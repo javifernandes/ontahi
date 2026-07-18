@@ -1,0 +1,17 @@
+{
+  "name": "ontahi",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm --filter @ontahi/www build",
+    "dev": "pnpm --filter @ontahi/www dev",
+    "lint": "pnpm --filter @ontahi/www lint",
+    "verify:local": "node scripts/verify-local-page.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "typescript": "5.4.5"
+  }
+}

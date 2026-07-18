@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Ontahi ceibo symbol</title>
+  <desc id="desc">A stylized ceibo flower symbol with red petals, olive leaves and a forest stem.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M61 71c-7 13-9 25-4 38" stroke="#465538" stroke-width="7"/>
+    <path d="M56 84c-15-8-26-4-34 11 14 3 26-1 34-11Z" fill="#7A7F52"/>
+    <path d="M63 77c14 0 24 7 30 21-15 0-25-7-30-21Z" fill="#98A16B"/>
+    <path d="M62 66c-18-2-31-12-38-29 19-1 32 9 38 29Z" fill="#D94C43"/>
+    <path d="M66 60c-9-17-8-34 3-49 13 15 12 32-3 49Z" fill="#E06A61"/>
+    <path d="M72 62c8-16 22-24 40-24-6 18-19 27-40 24Z" fill="#D94C43"/>
+    <path d="M70 70c16 3 28 14 35 31-19 0-31-10-35-31Z" fill="#E06A61"/>
+    <path d="M56 63c-15 8-30 8-45 0 12-13 28-13 45 0Z" fill="#D94C43"/>
+    <circle cx="64" cy="66" r="7" fill="#F6F2EB" stroke="#D94C43" stroke-width="3"/>
+  </g>
+</svg>
+
