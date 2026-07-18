@@ -3,55 +3,52 @@ import Image from 'next/image';
 const essayUrl =
   'https://bookops.net/ontahi-library-01-living-systems/living-systems/why-systems-evolve';
 const repoUrl = 'https://github.com/javifernandes/ontahi';
+const licenseUrl = `${repoUrl}/blob/main/LICENSE`;
 
 const adoptionLayers = [
   [
     'Domain',
-    'Entities, relations, operations, policies, and events give ordinary applications a precise executable model.',
+    'Entities, relations, operations, policies, and events give ordinary applications a precise executable ontology.',
   ],
   [
-    'Runtime',
-    'Tasks, workflows, resources, state, and observability make the model durable beyond a single request.',
+    'Execution',
+    'When time matters, an invocation becomes a durable execution with identity, emissions, usage, and history.',
   ],
   [
-    'Experience',
-    'Actors, rooms, presence, memory, and autonomy become available when the domain needs a living world.',
+    'Autonomy',
+    'Policies, resources, and interchangeable implementations let entities act without introducing an Actor primitive.',
   ],
 ] as const;
 
 const domainLayers = [
   ['Entities', 'Things with identity, lifecycle, permissions, and meaning inside the domain.'],
   ['Relations', 'Connections that make the system navigable as a graph, not a pile of tables.'],
-  ['Operations', 'Queries, commands, and streams named as domain actions rather than raw endpoints.'],
+  ['Operations', 'Possible transformations, named as domain actions rather than raw endpoints.'],
   ['Events', 'Facts that preserve what happened and make change observable.'],
-  ['Policies', 'Rules for authority, visibility, invariants, and allowed transitions.'],
-  ['Tasks', 'Durable work that can run, retry, pause, resume, and leave evidence.'],
+  ['Executions', 'Invocations that happen in time, with identity, status, result, and history.'],
+  ['Emissions', 'Values produced while an execution advances toward its final result.'],
   ['Resources', 'Cost, capacity, quotas, and scale modeled explicitly when they matter.'],
+  ['Policies', 'Rules for admission, authority, limits, priority, and implementation choice.'],
 ] as const;
 
-const experienceLayers = [
-  ['Actors', 'Autonomous entities with memory, goals, capabilities, and boundaries.'],
-  ['Rooms & Presence', 'Spaces where humans and agents enter, coordinate, observe, and leave traces.'],
-  ['Autonomy', 'Actions can be delegated without losing policy, history, or accountability.'],
-  ['Living Worlds', 'The domain can keep running, adapting, and accumulating context over time.'],
+const autonomyCapacities = [
+  ['Identity & memory', 'An entity carries state, context, and history across many executions.'],
+  ['Operations', 'Its capabilities are operations, or useful views over related operations.'],
+  ['Executions', 'Work can persist, stream values, retry, cancel, and remain observable over time.'],
+  ['Resources & policies', 'Availability, budgets, limits, priorities, and implementations stay explicit.'],
 ] as const;
 
 const usageModes = [
-  ['Application', 'Use Ontahí to name a traditional product domain with clearer contracts.'],
-  ['Workflow', 'Add durable tasks, policies, and resources when the system outgrows request/response.'],
-  ['Experience', 'Introduce actors and presence when the domain becomes shared, autonomous, or persistent.'],
-] as const;
-
-const ecosystem = [
-  ['Atlas', 'Design and planning of experiences.'],
-  ['Ontahí', 'Runtime for living domains.'],
-  ['BookOps', 'Documentation and knowledge.'],
+  ['Application', 'Model a traditional product domain, from a to-do list upward, with clearer contracts.'],
+  ['Durable computation', 'Give long-running operations identity, emissions, resource usage, and history.'],
+  ['Autonomous system', 'Let domain entities act over time when policies and capacities make that useful.'],
 ] as const;
 
 export default function HomePage() {
   return (
-    <main>
-      <section className="hero" aria-labelledby="hero-title">
+    <>
+      <main>
+        <section className="hero" aria-labelledby="hero-title">
         <header className="site-header" aria-label="Ontahi">
           <a className="brand-mark" href="/" aria-label="Ontahi home">
             <Image src="/brand/ontahi-symbol.svg" width={34} height={34} alt="" priority />
@@ -67,11 +64,11 @@ export default function HomePage() {
           <div className="hero-copy">
             <p className="eyebrow">Coming soon</p>
             <h1 id="hero-title">Ontahí</h1>
-            <p className="lede">Executable domains, from applications to living experiences.</p>
+            <p className="lede">Executable domains, from everyday apps to autonomous systems.</p>
             <p className="support">
-              Ontahí starts as a framework for modeling domains with entities, operations,
-              relations, policies, and events. Actors and experiences are a further layer,
-              not a requirement.
+              Ontahí models software through entities, relations, operations, policies, and
+              events. When work needs time, resources, or autonomy, the same model grows into
+              durable, observable executions. No special Actor primitive required.
             </p>
           </div>
 
@@ -91,7 +88,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            <p className="formula">Start with the domain. Add life only where life belongs.</p>
+            <p className="formula">Ontahí provides the grammar. The domain provides the names.</p>
           </aside>
         </div>
       </section>
@@ -129,8 +126,8 @@ export default function HomePage() {
             <p className="eyebrow">Core model</p>
             <h2 id="runtime-title">A small application can still deserve an ontology.</h2>
             <p>
-              Ontahí 1.0 is useful before autonomy enters the picture. A domain becomes
-              easier to build when its names, boundaries, transitions, and history are explicit.
+              Ontahí is useful before autonomy enters the picture. A domain becomes easier to
+              build when its names, boundaries, transformations, and history are explicit.
             </p>
           </div>
 
@@ -149,16 +146,17 @@ export default function HomePage() {
       <section className="principles-section" aria-labelledby="principles-title">
         <div className="section-inner principles-inner">
           <div className="section-copy">
-            <p className="eyebrow">Experience layer</p>
-            <h2 id="principles-title">Autonomy is a layer, not the entry fee.</h2>
+            <p className="eyebrow">Emergent autonomy</p>
+            <h2 id="principles-title">An actor is not a new kind of thing.</h2>
             <p>
-              Some domains need actors with memory, presence, goals, resource budgets, and
-              observable behavior. Others only need a better way to name and execute the domain.
+              Autonomous behavior emerges when an entity has operations whose executions can be
+              scheduled, observed, limited, and resolved over time. Some domains need this. Many
+              only need a better way to name and execute their domain.
             </p>
           </div>
 
           <ol className="principles-list">
-            {experienceLayers.map(([title, text]) => (
+            {autonomyCapacities.map(([title, text]) => (
               <li key={title}>
                 <strong>{title}</strong>
                 <span>{text}</span>
@@ -175,7 +173,17 @@ export default function HomePage() {
             </article>
           ))}
         </div>
-      </section>
-    </main>
+        </section>
+      </main>
+
+      <footer className="site-footer">
+        <div className="footer-inner">
+          <p>© 2026 Javier Fernandes and Ontahí contributors.</p>
+          <p>
+            Source code licensed under the <a href={licenseUrl}>Apache License 2.0</a>.
+          </p>
+        </div>
+      </footer>
+    </>
   );
 }

@@ -25,6 +25,7 @@ let bodyText = '';
 let overlayCount = 0;
 let hasEssayLink = false;
 let hasRepoLink = false;
+let hasLicenseLink = false;
 
 for (const viewport of viewports) {
   const page = await browser.newPage({
@@ -58,6 +59,10 @@ for (const viewport of viewports) {
   hasEssayLink ||= (await page.locator('a[href*="why-systems-evolve"]').count()) > 0;
   hasRepoLink ||=
     (await page.locator('a[href="https://github.com/javifernandes/ontahi"]').count()) > 0;
+  hasLicenseLink ||=
+    (await page
+      .locator('a[href="https://github.com/javifernandes/ontahi/blob/main/LICENSE"]')
+      .count()) > 0;
 
   const screenshotPath = path.join(outputDir, `ontahi-home-${viewport.name}.png`);
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -72,12 +77,15 @@ const result = {
   hasOntahi: bodyText.includes('Ontahí'),
   hasComingSoon: bodyText.toLowerCase().includes('coming soon'),
   hasExecutableDomains: bodyText.includes(
-    'Executable domains, from applications to living experiences.',
+    'Executable domains, from everyday apps to autonomous systems.',
   ),
   hasDomainLayer: bodyText.includes('Entities, relations, operations, policies, and events'),
-  hasOptionalAutonomy: bodyText.includes('Autonomy is a layer, not the entry fee.'),
+  hasExecutionLayer: bodyText.includes('an invocation becomes a durable execution'),
+  hasEmergentAutonomy: bodyText.includes('An actor is not a new kind of thing.'),
+  hasCopyright: bodyText.includes('© 2026 Javier Fernandes and Ontahí contributors.'),
   hasEssayLink,
   hasRepoLink,
+  hasLicenseLink,
   overlayCount,
   consoleMessages,
   failedResponses,
@@ -91,9 +99,12 @@ if (
   !result.hasComingSoon ||
   !result.hasExecutableDomains ||
   !result.hasDomainLayer ||
-  !result.hasOptionalAutonomy ||
+  !result.hasExecutionLayer ||
+  !result.hasEmergentAutonomy ||
+  !result.hasCopyright ||
   !result.hasEssayLink ||
   !result.hasRepoLink ||
+  !result.hasLicenseLink ||
   overlayCount > 0 ||
   failedResponses.length > 0
 ) {

@@ -481,6 +481,33 @@ h2 {
   line-height: 1.5;
 }
 
+.site-footer {
+  border-top: 1px solid var(--ontahi-paper-shade);
+  background: var(--ontahi-warm-paper);
+  color: var(--ontahi-olive-dark);
+}
+
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 1.4rem 1.5rem 1.6rem;
+  font-family: var(--font-ontahi-mono);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.footer-inner p {
+  margin: 0;
+}
+
+.footer-inner a {
+  color: var(--ontahi-ceibo);
+  text-underline-offset: 0.25rem;
+}
+
 @media (max-width: 980px) {
   body::after {
     top: 11rem;
@@ -609,6 +636,12 @@ h2 {
   .ecosystem-strip article:last-child {
     min-height: auto;
     border-radius: 8px;
+  }
+
+  .footer-inner {
+    flex-direction: column;
+    gap: 0.4rem;
+    padding-inline: 1rem;
   }
 }
 
