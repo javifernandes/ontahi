@@ -1,0 +1,57 @@
+{
+  "name": "@ontahi/runtime-nextjs",
+  "version": "1.0.0",
+  "description": "Next.js action runtime and transport helpers for Ontahi applications",
+  "main": "dist/actions/index.js",
+  "types": "dist/actions/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/actions/index.d.ts",
+      "import": "./dist/actions/index.js",
+      "require": "./dist/actions/index.js"
+    },
+    "./actions": {
+      "types": "./dist/actions/index.d.ts",
+      "import": "./dist/actions/index.js",
+      "require": "./dist/actions/index.js"
+    },
+    "./actions/server": {
+      "types": "./dist/actions/server.d.ts",
+      "import": "./dist/actions/server.js",
+      "require": "./dist/actions/server.js"
+    },
+    "./operation-invocation": {
+      "types": "./dist/operation-invocation/index.d.ts",
+      "import": "./dist/operation-invocation/index.js",
+      "require": "./dist/operation-invocation/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "test:watch": "pnpm exec vitest",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@ontahi/core": "workspace:*",
+    "effect": "^3.21.0",
+    "next-safe-action": "^8.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  }
+}

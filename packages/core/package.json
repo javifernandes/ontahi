@@ -1,0 +1,130 @@
+{
+  "name": "@ontahi/core",
+  "version": "1.0.0",
+  "description": "Core runtime, graph, and computation primitives for Ontahi applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./computation/async": {
+      "types": "./dist/computation/async.d.ts",
+      "import": "./dist/computation/async.js",
+      "require": "./dist/computation/async.js"
+    },
+    "./computation/effect": {
+      "types": "./dist/computation/effect.d.ts",
+      "import": "./dist/computation/effect.js",
+      "require": "./dist/computation/effect.js"
+    },
+    "./computation/stream": {
+      "types": "./dist/computation/stream.d.ts",
+      "import": "./dist/computation/stream.js",
+      "require": "./dist/computation/stream.js"
+    },
+    "./runtime/browser": {
+      "types": "./dist/runtime/browser.d.ts",
+      "import": "./dist/runtime/browser.js",
+      "require": "./dist/runtime/browser.js"
+    },
+    "./runtime/actions": {
+      "types": "./dist/runtime/actions/index.d.ts",
+      "import": "./dist/runtime/actions/index.js",
+      "require": "./dist/runtime/actions/index.js"
+    },
+    "./runtime/contracts": {
+      "types": "./dist/runtime/contracts.d.ts",
+      "import": "./dist/runtime/contracts.js",
+      "require": "./dist/runtime/contracts.js"
+    },
+    "./runtime/operation-invocation": {
+      "types": "./dist/runtime/operation-invocation.d.ts",
+      "import": "./dist/runtime/operation-invocation.js",
+      "require": "./dist/runtime/operation-invocation.js"
+    },
+    "./runtime/server": {
+      "types": "./dist/runtime/server/index.d.ts",
+      "import": "./dist/runtime/server/index.js",
+      "require": "./dist/runtime/server/index.js"
+    },
+    "./runtime/server/ingress": {
+      "types": "./dist/runtime/server/ingress.d.ts",
+      "import": "./dist/runtime/server/ingress.js",
+      "require": "./dist/runtime/server/ingress.js"
+    },
+    "./runtime/server/operation-invocation": {
+      "types": "./dist/runtime/server/operation-invocation.d.ts",
+      "import": "./dist/runtime/server/operation-invocation.js",
+      "require": "./dist/runtime/server/operation-invocation.js"
+    },
+    "./runtime/server/tasks": {
+      "types": "./dist/runtime/server/tasks.d.ts",
+      "import": "./dist/runtime/server/tasks.js",
+      "require": "./dist/runtime/server/tasks.js"
+    },
+    "./data-graph": {
+      "types": "./dist/data-graph/index.d.ts",
+      "import": "./dist/data-graph/index.js",
+      "require": "./dist/data-graph/index.js"
+    },
+    "./model/validation": {
+      "types": "./dist/model/validation.d.ts",
+      "import": "./dist/model/validation.js",
+      "require": "./dist/model/validation.js"
+    },
+    "./model/zod": {
+      "types": "./dist/model/zod.d.ts",
+      "import": "./dist/model/zod.js",
+      "require": "./dist/model/zod.js"
+    },
+    "./value/array": {
+      "types": "./dist/value/array.d.ts",
+      "import": "./dist/value/array.js",
+      "require": "./dist/value/array.js"
+    },
+    "./value/object": {
+      "types": "./dist/value/object.d.ts",
+      "import": "./dist/value/object.js",
+      "require": "./dist/value/object.js"
+    },
+    "./value/error": {
+      "types": "./dist/value/error.d.ts",
+      "import": "./dist/value/error.js",
+      "require": "./dist/value/error.js"
+    },
+    "./value/date-time": {
+      "types": "./dist/value/date-time.d.ts",
+      "import": "./dist/value/date-time.js",
+      "require": "./dist/value/date-time.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "test:watch": "pnpm exec vitest",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.{ts,tsx}\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.{ts,tsx}\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "effect": "^3.21.0",
+    "zod": "^4.3.6",
+    "typia": "^12.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "vitest": "^4.0.18",
+    "typescript": "^5.0.0"
+  }
+}
