@@ -22,7 +22,7 @@ describe('Explorer schema fields', () => {
 
   it('renders schema fields as a hierarchical field tree', () => {
     const schema: ExplorerSchemaDescriptor = {
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object',
       fields: [
         {
@@ -70,7 +70,7 @@ describe('Explorer schema fields', () => {
   it('renders schema union variants as selectable branches', async () => {
     const user = userEvent.setup();
     const schema: ExplorerSchemaDescriptor = {
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object',
       fields: [
         {

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
+import { field, value } from '../../../src/data-graph/index.js';
 import {
   architecture,
   createInMemoryTaskRunStore,
@@ -133,8 +133,8 @@ describe('tasks', () => {
     });
     const task = defineTask({
       id: 'demo.validated-input',
-      input: z.object({
-        name: z.string().trim().min(1),
+      input: value('ValidatedTaskInput', {
+        name: field.nonEmptyString({ trim: true }),
       }),
       run: input =>
         Effect.succeed({
@@ -172,8 +172,8 @@ describe('tasks', () => {
     });
     const countedStep = defineTaskStep<{ count: number }, { count: number }>({
       id: 'counted-step',
-      input: z.object({
-        count: z.number().int().min(1),
+      input: value('CountedStepInput', {
+        count: field.positiveInteger(),
       }),
       run: input =>
         Effect.succeed({

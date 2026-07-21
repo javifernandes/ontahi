@@ -374,9 +374,11 @@ Requirements are not the same thing as boundary schema validation.
 
 Current preferred split:
 
-1. action and route transport inputs use Zod-backed boundary schemas
-2. usecase pre/post guarantees use contracts
-3. `requires` stay focused on guard-style runtime conditions such as auth, access, and feature switches
+1. domain operation inputs and outputs use graph-native Ontahi schemas
+2. the operation invocation boundary derives runtime validation from those schemas
+3. transport-only actions and routes may use local validation adapters when they do not expose a domain operation
+4. usecase pre/post guarantees use contracts
+5. `requires` stay focused on guard-style runtime conditions such as auth, access, and feature switches
 
 ### Concerns
 

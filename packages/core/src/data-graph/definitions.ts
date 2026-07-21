@@ -13,18 +13,52 @@ export type FieldDefinition<TValue> = {
   stringConstraints?: StringFieldConstraints;
   numberConstraints?: NumberFieldConstraints;
   nullable?: true;
+  optional?: true;
+  description?: string;
+  presentation?: GraphSchemaPresentation;
   __value?: TValue;
 };
 
 export type StringFieldConstraints = {
   minLength?: number;
   maxLength?: number;
+  trim?: true;
+  pattern?: {
+    source: string;
+    flags?: string;
+  };
+  format?: 'email' | 'url' | 'uuid' | 'datetime';
+  messages?: {
+    required?: string;
+    minLength?: string;
+    maxLength?: string;
+    pattern?: string;
+    format?: string;
+  };
 };
 
 export type NumberFieldConstraints = {
+  coerce?: true;
   integer?: true;
   min?: number;
   max?: number;
+  multipleOf?: number;
+  messages?: {
+    required?: string;
+    integer?: string;
+    min?: string;
+    max?: string;
+    multipleOf?: string;
+  };
+};
+
+export type GraphSchemaPresentation = {
+  booleanLabels?: {
+    true?: string;
+    false?: string;
+    unset?: string;
+  };
+  control?: 'text' | 'textarea' | 'password' | 'email' | 'url';
 };
 
 type FieldDefinitions = Record<string, FieldDefinition<unknown>>;
@@ -37,79 +71,180 @@ export type InferEntityRecord<TFields extends FieldDefinitions> = {
   [TKey in keyof TFields]: InferFieldValue<TFields[TKey]>;
 };
 
+export type GraphSchemaLike<TValue = unknown> = {
+  kind: string;
+  __value?: TValue;
+};
+
 export type GraphSchemaDefinition =
   | AnyFieldDefinition
   | AnyEntityDefinition
   | AnyEntityViewDefinition
   | AnyValueDefinition
+  | AnyGraphObjectDefinition
   | GraphArrayDefinition
   | GraphNullableDefinition
-  | GraphOptionalDefinition;
+  | GraphOptionalDefinition
+  | GraphLiteralDefinition
+  | GraphUnionDefinition
+  | GraphRecordDefinition
+  | GraphDefaultDefinition
+  | GraphTransformDefinition
+  | GraphRefinementDefinition
+  | GraphLazyDefinition
+  | GraphNamedDefinition
+  | GraphVoidDefinition;
 
 export interface GraphSchemaFields {
-  [fieldName: string]: GraphSchemaDefinition;
+  [fieldName: string]: GraphSchemaLike;
 }
 
-type InferGraphSchemaFields<TFields extends GraphSchemaFields> = {
-  [TKey in keyof TFields]: InferGraphSchemaValue<TFields[TKey]>;
-};
+type OptionalGraphSchemaFieldKeys<TFields extends GraphSchemaFields> = {
+  [TKey in keyof TFields]: TFields[TKey] extends { kind: 'schema.optional' } | { optional: true }
+    ? TKey
+    : never;
+}[keyof TFields];
+
+type RequiredGraphSchemaFieldKeys<TFields extends GraphSchemaFields> = Exclude<
+  keyof TFields,
+  OptionalGraphSchemaFieldKeys<TFields>
+>;
+
+type InferGraphSchemaFields<TFields extends GraphSchemaFields> = Simplify<
+  {
+    [TKey in RequiredGraphSchemaFieldKeys<TFields>]: InferGraphSchemaValue<TFields[TKey]>;
+  } & {
+    [TKey in OptionalGraphSchemaFieldKeys<TFields>]?: Exclude<
+      InferGraphSchemaValue<TFields[TKey]>,
+      undefined
+    >;
+  }
+>;
 
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
 
-export type InferGraphSchemaValue<TSchema extends GraphSchemaDefinition> =
-  TSchema extends FieldDefinition<infer TValue>
-    ? TValue
-    : TSchema extends EntityDefinition<any, infer TFields, any, any>
-      ? InferEntityRecord<TFields>
-      : TSchema extends AnyEntityDefinition
-        ? InferEntityRecord<TSchema['fields']>
-        : TSchema extends EntityViewDefinition<infer TEntity, any, infer TFields, infer TOmit>
-          ? Simplify<
-              Omit<InferEntityRecord<TEntity['fields']>, TOmit[number]> &
-                InferGraphSchemaFields<TFields>
-            >
-          : TSchema extends ValueDefinition<any, infer TFields>
-            ? InferGraphSchemaFields<TFields>
-            : TSchema extends GraphArrayDefinition<infer TItem>
-              ? InferGraphSchemaValue<TItem>[]
-              : TSchema extends GraphNullableDefinition<infer TItem>
-                ? InferGraphSchemaValue<TItem> | null
-                : TSchema extends GraphOptionalDefinition<infer TItem>
-                  ? InferGraphSchemaValue<TItem> | undefined
-                  : never;
+export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> = TSchema extends {
+  __value?: infer TValue;
+}
+  ? TValue
+  : never;
 
 export type ValueDefinition<
   TName extends string = string,
   TFields extends GraphSchemaFields = GraphSchemaFields,
+  TValue = InferGraphSchemaFields<TFields>,
 > = {
   kind: 'value';
   name: TName;
   fields: TFields;
+  unknownKeys?: 'strip' | 'strict' | 'passthrough';
+  __value?: TValue;
+};
+
+export type AnyValueDefinition = ValueDefinition<string, GraphSchemaFields, unknown>;
+
+export type GraphObjectDefinition<
+  TFields extends GraphSchemaFields = GraphSchemaFields,
+  TUnknownKeys extends 'strip' | 'strict' | 'passthrough' = 'strip',
+> = {
+  kind: 'schema.object';
+  fields: TFields;
+  unknownKeys: TUnknownKeys;
+  description?: string;
   __value?: InferGraphSchemaFields<TFields>;
 };
 
-export type AnyValueDefinition = ValueDefinition<string, GraphSchemaFields>;
+export type AnyGraphObjectDefinition = GraphObjectDefinition<
+  GraphSchemaFields,
+  'strip' | 'strict' | 'passthrough'
+>;
 
-export interface GraphArrayDefinition<TItem extends GraphSchemaDefinition = GraphSchemaDefinition> {
+export interface GraphArrayDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
   kind: 'schema.array';
   item: TItem;
   __value?: InferGraphSchemaValue<TItem>[];
 }
 
-export interface GraphNullableDefinition<
-  TItem extends GraphSchemaDefinition = GraphSchemaDefinition,
-> {
+export interface GraphNullableDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
   kind: 'schema.nullable';
   item: TItem;
   __value?: InferGraphSchemaValue<TItem> | null;
 }
 
-export interface GraphOptionalDefinition<
-  TItem extends GraphSchemaDefinition = GraphSchemaDefinition,
-> {
+export interface GraphOptionalDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
   kind: 'schema.optional';
   item: TItem;
   __value?: InferGraphSchemaValue<TItem> | undefined;
+}
+
+export interface GraphLiteralDefinition<TValue = string | number | boolean | null> {
+  kind: 'schema.literal';
+  value: TValue;
+  description?: string;
+  __value?: TValue;
+}
+
+export interface GraphUnionDefinition<
+  TOptions extends readonly GraphSchemaLike[] = readonly GraphSchemaDefinition[],
+> {
+  kind: 'schema.union';
+  options: TOptions;
+  discriminator?: string;
+  description?: string;
+  __value?: InferGraphSchemaValue<TOptions[number]>;
+}
+
+export interface GraphRecordDefinition<TValue extends GraphSchemaLike = GraphSchemaDefinition> {
+  kind: 'schema.record';
+  value: TValue;
+  description?: string;
+  __value?: Record<string, InferGraphSchemaValue<TValue>>;
+}
+
+export interface GraphDefaultDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
+  kind: 'schema.default';
+  item: TItem;
+  defaultValue: Exclude<InferGraphSchemaValue<TItem>, undefined>;
+  __value?: Exclude<InferGraphSchemaValue<TItem>, undefined>;
+}
+
+export interface GraphTransformDefinition<
+  TItem extends GraphSchemaLike = GraphSchemaDefinition,
+  TOutput = unknown,
+> {
+  kind: 'schema.transform';
+  item: TItem;
+  transform: (value: InferGraphSchemaValue<TItem>) => TOutput;
+  __value?: TOutput;
+}
+
+export interface GraphRefinementDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
+  kind: 'schema.refinement';
+  item: TItem;
+  predicate: (value: InferGraphSchemaValue<TItem>) => boolean;
+  message: string;
+  path?: readonly (string | number)[];
+  rule?: string;
+  __value?: InferGraphSchemaValue<TItem>;
+}
+
+export interface GraphLazyDefinition<TValue = unknown> {
+  kind: 'schema.lazy';
+  name: string;
+  resolve: () => GraphSchemaDefinition;
+  __value?: TValue;
+}
+
+export interface GraphNamedDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
+  kind: 'schema.named';
+  name: string;
+  item: TItem;
+  __value?: InferGraphSchemaValue<TItem>;
+}
+
+export interface GraphVoidDefinition {
+  kind: 'schema.void';
+  __value?: void;
 }
 
 export type EntityViewDefinition<
@@ -231,6 +366,7 @@ export type EntityDefinition<
   kind: 'entity';
   name: TName;
   fields: TFields;
+  __value?: InferEntityRecord<TFields>;
   relations: TRelations;
   refLocators: TLocators;
   identityLocatorName?: keyof TLocators & string;
@@ -254,10 +390,23 @@ export type EntityDefinition<
   identity: <TLocatorName extends keyof TLocators & string>(
     locatorName: TLocatorName,
   ) => EntityDefinition<TName, TFields, TRelations, TLocators>;
-  view: (
-    viewName: string,
-    config?: EntityViewConfig<AnyEntityDefinition, GraphSchemaFields, readonly string[]>,
-  ) => AnyEntityViewDefinition;
+  view: <
+    TViewName extends string,
+    TViewFields extends GraphSchemaFields = {},
+    TOmit extends readonly (keyof TFields & string)[] = readonly [],
+  >(
+    viewName: TViewName,
+    config?: EntityViewConfig<
+      EntityDefinition<TName, TFields, TRelations, TLocators>,
+      TViewFields,
+      TOmit
+    >,
+  ) => EntityViewDefinition<
+    EntityDefinition<TName, TFields, TRelations, TLocators>,
+    TViewName,
+    TViewFields,
+    TOmit
+  >;
   hasMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
@@ -282,6 +431,7 @@ export type AnyEntityDefinition = {
   kind: 'entity';
   name: string;
   fields: FieldDefinitions;
+  __value?: Record<string, unknown>;
   relations: Record<string, RelationDefinition<RelationKind, any>>;
   refLocators: EntityRefLocatorDeclarations;
   identityLocatorName?: string;
@@ -297,6 +447,34 @@ const identifierStringConstraints = {
   maxLength: 200,
 } satisfies StringFieldConstraints;
 
+export type StringFieldInputConstraints = Omit<StringFieldConstraints, 'pattern'> & {
+  pattern?: RegExp | StringFieldConstraints['pattern'];
+};
+
+const normalizeStringConstraints = (
+  constraints?: StringFieldInputConstraints,
+): StringFieldConstraints | undefined => {
+  if (!constraints) {
+    return undefined;
+  }
+
+  const { pattern, ...rest } = constraints;
+
+  return {
+    ...rest,
+    ...(pattern instanceof RegExp
+      ? {
+          pattern: {
+            source: pattern.source,
+            ...(pattern.flags ? { flags: pattern.flags } : {}),
+          },
+        }
+      : pattern
+        ? { pattern }
+        : {}),
+  };
+};
+
 export const field = {
   id: (): FieldDefinition<string> => ({
     kind: 'field',
@@ -308,20 +486,39 @@ export const field = {
     fieldType: 'string',
     stringConstraints: identifierStringConstraints,
   }),
-  string: (constraints?: StringFieldConstraints): FieldDefinition<string> => ({
+  string: (constraints?: StringFieldInputConstraints): FieldDefinition<string> => ({
     kind: 'field',
     fieldType: 'string',
-    ...(constraints ? { stringConstraints: constraints } : {}),
+    ...(constraints ? { stringConstraints: normalizeStringConstraints(constraints) } : {}),
   }),
   nonEmptyString: (
-    constraints?: Omit<StringFieldConstraints, 'minLength'>,
+    constraints?: Omit<StringFieldInputConstraints, 'minLength'>,
   ): FieldDefinition<string> => ({
     kind: 'field',
     fieldType: 'string',
-    stringConstraints: {
-      minLength: 1,
-      ...constraints,
-    },
+    stringConstraints: normalizeStringConstraints({ minLength: 1, ...constraints }),
+  }),
+  email: (constraints?: Omit<StringFieldInputConstraints, 'format'>): FieldDefinition<string> => ({
+    kind: 'field',
+    fieldType: 'string',
+    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'email' }),
+  }),
+  url: (constraints?: Omit<StringFieldInputConstraints, 'format'>): FieldDefinition<string> => ({
+    kind: 'field',
+    fieldType: 'string',
+    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'url' }),
+  }),
+  uuid: (constraints?: Omit<StringFieldInputConstraints, 'format'>): FieldDefinition<string> => ({
+    kind: 'field',
+    fieldType: 'string',
+    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'uuid' }),
+  }),
+  datetime: (
+    constraints?: Omit<StringFieldInputConstraints, 'format'>,
+  ): FieldDefinition<string> => ({
+    kind: 'field',
+    fieldType: 'string',
+    stringConstraints: normalizeStringConstraints({ ...constraints, format: 'datetime' }),
   }),
   number: (constraints?: NumberFieldConstraints): FieldDefinition<number> => ({
     kind: 'field',
@@ -368,6 +565,10 @@ export const field = {
   nullable: <TValue>(definition: FieldDefinition<TValue>): FieldDefinition<TValue | null> => ({
     ...definition,
     nullable: true,
+  }),
+  optional: <TValue>(definition: FieldDefinition<TValue>): FieldDefinition<TValue | undefined> => ({
+    ...definition,
+    optional: true,
   }),
 };
 
@@ -477,35 +678,191 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     },
   };
 
-  return entityDefinition as EntityDefinition<TName, TFields, {}, {}>;
+  return entityDefinition as unknown as EntityDefinition<TName, TFields, {}, {}>;
 };
 
-export const value = (name: string, fields: Record<string, unknown>): AnyValueDefinition => ({
+export const value = <TName extends string, TFields extends GraphSchemaFields>(
+  name: TName,
+  fields: TFields,
+  options?: { unknownKeys?: 'strip' | 'strict' | 'passthrough' },
+): ValueDefinition<TName, TFields> => ({
   kind: 'value',
   name,
-  fields: fields as GraphSchemaFields,
+  fields,
+  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
 });
 
-export const graphArray = (item: unknown): GraphArrayDefinition => ({
+export const valueOf = <TValue>(
+  name: string,
+  fields: GraphSchemaFields,
+  options?: { unknownKeys?: 'strip' | 'strict' | 'passthrough' },
+): ValueDefinition<string, GraphSchemaFields, TValue> => ({
+  kind: 'value',
+  name,
+  fields,
+  ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
+});
+
+export const graphObject = <
+  TFields extends GraphSchemaFields,
+  TUnknownKeys extends 'strip' | 'strict' | 'passthrough' = 'strip',
+>(
+  fields: TFields,
+  options?: { unknownKeys?: TUnknownKeys; description?: string },
+): GraphObjectDefinition<TFields, TUnknownKeys> => ({
+  kind: 'schema.object',
+  fields,
+  unknownKeys: options?.unknownKeys ?? ('strip' as TUnknownKeys),
+  ...(options?.description ? { description: options.description } : {}),
+});
+
+export const graphArray = <TItem extends GraphSchemaLike>(
+  item: TItem,
+): GraphArrayDefinition<TItem> => ({
   kind: 'schema.array',
-  item: item as GraphSchemaDefinition,
+  item,
 });
 
-export const graphNullable = (item: unknown): GraphNullableDefinition => ({
+export const graphNullable = <TItem extends GraphSchemaLike>(
+  item: TItem,
+): GraphNullableDefinition<TItem> => ({
   kind: 'schema.nullable',
-  item: item as GraphSchemaDefinition,
+  item,
 });
 
-export const graphOptional = (item: unknown): GraphOptionalDefinition => ({
+export const graphOptional = <TItem extends GraphSchemaLike>(
+  item: TItem,
+): GraphOptionalDefinition<TItem> => ({
   kind: 'schema.optional',
-  item: item as GraphSchemaDefinition,
+  item,
 });
+
+export const graphLiteral = <const TValue extends string | number | boolean | null>(
+  literalValue: TValue,
+): GraphLiteralDefinition<TValue> => ({
+  kind: 'schema.literal',
+  value: literalValue,
+});
+
+export const graphUnion = <const TOptions extends readonly GraphSchemaLike[]>(
+  options: TOptions,
+): GraphUnionDefinition<TOptions> => ({
+  kind: 'schema.union',
+  options,
+});
+
+export const graphDiscriminatedUnion = <const TOptions extends readonly GraphSchemaLike[]>(
+  discriminator: string,
+  options: TOptions,
+): GraphUnionDefinition<TOptions> => ({
+  kind: 'schema.union',
+  discriminator,
+  options,
+});
+
+export const graphRecord = <TValue extends GraphSchemaLike>(
+  recordValue: TValue,
+): GraphRecordDefinition<TValue> => ({
+  kind: 'schema.record',
+  value: recordValue,
+});
+
+export const graphDefault = <TItem extends GraphSchemaLike>(
+  item: TItem,
+  defaultValue: Exclude<InferGraphSchemaValue<TItem>, undefined>,
+): GraphDefaultDefinition<TItem> => ({
+  kind: 'schema.default',
+  item,
+  defaultValue,
+});
+
+export const graphTransform = <TItem extends GraphSchemaLike, TOutput>(
+  item: TItem,
+  transform: (value: InferGraphSchemaValue<TItem>) => TOutput,
+): GraphTransformDefinition<TItem, TOutput> => ({
+  kind: 'schema.transform',
+  item,
+  transform,
+});
+
+export const graphRefine = <TItem extends GraphSchemaLike>(
+  item: TItem,
+  predicate: (value: InferGraphSchemaValue<TItem>) => boolean,
+  options: { message: string; path?: readonly (string | number)[]; rule?: string },
+): GraphRefinementDefinition<TItem> => ({
+  kind: 'schema.refinement',
+  item,
+  predicate,
+  message: options.message,
+  ...(options.path ? { path: options.path } : {}),
+  ...(options.rule ? { rule: options.rule } : {}),
+});
+
+export const graphLazy = <TValue>(
+  name: string,
+  resolve: () => GraphSchemaDefinition,
+): GraphLazyDefinition<TValue> => ({
+  kind: 'schema.lazy',
+  name,
+  resolve,
+});
+
+export const graphNamed = <TItem extends GraphSchemaLike>(
+  name: string,
+  item: TItem,
+): GraphNamedDefinition<TItem> => ({
+  kind: 'schema.named',
+  name,
+  item,
+});
+
+export const graphVoid = (): GraphVoidDefinition => ({ kind: 'schema.void' });
+
+export const describeGraphSchema = <TSchema extends object>(
+  schema: TSchema,
+  description: string,
+): TSchema => ({ ...schema, description });
+
+export const presentGraphSchema = <TSchema extends object>(
+  schema: TSchema,
+  presentation: GraphSchemaPresentation,
+): TSchema => ({ ...schema, presentation });
 
 export const graphSchema = {
   value,
+  valueOf,
+  object: graphObject,
   array: graphArray,
   nullable: graphNullable,
   optional: graphOptional,
+  literal: graphLiteral,
+  union: graphUnion,
+  discriminatedUnion: graphDiscriminatedUnion,
+  record: graphRecord,
+  default: graphDefault,
+  transform: graphTransform,
+  refine: graphRefine,
+  lazy: graphLazy,
+  named: graphNamed,
+  void: graphVoid,
+  describe: describeGraphSchema,
+  present: presentGraphSchema,
+  string: field.string,
+  nonEmptyString: field.nonEmptyString,
+  email: field.email,
+  url: field.url,
+  uuid: field.uuid,
+  datetime: field.datetime,
+  id: field.id,
+  slug: field.slug,
+  number: field.number,
+  integer: field.integer,
+  nonNegativeInteger: field.nonNegativeInteger,
+  positiveInteger: field.positiveInteger,
+  boolean: field.boolean,
+  date: field.date,
+  json: field.json,
+  enum: field.enum,
 };
 
 export const mapEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) => ({

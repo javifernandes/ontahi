@@ -3,6 +3,11 @@ import type { IValidation } from 'typia';
 import type { ZodIssue, ZodType } from 'zod';
 
 import { toEffect } from '../../../computation/effect.js';
+import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
+import {
+  safeParseUnknownGraphSchema,
+  type GraphSchemaValidationIssue,
+} from '../../../data-graph/schema.js';
 import { createOperationFailure } from '../failures.js';
 import { isEffectSuccessPayload } from '../intents.js';
 import type { LayerConcern, LayerConcernRuntime } from '../layer-types.js';
@@ -38,6 +43,11 @@ export type ContractFromZodOptions<
   TInput extends OperationInput,
   TReason extends string = 'invalid_input',
 > = ContractFromValidationOptions<TInput, ZodIssue, TReason>;
+
+export type ContractFromGraphSchemaOptions<
+  TInput extends OperationInput,
+  TReason extends string = 'invalid_input',
+> = ContractFromValidationOptions<TInput, GraphSchemaValidationIssue, TReason>;
 
 type TypiaValidationFieldName<TInput extends OperationInput> = Extract<keyof TInput, string>;
 
@@ -217,6 +227,30 @@ export const contractFromZod = <
     const message =
       options?.formatMessage?.(result.error.issues, input) ??
       result.error.issues[0]?.message ??
+      'Input validation failed.';
+
+    return createOperationFailure(reason, message);
+  };
+};
+
+export const contractFromGraphSchema = <
+  TInput extends OperationInput,
+  TReason extends string = 'invalid_input',
+>(
+  schema: GraphSchemaLike<TInput>,
+  options?: ContractFromGraphSchemaOptions<TInput, TReason>,
+): ContractPreCheck<TInput, OperationFailure<TReason>> => {
+  const reason = options?.reason ?? ('invalid_input' as TReason);
+
+  return input => {
+    const result = safeParseUnknownGraphSchema(schema, input);
+    if (result.success) {
+      return;
+    }
+
+    const message =
+      options?.formatMessage?.(result.issues, input as TInput) ??
+      result.issues[0]?.message ??
       'Input validation failed.';
 
     return createOperationFailure(reason, message);

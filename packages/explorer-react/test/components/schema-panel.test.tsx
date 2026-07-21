@@ -22,7 +22,7 @@ describe('ExplorerSchemaPanel', () => {
   it('toggles a schema between field tree and raw JSON', async () => {
     const user = userEvent.setup();
     const schema: ExplorerSchemaDescriptor = {
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object',
       fields: [
         {

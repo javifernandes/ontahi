@@ -49,7 +49,7 @@ const operations: ExplorerOperationDescriptor[] = [
     hasBridgeQuery: true,
     bridgeQueryCount: 2,
     inputSchema: {
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object',
       fields: [
         {

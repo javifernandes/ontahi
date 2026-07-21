@@ -45,8 +45,7 @@
     "@monaco-editor/react": "^4.6.0",
     "monaco-editor": "^0.55.1",
     "@ontahi/core": "workspace:*",
-    "@ontahi/react": "workspace:*",
-    "zod": "^4.3.6"
+    "@ontahi/react": "workspace:*"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.51.0",

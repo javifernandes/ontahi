@@ -16,7 +16,7 @@ const buildOperation = (
   authority: 'server',
   exposure: 'bridge',
   inputSchema: {
-    source: 'zod',
+    source: 'ontahi',
     summary: 'object',
     fields: [
       {
@@ -88,7 +88,7 @@ describe('ExplorerOperationSignature', () => {
           name: 'getSharingInfo',
           inputRefs: [],
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -117,7 +117,7 @@ describe('ExplorerOperationSignature', () => {
         operation={buildOperation({
           inputRefs: [],
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {

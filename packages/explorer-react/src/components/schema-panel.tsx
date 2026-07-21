@@ -53,7 +53,7 @@ export const ExplorerSchemaPanel = ({
         ) : null
       }
     >
-      {schema.fields.length === 0 || schema.source !== 'zod' ? (
+      {schema.fields.length === 0 ? (
         <div className='flex flex-wrap items-center gap-2'>
           <ExplorerSchemaStatusBadge schema={schema} />
           {schema.fields.length === 0 ? (

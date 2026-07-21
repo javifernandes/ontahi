@@ -1,5 +1,5 @@
+import { field, graphSchema, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import { describeRuntimeSchema, undeclaredResultSchema } from '../../src/server/index.js';
 
@@ -23,21 +23,21 @@ const expectPlainObjects = (value: unknown) => {
 };
 
 describe('graph ops schema descriptor', () => {
-  it('describes zod object fields as a compact contract', () => {
+  it('describes Ontahi object fields as a compact contract', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        bookSlug: z.string(),
-        limit: z.number().optional(),
-        filters: z
-          .object({
-            language: z.string().nullable(),
-          })
-          .optional(),
+      value('BookQueryInput', {
+        bookSlug: field.string(),
+        limit: field.optional(field.number()),
+        filters: graphSchema.optional(
+          value('BookQueryFilters', {
+            language: field.nullable(field.string()),
+          }),
+        ),
       }),
     );
 
     expect(descriptor).toMatchObject({
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object with 3 fields',
     });
     expect(descriptor.fields).toEqual(
@@ -52,11 +52,11 @@ describe('graph ops schema descriptor', () => {
 
   it('returns plain JSON schema objects for client component props', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        kind: z.literal('import'),
-        tags: z.array(z.string()),
-        payload: z.object({
-          enabled: z.boolean(),
+      value('ImportInput', {
+        kind: graphSchema.literal('import'),
+        tags: graphSchema.array(field.string()),
+        payload: value('ImportPayload', {
+          enabled: field.boolean(),
         }),
       }),
     );
@@ -66,8 +66,8 @@ describe('graph ops schema descriptor', () => {
 
   it('preserves string enum values for richer input controls', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        sort: z.enum(['book_order', 'recent_activity', 'newest']).optional(),
+      value('SortedQueryInput', {
+        sort: field.optional(field.enum(['book_order', 'recent_activity', 'newest'] as const)),
       }),
     );
 
@@ -83,19 +83,16 @@ describe('graph ops schema descriptor', () => {
 
   it('preserves boolean presentation metadata for richer controls', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        isPending: z
-          .boolean()
-          .optional()
-          .meta({
-            presentation: {
-              booleanLabels: {
-                true: 'Pending invite',
-                false: 'Active collaborator',
-                unset: 'Default',
-              },
+      value('RemoveCollaboratorInput', {
+        isPending: field.optional(
+          graphSchema.present(field.boolean(), {
+            booleanLabels: {
+              true: 'Pending invite',
+              false: 'Active collaborator',
+              unset: 'Default',
             },
           }),
+        ),
       }),
     );
 
@@ -116,21 +113,17 @@ describe('graph ops schema descriptor', () => {
   });
 
   it('reflects input union variants without losing the merged field contract', () => {
-    const BookTarget = z
-      .object({
-        kind: z.literal('book'),
-        slug: z.string(),
-      })
-      .meta({ id: 'BookTarget' });
-    const ProfileTarget = z
-      .object({
-        kind: z.literal('profile'),
-        email: z.string(),
-      })
-      .meta({ id: 'ProfileTarget' });
+    const BookTarget = value('BookTarget', {
+      kind: graphSchema.literal('book'),
+      slug: field.string(),
+    });
+    const ProfileTarget = value('ProfileTarget', {
+      kind: graphSchema.literal('profile'),
+      email: field.string(),
+    });
     const descriptor = describeRuntimeSchema(
-      z.object({
-        target: z.union([BookTarget, ProfileTarget]),
+      value('TargetInput', {
+        target: graphSchema.union([BookTarget, ProfileTarget]),
       }),
     );
     const target = descriptor.fields.find(field => field.path === 'target');
@@ -166,11 +159,47 @@ describe('graph ops schema descriptor', () => {
     );
   });
 
+  it('preserves named field variants merged across result branches', () => {
+    const descriptor = describeRuntimeSchema(
+      graphSchema.discriminatedUnion('state', [
+        value('DeniedResult', {
+          state: graphSchema.literal('denied'),
+          subject: value('DeniedSubject', {
+            slug: field.string(),
+          }),
+        }),
+        value('ReadyResult', {
+          state: graphSchema.literal('ready'),
+          subject: value('ReadySubject', {
+            id: field.string(),
+          }),
+        }),
+      ]),
+      { io: 'output' },
+    );
+
+    expect(descriptor.fields.find(field => field.path === 'subject')).toEqual(
+      expect.objectContaining({
+        type: 'DeniedSubject | ReadySubject',
+        variants: [
+          expect.objectContaining({
+            type: 'DeniedSubject',
+            fields: [expect.objectContaining({ path: 'subject.slug', type: 'string' })],
+          }),
+          expect.objectContaining({
+            type: 'ReadySubject',
+            fields: [expect.objectContaining({ path: 'subject.id', type: 'string' })],
+          }),
+        ],
+      }),
+    );
+  });
+
   it('describes empty input objects as operations without parameters', () => {
-    const descriptor = describeRuntimeSchema(z.object({}));
+    const descriptor = describeRuntimeSchema(value('EmptyInput', {}));
 
     expect(descriptor).toMatchObject({
-      source: 'zod',
+      source: 'ontahi',
       summary: 'no input fields',
       fields: [],
     });
@@ -178,19 +207,19 @@ describe('graph ops schema descriptor', () => {
 
   it('flattens array item fields for collection outputs', () => {
     const descriptor = describeRuntimeSchema(
-      z.array(
-        z.object({
-          slug: z.string(),
-          title: z.string(),
-          version: z.string(),
+      graphSchema.array(
+        value('BookSummary', {
+          slug: field.string(),
+          title: field.string(),
+          version: field.string(),
         }),
       ),
       { io: 'output' },
     );
 
     expect(descriptor).toMatchObject({
-      source: 'zod',
-      summary: 'object[]',
+      source: 'ontahi',
+      summary: 'BookSummary[]',
     });
     expect(descriptor.fields).toEqual(
       expect.arrayContaining([
@@ -203,11 +232,11 @@ describe('graph ops schema descriptor', () => {
 
   it('flattens object fields nested inside array properties', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        books: z.array(
-          z.object({
-            slug: z.string(),
-            title: z.string(),
+      value('BookList', {
+        books: graphSchema.array(
+          value('BookListItem', {
+            slug: field.string(),
+            title: field.string(),
           }),
         ),
       }),
@@ -216,7 +245,7 @@ describe('graph ops schema descriptor', () => {
 
     expect(descriptor.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'books', type: 'object[]', required: true }),
+        expect.objectContaining({ path: 'books', type: 'BookListItem[]', required: true }),
         expect.objectContaining({ path: 'books[].slug', type: 'string', required: true }),
         expect.objectContaining({ path: 'books[].title', type: 'string', required: true }),
       ]),
@@ -225,8 +254,10 @@ describe('graph ops schema descriptor', () => {
 
   it('does not duplicate scalar array item fields', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        columnAlignments: z.array(z.enum(['left', 'center', 'right'])).optional(),
+      value('TableBlock', {
+        columnAlignments: graphSchema.optional(
+          graphSchema.array(field.enum(['left', 'center', 'right'] as const)),
+        ),
       }),
       { io: 'output' },
     );
@@ -247,34 +278,38 @@ describe('graph ops schema descriptor', () => {
 
   it('flattens nullable object output fields', () => {
     const descriptor = describeRuntimeSchema(
-      z
-        .object({
-          chapter: z.object({
-            id: z.string(),
-            title: z.string(),
-            sections: z.array(
-              z.object({
-                id: z.string(),
-                title: z.string(),
+      graphSchema.nullable(
+        value('FetchChapterResult', {
+          chapter: value('ChapterNode', {
+            id: field.string(),
+            title: field.string(),
+            sections: graphSchema.array(
+              value('SectionNode', {
+                id: field.string(),
+                title: field.string(),
               }),
             ),
           }),
-          partTitle: z.string().nullable(),
-        })
-        .nullable(),
+          partTitle: field.nullable(field.string()),
+        }),
+      ),
       { io: 'output' },
     );
 
     expect(descriptor).toMatchObject({
-      source: 'zod',
-      summary: 'object with 2 fields | null',
+      source: 'ontahi',
+      summary: 'FetchChapterResult | null',
     });
     expect(descriptor.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'chapter', type: 'object', required: true }),
+        expect.objectContaining({ path: 'chapter', type: 'ChapterNode', required: true }),
         expect.objectContaining({ path: 'chapter.id', type: 'string', required: true }),
         expect.objectContaining({ path: 'chapter.title', type: 'string', required: true }),
-        expect.objectContaining({ path: 'chapter.sections', type: 'object[]', required: true }),
+        expect.objectContaining({
+          path: 'chapter.sections',
+          type: 'SectionNode[]',
+          required: true,
+        }),
         expect.objectContaining({ path: 'chapter.sections[].id', type: 'string', required: true }),
         expect.objectContaining({
           path: 'chapter.sections[].title',
@@ -288,21 +323,25 @@ describe('graph ops schema descriptor', () => {
 
   it('flattens object fields inside nullable properties', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        prev: z
-          .object({
-            partSlug: z.string(),
-            chapterSlug: z.string(),
-            title: z.string(),
-          })
-          .nullable(),
+      value('ChapterNavigation', {
+        prev: graphSchema.nullable(
+          value('ChapterNavigationRef', {
+            partSlug: field.string(),
+            chapterSlug: field.string(),
+            title: field.string(),
+          }),
+        ),
       }),
       { io: 'output' },
     );
 
     expect(descriptor.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'prev', type: 'object | null', required: true }),
+        expect.objectContaining({
+          path: 'prev',
+          type: 'ChapterNavigationRef | null',
+          required: true,
+        }),
         expect.objectContaining({ path: 'prev.partSlug', type: 'string', required: true }),
         expect.objectContaining({ path: 'prev.chapterSlug', type: 'string', required: true }),
         expect.objectContaining({ path: 'prev.title', type: 'string', required: true }),
@@ -312,17 +351,17 @@ describe('graph ops schema descriptor', () => {
 
   it('describes discriminated object arrays by their variants', () => {
     const descriptor = describeRuntimeSchema(
-      z.object({
-        content: z.array(
-          z.discriminatedUnion('type', [
-            z.object({
-              type: z.literal('paragraph'),
-              text: z.string(),
+      value('ChapterContent', {
+        content: graphSchema.array(
+          graphSchema.discriminatedUnion('type', [
+            value('ParagraphBlock', {
+              type: graphSchema.literal('paragraph'),
+              text: field.string(),
             }),
-            z.object({
-              type: z.literal('code'),
-              code: z.string(),
-              language: z.string().optional(),
+            value('CodeBlock', {
+              type: graphSchema.literal('code'),
+              code: field.string(),
+              language: field.optional(field.string()),
             }),
           ]),
         ),
@@ -332,7 +371,10 @@ describe('graph ops schema descriptor', () => {
 
     expect(descriptor.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'content', type: '(paragraph | code)[]' }),
+        expect.objectContaining({
+          path: 'content',
+          type: '(ParagraphBlock | CodeBlock)[]',
+        }),
         expect.objectContaining({ path: 'content[].type', type: '"paragraph" | "code"' }),
         expect.objectContaining({ path: 'content[].text', type: 'string' }),
         expect.objectContaining({ path: 'content[].code', type: 'string' }),
@@ -341,13 +383,11 @@ describe('graph ops schema descriptor', () => {
   });
 
   it('keeps named schema refs while expanding their fields', () => {
-    const Viewer = z
-      .object({
-        isSignedIn: z.boolean(),
-      })
-      .meta({ id: 'GraphOpsViewerContract' });
+    const Viewer = value('GraphOpsViewerContract', {
+      isSignedIn: field.boolean(),
+    });
     const descriptor = describeRuntimeSchema(
-      z.object({
+      value('ViewerResult', {
         viewer: Viewer,
       }),
       { io: 'output' },

@@ -74,7 +74,7 @@ export type ExplorerSchemaField = {
 };
 
 export type ExplorerSchemaDescriptor = {
-  source: 'zod' | 'unknown' | 'not-declared';
+  source: 'ontahi' | 'unknown' | 'not-declared';
   summary: string;
   fields: ExplorerSchemaField[];
   jsonSchema?: unknown;

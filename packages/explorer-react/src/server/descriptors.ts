@@ -1,5 +1,9 @@
-import { inferEntityRefInputLocatorFieldGroups } from '@ontahi/core/data-graph';
-import { z } from 'zod';
+import {
+  field,
+  graphSchema,
+  inferEntityRefInputLocatorFieldGroups,
+  value,
+} from '@ontahi/core/data-graph';
 
 import type {
   ExplorerEntityDescriptor,
@@ -19,16 +23,16 @@ import {
   undeclaredResultSchema,
 } from './schema-descriptor.js';
 
-const TaskRunRefSchema = z.object({
-  taskId: z.string(),
-  runId: z.string(),
-  status: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
-  subject: z
-    .object({
-      type: z.string(),
-      id: z.string(),
-    })
-    .optional(),
+const TaskRunSubjectSchema = value('TaskRunSubject', {
+  type: field.string(),
+  id: field.string(),
+});
+
+const TaskRunRefSchema = value('TaskRunRef', {
+  taskId: field.string(),
+  runId: field.string(),
+  status: field.enum(['queued', 'running', 'completed', 'failed', 'cancelled'] as const),
+  subject: graphSchema.optional(TaskRunSubjectSchema),
 });
 
 export type ExplorerEntityLike = {

@@ -57,7 +57,7 @@ const buildOperation = (
   authority: 'server',
   exposure: 'bridge',
   inputSchema: {
-    source: 'zod',
+    source: 'ontahi',
     summary: 'object',
     fields: [
       {
@@ -295,7 +295,7 @@ describe('ExplorerOperationExecutePanel', () => {
           id: 'Book.deleteBook',
           name: 'deleteBook',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -479,7 +479,7 @@ describe('ExplorerOperationExecutePanel', () => {
           entityName: 'CommentThread',
           name: 'listThreadsForBook',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -520,7 +520,7 @@ describe('ExplorerOperationExecutePanel', () => {
           entityName: 'CommentThread',
           name: 'listThreadsForBook',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -569,7 +569,7 @@ describe('ExplorerOperationExecutePanel', () => {
           entityName: 'Book',
           name: 'setCollaboratorPending',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -620,7 +620,7 @@ describe('ExplorerOperationExecutePanel', () => {
           entityName: 'Book',
           name: 'removeCollaborator',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -676,7 +676,7 @@ describe('ExplorerOperationExecutePanel', () => {
           entityName: 'BookCollaborators',
           name: 'invite',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -790,7 +790,7 @@ describe('ExplorerOperationExecutePanel', () => {
           entityName: 'Book',
           name: 'fetchChapter',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {

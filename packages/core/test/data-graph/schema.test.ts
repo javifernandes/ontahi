@@ -7,7 +7,10 @@ import {
   graphOutput,
   graphSchema,
   resolveDomainOperations,
+  safeParseGraphSchema,
+  toGraphJsonSchema,
   toGraphOutputDescriptor,
+  toGraphSchemaDescriptor,
   toZodSchema,
   value,
 } from '../../src/data-graph/index.js';
@@ -30,7 +33,6 @@ describe('data-graph schema DSL', () => {
       title: 'Progbook',
     });
     expect(toGraphOutputDescriptor(Book)).toEqual(graphOutput.entity(Book));
-    expect(toGraphOutputDescriptor(toZodSchema(Book) as never)).toEqual(graphOutput.entity(Book));
   });
 
   it('preserves basic field constraints when generating Zod schemas', () => {
@@ -94,6 +96,75 @@ describe('data-graph schema DSL', () => {
         pageCount: 5001,
       }),
     ).toThrow();
+  });
+
+  it('describes and validates composed graph-native operation schemas without exposing Zod', () => {
+    const OperationInput = value('OperationInput', {
+      installationId: field.string({ trim: true, pattern: /^\d+$/ }),
+      email: field.email({ maxLength: 200 }),
+      limit: graphSchema.default(graphSchema.optional(field.integer({ min: 1, max: 100 })), 20),
+      mode: graphSchema.discriminatedUnion('kind', [
+        graphSchema.object({
+          kind: graphSchema.literal('chapter'),
+          slug: field.nonEmptyString(),
+        }),
+        graphSchema.object({
+          kind: graphSchema.literal('book'),
+          includeDrafts: graphSchema.optional(field.boolean()),
+        }),
+      ]),
+      metadata: graphSchema.optional(graphSchema.record(field.json())),
+    });
+
+    expect(
+      safeParseGraphSchema(OperationInput, {
+        installationId: ' 123 ',
+        email: 'reader@example.com',
+        mode: { kind: 'chapter', slug: 'intro' },
+      }),
+    ).toMatchObject({
+      success: true,
+      data: {
+        installationId: '123',
+        email: 'reader@example.com',
+        limit: 20,
+      },
+    });
+    expect(
+      safeParseGraphSchema(OperationInput, {
+        installationId: 'not-a-number',
+        email: 'invalid',
+        mode: { kind: 'chapter', slug: '' },
+      }).success,
+    ).toBe(false);
+    expect(toGraphSchemaDescriptor(OperationInput)).toMatchObject({
+      kind: 'object',
+      role: 'value',
+      name: 'OperationInput',
+      fields: {
+        installationId: {
+          kind: 'scalar',
+          stringConstraints: {
+            trim: true,
+            pattern: { source: '^\\d+$' },
+          },
+        },
+        email: {
+          kind: 'scalar',
+          stringConstraints: { format: 'email', maxLength: 200 },
+        },
+      },
+    });
+    expect(toGraphJsonSchema(OperationInput)).toMatchObject({
+      type: 'object',
+      required: ['installationId', 'email', 'mode'],
+      properties: {
+        installationId: { type: 'string', pattern: '^\\d+$' },
+        email: { type: 'string', format: 'email', maxLength: 200 },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+        mode: { anyOf: expect.any(Array) },
+      },
+    });
   });
 
   it('defines entity views that include entity fields by default and add derived fields', () => {

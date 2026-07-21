@@ -26,7 +26,7 @@ const buildOperation = (
   authority: 'server',
   exposure: 'bridge',
   inputSchema: {
-    source: 'zod',
+    source: 'ontahi',
     summary: 'object',
     fields: [
       {
@@ -108,7 +108,7 @@ describe('useExplorerOperationExecutor helpers', () => {
           entityName: 'BookCollaborators',
           name: 'invite',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -167,7 +167,7 @@ describe('useExplorerOperationExecutor helpers', () => {
           entityName: 'Book',
           name: 'fetchChapterNavigation',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -211,7 +211,7 @@ describe('useExplorerOperationExecutor helpers', () => {
           entityName: 'Book',
           name: 'fetchChapterNavigation',
           inputSchema: {
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object',
             fields: [
               {
@@ -299,7 +299,7 @@ describe('useExplorerOperationExecutor helpers', () => {
       entityName: 'BookCollaborators',
       name: 'invite',
       inputSchema: {
-        source: 'zod',
+        source: 'ontahi',
         summary: 'object',
         fields: [
           {
@@ -419,7 +419,7 @@ describe('useExplorerOperationExecutor helpers', () => {
   it('reports missing required scalar inputs without rejecting valid false, zero, or null values', () => {
     const operation = buildOperation({
       inputSchema: {
-        source: 'zod',
+        source: 'ontahi',
         summary: 'object',
         fields: [
           { path: 'confirmation', type: 'string', required: true },

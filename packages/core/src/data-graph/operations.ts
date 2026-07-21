@@ -1,4 +1,9 @@
-import type { AnyEntityDefinition, EntityRefLocators, RelationKind } from './definitions.js';
+import type {
+  AnyEntityDefinition,
+  EntityRefLocators,
+  GraphSchemaLike,
+  RelationKind,
+} from './definitions.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import {
   bindEntityRefOperationProxy,
@@ -13,6 +18,7 @@ import {
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
 } from './ref.js';
+import { isGraphSchemaDefinition } from './schema-descriptor.js';
 
 export type GraphEntityExposure = 'browser-direct' | 'bridge' | 'server-only';
 export type GraphOperationAuthority = 'client-safe' | 'server-required';
@@ -207,7 +213,8 @@ export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult 
   authority: DomainOperationAuthority;
   exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
   description?: string;
-  output?: unknown;
+  input?: GraphSchemaLike<TInput>;
+  output?: GraphSchemaLike<TResult>;
   graphOutput?: GraphOutputDescriptor;
   bridge?: DomainOperationBridgeMetadata<TInput>;
   clientCache?: DomainOperationClientCacheMetadata<TInput, TResult>;
@@ -443,7 +450,8 @@ type ResolvedDomainOperationLike = {
   authority: DomainOperationAuthority;
   exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
   description?: string;
-  output?: unknown;
+  input?: GraphSchemaLike<any>;
+  output?: GraphSchemaLike<any>;
   graphOutput?: GraphOutputDescriptor;
   bridge?: DomainOperationBridgeMetadata<any>;
   clientCache?: DomainOperationClientCacheMetadata<any, any>;
@@ -584,12 +592,22 @@ export const resolveDomainOperations = <
 ): ResolveDomainOperations<TEntityName, TOperations> =>
   Object.fromEntries(
     Object.entries(operations).map(([name, operation]) => {
+      const operationId = resolveOperationId(entityName, name);
+
+      if (operation.input !== undefined && !isGraphSchemaDefinition(operation.input)) {
+        throw new Error(`Domain operation "${operationId}" input must be an Ontahi schema.`);
+      }
+
+      if (operation.output !== undefined && !isGraphSchemaDefinition(operation.output)) {
+        throw new Error(`Domain operation "${operationId}" output must be an Ontahi schema.`);
+      }
+
       const authority = operation.authority ?? defaults?.authority ?? 'server';
       const exposure = operation.exposure ?? defaults?.exposure;
 
       if (!exposure) {
         throw new Error(
-          `Domain operation "${resolveOperationId(entityName, name)}" must declare exposure or inherit it from domainOperationDefaults.`,
+          `Domain operation "${operationId}" must declare exposure or inherit it from domainOperationDefaults.`,
         );
       }
 
@@ -606,7 +624,7 @@ export const resolveDomainOperations = <
 
       if (durable && !durable.runtime) {
         throw new Error(
-          `Durable domain operation "${resolveOperationId(entityName, name)}" must declare durable.runtime or inherit it from domainOperationDefaults.durable.runtime.`,
+          `Durable domain operation "${operationId}" must declare durable.runtime or inherit it from domainOperationDefaults.durable.runtime.`,
         );
       }
 
@@ -627,7 +645,7 @@ export const resolveDomainOperations = <
         ...(bridge ? { bridge } : {}),
         ...(durable ? { durable } : {}),
         entityName,
-        id: resolveOperationId(entityName, name),
+        id: operationId,
       });
       Object.defineProperty(resolvedOperation, 'name', {
         value: name,

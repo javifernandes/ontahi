@@ -1,16 +1,20 @@
 import { Effect } from 'effect';
-import type { ZodIssue } from 'zod';
+
+import {
+  safeParseUnknownGraphSchema,
+  type GraphSchemaValidationIssue,
+} from '../../../data-graph/schema.js';
 
 import { invalidTaskInputFailure, invalidTaskStepInputFailure } from './failures.js';
 import type { TaskDefinition, TaskFailure, TaskStepDefinition } from './types.js';
 
-const formatIssues = (issues: ReadonlyArray<ZodIssue>) =>
+const formatIssues = (issues: ReadonlyArray<GraphSchemaValidationIssue>) =>
   issues.map(issue => ({
     path: issue.path.join('.'),
     message: issue.message,
   }));
 
-const firstIssueMessage = (issues: ReadonlyArray<ZodIssue>, fallback: string) =>
+const firstIssueMessage = (issues: ReadonlyArray<GraphSchemaValidationIssue>, fallback: string) =>
   issues[0]?.message ?? fallback;
 
 export const validateTaskInput = <TInput, TResult>(
@@ -21,18 +25,18 @@ export const validateTaskInput = <TInput, TResult>(
     return Effect.succeed(input as TInput);
   }
 
-  const result = task.input.safeParse(input);
+  const result = safeParseUnknownGraphSchema(task.input, input);
 
   if (result.success) {
-    return Effect.succeed(result.data);
+    return Effect.succeed(result.data as TInput);
   }
 
   return Effect.fail(
     invalidTaskInputFailure(
       task.id,
-      firstIssueMessage(result.error.issues, 'Task input validation failed.'),
+      firstIssueMessage(result.issues, 'Task input validation failed.'),
       {
-        issues: formatIssues(result.error.issues),
+        issues: formatIssues(result.issues),
       },
     ),
   );
@@ -47,19 +51,19 @@ export const validateTaskStepInput = <TInput, TResult>(
     return Effect.succeed(input as TInput);
   }
 
-  const result = step.input.safeParse(input);
+  const result = safeParseUnknownGraphSchema(step.input, input);
 
   if (result.success) {
-    return Effect.succeed(result.data);
+    return Effect.succeed(result.data as TInput);
   }
 
   return Effect.fail(
     invalidTaskStepInputFailure(
       taskId,
       step.id,
-      firstIssueMessage(result.error.issues, 'Task step input validation failed.'),
+      firstIssueMessage(result.issues, 'Task step input validation failed.'),
       {
-        issues: formatIssues(result.error.issues),
+        issues: formatIssues(result.issues),
       },
     ),
   );

@@ -1,5 +1,5 @@
+import { field, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from '../../src/server/index.js';
 
@@ -46,8 +46,8 @@ describe('explorer descriptor builder', () => {
           name: 'load',
           authority: 'graph',
           exposure: 'public',
-          input: z.object({ slug: z.string() }),
-          output: z.object({ title: z.string() }),
+          input: value('LoadBookInput', { slug: field.string() }),
+          output: value('LoadBookOutput', { title: field.string() }),
         },
       ],
       domainOperations: [
@@ -79,8 +79,8 @@ describe('explorer descriptor builder', () => {
           durable: {
             taskId: 'book.publish',
             runtime: 'test-runtime',
-            progress: z.object({ percent: z.number() }),
-            finalOutput: z.object({ published: z.boolean() }),
+            progress: value('PublishBookProgress', { percent: field.number() }),
+            finalOutput: value('PublishBookOutput', { published: field.boolean() }),
             subject: {},
             idempotency: { policy: 'semantic' },
           },
@@ -88,13 +88,13 @@ describe('explorer descriptor builder', () => {
       ],
       tasks: [{ id: 'Book.sync', entityName: 'Book', name: 'sync' }],
       getTaskDefinition: () => ({
-        input: z.object({ slug: z.string() }),
-        progress: z.object({ percent: z.number() }),
-        output: z.object({ published: z.boolean() }),
+        input: value('SyncBookInput', { slug: field.string() }),
+        progress: value('SyncBookProgress', { percent: field.number() }),
+        output: value('SyncBookOutput', { published: field.boolean() }),
         steps: {
           fetch: {
             id: 'fetch',
-            input: z.object({ slug: z.string() }),
+            input: value('FetchBookStepInput', { slug: field.string() }),
           },
         },
       }),
@@ -149,15 +149,15 @@ describe('explorer descriptor builder', () => {
           hasSubject: true,
           idempotencyPolicy: 'semantic',
           runRefSchema: expect.objectContaining({
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object with 4 fields',
           }),
           progressSchema: expect.objectContaining({
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object with 1 field',
           }),
           finalOutputSchema: expect.objectContaining({
-            source: 'zod',
+            source: 'ontahi',
             summary: 'object with 1 field',
           }),
         },
@@ -189,7 +189,7 @@ describe('explorer descriptor builder', () => {
     );
     expect(snapshot.tasks[0]?.steps[0]?.inputSchema).toEqual(
       expect.objectContaining({
-        source: 'zod',
+        source: 'ontahi',
         summary: 'object with 1 field',
       }),
     );

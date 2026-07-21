@@ -1,7 +1,7 @@
+import { field, value } from '@ontahi/core/data-graph';
 import type { TaskDefinition } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
 const { workflowSleep } = vi.hoisted(() => ({
   workflowSleep: vi.fn(() => Promise.resolve()),
@@ -183,8 +183,8 @@ describe('vercel workflow task executor', () => {
     const run = vi.fn(() => Effect.succeed({ message: 'Hi there' }));
     taskDefinitions.set('fixture.say-hello', {
       id: 'fixture.say-hello',
-      input: z.object({
-        name: z.string().min(1),
+      input: value('SayHelloTaskInput', {
+        name: field.nonEmptyString(),
       }),
       run,
     });

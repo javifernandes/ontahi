@@ -40,7 +40,7 @@ const operation: ExplorerOperationDescriptor = {
     hasSubject: true,
     idempotencyPolicy: 'required',
     runRefSchema: {
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object with 3 fields',
       fields: [],
     },
@@ -72,7 +72,7 @@ const task: ExplorerTaskDescriptor = {
   entityName: 'Book',
   name: 'importBook',
   inputSchema: {
-    source: 'zod',
+    source: 'ontahi',
     summary: 'object',
     fields: [
       {
@@ -101,7 +101,7 @@ const task: ExplorerTaskDescriptor = {
         fields: [],
       },
       resultSchema: {
-        source: 'zod',
+        source: 'ontahi',
         summary: 'object',
         fields: [
           {

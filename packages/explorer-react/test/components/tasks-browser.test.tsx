@@ -39,7 +39,7 @@ const tasks: ExplorerTaskDescriptor[] = [
     entityName: 'Book',
     name: 'importBook',
     inputSchema: {
-      source: 'zod',
+      source: 'ontahi',
       summary: 'object',
       fields: [
         {

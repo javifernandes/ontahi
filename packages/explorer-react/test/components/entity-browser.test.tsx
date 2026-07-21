@@ -91,7 +91,7 @@ const operation: ExplorerOperationDescriptor = {
   exposure: 'internal',
   description: 'Return sharing data.',
   inputSchema: {
-    source: 'zod',
+    source: 'ontahi',
     summary: 'object',
     fields: [
       {

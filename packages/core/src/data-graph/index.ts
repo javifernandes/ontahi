@@ -19,5 +19,6 @@ export * from './relation-root.js';
 export * from './runtime.js';
 export * from './runtime-bound-api.js';
 export * from './schema.js';
+export * from './schema-descriptor.js';
 export * from './selection.js';
 export * from './selection-assembly.js';

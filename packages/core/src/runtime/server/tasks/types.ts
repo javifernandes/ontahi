@@ -1,6 +1,6 @@
 import type { Effect } from 'effect';
-import type { ZodType } from 'zod';
 
+import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
 import type {
   TaskActor,
   TaskRunListItem,
@@ -26,6 +26,8 @@ export type {
 } from '../../contracts.js';
 
 export type TaskFailure = OperationFailure<string, Record<string, unknown>>;
+
+export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;
 
 export type TaskRunStoreCreateInput = {
   taskId: string;
@@ -79,7 +81,7 @@ export type TaskContext = Pick<TaskRunRef, 'taskId' | 'runId' | 'subject'> & {
 
 export type TaskStepDefinition<TInput, TResult> = {
   id: string;
-  input?: ZodType<TInput>;
+  input?: TaskSchema<TInput>;
   run(input: TInput, context: TaskContext): Effect.Effect<TResult, TaskFailure>;
 };
 
@@ -95,9 +97,9 @@ export type TaskStepDeclarations = TaskStepRegistry | ReadonlyArray<TaskStepDefi
 
 export type TaskDefinition<TInput, TResult> = {
   id: string;
-  input?: ZodType<TInput>;
-  progress?: ZodType<NonNullable<TaskSnapshot['progress']>>;
-  output?: ZodType<TResult>;
+  input?: TaskSchema<TInput>;
+  progress?: TaskSchema<NonNullable<TaskSnapshot['progress']>>;
+  output?: TaskSchema<TResult>;
   steps?: TaskStepRegistry;
   run(input: TInput, context: TaskContext): Effect.Effect<TResult, TaskFailure>;
 };

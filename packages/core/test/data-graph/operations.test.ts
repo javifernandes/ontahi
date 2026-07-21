@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import {
   defineClientDomainOperation,
@@ -17,10 +16,12 @@ import {
   entity,
   field,
   graphOutput,
+  graphSchema,
   type AnyEntityDefinition,
   resolveDomainOperations,
   resolveGraphOperations,
   resolveOperationId,
+  value,
 } from '../../src/data-graph/index.js';
 
 describe('data-graph operations', () => {
@@ -240,39 +241,18 @@ describe('data-graph operations', () => {
     );
   });
 
-  it('uses graph output metadata attached to the output schema', () => {
-    const Book = entity('Book', {
-      id: field.id(),
-      slug: field.string(),
-    });
-    const output = graphOutput.schema(
-      z.object({
-        book: z.object({
-          id: z.string(),
-          slug: z.string(),
+  it('rejects non-Ontahi domain operation contracts during resolution', () => {
+    expect(() =>
+      resolveDomainOperations('Book', {
+        legacy: defineDomainOperationMetadata({
+          exposure: 'bridge',
+          input: { parse: () => ({}) } as never,
         }),
       }),
-      graphOutput.object({
-        book: graphOutput.entity(Book),
-      }),
-    );
-
-    const operations = resolveDomainOperations('Book', {
-      getInfo: defineDomainOperationMetadata({
-        exposure: 'bridge',
-        output,
-      }),
-    });
-
-    expect(operations.getInfo.output).toBe(output);
-    expect(operations.getInfo.graphOutput).toEqual(
-      graphOutput.object({
-        book: graphOutput.entity(Book),
-      }),
-    );
+    ).toThrow('Domain operation "Book.legacy" input must be an Ontahi schema.');
   });
 
-  it('derives graph output metadata from annotated nested Zod schemas', () => {
+  it('derives graph output metadata from nested Ontahi schemas', () => {
     const CommentMessage = entity('CommentMessage', {
       id: field.id(),
       body: field.string(),
@@ -284,22 +264,14 @@ describe('data-graph operations', () => {
     })
       .locators({ refById: 'id' })
       .identity('refById');
-    const MessageSchema = graphOutput.entity(
-      CommentMessage,
-      z.object({
-        id: z.string(),
-        body: z.string(),
-      }),
-    );
-    const ThreadSchema = graphOutput.entity(
-      CommentThread,
-      z.object({
-        id: z.string(),
-        messages: z.array(MessageSchema),
-      }),
-    );
-    const output = z.object({
-      threads: z.array(ThreadSchema),
+    const MessageSchema = CommentMessage.view('ThreadMessage');
+    const ThreadSchema = CommentThread.view('Thread', {
+      fields: {
+        messages: graphSchema.array(MessageSchema),
+      },
+    });
+    const output = value('ListThreadsResult', {
+      threads: graphSchema.array(ThreadSchema),
     });
 
     const operations = resolveDomainOperations('CommentThread', {

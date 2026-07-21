@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
+import { field, graphSchema, value } from '../../src/data-graph/index.js';
 import {
   isOperationInvocationProtocolResponse,
   parseOperationInvocationRequest,
@@ -64,7 +64,7 @@ describe('operation invocation dispatcher', () => {
     name: 'rename',
     authority: 'server' as const,
     exposure: 'bridge' as const,
-    input: z.object({ title: z.string().min(1) }),
+    input: value('RenameBookInput', { title: field.nonEmptyString() }),
     inputRefs: undefined,
     layer: 'books',
     run: vi.fn(),
@@ -138,11 +138,9 @@ describe('operation invocation dispatcher', () => {
     const dispatcher = createOperationInvocationDispatcher({
       resolveOperation: () => ({
         ...operation,
-        input: {
-          safeParse: () => {
-            throw failure;
-          },
-        } as unknown as typeof operation.input,
+        input: graphSchema.transform(operation.input, () => {
+          throw failure;
+        }),
       }),
       invokeOperation: vi.fn(),
       checkPermission: vi.fn(),

@@ -1,6 +1,11 @@
 import { Effect } from 'effect';
-import { z, type ZodType } from 'zod';
 
+import {
+  graphSchema,
+  type GraphSchemaDefinition,
+  type GraphSchemaLike,
+  type InferGraphSchemaValue,
+} from '../../data-graph/definitions.js';
 import {
   resolveDomainOperations,
   type DurableOperationDeclarationMetadata,
@@ -47,9 +52,11 @@ import type {
   TaskTrigger,
 } from './tasks/types.js';
 
-type InputSchemaLike<TInput> = ZodType<TInput>;
-type OutputSchemaLike = ZodType<unknown>;
-const EmptyInputSchema = z.object({}) as unknown as InputSchemaLike<Record<string, never>>;
+export type OperationSchema<TValue = unknown> = GraphSchemaLike<TValue>;
+
+type InputSchemaLike<TInput> = OperationSchema<TInput>;
+type OutputSchemaLike<TResult = unknown> = OperationSchema<TResult>;
+const EmptyInputSchema = graphSchema.object({});
 
 export type DomainOperationSuccess = unknown;
 
@@ -100,7 +107,7 @@ export type DomainOperationDeclaration<
   TInputRefs extends EntityRefInputDeclarations = {},
 > = ServerDomainOperationMetadata<TInput, TResult> & {
   input?: InputSchemaLike<TInput>;
-  output?: OutputSchemaLike;
+  output?: OutputSchemaLike<TResult>;
   graphOutput?: GraphOutputDescriptor;
   inputRefs?: TInputRefs;
   graphOps?: DomainOperationGraphOpsMetadata;
@@ -133,6 +140,9 @@ export type DomainOperationDeclarations = Record<
   string,
   DomainOperationDeclaration<any, any, any, any, any>
 >;
+
+export type InferOperationSchemaValue<TSchema extends GraphSchemaDefinition> =
+  InferGraphSchemaValue<TSchema>;
 
 export type ResolvedDomainOperationDeclaration<
   TInput extends OperationInput = OperationInput,
@@ -371,7 +381,7 @@ export const createTaskDefinitionFromDurableDomainOperation = <TInput extends Op
 
   return {
     id: resolveDurableOperationTaskId(operation),
-    input: operation.input,
+    input: operation.input as TaskDefinition<TInput, unknown>['input'],
     progress: operation.durable.progress as TaskDefinition<TInput, unknown>['progress'],
     output: operation.durable.finalOutput as TaskDefinition<TInput, unknown>['output'],
     steps: Object.fromEntries(

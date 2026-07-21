@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
+import { field, value } from '../../../src/data-graph/index.js';
 import {
   architecture,
   getArchitecture,
@@ -120,8 +120,8 @@ describe('architecture app facade', () => {
       authority: 'server',
       exposure: 'server-only',
       layer: 'features.books',
-      input: z.object({
-        bookSlug: z.string(),
+      input: value('ReadBookInput', {
+        bookSlug: field.string(),
       }),
       run: (input: { bookSlug: string }) =>
         Effect.succeed({

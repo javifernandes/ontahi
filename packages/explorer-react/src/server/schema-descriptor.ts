@@ -1,4 +1,8 @@
-import { z } from 'zod';
+import {
+  isGraphSchemaDefinition,
+  toGraphJsonSchema,
+  type GraphSchemaDefinition,
+} from '@ontahi/core/data-graph';
 
 import type {
   ExplorerSchemaDescriptor,
@@ -7,6 +11,7 @@ import type {
 } from '../contracts/index.js';
 
 type JsonSchemaObject = {
+  title?: string;
   type?: string | string[];
   properties?: Record<string, JsonSchemaObject>;
   required?: string[];
@@ -44,12 +49,6 @@ export const undeclaredInputSchema = (): ExplorerSchemaDescriptor =>
 export const undeclaredResultSchema = (): ExplorerSchemaDescriptor =>
   notDeclaredSchema('Return type is TypeScript-only; no runtime result schema is declared yet.');
 
-const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const isZodSchema = (value: unknown): value is z.ZodType =>
-  isObjectRecord(value) && '_zod' in value;
-
 const formatLiteral = (value: unknown) =>
   typeof value === 'string' ? `"${value}"` : JSON.stringify(value);
 
@@ -63,6 +62,10 @@ const resolveSchemaRef = (schema: JsonSchemaObject, context: JsonSchemaContext) 
 const describeObjectVariantLabel = (schema: JsonSchemaObject, context: JsonSchemaContext) => {
   if (schema.$ref) {
     return refName(schema.$ref);
+  }
+
+  if (schema.title) {
+    return schema.title;
   }
 
   const discriminator = schema.properties?.type;
@@ -84,6 +87,10 @@ const formatArrayItemType = (type: string) =>
 const describeSchemaType = (schema: JsonSchemaObject, context: JsonSchemaContext): string => {
   if (schema.$ref) {
     return refName(schema.$ref);
+  }
+
+  if (schema.title) {
+    return schema.title;
   }
 
   if (schema.const !== undefined) {
@@ -237,6 +244,15 @@ const describeSchemaFieldVariants = (
       {
         type: name,
         fields: flattenNestedSchemaFields(resolved, pathPrefix, required, context, nextVisitedRefs),
+      },
+    ];
+  }
+
+  if (schema.title && schema.properties) {
+    return [
+      {
+        type: schema.title,
+        fields: flattenNestedSchemaFields(schema, pathPrefix, required, context, visitedRefs),
       },
     ];
   }
@@ -479,16 +495,21 @@ const summarizeJsonSchema = (
   schema: JsonSchemaObject,
   context: JsonSchemaContext,
   options?: { io?: 'input' | 'output' },
+  preferTitle = false,
 ): string => {
   if (schema.$ref) {
     return refName(schema.$ref);
+  }
+
+  if (preferTitle && schema.title) {
+    return schema.title;
   }
 
   const variants = getSchemaVariants(schema);
 
   if (variants.length > 0) {
     return [
-      ...new Set(variants.map(variant => summarizeJsonSchema(variant, context, options))),
+      ...new Set(variants.map(variant => summarizeJsonSchema(variant, context, options, true))),
     ].join(' | ');
   }
 
@@ -505,9 +526,6 @@ const summarizeJsonSchema = (
   return describeSchemaType(schema, context);
 };
 
-const toPlainJsonSchema = (schema: JsonSchemaObject): JsonSchemaObject =>
-  JSON.parse(JSON.stringify(schema)) as JsonSchemaObject;
-
 export const describeRuntimeSchema = (
   schema: unknown,
   options?: { io?: 'input' | 'output' },
@@ -516,36 +534,38 @@ export const describeRuntimeSchema = (
     return undeclaredInputSchema();
   }
 
-  if (!isZodSchema(schema)) {
-    return {
-      source: 'unknown',
-      summary: 'Runtime schema exists, but it is not a recognized Zod schema.',
-      fields: [],
-    };
+  if (isGraphSchemaDefinition(schema)) {
+    return describeGraphSchema(schema, options);
   }
 
+  return {
+    source: 'unknown',
+    summary: 'Runtime schema exists, but it is not a recognized Ontahi schema.',
+    fields: [],
+  };
+};
+
+export const describeGraphSchema = (
+  schema: GraphSchemaDefinition,
+  options?: { io?: 'input' | 'output' },
+): ExplorerSchemaDescriptor => {
   try {
     const io = options?.io ?? 'input';
-    const jsonSchema = z.toJSONSchema(schema, {
-      io,
-      unrepresentable: 'any',
-      cycles: 'ref',
-    }) as JsonSchemaObject;
-    const plainJsonSchema = toPlainJsonSchema(jsonSchema);
+    const jsonSchema = toGraphJsonSchema(schema) as JsonSchemaObject;
     const context = {
-      definitions: plainJsonSchema.$defs ?? {},
+      definitions: jsonSchema.$defs ?? {},
     };
 
     return {
-      source: 'zod',
-      summary: summarizeJsonSchema(plainJsonSchema, context, { io }),
-      fields: flattenSchemaFields(plainJsonSchema, '', true, context),
-      jsonSchema: plainJsonSchema,
+      source: 'ontahi',
+      summary: summarizeJsonSchema(jsonSchema, context, { io }),
+      fields: flattenSchemaFields(jsonSchema, '', true, context),
+      jsonSchema,
     };
   } catch (error) {
     return {
-      source: 'zod',
-      summary: 'Zod schema could not be converted to JSON Schema.',
+      source: 'ontahi',
+      summary: 'Ontahi schema could not be described.',
       fields: [],
       error: error instanceof Error ? error.message : String(error),
     };

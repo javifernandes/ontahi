@@ -15,10 +15,12 @@ import {
   type EntityRefInputPublicInput,
   type EntityRefLocator,
 } from '../../data-graph/ref.js';
+import { parseGraphSchema, safeParseGraphSchema } from '../../data-graph/schema.js';
 
 import type { ArchitectureDefinition, ArchitectureNamespace } from './architecture-types.js';
 import {
   contract,
+  contractFromGraphSchema,
   contractFromTypia,
   contractFromValidation,
   contractFromZod,
@@ -148,36 +150,33 @@ type ConfiguredOperationFailure<TOperation extends AnyResolvedDomainOperation> =
     ? TFailure
     : never;
 
-type ConfiguredOperationRawRun = {
-  <TOperation extends AnyResolvedDomainOperation & { durable: object }>(
-    operation: TOperation,
-    input: ConfiguredOperationInput<TOperation>,
-  ): Promise<OperationResult<TaskRunRef, ConfiguredOperationFailure<TOperation> | TaskFailure>>;
-  <TOperation extends AnyResolvedDomainOperation>(
-    operation: TOperation,
-    input: ConfiguredOperationInput<TOperation>,
-  ): Promise<
-    OperationResult<ConfiguredOperationResult<TOperation>, ConfiguredOperationFailure<TOperation>>
-  >;
-};
+type ConfiguredOperationExecutionResult<TOperation extends AnyResolvedDomainOperation> =
+  undefined extends TOperation['durable'] ? ConfiguredOperationResult<TOperation> : TaskRunRef;
 
-type ConfiguredOperationInvoke = {
-  <TOperation extends AnyResolvedDomainOperation & { durable: object }>(
-    operation: TOperation,
-    input: ConfiguredOperationInput<TOperation>,
-  ): Promise<
-    OperationInvocationResult<TaskRunRef, ConfiguredOperationFailure<TOperation> | TaskFailure>
-  >;
-  <TOperation extends AnyResolvedDomainOperation>(
-    operation: TOperation,
-    input: ConfiguredOperationInput<TOperation>,
-  ): Promise<
-    OperationInvocationResult<
-      ConfiguredOperationResult<TOperation>,
-      ConfiguredOperationFailure<TOperation>
-    >
-  >;
-};
+type ConfiguredOperationExecutionFailure<TOperation extends AnyResolvedDomainOperation> =
+  undefined extends TOperation['durable']
+    ? ConfiguredOperationFailure<TOperation>
+    : ConfiguredOperationFailure<TOperation> | TaskFailure;
+
+type ConfiguredOperationRawRun = <TOperation extends AnyResolvedDomainOperation>(
+  operation: TOperation,
+  input: ConfiguredOperationInput<NoInfer<TOperation>>,
+) => Promise<
+  OperationResult<
+    ConfiguredOperationExecutionResult<TOperation>,
+    ConfiguredOperationExecutionFailure<TOperation>
+  >
+>;
+
+type ConfiguredOperationInvoke = <TOperation extends AnyResolvedDomainOperation>(
+  operation: TOperation,
+  input: ConfiguredOperationInput<NoInfer<TOperation>>,
+) => Promise<
+  OperationInvocationResult<
+    ConfiguredOperationExecutionResult<TOperation>,
+    ConfiguredOperationExecutionFailure<TOperation>
+  >
+>;
 
 type GraphEntityRefProvider = <
   TEntity extends Pick<AnyEntityDefinition, 'name'> | string,
@@ -248,9 +247,12 @@ const concernFacadeBase = {
 
 const validationFacadeBase = {
   contract,
+  contractFromGraphSchema,
   contractFromTypia,
   contractFromValidation,
   contractFromZod,
+  parseGraphSchema,
+  safeParseGraphSchema,
 };
 
 const cacheFacadeBase = {

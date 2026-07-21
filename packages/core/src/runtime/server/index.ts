@@ -28,6 +28,7 @@ export {
 } from './features.js';
 export {
   contract,
+  contractFromGraphSchema,
   contractFromTypia,
   contractFromZod,
   contractFromValidation,
@@ -35,6 +36,7 @@ export {
   typiaFieldMessage,
   toContractConcern,
   type CreateTypiaValidationMessageFormatterOptions,
+  type ContractFromGraphSchemaOptions,
   type ContractFromTypiaOptions,
   type ContractFromZodOptions,
   type ContractFromValidationOptions,

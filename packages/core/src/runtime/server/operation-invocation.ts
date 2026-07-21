@@ -1,4 +1,5 @@
 import { normalizeEntityRefInput } from '../../data-graph/ref.js';
+import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
 import {
   operationInputInvalid,
   operationRejected,
@@ -121,7 +122,7 @@ export const createOperationInvocationDispatcher =
 
     try {
       const normalizedInput = normalizeOperationInput(operation, request.input);
-      validatedInput = operation.input.safeParse(normalizedInput);
+      validatedInput = safeParseUnknownGraphSchema(operation.input, normalizedInput);
     } catch (error) {
       reportError?.(error, request);
 
@@ -132,7 +133,10 @@ export const createOperationInvocationDispatcher =
     }
 
     if (!validatedInput.success) {
-      return invalidInputResponse(request, toOperationValidationIssues(validatedInput.error));
+      return invalidInputResponse(
+        request,
+        toOperationValidationIssues({ issues: validatedInput.issues }),
+      );
     }
 
     if (request.kind === 'check-permission') {
