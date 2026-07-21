@@ -14,7 +14,13 @@ export {
   normalizeTaskTrigger,
   taskTriggerActorMatches,
 } from './tasks/triggers.js';
-export { validateTaskInput, validateTaskStepInput } from './tasks/validation.js';
+export {
+  validateTaskInput,
+  validateTaskOutput,
+  validateTaskProgress,
+  validateTaskStepInput,
+  validateTaskStepOutput,
+} from './tasks/validation.js';
 export type {
   InProcessTaskRuntimeAdapterOptions,
   TaskActor,

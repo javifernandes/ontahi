@@ -82,6 +82,7 @@ export type TaskContext = Pick<TaskRunRef, 'taskId' | 'runId' | 'subject'> & {
 export type TaskStepDefinition<TInput, TResult> = {
   id: string;
   input?: TaskSchema<TInput>;
+  output?: TaskSchema<TResult>;
   run(input: TInput, context: TaskContext): Effect.Effect<TResult, TaskFailure>;
 };
 

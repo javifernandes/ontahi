@@ -2,8 +2,12 @@ import 'server-only';
 
 import {
   validateTaskInput,
+  validateTaskOutput,
+  validateTaskProgress,
   validateTaskStepInput,
+  validateTaskStepOutput,
   type TaskContext,
+  type TaskDefinition,
   type TaskFailure,
   type TaskRunRef,
   type TaskRunSource,
@@ -160,7 +164,11 @@ export const createVercelWorkflowTaskExecutor = ({
     }
   };
 
-  const createTaskContext = (source: TaskRunSource, runStep: VercelTaskStepRunner): TaskContext => {
+  const createTaskContext = (
+    source: TaskRunSource,
+    task: TaskDefinition<unknown, unknown>,
+    runStep: VercelTaskStepRunner,
+  ): TaskContext => {
     const ref = {
       taskId: source.taskId,
       runId: source.runId,
@@ -172,18 +180,20 @@ export const createVercelWorkflowTaskExecutor = ({
       trigger: source.trigger,
       createdAt: source.createdAt,
       progress: progress =>
-        Effect.tryPromise({
-          try: async () => {
-            const snapshot = await updateTaskRun(ref, {
-              status: 'running',
-              progress,
-              updatedAt: now(),
-            });
-            await writeProgress(ref.runId, progress);
-            return snapshot;
-          },
-          catch: toTaskFailure,
-        }),
+        Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
+          Effect.tryPromise({
+            try: async () => {
+              const snapshot = await updateTaskRun(ref, {
+                status: 'running',
+                progress: parsedProgress,
+                updatedAt: now(),
+              });
+              await writeProgress(ref.runId, parsedProgress);
+              return snapshot;
+            },
+            catch: toTaskFailure,
+          }),
+        ),
       sleep: milliseconds =>
         Effect.tryPromise({
           try: () => workflowSleep(milliseconds),
@@ -224,10 +234,11 @@ export const createVercelWorkflowTaskExecutor = ({
     }
 
     const source = await loadTaskRunSource(input);
-    const context = createTaskContext(source, runStep);
+    const context = createTaskContext(source, task, runStep);
     const parsedInput = await runTaskEffect(validateTaskStepInput(input.taskId, step, input.input));
+    const output = await runTaskEffect(step.run(parsedInput, context));
 
-    return runTaskEffect(step.run(parsedInput, context));
+    return runTaskEffect(validateTaskStepOutput(input.taskId, step, output));
   };
 
   const runTask = async (input: VercelTaskWorkflowInput, runStep: VercelTaskStepRunner) => {
@@ -253,24 +264,25 @@ export const createVercelWorkflowTaskExecutor = ({
 
     try {
       const source = await loadTaskRunSource(ref);
-      const context = createTaskContext(source, runStep);
+      const context = createTaskContext(source, task, runStep);
       const parsedInput = await runTaskEffect(validateTaskInput(task, source.input));
       await updateTaskRun(ref, {
         input: parsedInput,
         updatedAt: now(),
       });
       const result = await runTaskEffect(task.run(parsedInput, context));
+      const parsedResult = await runTaskEffect(validateTaskOutput(task, result));
       const completedAt = now();
 
       await updateTaskRun(ref, {
         status: 'completed',
-        result,
+        result: parsedResult,
         completedAt,
         updatedAt: completedAt,
       });
-      await writeResult(ref.runId, result);
+      await writeResult(ref.runId, parsedResult);
 
-      return result;
+      return parsedResult;
     } catch (error) {
       const failure = toTaskFailure(error);
       const completedAt = now();

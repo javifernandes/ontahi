@@ -7,7 +7,10 @@ import {
   createInMemoryTaskRunStore,
   createInProcessTaskRuntimeAdapter,
   createSystemTaskTrigger,
+  createTaskDefinitionFromDurableDomainOperation,
   createUserTaskTrigger,
+  defineDomainOperation,
+  defineDomainOperationsForEntity,
   defineTask,
   defineTaskStep,
   getTaskSnapshot,
@@ -27,6 +30,42 @@ const createDeferred = () => {
 };
 
 describe('tasks', () => {
+  it('projects a complete durable operation lifecycle into a task definition', () => {
+    const InputSchema = value('ImportInput', { source: field.string() });
+    const ProgressSchema = value('ImportProgress', { percent: field.number() });
+    const OutputSchema = value('ImportOutput', { imported: field.boolean() });
+    const step = defineTaskStep({
+      id: 'import-source',
+      input: InputSchema,
+      output: OutputSchema,
+      run: () => Effect.succeed({ imported: true }),
+    });
+    const operations = defineDomainOperationsForEntity('Book', {
+      importBook: defineDomainOperation({
+        layer: 'test.books',
+        exposure: 'server-only',
+        input: InputSchema,
+        durable: {
+          runtime: 'in-process',
+          progress: ProgressSchema,
+          finalOutput: OutputSchema,
+          steps: [step],
+        },
+        run: () => Effect.succeed({ imported: true }),
+      }),
+    });
+
+    const task = createTaskDefinitionFromDurableDomainOperation(operations.importBook);
+
+    expect(task.id).toBe('Book.importBook');
+    expect(task.input).toBe(InputSchema);
+    expect(task.progress).toBe(ProgressSchema);
+    expect(task.output).toBe(OutputSchema);
+    expect(task.steps).toEqual({
+      'import-source': step,
+    });
+  });
+
   it('creates and normalizes task triggers', () => {
     expect(normalizeTaskTrigger(undefined)).toEqual({
       cause: 'system',
@@ -193,6 +232,93 @@ describe('tasks', () => {
         status: 'failed',
         error: {
           code: 'invalid_task_step_input',
+        },
+      });
+    });
+  });
+
+  it('validates progress snapshots before storing them', async () => {
+    const store = createInMemoryTaskRunStore();
+    const adapter = createInProcessTaskRuntimeAdapter({
+      store,
+      sleep: async () => {},
+    });
+    const task = defineTask({
+      id: 'demo.validated-progress',
+      progress: value('DemoTaskProgress', {
+        percent: field.number({ min: 0, max: 100 }),
+      }),
+      run: (_input: {}, context) =>
+        Effect.gen(function* () {
+          yield* context.progress({ percent: 101 });
+          return { completed: true };
+        }),
+    });
+
+    const run = await Effect.runPromise(adapter.start(task, {}, { runId: 'run-progress' }));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(adapter.getSnapshot(run))).resolves.toMatchObject({
+        status: 'failed',
+        error: {
+          code: 'invalid_task_progress',
+        },
+      });
+    });
+  });
+
+  it('validates step output before returning it to the task', async () => {
+    const store = createInMemoryTaskRunStore();
+    const adapter = createInProcessTaskRuntimeAdapter({
+      store,
+      sleep: async () => {},
+    });
+    const countedStep = defineTaskStep({
+      id: 'counted-step',
+      output: value('CountedStepOutput', {
+        count: field.positiveInteger(),
+      }),
+      run: () => Effect.succeed({ count: 0 }),
+    });
+    const task = defineTask({
+      id: 'demo.validated-step-output',
+      steps: [countedStep],
+      run: (_input: {}, context) => context.step(countedStep, {}),
+    });
+
+    const run = await Effect.runPromise(adapter.start(task, {}, { runId: 'run-step-output' }));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(adapter.getSnapshot(run))).resolves.toMatchObject({
+        status: 'failed',
+        error: {
+          code: 'invalid_task_step_output',
+        },
+      });
+    });
+  });
+
+  it('validates final task output before completing the run', async () => {
+    const store = createInMemoryTaskRunStore();
+    const adapter = createInProcessTaskRuntimeAdapter({
+      store,
+      sleep: async () => {},
+    });
+    const task = defineTask({
+      id: 'demo.validated-output',
+      output: value('DemoTaskOutput', {
+        count: field.positiveInteger(),
+      }),
+      run: () => Effect.succeed({ count: 0 }),
+    });
+
+    const run = await Effect.runPromise(adapter.start(task, {}, { runId: 'run-output' }));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(adapter.getSnapshot(run))).resolves.toMatchObject({
+        status: 'failed',
+        error: {
+          code: 'invalid_task_output',
         },
       });
     });

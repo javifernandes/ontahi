@@ -179,8 +179,10 @@ export type DurableOperationTrigger = {
   };
 };
 
-export type DurableOperationStepDefinitionLike = {
+export type DurableOperationStepDefinitionLike<TInput = unknown, TResult = unknown> = {
   id: string;
+  input?: GraphSchemaLike<TInput>;
+  output?: GraphSchemaLike<TResult>;
 };
 
 export type DurableOperationIdempotencyMetadata<TInput = unknown> = {
@@ -191,12 +193,12 @@ export type DurableOperationIdempotencyMetadata<TInput = unknown> = {
 export type DurableOperationMetadata<TInput = unknown, TResult = unknown> = {
   runtime: DurableOperationRuntime;
   taskId?: string;
-  progress?: unknown;
-  finalOutput?: unknown;
+  progress?: GraphSchemaLike<any>;
+  finalOutput?: GraphSchemaLike<TResult>;
   subject?: (input: TInput) => DurableOperationSubject;
   trigger?: DurableOperationTrigger | ((input: TInput) => DurableOperationTrigger);
   source?: DurableOperationTrigger['source'];
-  steps?: ReadonlyArray<DurableOperationStepDefinitionLike>;
+  steps?: ReadonlyArray<DurableOperationStepDefinitionLike<any, any>>;
   idempotency?: DurableOperationIdempotencyMetadata<TInput>;
 };
 

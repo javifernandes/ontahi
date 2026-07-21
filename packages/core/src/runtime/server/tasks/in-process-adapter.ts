@@ -8,7 +8,13 @@ import type {
   TaskRuntimeAdapter,
   TaskSnapshot,
 } from './types.js';
-import { validateTaskInput, validateTaskStepInput } from './validation.js';
+import {
+  validateTaskInput,
+  validateTaskOutput,
+  validateTaskProgress,
+  validateTaskStepInput,
+  validateTaskStepOutput,
+} from './validation.js';
 
 const now = () => new Date().toISOString();
 
@@ -47,7 +53,10 @@ export const createInProcessTaskRuntimeAdapter = ({
         ...(source.subject ? { subject: source.subject } : {}),
         trigger: source.trigger,
         createdAt: source.createdAt,
-        progress: progress => store.update(ref, { progress }),
+        progress: progress =>
+          Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
+            store.update(ref, { progress: parsedProgress }),
+          ),
         sleep: milliseconds =>
           Effect.tryPromise({
             try: () => sleep(milliseconds),
@@ -59,7 +68,9 @@ export const createInProcessTaskRuntimeAdapter = ({
 
           return step
             ? Effect.flatMap(validateTaskStepInput(task.id, step, input), parsedInput =>
-                step.run(parsedInput, context),
+                Effect.flatMap(step.run(parsedInput, context), output =>
+                  validateTaskStepOutput(task.id, step, output),
+                ),
               )
             : Effect.fail(missingTaskStepFailure(task.id, name));
         },
@@ -70,10 +81,11 @@ export const createInProcessTaskRuntimeAdapter = ({
           startedAt: now(),
         });
         const result = yield* task.run(parsedInput, context);
+        const parsedResult = yield* validateTaskOutput(task, result);
         yield* store.update(ref, {
           status: 'completed',
           completedAt: now(),
-          result,
+          result: parsedResult,
         });
       }).pipe(
         Effect.catchAll(error =>

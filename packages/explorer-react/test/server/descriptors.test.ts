@@ -95,6 +95,7 @@ describe('explorer descriptor builder', () => {
           fetch: {
             id: 'fetch',
             input: value('FetchBookStepInput', { slug: field.string() }),
+            output: value('FetchBookStepOutput', { title: field.string() }),
           },
         },
       }),
@@ -188,6 +189,12 @@ describe('explorer descriptor builder', () => {
       }),
     );
     expect(snapshot.tasks[0]?.steps[0]?.inputSchema).toEqual(
+      expect.objectContaining({
+        source: 'ontahi',
+        summary: 'object with 1 field',
+      }),
+    );
+    expect(snapshot.tasks[0]?.steps[0]?.resultSchema).toEqual(
       expect.objectContaining({
         source: 'ontahi',
         summary: 'object with 1 field',

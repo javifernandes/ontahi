@@ -26,6 +26,9 @@ import {
 
 describe('data-graph operations', () => {
   it('resolves canonical operation ids for graph and domain operations', () => {
+    const ReindexBookSearchResultSchema = value('ReindexBookSearchResult', {
+      indexed: field.boolean(),
+    });
     const graphOperations = resolveGraphOperations('Book', {
       fetchBooks: defineGraphOperation({
         authority: 'client-safe',
@@ -40,9 +43,7 @@ describe('data-graph operations', () => {
           authority: 'server',
           exposure: 'server-only',
           durable: {
-            finalOutput: {
-              schemaName: 'ReindexBookSearchResultSchema',
-            },
+            finalOutput: ReindexBookSearchResultSchema,
           },
         }),
       },
@@ -71,9 +72,7 @@ describe('data-graph operations', () => {
       exposure: 'server-only',
       durable: {
         runtime: 'vercel-workflow',
-        finalOutput: {
-          schemaName: 'ReindexBookSearchResultSchema',
-        },
+        finalOutput: ReindexBookSearchResultSchema,
       },
     });
   });
@@ -85,9 +84,9 @@ describe('data-graph operations', () => {
           authority: 'server',
           exposure: 'bridge',
           durable: {
-            finalOutput: {
-              schemaName: 'GithubMarkdownImportResultSchema',
-            },
+            finalOutput: value('GithubMarkdownImportResult', {
+              imported: field.boolean(),
+            }),
           },
         }),
       }),
@@ -425,9 +424,9 @@ describe('data-graph operations', () => {
           },
           durable: {
             runtime: 'vercel-workflow',
-            finalOutput: {
-              schemaName: 'FetchChapterResultSchema',
-            },
+            finalOutput: value('FetchChapterResult', {
+              fetched: field.boolean(),
+            }),
             subject: (input: { bookSlug: string }) => ({
               type: 'book',
               id: input.bookSlug,

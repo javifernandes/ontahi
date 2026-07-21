@@ -157,6 +157,7 @@ export type ExplorerTaskLike = {
 export type ExplorerTaskStepDefinitionLike = {
   id: string;
   input?: unknown;
+  output?: unknown;
 };
 
 export type ExplorerTaskDefinitionLike = {
@@ -603,7 +604,9 @@ const describeTask = (
   steps: listTaskSteps(taskDefinition?.steps).map(step => ({
     id: step.id,
     inputSchema: step.input ? describeRuntimeSchema(step.input) : undeclaredInputSchema(),
-    resultSchema: undeclaredResultSchema(),
+    resultSchema: step.output
+      ? describeRuntimeSchema(step.output, { io: 'output' })
+      : undeclaredResultSchema(),
   })),
 });
 

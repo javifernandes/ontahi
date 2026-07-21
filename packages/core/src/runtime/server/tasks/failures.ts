@@ -42,6 +42,26 @@ export const invalidTaskStepInputFailure = (
 ): TaskFailure =>
   createTaskFailure('invalid_task_step_input', message, { taskId, stepId, ...context });
 
+export const invalidTaskProgressFailure = (
+  taskId: string,
+  message: string,
+  context?: Record<string, unknown>,
+): TaskFailure => createTaskFailure('invalid_task_progress', message, { taskId, ...context });
+
+export const invalidTaskStepOutputFailure = (
+  taskId: string,
+  stepId: string,
+  message: string,
+  context?: Record<string, unknown>,
+): TaskFailure =>
+  createTaskFailure('invalid_task_step_output', message, { taskId, stepId, ...context });
+
+export const invalidTaskOutputFailure = (
+  taskId: string,
+  message: string,
+  context?: Record<string, unknown>,
+): TaskFailure => createTaskFailure('invalid_task_output', message, { taskId, ...context });
+
 export const toTaskFailure = (error: unknown): TaskFailure =>
   typeof error === 'object' &&
   error !== null &&

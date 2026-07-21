@@ -217,6 +217,119 @@ describe('vercel workflow task executor', () => {
     );
   });
 
+  it('validates progress before persisting workflow task snapshots', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.progress',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.progress', {
+      id: 'fixture.progress',
+      progress: value('FixtureProgress', {
+        percent: field.number({ min: 0, max: 100 }),
+      }),
+      run: (_input: unknown, context) =>
+        Effect.gen(function* () {
+          yield* context.progress({ percent: 101 });
+          return { completed: true };
+        }),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask(
+        {
+          taskId: 'fixture.progress',
+          runId: 'bookops-run-1',
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'invalid_task_progress',
+    });
+    expect(writeProgressEvent).not.toHaveBeenCalled();
+  });
+
+  it('validates final output before completing a workflow task', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.output',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.output', {
+      id: 'fixture.output',
+      output: value('FixtureOutput', {
+        count: field.positiveInteger(),
+      }),
+      run: () => Effect.succeed({ count: 0 }),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask(
+        {
+          taskId: 'fixture.output',
+          runId: 'bookops-run-1',
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'invalid_task_output',
+    });
+    expect(writeResultEvent).not.toHaveBeenCalled();
+  });
+
+  it('validates step output before returning it to a workflow task', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.step-output',
+        runId: 'bookops-run-1',
+        status: 'running',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.step-output', {
+      id: 'fixture.step-output',
+      steps: {
+        count: {
+          id: 'count',
+          output: value('CountStepOutput', {
+            count: field.positiveInteger(),
+          }),
+          run: () => Effect.succeed({ count: 0 }),
+        },
+      },
+      run: () => Effect.succeed({}),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTaskStep(
+        {
+          taskId: 'fixture.step-output',
+          runId: 'bookops-run-1',
+          stepName: 'count',
+          input: {},
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'invalid_task_step_output',
+    });
+  });
+
   it('persists structured task failures embedded in Vercel Workflow step errors', async () => {
     loadSource.mockReturnValue(
       Effect.succeed({

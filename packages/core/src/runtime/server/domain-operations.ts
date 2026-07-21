@@ -372,26 +372,29 @@ const resolveDurableOperationTaskId = (
   operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
 ) => operation.durable?.taskId ?? operation.id;
 
-export const createTaskDefinitionFromDurableDomainOperation = <TInput extends OperationInput>(
-  operation: ResolvedDomainOperationDeclaration<TInput, DomainOperationSuccess, any, any>,
-): TaskDefinition<TInput, unknown> => {
+export const createTaskDefinitionFromDurableDomainOperation = <
+  TInput extends OperationInput,
+  TResult extends DomainOperationSuccess,
+>(
+  operation: ResolvedDomainOperationDeclaration<TInput, TResult, any, any>,
+): TaskDefinition<TInput, TResult> => {
   if (!operation.durable) {
     throw new Error(`Domain operation "${operation.id}" is not durable.`);
   }
 
   return {
     id: resolveDurableOperationTaskId(operation),
-    input: operation.input as TaskDefinition<TInput, unknown>['input'],
-    progress: operation.durable.progress as TaskDefinition<TInput, unknown>['progress'],
-    output: operation.durable.finalOutput as TaskDefinition<TInput, unknown>['output'],
+    input: operation.input,
+    progress: operation.durable.progress,
+    output: operation.durable.finalOutput,
     steps: Object.fromEntries(
-      (operation.durable.steps ?? []).map(step => [
-        step.id,
-        step as TaskStepDefinition<unknown, unknown>,
-      ]),
+      (operation.durable.steps ?? []).map(step => [step.id, step as TaskStepDefinition<any, any>]),
     ),
-    run: (input, context) =>
-      operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never, context),
+    run: ((input, context) =>
+      operation.run(
+        attachEntityRefInputRefs(input, operation.inputRefs) as never,
+        context,
+      )) as TaskDefinition<TInput, TResult>['run'],
   };
 };
 
