@@ -58,17 +58,22 @@ export type DataGraphArchitectureAdapterOptions<
   TError,
   TReadOptions,
   TCommandOptions,
-  TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions>,
+  TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, any>,
 > = {
   createRuntime: (runtime: LayerConcernRuntime<TInput>) => TRuntime;
 };
+
+type RuntimeCommandError<TRuntime> =
+  TRuntime extends DataGraphExecutionRuntime<any, any, any, infer TCommandError>
+    ? TCommandError
+    : never;
 
 export const createDataGraphArchitectureAdapter = <
   TInput = unknown,
   TError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
-  TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions> =
+  TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, any> =
     DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions>,
 >({
   createRuntime,
@@ -79,18 +84,30 @@ export const createDataGraphArchitectureAdapter = <
   TCommandOptions,
   TRuntime
 >) => {
-  const boundDataGraph = createRuntimeBoundDataGraphApi<TError, TReadOptions, TCommandOptions>(() =>
-    getRequiredDataGraphRuntime<TRuntime>(),
-  );
+  type TCommandError = RuntimeCommandError<TRuntime>;
+  const boundDataGraph = createRuntimeBoundDataGraphApi<
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  >(() => getRequiredDataGraphRuntime<TRuntime>());
   type AdapterGraphSelection<
     TEntity extends AnyEntityDefinition,
     TResult = InferEntityRecord<TEntity['fields']>,
-  > = RuntimeBoundGraphSelection<TEntity, TResult, TError, TReadOptions, TCommandOptions>;
+  > = RuntimeBoundGraphSelection<
+    TEntity,
+    TResult,
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  >;
   type AdapterSelectionEntity<TEntity extends AnyEntityDefinition> = RuntimeBoundSelectionEntity<
     TEntity,
     TError,
     TReadOptions,
-    TCommandOptions
+    TCommandOptions,
+    TCommandError
   >;
   type DefaultEntityRefResolution<TEntity extends AnyEntityDefinition> = ReturnType<
     ReturnType<AdapterSelectionEntity<TEntity>['all']>['get']

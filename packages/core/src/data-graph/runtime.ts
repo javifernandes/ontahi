@@ -20,17 +20,18 @@ export interface DataGraphRuntime<TError = never, TOptions = undefined> {
 }
 
 export interface DataGraphExecutionRuntime<
-  TError = never,
+  TReadError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
-> extends DataGraphRuntime<TError, TReadOptions> {
+  TCommandError = TReadError,
+> extends DataGraphRuntime<TReadError, TReadOptions> {
   count<TParams, TResult>(
     queryOrView: QueryOrView<TParams, TResult>,
     params: TParams,
     options?: TReadOptions,
-  ): import('effect').Effect.Effect<number, TError>;
+  ): import('effect').Effect.Effect<number, TReadError>;
   runCommand<TResult = void>(
     command: GraphCommandSpec<any, any, TResult>,
     options?: TCommandOptions,
-  ): import('effect').Effect.Effect<TResult, TError>;
+  ): import('effect').Effect.Effect<TResult, TCommandError>;
 }

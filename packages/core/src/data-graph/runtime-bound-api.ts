@@ -30,23 +30,28 @@ export type RuntimeBoundGraphSelection<
   TError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
-> = BoundGraphSelection<TEntity, TResult, TError, TReadOptions, TError, TCommandOptions>;
+  TCommandError = TError,
+> = BoundGraphSelection<TEntity, TResult, TError, TReadOptions, TCommandError, TCommandOptions>;
 
 export type RuntimeBoundSelectionEntity<
   TEntity extends AnyEntityDefinition,
   TError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
-> = BoundSelectionEntityBase<TEntity, TError, TReadOptions, TError, TCommandOptions>;
+  TCommandError = TError,
+> = BoundSelectionEntityBase<TEntity, TError, TReadOptions, TCommandError, TCommandOptions>;
 
 export const createRuntimeBoundDataGraphApi = <
   TError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
+  TCommandError = TError,
 >(
-  getRuntime: () => DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions>,
+  getRuntime: () => DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, TCommandError>,
 ) => {
-  const executor = createDataGraphExecutor<TError, TReadOptions, TCommandOptions>(getRuntime);
+  const executor = createDataGraphExecutor<TError, TReadOptions, TCommandOptions, TCommandError>(
+    getRuntime,
+  );
 
   const graphReadExecutor: GraphReadExecutor<TError, TReadOptions> = {
     get: (queryOrView, params, options) => executor.getViewEffect(queryOrView, params, options),
@@ -56,7 +61,7 @@ export const createRuntimeBoundDataGraphApi = <
       executor.streamViewEffect(queryOrView, params, options),
   };
 
-  const graphCommandExecutor: GraphCommandExecutor<TError, TCommandOptions> = {
+  const graphCommandExecutor: GraphCommandExecutor<TCommandError, TCommandOptions> = {
     run: (command, options) => executor.runCommandEffect(command, options),
   };
 
@@ -71,8 +76,8 @@ export const createRuntimeBoundDataGraphApi = <
     TResult = void,
   >(
     command: GraphCommandSpec<TEntity, TPayload, TResult>,
-  ): RuntimeBoundGraphCommand<TEntity, TPayload, TResult, TError, TCommandOptions> =>
-    createBoundGraphCommand<TEntity, TPayload, TResult, TError, TCommandOptions>(
+  ): RuntimeBoundGraphCommand<TEntity, TPayload, TResult, TCommandError, TCommandOptions> =>
+    createBoundGraphCommand<TEntity, TPayload, TResult, TCommandError, TCommandOptions>(
       command,
       graphCommandExecutor,
     );
@@ -80,7 +85,7 @@ export const createRuntimeBoundDataGraphApi = <
   const selectionAssembly = createGraphSelectionAssembly<
     TError,
     TReadOptions,
-    TError,
+    TCommandError,
     TCommandOptions
   >({
     createCommand: createGraphCommand,
@@ -95,10 +100,16 @@ export const createRuntimeBoundDataGraphApi = <
     ): BoundGraphRead<TRead, TError, TReadOptions> => bindGraphRead(read, graphReadExecutor),
     bindSelectionEntity: <TEntity extends AnyEntityDefinition>(
       entityDefinition: TEntity,
-    ): RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions> =>
+    ): RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions, TCommandError> =>
       selectionAssembly.bindSelectionEntity(
         entityDefinition,
-      ) as unknown as RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions>,
+      ) as unknown as RuntimeBoundSelectionEntity<
+        TEntity,
+        TError,
+        TReadOptions,
+        TCommandOptions,
+        TCommandError
+      >,
     createExecutableGraphRead,
     createGraphCommand,
     createGraphSelection: <
@@ -106,13 +117,21 @@ export const createRuntimeBoundDataGraphApi = <
       TResult = InferEntityRecord<TEntity['fields']>,
     >(
       builder: QueryBuilder<TEntity, TResult>,
-    ): RuntimeBoundGraphSelection<TEntity, TResult, TError, TReadOptions, TCommandOptions> =>
+    ): RuntimeBoundGraphSelection<
+      TEntity,
+      TResult,
+      TError,
+      TReadOptions,
+      TCommandOptions,
+      TCommandError
+    > =>
       selectionAssembly.createGraphSelection(builder) as unknown as RuntimeBoundGraphSelection<
         TEntity,
         TResult,
         TError,
         TReadOptions,
-        TCommandOptions
+        TCommandOptions,
+        TCommandError
       >,
     namedGraphRead: selectionAssembly.namedGraphRead,
     selectionAssembly,

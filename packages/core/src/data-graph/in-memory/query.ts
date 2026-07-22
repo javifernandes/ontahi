@@ -35,6 +35,14 @@ type OrderSpec = {
   direction: 'asc' | 'desc';
 };
 
+const comparePredicateValues = (left: unknown, right: unknown) => {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left - right;
+  }
+
+  return String(left).localeCompare(String(right));
+};
+
 export const applyPredicates = (
   rows: ReadonlyArray<Record<string, unknown>>,
   predicates: readonly Predicate[],
@@ -51,12 +59,12 @@ export const applyPredicates = (
 
       if (predicate.operator === 'lte') {
         const rowValue = row[predicate.fieldName];
-        return rowValue != null && String(rowValue) <= String(predicate.value);
+        return rowValue != null && comparePredicateValues(rowValue, predicate.value) <= 0;
       }
 
       if (predicate.operator === 'lt') {
         const rowValue = row[predicate.fieldName];
-        return rowValue != null && String(rowValue) < String(predicate.value);
+        return rowValue != null && comparePredicateValues(rowValue, predicate.value) < 0;
       }
 
       return row[predicate.fieldName] == null;

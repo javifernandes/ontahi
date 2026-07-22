@@ -145,4 +145,30 @@ describe('runtime-bound data graph api', () => {
       'namedGraphRead(missingBuilder) requires a selection or a builder function.',
     );
   });
+
+  it('keeps command failures separate from infallible graph reads', async () => {
+    const commandFailure = { _tag: 'CommandFailure', message: 'write failed' } as const;
+    const runtime = {
+      ...createRuntime(),
+      runCommand: () => Effect.fail(commandFailure),
+    } as DataGraphExecutionRuntime<
+      never,
+      { authority: 'viewer' },
+      { authority: 'system' },
+      typeof commandFailure
+    >;
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const BookEntity = api.bindSelectionEntity(Book);
+
+    await expect(
+      Effect.runPromise(
+        BookEntity.insert({ slug: 'progbook', title: 'Progbook' })
+          .run({ authority: 'system' })
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: commandFailure,
+    });
+  });
 });

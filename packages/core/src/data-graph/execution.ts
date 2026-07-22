@@ -5,11 +5,17 @@ import type { QueryOrView } from './query.js';
 import type { DataGraphExecutionRuntime } from './runtime.js';
 
 export const createDataGraphExecutor = <
-  TError = never,
+  TReadError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
+  TCommandError = TReadError,
 >(
-  getRuntime: () => DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions>,
+  getRuntime: () => DataGraphExecutionRuntime<
+    TReadError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  >,
 ) => ({
   getViewEffect: <TParams, TResult>(
     queryOrView: QueryOrView<TParams, TResult>,
@@ -38,7 +44,10 @@ export const createDataGraphExecutor = <
 });
 
 export type DataGraphExecutor<
-  TError = never,
+  TReadError = never,
   TReadOptions = undefined,
   TCommandOptions = TReadOptions,
-> = ReturnType<typeof createDataGraphExecutor<TError, TReadOptions, TCommandOptions>>;
+  TCommandError = TReadError,
+> = ReturnType<
+  typeof createDataGraphExecutor<TReadError, TReadOptions, TCommandOptions, TCommandError>
+>;

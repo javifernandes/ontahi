@@ -31,6 +31,12 @@ describe('in-memory query helpers', () => {
     expect(
       applyPredicates(rows, [{ kind: 'predicate', operator: 'isNull', fieldName: 'deletedAt' }]),
     ).toEqual([rows[0], rows[1]]);
+    expect(
+      applyPredicates(
+        [{ order: 2 }, { order: 10 }],
+        [{ kind: 'predicate', operator: 'lte', fieldName: 'order', value: 2 }],
+      ),
+    ).toEqual([{ order: 2 }]);
   });
 
   it('orders in-memory rows by multiple fields and handles nullish values', () => {
