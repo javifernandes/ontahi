@@ -1,0 +1,43 @@
+{
+  "name": "@ontahi/codegen",
+  "version": "1.0.0",
+  "description": "Build-time analysis and code generation primitives for Ontahi applications",
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.mjs"
+    },
+    "./operation-contracts": {
+      "import": "./src/operation-contracts/metadata-analyzer.mjs"
+    },
+    "./application": {
+      "import": "./src/application-analysis.mjs"
+    },
+    "./projections": {
+      "import": "./src/projections.mjs"
+    },
+    "./runner": {
+      "import": "./src/runner.mjs"
+    },
+    "./source-loader": {
+      "import": "./src/source-loader.mjs"
+    }
+  },
+  "scripts": {
+    "build": "node --check src/index.mjs && node --check src/application-analysis.mjs && node --check src/source-loader.mjs && node --check src/operation-contracts/metadata-analyzer.mjs && node --check src/projections.mjs && node --check src/runner.mjs",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "test:watch": "pnpm exec vitest",
+    "typecheck": "pnpm run build"
+  },
+  "dependencies": {
+    "typescript": "^5.4.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
+    "vitest": "^4.0.18"
+  }
+}

@@ -25,6 +25,11 @@
       "types": "./dist/reconciliation.d.ts",
       "import": "./dist/reconciliation.js",
       "require": "./dist/reconciliation.js"
+    },
+    "./codegen": {
+      "types": "./dist/codegen.d.ts",
+      "import": "./dist/codegen.js",
+      "require": "./dist/codegen.js"
     }
   },
   "files": [

@@ -7,5 +7,6 @@ Vercel Workflow integration for Ontahi durable tasks.
 1. `@ontahi/runtime-vercel-workflows/adapter`: creates an Ontahi `TaskRuntimeAdapter` from a host task run store and workflow resolver.
 2. `@ontahi/runtime-vercel-workflows/executor`: runs Ontahi tasks and steps inside a host-owned Vercel Workflow entrypoint.
 3. `@ontahi/runtime-vercel-workflows/reconciliation`: maps and reconciles Vercel Workflow run state into Ontahi task snapshots.
+4. `@ontahi/runtime-vercel-workflows/codegen`: emits statically discoverable workflow and step entrypoints from an analyzed Ontahi application.
 
-The package does not own application task definitions, generated `'use workflow'` or `'use step'` entrypoints, concrete task run stores, routes, or step executors. Hosts such as BookOps provide those capabilities explicitly.
+The codegen entrypoint owns adapter-specific rendering but not generated files. Hosts provide output paths, their configured workflow runtime module, and optional task step runners. The runtime package does not own application task definitions, concrete task run stores, routes, or step executors.
