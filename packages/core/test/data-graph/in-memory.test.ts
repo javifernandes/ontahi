@@ -7,12 +7,54 @@ import {
   field,
   mapEntity,
   query,
+  Selection,
   view,
 } from '../../src/data-graph/index.js';
 
 import { defineAudienceGraph, defineReaderGraph } from './fixtures.js';
 
 describe('data-graph in-memory runtime', () => {
+  it('enforces exact-one selection cardinality after materialization', async () => {
+    const Book = entity('CardinalityBook', {
+      id: field.id(),
+      status: field.string(),
+    });
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        CardinalityBook: [
+          { id: 'book-1', status: 'draft' },
+          { id: 'book-2', status: 'draft' },
+          { id: 'book-3', status: 'published' },
+        ],
+      },
+    });
+    const exact = (status: string) =>
+      query(Book).where(
+        new Selection(
+          Book,
+          { kind: 'predicate', operator: 'eq', fieldName: 'status', value: status },
+          undefined,
+          'one',
+        ),
+      );
+
+    await expect(Effect.runPromise(runtime.run(exact('published'), undefined))).resolves.toEqual([
+      { id: 'book-3', status: 'published' },
+    ]);
+    await expect(
+      Effect.runPromise(runtime.run(exact('missing'), undefined).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
+    await expect(
+      Effect.runPromise(runtime.count(exact('draft'), undefined).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
+  });
+
   it('materializes missing belongsTo relations as null', async () => {
     const { BookWithCollaborators } = defineAudienceGraph();
 

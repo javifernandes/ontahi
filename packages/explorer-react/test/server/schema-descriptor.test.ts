@@ -1,4 +1,4 @@
-import { field, graphSchema, value } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import { describeRuntimeSchema, undeclaredResultSchema } from '../../src/server/index.js';
@@ -23,6 +23,31 @@ const expectPlainObjects = (value: unknown) => {
 };
 
 describe('graph ops schema descriptor', () => {
+  it('preserves selection semantics for Explorer controls', () => {
+    const Notification = entity('UserNotification', {
+      id: field.id(),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const descriptor = describeRuntimeSchema(
+      value('MarkNotificationsReadInput', {
+        notifications: graphSchema.selection(Notification, { cardinality: 'many' }),
+      }),
+    );
+
+    expect(descriptor.fields).toEqual([
+      expect.objectContaining({
+        path: 'notifications',
+        type: 'Selection<UserNotification>',
+        selection: {
+          entityName: 'UserNotification',
+          cardinality: 'many',
+          identity: { name: 'refById', fields: ['id'] },
+        },
+      }),
+    ]);
+  });
+
   it('describes Ontahi object fields as a compact contract', () => {
     const descriptor = describeRuntimeSchema(
       value('BookQueryInput', {

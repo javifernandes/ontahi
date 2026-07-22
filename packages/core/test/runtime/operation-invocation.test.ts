@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { field, graphSchema, value } from '../../src/data-graph/index.js';
+import { entity, field, graphSchema, Selection, value } from '../../src/data-graph/index.js';
 import {
   isOperationInvocationProtocolResponse,
   parseOperationInvocationRequest,
@@ -99,6 +99,52 @@ describe('operation invocation dispatcher', () => {
       },
     });
     expect(invokeOperation).toHaveBeenCalledWith(operation, { title: 'Ontahi' });
+  });
+
+  it('hydrates transported selections before invoking an operation', async () => {
+    const Book = entity('Book', { id: field.id(), status: field.string() });
+    const selectionOperation = {
+      ...operation,
+      id: 'Book.archiveMany',
+      name: 'archiveMany',
+      input: value('ArchiveManyInput', {
+        books: graphSchema.selection(Book, { cardinality: 'many' }),
+      }),
+    };
+    const invokeOperation = vi.fn(async (_operation, input) => ({
+      ok: true as const,
+      kind: 'success' as const,
+      value: input,
+    }));
+    const { createOperationInvocationDispatcher } =
+      await import('../../src/runtime/server/operation-invocation.js');
+    const dispatcher = createOperationInvocationDispatcher({
+      resolveOperation: () => selectionOperation,
+      invokeOperation,
+      checkPermission: async () => ({ allowed: true }),
+    });
+
+    await dispatcher({
+      kind: 'invoke',
+      operationId: selectionOperation.id,
+      input: {
+        books: {
+          kind: 'selection',
+          entityName: 'Book',
+          expression: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'status',
+            value: 'draft',
+          },
+        },
+      },
+    });
+
+    const hydratedInput = invokeOperation.mock.calls[0]?.[1] as { books: Selection<typeof Book> };
+    expect(hydratedInput.books).toBeInstanceOf(Selection);
+    expect(hydratedInput.books.root).toBe(Book);
+    expect(hydratedInput.books.build()).toMatchObject({ fieldName: 'status', value: 'draft' });
   });
 
   it('returns normalized validation issues without exposing Zod errors', async () => {

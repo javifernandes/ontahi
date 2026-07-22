@@ -50,6 +50,15 @@ const buildPlaceholderForType = (type: string, required: boolean): unknown => {
   return '';
 };
 
+const buildSelectionDraft = (field: ExplorerSchemaDescriptor['fields'][number]) =>
+  field.selection
+    ? {
+        kind: 'selection',
+        entityName: field.selection.entityName,
+        expression: { kind: 'none' },
+      }
+    : buildPlaceholderForType(field.type, field.required);
+
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -375,7 +384,7 @@ export const buildExplorerOperationInputDraft = (source: ExplorerInputDraftSourc
 
   return Object.fromEntries([
     ...refDraftEntries,
-    ...fields.map(field => [field.path, buildPlaceholderForType(field.type, field.required)]),
+    ...fields.map(field => [field.path, buildSelectionDraft(field)]),
   ]);
 };
 

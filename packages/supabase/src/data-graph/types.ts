@@ -2,6 +2,7 @@ import type {
   AnyEntityDefinition,
   CompiledOrderBy,
   CompiledPredicate,
+  CompiledSelectionExpression,
   GraphExecutionAuthorityOptions,
   RelationQueryBuilder,
   SelectionValue,
@@ -44,7 +45,9 @@ export type SupabasePredicateInput =
   | { operator: 'in'; fieldName: string; values: readonly unknown[] }
   | { operator: 'isNull'; fieldName: string }
   | { operator: 'lte'; fieldName: string; value: unknown }
-  | { operator: 'lt'; fieldName: string; value: unknown };
+  | { operator: 'lt'; fieldName: string; value: unknown }
+  | { operator: 'gte'; fieldName: string; value: unknown }
+  | { operator: 'gt'; fieldName: string; value: unknown };
 
 export type FetchEntityRowsInput<TClient extends SupabaseLikeClient> = {
   supabase: TClient;
@@ -56,6 +59,7 @@ export type FetchEntityRowsInput<TClient extends SupabaseLikeClient> = {
   includeShape?: IncludeShape;
   tableName?: string;
   compiledWhere?: CompiledPredicate[];
+  compiledSelection?: CompiledSelectionExpression;
   compiledOrderBy?: CompiledOrderBy[];
   message: string;
   createError: SupabaseErrorFactory<any>;

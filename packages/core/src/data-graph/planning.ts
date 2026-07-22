@@ -12,6 +12,8 @@ import {
   type QueryOrView,
   type SelectionValue,
 } from './query.js';
+import type { SelectionExpression } from './selection-ast.js';
+import { getConjunctiveSelectionPredicates, lowerSelectionReferences } from './selection-ast.js';
 
 const collectSelectionFieldNames = (
   selection: Record<string, SelectionValue> | undefined,
@@ -79,7 +81,17 @@ export type CompiledPredicate =
   | { operator: 'in'; field: string; column: string; values: readonly unknown[] }
   | { operator: 'isNull'; field: string; column: string }
   | { operator: 'lte'; field: string; column: string; value: unknown }
-  | { operator: 'lt'; field: string; column: string; value: unknown };
+  | { operator: 'lt'; field: string; column: string; value: unknown }
+  | { operator: 'gte'; field: string; column: string; value: unknown }
+  | { operator: 'gt'; field: string; column: string; value: unknown };
+
+export type CompiledSelectionExpression =
+  | CompiledPredicate
+  | { kind: 'all' }
+  | { kind: 'none' }
+  | { kind: 'and'; operands: CompiledSelectionExpression[] }
+  | { kind: 'or'; operands: CompiledSelectionExpression[] }
+  | { kind: 'not'; operand: CompiledSelectionExpression };
 
 export type CompiledOrderBy = {
   field: string;
@@ -104,6 +116,7 @@ export type CompiledIncludePlan = {
 export type CompiledQueryPlan = {
   rootEntity: string;
   rootTable: string;
+  selection: CompiledSelectionExpression;
   where: CompiledPredicate[];
   orderBy: CompiledOrderBy[];
   limit?: number;
@@ -144,57 +157,77 @@ const compileIncludes = (
     };
   });
 
+export const compileSelectionExpression = (
+  entityDefinition: AnyEntityDefinition,
+  expression: SelectionExpression,
+): CompiledSelectionExpression => {
+  if (expression.kind === 'references') {
+    return compileSelectionExpression(entityDefinition, lowerSelectionReferences(expression));
+  }
+  if (expression.kind === 'all' || expression.kind === 'none') {
+    return { kind: expression.kind };
+  }
+
+  if (expression.kind === 'and' || expression.kind === 'or') {
+    return {
+      kind: expression.kind,
+      operands: expression.operands.map(operand =>
+        compileSelectionExpression(entityDefinition, operand),
+      ),
+    };
+  }
+
+  if (expression.kind === 'not') {
+    return {
+      kind: 'not',
+      operand: compileSelectionExpression(entityDefinition, expression.operand),
+    };
+  }
+
+  const field = expression.fieldName;
+  const column = resolveColumnNameForEntity(entityDefinition, field);
+
+  if (expression.operator === 'in') {
+    return { operator: 'in', field, column, values: expression.values };
+  }
+
+  if (expression.operator === 'isNull') {
+    return { operator: 'isNull', field, column };
+  }
+
+  return { operator: expression.operator, field, column, value: expression.value };
+};
+
+export const compileConjunctiveSelectionPredicates = (
+  entityDefinition: AnyEntityDefinition,
+  expression: SelectionExpression,
+): CompiledPredicate[] => {
+  const predicates = getConjunctiveSelectionPredicates(lowerSelectionReferences(expression));
+
+  if (!predicates) {
+    throw new Error('This data graph provider only supports conjunctive selections.');
+  }
+
+  return predicates.map(predicate => {
+    const compiled = compileSelectionExpression(entityDefinition, predicate);
+    return compiled as CompiledPredicate;
+  });
+};
+
 export const compileResolvedQueryPlan = <TEntity extends AnyEntityDefinition, TResult>(
   spec: QuerySpec<TEntity, TResult>,
 ): CompiledQueryPlan => {
   const rootMapping = getEntityMapping(spec.root);
+  const loweredSelection = lowerSelectionReferences(spec.selection);
 
   return {
     rootEntity: spec.root.name,
     rootTable: rootMapping.tableName,
-    where: spec.where.map(predicate => {
-      if (predicate.operator === 'eq') {
-        return {
-          operator: 'eq' as const,
-          field: predicate.fieldName,
-          column: resolveColumnNameForEntity(spec.root, predicate.fieldName),
-          value: predicate.value,
-        };
-      }
-
-      if (predicate.operator === 'in') {
-        return {
-          operator: 'in' as const,
-          field: predicate.fieldName,
-          column: resolveColumnNameForEntity(spec.root, predicate.fieldName),
-          values: predicate.values,
-        };
-      }
-
-      if (predicate.operator === 'lte') {
-        return {
-          operator: 'lte' as const,
-          field: predicate.fieldName,
-          column: resolveColumnNameForEntity(spec.root, predicate.fieldName),
-          value: predicate.value,
-        };
-      }
-
-      if (predicate.operator === 'lt') {
-        return {
-          operator: 'lt' as const,
-          field: predicate.fieldName,
-          column: resolveColumnNameForEntity(spec.root, predicate.fieldName),
-          value: predicate.value,
-        };
-      }
-
-      return {
-        operator: 'isNull' as const,
-        field: predicate.fieldName,
-        column: resolveColumnNameForEntity(spec.root, predicate.fieldName),
-      };
-    }),
+    selection: compileSelectionExpression(spec.root, loweredSelection),
+    where:
+      (getConjunctiveSelectionPredicates(loweredSelection)?.map(predicate =>
+        compileSelectionExpression(spec.root, predicate),
+      ) as CompiledPredicate[] | undefined) ?? [],
     orderBy: compileOrderBy(spec.root, spec.orderBy),
     limit: spec.limit,
     includes: compileIncludes(spec.root, spec.includes),

@@ -1,5 +1,5 @@
 import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
-import type { QuerySpec } from './query.js';
+import type { SelectionExpression } from './selection-ast.js';
 
 export type GraphCommandOperation = 'insert' | 'insert_many' | 'upsert' | 'update' | 'delete';
 
@@ -17,7 +17,7 @@ export type GraphCommandSpec<
   name?: string;
   operation: GraphCommandOperation;
   root: TEntity;
-  where: QuerySpec<TEntity, InferEntityRecord<TEntity['fields']>>['where'];
+  selection: SelectionExpression;
   payload?: TPayload;
   upsert?: GraphUpsertOptions<TEntity>;
   returning?: readonly (keyof InferEntityRecord<TEntity['fields']> & string)[];

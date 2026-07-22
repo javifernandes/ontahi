@@ -54,18 +54,22 @@ describe('data-graph planning', () => {
     );
 
     const spec = resolveQuerySpec(bySlugView, { slug: 'progbook' });
-    expect(spec.where).toEqual([
-      {
-        kind: 'predicate',
-        operator: 'eq',
-        fieldName: 'slug',
-        value: 'progbook',
-      },
-    ]);
+    expect(spec.selection).toEqual({
+      kind: 'predicate',
+      operator: 'eq',
+      fieldName: 'slug',
+      value: 'progbook',
+    });
 
     expect(compileQueryPlan(bySlugView, { slug: 'progbook' })).toEqual({
       rootEntity: 'Book',
       rootTable: 'books',
+      selection: {
+        operator: 'eq',
+        field: 'slug',
+        column: 'slug',
+        value: 'progbook',
+      },
       where: [
         {
           operator: 'eq',

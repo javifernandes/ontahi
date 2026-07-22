@@ -29,6 +29,7 @@ import {
   updateExplorerInputFieldDraft,
   useExplorerOperationExecutor,
 } from './operation-executor.js';
+import { ExplorerSelectionInput } from './selection-input.js';
 import type { ExplorerThemePreference } from './theme.js';
 
 export type ExplorerOperationExecutePanelVariant = 'default' | 'compact';
@@ -318,6 +319,8 @@ const isStructuredInputField = (field: ExplorerSchemaField) => {
   return type.includes('array') || type.includes('object') || type.includes('json');
 };
 
+const isSelectionInputField = (field: ExplorerSchemaField) => Boolean(field.selection);
+
 const formatInputFieldControlValue = (value: unknown) => {
   if (value == null) {
     return '';
@@ -361,6 +364,10 @@ const getBooleanInputLabels = (field: ExplorerSchemaField) => ({
 });
 
 const getCompactInputTypeLabel = (field: ExplorerSchemaField) => {
+  if (field.selection) {
+    return `${field.selection.entityName} selection (${field.selection.cardinality})`;
+  }
+
   if (isEnumInputField(field)) {
     return 'choice';
   }
@@ -693,7 +700,16 @@ const ExplorerScalarInputRow = ({
       required={field.required}
     />
   );
-  const control = isEnumInputField(field) ? (
+  const selectionControl = field.selection ? (
+    <ExplorerSelectionInput
+      field={{ ...field, selection: field.selection }}
+      value={value}
+      onChange={updateValue}
+    />
+  ) : null;
+  const control = isSelectionInputField(field) ? (
+    selectionControl
+  ) : isEnumInputField(field) ? (
     enumControl
   ) : isBooleanInputField(field) ? (
     <ExplorerBooleanChoice field={field} value={value} onChange={updateValue} variant='default' />
@@ -722,7 +738,9 @@ const ExplorerScalarInputRow = ({
       className='min-h-10 rounded-md border bg-background px-3 text-sm outline-none transition-colors focus:border-primary aria-[invalid=true]:border-destructive'
     />
   );
-  const compactControl = isEnumInputField(field) ? (
+  const compactControl = isSelectionInputField(field) ? (
+    selectionControl
+  ) : isEnumInputField(field) ? (
     enumControl
   ) : isBooleanInputField(field) ? (
     <ExplorerBooleanChoice

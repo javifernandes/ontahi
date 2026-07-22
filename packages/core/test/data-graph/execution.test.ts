@@ -20,7 +20,7 @@ describe('data-graph executor', () => {
 
   it('defers runtime lookup until effects are executed and delegates every operation', async () => {
     const read = query(Book).where(book => book.slug.eq('progbook'));
-    const command = createUpdateCommandSpec(Book, read.build().where, { title: 'Updated' });
+    const command = createUpdateCommandSpec(Book, read.build().selection, { title: 'Updated' });
     const runtime = {
       get: vi.fn(() => Effect.succeed({ id: 'book-1', slug: 'progbook', title: 'Progbook' })),
       run: vi.fn(() => Effect.succeed([{ id: 'book-1', slug: 'progbook', title: 'Progbook' }])),

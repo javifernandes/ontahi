@@ -18,6 +18,8 @@ import {
   applySupabaseLimit,
   applySupabaseOrderBy,
   applySupabasePredicates,
+  applySupabaseSelection,
+  compileSupabaseSelection,
   hasEmptySupabaseInPredicate,
 } from './index.js';
 
@@ -26,50 +28,54 @@ export const fetchSupabaseEntityRowsEffect = <TClient extends SupabaseLikeClient
     createError: SupabaseErrorFactory<TError>;
   },
 ): Effect.Effect<EntityRow[], TError> =>
-  hasEmptySupabaseInPredicate(input.compiledWhere ?? input.predicates)
+  input.compiledSelection && compileSupabaseSelection(input.compiledSelection).kind === 'none'
     ? Effect.succeed([])
-    : Effect.tryPromise({
-        try: async () => {
-          const selectColumns = selectColumnsForQuery({
-            entityDefinition: input.entityDefinition,
-            selectShape: input.selectShape,
-            includeShape: input.includeShape,
-          });
+    : hasEmptySupabaseInPredicate(input.compiledWhere ?? input.predicates)
+      ? Effect.succeed([])
+      : Effect.tryPromise({
+          try: async () => {
+            const selectColumns = selectColumnsForQuery({
+              entityDefinition: input.entityDefinition,
+              selectShape: input.selectShape,
+              includeShape: input.includeShape,
+            });
 
-          let query = input.supabase
-            .from(input.tableName ?? getEntityMapping(input.entityDefinition).tableName)
-            .select(selectColumns.join(', '));
+            let query = input.supabase
+              .from(input.tableName ?? getEntityMapping(input.entityDefinition).tableName)
+              .select(selectColumns.join(', '));
 
-          query = applySupabasePredicates(
-            input.entityDefinition,
-            query,
-            input.compiledWhere ?? input.predicates,
-          );
+            query = input.compiledSelection
+              ? applySupabaseSelection(query, compileSupabaseSelection(input.compiledSelection))
+              : applySupabasePredicates(
+                  input.entityDefinition,
+                  query,
+                  input.compiledWhere ?? input.predicates,
+                );
 
-          query = applySupabaseOrderBy(
-            input.entityDefinition,
-            query,
-            input.compiledOrderBy ?? input.orderBy,
-          );
+            query = applySupabaseOrderBy(
+              input.entityDefinition,
+              query,
+              input.compiledOrderBy ?? input.orderBy,
+            );
 
-          query = applySupabaseLimit(query, input.limit);
+            query = applySupabaseLimit(query, input.limit);
 
-          const result = await query;
-          if (result.error) {
-            throw result.error.message;
-          }
+            const result = await query;
+            if (result.error) {
+              throw result.error.message;
+            }
 
-          return (result.data ?? []).map((row: Record<string, unknown>) =>
-            toSupabaseEntityRow(input.entityDefinition, row),
-          );
-        },
-        catch: cause =>
-          input.createError({
-            message: input.message,
-            logMessage: input.message,
-            cause,
-          }),
-      });
+            return (result.data ?? []).map((row: Record<string, unknown>) =>
+              toSupabaseEntityRow(input.entityDefinition, row),
+            );
+          },
+          catch: cause =>
+            input.createError({
+              message: input.message,
+              logMessage: input.message,
+              cause,
+            }),
+        });
 
 type HydrateSupabaseEntityRowsInput<TClient extends SupabaseLikeClient, TError> = {
   supabase: TClient;

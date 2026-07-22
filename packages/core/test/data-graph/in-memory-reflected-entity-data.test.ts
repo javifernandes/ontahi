@@ -60,9 +60,9 @@ describe('in-memory reflected entity data', () => {
         kind: 'command',
         operation: 'update',
         root: Book,
-        where: query(Book)
+        selection: query(Book)
           .where(book => book.id.eq('book-2'))
-          .build().where,
+          .build().selection,
         payload: { title: 'Beta revised' },
         cardinality: 'one',
       }),

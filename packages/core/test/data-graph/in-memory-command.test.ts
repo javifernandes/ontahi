@@ -43,7 +43,7 @@ describe('in-memory graph commands', () => {
         kind: 'command',
         operation: 'insert',
         root: Book,
-        where: [],
+        selection: { kind: 'none' },
         payload: {
           id: 'book-2',
           slug: 'beta',
@@ -59,7 +59,7 @@ describe('in-memory graph commands', () => {
         kind: 'command',
         operation: 'insert_many',
         root: Book,
-        where: [],
+        selection: { kind: 'none' },
         payload: [
           { id: 'book-3', slug: 'gamma', title: 'Gamma', published: true },
           { id: 'book-4', slug: 'delta', title: 'Delta', published: true },
@@ -94,7 +94,7 @@ describe('in-memory graph commands', () => {
         kind: 'command',
         operation: 'upsert',
         root: Book,
-        where: [],
+        selection: { kind: 'none' },
         payload,
         upsert: { conflictOn: ['slug'], strategy },
         returning: ['id', 'title'],
@@ -121,9 +121,9 @@ describe('in-memory graph commands', () => {
         kind: 'command',
         operation: 'update',
         root: Book,
-        where: query(Book)
+        selection: query(Book)
           .where(book => book.slug.eq('beta'))
-          .build().where,
+          .build().selection,
         payload: { published: true },
         returning: ['id', 'published'],
         cardinality: 'one',
@@ -134,9 +134,9 @@ describe('in-memory graph commands', () => {
         kind: 'command',
         operation: 'delete',
         root: Book,
-        where: query(Book)
+        selection: query(Book)
           .where(book => book.published.eq(true))
-          .build().where,
+          .build().selection,
         returning: ['id'],
       }),
     );
@@ -147,14 +147,14 @@ describe('in-memory graph commands', () => {
   });
 
   it('reports invalid commands and one-row cardinality mismatches as typed failures', async () => {
-    const { runtime } = createRuntime();
+    const { dataset, runtime } = createRuntime();
     const missingUpdate: GraphCommandSpec = {
       kind: 'command',
       operation: 'update',
       root: Book,
-      where: query(Book)
+      selection: query(Book)
         .where(book => book.slug.eq('missing'))
-        .build().where,
+        .build().selection,
       payload: { title: 'Missing' },
       cardinality: 'one',
     };
@@ -162,7 +162,7 @@ describe('in-memory graph commands', () => {
       kind: 'command',
       operation: 'upsert',
       root: Book,
-      where: [],
+      selection: { kind: 'none' },
       payload: { id: 'book-2', slug: 'beta' },
       upsert: { conflictOn: [], strategy: 'merge' },
     };
@@ -170,7 +170,7 @@ describe('in-memory graph commands', () => {
       kind: 'command',
       operation: 'upsert',
       root: Book,
-      where: [],
+      selection: { kind: 'none' },
       payload: { id: 'book-2', title: 'Beta' },
       upsert: { conflictOn: ['slug'], strategy: 'merge' },
     };
@@ -202,5 +202,34 @@ describe('in-memory graph commands', () => {
         reason: 'invalid_command',
       },
     });
+
+    dataset.Book = [
+      ...(dataset.Book ?? []),
+      {
+        id: 'book-2',
+        slug: 'beta',
+        title: 'Beta',
+        published: false,
+      },
+    ];
+    const before = structuredClone(dataset.Book);
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runCommand({
+            kind: 'command',
+            operation: 'update',
+            root: Book,
+            selection: { kind: 'all' },
+            payload: { published: true },
+            cardinality: 'one',
+          })
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
+    expect(dataset.Book).toEqual(before);
   });
 });

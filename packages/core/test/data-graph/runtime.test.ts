@@ -7,7 +7,6 @@ import {
   field,
   mapEntity,
   query,
-  type DataGraphRuntime,
 } from '../../src/data-graph/index.js';
 
 describe('data-graph runtime contract', () => {
@@ -19,7 +18,7 @@ describe('data-graph runtime contract', () => {
 
     mapEntity(Book).toTable('books');
 
-    const runtime: DataGraphRuntime = createInMemoryDataGraphRuntime({
+    const runtime = createInMemoryDataGraphRuntime({
       dataset: {
         Book: [{ id: 'book-1', slug: 'progbook' }],
       },

@@ -17,6 +17,7 @@ import {
   field,
   graphOutput,
   graphSchema,
+  selection,
   type AnyEntityDefinition,
   resolveDomainOperations,
   resolveGraphOperations,
@@ -25,6 +26,55 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph operations', () => {
+  it('accepts first-class selections as transport-safe operation inputs', () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      createdAt: field.date(),
+    });
+    const DeleteBooksInput = value('DeleteBooksInput', {
+      books: graphSchema.selection(Book, { cardinality: 'many' }),
+    });
+    const operations = resolveDomainOperations('Book', {
+      deleteBooks: defineDomainOperationMetadata({
+        exposure: 'bridge',
+        input: DeleteBooksInput,
+      }),
+    });
+    const oldBooks = selection(Book, book =>
+      book.createdAt.lt(new Date('2026-01-01T00:00:00.000Z')),
+    );
+    const invocation = operations.deleteBooks({ books: oldBooks });
+    const clientBook = defineClientEntity(Book, {
+      exposure: 'bridge',
+      domainOperations: {
+        deleteBooks: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          bridge: {},
+          input: DeleteBooksInput,
+        }),
+      },
+    });
+    const clientInvocation = clientBook.domain.deleteBooks({ books: oldBooks });
+
+    expect(graphSchema.selection(Book).cardinality).toBe('many');
+    expect(DeleteBooksInput.fields.books.cardinality).toBe('many');
+    expect(invocation.input.books).toBe(oldBooks);
+    expect(clientInvocation.input.books).toBe(oldBooks);
+    expect(JSON.parse(JSON.stringify(invocation.input))).toEqual({
+      books: {
+        kind: 'selection',
+        entityName: 'Book',
+        expression: {
+          kind: 'predicate',
+          operator: 'lt',
+          fieldName: 'createdAt',
+          value: '2026-01-01T00:00:00.000Z',
+        },
+      },
+    });
+  });
+
   it('resolves canonical operation ids for graph and domain operations', () => {
     const ReindexBookSearchResultSchema = value('ReindexBookSearchResult', {
       indexed: field.boolean(),

@@ -33,6 +33,10 @@ const getBooleanInputLabels = (field: ExplorerSchemaField) => ({
 });
 
 const humanizeScalarType = (field: ExplorerSchemaField) => {
+  if (field.selection) {
+    return `${field.selection.entityName} selection (${field.selection.cardinality})`;
+  }
+
   const normalizedType = field.type.toLowerCase();
 
   if (normalizedType.includes('string')) {

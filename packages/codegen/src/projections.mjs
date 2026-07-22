@@ -79,6 +79,10 @@ ${relationDefinitions
 
       lines.push('      },');
 
+      if (operation.inputSchemaText) {
+        lines.push(`      input: ${operation.inputSchemaText},`);
+      }
+
       if (operation.durableRuntime) {
         lines.push('      durable: {');
         lines.push(`        runtime: '${operation.durableRuntime}',`);
@@ -116,6 +120,9 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
   const clientCacheTexts = entities.flatMap(entity =>
     entity.operations.flatMap(operation => operation.clientCacheText ?? []),
   );
+  const inputSchemaTexts = entities.flatMap(entity =>
+    entity.operations.flatMap(operation => operation.inputSchemaText ?? []),
+  );
   const usesCacheRef =
     clientCacheTexts.some(text => /\bcacheRef\b/.test(text)) ||
     helperTexts.some(helperText => /\bcacheRef\b/.test(helperText));
@@ -125,6 +132,10 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
   const usesCreateEntityRef =
     clientCacheTexts.some(text => /\bcreateEntityRef\b/.test(text)) ||
     helperTexts.some(helperText => /\bcreateEntityRef\b/.test(helperText));
+  const usesGraphSchema = inputSchemaTexts.some(text => /\bgraphSchema\b/.test(text));
+  const usesGraphSelection = inputSchemaTexts.some(text => /\bgraphSelection\b/.test(text));
+  const usesValue = inputSchemaTexts.some(text => /\bvalue\s*\(/.test(text));
+  const usesField = inputSchemaTexts.some(text => /\bfield\./.test(text));
   const relationDefinitions = entities.filter(entity => entity.relation);
   const relationDefinitionsBySource = new Map();
   for (const relationDefinition of relationDefinitions) {
@@ -147,6 +158,7 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
               ...(entity.helperTexts ?? []),
               ...entity.operations.flatMap(operation => operation.graphOutputText ?? []),
               ...entity.operations.flatMap(operation => operation.clientCacheText ?? []),
+              ...entity.operations.flatMap(operation => operation.inputSchemaText ?? []),
             ].join('\n'),
           ),
         ].filter(Boolean),
@@ -167,8 +179,12 @@ ${usesCacheRef ? '  cacheRef,\n' : ''}
 ${usesCreateEntityRef ? '  createEntityRef,\n' : ''}
   defineClientDomainOperation,
   defineClientEntity,
+${usesField ? '  field,\n' : ''}
 ${usesGraphOutput ? '  graphOutput,\n' : ''}
+${usesGraphSchema ? '  graphSchema,\n' : ''}
+${usesGraphSelection ? '  graphSelection,\n' : ''}
 ${usesQueryRef ? '  queryRef,\n' : ''}
+${usesValue ? '  value,\n' : ''}
 } from '@ontahi/core/data-graph';
 
 ${schemaImportSection}

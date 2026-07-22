@@ -12,6 +12,7 @@ import type {
   GraphOptionalDefinition,
   GraphRecordDefinition,
   GraphRefinementDefinition,
+  GraphSelectionDefinition,
   GraphSchemaDefinition,
   GraphSchemaFields,
   GraphSchemaPresentation,
@@ -42,6 +43,7 @@ export type GraphSchemaDescriptor =
   | GraphSchemaRefinementDescriptor
   | GraphSchemaLazyDescriptor
   | GraphSchemaNamedDescriptor
+  | GraphSelectionDescriptor
   | GraphSchemaVoidDescriptor;
 
 export type GraphSchemaScalarDescriptor = {
@@ -141,6 +143,16 @@ export type GraphSchemaNamedDescriptor = {
   item: GraphSchemaDescriptor;
 };
 
+export type GraphSelectionDescriptor = {
+  kind: 'selection';
+  entityName: string;
+  cardinality: 'one' | 'many';
+  identity?: {
+    name: string;
+    fields: string[];
+  };
+};
+
 export type GraphSchemaVoidDescriptor = {
   kind: 'void';
 };
@@ -167,6 +179,14 @@ export type GraphJsonSchema = {
   $ref?: string;
   $defs?: Record<string, GraphJsonSchema>;
   presentation?: GraphSchemaPresentation;
+  'x-ontahi-selection'?: {
+    entityName: string;
+    cardinality: 'one' | 'many';
+    identity?: {
+      name: string;
+      fields: string[];
+    };
+  };
 };
 
 const descriptorFields = (fields: GraphSchemaFields, resolvingLazyNames: Set<string>) =>
@@ -194,6 +214,7 @@ const graphSchemaKinds = new Set<GraphSchemaDefinition['kind']>([
   'schema.refinement',
   'schema.lazy',
   'schema.named',
+  'schema.selection',
   'schema.void',
 ]);
 
@@ -408,6 +429,21 @@ export const toGraphSchemaDescriptor = (
     };
   }
 
+  if (schema.kind === 'schema.selection') {
+    const selection = schema as GraphSelectionDefinition;
+    const identityName = selection.entity.identityLocatorName;
+    const identity = identityName ? selection.entity.refLocators[identityName] : undefined;
+
+    return {
+      kind: 'selection',
+      entityName: selection.entity.name,
+      cardinality: selection.cardinality,
+      ...(identityName && identity?.fields
+        ? { identity: { name: identityName, fields: [...identity.fields] } }
+        : {}),
+    };
+  }
+
   return { kind: 'void' };
 };
 
@@ -546,6 +582,24 @@ const descriptorToJsonSchema = (
     return {
       ...descriptorToJsonSchema(descriptor.item, context),
       title: descriptor.name,
+    };
+  }
+
+  if (descriptor.kind === 'selection') {
+    return {
+      type: 'object',
+      'x-ontahi-selection': {
+        entityName: descriptor.entityName,
+        cardinality: descriptor.cardinality,
+        ...(descriptor.identity ? { identity: descriptor.identity } : {}),
+      },
+      properties: {
+        kind: { const: 'selection' },
+        entityName: { const: descriptor.entityName },
+        expression: { type: 'object' },
+      },
+      required: ['kind', 'entityName', 'expression'],
+      additionalProperties: false,
     };
   }
 

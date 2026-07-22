@@ -5,6 +5,7 @@ import type {
   EntityRefLocatorFactory,
   EntityRefLocatorValue,
 } from './ref.js';
+import type { Selection } from './selection-value.js';
 
 export type FieldDefinition<TValue> = {
   kind: 'field';
@@ -93,6 +94,7 @@ export type GraphSchemaDefinition =
   | GraphRefinementDefinition
   | GraphLazyDefinition
   | GraphNamedDefinition
+  | GraphSelectionDefinition
   | GraphVoidDefinition;
 
 export interface GraphSchemaFields {
@@ -245,6 +247,15 @@ export interface GraphNamedDefinition<TItem extends GraphSchemaLike = GraphSchem
 export interface GraphVoidDefinition {
   kind: 'schema.void';
   __value?: void;
+}
+
+export interface GraphSelectionDefinition<
+  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
+> {
+  kind: 'schema.selection';
+  entity: TEntity;
+  cardinality: 'one' | 'many';
+  __value?: Selection<TEntity>;
 }
 
 export type EntityViewDefinition<
@@ -818,6 +829,15 @@ export const graphNamed = <TItem extends GraphSchemaLike>(
 
 export const graphVoid = (): GraphVoidDefinition => ({ kind: 'schema.void' });
 
+export const graphSelection = <TEntity extends AnyEntityDefinition>(
+  entityDefinition: TEntity,
+  options?: { cardinality?: 'one' | 'many' },
+): GraphSelectionDefinition<TEntity> => ({
+  kind: 'schema.selection',
+  entity: entityDefinition,
+  cardinality: options?.cardinality ?? 'many',
+});
+
 export const describeGraphSchema = <TSchema extends object>(
   schema: TSchema,
   description: string,
@@ -845,6 +865,7 @@ export const graphSchema = {
   lazy: graphLazy,
   named: graphNamed,
   void: graphVoid,
+  selection: graphSelection,
   describe: describeGraphSchema,
   present: presentGraphSchema,
   string: field.string,

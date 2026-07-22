@@ -372,6 +372,165 @@ describe('ExplorerOperationExecutePanel', () => {
     expect(screen.queryByText('Runtime result')).toBeNull();
   });
 
+  it('authors a reflected entity selection without exposing its transport object', async () => {
+    const user = userEvent.setup();
+    invokeOperationMock.mockResolvedValueOnce(invocationSuccess({ marked: true }));
+    readEntityDataMock.mockResolvedValueOnce({
+      entityName: 'UserNotification',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'title', type: 'string', nullable: false },
+      ],
+      display: { primary: 'title' },
+      rows: [
+        { id: 'notification-1', title: 'First notification' },
+        { id: 'notification-2', title: 'Second notification' },
+      ],
+      page: 1,
+      pageSize: 8,
+      totalCount: 2,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({
+          id: 'UserNotification.markNotificationsRead',
+          entityName: 'UserNotification',
+          name: 'markNotificationsRead',
+          inputSchema: {
+            source: 'ontahi',
+            summary: 'object',
+            fields: [
+              {
+                path: 'notifications',
+                type: 'Selection<UserNotification>',
+                required: true,
+                selection: {
+                  entityName: 'UserNotification',
+                  cardinality: 'many',
+                  identity: { name: 'refById', fields: ['id'] },
+                },
+              },
+            ],
+          },
+        })}
+        variant='compact'
+      />,
+    );
+
+    expect(screen.getByText('UserNotification selection (many)')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'None' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Selected (0)' }).getAttribute('aria-checked')).toBe(
+      'false',
+    );
+
+    await user.click(screen.getByRole('textbox', { name: 'Choose UserNotification' }));
+    await user.click(await screen.findByRole('checkbox', { name: /First notification/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Second notification/ }));
+    expect(screen.getByRole('radio', { name: 'None' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('radio', { name: 'All' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('radio', { name: 'Selected (2)' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: /^run$/i }));
+
+    await waitFor(() => {
+      expect(invokeOperationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'UserNotification.markNotificationsRead',
+          input: {
+            notifications: {
+              kind: 'selection',
+              entityName: 'UserNotification',
+              expression: {
+                kind: 'references',
+                refs: [
+                  {
+                    kind: 'entity-ref',
+                    entityName: 'UserNotification',
+                    locator: { id: 'notification-1' },
+                  },
+                  {
+                    kind: 'entity-ref',
+                    entityName: 'UserNotification',
+                    locator: { id: 'notification-2' },
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+    });
+  });
+
+  it('uses single-choice semantics for one-cardinality selections', async () => {
+    const user = userEvent.setup();
+    readEntityDataMock.mockResolvedValueOnce({
+      entityName: 'Book',
+      columns: [{ field: 'id', type: 'id', nullable: false }],
+      display: { primary: 'title' },
+      rows: [{ id: 'book-1', title: 'Programming Book' }],
+      page: 1,
+      pageSize: 8,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({
+          inputRefs: [],
+          inputSchema: {
+            source: 'ontahi',
+            summary: 'object',
+            fields: [
+              {
+                path: 'book',
+                type: 'Selection<Book>',
+                required: true,
+                selection: {
+                  entityName: 'Book',
+                  cardinality: 'one',
+                  identity: { name: 'refById', fields: ['id'] },
+                },
+              },
+            ],
+          },
+        })}
+        variant='compact'
+      />,
+    );
+
+    expect(screen.queryByRole('radio', { name: 'All' })).toBeNull();
+    await user.click(screen.getByRole('textbox', { name: 'Choose Book' }));
+    await user.click(await screen.findByRole('radio', { name: /Programming Book/ }));
+    expect(screen.getByRole('radio', { name: 'Selected (1)' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: /^run$/i }));
+
+    await waitFor(() => {
+      expect(invokeOperationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: {
+            book: {
+              kind: 'selection',
+              entityName: 'Book',
+              expression: {
+                kind: 'references',
+                refs: [{ kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } }],
+              },
+            },
+          },
+        }),
+      );
+    });
+  });
+
   it('renders reflected validation errors', async () => {
     const user = userEvent.setup();
     invokeOperationMock.mockResolvedValueOnce({

@@ -14,17 +14,21 @@ import {
   type RelatedRootReadSpec,
 } from '../relation-root.js';
 import type { DataGraphExecutionRuntime } from '../runtime.js';
+import { selectionAnd } from '../selection-ast.js';
 
-import { executeInMemoryGraphCommandEffect, type InMemoryDataGraphError } from './command.js';
+import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { materializeRecord, type InMemoryDataset } from './materialization.js';
-import { applyOrder, applyPredicates } from './query.js';
+import { applyOrder, applySelectionExpression } from './query.js';
 
 const selectRows = (
   spec: QuerySpec<any, any>,
   dataset: InMemoryDataset,
   options?: { applyLimit?: boolean },
 ) => {
-  const rows = applyOrder(applyPredicates(dataset[spec.root.name] ?? [], spec.where), spec.orderBy);
+  const rows = applyOrder(
+    applySelectionExpression(dataset[spec.root.name] ?? [], spec.selection),
+    spec.orderBy,
+  );
 
   return options?.applyLimit === false
     ? rows
@@ -55,7 +59,14 @@ const executePlainRead = <TParams, TResult>(
 ) => {
   const spec = resolveQuerySpec(queryOrView, params);
 
-  return materializeRows(spec, selectRows(spec, dataset), dataset, options);
+  const rows = materializeRows(spec, selectRows(spec, dataset), dataset, options);
+  if (spec.cardinality === 'one' && rows.length !== 1) {
+    throw new InMemoryDataGraphError(
+      `Expected exactly one ${spec.root.name}, received ${rows.length}.`,
+      'cardinality_mismatch',
+    );
+  }
+  return rows;
 };
 
 const uniqueNonNullValues = (rows: Array<Record<string, unknown>>, field: string) => [
@@ -68,15 +79,12 @@ const withRelatedTargetPredicate = (
   sourceValues: readonly unknown[],
 ): QuerySpec<any, any> => ({
   ...spec.target,
-  where: [
-    ...spec.target.where,
-    {
-      kind: 'predicate',
-      operator: 'in',
-      fieldName: targetField,
-      values: sourceValues,
-    },
-  ],
+  selection: selectionAnd(spec.target.selection, {
+    kind: 'predicate',
+    operator: 'in',
+    fieldName: targetField,
+    values: sourceValues,
+  }),
 });
 
 const emptyRelatedRootResult = <TResult>(mode: RelatedRootReadMode, sourceRows: unknown[]) => {
@@ -175,7 +183,14 @@ const countRead = <TParams, TResult>(
 ) => {
   if (!isRelatedRootReadSpec(queryOrView)) {
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
-    return selectRows(spec, dataset, { applyLimit: false }).length;
+    const count = selectRows(spec, dataset, { applyLimit: false }).length;
+    if (spec.cardinality === 'one' && count !== 1) {
+      throw new InMemoryDataGraphError(
+        `Expected exactly one ${spec.root.name}, received ${count}.`,
+        'cardinality_mismatch',
+      );
+    }
+    return count;
   }
 
   const { sourceField, targetField } = resolveRelatedRootFields(
@@ -197,16 +212,56 @@ const countRead = <TParams, TResult>(
 
 export const createInMemoryDataGraphRuntime = (input: {
   dataset: InMemoryDataset;
-}): DataGraphExecutionRuntime<never, undefined, undefined, InMemoryDataGraphError> =>
+}): DataGraphExecutionRuntime<
+  InMemoryDataGraphError,
+  undefined,
+  undefined,
+  InMemoryDataGraphError
+> =>
   ({
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
-      Effect.sync<TResult | null>(() => executeRead(queryOrView, params, input.dataset)[0] ?? null),
+      Effect.try({
+        try: () => executeRead(queryOrView, params, input.dataset)[0] ?? null,
+        catch: cause =>
+          cause instanceof InMemoryDataGraphError
+            ? cause
+            : new InMemoryDataGraphError('Failed to execute in-memory read.', 'read_failed', cause),
+      }),
     run: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
-      Effect.sync<TResult[]>(() => executeRead(queryOrView, params, input.dataset)),
+      Effect.try({
+        try: () => executeRead(queryOrView, params, input.dataset),
+        catch: cause =>
+          cause instanceof InMemoryDataGraphError
+            ? cause
+            : new InMemoryDataGraphError('Failed to execute in-memory read.', 'read_failed', cause),
+      }),
     stream: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
-      Stream.fromIterable(executeRead(queryOrView, params, input.dataset)),
+      Stream.fromEffect(
+        Effect.try({
+          try: () => executeRead(queryOrView, params, input.dataset),
+          catch: cause =>
+            cause instanceof InMemoryDataGraphError
+              ? cause
+              : new InMemoryDataGraphError(
+                  'Failed to execute in-memory read.',
+                  'read_failed',
+                  cause,
+                ),
+        }),
+      ).pipe(Stream.flatMap(Stream.fromIterable)),
     count: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
-      Effect.sync(() => countRead(queryOrView, params, input.dataset)),
+      Effect.try({
+        try: () => countRead(queryOrView, params, input.dataset),
+        catch: cause =>
+          cause instanceof InMemoryDataGraphError
+            ? cause
+            : new InMemoryDataGraphError('Failed to count in-memory read.', 'read_failed', cause),
+      }),
     runCommand: <TResult>(command: GraphCommandSpec<any, any, TResult>) =>
       executeInMemoryGraphCommandEffect(input.dataset, command),
-  }) satisfies DataGraphExecutionRuntime<never, undefined, undefined, InMemoryDataGraphError>;
+  }) satisfies DataGraphExecutionRuntime<
+    InMemoryDataGraphError,
+    undefined,
+    undefined,
+    InMemoryDataGraphError
+  >;

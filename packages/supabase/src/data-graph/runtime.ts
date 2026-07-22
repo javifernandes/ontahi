@@ -1,11 +1,13 @@
 import {
   compileResolvedQueryPlan,
+  getConjunctiveSelectionPredicates,
   createRelatedRootReadSpec,
   getPublicSourceFieldAccessor,
   isRelatedRootReadSpec,
   materializeFlatSelection,
   resolveQuerySpec,
   resolveRelatedRootFields,
+  selectionAnd,
   selectionUsesRelationBuilders,
   stripQueryShape,
   type AnyEntityDefinition,
@@ -29,7 +31,7 @@ import type {
   SupabaseReadDeps,
 } from './types.js';
 
-import { applySupabasePredicates, hasEmptySupabaseInPredicate } from './index.js';
+import { applySupabaseSelection, compileSupabaseSelection } from './index.js';
 
 export const executeSupabaseGraphQueryEffect = <
   TClient extends SupabaseLikeClient,
@@ -62,13 +64,15 @@ export const executeSupabaseGraphQueryEffect = <
     const rootRows = yield* fetchSupabaseEntityRowsEffect({
       supabase,
       entityDefinition: spec.root,
-      predicates: spec.where as FetchEntityRowsInput<TClient>['predicates'],
+      predicates: (getConjunctiveSelectionPredicates(spec.selection) ??
+        []) as FetchEntityRowsInput<TClient>['predicates'],
       orderBy: spec.orderBy,
       limit: spec.limit,
       selectShape: spec.select,
       includeShape: spec.includes,
       tableName: plan.rootTable,
       compiledWhere: plan.where,
+      compiledSelection: plan.selection,
       compiledOrderBy: plan.orderBy,
       message: `Failed to load ${spec.root.name} records`,
       createError: deps.createError,
@@ -82,6 +86,16 @@ export const executeSupabaseGraphQueryEffect = <
       fetchEntityRowsEffect: nestedInput => fetchSupabaseEntityRowsEffect(nestedInput),
       createError: deps.createError,
     });
+
+    if (spec.cardinality === 'one' && hydratedRows.length !== 1) {
+      return yield* Effect.fail(
+        deps.createError({
+          message: `Expected exactly one ${spec.root.name}, received ${hydratedRows.length}`,
+          logMessage: `Data graph selection cardinality mismatch for ${spec.root.name}`,
+          cause: 'selection_cardinality_mismatch',
+        }),
+      );
+    }
 
     return hydratedRows.map(row =>
       materializeSupabaseEntityRow(row, spec.root, spec.select, spec.includes),
@@ -110,18 +124,27 @@ export const executeSupabaseGraphCountEffect = <
 
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
     const plan = compileResolvedQueryPlan(spec);
-    const predicates = plan.where.length > 0 ? plan.where : spec.where;
+    const selection = compileSupabaseSelection(plan.selection);
 
-    if (hasEmptySupabaseInPredicate(predicates)) {
+    if (selection.kind === 'none') {
+      if (spec.cardinality === 'one') {
+        return yield* Effect.fail(
+          deps.createError({
+            message: `Expected exactly one ${spec.root.name}, received 0`,
+            logMessage: `Data graph selection cardinality mismatch for ${spec.root.name}`,
+            cause: 'selection_cardinality_mismatch',
+          }),
+        );
+      }
       return 0;
     }
 
     const supabase = yield* deps.getClient(options);
 
-    return yield* Effect.tryPromise({
+    const count = yield* Effect.tryPromise({
       try: async () => {
         let query = supabase.from(plan.rootTable).select('*', { count: 'exact', head: true });
-        query = applySupabasePredicates(spec.root, query, predicates);
+        query = applySupabaseSelection(query, selection);
 
         const result = await query;
         if (result.error) {
@@ -137,6 +160,18 @@ export const executeSupabaseGraphCountEffect = <
           cause,
         }),
     });
+
+    if (spec.cardinality === 'one' && count !== 1) {
+      return yield* Effect.fail(
+        deps.createError({
+          message: `Expected exactly one ${spec.root.name}, received ${count}`,
+          logMessage: `Data graph selection cardinality mismatch for ${spec.root.name}`,
+          cause: 'selection_cardinality_mismatch',
+        }),
+      );
+    }
+
+    return count;
   });
 
 const resolvePlainSourceSpec = <TParams, TResult>(
@@ -269,15 +304,12 @@ const buildRelatedRootTargetSpec = <TTarget extends AnyEntityDefinition>(
 
   return {
     ...(options?.stripShape ? stripQueryShape(spec.target) : spec.target),
-    where: [
-      ...spec.target.where,
-      {
-        kind: 'predicate',
-        operator: 'in',
-        fieldName: targetField,
-        values: sourceValues,
-      },
-    ],
+    selection: selectionAnd(spec.target.selection, {
+      kind: 'predicate',
+      operator: 'in',
+      fieldName: targetField,
+      values: sourceValues,
+    }),
   };
 };
 

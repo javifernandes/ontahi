@@ -1,4 +1,5 @@
 import {
+  compileSelectionExpression,
   getEntityMapping,
   resolveColumnNameForEntity,
   type GraphCommandSpec,
@@ -8,7 +9,8 @@ import { Effect } from 'effect';
 import type { SupabaseErrorFactory, SupabaseLikeClient } from './types.js';
 
 import {
-  applySupabasePredicates,
+  applySupabaseSelection,
+  compileSupabaseSelection,
   getProbeColumnForEntity,
   mapEntityPayloadToSupabaseColumns,
   mapSupabaseRowToEntityFields,
@@ -101,6 +103,10 @@ export const executeSupabaseGraphCommandEffect = <
       options?.message ??
       DEFAULT_COMMAND_MESSAGES[command.operation].logMessage;
     const probeColumn = getProbeColumnForEntity(command.root);
+    const compiledSelection =
+      command.operation === 'update' || command.operation === 'delete'
+        ? compileSupabaseSelection(compileSelectionExpression(command.root, command.selection))
+        : ({ kind: 'all' } as const);
 
     const mappedPayload = Array.isArray(command.payload)
       ? command.payload.map(payload =>
@@ -132,6 +138,19 @@ export const executeSupabaseGraphCommandEffect = <
           }),
       });
 
+    if (compiledSelection.kind === 'none') {
+      if (command.cardinality === 'one') {
+        return yield* Effect.fail(
+          deps.createError({
+            message,
+            logMessage,
+            cause: 'Expected exactly one affected row, got 0',
+          }),
+        );
+      }
+      return (command.returning ? [] : undefined) as TResult;
+    }
+
     if (
       command.returning &&
       command.returning.length > 0 &&
@@ -153,7 +172,7 @@ export const executeSupabaseGraphCommandEffect = <
           selectColumns: returningColumns.join(', '),
         });
 
-        return applySupabasePredicates(command.root, query, command.where);
+        return applySupabaseSelection(query, compiledSelection);
       });
 
       const mappedRows = rows.map(row =>
@@ -184,7 +203,7 @@ export const executeSupabaseGraphCommandEffect = <
           selectColumns: probeColumn,
         });
 
-        return applySupabasePredicates(command.root, query, command.where);
+        return applySupabaseSelection(query, compiledSelection);
       });
 
       if (rows.length !== 1) {
@@ -208,7 +227,7 @@ export const executeSupabaseGraphCommandEffect = <
           mappedPayload,
         });
 
-        const result = await applySupabasePredicates(command.root, query, command.where);
+        const result = await applySupabaseSelection(query, compiledSelection);
         if (result.error) {
           throw result.error.message;
         }

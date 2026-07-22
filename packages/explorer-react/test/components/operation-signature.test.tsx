@@ -142,4 +142,33 @@ describe('ExplorerOperationSignature', () => {
     expect(within(row).getByText('isPending')).toBeTruthy();
     expect(within(row).getByText('pending invite/active collaborator')).toBeTruthy();
   });
+
+  it('presents selections as entity sets instead of objects', () => {
+    render(
+      <ExplorerOperationSignature
+        operation={buildOperation({
+          inputRefs: [],
+          inputSchema: {
+            source: 'ontahi',
+            summary: 'object',
+            fields: [
+              {
+                path: 'notifications',
+                type: 'Selection<UserNotification>',
+                required: true,
+                selection: {
+                  entityName: 'UserNotification',
+                  cardinality: 'many',
+                },
+              },
+            ],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText('notifications')).toBeTruthy();
+    expect(screen.getByText('UserNotification selection (many)')).toBeTruthy();
+    expect(screen.queryByText('object')).toBeNull();
+  });
 });

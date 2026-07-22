@@ -5,37 +5,13 @@ import {
   type RelationKind,
 } from './definitions.js';
 import type { RelatedRootReadSpec } from './relation-root.js';
-
-type Predicate =
-  | {
-      kind: 'predicate';
-      operator: 'eq';
-      fieldName: string;
-      value: unknown;
-    }
-  | {
-      kind: 'predicate';
-      operator: 'in';
-      fieldName: string;
-      values: readonly unknown[];
-    }
-  | {
-      kind: 'predicate';
-      operator: 'isNull';
-      fieldName: string;
-    }
-  | {
-      kind: 'predicate';
-      operator: 'lte';
-      fieldName: string;
-      value: unknown;
-    }
-  | {
-      kind: 'predicate';
-      operator: 'lt';
-      fieldName: string;
-      value: unknown;
-    };
+import {
+  selectionAll,
+  selectionAnd,
+  type EntitySelectionSource,
+  type SelectionExpression,
+  type SelectionPredicate,
+} from './selection-ast.js';
 
 type OrderDirection = 'asc' | 'desc';
 
@@ -48,11 +24,13 @@ type OrderSpec = {
 type FieldReference<TValue = unknown> = {
   kind: 'field-ref';
   fieldName: string;
-  eq: (value: TValue) => Predicate;
-  in: (values: readonly TValue[]) => Predicate;
-  isNull: () => Predicate;
-  lte: (value: TValue) => Predicate;
-  lt: (value: TValue) => Predicate;
+  eq: (value: TValue) => SelectionPredicate;
+  in: (values: readonly TValue[]) => SelectionPredicate;
+  isNull: () => SelectionPredicate;
+  lte: (value: TValue) => SelectionPredicate;
+  lt: (value: TValue) => SelectionPredicate;
+  gte: (value: TValue) => SelectionPredicate;
+  gt: (value: TValue) => SelectionPredicate;
   asc: () => OrderSpec;
   desc: () => OrderSpec;
 };
@@ -67,6 +45,8 @@ const createFieldReference = <TValue>(fieldName: string): FieldReference<TValue>
   isNull: () => ({ kind: 'predicate', operator: 'isNull', fieldName }),
   lte: value => ({ kind: 'predicate', operator: 'lte', fieldName, value }),
   lt: value => ({ kind: 'predicate', operator: 'lt', fieldName, value }),
+  gte: value => ({ kind: 'predicate', operator: 'gte', fieldName, value }),
+  gt: value => ({ kind: 'predicate', operator: 'gt', fieldName, value }),
   asc: () => ({ kind: 'order', fieldName, direction: 'asc' }),
   desc: () => ({ kind: 'order', fieldName, direction: 'desc' }),
 });
@@ -258,11 +238,12 @@ export type QuerySpec<
 > = {
   kind: 'query';
   root: TEntity;
-  where: Predicate[];
+  selection: SelectionExpression;
   select?: Record<string, SelectionValue>;
   includes?: Record<string, AnyRelationQueryBuilder>;
   orderBy: OrderSpec[];
   limit?: number;
+  cardinality?: 'one' | 'many';
   __result?: unknown;
 };
 
@@ -272,10 +253,23 @@ export class QueryBuilder<
 > {
   constructor(readonly spec: QuerySpec<TEntity, TResult>) {}
 
-  where(build: (root: EntityProxy<TEntity>) => Predicate) {
+  where(
+    build: ((root: EntityProxy<TEntity>) => SelectionExpression) | EntitySelectionSource<TEntity>,
+  ) {
+    if (typeof build !== 'function' && build.root !== this.spec.root) {
+      throw new Error(`Cannot apply a ${build.root.name} selection to ${this.spec.root.name}.`);
+    }
+
     return new QueryBuilder<TEntity, TResult>({
       ...this.spec,
-      where: [...this.spec.where, build(createEntityProxy(this.spec.root))],
+      selection: selectionAnd(
+        this.spec.selection,
+        typeof build === 'function' ? build(createEntityProxy(this.spec.root)) : build.expression,
+      ),
+      ...(typeof build !== 'function' &&
+      (this.spec.cardinality === 'one' || build.cardinality === 'one')
+        ? { cardinality: 'one' as const }
+        : {}),
     });
   }
 
@@ -326,7 +320,7 @@ export const query = <TEntity extends AnyEntityDefinition>(entityDefinition: TEn
   new QueryBuilder<TEntity>({
     kind: 'query',
     root: entityDefinition,
-    where: [],
+    selection: selectionAll(),
     orderBy: [],
   });
 

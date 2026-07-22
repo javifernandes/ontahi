@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GraphSelection,
+  Selection,
   createBoundGraphCommand,
   createDeleteCommandSpec,
   createInsertCommandSpec,
@@ -13,6 +14,7 @@ import {
   field,
   mapEntity,
   query,
+  selection,
 } from '../../src/data-graph/index.js';
 
 describe('data-graph selection helpers', () => {
@@ -40,10 +42,77 @@ describe('data-graph selection helpers', () => {
     expect(selection.root).toBe(Book);
     expect(selection.build()).toMatchObject({
       root: Book,
-      where: [{ operator: 'eq', fieldName: 'slug', value: 'progbook' }],
+      selection: { operator: 'eq', fieldName: 'slug', value: 'progbook' },
       orderBy: [{ fieldName: 'title', direction: 'asc' }],
       limit: 10,
     });
+  });
+
+  it('treats membership selections as first-class composable values', () => {
+    const owned = selection(Book, book => book.ownerId.eq('owner-1')).named('ownedBooks');
+    const visible = owned
+      .or(book => book.slug.eq('public'))
+      .and(selection(Book, book => book.title.eq('Ontahí')).not());
+
+    expect(owned.name).toBe('ownedBooks');
+    expect(visible.toAst()).toEqual({
+      kind: 'selection',
+      entityName: 'Book',
+      expression: {
+        kind: 'and',
+        operands: [
+          {
+            kind: 'or',
+            operands: [
+              { kind: 'predicate', operator: 'eq', fieldName: 'ownerId', value: 'owner-1' },
+              { kind: 'predicate', operator: 'eq', fieldName: 'slug', value: 'public' },
+            ],
+          },
+          {
+            kind: 'not',
+            operand: {
+              kind: 'predicate',
+              operator: 'eq',
+              fieldName: 'title',
+              value: 'Ontahí',
+            },
+          },
+        ],
+      },
+    });
+    expect(query(Book).where(visible).build().selection).toEqual(visible.build());
+    expect(visible.toQuery().build().selection).toEqual(visible.build());
+    expect(createDeleteCommandSpec(Book, visible).selection).toEqual(visible.build());
+  });
+
+  it('provides all and none selections and rejects cross-entity composition', () => {
+    const Author = entity('Author', { id: field.id() });
+
+    expect(Selection.all(Book).build()).toEqual({ kind: 'all' });
+    expect(Selection.none(Book).build()).toEqual({ kind: 'none' });
+    expect(() => Selection.all(Book).and(Selection.all(Author) as never)).toThrow(
+      'Cannot combine a Book selection with Author.',
+    );
+    expect(() => query(Book).where(Selection.all(Author) as never)).toThrow(
+      'Cannot apply a Author selection to Book.',
+    );
+  });
+
+  it('carries exact-one requirements into reads and commands without allowing weakening', () => {
+    const exactBook = new Selection(
+      Book,
+      { kind: 'predicate', operator: 'eq', fieldName: 'slug', value: 'progbook' },
+      undefined,
+      'one',
+    );
+    const selected = new GraphSelection(query(Book).where(exactBook));
+
+    expect(selected.build().cardinality).toBe('one');
+    expect(selected.update({ title: 'Updated' }).build().cardinality).toBe('one');
+    expect(selected.updateMany({ title: 'Updated' }).build().cardinality).toBe('one');
+    expect(selected.delete().build().cardinality).toBe('one');
+    expect(selected.deleteMany().build().cardinality).toBe('one');
+    expect(exactBook.and(book => book.ownerId.eq('owner-1')).cardinality).toBe('one');
   });
 
   it('builds update command variants from a selection', () => {
@@ -51,7 +120,7 @@ describe('data-graph selection helpers', () => {
 
     expect(selection.update({ title: 'Updated' }).build()).toMatchObject({
       operation: 'update',
-      where: [{ operator: 'eq', fieldName: 'slug', value: 'progbook' }],
+      selection: { operator: 'eq', fieldName: 'slug', value: 'progbook' },
       payload: { title: 'Updated' },
     });
 
@@ -91,7 +160,7 @@ describe('data-graph selection helpers', () => {
 
     expect(selection.delete().build()).toMatchObject({
       operation: 'delete',
-      where: [{ operator: 'eq', fieldName: 'slug', value: 'progbook' }],
+      selection: { operator: 'eq', fieldName: 'slug', value: 'progbook' },
     });
 
     expect(selection.deleteOne().build()).toMatchObject({
@@ -116,19 +185,26 @@ describe('data-graph selection helpers', () => {
   });
 
   it('supports top-level command spec factories and pipe helpers', () => {
-    const where = query(Book)
+    const selectionExpression = query(Book)
       .where(book => book.slug.eq('progbook'))
-      .build().where;
+      .build().selection;
 
     expect(
-      createUpdateCommandSpec(Book, where, { title: 'Updated' }, { returning: ['id'] }),
+      createUpdateCommandSpec(
+        Book,
+        selectionExpression,
+        { title: 'Updated' },
+        { returning: ['id'] },
+      ),
     ).toMatchObject({
       operation: 'update',
       returning: ['id'],
       payload: { title: 'Updated' },
     });
 
-    expect(createDeleteCommandSpec(Book, where, { cardinality: 'one' })).toMatchObject({
+    expect(
+      createDeleteCommandSpec(Book, selectionExpression, { cardinality: 'one' }),
+    ).toMatchObject({
       operation: 'delete',
       cardinality: 'one',
     });
@@ -138,7 +214,7 @@ describe('data-graph selection helpers', () => {
     ).toMatchObject({
       operation: 'insert',
       cardinality: 'one',
-      where: [],
+      selection: { kind: 'none' },
     });
 
     expect(
@@ -168,7 +244,7 @@ describe('data-graph selection helpers', () => {
   it('binds graph commands to an executor without app-specific subclasses', async () => {
     const calls: Array<{ name: string | undefined; title: string | undefined }> = [];
     const command = createBoundGraphCommand(
-      createUpdateCommandSpec(Book, [], { title: 'Updated' }, { returning: ['id'] }),
+      createUpdateCommandSpec(Book, { kind: 'all' }, { title: 'Updated' }, { returning: ['id'] }),
       {
         run: <TResult>(input: ReturnType<typeof createUpdateCommandSpec>) =>
           Effect.sync(() => {

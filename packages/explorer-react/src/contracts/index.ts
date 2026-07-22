@@ -71,6 +71,14 @@ export type ExplorerSchemaField = {
   enumValues?: string[];
   variants?: ExplorerSchemaVariant[];
   presentation?: ExplorerSchemaFieldPresentation;
+  selection?: {
+    entityName: string;
+    cardinality: 'one' | 'many';
+    identity?: {
+      name: string;
+      fields: string[];
+    };
+  };
 };
 
 export type ExplorerSchemaDescriptor = {

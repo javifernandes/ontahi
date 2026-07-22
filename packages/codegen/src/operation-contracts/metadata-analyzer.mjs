@@ -38,6 +38,7 @@ const graphSchemaHelperNames = new Map([
   ['graphRefine', 'refine'],
   ['graphLazy', 'lazy'],
   ['graphNamed', 'named'],
+  ['graphSelection', 'selection'],
   ['describeGraphSchema', 'describe'],
   ['presentGraphSchema', 'present'],
 ]);
@@ -1119,6 +1120,7 @@ const parseOperationDefinition = (
   const durableNode = config.get('durable');
   const ingressNode = config.get('ingress');
   const outputNode = config.get('output');
+  const inputNode = config.get('input');
   const graphOutputNode = config.get('graphOutput');
   const clientCacheNode = config.get('clientCache');
 
@@ -1188,7 +1190,35 @@ const parseOperationDefinition = (
   let bridgeInvalidateText;
   let graphOutputText;
   let clientCacheText;
+  let inputSchemaText;
   const helperDeclarations = new Map();
+
+  if (inputNode) {
+    const unwrappedInput = unwrapExpression(inputNode);
+    const localInputDeclaration =
+      unwrappedInput && ts.isIdentifier(unwrappedInput)
+        ? schemaContext?.declarations.get(unwrappedInput.text)
+        : undefined;
+    const importedInputContext =
+      schemaContext && unwrappedInput && ts.isIdentifier(unwrappedInput) && !localInputDeclaration
+        ? resolveImportedSchemaContext(unwrappedInput.text, schemaContext)
+        : undefined;
+    const importedInputDeclaration =
+      unwrappedInput && ts.isIdentifier(unwrappedInput)
+        ? importedInputContext?.declarations.get(unwrappedInput.text)
+        : undefined;
+    const localInputNode =
+      unwrappedInput && ts.isIdentifier(unwrappedInput)
+        ? (localInputDeclaration?.initializer ?? importedInputDeclaration?.initializer)
+        : unwrappedInput;
+
+    if (localInputNode) {
+      const candidateInputSchemaText = getNodeText(unwrapExpression(localInputNode));
+      if (/\b(?:graphSchema\.selection|graphSelection)\s*\(/.test(candidateInputSchemaText)) {
+        inputSchemaText = candidateInputSchemaText;
+      }
+    }
+  }
   if (bridgeNode) {
     if (!ts.isObjectLiteralExpression(bridgeNode)) {
       return {
@@ -1266,6 +1296,7 @@ const parseOperationDefinition = (
     bridgeInvalidateText,
     graphOutputText,
     clientCacheText,
+    inputSchemaText,
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

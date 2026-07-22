@@ -15,6 +15,7 @@ import type {
   GraphOptionalDefinition,
   GraphRecordDefinition,
   GraphRefinementDefinition,
+  GraphSelectionDefinition,
   GraphSchemaDefinition,
   GraphSchemaFields,
   GraphTransformDefinition,
@@ -22,6 +23,9 @@ import type {
   GraphVoidDefinition,
 } from './definitions.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
+import { isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref.js';
+import type { SelectionExpression } from './selection-ast.js';
+import { Selection } from './selection-value.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object';
@@ -84,6 +88,210 @@ const isGraphNamedDefinition = (schema: GraphSchemaDefinition): schema is GraphN
 
 const isGraphVoidDefinition = (schema: GraphSchemaDefinition): schema is GraphVoidDefinition =>
   schema.kind === 'schema.void';
+
+const isGraphSelectionDefinition = (
+  schema: GraphSchemaDefinition,
+): schema is GraphSelectionDefinition => schema.kind === 'schema.selection';
+
+const selectionExpressionSchema: z.ZodType<SelectionExpression> = z.lazy(() =>
+  z.union([
+    z.object({ kind: z.literal('all') }),
+    z.object({ kind: z.literal('none') }),
+    z.object({
+      kind: z.literal('references'),
+      refs: z.array(
+        z.object({
+          kind: z.literal('entity-ref'),
+          entityName: z.string(),
+          locator: z.record(z.string(), z.custom<EntityRefLocatorValue>(isEntityRefLocatorValue)),
+        }),
+      ),
+    }),
+    z.object({
+      kind: z.literal('predicate'),
+      operator: z.literal('eq'),
+      fieldName: z.string(),
+      value: z.unknown(),
+    }),
+    z.object({
+      kind: z.literal('predicate'),
+      operator: z.literal('in'),
+      fieldName: z.string(),
+      values: z.array(z.unknown()),
+    }),
+    z.object({
+      kind: z.literal('predicate'),
+      operator: z.literal('isNull'),
+      fieldName: z.string(),
+    }),
+    z.object({
+      kind: z.literal('predicate'),
+      operator: z.union([z.literal('lte'), z.literal('lt'), z.literal('gte'), z.literal('gt')]),
+      fieldName: z.string(),
+      value: z.unknown(),
+    }),
+    z.object({
+      kind: z.union([z.literal('and'), z.literal('or')]),
+      operands: z.array(selectionExpressionSchema),
+    }),
+    z.object({ kind: z.literal('not'), operand: selectionExpressionSchema }),
+  ]),
+);
+
+const validateSelectionFields = (
+  expression: SelectionExpression,
+  entity: AnyEntityDefinition,
+  context: z.RefinementCtx,
+) => {
+  if (expression.kind === 'references') {
+    for (const [index, ref] of expression.refs.entries()) {
+      if (ref.entityName !== entity.name) {
+        context.addIssue({
+          code: 'custom',
+          message: `Expected a ${entity.name} reference, received ${ref.entityName}.`,
+          path: ['expression', 'refs', index, 'entityName'],
+        });
+        continue;
+      }
+
+      const locatorFields = Object.keys(ref.locator);
+      const matchesLocator = Object.values(entity.refLocators).some(
+        locator =>
+          locator.fields?.length === locatorFields.length &&
+          locator.fields.every(fieldName => locatorFields.includes(fieldName)),
+      );
+      if (!matchesLocator) {
+        context.addIssue({
+          code: 'custom',
+          message: `Unknown locator fields on entity ${entity.name}: ${locatorFields.join(', ')}.`,
+          path: ['expression', 'refs', index, 'locator'],
+        });
+        continue;
+      }
+
+      for (const [fieldName, value] of Object.entries(ref.locator)) {
+        const fieldDefinition = entity.fields[fieldName];
+        if (!fieldDefinition || !toZodFieldSchema(fieldDefinition).safeParse(value).success) {
+          context.addIssue({
+            code: 'custom',
+            message: `Invalid locator value for ${entity.name}.${fieldName}.`,
+            path: ['expression', 'refs', index, 'locator', fieldName],
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  if (expression.kind === 'predicate') {
+    const fieldDefinition = entity.fields[expression.fieldName];
+    if (!fieldDefinition) {
+      context.addIssue({
+        code: 'custom',
+        message: `Unknown field "${expression.fieldName}" on entity ${entity.name}.`,
+        path: ['expression', 'fieldName'],
+      });
+      return;
+    }
+
+    const values =
+      expression.operator === 'in'
+        ? expression.values
+        : expression.operator === 'isNull'
+          ? []
+          : [expression.value];
+    for (const value of values) {
+      const validDate = fieldDefinition.fieldType === 'date' && value instanceof Date;
+      if (!validDate && !toZodFieldSchema(fieldDefinition).safeParse(value).success) {
+        context.addIssue({
+          code: 'custom',
+          message: `Invalid value for ${entity.name}.${expression.fieldName}.`,
+          path: ['expression', 'value'],
+        });
+      }
+    }
+    return;
+  }
+
+  if (expression.kind === 'and' || expression.kind === 'or') {
+    expression.operands.forEach(operand => validateSelectionFields(operand, entity, context));
+  } else if (expression.kind === 'not') {
+    validateSelectionFields(expression.operand, entity, context);
+  }
+};
+
+const hydrateSelectionValues = (
+  expression: SelectionExpression,
+  entity: AnyEntityDefinition,
+): SelectionExpression => {
+  if (expression.kind === 'references') return expression;
+
+  if (expression.kind === 'predicate') {
+    const fieldDefinition = entity.fields[expression.fieldName];
+    if (fieldDefinition?.fieldType !== 'date') return expression;
+    if (expression.operator === 'in') {
+      return {
+        ...expression,
+        values: expression.values.map(value =>
+          typeof value === 'string' ? new Date(value) : value,
+        ),
+      };
+    }
+    if (expression.operator === 'isNull') return expression;
+    return {
+      ...expression,
+      value: typeof expression.value === 'string' ? new Date(expression.value) : expression.value,
+    };
+  }
+  if (expression.kind === 'and' || expression.kind === 'or') {
+    return {
+      ...expression,
+      operands: expression.operands.map(operand => hydrateSelectionValues(operand, entity)),
+    };
+  }
+  if (expression.kind === 'not') {
+    return { ...expression, operand: hydrateSelectionValues(expression.operand, entity) };
+  }
+  return expression;
+};
+
+const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
+  z
+    .preprocess(
+      value => (value instanceof Selection ? value.toAst() : value),
+      z.object({
+        kind: z.literal('selection'),
+        entityName: z.literal(schema.entity.name),
+        expression: selectionExpressionSchema,
+      }),
+    )
+    .superRefine((ast, context) => {
+      validateSelectionFields(ast.expression, schema.entity, context);
+      if (schema.cardinality !== 'one') return;
+
+      const knownCount =
+        ast.expression.kind === 'none'
+          ? 0
+          : ast.expression.kind === 'references'
+            ? ast.expression.refs.length
+            : undefined;
+      if (knownCount !== undefined && knownCount !== 1) {
+        context.addIssue({
+          code: 'custom',
+          message: `Expected exactly one ${schema.entity.name} reference, received ${knownCount}.`,
+          path: ['expression'],
+        });
+      }
+    })
+    .transform(
+      ast =>
+        new Selection(
+          schema.entity,
+          hydrateSelectionValues(ast.expression, schema.entity),
+          undefined,
+          schema.cardinality,
+        ),
+    );
 
 const toZodFieldSchema = (field: AnyFieldDefinition): ZodType => {
   let schema: ZodType;
@@ -295,6 +503,10 @@ const toBareZodSchema = (schema: GraphSchemaDefinition): ZodType => {
 
   if (isGraphNamedDefinition(schema)) {
     return toZodSchemaInternal(schema.item);
+  }
+
+  if (isGraphSelectionDefinition(schema)) {
+    return toZodSelectionSchema(schema);
   }
 
   if (isGraphVoidDefinition(schema)) {

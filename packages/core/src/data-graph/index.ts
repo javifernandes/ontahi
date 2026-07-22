@@ -23,4 +23,6 @@ export * from './runtime-bound-api.js';
 export * from './schema.js';
 export * from './schema-descriptor.js';
 export * from './selection.js';
+export * from './selection-value.js';
+export * from './selection-ast.js';
 export * from './selection-assembly.js';

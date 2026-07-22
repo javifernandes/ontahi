@@ -20,7 +20,7 @@ describe('data-graph commands', () => {
   });
   const where = query(Book)
     .where(book => book.slug.eq('progbook'))
-    .build().where;
+    .build().selection;
 
   it('builds immutable named command specs and supports pipe helpers', () => {
     const command = new GraphCommand(createUpdateCommandSpec(Book, where, { title: 'Updated' }));

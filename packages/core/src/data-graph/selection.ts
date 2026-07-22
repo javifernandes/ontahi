@@ -1,6 +1,11 @@
 import { GraphCommand, type GraphCommandSpec } from './command.js';
 import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
+import {
+  selectionNone,
+  type EntitySelectionSource,
+  type SelectionExpression,
+} from './selection-ast.js';
 
 export type QueryWhereArg<TEntity extends AnyEntityDefinition, TResult> = Parameters<
   QueryBuilder<TEntity, TResult>['where']
@@ -28,14 +33,24 @@ export type PickEntityFields<
   TFieldNames extends readonly EntityFieldName<TEntity>[],
 > = Pick<InferEntityRecord<TEntity['fields']>, TFieldNames[number]>;
 
-type EntityWhere<TEntity extends AnyEntityDefinition> = QuerySpec<
-  TEntity,
-  InferEntityRecord<TEntity['fields']>
->['where'];
+type EntitySelection<TEntity extends AnyEntityDefinition> =
+  | SelectionExpression
+  | EntitySelectionSource<TEntity>;
+
+const resolveEntitySelection = <TEntity extends AnyEntityDefinition>(
+  root: TEntity,
+  selection: EntitySelection<TEntity>,
+) => {
+  if (!('expression' in selection)) return selection;
+  if (selection.root !== root) {
+    throw new Error(`Cannot target ${root.name} with a ${selection.root.name} selection.`);
+  }
+  return selection.expression;
+};
 
 export const createUpdateCommandSpec = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
-  where: EntityWhere<TEntity>,
+  selection: EntitySelection<TEntity>,
   payload: Partial<InferEntityRecord<TEntity['fields']>>,
   options?: {
     returning?: readonly EntityFieldName<TEntity>[];
@@ -45,7 +60,7 @@ export const createUpdateCommandSpec = <TEntity extends AnyEntityDefinition>(
   kind: 'command',
   operation: 'update',
   root,
-  where,
+  selection: resolveEntitySelection(root, selection),
   payload,
   ...(options?.returning ? { returning: [...options.returning] } : {}),
   ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
@@ -53,7 +68,7 @@ export const createUpdateCommandSpec = <TEntity extends AnyEntityDefinition>(
 
 export const createDeleteCommandSpec = <TEntity extends AnyEntityDefinition, TResult = void>(
   root: TEntity,
-  where: EntityWhere<TEntity>,
+  selection: EntitySelection<TEntity>,
   options?: {
     returning?: readonly EntityFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
@@ -62,7 +77,7 @@ export const createDeleteCommandSpec = <TEntity extends AnyEntityDefinition, TRe
   kind: 'command',
   operation: 'delete',
   root,
-  where,
+  selection: resolveEntitySelection(root, selection),
   ...(options?.returning ? { returning: [...options.returning] } : {}),
   ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
 });
@@ -78,7 +93,7 @@ export const createInsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   kind: 'command',
   operation: 'insert',
   root,
-  where: [],
+  selection: selectionNone(),
   payload,
   ...(options?.returning ? { returning: [...options.returning] } : {}),
   ...(options?.cardinality ? { cardinality: options.cardinality } : {}),
@@ -94,7 +109,7 @@ export const createInsertManyCommandSpec = <TEntity extends AnyEntityDefinition>
   kind: 'command',
   operation: 'insert_many',
   root,
-  where: [],
+  selection: selectionNone(),
   payload,
   ...(options?.returning ? { returning: [...options.returning] } : {}),
 });
@@ -110,7 +125,7 @@ export const createUpsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   kind: 'command',
   operation: 'upsert',
   root,
-  where: [],
+  selection: selectionNone(),
   payload,
   upsert: {
     conflictOn: [...options.conflictOn],
@@ -295,7 +310,10 @@ export class GraphSelection<
     },
   ) {
     return this.factories.createCommand(
-      createUpdateCommandSpec(this.root, this.builder.spec.where, payload, options),
+      createUpdateCommandSpec(this.root, this.builder.spec.selection, payload, {
+        ...options,
+        ...(this.builder.spec.cardinality === 'one' ? { cardinality: 'one' as const } : {}),
+      }),
     );
   }
 
@@ -304,7 +322,10 @@ export class GraphSelection<
     cardinality?: 'one' | 'many';
   }) {
     return this.factories.createCommand<TEntity, never, TResultCommand>(
-      createDeleteCommandSpec<TEntity, TResultCommand>(this.root, this.builder.spec.where, options),
+      createDeleteCommandSpec<TEntity, TResultCommand>(this.root, this.builder.spec.selection, {
+        ...options,
+        ...(this.builder.spec.cardinality === 'one' ? { cardinality: 'one' as const } : {}),
+      }),
     );
   }
 

@@ -3,11 +3,12 @@ import { Effect } from 'effect';
 import type { GraphCommandSpec } from '../command.js';
 
 import type { InMemoryDataset } from './materialization.js';
-import { applyPredicates } from './query.js';
+import { applySelectionExpression } from './query.js';
 
 export type InMemoryDataGraphFailureReason =
   | 'cardinality_mismatch'
   | 'invalid_command'
+  | 'read_failed'
   | 'mutation_failed';
 
 export class InMemoryDataGraphError extends Error {
@@ -101,7 +102,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
     }
   } else if (command.operation === 'update') {
     const [payload] = payloadRows(command);
-    const matches = new Set(applyPredicates(currentRows, command.where));
+    const matches = new Set(applySelectionExpression(currentRows, command.selection));
 
     nextRows = currentRows.map(row => {
       if (!matches.has(row)) {
@@ -113,13 +114,13 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
       return updated;
     });
   } else {
-    const matches = new Set(applyPredicates(currentRows, command.where));
+    const matches = new Set(applySelectionExpression(currentRows, command.selection));
     affectedRows = currentRows.filter(row => matches.has(row));
     nextRows = currentRows.filter(row => !matches.has(row));
   }
 
-  dataset[entityName] = nextRows;
   assertOneAffectedRow(command, affectedRows);
+  dataset[entityName] = nextRows;
 
   if (!command.returning || command.returning.length === 0) {
     return undefined;

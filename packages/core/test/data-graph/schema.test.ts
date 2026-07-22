@@ -8,6 +8,8 @@ import {
   graphSchema,
   resolveDomainOperations,
   safeParseGraphSchema,
+  selection,
+  Selection,
   toGraphJsonSchema,
   toGraphOutputDescriptor,
   toGraphSchemaDescriptor,
@@ -16,6 +18,148 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph schema DSL', () => {
+  it('describes, transports, and validates entity selections as operation values', () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      status: field.string(),
+    });
+    const DeleteBooksInput = value('DeleteBooksInput', {
+      books: graphSchema.selection(Book, { cardinality: 'one' }),
+    });
+    const authored = selection(Book, book => book.status.eq('archived'));
+    const transported = JSON.parse(JSON.stringify({ books: authored }));
+    const parsed = safeParseGraphSchema(DeleteBooksInput, transported);
+
+    expect(transported).toEqual({
+      books: {
+        kind: 'selection',
+        entityName: 'Book',
+        expression: {
+          kind: 'predicate',
+          operator: 'eq',
+          fieldName: 'status',
+          value: 'archived',
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.books).toBeInstanceOf(Selection);
+      expect(parsed.data.books.root).toBe(Book);
+      expect(parsed.data.books.build()).toEqual(authored.build());
+      expect(parsed.data.books.cardinality).toBe('one');
+    }
+    expect(toGraphSchemaDescriptor(DeleteBooksInput)).toMatchObject({
+      fields: {
+        books: { kind: 'selection', entityName: 'Book', cardinality: 'one' },
+      },
+    });
+    expect(toGraphJsonSchema(DeleteBooksInput)).toMatchObject({
+      properties: {
+        books: {
+          type: 'object',
+          'x-ontahi-selection': { entityName: 'Book', cardinality: 'one' },
+          properties: { entityName: { const: 'Book' } },
+        },
+      },
+    });
+    expect(
+      safeParseGraphSchema(DeleteBooksInput, {
+        books: {
+          kind: 'selection',
+          entityName: 'Book',
+          expression: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'missing',
+            value: 'x',
+          },
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates statically knowable selection cardinality and defers predicates', () => {
+    const Book = entity('CardinalityBook', { id: field.id(), status: field.string() })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const Input = value('OneBookInput', {
+      book: graphSchema.selection(Book, { cardinality: 'one' }),
+    });
+    const reference = (id: string) => ({
+      kind: 'entity-ref' as const,
+      entityName: 'CardinalityBook' as const,
+      locator: { id },
+    });
+
+    expect(safeParseGraphSchema(Input, { book: Selection.none(Book).toAst() }).success).toBe(false);
+    expect(
+      safeParseGraphSchema(Input, { book: Selection.references(Book, []).toAst() }).success,
+    ).toBe(false);
+    expect(
+      safeParseGraphSchema(Input, {
+        book: Selection.references(Book, [reference('book-1'), reference('book-2')]).toAst(),
+      }).success,
+    ).toBe(false);
+
+    const parsedReference = safeParseGraphSchema(Input, {
+      book: Selection.references(Book, [reference('book-1')]).toAst(),
+    });
+    const parsedPredicate = safeParseGraphSchema(Input, {
+      book: selection(Book, book => book.status.eq('draft')).toAst(),
+    });
+
+    expect(parsedReference.success).toBe(true);
+    expect(parsedPredicate.success).toBe(true);
+    if (parsedPredicate.success) expect(parsedPredicate.data.book.cardinality).toBe('one');
+  });
+
+  it('validates and rehydrates selections defined by references', () => {
+    const Book = entity('BookReferenceTarget', {
+      id: field.id(),
+      slug: field.string(),
+    })
+      .locators({ refById: 'id', refBySlug: 'slug' })
+      .identity('refById');
+    const Input = value('ArchiveBooksInput', {
+      books: graphSchema.selection(Book),
+    });
+    const references = Selection.references(Book, [
+      { kind: 'entity-ref', entityName: 'BookReferenceTarget', locator: { id: 'book-1' } },
+    ]);
+
+    expect(safeParseGraphSchema(Input, { books: references.toAst() })).toMatchObject({
+      success: true,
+    });
+    expect(toGraphJsonSchema(Input)).toMatchObject({
+      properties: {
+        books: {
+          'x-ontahi-selection': {
+            identity: { name: 'refById', fields: ['id'] },
+          },
+        },
+      },
+    });
+    expect(
+      safeParseGraphSchema(Input, {
+        books: {
+          kind: 'selection',
+          entityName: 'BookReferenceTarget',
+          expression: {
+            kind: 'references',
+            refs: [
+              {
+                kind: 'entity-ref',
+                entityName: 'BookReferenceTarget',
+                locator: { missing: 'book-1' },
+              },
+            ],
+          },
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it('uses entity definitions as graph schemas and Zod adapter inputs', () => {
     const Book = entity('Book', {
       id: field.id(),

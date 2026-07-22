@@ -84,6 +84,53 @@ describe('Ontahi application declaration analysis', () => {
     });
   });
 
+  it('projects selection input contracts into generated client operations', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { graphSchema, value } from '@ontahi/core/data-graph';
+        import { app } from './application';
+
+        const BookEntity = { name: 'Book' };
+        const DeleteBooksInput = value('DeleteBooksInput', {
+          books: graphSchema.selection(BookEntity, { cardinality: 'many' }),
+        });
+
+        export const Book = app.graph.defineEntity(BookEntity, {
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'books',
+          },
+          domainOperations: {
+            deleteBooks: app.operation.define({
+              input: DeleteBooksInput,
+              run: input => input,
+            }),
+          },
+        });
+      `,
+      'Book',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition?.operations[0]).toMatchObject({
+      name: 'deleteBooks',
+      inputSchemaText:
+        "value('DeleteBooksInput', {\n          books: graphSchema.selection(BookEntity, { cardinality: 'many' }),\n        })",
+    });
+
+    const source = renderGeneratedClientEntityModule({
+      entities: [analysis.definition],
+    });
+
+    expect(source).toContain('  graphSchema,');
+    expect(source).toContain('  value,');
+    expect(source).toContain("import {\n  BookEntity,\n} from './schema';");
+    expect(source).toMatch(
+      /input: value\('DeleteBooksInput', \{\s+books: graphSchema\.selection\(BookEntity, \{ cardinality: 'many' \}\),\s+\}\),/,
+    );
+  });
+
   it('analyzes a filesystem application once into a serializable projection-neutral model', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-application-'));
     const sourceRoot = path.join(directory, 'src');

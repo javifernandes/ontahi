@@ -7,6 +7,9 @@ import {
   mapRelation,
   query,
   resolveQuerySpec,
+  Selection,
+  selectionNot,
+  selectionOr,
 } from '@ontahi/core/data-graph';
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
@@ -78,6 +81,18 @@ class TestQueryBuilder implements PromiseLike<QueryResult> {
 
   lte(...args: unknown[]) {
     return this.chain('lte', ...args);
+  }
+
+  gt(...args: unknown[]) {
+    return this.chain('gt', ...args);
+  }
+
+  gte(...args: unknown[]) {
+    return this.chain('gte', ...args);
+  }
+
+  or(...args: unknown[]) {
+    return this.chain('or', ...args);
   }
 
   insert(...args: unknown[]) {
@@ -154,7 +169,7 @@ describe('data-graph supabase runtime helpers', () => {
       fetchSupabaseEntityRowsEffect({
         supabase,
         entityDefinition: Book,
-        predicates: spec.where,
+        predicates: [],
         orderBy: spec.orderBy,
         selectShape: spec.select,
         includeShape: spec.includes,
@@ -448,6 +463,80 @@ describe('data-graph supabase runtime helpers', () => {
     expect(count).toBe(0);
   });
 
+  it('executes recursive selections through PostgREST logic', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      ownerId: field.id(),
+      title: field.string(),
+    });
+    mapEntity(Book).toTable('books', { ownerId: 'owner_id' });
+
+    const supabase = new TestSupabaseDouble();
+    supabase.queueQuery('books', { data: [{ id: 'book-1', owner_id: 'owner-1', title: 'A' }] });
+
+    const rows = await Effect.runPromise(
+      executeSupabaseGraphQueryEffect(
+        { getClient: () => Effect.succeed(supabase), createError },
+        query(Book).where(book =>
+          selectionOr(book.ownerId.eq('owner-1'), selectionNot(book.title.eq('Archived, old'))),
+        ),
+        undefined,
+      ),
+    );
+
+    expect(rows).toEqual([{ id: 'book-1', ownerId: 'owner-1', title: 'A' }]);
+    expect(supabase.queries[0]?.operations).toContainEqual({
+      method: 'or',
+      args: ['owner_id.eq."owner-1",not.title.eq."Archived, old"'],
+    });
+  });
+
+  it('enforces exact-one selection cardinality for Supabase reads and counts', async () => {
+    const Book = entity('CardinalityBook', {
+      id: field.id(),
+      status: field.string(),
+    });
+    mapEntity(Book).toTable('cardinality_books');
+    const exactDraft = query(Book).where(
+      new Selection(
+        Book,
+        { kind: 'predicate', operator: 'eq', fieldName: 'status', value: 'draft' },
+        undefined,
+        'one',
+      ),
+    );
+
+    const readSupabase = new TestSupabaseDouble();
+    readSupabase.queueQuery('cardinality_books', {
+      data: [
+        { id: 'book-1', status: 'draft' },
+        { id: 'book-2', status: 'draft' },
+      ],
+      error: null,
+    });
+    await expect(
+      Effect.runPromise(
+        executeSupabaseGraphQueryEffect(
+          { getClient: () => Effect.succeed(readSupabase), createError },
+          exactDraft,
+          undefined,
+        ),
+      ),
+    ).rejects.toThrow('Expected exactly one CardinalityBook, received 2');
+
+    const countSupabase = new TestSupabaseDouble();
+    countSupabase.queueQuery('cardinality_books', { count: 0, data: null, error: null });
+    await expect(
+      Effect.runPromise(
+        executeSupabaseGraphCountEffect(
+          { getClient: () => Effect.succeed(countSupabase), createError },
+          exactDraft,
+          undefined,
+        ),
+      ),
+    ).rejects.toThrow('Expected exactly one CardinalityBook, received 0');
+  });
+
   it('executes relation-root read specs with the generic Supabase runtime', async () => {
     const { BookCollaboratorWithProfile, BookWithCollaborators } = defineAudienceGraph();
     const supabase = new TestSupabaseDouble();
@@ -532,7 +621,7 @@ describe('data-graph supabase runtime helpers', () => {
           kind: 'command',
           operation: 'insert',
           root: Book,
-          where: [],
+          selection: { kind: 'none' },
           payload: {
             ownerId: 'owner-1',
             title: 'Book',
@@ -587,7 +676,12 @@ describe('data-graph supabase runtime helpers', () => {
           kind: 'command',
           operation: 'update',
           root: Book,
-          where: [{ kind: 'predicate', operator: 'eq', fieldName: 'ownerId', value: 'owner-1' }],
+          selection: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'ownerId',
+            value: 'owner-1',
+          },
           payload: {
             title: 'Updated',
           },
@@ -618,6 +712,77 @@ describe('data-graph supabase runtime helpers', () => {
     ]);
   });
 
+  it('applies recursive selections to commands', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      ownerId: field.id(),
+      title: field.string(),
+    });
+    mapEntity(Book).toTable('books', { ownerId: 'owner_id' });
+    const supabase = new TestSupabaseDouble();
+    supabase.queueQuery('books', { data: [], error: null });
+
+    await Effect.runPromise(
+      executeSupabaseGraphCommandEffect(
+        { getClient: () => Effect.succeed(supabase), createError },
+        {
+          kind: 'command',
+          operation: 'delete',
+          root: Book,
+          selection: selectionOr(
+            { kind: 'predicate', operator: 'eq', fieldName: 'ownerId', value: 'owner-1' },
+            selectionNot({
+              kind: 'predicate',
+              operator: 'eq',
+              fieldName: 'title',
+              value: 'Keep',
+            }),
+          ),
+          cardinality: 'many',
+        },
+      ),
+    );
+
+    expect(supabase.queries[0]?.operations).toEqual([
+      { method: 'delete', args: [] },
+      { method: 'or', args: ['owner_id.eq."owner-1",not.title.eq."Keep"'] },
+    ]);
+  });
+
+  it('lowers reference selections through entity locators', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+    });
+    mapEntity(Book).toTable('books');
+    const supabase = new TestSupabaseDouble();
+    supabase.queueQuery('books', { data: [], error: null });
+
+    await Effect.runPromise(
+      executeSupabaseGraphCommandEffect(
+        { getClient: () => Effect.succeed(supabase), createError },
+        {
+          kind: 'command',
+          operation: 'delete',
+          root: Book,
+          selection: {
+            kind: 'references',
+            refs: [
+              { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+              { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-2' } },
+            ],
+          },
+          cardinality: 'many',
+        },
+      ),
+    );
+
+    expect(supabase.queries[0]?.operations).toEqual([
+      { method: 'delete', args: [] },
+      { method: 'or', args: ['id.eq."book-1",id.eq."book-2"'] },
+    ]);
+  });
+
   it('executes upserts with Supabase conflict options', async () => {
     const Book = entity('Book', {
       id: field.id(),
@@ -645,7 +810,7 @@ describe('data-graph supabase runtime helpers', () => {
           kind: 'command',
           operation: 'upsert',
           root: Book,
-          where: [],
+          selection: { kind: 'none' },
           payload: {
             ownerId: 'owner-1',
             title: 'Book',
@@ -704,7 +869,12 @@ describe('data-graph supabase runtime helpers', () => {
             kind: 'command',
             operation: 'delete',
             root: Book,
-            where: [{ kind: 'predicate', operator: 'eq', fieldName: 'ownerId', value: 'owner-1' }],
+            selection: {
+              kind: 'predicate',
+              operator: 'eq',
+              fieldName: 'ownerId',
+              value: 'owner-1',
+            },
             returning: ['id'],
             cardinality: 'one',
           },
@@ -814,7 +984,7 @@ describe('data-graph supabase runtime helpers', () => {
           kind: 'command',
           operation: 'insert',
           root: BookWithCollaborators,
-          where: [],
+          selection: { kind: 'none' },
           payload: {
             slug: 'progbook',
           },

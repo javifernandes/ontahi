@@ -31,6 +31,14 @@ type JsonSchemaObject = {
       unset?: unknown;
     };
   };
+  'x-ontahi-selection'?: {
+    entityName: string;
+    cardinality: 'one' | 'many';
+    identity?: {
+      name: string;
+      fields: string[];
+    };
+  };
 };
 
 type JsonSchemaContext = {
@@ -168,6 +176,17 @@ const presentationMetadata = (
         },
       }
     : {};
+};
+
+const selectionMetadata = (schema: JsonSchemaObject) => {
+  const selection = schema['x-ontahi-selection'];
+
+  return selection
+    ? {
+        type: `Selection<${selection.entityName}>`,
+        selection,
+      }
+    : undefined;
 };
 
 const isArraySchema = (schema: JsonSchemaObject) =>
@@ -476,16 +495,20 @@ const flattenSchemaFields = (
     const path = pathPrefix ? `${pathPrefix}.${name}` : name;
     const childRequired = required && requiredProperties.has(name);
     const variants = describeSchemaFieldVariants(child, path, childRequired, context, visitedRefs);
+    const selection = selectionMetadata(child);
     const current = {
       path,
-      type: describeSchemaType(child, context),
+      type: selection?.type ?? describeSchemaType(child, context),
       required: childRequired,
       ...(child.description ? { description: child.description } : {}),
       ...enumValuesMetadata(child),
       ...(variants.length > 0 ? { variants } : {}),
       ...presentationMetadata(child),
+      ...(selection ? { selection: selection.selection } : {}),
     };
-    const nested = flattenNestedSchemaFields(child, path, childRequired, context, visitedRefs);
+    const nested = selection
+      ? []
+      : flattenNestedSchemaFields(child, path, childRequired, context, visitedRefs);
 
     return [current, ...nested];
   });
