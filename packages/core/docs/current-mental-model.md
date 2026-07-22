@@ -26,7 +26,7 @@ It describes:
 
 `@ontahi/core` is intentionally imperfect right now, but its public surface is getting narrower.
 
-It should be read as the first stable name for the generic framework surface, not as final framework documentation. As of the Supabase, Next.js runtime, and React runtime extraction slices, core owns the technology-free graph and runtime vocabulary while the Supabase adapter lives in `@ontahi/supabase`, the action transport lives in `@ontahi/runtime-nextjs`, and non-visual React integration lives in `@ontahi/react`.
+It should be read as the first stable name for the generic framework surface, not as final framework documentation. Core owns technology-free graph and runtime vocabulary. Technology adapters, React integration, Explorer, and code generation now live in focused `@ontahi/*` packages.
 
 Today core still contains some modules and vocabulary that may need cleaner boundaries later:
 
@@ -34,22 +34,30 @@ Today core still contains some modules and vocabulary that may need cleaner boun
 2. task abstractions that still need a clearer split from runtime-specific workflow adapters
 3. names such as `architecture(...)` that may eventually become more Ontahi-native
 
-The package boundaries are expected to keep moving toward:
+The current package boundaries are:
 
 1. `@ontahi/core`
-2. `@ontahi/supabase`
-3. `@ontahi/runtime-nextjs`
-4. `@ontahi/react`
-5. `@ontahi/runtime-vercel-workflows`
+2. `@ontahi/opentelemetry`
+3. `@ontahi/codegen`
+4. `@ontahi/supabase`
+5. `@ontahi/runtime-express`
+6. `@ontahi/runtime-nextjs`
+7. `@ontahi/runtime-vercel-workflows`
+8. `@ontahi/react`
+9. `@ontahi/explorer-react`
 
-Until the remaining packages exist, docs in this folder should explain which ideas are generic and which examples are still inherited from BookOps.
+Docs in this folder should explain which ideas are generic and which examples are still inherited from BookOps.
 
 The current split is:
 
 1. `@ontahi/core` for technology-free computation, graph, runtime, and task abstractions
-2. `@ontahi/supabase` for Supabase graph/runtime adapters
-3. `@ontahi/runtime-nextjs` for Next.js action transport and `next-safe-action` glue
-4. `@ontahi/react` for non-visual React hooks, React Query integration, and operation bridge adapters
+2. `@ontahi/opentelemetry` for OpenTelemetry span adaptation; hosts configure SDKs and exporters
+3. `@ontahi/codegen` for build-time application analysis and neutral projections
+4. `@ontahi/supabase` for Supabase graph/runtime adapters
+5. `@ontahi/runtime-express` and `@ontahi/runtime-nextjs` for host transports
+6. `@ontahi/runtime-vercel-workflows` for durable Vercel Workflow execution
+7. `@ontahi/react` for non-visual React hooks and graph runtime integration
+8. `@ontahi/explorer-react` for the reusable reflective Explorer UI
 
 ## Core Idea
 

@@ -100,21 +100,6 @@ export {
   withRuntimeSpan,
 } from './telemetry.js';
 export {
-  createOpenTelemetryServerRuntimeTelemetryAdapter,
-  getActiveTraceMetadata,
-  getOpenTelemetryRuntimeAttributes,
-  markOpenTelemetrySpanFailure,
-  markOpenTelemetrySpanSuccess,
-  prefixTelemetryAttributes,
-  sanitizeTelemetryAttributes,
-  withOpenTelemetryServerSpan,
-} from './opentelemetry.js';
-export {
-  createSentryServerReportingTools,
-  type CreateSentryServerReportingToolsOptions,
-  type ServerReportOptions,
-} from './sentry-reporting.js';
-export {
   toOperationInvocationResult,
   operationInputInvalid,
   operationRejected,

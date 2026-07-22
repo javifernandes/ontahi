@@ -1,7 +1,15 @@
-import { toError, toErrorMessage } from '../../value/error.js';
-
-import type { ServerRuntimeTelemetryAdapter } from './config-types.js';
-import { createServerRuntimeTelemetryAdapter } from './telemetry.js';
+import {
+  createServerRuntimeTelemetryAdapter,
+  type ServerRuntimeTelemetryAdapter,
+} from '@ontahi/core/runtime/server';
+import { toError, toErrorMessage } from '@ontahi/core/value/error';
+import {
+  SpanStatusCode,
+  trace,
+  type AttributeValue,
+  type Span,
+  type SpanOptions,
+} from '@opentelemetry/api';
 
 const SENSITIVE_ATTRIBUTE_KEY =
   /(email|token|cookie|secret|password|authorization|body|content|text|prompt|headers?)/i;
@@ -16,32 +24,7 @@ type TelemetryAttributeInput =
   | TelemetryPrimitive[]
   | Date[];
 
-type SpanLike = {
-  setAttributes?: (attributes: Record<string, unknown>) => unknown;
-  setStatus?: (status: { code: number; message?: string }) => unknown;
-  recordException?: (error: unknown) => void;
-  end?: () => void;
-  spanContext?: () => {
-    traceId: string;
-    spanId: string;
-  };
-};
-
-type OTelApi = {
-  SpanStatusCode: {
-    ERROR: number;
-  };
-  trace: {
-    getActiveSpan: () => SpanLike | undefined;
-    getTracer: (name: string) => {
-      startActiveSpan: <TValue>(
-        name: string,
-        options: unknown,
-        fn: (span: SpanLike) => Promise<TValue> | TValue,
-      ) => Promise<TValue>;
-    };
-  };
-};
+type WritableSpan = Pick<Span, 'recordException' | 'setAttributes' | 'setStatus'>;
 
 const isSensitiveAttributeKey = (key: string) => {
   if (SENSITIVE_ATTRIBUTE_KEY.test(key)) {
@@ -57,9 +40,7 @@ const isSensitiveAttributeKey = (key: string) => {
   );
 };
 
-const toTelemetryAttributeValue = (
-  value: TelemetryAttributeInput,
-): string | number | boolean | string[] | undefined => {
+const toTelemetryAttributeValue = (value: TelemetryAttributeInput): AttributeValue | undefined => {
   if (value == null) {
     return undefined;
   }
@@ -105,38 +86,10 @@ const toTelemetryAttributeValue = (
   return undefined;
 };
 
-const createNoopSpan = (): SpanLike => ({
-  setAttributes: () => undefined,
-  setStatus: () => undefined,
-  recordException: () => undefined,
-  end: () => undefined,
-  spanContext: () => ({
-    traceId: '',
-    spanId: '',
-  }),
-});
-
-let cachedOtelApi: OTelApi | null | undefined;
-
-const getOtelApi = (): OTelApi | null => {
-  if (cachedOtelApi !== undefined) {
-    return cachedOtelApi;
-  }
-
-  try {
-    const maybeRequire = (0, eval)('require') as ((id: string) => unknown) | undefined;
-    cachedOtelApi = maybeRequire ? (maybeRequire('@opentelemetry/api') as OTelApi) : null;
-  } catch {
-    cachedOtelApi = null;
-  }
-
-  return cachedOtelApi;
-};
-
 export const sanitizeTelemetryAttributes = (
   attributes?: Record<string, unknown>,
-): Record<string, unknown> => {
-  const sanitized: Record<string, unknown> = {};
+): Record<string, AttributeValue> => {
+  const sanitized: Record<string, AttributeValue> = {};
 
   if (!attributes) {
     return sanitized;
@@ -159,7 +112,7 @@ export const sanitizeTelemetryAttributes = (
 export const prefixTelemetryAttributes = (
   prefix: string,
   attributes?: Record<string, unknown>,
-): Record<string, unknown> =>
+): Record<string, AttributeValue> =>
   Object.fromEntries(
     Object.entries(sanitizeTelemetryAttributes(attributes)).map(([key, value]) => [
       `${prefix}.${key}`,
@@ -168,12 +121,7 @@ export const prefixTelemetryAttributes = (
   );
 
 export const getActiveTraceMetadata = (): { traceId?: string; spanId?: string } => {
-  const activeSpan = getOtelApi()?.trace.getActiveSpan();
-  if (!activeSpan) {
-    return {};
-  }
-
-  const context = activeSpan.spanContext?.();
+  const context = trace.getActiveSpan()?.spanContext();
   if (!context) {
     return {};
   }
@@ -190,13 +138,11 @@ export const getOpenTelemetryRuntimeAttributes = (input: {
   input?: Record<string, unknown>;
   extra?: Record<string, unknown>;
   attributes?: Record<string, unknown>;
-  environment?: string;
-}): Record<string, unknown> => ({
-  'bookops.scope': input.scope,
-  'bookops.runtime': input.runtime,
-  ...(input.environment ? { 'bookops.environment': input.environment } : {}),
-  ...prefixTelemetryAttributes('bookops.input', input.input),
-  ...prefixTelemetryAttributes('bookops.extra', input.extra),
+}): Record<string, AttributeValue> => ({
+  'ontahi.scope': input.scope,
+  'ontahi.runtime': input.runtime,
+  ...prefixTelemetryAttributes('ontahi.input', input.input),
+  ...prefixTelemetryAttributes('ontahi.extra', input.extra),
   ...sanitizeTelemetryAttributes(input.attributes),
 });
 
@@ -204,8 +150,8 @@ export const markOpenTelemetrySpanSuccess = (
   span: unknown,
   attributes?: Record<string, unknown>,
 ): void => {
-  (span as SpanLike | undefined)?.setAttributes?.({
-    'bookops.outcome': 'success',
+  (span as WritableSpan | undefined)?.setAttributes({
+    'ontahi.outcome': 'success',
     ...sanitizeTelemetryAttributes(attributes),
   });
 };
@@ -215,13 +161,14 @@ export const markOpenTelemetrySpanFailure = (
   kind: string,
   attributes?: Record<string, unknown>,
 ): void => {
-  (span as SpanLike | undefined)?.setAttributes?.({
-    'bookops.outcome': 'failure',
-    'bookops.failure_kind': kind,
+  const writableSpan = span as WritableSpan | undefined;
+  writableSpan?.setAttributes({
+    'ontahi.outcome': 'failure',
+    'ontahi.failure.kind': kind,
     ...sanitizeTelemetryAttributes(attributes),
   });
-  (span as SpanLike | undefined)?.setStatus?.({
-    code: getOtelApi()?.SpanStatusCode.ERROR ?? 2,
+  writableSpan?.setStatus({
+    code: SpanStatusCode.ERROR,
     message: kind,
   });
 };
@@ -233,36 +180,29 @@ export const withOpenTelemetryServerSpan = async <TValue>(
     spanOptions?: unknown;
   },
   fn: (span: unknown) => Promise<TValue> | TValue,
-  tracerName = 'app.server',
-): Promise<TValue> => {
-  const otelApi = getOtelApi();
-
-  if (!otelApi) {
-    return Promise.resolve(fn(createNoopSpan()));
-  }
-
-  return otelApi.trace
+  tracerName = 'ontahi.server',
+): Promise<TValue> =>
+  trace
     .getTracer(tracerName)
-    .startActiveSpan(name, options.spanOptions ?? {}, async span => {
+    .startActiveSpan(name, (options.spanOptions ?? {}) as SpanOptions, async span => {
       const attributes = sanitizeTelemetryAttributes(options.attributes);
       if (Object.keys(attributes).length > 0) {
-        span.setAttributes?.(attributes);
+        span.setAttributes(attributes);
       }
 
       try {
         return await fn(span);
       } catch (error) {
-        span.recordException?.(toError(error));
-        span.setStatus?.({
-          code: otelApi.SpanStatusCode.ERROR,
+        span.recordException(toError(error));
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
           message: toErrorMessage(error),
         });
         throw error;
       } finally {
-        span.end?.();
+        span.end();
       }
     });
-};
 
 export const createOpenTelemetryServerRuntimeTelemetryAdapter = (options?: {
   tracerName?: string;
@@ -270,13 +210,8 @@ export const createOpenTelemetryServerRuntimeTelemetryAdapter = (options?: {
 }): ServerRuntimeTelemetryAdapter =>
   createServerRuntimeTelemetryAdapter({
     withSpan: (name, spanOptions, fn) =>
-      withOpenTelemetryServerSpan(name, spanOptions, fn, options?.tracerName ?? 'app.server'),
+      withOpenTelemetryServerSpan(name, spanOptions, fn, options?.tracerName),
     markSuccess: markOpenTelemetrySpanSuccess,
     markFailure: markOpenTelemetrySpanFailure,
-    getRuntimeAttributes:
-      options?.getRuntimeAttributes ??
-      (input =>
-        getOpenTelemetryRuntimeAttributes({
-          ...input,
-        })),
+    getRuntimeAttributes: options?.getRuntimeAttributes ?? getOpenTelemetryRuntimeAttributes,
   });
