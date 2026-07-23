@@ -8,7 +8,11 @@ import {
   hasActionError,
   type ActionQueryKey,
 } from '@ontahi/core/runtime/actions';
-import type { OperationInvocationResult } from '@ontahi/core/runtime/contracts';
+import type {
+  OperationInvocationResult,
+  TaskRunRef,
+  TaskSnapshot,
+} from '@ontahi/core/runtime/contracts';
 import type { QueryKey, UseQueryResult } from '@tanstack/react-query';
 
 import type { ActionResultLike, UseActionOptions, UseActionResult } from './use-action.js';
@@ -118,6 +122,9 @@ export type CheckDomainOperationPermissionBridgeAction = (input: {
 
 export type OperationBridgeAdapter<TAdapterName extends string = string> = {
   name: TAdapterName;
+  getTaskSnapshot?: <TResult = unknown>(
+    ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
+  ) => Promise<TaskSnapshot<TResult>>;
   useBridgeAction: <TInput, TData>(
     operation: BridgedOperationLike<TInput, TData>,
   ) => OperationBridgeAction<TInput, TData>;

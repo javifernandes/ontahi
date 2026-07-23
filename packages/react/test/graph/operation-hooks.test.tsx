@@ -6,6 +6,7 @@ import {
   entity,
   field,
   graphOutput,
+  graphSchema,
 } from '@ontahi/core/data-graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -17,6 +18,7 @@ import {
   OntahiGraphProvider,
   useDurableOperation,
   useOperation,
+  useOperationQuery,
   useReflectedOperationRunner,
 } from '../../src/graph/index.js';
 
@@ -27,8 +29,11 @@ const createWrapper = (
   reflectedOperationInvoker?: Parameters<
     typeof OntahiGraphProvider
   >[0]['reflectedOperationInvoker'],
+  getTaskSnapshot?: NonNullable<
+    Parameters<typeof createNextActionOperationBridgeAdapter>[1]
+  >['getTaskSnapshot'],
 ) => {
-  const bridgeAdapter = createNextActionOperationBridgeAdapter(bridgeAction);
+  const bridgeAdapter = createNextActionOperationBridgeAdapter(bridgeAction, { getTaskSnapshot });
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
@@ -61,6 +66,51 @@ const defineBookEntity = () =>
     .identity('refById');
 
 describe('operation hooks', () => {
+  it('preserves legacy query inputs when generated schema metadata is absent', async () => {
+    const bridgeAction = vi.fn().mockResolvedValue({ data: { title: 'Ontahi' } });
+    const operation = defineClientDomainOperationsForEntity('Book', {
+      fetchBook: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {
+          query: [({ slug }: { slug: string }) => slug],
+        },
+      }),
+    }).fetchBook;
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result } = renderHook(() => useOperationQuery(operation, { slug: 'ontahi' }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.data).toEqual({ title: 'Ontahi' }));
+    expect(bridgeAction).toHaveBeenCalledWith({
+      operationId: 'Book.fetchBook',
+      input: { slug: 'ontahi' },
+    });
+  });
+
+  it('omits transport input only for an explicit void schema', async () => {
+    const bridgeAction = vi.fn().mockResolvedValue({ data: [{ title: 'Ontahi' }] });
+    const operation = defineClientDomainOperationsForEntity('Book', {
+      listBooks: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        input: graphSchema.void(),
+      }),
+    }).listBooks;
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result } = renderHook(() => useOperationQuery(operation), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.data).toEqual([{ title: 'Ontahi' }]));
+    expect(bridgeAction).toHaveBeenCalledWith({
+      operationId: 'Book.listBooks',
+      input: undefined,
+    });
+  });
+
   it('runs bridge domain operations and reconciles graph outputs in the client cache', async () => {
     const BookEntity = defineBookEntity();
     const book = {
@@ -169,11 +219,35 @@ describe('operation hooks', () => {
         },
       }),
     }).importBook;
-    const { Wrapper } = createWrapper(bridgeAction);
+    const getTaskSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce({
+        taskId: 'book.import',
+        runId: 'run-1',
+        status: 'running',
+        updatedAt: '2026-07-23T00:00:00.000Z',
+        progress: { phase: 'importing' },
+      })
+      .mockResolvedValue({
+        taskId: 'book.import',
+        runId: 'run-1',
+        status: 'completed',
+        updatedAt: '2026-07-23T00:00:01.000Z',
+        completedAt: '2026-07-23T00:00:01.000Z',
+        result: { imported: 3 },
+      });
+    const { Wrapper } = createWrapper(
+      bridgeAction,
+      createGraphClientCache(),
+      new QueryClient(),
+      undefined,
+      getTaskSnapshot,
+    );
     const { result } = renderHook(
       () =>
         useDurableOperation(operation, {
           invalidateOnSuccess: false,
+          pollIntervalMs: 10,
         }),
       { wrapper: Wrapper },
     );
@@ -195,6 +269,9 @@ describe('operation hooks', () => {
     });
 
     expect(result.current.durable.runtime).toBe('vercel-workflow');
+    await waitFor(() => expect(result.current.isCompleted).toBe(true));
+    expect(result.current.finalValue).toEqual({ imported: 3 });
+    expect(getTaskSnapshot).toHaveBeenCalledWith({ taskId: 'book.import', runId: 'run-1' });
   });
 
   it('runs reflected bridge operations from descriptor metadata', async () => {

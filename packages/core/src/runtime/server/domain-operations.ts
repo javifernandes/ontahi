@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { GraphCommand } from '../../data-graph/command.js';
 import {
   graphSchema,
   type GraphSchemaDefinition,
@@ -16,6 +17,7 @@ import {
   type ResolveDomainOperations,
 } from '../../data-graph/operations.js';
 import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
+import type { QuerySpec } from '../../data-graph/query.js';
 import {
   attachEntityRefInputRefs,
   normalizeEntityRefInput,
@@ -23,9 +25,12 @@ import {
   type EntityRefInputPublicInput,
   type EntityRefInputRunInput,
 } from '../../data-graph/ref.js';
+import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
+import { GraphSelection } from '../../data-graph/selection.js';
 
 import type { OperationContracts } from './concerns/contract-types.js';
 import { operationRuntimeContextStorage, toContextRecord } from './context.js';
+import { getRequiredDataGraphRuntime } from './data-graph.js';
 import { layer } from './dsl.js';
 import type { EffectSuccessPayload } from './effect-intents/types.js';
 import type { LayerConcern } from './layer-types.js';
@@ -60,6 +65,15 @@ const EmptyInputSchema = graphSchema.object({});
 
 export type DomainOperationSuccess = unknown;
 
+type DomainOperationGraphRead<TResult> = TResult extends readonly (infer TItem)[]
+  ? { build: () => QuerySpec<any, TItem> }
+  : never;
+
+type AnyDomainOperationGraphRead = { build: () => QuerySpec<any, any> };
+
+const isDomainOperationGraphRead = (value: unknown): value is AnyDomainOperationGraphRead =>
+  value instanceof GraphSelection;
+
 export type DomainOperationRun<
   TInput extends OperationInput,
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
@@ -68,7 +82,10 @@ export type DomainOperationRun<
 > = (
   input: TInput,
   context?: TaskContext,
-) => Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>;
+) =>
+  | Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>
+  | GraphCommand<any, any, TResult>
+  | DomainOperationGraphRead<TResult>;
 
 export type DomainOperationCacheMetadata<TInput extends OperationInput> =
   OperationCacheConfig<TInput>;
@@ -253,6 +270,32 @@ type DomainOperationRunner<
 
 const operationRunnerCache = new WeakMap<object, DomainOperationRunner<any, any, any, any>>();
 
+const executeDomainOperationRunResult = <TResult, TFailure, TInfraError>(
+  result:
+    | Effect.Effect<TResult, TFailure | TInfraError>
+    | GraphCommand<any, any, TResult>
+    | AnyDomainOperationGraphRead,
+): Effect.Effect<TResult, TFailure | TInfraError> =>
+  result instanceof GraphCommand
+    ? Effect.sync(() =>
+        getRequiredDataGraphRuntime<
+          DataGraphExecutionRuntime<unknown, unknown, unknown, unknown>
+        >(),
+      ).pipe(
+        Effect.flatMap(runtime => runtime.runCommand<TResult>(result.build())),
+        Effect.orDie,
+      )
+    : isDomainOperationGraphRead(result)
+      ? (Effect.sync(() =>
+          getRequiredDataGraphRuntime<
+            DataGraphExecutionRuntime<unknown, unknown, unknown, unknown>
+          >(),
+        ).pipe(
+          Effect.flatMap(runtime => runtime.run(result.build(), undefined)),
+          Effect.orDie,
+        ) as unknown as Effect.Effect<TResult, TFailure | TInfraError>)
+      : result;
+
 const resolveDomainOperationRunner = <
   TInput extends OperationInput,
   TResult extends DomainOperationSuccess,
@@ -278,9 +321,10 @@ const resolveDomainOperationRunner = <
 
   const runOperation = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
-  ): ReturnType<
-    ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>['run']
-  > => operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never);
+  ): Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError> =>
+    executeDomainOperationRunResult(
+      operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never),
+    );
 
   const normalizedRunner = layer(operation.layer).operation(operation.name, runOperation, {
     defectLogMessage: operation.defectLogMessage,
@@ -391,9 +435,8 @@ export const createTaskDefinitionFromDurableDomainOperation = <
       (operation.durable.steps ?? []).map(step => [step.id, step as TaskStepDefinition<any, any>]),
     ),
     run: ((input, context) =>
-      operation.run(
-        attachEntityRefInputRefs(input, operation.inputRefs) as never,
-        context,
+      executeDomainOperationRunResult(
+        operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never, context),
       )) as TaskDefinition<TInput, TResult>['run'],
   };
 };

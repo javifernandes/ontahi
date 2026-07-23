@@ -145,6 +145,20 @@ describe('data-graph operations', () => {
     );
   });
 
+  it('uses the operation output as the durable final output by default', () => {
+    const Output = value('RefreshOutput', { refreshed: field.boolean() });
+    const operations = resolveDomainOperations('Book', {
+      refresh: defineDomainOperationMetadata({
+        authority: 'server',
+        exposure: 'bridge',
+        output: Output,
+        durable: { runtime: 'in-process' },
+      }),
+    });
+
+    expect(operations.refresh.durable?.finalOutput).toBe(Output);
+  });
+
   it('defines client entities with bridge-only domain operation metadata and locators', () => {
     const Book = entity('Book', {
       id: field.id(),

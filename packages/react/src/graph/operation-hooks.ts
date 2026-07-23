@@ -4,7 +4,7 @@ import type {
   AnyEntityRef,
   DomainOperationInvocation as OperationInvocation,
 } from '@ontahi/core/data-graph';
-import type { TaskRunRef } from '@ontahi/core/runtime/contracts';
+import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   useInfiniteQuery,
   useQuery,
@@ -45,12 +45,14 @@ import {
 } from './operation-cache.js';
 import type {
   ClientOperationLike,
+  DurableOperationHookOptions,
   DurableOperationHookResult,
   DurableOperationLike,
   GraphClientCache,
   OperationHookOptions,
   OperationHookResult,
   OperationInfiniteQueryOptions,
+  OperationInputArgs,
   OperationQueryOptions,
   OperationRunner,
   ReflectedOperationLike,
@@ -88,7 +90,7 @@ export function useOperation<TInput, TData>(
     optionsRef.current = options;
   }, [options]);
 
-  const executeAsync = useCallback(
+  const executeInputAsync = useCallback(
     async (input: TInput) => {
       const currentOptions = optionsRef.current;
 
@@ -157,9 +159,14 @@ export function useOperation<TInput, TData>(
     [clientCache, executeTransportAsync, operation, queryClient],
   );
 
+  const executeAsync = useCallback(
+    (...args: OperationInputArgs<TInput>) => executeInputAsync(args[0] as TInput),
+    [executeInputAsync],
+  );
+
   const execute = useCallback(
-    (input: TInput) => {
-      void executeAsync(input);
+    (...args: OperationInputArgs<TInput>) => {
+      void executeAsync(...args);
     },
     [executeAsync],
   );
@@ -198,24 +205,104 @@ export function useOperation<TInput, TData>(
 
 export function useDurableOperation<TInput, TResult = unknown>(
   operation: DurableOperationLike<TInput, TResult>,
-  options?: OperationHookOptions<TInput, TaskRunRef>,
+  options?: DurableOperationHookOptions<TInput>,
 ): DurableOperationHookResult<TInput, TResult> {
+  const adapter = useDefaultOperationBridgeAdapter();
+  const queryClient = useQueryClient();
   const mutation = useOperation<TInput, TaskRunRef>(
     operation as ClientOperationLike<TInput, TaskRunRef>,
-    options,
+    { ...options, invalidateOnSuccess: false },
   );
+  const runRef = mutation.value;
+  const snapshotQuery = useQuery({
+    queryKey: ['ontahi-task-run', runRef?.taskId, runRef?.runId],
+    enabled: Boolean(runRef && adapter.getTaskSnapshot),
+    queryFn: () => {
+      if (!runRef || !adapter.getTaskSnapshot) {
+        throw new Error('The operation bridge does not provide task snapshot transport.');
+      }
+
+      return adapter.getTaskSnapshot<TResult>({ taskId: runRef.taskId, runId: runRef.runId });
+    },
+    refetchInterval: query => {
+      const status = (query.state.data as TaskSnapshot<TResult> | undefined)?.status;
+      return status === 'completed' || status === 'failed' || status === 'cancelled'
+        ? false
+        : (options?.pollIntervalMs ?? 500);
+    },
+  });
+  const snapshot = snapshotQuery.data;
+  const invalidatedRunRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (
+      !snapshot ||
+      !mutation.input ||
+      (snapshot.status !== 'completed' &&
+        snapshot.status !== 'failed' &&
+        snapshot.status !== 'cancelled')
+    ) {
+      return;
+    }
+
+    const runKey = `${snapshot.taskId}:${snapshot.runId}:${snapshot.status}`;
+    if (invalidatedRunRef.current === runKey) return;
+    invalidatedRunRef.current = runKey;
+
+    if (snapshot.status === 'completed' && (options?.invalidateOnSuccess ?? true)) {
+      void Promise.all(
+        resolveOperationBridgeInvalidationQueryKeys(operation, mutation.input).map(queryKey =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      );
+    }
+  }, [mutation.input, operation, options?.invalidateOnSuccess, queryClient, snapshot]);
+
+  const reset = useCallback(() => {
+    mutation.reset();
+    invalidatedRunRef.current = undefined;
+  }, [mutation]);
+  const runStatus = snapshot?.status ?? runRef?.status;
 
   return {
     ...mutation,
+    reset,
     durable: operation.durable,
+    snapshot,
+    progress: snapshot?.progress,
+    finalValue: snapshot?.result,
+    runError: snapshot?.error,
+    isQueued: runStatus === 'queued',
+    isRunning: runStatus === 'running',
+    isCompleted: runStatus === 'completed',
+    isFailed: runStatus === 'failed',
+    isCancelled: runStatus === 'cancelled',
+    isRefreshingRun: snapshotQuery.isFetching,
+    isExecuting:
+      mutation.isExecuting ||
+      (Boolean(adapter.getTaskSnapshot) && (runStatus === 'queued' || runStatus === 'running')),
   };
 }
 
+export function useOperationQuery<TData>(
+  operation: ClientOperationLike<void, TData>,
+  options?: OperationQueryOptions<TData>,
+): UseQueryResult<TData, Error>;
 export function useOperationQuery<TInput, TData>(
   operation: ClientOperationLike<TInput, TData>,
   input: TInput,
   options?: OperationQueryOptions<TData>,
+): UseQueryResult<TData, Error>;
+export function useOperationQuery<TInput, TData>(
+  operation: ClientOperationLike<TInput, TData>,
+  inputOrOptions?: TInput | OperationQueryOptions<TData>,
+  providedOptions?: OperationQueryOptions<TData>,
 ): UseQueryResult<TData, Error> {
+  const hasInput = operation.input?.kind !== 'schema.void';
+  const input = (hasInput ? inputOrOptions : undefined) as TInput;
+  const options = (hasInput ? providedOptions : inputOrOptions) as
+    | OperationQueryOptions<TData>
+    | undefined;
   const adapter = useDefaultOperationBridgeAdapter();
   const clientCache = useGraphClientCache();
   const cacheVersion = useGraphClientCacheVersion(clientCache);

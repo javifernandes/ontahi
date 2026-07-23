@@ -4,7 +4,7 @@ import type {
   GraphClientCache,
   ReflectedOperationDescriptor,
 } from '@ontahi/core/data-graph';
-import type { TaskRunRef } from '@ontahi/core/runtime/contracts';
+import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import type {
   InfiniteData,
   QueryKey,
@@ -32,7 +32,7 @@ export type ReflectedOperationLike<
 
 export type DurableOperationLike<TInput = unknown, TResult = unknown> = ClientOperationLike<
   TInput,
-  unknown
+  TResult
 > & {
   durable: DurableOperationMetadata<TInput, TResult>;
 };
@@ -42,6 +42,16 @@ export type DurableOperationHookResult<TInput, TResult> = OperationHookResult<
   TaskRunRef
 > & {
   durable: DurableOperationMetadata<TInput, TResult>;
+  snapshot: TaskSnapshot<TResult> | undefined;
+  progress: TaskSnapshot<TResult>['progress'];
+  finalValue: TResult | undefined;
+  runError: TaskSnapshot<TResult>['error'];
+  isQueued: boolean;
+  isRunning: boolean;
+  isCompleted: boolean;
+  isFailed: boolean;
+  isCancelled: boolean;
+  isRefreshingRun: boolean;
 };
 
 export type MaybePromise<T> = T | Promise<T>;
@@ -65,9 +75,15 @@ export type OperationHookOptions<TInput, TData> = {
   invalidateOnSuccess?: boolean;
 };
 
+export type DurableOperationHookOptions<TInput> = OperationHookOptions<TInput, TaskRunRef> & {
+  pollIntervalMs?: number;
+};
+
+export type OperationInputArgs<TInput> = [TInput] extends [void] ? [] : [input: TInput];
+
 export type OperationHookResult<TInput, TData> = {
-  execute: (input: TInput) => void;
-  executeAsync: (input: TInput) => Promise<OperationInvocationResult<TData>>;
+  execute: (...args: OperationInputArgs<TInput>) => void;
+  executeAsync: (...args: OperationInputArgs<TInput>) => Promise<OperationInvocationResult<TData>>;
   input: TInput | undefined;
   result: OperationInvocationResult<TData> | undefined;
   value: TData | undefined;

@@ -1,4 +1,5 @@
-import type { AnyEntityDefinition } from './definitions.js';
+import { GraphCommand } from './command.js';
+import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
 import { query, type EntityProxy, type QueryBuilder } from './query.js';
 import type { AnyEntityRef, EntityRef } from './ref.js';
 import {
@@ -14,6 +15,7 @@ import {
   type SelectionAst,
   type SelectionExpression,
 } from './selection-ast.js';
+import { createUpdateCommandSpec } from './selection.js';
 
 export type SelectionBuilder<TEntity extends AnyEntityDefinition> = (
   root: EntityProxy<TEntity>,
@@ -95,6 +97,10 @@ export class Selection<
 
   toQuery(): QueryBuilder<TEntity> {
     return query(this.root).where(this);
+  }
+
+  update(payload: Partial<InferEntityRecord<TEntity['fields']>>) {
+    return new GraphCommand(createUpdateCommandSpec(this.root, this, payload));
   }
 
   toAst(): SelectionAst<TEntity['name']> {

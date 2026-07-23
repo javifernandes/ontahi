@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   defineDomainOperationMetadata,
@@ -18,6 +18,38 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph schema DSL', () => {
+  it('derives named value contracts from model fields without duplicating them', () => {
+    const Todo = entity('Todo', {
+      id: field.id(),
+      title: field.nonEmptyString({ trim: true }),
+      completed: field.boolean(),
+    });
+    const CreateTodoInput = graphSchema.pick(Todo, ['id', 'title']).named('CreateTodoInput');
+
+    expect(CreateTodoInput.fields.id).toBe(Todo.fields.id);
+    expect(CreateTodoInput.fields.title).toBe(Todo.fields.title);
+    expect(CreateTodoInput.fields).not.toHaveProperty('completed');
+    expectTypeOf(CreateTodoInput.__value).toEqualTypeOf<
+      { id: string; title: string } | undefined
+    >();
+    expect(
+      safeParseGraphSchema(CreateTodoInput, { id: 'todo-1', title: '  Write tests  ' }),
+    ).toEqual({
+      success: true,
+      data: { id: 'todo-1', title: 'Write tests' },
+    });
+    expect(toGraphSchemaDescriptor(CreateTodoInput)).toMatchObject({
+      kind: 'object',
+      role: 'value',
+      name: 'CreateTodoInput',
+      derivedFrom: {
+        operation: 'pick',
+        source: { kind: 'entity', name: 'Todo' },
+        fields: ['id', 'title'],
+      },
+    });
+  });
+
   it('describes, transports, and validates entity selections as operation values', () => {
     const Book = entity('Book', {
       id: field.id(),

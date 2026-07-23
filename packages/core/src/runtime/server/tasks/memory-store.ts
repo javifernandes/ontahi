@@ -24,13 +24,18 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   completedAt: source.completedAt,
   progress: source.progress,
   error: source.error,
+  result: source.result,
 });
 
-const toListItem = (source: TaskRunSource): TaskRunListItem => ({
-  ...toSnapshot(source),
-  trigger: source.trigger,
-  runtime: source.runtime,
-});
+const toListItem = (source: TaskRunSource): TaskRunListItem => {
+  const { result: _result, ...snapshot } = toSnapshot(source);
+
+  return {
+    ...snapshot,
+    trigger: source.trigger,
+    runtime: source.runtime,
+  };
+};
 
 const matchesActor = (source: TaskRunSource, actor: TaskActor) =>
   taskTriggerActorMatches(source.trigger, actor);

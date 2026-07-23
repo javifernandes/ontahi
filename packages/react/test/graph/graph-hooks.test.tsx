@@ -127,7 +127,7 @@ describe('graph query and command hooks', () => {
       kind: 'command',
       operation: 'update',
       root: BookEntity,
-      where: [],
+      selection: { kind: 'all' },
       payload: {
         title: 'Ontahi Updated',
       },
@@ -162,7 +162,7 @@ describe('graph query and command hooks', () => {
       kind: 'command',
       operation: 'update',
       root: BookEntity,
-      where: [],
+      selection: { kind: 'all' },
       payload: {
         title: 'Ontahi Updated',
       },

@@ -140,7 +140,17 @@ export type ValueDefinition<
   name: TName;
   fields: TFields;
   unknownKeys?: 'strip' | 'strict' | 'passthrough';
+  derivedFrom?: GraphSchemaDerivation;
   __value?: TValue;
+};
+
+export type GraphSchemaDerivation = {
+  operation: 'pick';
+  source: {
+    kind: 'entity' | 'entity-view' | 'value' | 'object';
+    name?: string;
+  };
+  fields: readonly string[];
 };
 
 export type AnyValueDefinition = ValueDefinition<string, GraphSchemaFields, unknown>;
@@ -714,6 +724,55 @@ export const valueOf = <TValue>(
   ...(options?.unknownKeys ? { unknownKeys: options.unknownKeys } : {}),
 });
 
+type GraphSchemaFieldSource = {
+  kind: 'entity' | 'entity-view' | 'value' | 'schema.object';
+  name?: string;
+  fields: GraphSchemaFields;
+};
+
+export type GraphSchemaPickBuilder<
+  TSource extends GraphSchemaFieldSource,
+  TKeys extends readonly (keyof TSource['fields'] & string)[],
+> = {
+  named: <TName extends string>(
+    name: TName,
+  ) => ValueDefinition<TName, Pick<TSource['fields'], TKeys[number]>>;
+};
+
+export const graphPick = <
+  TSource extends GraphSchemaFieldSource,
+  const TKeys extends readonly (keyof TSource['fields'] & string)[],
+>(
+  source: TSource,
+  keys: TKeys,
+): GraphSchemaPickBuilder<TSource, TKeys> => {
+  const fields = Object.fromEntries(
+    keys.map(key => {
+      if (!(key in source.fields)) {
+        throw new Error(`Cannot pick unknown field ${key} from ${source.name ?? source.kind}`);
+      }
+
+      return [key, source.fields[key]];
+    }),
+  ) as Pick<TSource['fields'], TKeys[number]>;
+
+  return {
+    named: name => ({
+      kind: 'value',
+      name,
+      fields,
+      derivedFrom: {
+        operation: 'pick',
+        source: {
+          kind: source.kind === 'schema.object' ? 'object' : source.kind,
+          ...(source.name ? { name: source.name } : {}),
+        },
+        fields: [...keys],
+      },
+    }),
+  };
+};
+
 export const graphObject = <
   TFields extends GraphSchemaFields,
   TUnknownKeys extends 'strip' | 'strict' | 'passthrough' = 'strip',
@@ -851,6 +910,7 @@ export const presentGraphSchema = <TSchema extends object>(
 export const graphSchema = {
   value,
   valueOf,
+  pick: graphPick,
   object: graphObject,
   array: graphArray,
   nullable: graphNullable,

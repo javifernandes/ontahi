@@ -5,6 +5,12 @@ const normalizeInlineBridgeQueryInputType = typeText => typeText.replace(/\s+/g,
 const collectEntityDefinitionNamesFromText = text =>
   Array.from(text.matchAll(/\b[A-Z][A-Za-z0-9_]*Entity\b/g), match => match[0]);
 
+const shouldRenderInputContract = (operation, operationContracts) =>
+  Boolean(operation.inputSchemaText) &&
+  (operationContracts === 'all' ||
+    (operationContracts === 'selection' &&
+      /\b(?:graphSelection|graphSchema\.selection)\b/.test(operation.inputSchemaText)));
+
 const hoistClientBridgeQueryInputTypes = sourceText => {
   const aliasesByType = new Map();
 
@@ -40,7 +46,11 @@ const hoistClientBridgeQueryInputTypes = sourceText => {
   );
 };
 
-const renderClientEntityExport = (definition, relationDefinitionsBySource = new Map()) => {
+const renderClientEntityExport = (
+  definition,
+  relationDefinitionsBySource = new Map(),
+  operationContracts = 'all',
+) => {
   const entityExportName = definition.entityName;
   const entityArgument = definition.entityDefinitionName
     ? definition.entityDefinitionName
@@ -79,8 +89,13 @@ ${relationDefinitions
 
       lines.push('      },');
 
-      if (operation.inputSchemaText) {
+      if (shouldRenderInputContract(operation, operationContracts)) {
         lines.push(`      input: ${operation.inputSchemaText},`);
+      } else if (operationContracts === 'all') {
+        lines.push('      input: graphSchema.void(),');
+      }
+      if (operationContracts === 'all' && operation.outputSchemaText) {
+        lines.push(`      output: ${operation.outputSchemaText},`);
       }
 
       if (operation.durableRuntime) {
@@ -110,7 +125,11 @@ ${operationBlocks}
 });`;
 };
 
-export const renderGeneratedClientEntityModule = ({ entities }) => {
+export const renderGeneratedClientEntityModule = ({
+  entities,
+  schemaImportPath = './schema',
+  operationContracts = 'all',
+}) => {
   const helperTexts = Array.from(new Set(entities.flatMap(entity => entity.helperTexts ?? [])));
   const helperSection = helperTexts.length > 0 ? `${helperTexts.join('\n\n')}\n\n` : '';
   const usesQueryRef = helperTexts.some(helperText => /\bqueryRef\b/.test(helperText));
@@ -121,8 +140,19 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
     entity.operations.flatMap(operation => operation.clientCacheText ?? []),
   );
   const inputSchemaTexts = entities.flatMap(entity =>
-    entity.operations.flatMap(operation => operation.inputSchemaText ?? []),
+    entity.operations.flatMap(operation =>
+      shouldRenderInputContract(operation, operationContracts)
+        ? (operation.inputSchemaText ?? [])
+        : [],
+    ),
   );
+  const outputSchemaTexts =
+    operationContracts === 'all'
+      ? entities.flatMap(entity =>
+          entity.operations.flatMap(operation => operation.outputSchemaText ?? []),
+        )
+      : [];
+  const schemaTexts = [...inputSchemaTexts, ...outputSchemaTexts];
   const usesCacheRef =
     clientCacheTexts.some(text => /\bcacheRef\b/.test(text)) ||
     helperTexts.some(helperText => /\bcacheRef\b/.test(helperText));
@@ -132,10 +162,13 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
   const usesCreateEntityRef =
     clientCacheTexts.some(text => /\bcreateEntityRef\b/.test(text)) ||
     helperTexts.some(helperText => /\bcreateEntityRef\b/.test(helperText));
-  const usesGraphSchema = inputSchemaTexts.some(text => /\bgraphSchema\b/.test(text));
-  const usesGraphSelection = inputSchemaTexts.some(text => /\bgraphSelection\b/.test(text));
-  const usesValue = inputSchemaTexts.some(text => /\bvalue\s*\(/.test(text));
-  const usesField = inputSchemaTexts.some(text => /\bfield\./.test(text));
+  const usesGraphSchema =
+    schemaTexts.some(text => /\bgraphSchema\b/.test(text)) ||
+    (operationContracts === 'all' &&
+      entities.some(entity => entity.operations.some(operation => !operation.inputSchemaText)));
+  const usesGraphSelection = schemaTexts.some(text => /\bgraphSelection\b/.test(text));
+  const usesValue = schemaTexts.some(text => /\bvalue\s*\(/.test(text));
+  const usesField = schemaTexts.some(text => /\bfield\./.test(text));
   const relationDefinitions = entities.filter(entity => entity.relation);
   const relationDefinitionsBySource = new Map();
   for (const relationDefinition of relationDefinitions) {
@@ -146,7 +179,9 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
   }
   const orderedEntities = [...relationDefinitions, ...entities.filter(entity => !entity.relation)];
   const entityExports = orderedEntities
-    .map(entity => renderClientEntityExport(entity, relationDefinitionsBySource))
+    .map(entity =>
+      renderClientEntityExport(entity, relationDefinitionsBySource, operationContracts),
+    )
     .join('\n\n');
   const entityDefinitionImports = Array.from(
     new Set(
@@ -158,7 +193,14 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
               ...(entity.helperTexts ?? []),
               ...entity.operations.flatMap(operation => operation.graphOutputText ?? []),
               ...entity.operations.flatMap(operation => operation.clientCacheText ?? []),
-              ...entity.operations.flatMap(operation => operation.inputSchemaText ?? []),
+              ...entity.operations.flatMap(operation =>
+                shouldRenderInputContract(operation, operationContracts)
+                  ? (operation.inputSchemaText ?? [])
+                  : [],
+              ),
+              ...(operationContracts === 'all'
+                ? entity.operations.flatMap(operation => operation.outputSchemaText ?? [])
+                : []),
             ].join('\n'),
           ),
         ].filter(Boolean),
@@ -167,29 +209,32 @@ export const renderGeneratedClientEntityModule = ({ entities }) => {
   ).sort();
   const schemaImportSection =
     entityDefinitionImports.length > 0
-      ? `import {\n${entityDefinitionImports.map(name => `  ${name},`).join('\n')}\n} from './schema';\n\n`
+      ? entityDefinitionImports.length === 1
+        ? `import { ${entityDefinitionImports[0]} } from '${schemaImportPath}';\n\n`
+        : `import {\n${entityDefinitionImports.map(name => `  ${name},`).join('\n')}\n} from '${schemaImportPath}';\n\n`
       : '';
+  const coreImports = [
+    ...(usesCacheRef ? ['cacheRef'] : []),
+    ...(usesCreateEntityRef ? ['createEntityRef'] : []),
+    'defineClientDomainOperation',
+    'defineClientEntity',
+    ...(usesField ? ['field'] : []),
+    ...(usesGraphOutput ? ['graphOutput'] : []),
+    ...(usesGraphSchema ? ['graphSchema'] : []),
+    ...(usesGraphSelection ? ['graphSelection'] : []),
+    ...(usesQueryRef ? ['queryRef'] : []),
+    ...(usesValue ? ['value'] : []),
+  ];
 
   return hoistClientBridgeQueryInputTypes(`'use client';
 
 // This file is generated by @ontahi/codegen. Do not edit by hand.
 
 import {
-${usesCacheRef ? '  cacheRef,\n' : ''}
-${usesCreateEntityRef ? '  createEntityRef,\n' : ''}
-  defineClientDomainOperation,
-  defineClientEntity,
-${usesField ? '  field,\n' : ''}
-${usesGraphOutput ? '  graphOutput,\n' : ''}
-${usesGraphSchema ? '  graphSchema,\n' : ''}
-${usesGraphSelection ? '  graphSelection,\n' : ''}
-${usesQueryRef ? '  queryRef,\n' : ''}
-${usesValue ? '  value,\n' : ''}
+${coreImports.map(name => `  ${name},`).join('\n')}
 } from '@ontahi/core/data-graph';
 
-${schemaImportSection}
-${helperSection}
-${entityExports}
+${schemaImportSection}${helperSection}${entityExports}
 `);
 };
 

@@ -1,7 +1,10 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createExpressOperationInvocationHandler } from '../../src/operation-invocation/index.js';
+import {
+  createExpressOperationInvocationHandler,
+  createExpressTaskSnapshotHandler,
+} from '../../src/operation-invocation/index.js';
 
 const invokeHandler = async (handler: RequestHandler, body: unknown) => {
   let status = 200;
@@ -23,6 +26,32 @@ const invokeHandler = async (handler: RequestHandler, body: unknown) => {
 };
 
 describe('Express operation invocation adapter', () => {
+  it('serves task snapshots through the Express transport', async () => {
+    const getSnapshot = vi.fn(async () => ({
+      taskId: 'Book.import',
+      runId: 'run-1',
+      status: 'completed' as const,
+      updatedAt: '2026-07-23T00:00:00.000Z',
+      result: { imported: 3 },
+    }));
+    let payload: unknown;
+    const response = {
+      json: vi.fn((nextPayload: unknown) => {
+        payload = nextPayload;
+        return response;
+      }),
+    } as unknown as Response;
+
+    await createExpressTaskSnapshotHandler({ getSnapshot })(
+      { params: { taskId: 'Book.import', runId: 'run-1' } } as unknown as Request,
+      response,
+      vi.fn() as NextFunction,
+    );
+
+    expect(getSnapshot).toHaveBeenCalledWith({ taskId: 'Book.import', runId: 'run-1' });
+    expect(payload).toMatchObject({ status: 'completed', result: { imported: 3 } });
+  });
+
   it('rejects malformed protocol requests before dispatch', async () => {
     const dispatcher = vi.fn();
     const response = await invokeHandler(createExpressOperationInvocationHandler({ dispatcher }), {

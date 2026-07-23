@@ -621,6 +621,9 @@ export const resolveDomainOperations = <
         ? {
             ...defaults?.durable,
             ...operation.durable,
+            ...(operation.durable.finalOutput === undefined && operation.output !== undefined
+              ? { finalOutput: operation.output }
+              : {}),
           }
         : undefined;
 
@@ -754,11 +757,33 @@ export const defineOperationBridgeBinding = <TBinding, TAdapter extends string =
   callable,
 });
 
+type InferClientOperationInput<TOperation> = TOperation extends {
+  input: GraphSchemaLike<infer TInput>;
+}
+  ? TInput
+  : TOperation extends { bridge: { query: readonly (infer TSegment)[] } }
+    ? [TSegment] extends [never]
+      ? void
+      : TSegment extends (input: infer TInput, ...args: any[]) => unknown
+        ? TInput
+        : void
+    : TOperation extends { bridge: DomainOperationBridgeMetadata<infer TInput> }
+      ? unknown extends TInput
+        ? unknown
+        : TInput
+      : unknown;
+
 export const defineClientDomainOperation = <
   TOperation extends Omit<ClientDomainOperationDeclaration<any, any>, 'kind'>,
 >(
   operation: TOperation,
-): TOperation & { kind: 'domain-operation' } => ({
+): TOperation & {
+  kind: 'domain-operation';
+  __clientTypes?: {
+    input: InferClientOperationInput<TOperation>;
+    output: TOperation extends { output: GraphSchemaLike<infer TOutput> } ? TOutput : unknown;
+  };
+} => ({
   kind: 'domain-operation',
   ...operation,
 });

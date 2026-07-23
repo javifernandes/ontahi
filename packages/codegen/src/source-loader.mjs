@@ -2,6 +2,12 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
+const SOURCE_EXTENSION_FALLBACKS = {
+  '.js': ['.ts', '.tsx'],
+  '.mjs': ['.mts'],
+  '.cjs': ['.cts'],
+  '.jsx': ['.tsx'],
+};
 
 const isFile = sourcePath => {
   if (!existsSync(sourcePath)) {
@@ -16,8 +22,15 @@ const isFile = sourcePath => {
 };
 
 const resolveExistingModulePath = (basePath, extensions) => {
+  const declaredExtension = path.extname(basePath);
+  const withoutDeclaredExtension = declaredExtension
+    ? basePath.slice(0, -declaredExtension.length)
+    : basePath;
   const candidates = [
     basePath,
+    ...(SOURCE_EXTENSION_FALLBACKS[declaredExtension] ?? []).map(
+      extension => `${withoutDeclaredExtension}${extension}`,
+    ),
     ...extensions.map(extension => `${basePath}${extension}`),
     ...extensions.map(extension => path.join(basePath, `index${extension}`)),
   ];

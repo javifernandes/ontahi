@@ -197,7 +197,7 @@ export type TaskRunRef = {
   subject?: TaskSubject;
 };
 
-export type TaskSnapshot = {
+export type TaskSnapshot<TResult = unknown> = {
   taskId: string;
   runId: string;
   status: TaskStatus;
@@ -215,6 +215,7 @@ export type TaskSnapshot = {
     code: string;
     message: string;
   };
+  result?: TResult;
 };
 
 export type TaskRunSource = TaskSnapshot & {

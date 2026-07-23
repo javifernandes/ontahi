@@ -1191,6 +1191,7 @@ const parseOperationDefinition = (
   let graphOutputText;
   let clientCacheText;
   let inputSchemaText;
+  let outputSchemaText;
   const helperDeclarations = new Map();
 
   if (inputNode) {
@@ -1212,10 +1213,50 @@ const parseOperationDefinition = (
         ? (localInputDeclaration?.initializer ?? importedInputDeclaration?.initializer)
         : unwrappedInput;
 
-    if (localInputNode) {
+    if (
+      localInputNode &&
+      !(ts.isIdentifier(localInputNode) && localInputNode.text === 'undefined')
+    ) {
       const candidateInputSchemaText = getNodeText(unwrapExpression(localInputNode));
-      if (/\b(?:graphSchema\.selection|graphSelection)\s*\(/.test(candidateInputSchemaText)) {
+      if (candidateInputSchemaText.trim() !== 'undefined') {
         inputSchemaText = candidateInputSchemaText;
+      }
+    }
+  }
+  if (outputNode) {
+    const unwrappedOutput = unwrapExpression(outputNode);
+    const localOutputDeclaration =
+      unwrappedOutput && ts.isIdentifier(unwrappedOutput)
+        ? schemaContext?.declarations.get(unwrappedOutput.text)
+        : undefined;
+    const importedOutputContext =
+      schemaContext &&
+      unwrappedOutput &&
+      ts.isIdentifier(unwrappedOutput) &&
+      !localOutputDeclaration
+        ? resolveImportedSchemaContext(unwrappedOutput.text, schemaContext)
+        : undefined;
+    const importedOutputDeclaration =
+      unwrappedOutput && ts.isIdentifier(unwrappedOutput)
+        ? importedOutputContext?.declarations.get(unwrappedOutput.text)
+        : undefined;
+    const preserveEntityIdentifier =
+      unwrappedOutput &&
+      ts.isIdentifier(unwrappedOutput) &&
+      unwrappedOutput.text.endsWith('Entity');
+    const localOutputNode = preserveEntityIdentifier
+      ? unwrappedOutput
+      : unwrappedOutput && ts.isIdentifier(unwrappedOutput)
+        ? (localOutputDeclaration?.initializer ?? importedOutputDeclaration?.initializer)
+        : unwrappedOutput;
+
+    if (
+      localOutputNode &&
+      !(ts.isIdentifier(localOutputNode) && localOutputNode.text === 'undefined')
+    ) {
+      const candidateOutputSchemaText = getNodeText(unwrapExpression(localOutputNode));
+      if (candidateOutputSchemaText.trim() !== 'undefined') {
+        outputSchemaText = candidateOutputSchemaText;
       }
     }
   }
@@ -1297,6 +1338,7 @@ const parseOperationDefinition = (
     graphOutputText,
     clientCacheText,
     inputSchemaText,
+    outputSchemaText,
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

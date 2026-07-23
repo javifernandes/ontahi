@@ -83,6 +83,12 @@ describe('data-graph selection helpers', () => {
     expect(query(Book).where(visible).build().selection).toEqual(visible.build());
     expect(visible.toQuery().build().selection).toEqual(visible.build());
     expect(createDeleteCommandSpec(Book, visible).selection).toEqual(visible.build());
+    expect(visible.update({ title: 'Visible' }).build()).toMatchObject({
+      operation: 'update',
+      root: Book,
+      selection: visible.build(),
+      payload: { title: 'Visible' },
+    });
   });
 
   it('provides all and none selections and rejects cross-entity composition', () => {

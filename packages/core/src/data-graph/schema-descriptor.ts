@@ -76,6 +76,14 @@ export type GraphSchemaObjectDescriptor = {
   fields: Record<string, GraphSchemaDescriptor>;
   unknownKeys: 'strip' | 'strict' | 'passthrough';
   description?: string;
+  derivedFrom?: {
+    operation: 'pick';
+    source: {
+      kind: 'entity' | 'entity-view' | 'value' | 'object';
+      name?: string;
+    };
+    fields: string[];
+  };
 };
 
 export type GraphSchemaArrayDescriptor = {
@@ -279,6 +287,14 @@ const describeValue = (
   name: schema.name,
   fields: descriptorFields(schema.fields, resolvingLazyNames),
   unknownKeys: schema.unknownKeys ?? 'strip',
+  ...(schema.derivedFrom
+    ? {
+        derivedFrom: {
+          ...schema.derivedFrom,
+          fields: [...schema.derivedFrom.fields],
+        },
+      }
+    : {}),
 });
 
 const describeObject = (
