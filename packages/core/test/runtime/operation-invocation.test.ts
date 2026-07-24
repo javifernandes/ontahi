@@ -32,6 +32,22 @@ describe('operation invocation protocol', () => {
     ).toMatchObject({ success: true });
   });
 
+  it('parses invocation messages without an input for void operations', () => {
+    expect(
+      parseOperationInvocationRequest({
+        kind: 'invoke',
+        operationId: 'Todo.list',
+      }),
+    ).toEqual({
+      success: true,
+      request: {
+        kind: 'invoke',
+        operationId: 'Todo.list',
+        input: undefined,
+      },
+    });
+  });
+
   it('rejects malformed transport messages', () => {
     expect(parseOperationInvocationRequest({ operationId: 'Book.rename', input: {} })).toEqual({
       success: false,

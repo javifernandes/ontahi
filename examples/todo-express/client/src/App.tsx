@@ -1,9 +1,7 @@
-import { createEntityRef, Selection } from '@ontahi/core/data-graph';
 import { useDurableOperation, useOperation, useOperationQuery } from '@ontahi/react/graph';
 import { FormEvent, useState } from 'react';
 
 import { Todo } from '../../src/generated/client-entities.js';
-import { TodoEntity } from '../../src/todo-schema.js';
 
 export const App = () => {
   const [title, setTitle] = useState('');
@@ -27,10 +25,7 @@ export const App = () => {
 
   const completeSelected = async () => {
     await completeTodos.executeAsync({
-      todos: Selection.references(
-        TodoEntity,
-        selectedIds.map(id => createEntityRef(TodoEntity, { id })),
-      ),
+      todos: selectedIds,
     });
     setSelectedIds([]);
   };

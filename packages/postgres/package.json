@@ -1,0 +1,49 @@
+{
+  "name": "@ontahi/postgres",
+  "version": "1.0.0",
+  "description": "Direct PostgreSQL data graph runtime for Ontahi",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./data-graph": {
+      "types": "./dist/data-graph/index.d.ts",
+      "import": "./dist/data-graph/index.js",
+      "require": "./dist/data-graph/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "test:unit": "pnpm exec vitest run test/data-graph/sql.test.ts",
+    "test:integration": "pnpm exec vitest run test/data-graph/postgres-runtime.integration.test.ts",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@ontahi/core": "workspace:*",
+    "effect": "^3.21.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.7.2",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.15.5",
+    "@vitest/coverage-v8": "^4.0.18",
+    "testcontainers": "^11.7.2",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  }
+}

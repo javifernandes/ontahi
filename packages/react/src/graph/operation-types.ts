@@ -1,6 +1,7 @@
 import type {
   ClientDomainOperationDeclaration as ClientOperationDeclaration,
   DurableOperationMetadata,
+  GraphSchemaLike,
   GraphClientCache,
   ReflectedOperationDescriptor,
 } from '@ontahi/core/data-graph';
@@ -23,6 +24,20 @@ export type ClientOperationLike<TInput = unknown, TData = unknown> = ClientOpera
   id: string;
   entityName: string;
   name: string;
+};
+
+export type ClientSchemaOperationLike<TInput = unknown, TData = unknown> = Omit<
+  ClientOperationDeclaration<any, any>,
+  '__clientTypes'
+> & {
+  id: string;
+  entityName: string;
+  name: string;
+  input: GraphSchemaLike;
+  __clientTypes?: {
+    input: TInput;
+    output: TData;
+  };
 };
 
 export type ReflectedOperationLike<

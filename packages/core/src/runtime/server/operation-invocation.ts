@@ -42,10 +42,14 @@ export type CreateOperationInvocationDispatcherOptions = {
 const normalizeOperationInput = (
   operation: OperationInvocationOperation,
   input: unknown,
-): unknown =>
-  typeof input === 'object' && input !== null && !Array.isArray(input)
-    ? normalizeEntityRefInput(input, operation.inputRefs)
-    : input;
+): unknown => {
+  const operationInput = input === undefined ? {} : input;
+  return typeof operationInput === 'object' &&
+    operationInput !== null &&
+    !Array.isArray(operationInput)
+    ? normalizeEntityRefInput(operationInput, operation.inputRefs)
+    : operationInput;
+};
 
 const unknownOperationResponse = (
   request: OperationInvocationRequest,

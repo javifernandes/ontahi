@@ -4,6 +4,7 @@ import type {
   AnyEntityRef,
   DomainOperationInvocation as OperationInvocation,
 } from '@ontahi/core/data-graph';
+import { normalizeGraphSchemaClientInput } from '@ontahi/core/data-graph';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   useInfiniteQuery,
@@ -45,6 +46,7 @@ import {
 } from './operation-cache.js';
 import type {
   ClientOperationLike,
+  ClientSchemaOperationLike,
   DurableOperationHookOptions,
   DurableOperationHookResult,
   DurableOperationLike,
@@ -71,7 +73,15 @@ const getOperationCacheAwareQueryKey = <TInput, TData>(
   getOperationClientCacheKey(clientCache, operation, input, getOperationQueryKey(operation, input));
 
 export function useOperation<TInput, TData>(
+  operation: ClientSchemaOperationLike<TInput, TData>,
+  options?: OperationHookOptions<TInput, TData>,
+): OperationHookResult<TInput, TData>;
+export function useOperation<TInput, TData>(
   operation: ClientOperationLike<TInput, TData>,
+  options?: OperationHookOptions<TInput, TData>,
+): OperationHookResult<TInput, TData>;
+export function useOperation<TInput, TData>(
+  operation: ClientOperationLike<TInput, TData> | ClientSchemaOperationLike<TInput, TData>,
   options?: OperationHookOptions<TInput, TData>,
 ): OperationHookResult<TInput, TData> {
   const adapter = useDefaultOperationBridgeAdapter();
@@ -85,6 +95,7 @@ export function useOperation<TInput, TData>(
   const resetTransport = transport.reset;
   const optionsRef = useRef(options);
   const [result, setResult] = useState<OperationInvocationResult<TData>>();
+  const [input, setInput] = useState<TInput>();
 
   useEffect(() => {
     optionsRef.current = options;
@@ -93,13 +104,17 @@ export function useOperation<TInput, TData>(
   const executeInputAsync = useCallback(
     async (input: TInput) => {
       const currentOptions = optionsRef.current;
+      const transportInput = operation.input
+        ? (normalizeGraphSchemaClientInput(operation.input, input) as TInput)
+        : input;
+      setInput(input);
 
       await currentOptions?.onExecute?.({ input });
 
       let invocation: OperationInvocationResult<TData>;
 
       try {
-        invocation = toOperationInvocationResult(await executeTransportAsync(input));
+        invocation = toOperationInvocationResult(await executeTransportAsync(transportInput));
       } catch (error) {
         invocation = operationBridgeErrored(
           error instanceof Error ? error.message : 'Graph operation bridge failed.',
@@ -113,7 +128,7 @@ export function useOperation<TInput, TData>(
           affectedCacheRefs = invalidateOperationCacheRefs(
             clientCache,
             operation,
-            input,
+            transportInput,
             invocation.value,
           );
         }
@@ -134,8 +149,8 @@ export function useOperation<TInput, TData>(
         if (currentOptions?.invalidateOnSuccess ?? true) {
           await Promise.all([
             invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
-            ...resolveOperationBridgeInvalidationQueryKeys(operation, input).map(queryKey =>
-              queryClient.invalidateQueries({ queryKey }),
+            ...resolveOperationBridgeInvalidationQueryKeys(operation, transportInput).map(
+              queryKey => queryClient.invalidateQueries({ queryKey }),
             ),
           ]);
         }
@@ -174,6 +189,7 @@ export function useOperation<TInput, TData>(
   const reset = useCallback(() => {
     resetTransport();
     setResult(undefined);
+    setInput(undefined);
   }, [resetTransport]);
 
   const hasErrored = Boolean(result && !result.ok) || transport.hasErrored;
@@ -189,7 +205,7 @@ export function useOperation<TInput, TData>(
   return {
     execute,
     executeAsync,
-    input: transport.input,
+    input,
     result,
     value: result?.ok ? result.value : undefined,
     reset,
@@ -237,7 +253,6 @@ export function useDurableOperation<TInput, TResult = unknown>(
   useEffect(() => {
     if (
       !snapshot ||
-      !mutation.input ||
       (snapshot.status !== 'completed' &&
         snapshot.status !== 'failed' &&
         snapshot.status !== 'cancelled')
@@ -250,8 +265,11 @@ export function useDurableOperation<TInput, TResult = unknown>(
     invalidatedRunRef.current = runKey;
 
     if (snapshot.status === 'completed' && (options?.invalidateOnSuccess ?? true)) {
+      const invalidationInput = operation.input
+        ? (normalizeGraphSchemaClientInput(operation.input, mutation.input) as TInput)
+        : (mutation.input as TInput);
       void Promise.all(
-        resolveOperationBridgeInvalidationQueryKeys(operation, mutation.input).map(queryKey =>
+        resolveOperationBridgeInvalidationQueryKeys(operation, invalidationInput).map(queryKey =>
           queryClient.invalidateQueries({ queryKey }),
         ),
       );

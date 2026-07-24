@@ -3,13 +3,13 @@ import type { OperationInvocationResult, OperationValidationIssue } from './cont
 export type OperationInvokeRequest = {
   kind: 'invoke';
   operationId: string;
-  input: unknown;
+  input?: unknown;
 };
 
 export type OperationPermissionRequest = {
   kind: 'check-permission';
   operationId: string;
-  input: unknown;
+  input?: unknown;
 };
 
 export type OperationInvocationRequest = OperationInvokeRequest | OperationPermissionRequest;
@@ -113,16 +113,6 @@ export const parseOperationInvocationRequest = (
       error: operationInvocationProtocolError(
         'invalid_request',
         'Operation invocation operationId must be a non-empty string.',
-      ),
-    };
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(value, 'input')) {
-    return {
-      success: false,
-      error: operationInvocationProtocolError(
-        'invalid_request',
-        'Operation invocation request must include input.',
       ),
     };
   }

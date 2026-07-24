@@ -6,6 +6,8 @@ import {
   field,
   graphOutput,
   graphSchema,
+  type InferGraphSchemaClientInput,
+  normalizeGraphSchemaClientInput,
   resolveDomainOperations,
   safeParseGraphSchema,
   selection,
@@ -109,6 +111,54 @@ describe('data-graph schema DSL', () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it('normalizes ergonomic client selection inputs through the default identity', () => {
+    const Todo = entity('Todo', {
+      id: field.id(),
+      title: field.string(),
+      completed: field.boolean(),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const inputSchema = graphSchema.object({
+      todos: graphSchema.selection(Todo, { cardinality: 'many' }),
+    });
+    type ClientInput = InferGraphSchemaClientInput<typeof inputSchema>;
+
+    expectTypeOf<{ todos: string[] }>().toMatchTypeOf<ClientInput>();
+    expectTypeOf<{
+      todos: { id: string; title: string; completed: boolean }[];
+    }>().toMatchTypeOf<ClientInput>();
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          normalizeGraphSchemaClientInput(inputSchema, {
+            todos: ['todo-1', { id: 'todo-2', title: 'Second', completed: false }],
+          }),
+        ),
+      ),
+    ).toEqual({
+      todos: {
+        kind: 'selection',
+        entityName: 'Todo',
+        expression: {
+          kind: 'references',
+          refs: [
+            {
+              kind: 'entity-ref',
+              entityName: 'Todo',
+              locator: { id: 'todo-1' },
+            },
+            {
+              kind: 'entity-ref',
+              entityName: 'Todo',
+              locator: { id: 'todo-2' },
+            },
+          ],
+        },
+      },
+    });
   });
 
   it('validates statically knowable selection cardinality and defers predicates', () => {

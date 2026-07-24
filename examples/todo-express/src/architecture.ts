@@ -9,11 +9,42 @@ import {
   createInMemoryTaskRunStore,
   createInProcessTaskRuntimeAdapter,
 } from '@ontahi/core/runtime/server';
+import {
+  createPostgresDataGraphRuntime,
+  type PostgresDataGraphError,
+  postgresMapping,
+} from '@ontahi/postgres/data-graph';
+import { Pool } from 'pg';
+
+import { TodoEntity } from './todo-schema.js';
 
 export const todoDataset: InMemoryDataset = { Todo: [] };
 
-const graph = createDataGraphArchitectureAdapter<unknown, InMemoryDataGraphError>({
-  createRuntime: () => createInMemoryDataGraphRuntime({ dataset: todoDataset }),
+const postgresPool =
+  process.env.TODO_STORAGE === 'postgres'
+    ? new Pool({
+        connectionString:
+          process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54329/ontahi_todos',
+      })
+    : undefined;
+
+const graph = createDataGraphArchitectureAdapter<
+  unknown,
+  InMemoryDataGraphError | PostgresDataGraphError
+>({
+  createRuntime: () =>
+    postgresPool
+      ? createPostgresDataGraphRuntime({
+          pool: postgresPool,
+          mappings: [
+            postgresMapping({
+              entity: TodoEntity,
+              table: 'todos',
+              columns: { id: 'id', title: 'title', completed: 'completed' },
+            }),
+          ],
+        })
+      : createInMemoryDataGraphRuntime({ dataset: todoDataset }),
 });
 
 const taskRunStore = createInMemoryTaskRunStore();

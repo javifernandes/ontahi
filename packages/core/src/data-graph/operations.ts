@@ -1,3 +1,4 @@
+import type { InferGraphSchemaClientInput } from './client-input.js';
 import type {
   AnyEntityDefinition,
   EntityRefLocators,
@@ -758,35 +759,43 @@ export const defineOperationBridgeBinding = <TBinding, TAdapter extends string =
 });
 
 type InferClientOperationInput<TOperation> = TOperation extends {
-  input: GraphSchemaLike<infer TInput>;
+  input: infer TSchema extends GraphSchemaLike;
 }
-  ? TInput
-  : TOperation extends { bridge: { query: readonly (infer TSegment)[] } }
-    ? [TSegment] extends [never]
-      ? void
-      : TSegment extends (input: infer TInput, ...args: any[]) => unknown
-        ? TInput
-        : void
-    : TOperation extends { bridge: DomainOperationBridgeMetadata<infer TInput> }
-      ? unknown extends TInput
-        ? unknown
-        : TInput
-      : unknown;
+  ? InferGraphSchemaClientInput<TSchema>
+  : TOperation extends { durable: { subject: (input: infer TInput, ...args: any[]) => unknown } }
+    ? TInput
+    : TOperation extends { bridge: { query: readonly (infer TSegment)[] } }
+      ? [TSegment] extends [never]
+        ? void
+        : TSegment extends (input: infer TInput, ...args: any[]) => unknown
+          ? TInput
+          : void
+      : TOperation extends { bridge: DomainOperationBridgeMetadata<infer TInput> }
+        ? unknown extends TInput
+          ? unknown
+          : TInput
+        : unknown;
+
+type DefinedClientDomainOperation<TOperation> = TOperation & {
+  kind: 'domain-operation';
+} & (TOperation extends { input: GraphSchemaLike }
+    ? {
+        __clientTypes?: {
+          input: InferClientOperationInput<TOperation>;
+          output: TOperation extends { output: GraphSchemaLike<infer TOutput> } ? TOutput : unknown;
+        };
+      }
+    : {});
 
 export const defineClientDomainOperation = <
   TOperation extends Omit<ClientDomainOperationDeclaration<any, any>, 'kind'>,
 >(
   operation: TOperation,
-): TOperation & {
-  kind: 'domain-operation';
-  __clientTypes?: {
-    input: InferClientOperationInput<TOperation>;
-    output: TOperation extends { output: GraphSchemaLike<infer TOutput> } ? TOutput : unknown;
-  };
-} => ({
-  kind: 'domain-operation',
-  ...operation,
-});
+): DefinedClientDomainOperation<TOperation> =>
+  ({
+    kind: 'domain-operation',
+    ...operation,
+  }) as DefinedClientDomainOperation<TOperation>;
 
 export const defineDomainOperationsForEntity = <
   TEntity extends Pick<AnyEntityDefinition, 'name'> | string,

@@ -64,6 +64,26 @@ describe('Ontahi todo portability example', () => {
     expect(todoDataset.Todo).toEqual([]);
   });
 
+  it('invokes a void-input operation when the transport omits input', async () => {
+    todoDataset.Todo = [{ id: 'todo-1', title: 'Persisted', completed: false }];
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'invoke', operationId: 'Todo.list' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: true,
+        kind: 'success',
+        value: [{ id: 'todo-1', title: 'Persisted', completed: false }],
+      },
+    });
+  });
+
   it.each([
     {
       name: 'reference-defined membership',

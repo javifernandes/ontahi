@@ -153,6 +153,65 @@ describe('operation hooks', () => {
     expect(clientCache.readEntity(createEntityRef(BookEntity, { id: 'book-1' }))).toBe(book);
   });
 
+  it('normalizes ids and entity records into selection refs before transport', async () => {
+    const TodoEntity = entity('Todo', {
+      id: field.id(),
+      title: field.string(),
+      completed: field.boolean(),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const operation = defineClientDomainOperationsForEntity(TodoEntity, {
+      complete: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: { invalidate: [['Todo']] },
+        input: graphSchema.object({
+          todos: graphSchema.selection(TodoEntity, { cardinality: 'many' }),
+        }),
+      }),
+    }).complete;
+    const bridgeAction = vi.fn().mockResolvedValue({ data: undefined });
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result } = renderHook(() => useOperation(operation), {
+      wrapper: Wrapper,
+    });
+
+    await act(async () => {
+      await result.current.executeAsync({
+        todos: ['todo-1', { id: 'todo-2', title: 'Second', completed: false }],
+      });
+    });
+
+    expect(JSON.parse(JSON.stringify(bridgeAction.mock.calls[0]?.[0]))).toEqual({
+      operationId: 'Todo.complete',
+      input: {
+        todos: {
+          kind: 'selection',
+          entityName: 'Todo',
+          expression: {
+            kind: 'references',
+            refs: [
+              {
+                kind: 'entity-ref',
+                entityName: 'Todo',
+                locator: { id: 'todo-1' },
+              },
+              {
+                kind: 'entity-ref',
+                entityName: 'Todo',
+                locator: { id: 'todo-2' },
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(result.current.input).toEqual({
+      todos: ['todo-1', { id: 'todo-2', title: 'Second', completed: false }],
+    });
+  });
+
   it('runs success callbacks before waiting for query invalidation', async () => {
     let resolveInvalidation: (() => void) | undefined;
     const invalidation = new Promise<void>(resolve => {
@@ -272,6 +331,56 @@ describe('operation hooks', () => {
     await waitFor(() => expect(result.current.isCompleted).toBe(true));
     expect(result.current.finalValue).toEqual({ imported: 3 });
     expect(getTaskSnapshot).toHaveBeenCalledWith({ taskId: 'book.import', runId: 'run-1' });
+  });
+
+  it('invalidates queries when a void-input durable operation completes', async () => {
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const bridgeAction = vi.fn().mockResolvedValue({
+      data: {
+        taskId: 'Todo.completeAll',
+        runId: 'run-1',
+        status: 'queued',
+      },
+    });
+    const operation = defineClientDomainOperationsForEntity('Todo', {
+      completeAll: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        input: graphSchema.void(),
+        bridge: { invalidate: [['Todo']] },
+        durable: { runtime: 'in-process' },
+      }),
+    }).completeAll;
+    const getTaskSnapshot = vi.fn().mockResolvedValue({
+      taskId: 'Todo.completeAll',
+      runId: 'run-1',
+      status: 'completed',
+      updatedAt: '2026-07-24T00:00:01.000Z',
+      completedAt: '2026-07-24T00:00:01.000Z',
+      result: { completed: 2 },
+    });
+    const { Wrapper } = createWrapper(
+      bridgeAction,
+      createGraphClientCache(),
+      queryClient,
+      undefined,
+      getTaskSnapshot,
+    );
+    const { result } = renderHook(() => useDurableOperation(operation, { pollIntervalMs: 10 }), {
+      wrapper: Wrapper,
+    });
+
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+
+    await waitFor(() => expect(result.current.isCompleted).toBe(true));
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['Todo'],
+      }),
+    );
   });
 
   it('runs reflected bridge operations from descriptor metadata', async () => {
