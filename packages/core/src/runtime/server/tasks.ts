@@ -6,8 +6,12 @@ export {
   listRecentTasks,
   startTask,
 } from './tasks/facade.js';
-export { createInProcessTaskRuntimeAdapter } from './tasks/in-process-adapter.js';
-export { createInMemoryTaskRunStore } from './tasks/memory-store.js';
+export {
+  createInProcessTaskExecutor,
+  createInProcessTaskRuntime,
+} from './tasks/in-process-adapter.js';
+export { createInMemoryTaskStorage } from './tasks/memory-store.js';
+export { inProcessTasks } from './tasks/presets.js';
 export {
   createSystemTaskTrigger,
   createUserTaskTrigger,
@@ -22,27 +26,30 @@ export {
   validateTaskStepOutput,
 } from './tasks/validation.js';
 export type {
-  InProcessTaskRuntimeAdapterOptions,
+  InProcessTaskExecutorOptions,
+  InProcessTaskRuntimeOptions,
+  InProcessTasksOptions,
   TaskActor,
-  TaskArchitectureConfig,
+  TaskConfig,
   TaskContext,
   TaskDeclarations,
   TaskDefinition,
   TaskDefinitionDeclaration,
+  TaskExecutor,
   TaskFailure,
   TaskMethod,
   TaskMethods,
+  TaskRunCreateInput,
+  TaskRunIdentity,
   TaskRunListItem,
-  TaskRunControlStore,
-  TaskRunEngineStore,
   TaskRunRef,
   TaskRunSource,
-  TaskRunStore,
-  TaskRunStoreCreateInput,
   TaskRuntimeRef,
-  TaskRuntimeAdapter,
-  TaskRuntimeAdapterStartOptions,
   TaskSnapshot,
+  TaskStartOptions,
+  TaskStorage,
+  TaskStorageControl,
+  TaskStorageEngine,
   TaskStatus,
   TaskStepDeclarations,
   TaskStepDefinition,
@@ -51,4 +58,5 @@ export type {
   TaskStepResult,
   TaskSubject,
   TaskTrigger,
+  TaskRuntime,
 } from './tasks/types.js';

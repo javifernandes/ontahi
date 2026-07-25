@@ -6,7 +6,7 @@ import type {
 } from '@ontahi/core/data-graph';
 import type {
   OperationInvocationResult,
-  TaskRunRef,
+  TaskRunIdentity,
   TaskSnapshot,
 } from '@ontahi/core/runtime/contracts';
 import {
@@ -33,7 +33,7 @@ const DEFAULT_ENDPOINT = '/api/data-graph/domain-operations';
 
 const fetchTaskSnapshot = async <TResult>(
   endpoint: string,
-  ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
+  ref: TaskRunIdentity,
 ): Promise<TaskSnapshot<TResult>> => {
   const response = await fetch(
     `${endpoint}/${encodeURIComponent(ref.taskId)}/${encodeURIComponent(ref.runId)}`,
@@ -152,8 +152,7 @@ export const createFetchOperationBridgeAdapter = (
     name: 'fetch',
     ...(taskEndpoint
       ? {
-          getTaskSnapshot: (ref: Pick<TaskRunRef, 'taskId' | 'runId'>) =>
-            fetchTaskSnapshot(taskEndpoint, ref),
+          getTaskSnapshot: (ref: TaskRunIdentity) => fetchTaskSnapshot(taskEndpoint, ref),
         }
       : {}),
     useBridgeAction: operation =>

@@ -66,8 +66,8 @@ describe('vercel workflow task runtime adapter', () => {
       status: Promise.resolve('pending'),
     });
 
-    const { createVercelWorkflowTaskRuntimeAdapter } = await import('../src/adapter.js');
-    const adapter = createVercelWorkflowTaskRuntimeAdapter({
+    const { createVercelWorkflowTaskRuntime } = await import('../src/runtime.js');
+    const adapter = createVercelWorkflowTaskRuntime({
       taskRunStore: {
         create,
         attachRuntimeRef,

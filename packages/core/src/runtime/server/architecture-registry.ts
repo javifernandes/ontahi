@@ -3,6 +3,7 @@ import type { ArchitectureDefinition, ArchitectureLayerDefaults } from './archit
 import { combineConcerns } from './concerns.js';
 import { getServerRuntimeConfig } from './config.js';
 import type { Effectors } from './effect-intents/types.js';
+import type { LayerConcern } from './layer-types.js';
 import { combineRequirements } from './requirements.js';
 
 const EMPTY_ARCHITECTURE: ArchitectureDefinition<unknown> = {};
@@ -51,17 +52,24 @@ export const getArchitecture = async <TEvent = unknown>(): Promise<
 const matchesLayerPrefix = (scopePrefix: string, candidatePrefix: string) =>
   scopePrefix === candidatePrefix || scopePrefix.startsWith(`${candidatePrefix}.`);
 
+const getGraphRuntimeConcern = (
+  definition: ArchitectureDefinition<unknown>,
+): LayerConcern<any, unknown> | undefined => {
+  const withRuntime = definition.graph?.withRuntime;
+
+  return typeof withRuntime === 'function'
+    ? (withRuntime.call(definition.graph) as LayerConcern<any, unknown>)
+    : undefined;
+};
+
 export const resolveArchitectureLayerDefaults = async (
   prefix: string,
 ): Promise<ArchitectureLayerDefaults> => {
   const architectureDefinition = await getArchitecture();
   const layers = architectureDefinition.layers;
+  const graphRuntimeConcern = getGraphRuntimeConcern(architectureDefinition);
 
-  if (!layers) {
-    return {};
-  }
-
-  const matchingDefaults = Object.entries(layers)
+  const matchingDefaults = Object.entries(layers ?? {})
     .filter(([candidatePrefix]) => matchesLayerPrefix(prefix, candidatePrefix))
     .sort(([leftPrefix], [rightPrefix]) => leftPrefix.length - rightPrefix.length)
     .map(([, defaults]) => defaults);
@@ -71,7 +79,9 @@ export const resolveArchitectureLayerDefaults = async (
       requires: combineRequirements(resolved.requires, defaults.requires),
       concerns: combineConcerns(resolved.concerns, defaults.concerns),
     }),
-    {},
+    {
+      concerns: graphRuntimeConcern ? [graphRuntimeConcern] : undefined,
+    },
   );
 };
 

@@ -3,7 +3,7 @@ import 'server-only';
 import {
   type TaskFailure,
   type TaskRunSource,
-  type TaskRunStore,
+  type TaskStorage,
   type TaskSnapshot,
   type TaskStatus,
 } from '@ontahi/core/runtime/server/tasks';
@@ -217,7 +217,7 @@ const toRuntimeTerminalPatch = (
 
 export const reconcileTaskRunSource = (
   source: TaskRunSource,
-  store: Pick<TaskRunStore, 'update'>,
+  store: Pick<TaskStorage, 'update'>,
 ): Effect.Effect<TaskRunSource, TaskFailure> => {
   if (!shouldAttemptTaskRunReconciliation(source)) {
     return Effect.succeed(source);
@@ -279,7 +279,7 @@ export const reconcileTaskRunSource = (
 
 export const reconcileTaskSnapshot = (
   source: TaskRunSource,
-  store: Pick<TaskRunStore, 'update'>,
+  store: Pick<TaskStorage, 'update'>,
 ): Effect.Effect<TaskSnapshot, TaskFailure> =>
   Effect.map(reconcileTaskRunSource(source, store), reconciled => ({
     taskId: reconciled.taskId,

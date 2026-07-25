@@ -9,6 +9,7 @@ import {
   defineEntityRefInput,
   createRuntimeBoundDataGraphApi,
   type DataGraphExecutionRuntime,
+  type DataGraphDefaultStorage,
   type DomainOperationDefaults,
   type DomainOperationDeclarations,
   type EntityRefLocators,
@@ -60,7 +61,8 @@ export type DataGraphArchitectureAdapterOptions<
   TCommandOptions,
   TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, any>,
 > = {
-  createRuntime: (runtime: LayerConcernRuntime<TInput>) => TRuntime;
+  createRuntime?: (runtime: LayerConcernRuntime<TInput>) => TRuntime;
+  defaultStorage?: DataGraphDefaultStorage<TRuntime>;
 };
 
 type RuntimeCommandError<TRuntime> =
@@ -75,15 +77,23 @@ export const createDataGraphArchitectureAdapter = <
   TCommandOptions = TReadOptions,
   TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, any> =
     DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions>,
->({
-  createRuntime,
-}: DataGraphArchitectureAdapterOptions<
-  TInput,
-  TError,
-  TReadOptions,
-  TCommandOptions,
-  TRuntime
->) => {
+>(
+  options: DataGraphArchitectureAdapterOptions<
+    TInput,
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TRuntime
+  >,
+) => {
+  if (!options.createRuntime && !options.defaultStorage) {
+    throw new Error('createDataGraphArchitectureAdapter requires defaultStorage or createRuntime.');
+  }
+
+  const createRuntime = (runtime: LayerConcernRuntime<TInput>): TRuntime => {
+    if (options.defaultStorage) return options.defaultStorage.createRuntime();
+    return options.createRuntime!(runtime);
+  };
   type TCommandError = RuntimeCommandError<TRuntime>;
   const boundDataGraph = createRuntimeBoundDataGraphApi<
     TError,
@@ -260,6 +270,7 @@ export const createDataGraphArchitectureAdapter = <
   return {
     ...boundDataGraph,
     createRuntime,
+    ...(options.defaultStorage ? { readEntityData: options.defaultStorage.readEntityData } : {}),
     defineEntity,
     defineGraphEntity: defineEntity,
     defineRelation: defineGraphRelation,

@@ -1,4 +1,4 @@
-import type { TaskFailure, TaskRunRef } from './types.js';
+import type { TaskFailure, TaskRunIdentity } from './types.js';
 
 const createTaskFailure = (
   reason: string,
@@ -10,10 +10,10 @@ const createTaskFailure = (
   ...(extra ?? {}),
 });
 
-export const missingTaskRunFailure = (ref: Pick<TaskRunRef, 'taskId' | 'runId'>): TaskFailure =>
+export const missingTaskRunFailure = (ref: TaskRunIdentity): TaskFailure =>
   createTaskFailure('task_run_not_found', 'Task run not found.', ref);
 
-export const duplicateTaskRunFailure = (ref: Pick<TaskRunRef, 'taskId' | 'runId'>): TaskFailure =>
+export const duplicateTaskRunFailure = (ref: TaskRunIdentity): TaskFailure =>
   createTaskFailure('task_run_already_exists', 'Task run already exists.', ref);
 
 export const missingTaskStepFailure = (taskId: string, stepName: string): TaskFailure =>

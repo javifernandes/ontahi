@@ -1,57 +1,80 @@
-import { graphSchema } from '@ontahi/core/data-graph';
+import { field, graphSchema } from '@ontahi/core/data-graph';
+import { entity } from '@ontahi/core/entity';
+import { Effect } from 'effect';
 
-import { app } from './architecture.js';
-import { CompleteAllOutput, CompleteAllProgress, runCompleteAll } from './complete-all-task.js';
-import { TodoEntity } from './todo-schema.js';
+import {
+  CompleteAllOutput,
+  CompleteAllProgress,
+  createRunCompleteAll,
+} from './complete-all-task.js';
 
-const TodoCommands = app.graph.defineEntity(TodoEntity);
-
-export const Todo = app.graph.defineEntity(TodoEntity, {
+export const Todo = entity({
+  name: 'Todo',
+  fields: {
+    id: field.id(),
+    title: field.nonEmptyString({ trim: true }),
+    completed: field.boolean(),
+  },
+  locators: { refById: 'id' },
+  identity: 'refById',
   domainOperationDefaults: {
     authority: 'server',
     exposure: 'bridge',
     layer: 'todos',
   },
-  domainOperations: {
-    list: app.operation.define({
-      output: graphSchema.array(TodoEntity),
-      bridge: { query: [() => 'all'] },
-      run: () => TodoCommands.all().orderBy(todo => todo.title),
-    }),
-    create: app.operation.define({
-      input: graphSchema.pick(TodoEntity, ['id', 'title']).named('CreateTodoInput'),
-      output: TodoEntity,
-      bridge: { invalidate: [['Todo']] },
-      run: input =>
-        TodoCommands.insertReturning({ id: input.id, title: input.title, completed: false }, [
-          'id',
-          'title',
-          'completed',
-        ]),
-    }),
-    complete: app.operation.define({
-      input: graphSchema.object({
-        todos: graphSchema.selection(TodoEntity, { cardinality: 'many' }),
+  operations: ({ self, commands, operation, ingress }) => {
+    const runCompleteAll = createRunCompleteAll(() =>
+      commands
+        .where(todo => todo.completed.eq(false))
+        .updateReturning({ completed: true }, ['id'])
+        .run()
+        .pipe(
+          Effect.orDie,
+          Effect.map(completed => completed.length),
+        ),
+    );
+
+    return {
+      list: operation({
+        output: graphSchema.array(self),
+        bridge: { query: [() => 'all'] },
+        run: () => commands.all().orderBy(todo => todo.title),
       }),
-      bridge: { invalidate: [['Todo']] },
-      run: input => input.todos.update({ completed: true }),
-    }),
-    completeAll: app.operation.define({
-      output: CompleteAllOutput,
-      bridge: { invalidate: [['Todo']] },
-      ingress: [
-        app.ingress.http({
-          method: 'POST',
-          route: '/operations/Todo.completeAll',
-          provider: 'express',
-          channel: 'todo.complete-all',
+      create: operation({
+        input: graphSchema.pick(self, ['id', 'title']).named('CreateTodoInput'),
+        output: self,
+        bridge: { invalidate: [['Todo']] },
+        run: ({ id, title }) =>
+          commands.insertReturning({ id, title, completed: false }, ['id', 'title', 'completed']),
+      }),
+      complete: operation({
+        input: graphSchema.object({
+          todos: graphSchema.selection(self, { cardinality: 'many' }),
         }),
-      ],
-      durable: {
-        runtime: 'in-process',
-        progress: CompleteAllProgress,
-      },
-      run: runCompleteAll,
-    }),
+        bridge: { invalidate: [['Todo']] },
+        run: ({ todos }) => todos.update({ completed: true }),
+      }),
+      deleteAll: operation({
+        bridge: { invalidate: [['Todo']] },
+        run: () => commands.all().delete(),
+      }),
+      completeAll: operation({
+        output: CompleteAllOutput,
+        bridge: { invalidate: [['Todo']] },
+        ingress: [
+          ingress.http({
+            method: 'POST',
+            route: '/operations/Todo.completeAll',
+            provider: 'express',
+            channel: 'todo.complete-all',
+          }),
+        ],
+        durable: {
+          runtime: 'in-process',
+          progress: CompleteAllProgress,
+        },
+        run: runCompleteAll,
+      }),
+    };
   },
 });

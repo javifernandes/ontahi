@@ -1,4 +1,4 @@
-import type { TaskDefinition, TaskRunStore, TaskSnapshot } from '@ontahi/core/runtime/server/tasks';
+import type { TaskDefinition, TaskSnapshot, TaskStorage } from '@ontahi/core/runtime/server/tasks';
 
 export type VercelTaskWorkflowInput = {
   taskId: string;
@@ -16,18 +16,18 @@ export type VercelTaskStepWorkflow = (input: VercelTaskStepWorkflowInput) => Pro
 
 export type VercelTaskStepRunner = (input: VercelTaskStepWorkflowInput) => Promise<unknown>;
 
-export type VercelWorkflowTaskRunStore = Pick<
-  TaskRunStore,
+export type VercelWorkflowTaskStorage = Pick<
+  TaskStorage,
   'create' | 'attachRuntimeRef' | 'update' | 'loadSource' | 'listRecent'
 >;
 
-export type VercelWorkflowTaskRuntimeAdapterOptions = {
-  taskRunStore: VercelWorkflowTaskRunStore;
+export type VercelWorkflowTaskRuntimeOptions = {
+  taskRunStore: VercelWorkflowTaskStorage;
   resolveWorkflow(taskId: string): VercelTaskWorkflow | undefined;
   createRunId?: () => string;
 };
 
-export type VercelWorkflowTaskExecutorStore = Pick<TaskRunStore, 'loadSource' | 'update'>;
+export type VercelWorkflowTaskExecutorStore = Pick<TaskStorage, 'loadSource' | 'update'>;
 
 export type VercelWorkflowTaskExecutorOptions = {
   taskRunStore: VercelWorkflowTaskExecutorStore;

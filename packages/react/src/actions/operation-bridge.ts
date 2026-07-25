@@ -10,7 +10,7 @@ import {
 } from '@ontahi/core/runtime/actions';
 import type {
   OperationInvocationResult,
-  TaskRunRef,
+  TaskRunIdentity,
   TaskSnapshot,
 } from '@ontahi/core/runtime/contracts';
 import type { QueryKey, UseQueryResult } from '@tanstack/react-query';
@@ -122,9 +122,7 @@ export type CheckDomainOperationPermissionBridgeAction = (input: {
 
 export type OperationBridgeAdapter<TAdapterName extends string = string> = {
   name: TAdapterName;
-  getTaskSnapshot?: <TResult = unknown>(
-    ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
-  ) => Promise<TaskSnapshot<TResult>>;
+  getTaskSnapshot?: <TResult = unknown>(ref: TaskRunIdentity) => Promise<TaskSnapshot<TResult>>;
   useBridgeAction: <TInput, TData>(
     operation: BridgedOperationLike<TInput, TData>,
   ) => OperationBridgeAction<TInput, TData>;

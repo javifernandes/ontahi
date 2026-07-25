@@ -1,4 +1,4 @@
-import { createInMemoryTaskRunStore } from '@ontahi/core/runtime/server/tasks';
+import { createInMemoryTaskStorage } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,7 +27,7 @@ describe('task run reconciliation', () => {
   });
 
   it('patches stale non-terminal Vercel task runs from runtime status', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
     const source = await Effect.runPromise(
       store.create({
         taskId: 'fixture.say-hello',
@@ -67,7 +67,7 @@ describe('task run reconciliation', () => {
   });
 
   it('extracts structured task errors from failed Vercel workflow steps', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
     const source = await Effect.runPromise(
       store.create({
         taskId: 'book.import-github-markdown',
@@ -123,7 +123,7 @@ describe('task run reconciliation', () => {
   });
 
   it('enriches terminal generic Vercel failures from failed workflow steps', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
     const source = await Effect.runPromise(
       store.create({
         taskId: 'book.import-github-markdown',
@@ -177,7 +177,7 @@ describe('task run reconciliation', () => {
   });
 
   it('enriches terminal unknown Vercel failures from failed workflow steps', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
     const source = await Effect.runPromise(
       store.create({
         taskId: 'book.import-github-markdown',
@@ -234,7 +234,7 @@ describe('task run reconciliation', () => {
   });
 
   it('leaves task runs without a supported runtime untouched', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
     const source = await Effect.runPromise(
       store.create({
         taskId: 'fixture.say-hello',

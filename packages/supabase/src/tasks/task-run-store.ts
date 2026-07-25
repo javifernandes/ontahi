@@ -4,13 +4,13 @@ import {
   normalizeTaskTrigger,
   type TaskActor,
   type TaskFailure,
+  type TaskRunCreateInput,
+  type TaskRunIdentity,
   type TaskRunListItem,
-  type TaskRunRef,
   type TaskRunSource,
-  type TaskRunStore,
-  type TaskRunStoreCreateInput,
   type TaskSnapshot,
   type TaskStatus,
+  type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 
@@ -26,7 +26,7 @@ type SupabaseQueryResult<TData> = {
 
 type SupabaseQuery<TData> = PromiseLike<SupabaseQueryResult<TData>>;
 
-export type SupabaseTaskRunStoreClient = {
+export type SupabaseTaskStorageClient = {
   from(tableName: string): {
     insert(row: Record<string, unknown>): {
       select(columns?: string): {
@@ -69,8 +69,8 @@ type TaskRunRow = {
   completed_at: string | null;
 };
 
-export type CreateSupabaseTaskRunStoreOptions = {
-  client: SupabaseTaskRunStoreClient;
+export type CreateSupabaseTaskStorageOptions = {
+  client: SupabaseTaskStorageClient;
   tableName?: string;
   now?: () => string;
 };
@@ -143,7 +143,7 @@ const fromRow = (row: TaskRunRow): TaskRunSource => ({
   completedAt: row.completed_at ?? undefined,
 });
 
-const toCreateRow = (input: TaskRunStoreCreateInput, now: string): Record<string, unknown> => ({
+const toCreateRow = (input: TaskRunCreateInput, now: string): Record<string, unknown> => ({
   task_id: input.taskId,
   run_id: input.runId,
   status: 'queued',
@@ -177,7 +177,7 @@ const toPatchRow = (
 
 const keyFilters = <TQuery extends { eq(column: string, value: unknown): TQuery }>(
   query: TQuery,
-  ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
+  ref: TaskRunIdentity,
 ) => query.eq('task_id', ref.taskId).eq('run_id', ref.runId);
 
 const actorFilters = <TQuery extends { eq(column: string, value: unknown): TQuery }>(
@@ -188,12 +188,12 @@ const actorFilters = <TQuery extends { eq(column: string, value: unknown): TQuer
   return actor.id === undefined ? byKind : byKind.eq('trigger->actor->>id', actor.id);
 };
 
-export const createSupabaseTaskRunStore = ({
+export const createSupabaseTaskStorage = ({
   client,
   tableName = DEFAULT_TABLE_NAME,
   now = defaultNow,
-}: CreateSupabaseTaskRunStoreOptions): TaskRunStore => {
-  const loadRow = async (ref: Pick<TaskRunRef, 'taskId' | 'runId'>) => {
+}: CreateSupabaseTaskStorageOptions): TaskStorage => {
+  const loadRow = async (ref: TaskRunIdentity) => {
     const result = await keyFilters(client.from(tableName).select('*'), ref).maybeSingle();
 
     if (result.error) {
@@ -207,10 +207,7 @@ export const createSupabaseTaskRunStore = ({
     return result.data;
   };
 
-  const updateFromPatch = async (
-    ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
-    patch: Partial<TaskRunSource>,
-  ) => {
+  const updateFromPatch = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) => {
     const current = fromRow(await loadRow(ref));
     const result = await keyFilters(
       client.from(tableName).update(toPatchRow(current, patch, now())),

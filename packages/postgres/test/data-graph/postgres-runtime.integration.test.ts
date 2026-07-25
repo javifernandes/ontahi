@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   createPostgresDataGraphRuntime,
-  createPostgresReflectedEntityDataReader,
+  createPostgresDataGraphStorage,
 } from '../../src/data-graph/index.js';
 
 import { conformanceDataset, conformanceGraph, TodoEntity, TodoMapping } from './fixtures.js';
@@ -122,14 +122,14 @@ describe('PostgreSQL data graph runtime', () => {
 
   it('reads reflected entity data with search, filters, sorting and pagination', async () => {
     await resetPostgres();
-    const reader = createPostgresReflectedEntityDataReader({
+    const storage = createPostgresDataGraphStorage({
       pool,
       mappings: conformanceGraph.mappings,
       pageSizeOptions: [1, 2],
     });
 
     await expect(
-      reader.readEntityData({
+      storage.readEntityData({
         entityName: 'Book',
         search: 'a',
         filters: [{ field: 'published', operator: 'equals', value: 'false' }],
@@ -157,7 +157,7 @@ describe('PostgreSQL data graph runtime', () => {
     });
 
     await expect(
-      reader.readEntityData({
+      storage.readEntityData({
         entityName: 'Book',
         filters: [{ field: 'note', operator: 'isNull' }],
       }),
@@ -171,12 +171,12 @@ describe('PostgreSQL data graph runtime', () => {
     await resetPostgres();
     await pool.query('ALTER TABLE books DROP COLUMN note');
     try {
-      const reader = createPostgresReflectedEntityDataReader({
+      const storage = createPostgresDataGraphStorage({
         pool,
         mappings: conformanceGraph.mappings,
       });
 
-      await expect(reader.readEntityData({ entityName: 'Book' })).resolves.toMatchObject({
+      await expect(storage.readEntityData({ entityName: 'Book' })).resolves.toMatchObject({
         omittedColumns: [
           {
             field: 'note',

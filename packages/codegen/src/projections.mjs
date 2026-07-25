@@ -52,9 +52,11 @@ const renderClientEntityExport = (
   operationContracts = 'all',
 ) => {
   const entityExportName = definition.entityName;
-  const entityArgument = definition.entityDefinitionName
-    ? definition.entityDefinitionName
-    : `'${definition.entityName}'`;
+  const entityArgument = definition.entityDefinitionLocalName
+    ? definition.entityDefinitionLocalName
+    : definition.entityDefinitionName
+      ? definition.entityDefinitionName
+      : `'${definition.entityName}'`;
   const relationDefinitions = relationDefinitionsBySource.get(definition.entityName) ?? [];
   const relationBlock =
     relationDefinitions.length > 0
@@ -207,11 +209,29 @@ export const renderGeneratedClientEntityModule = ({
       ),
     ),
   ).sort();
+  const entityDefinitionAliases = new Map(
+    entities
+      .filter(entity => entity.entityDefinitionName && entity.entityDefinitionLocalName)
+      .map(entity => [entity.entityDefinitionName, entity.entityDefinitionLocalName]),
+  );
   const schemaImportSection =
     entityDefinitionImports.length > 0
       ? entityDefinitionImports.length === 1
-        ? `import { ${entityDefinitionImports[0]} } from '${schemaImportPath}';\n\n`
-        : `import {\n${entityDefinitionImports.map(name => `  ${name},`).join('\n')}\n} from '${schemaImportPath}';\n\n`
+        ? `import { ${entityDefinitionImports[0]}${
+            entityDefinitionAliases.has(entityDefinitionImports[0])
+              ? ` as ${entityDefinitionAliases.get(entityDefinitionImports[0])}`
+              : ''
+          } } from '${schemaImportPath}';\n\n`
+        : `import {\n${entityDefinitionImports
+            .map(
+              name =>
+                `  ${name}${
+                  entityDefinitionAliases.has(name)
+                    ? ` as ${entityDefinitionAliases.get(name)}`
+                    : ''
+                },`,
+            )
+            .join('\n')}\n} from '${schemaImportPath}';\n\n`
       : '';
   const coreImports = [
     ...(usesCacheRef ? ['cacheRef'] : []),

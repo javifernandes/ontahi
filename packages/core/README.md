@@ -15,10 +15,49 @@ Current docs:
 2. [Boundary Schemas](./docs/boundary-schemas.md) - graph-native operation contracts and the narrower role of transport validation adapters
 3. [Entity Lifecycle Modules](./docs/entity-lifecycle.md) - current house style for richer domain areas that need entity folders, policy modules, lifecycle transitions, and explicit event outputs
 
+## Application composition
+
+`ontahi(...)` is the application composition root for new applications. It binds storage, optional
+task execution, and semantic entities into the runtime and reflected graph consumed by ingress
+adapters and Explorer:
+
+```ts
+const application = ontahi({
+  storage,
+  tasks: inProcessTasks(),
+  entities: app => ({
+    Todo: defineTodo(app),
+  }),
+});
+```
+
+The configured storage remains available as `application.storage`. Provider-specific capabilities
+stay typed: in-memory applications expose their dataset for test setup, while persistent providers
+do not pretend to offer an in-process dataset.
+
+The entity builder callback is transitional: it gives entity modules access to operation and graph
+declaration primitives without requiring a separate public `architecture(...)` root. A future entity
+declaration refinement can make that binding fully declarative without changing the application
+composition model.
+
 ## In-Memory Graph
 
-`createInMemoryDataGraphRuntime` implements the full `DataGraphExecutionRuntime` surface over a live seeded dataset: queries, relation-root reads, streams, counts, inserts, bulk inserts, upserts, updates, and deletes. Commands support the same `returning` and cardinality contracts used by persistence adapters.
+`createInMemoryDataGraphStorage` is the recommended application binding. It supplies both the full
+`DataGraphExecutionRuntime` surface and reflected entity browsing over one live seeded dataset, so
+the application configures its default storage once:
 
-`createInMemoryReflectedEntityDataReader` exposes that same state to Ontahi Explorer with search, filters, sorting, and pagination.
+```ts
+const defaultStorage = createInMemoryDataGraphStorage({
+  entities: [TodoEntity],
+  dataset,
+});
 
-The implementation is intentionally process-local. It provides no restart durability, transactions, indexes, migrations, or database constraints; production adapters such as `@ontahi/supabase` own those guarantees.
+const graph = createDataGraphArchitectureAdapter({ defaultStorage });
+```
+
+Queries, relation-root reads, streams, counts, inserts, bulk inserts, upserts, updates, deletes, and
+Explorer reads all observe that same state. `createInMemoryDataGraphRuntime` and
+`createInMemoryReflectedEntityDataReader` remain available as lower-level building blocks.
+
+The implementation is intentionally process-local. It provides no restart durability, transactions,
+indexes, migrations, or database constraints; production adapters own those guarantees.

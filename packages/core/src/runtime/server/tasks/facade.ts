@@ -1,14 +1,14 @@
 import { Effect } from 'effect';
 
 import type {
-  TaskArchitectureConfig,
+  TaskConfig,
   TaskDeclarations,
   TaskDefinition,
   TaskFailure,
   TaskMethods,
-  TaskRunRef,
-  TaskRuntimeAdapter,
-  TaskRuntimeAdapterStartOptions,
+  TaskRunIdentity,
+  TaskRuntime,
+  TaskStartOptions,
 } from './types.js';
 
 const createTaskFailure = (reason: string, message: string): TaskFailure => ({
@@ -17,52 +17,52 @@ const createTaskFailure = (reason: string, message: string): TaskFailure => ({
 });
 
 export const startTask = <TInput, TResult>(
-  adapter: TaskRuntimeAdapter,
+  runtime: TaskRuntime,
   task: TaskDefinition<TInput, TResult>,
   input: TInput,
-  options?: TaskRuntimeAdapterStartOptions,
-) => adapter.start(task, input, options);
+  options?: TaskStartOptions,
+) => runtime.start(task, input, options);
 
-export const getTaskSnapshot = (
-  adapter: TaskRuntimeAdapter,
-  ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
-) => adapter.getSnapshot(ref);
+export const getTaskSnapshot = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
+  runtime.getSnapshot(ref);
 
-export const listRecentTasks = (adapter: TaskRuntimeAdapter, limit?: number) =>
-  adapter.listRecent(limit);
+export const listRecentTasks = (runtime: TaskRuntime, limit?: number) => runtime.listRecent(limit);
 
-export const createConfiguredTaskFacade = (config: TaskArchitectureConfig = {}) => {
-  const getAdapter = (): Effect.Effect<TaskRuntimeAdapter, TaskFailure> =>
-    config.adapter
-      ? Effect.succeed(config.adapter)
+export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
+  const configuredRuntime =
+    config.runtime ??
+    (config.executor && config.storage ? config.executor.createRuntime(config.storage) : undefined);
+  const getRuntime = (): Effect.Effect<TaskRuntime, TaskFailure> =>
+    configuredRuntime
+      ? Effect.succeed(configuredRuntime)
       : Effect.fail(
           createTaskFailure(
-            'task_adapter_missing',
-            'No task runtime adapter is configured for this architecture.',
+            'task_runtime_missing',
+            'Task execution requires both an executor and storage.',
           ),
         );
 
   const start = <TInput, TResult>(
     task: TaskDefinition<TInput, TResult>,
     input: TInput,
-    options?: TaskRuntimeAdapterStartOptions,
+    options?: TaskStartOptions,
   ) =>
     Effect.gen(function* () {
-      const adapter = yield* getAdapter();
-      return yield* startTask(adapter, task, input, options);
+      const runtime = yield* getRuntime();
+      return yield* startTask(runtime, task, input, options);
     });
 
   return {
     start,
-    getSnapshot: (ref: Pick<TaskRunRef, 'taskId' | 'runId'>) =>
+    getSnapshot: (ref: TaskRunIdentity) =>
       Effect.gen(function* () {
-        const adapter = yield* getAdapter();
-        return yield* getTaskSnapshot(adapter, ref);
+        const runtime = yield* getRuntime();
+        return yield* getTaskSnapshot(runtime, ref);
       }),
     listRecent: (limit?: number) =>
       Effect.gen(function* () {
-        const adapter = yield* getAdapter();
-        return yield* listRecentTasks(adapter, limit);
+        const runtime = yield* getRuntime();
+        return yield* listRecentTasks(runtime, limit);
       }),
     defineForEntity: <TEntity extends object, TTasks extends TaskDeclarations>(
       entity: TEntity,
@@ -71,7 +71,7 @@ export const createConfiguredTaskFacade = (config: TaskArchitectureConfig = {}) 
       const methods = Object.fromEntries(
         Object.entries(tasks).map(([name, task]) => [
           name,
-          (input: unknown, options?: TaskRuntimeAdapterStartOptions) => start(task, input, options),
+          (input: unknown, options?: TaskStartOptions) => start(task, input, options),
         ]),
       ) as TaskMethods<TTasks>;
 

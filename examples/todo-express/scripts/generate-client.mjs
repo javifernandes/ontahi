@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   analyzeOntahiApplication,
+  createStdinCommandFormatter,
   createFileSystemSourceLoader,
   renderGeneratedClientEntityModule,
 } from '@ontahi/codegen';
@@ -18,10 +19,17 @@ if (application.diagnostics.length > 0) {
   throw new Error(JSON.stringify(application.diagnostics, null, 2));
 }
 
-const source = renderGeneratedClientEntityModule({
+const generatedSource = renderGeneratedClientEntityModule({
   entities: application.clientEntities,
-  schemaImportPath: '../todo-schema.js',
+  schemaImportPath: '../todo.js',
 });
+const formatGeneratedSource = createStdinCommandFormatter({
+  command: 'pnpm',
+  args: ['exec', 'oxfmt', '--stdin-filepath', outputPath],
+  cwd: root,
+  label: 'oxfmt',
+});
+const source = await formatGeneratedSource({ outputPath, source: generatedSource });
 
 if (process.argv.includes('--check')) {
   const current = await readFile(outputPath, 'utf8');

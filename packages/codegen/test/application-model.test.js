@@ -44,6 +44,97 @@ describe('Ontahi application declaration analysis', () => {
     });
   });
 
+  it('discovers entities built inside the ontahi application composition root', () => {
+    const analysis = analyzeGraphApiModule(`
+      import { ontahi } from '@ontahi/core/runtime/server';
+      import { defineNote } from './note';
+
+      export const NotesApplication = ontahi({
+        storage,
+        entities: app => ({
+          Note: defineNote(app),
+        }),
+      });
+    `);
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.definition).toMatchObject({
+      apiExportName: 'NotesApplication',
+      entities: [
+        {
+          entityExportName: 'Note',
+          importedIdentifier: 'defineNote',
+          importPath: './note',
+        },
+      ],
+    });
+  });
+
+  it('discovers unified entities registered as an array', () => {
+    const analysis = analyzeGraphApiModule(`
+      import { ontahi } from '@ontahi/core/runtime/server';
+      import { Note } from './note';
+
+      export const NotesApplication = ontahi({
+        storage,
+        entities: [Note],
+      });
+    `);
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.definition).toMatchObject({
+      apiExportName: 'NotesApplication',
+      entities: [
+        {
+          entityExportName: 'Note',
+          importedIdentifier: 'Note',
+          importPath: './note',
+        },
+      ],
+    });
+  });
+
+  it('projects operations from a unified entity declaration', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity } from '@ontahi/core/entity';
+
+        export const Note = entity({
+          name: 'Note',
+          fields: {},
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'notes',
+          },
+          operations: ({ self, operation }) => ({
+            list: operation({
+              output: graphSchema.array(self),
+              bridge: { query: [() => 'all'] },
+              run: () => [],
+            }),
+          }),
+        });
+      `,
+      'Note',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Note',
+      entityDefinitionName: 'Note',
+      entityDefinitionLocalName: 'NoteSchema',
+      operations: [
+        {
+          name: 'list',
+          authority: 'server',
+          exposure: 'bridge',
+          outputSchemaText: 'graphSchema.array(NoteSchema)',
+        },
+      ],
+    });
+  });
+
   it('projects operation metadata from an embedded Ontahi DSL declaration', () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
@@ -77,6 +168,42 @@ describe('Ontahi application declaration analysis', () => {
       operations: [
         {
           name: 'create',
+          authority: 'server',
+          exposure: 'bridge',
+        },
+      ],
+    });
+  });
+
+  it('projects operation metadata from an exported entity builder', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        const NoteEntity = { name: 'Note' };
+
+        export const defineNote = app =>
+          app.graph.defineEntity(NoteEntity, {
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+              layer: 'notes',
+            },
+            domainOperations: {
+              list: app.operation.define({
+                run: () => [],
+              }),
+            },
+          });
+      `,
+      'defineNote',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Note',
+      entityExportName: 'defineNote',
+      operations: [
+        {
+          name: 'list',
           authority: 'server',
           exposure: 'bridge',
         },
@@ -302,6 +429,74 @@ describe('Ontahi application declaration analysis', () => {
     expect(analysis.diagnostics).toEqual([]);
     expect(analysis.entities).toMatchObject([{ entityName: 'Note' }]);
     expect(analysis.sourcePaths).toEqual([graphApiPath, noteSourcePath].sort());
+  });
+
+  it('discovers entities from an Ontahi application declaration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-application-'));
+    const graphApiPath = path.join(directory, 'application.ts');
+    const noteSourcePath = path.join(directory, 'note.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineOntahiApplication } from '@ontahi/core/runtime/server';
+        import { Note } from './note.js';
+        export const NotesApplication = defineOntahiApplication({
+          entities: { Note },
+          runtime: {},
+        });
+      `,
+      'utf8',
+    );
+    await writeFile(noteSourcePath, `export const Note = { name: 'Note' };`, 'utf8');
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.entities).toMatchObject([{ entityName: 'Note' }]);
+  });
+
+  it('continues past the graph overload of an Ontahi application declaration', () => {
+    const analysis = analyzeGraphApiModule(`
+      import { defineGraphApi } from '@ontahi/core/data-graph';
+      import { defineOntahiApplication } from '@ontahi/core/runtime/server';
+      import { Note } from './note';
+
+      export const NotesApplication = defineOntahiApplication({
+        graph: NotesGraphApi,
+        runtime,
+      });
+
+      export const NotesGraphApi = defineGraphApi({
+        entities: { Note },
+      });
+    `);
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.definition).toMatchObject({
+      apiExportName: 'NotesGraphApi',
+      entities: [{ entityExportName: 'Note', importPath: './note' }],
+    });
+  });
+
+  it('reports the unsupported graph overload accurately when its graph is not discoverable', () => {
+    const analysis = analyzeGraphApiModule(`
+      import { defineOntahiApplication } from '@ontahi/core/runtime/server';
+      import { NotesGraphApi } from './graph';
+
+      export const NotesApplication = defineOntahiApplication({
+        graph: NotesGraphApi,
+        runtime,
+      });
+    `);
+
+    expect(analysis.diagnostics).toEqual([
+      'NotesApplication uses defineOntahiApplication({ graph, runtime }), but the referenced graph declaration could not be discovered in this module.',
+    ]);
   });
 
   it('returns declaration-oriented diagnostics for unresolved graph entities', async () => {

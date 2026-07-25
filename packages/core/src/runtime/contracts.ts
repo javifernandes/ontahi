@@ -197,6 +197,8 @@ export type TaskRunRef = {
   subject?: TaskSubject;
 };
 
+export type TaskRunIdentity = Pick<TaskRunRef, 'taskId' | 'runId'>;
+
 export type TaskSnapshot<TResult = unknown> = {
   taskId: string;
   runId: string;

@@ -4,6 +4,7 @@ import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
 import type {
   TaskActor,
   TaskRunListItem,
+  TaskRunIdentity,
   TaskRunRef,
   TaskRunSource,
   TaskRuntimeRef,
@@ -16,6 +17,7 @@ import type { OperationFailure } from '../operation/types.js';
 export type {
   TaskActor,
   TaskRunListItem,
+  TaskRunIdentity,
   TaskRunRef,
   TaskRunSource,
   TaskRuntimeRef,
@@ -29,18 +31,16 @@ export type TaskFailure = OperationFailure<string, Record<string, unknown>>;
 
 export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;
 
-export type TaskRunStoreCreateInput = {
-  taskId: string;
-  runId: string;
+export type TaskRunCreateInput = TaskRunIdentity & {
   input?: unknown;
   trigger?: TaskTrigger;
   subject?: TaskSubject;
   runtime?: TaskRuntimeRef;
 };
 
-export type TaskRunControlStore = {
-  create(input: TaskRunStoreCreateInput): Effect.Effect<TaskRunSource, TaskFailure>;
-  getSnapshot(ref: Pick<TaskRunRef, 'taskId' | 'runId'>): Effect.Effect<TaskSnapshot, TaskFailure>;
+export type TaskStorageControl = {
+  create(input: TaskRunCreateInput): Effect.Effect<TaskRunSource, TaskFailure>;
+  getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
   listRecentForActor(
     actor: TaskActor,
@@ -48,36 +48,37 @@ export type TaskRunControlStore = {
   ): Effect.Effect<TaskRunListItem[], TaskFailure>;
 };
 
-export type TaskRunEngineStore = {
-  loadSource(ref: Pick<TaskRunRef, 'taskId' | 'runId'>): Effect.Effect<TaskRunSource, TaskFailure>;
+export type TaskStorageEngine = {
+  loadSource(ref: TaskRunIdentity): Effect.Effect<TaskRunSource, TaskFailure>;
   attachRuntimeRef(
-    ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
+    ref: TaskRunIdentity,
     runtime: TaskRuntimeRef,
   ): Effect.Effect<TaskSnapshot, TaskFailure>;
   update(
-    ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
+    ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
   ): Effect.Effect<TaskSnapshot, TaskFailure>;
 };
 
-export type TaskRunStore = TaskRunControlStore &
-  TaskRunEngineStore & {
-    get(ref: Pick<TaskRunRef, 'taskId' | 'runId'>): Effect.Effect<TaskSnapshot, TaskFailure>;
+export type TaskStorage = TaskStorageControl &
+  TaskStorageEngine & {
+    get(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   };
 
-export type TaskContext = Pick<TaskRunRef, 'taskId' | 'runId' | 'subject'> & {
-  trigger: TaskTrigger;
-  createdAt?: string;
-  progress(
-    progress: NonNullable<TaskSnapshot['progress']>,
-  ): Effect.Effect<TaskSnapshot, TaskFailure>;
-  sleep(milliseconds: number): Effect.Effect<void, TaskFailure>;
-  step<TStep extends TaskStepDefinition<any, any>>(
-    step: TStep,
-    input: TaskStepInput<TStep>,
-  ): Effect.Effect<TaskStepResult<TStep>, TaskFailure>;
-  step<TInput, TResult>(name: string, input: TInput): Effect.Effect<TResult, TaskFailure>;
-};
+export type TaskContext = TaskRunIdentity &
+  Pick<TaskRunRef, 'subject'> & {
+    trigger: TaskTrigger;
+    createdAt?: string;
+    progress(
+      progress: NonNullable<TaskSnapshot['progress']>,
+    ): Effect.Effect<TaskSnapshot, TaskFailure>;
+    sleep(milliseconds: number): Effect.Effect<void, TaskFailure>;
+    step<TStep extends TaskStepDefinition<any, any>>(
+      step: TStep,
+      input: TaskStepInput<TStep>,
+    ): Effect.Effect<TaskStepResult<TStep>, TaskFailure>;
+    step<TInput, TResult>(name: string, input: TInput): Effect.Effect<TResult, TaskFailure>;
+  };
 
 export type TaskStepDefinition<TInput, TResult> = {
   id: string;
@@ -114,7 +115,7 @@ export type TaskDefinitionDeclaration<TInput, TResult> = Omit<
 
 export type TaskDeclarations = Record<string, TaskDefinition<any, any>>;
 
-export type TaskRuntimeAdapterStartOptions = {
+export type TaskStartOptions = {
   runId?: string;
   trigger?: TaskTrigger;
   subject?: TaskSubject;
@@ -122,33 +123,43 @@ export type TaskRuntimeAdapterStartOptions = {
 
 export type TaskMethod<TTask> =
   TTask extends TaskDefinition<infer TInput, any>
-    ? (
-        input: TInput,
-        options?: TaskRuntimeAdapterStartOptions,
-      ) => Effect.Effect<TaskRunRef, TaskFailure>
+    ? (input: TInput, options?: TaskStartOptions) => Effect.Effect<TaskRunRef, TaskFailure>
     : never;
 
 export type TaskMethods<TTasks extends TaskDeclarations> = {
   [TName in keyof TTasks]: TaskMethod<TTasks[TName]>;
 };
 
-export type TaskRuntimeAdapter = {
+export type TaskRuntime = {
   start<TInput, TResult>(
     task: TaskDefinition<TInput, TResult>,
     input: TInput,
-    options?: TaskRuntimeAdapterStartOptions,
+    options?: TaskStartOptions,
   ): Effect.Effect<TaskRunRef, TaskFailure>;
-  getSnapshot(ref: Pick<TaskRunRef, 'taskId' | 'runId'>): Effect.Effect<TaskSnapshot, TaskFailure>;
+  getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
 };
 
-export type TaskArchitectureConfig = {
-  adapter?: TaskRuntimeAdapter;
+export type TaskExecutor = {
+  createRuntime(storage: TaskStorage): TaskRuntime;
 };
 
-export type InProcessTaskRuntimeAdapterOptions = {
-  store: TaskRunStore;
+export type TaskConfig = {
+  executor?: TaskExecutor;
+  storage?: TaskStorage;
+  runtime?: TaskRuntime;
+};
+
+export type InProcessTaskExecutorOptions = {
   sleep?: (milliseconds: number) => Promise<void>;
   createRunId?: () => string;
   onBackgroundError?: (error: unknown) => void;
+};
+
+export type InProcessTasksOptions = InProcessTaskExecutorOptions & {
+  storage?: TaskStorage;
+};
+
+export type InProcessTaskRuntimeOptions = InProcessTaskExecutorOptions & {
+  storage: TaskStorage;
 };

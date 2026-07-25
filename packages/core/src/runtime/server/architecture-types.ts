@@ -1,7 +1,7 @@
 import type { Effectors } from './effect-intents/types.js';
 import type { LayerConcern } from './layer-types.js';
 import type { OperationInput, OperationRequirement } from './operation/requirement-types.js';
-import type { TaskArchitectureConfig } from './tasks.js';
+import type { TaskConfig } from './tasks.js';
 
 export type ArchitectureNamespace = Record<string, unknown>;
 
@@ -26,5 +26,5 @@ export type ArchitectureDefinition<TEvent = unknown> = {
   cache?: ArchitectureNamespace;
   effects?: ArchitectureNamespace;
   runtime?: ArchitectureNamespace;
-  task?: ArchitectureNamespace & TaskArchitectureConfig;
+  task?: ArchitectureNamespace & TaskConfig;
 };

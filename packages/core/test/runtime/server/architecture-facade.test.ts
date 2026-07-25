@@ -90,8 +90,8 @@ describe('architecture app facade', () => {
         defineForEntity: expect.any(Function),
         start: expect.any(Function),
         getSnapshot: expect.any(Function),
-        createInMemoryRunStore: expect.any(Function),
-        createInProcessRuntimeAdapter: expect.any(Function),
+        createInMemoryTaskStorage: expect.any(Function),
+        createInProcessTaskRuntime: expect.any(Function),
       }),
     );
   });

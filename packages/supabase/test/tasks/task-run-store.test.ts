@@ -2,8 +2,8 @@ import type { TaskTrigger } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { createSupabaseTaskRunStore } from '../../src/tasks/index.js';
-import type { SupabaseTaskRunStoreClient } from '../../src/tasks/index.js';
+import { createSupabaseTaskStorage } from '../../src/tasks/index.js';
+import type { SupabaseTaskStorageClient } from '../../src/tasks/index.js';
 
 type FakeRow = Record<string, any>;
 
@@ -147,13 +147,13 @@ class FakeSupabaseTable {
   }
 }
 
-const createFakeSupabaseClient = (rows: FakeRow[] = []): SupabaseTaskRunStoreClient => ({
+const createFakeSupabaseClient = (rows: FakeRow[] = []): SupabaseTaskStorageClient => ({
   from: () => new FakeSupabaseTable(rows) as any,
 });
 
-describe('createSupabaseTaskRunStore', () => {
+describe('createSupabaseTaskStorage', () => {
   it('creates, reads, updates, and loads task run sources', async () => {
-    const store = createSupabaseTaskRunStore({
+    const store = createSupabaseTaskStorage({
       client: createFakeSupabaseClient(),
       now: () => '2026-06-03T00:00:00.000Z',
     });
@@ -283,7 +283,7 @@ describe('createSupabaseTaskRunStore', () => {
         completed_at: '2026-06-03T00:00:01.000Z',
       },
     ];
-    const store = createSupabaseTaskRunStore({
+    const store = createSupabaseTaskStorage({
       client: createFakeSupabaseClient(rows),
     });
 
@@ -353,7 +353,7 @@ describe('createSupabaseTaskRunStore', () => {
         completed_at: '2026-06-03T00:00:02.000Z',
       },
     ];
-    const store = createSupabaseTaskRunStore({
+    const store = createSupabaseTaskStorage({
       client: createFakeSupabaseClient(rows),
     });
 
@@ -371,7 +371,7 @@ describe('createSupabaseTaskRunStore', () => {
   });
 
   it('returns task failures for duplicate and missing task runs', async () => {
-    const store = createSupabaseTaskRunStore({
+    const store = createSupabaseTaskStorage({
       client: createFakeSupabaseClient(),
     });
     const input = {

@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["**/*.ts", "**/*.tsx", "../src/generated/**/*.ts", "../src/todo-schema.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "../src/generated/**/*.ts", "../src/todo.ts"]
 }

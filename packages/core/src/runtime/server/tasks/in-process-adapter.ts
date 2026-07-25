@@ -2,10 +2,12 @@ import { Effect } from 'effect';
 
 import { missingTaskStepFailure, toTaskFailure } from './failures.js';
 import type {
-  InProcessTaskRuntimeAdapterOptions,
+  InProcessTaskExecutorOptions,
+  InProcessTaskRuntimeOptions,
+  TaskExecutor,
   TaskContext,
   TaskRunRef,
-  TaskRuntimeAdapter,
+  TaskRuntime,
   TaskSnapshot,
 } from './types.js';
 import {
@@ -30,24 +32,24 @@ const toTaskRunRef = (snapshot: TaskSnapshot): TaskRunRef => ({
   ...(snapshot.subject ? { subject: snapshot.subject } : {}),
 });
 
-export const createInProcessTaskRuntimeAdapter = ({
-  store,
+export const createInProcessTaskRuntime = ({
+  storage,
   sleep = milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
   createRunId: createConfiguredRunId = createRunId,
   onBackgroundError,
-}: InProcessTaskRuntimeAdapterOptions): TaskRuntimeAdapter => ({
+}: InProcessTaskRuntimeOptions): TaskRuntime => ({
   start: (task, input, options) =>
     Effect.gen(function* () {
       const parsedInput = yield* validateTaskInput(task, input);
       const runId = options?.runId ?? createConfiguredRunId();
       const ref = { taskId: task.id, runId };
-      const snapshot = yield* store.create({
+      const snapshot = yield* storage.create({
         ...ref,
         input: parsedInput,
         trigger: options?.trigger,
         subject: options?.subject,
       });
-      const source = yield* store.loadSource(ref);
+      const source = yield* storage.loadSource(ref);
       const context: TaskContext = {
         ...ref,
         ...(source.subject ? { subject: source.subject } : {}),
@@ -55,7 +57,7 @@ export const createInProcessTaskRuntimeAdapter = ({
         createdAt: source.createdAt,
         progress: progress =>
           Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
-            store.update(ref, { progress: parsedProgress }),
+            storage.update(ref, { progress: parsedProgress }),
           ),
         sleep: milliseconds =>
           Effect.tryPromise({
@@ -76,20 +78,20 @@ export const createInProcessTaskRuntimeAdapter = ({
         },
       };
       const background = Effect.gen(function* () {
-        yield* store.update(ref, {
+        yield* storage.update(ref, {
           status: 'running',
           startedAt: now(),
         });
         const result = yield* task.run(parsedInput, context);
         const parsedResult = yield* validateTaskOutput(task, result);
-        yield* store.update(ref, {
+        yield* storage.update(ref, {
           status: 'completed',
           completedAt: now(),
           result: parsedResult,
         });
       }).pipe(
         Effect.catchAll(error =>
-          store.update(ref, {
+          storage.update(ref, {
             status: 'failed',
             completedAt: now(),
             error: {
@@ -103,6 +105,16 @@ export const createInProcessTaskRuntimeAdapter = ({
       void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
       return toTaskRunRef(snapshot);
     }),
-  getSnapshot: ref => store.getSnapshot(ref),
-  listRecent: limit => store.listRecent(limit),
+  getSnapshot: ref => storage.getSnapshot(ref),
+  listRecent: limit => storage.listRecent(limit),
+});
+
+export const createInProcessTaskExecutor = (
+  options: InProcessTaskExecutorOptions = {},
+): TaskExecutor => ({
+  createRuntime: storage =>
+    createInProcessTaskRuntime({
+      ...options,
+      storage,
+    }),
 });

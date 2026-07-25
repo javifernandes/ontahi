@@ -4,14 +4,22 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createTodoExpressApp } from '../src/application.js';
-import { todoDataset } from '../src/architecture.js';
+import { TodoApplication } from '../src/graph.js';
+
+const getTodoDataset = () => {
+  if (TodoApplication.storage.kind !== 'in-memory') {
+    throw new Error('Todo application tests require in-memory storage.');
+  }
+
+  return TodoApplication.storage.dataset;
+};
 
 describe('Ontahi todo portability example', () => {
   let closeServer: (() => Promise<void>) | undefined;
   let endpoint = '';
 
   beforeEach(async () => {
-    todoDataset.Todo = [];
+    getTodoDataset().Todo = [];
     const server = await new Promise<Server>(resolve => {
       const started = createTodoExpressApp().listen(0, '127.0.0.1', () => resolve(started));
     });
@@ -43,7 +51,7 @@ describe('Ontahi todo portability example', () => {
         value: { id: 'todo-1', title: 'Read Ontahi guide', completed: false },
       },
     });
-    expect(todoDataset.Todo).toEqual([
+    expect(getTodoDataset().Todo).toEqual([
       { id: 'todo-1', title: 'Read Ontahi guide', completed: false },
     ]);
   });
@@ -61,11 +69,11 @@ describe('Ontahi todo portability example', () => {
         issues: [{ path: 'title' }],
       },
     });
-    expect(todoDataset.Todo).toEqual([]);
+    expect(getTodoDataset().Todo).toEqual([]);
   });
 
   it('invokes a void-input operation when the transport omits input', async () => {
-    todoDataset.Todo = [{ id: 'todo-1', title: 'Persisted', completed: false }];
+    getTodoDataset().Todo = [{ id: 'todo-1', title: 'Persisted', completed: false }];
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -81,6 +89,55 @@ describe('Ontahi todo portability example', () => {
         kind: 'success',
         value: [{ id: 'todo-1', title: 'Persisted', completed: false }],
       },
+    });
+  });
+
+  it('deletes every Todo through a void-input operation', async () => {
+    getTodoDataset().Todo = [
+      { id: 'todo-1', title: 'First', completed: false },
+      { id: 'todo-2', title: 'Second', completed: true },
+    ];
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'invoke', operationId: 'Todo.deleteAll' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, kind: 'success' },
+    });
+    expect(getTodoDataset().Todo).toEqual([]);
+  });
+
+  it('serves the embedded Explorer snapshot and active runtime metadata', async () => {
+    const origin = endpoint.replace(/\/operations$/, '');
+    getTodoDataset().Todo = [{ id: 'todo-1', title: 'Visible in Explorer', completed: false }];
+
+    await expect(fetch(`${origin}/runtime`).then(response => response.json())).resolves.toEqual({
+      storage: 'in-memory',
+    });
+    await expect(
+      fetch(`${origin}/explorer/snapshot`).then(response => response.json()),
+    ).resolves.toMatchObject({
+      snapshot: {
+        entities: [{ name: 'Todo' }],
+        operations: expect.arrayContaining([expect.objectContaining({ id: 'Todo.deleteAll' })]),
+      },
+      entityDetails: [expect.objectContaining({ name: 'Todo' })],
+    });
+    await expect(
+      fetch(`${origin}/explorer/entities`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entityName: 'Todo' }),
+      }).then(response => response.json()),
+    ).resolves.toMatchObject({
+      entityName: 'Todo',
+      rows: [{ id: 'todo-1', title: 'Visible in Explorer', completed: false }],
+      totalCount: 1,
     });
   });
 
@@ -104,7 +161,7 @@ describe('Ontahi todo portability example', () => {
       completedIds: ['todo-2'],
     },
   ])('targets $name with a transported Selection', async ({ expression, completedIds }) => {
-    todoDataset.Todo = [
+    getTodoDataset().Todo = [
       { id: 'todo-1', title: 'First', completed: false },
       { id: 'todo-2', title: 'Second', completed: false },
     ];
@@ -118,13 +175,15 @@ describe('Ontahi todo portability example', () => {
       kind: 'invocation-result',
       result: { ok: true, kind: 'success' },
     });
-    expect(todoDataset.Todo?.filter(todo => todo.completed).map(todo => todo.id)).toEqual(
-      completedIds,
-    );
+    expect(
+      getTodoDataset()
+        .Todo?.filter(todo => todo.completed)
+        .map(todo => todo.id),
+    ).toEqual(completedIds);
   });
 
   it('starts and completes the durable operation through the same transport', async () => {
-    todoDataset.Todo = [
+    getTodoDataset().Todo = [
       { id: 'todo-1', title: 'First', completed: false },
       { id: 'todo-2', title: 'Second', completed: false },
     ];

@@ -4,11 +4,11 @@ import { duplicateTaskRunFailure, missingTaskRunFailure } from './failures.js';
 import { normalizeTaskTrigger, taskTriggerActorMatches } from './triggers.js';
 import type {
   TaskActor,
+  TaskRunIdentity,
   TaskRunListItem,
-  TaskRunRef,
   TaskRunSource,
-  TaskRunStore,
   TaskSnapshot,
+  TaskStorage,
 } from './types.js';
 
 const now = () => new Date().toISOString();
@@ -45,9 +45,9 @@ const getCreatedSortKey = (source: TaskRunSource) => source.createdAt ?? source.
 const compareByCreatedAtDescending = (left: TaskRunSource, right: TaskRunSource) =>
   getCreatedSortKey(right).localeCompare(getCreatedSortKey(left));
 
-export const createInMemoryTaskRunStore = (): TaskRunStore => {
+export const createInMemoryTaskStorage = (): TaskStorage => {
   const runs = new Map<string, TaskRunSource>();
-  const keyOf = (ref: Pick<TaskRunRef, 'taskId' | 'runId'>) => `${ref.taskId}:${ref.runId}`;
+  const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
 
   return {
     create: input =>

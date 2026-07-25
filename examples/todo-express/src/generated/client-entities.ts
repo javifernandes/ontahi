@@ -10,10 +10,9 @@ import {
   value,
 } from '@ontahi/core/data-graph';
 
-import { TodoEntity } from '../todo-schema.js';
+import { Todo as TodoSchema } from '../todo.js';
 
-export const Todo = defineClientEntity(TodoEntity, {
-
+export const Todo = defineClientEntity(TodoSchema, {
   domainOperations: {
     list: defineClientDomainOperation({
       authority: 'server',
@@ -22,7 +21,7 @@ export const Todo = defineClientEntity(TodoEntity, {
         query: [() => 'all'],
       },
       input: graphSchema.void(),
-      output: graphSchema.array(TodoEntity),
+      output: graphSchema.array(TodoSchema),
     }),
     create: defineClientDomainOperation({
       authority: 'server',
@@ -30,8 +29,8 @@ export const Todo = defineClientEntity(TodoEntity, {
       bridge: {
         invalidate: [['Todo']],
       },
-      input: graphSchema.pick(TodoEntity, ['id', 'title']).named('CreateTodoInput'),
-      output: TodoEntity,
+      input: graphSchema.pick(TodoSchema, ['id', 'title']).named('CreateTodoInput'),
+      output: TodoSchema,
     }),
     complete: defineClientDomainOperation({
       authority: 'server',
@@ -40,8 +39,16 @@ export const Todo = defineClientEntity(TodoEntity, {
         invalidate: [['Todo']],
       },
       input: graphSchema.object({
-        todos: graphSchema.selection(TodoEntity, { cardinality: 'many' }),
+        todos: graphSchema.selection(TodoSchema, { cardinality: 'many' }),
       }),
+    }),
+    deleteAll: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['Todo']],
+      },
+      input: graphSchema.void(),
     }),
     completeAll: defineClientDomainOperation({
       authority: 'server',
@@ -51,8 +58,8 @@ export const Todo = defineClientEntity(TodoEntity, {
       },
       input: graphSchema.void(),
       output: value('CompleteAllOutput', {
-  completed: field.nonNegativeInteger(),
-}),
+        completed: field.nonNegativeInteger(),
+      }),
       durable: {
         runtime: 'in-process',
       },

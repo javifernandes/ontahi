@@ -71,6 +71,11 @@
       "import": "./dist/data-graph/index.js",
       "require": "./dist/data-graph/index.js"
     },
+    "./entity": {
+      "types": "./dist/runtime/server/entity.d.ts",
+      "import": "./dist/runtime/server/entity.js",
+      "require": "./dist/runtime/server/entity.js"
+    },
     "./model/validation": {
       "types": "./dist/model/validation.d.ts",
       "import": "./dist/model/validation.js",

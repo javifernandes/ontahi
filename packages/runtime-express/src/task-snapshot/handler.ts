@@ -1,8 +1,8 @@
-import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/server/tasks';
 import type { Request, RequestHandler } from 'express';
 
 export type CreateExpressTaskSnapshotHandlerOptions = {
-  getSnapshot: (ref: Pick<TaskRunRef, 'taskId' | 'runId'>) => Promise<TaskSnapshot>;
+  getSnapshot: (ref: TaskRunIdentity) => Promise<TaskSnapshot>;
   reportError?: (error: unknown, request: Request) => void;
 };
 

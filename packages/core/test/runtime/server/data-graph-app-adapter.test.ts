@@ -86,4 +86,21 @@ describe('data graph architecture adapter', () => {
       }),
     );
   });
+
+  it('exposes reflected reads from the configured default storage', () => {
+    const readEntityData = vi.fn();
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      never,
+      { authority: 'viewer' },
+      { authority: 'system' }
+    >({
+      defaultStorage: {
+        createRuntime: () => createRuntime('default'),
+        readEntityData,
+      },
+    });
+
+    expect(graph.readEntityData).toBe(readEntityData);
+  });
 });

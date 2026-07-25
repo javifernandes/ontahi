@@ -1,5 +1,5 @@
 export {
-  createSupabaseTaskRunStore,
-  type CreateSupabaseTaskRunStoreOptions,
-  type SupabaseTaskRunStoreClient,
+  createSupabaseTaskStorage,
+  type CreateSupabaseTaskStorageOptions,
+  type SupabaseTaskStorageClient,
 } from './task-run-store.js';

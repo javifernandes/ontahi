@@ -112,6 +112,33 @@ describe('server data-graph runtime concern', () => {
     }
   });
 
+  it('implicitly injects the configured architecture graph into every layer', async () => {
+    const graph = {
+      withRuntime: () =>
+        withDataGraph<{ tenant: string }, { key: string }>({
+          createRuntime: runtime => ({
+            key: `${runtime.scope}:${runtime.input.tenant}`,
+          }),
+        }),
+    };
+
+    architecture({ graph });
+
+    try {
+      const readRuntime = layer('features.books').effect(
+        'readRuntime',
+        (input: { tenant: string }) =>
+          Effect.sync(() => getRequiredDataGraphRuntime<{ key: string }>()),
+      );
+
+      await expect(readRuntime({ tenant: 'bookops' })).resolves.toEqual({
+        key: 'features.books.readRuntime:bookops',
+      });
+    } finally {
+      architecture({});
+    }
+  });
+
   it('can inject a graph runtime into direct server effects through architecture defaults', async () => {
     architecture({
       layers: {

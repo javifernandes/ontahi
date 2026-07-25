@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import { useMemo } from 'react';
 
 import {
@@ -39,9 +39,7 @@ export const createNextActionOperationBridgeAdapter = (
   bridgeAction: RunDomainOperationBridgeAction,
   options?: {
     checkPermissionAction?: CheckDomainOperationPermissionBridgeAction;
-    getTaskSnapshot?: <TResult = unknown>(
-      ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
-    ) => Promise<TaskSnapshot<TResult>>;
+    getTaskSnapshot?: <TResult = unknown>(ref: TaskRunIdentity) => Promise<TaskSnapshot<TResult>>;
   },
 ): AnyOperationBridgeAdapter => {
   const buildRuntimeAction = <TInput, TData>(operation: BridgedOperationLike<TInput, TData>) =>

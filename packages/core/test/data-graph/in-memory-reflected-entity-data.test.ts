@@ -2,8 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
-  createInMemoryDataGraphRuntime,
-  createInMemoryReflectedEntityDataReader,
+  createInMemoryDataGraphStorage,
   entity,
   field,
   query,
@@ -28,15 +27,15 @@ describe('in-memory reflected entity data', () => {
         { id: 'book-3', title: 'Alphabet', published: true, score: 1 },
       ],
     };
-    const runtime = createInMemoryDataGraphRuntime({ dataset });
-    const reader = createInMemoryReflectedEntityDataReader({
+    const storage = createInMemoryDataGraphStorage({
       entities: [Book],
       dataset,
       pageSizeOptions: [1, 2],
     });
+    const runtime = storage.createRuntime();
 
     await expect(
-      reader.readEntityData({
+      storage.readEntityData({
         entityName: 'Book',
         search: 'alpha',
         filters: [{ field: 'published', operator: 'equals', value: 'true' }],
@@ -69,12 +68,12 @@ describe('in-memory reflected entity data', () => {
     );
 
     await expect(
-      reader.readEntityData({ entityName: 'Book', search: 'revised' }),
+      storage.readEntityData({ entityName: 'Book', search: 'revised' }),
     ).resolves.toMatchObject({
       rows: [{ id: 'book-2', title: 'Beta revised', published: false, score: 2 }],
       totalCount: 1,
     });
-    await expect(reader.readEntityData({ entityName: 'Missing' })).rejects.toThrow(
+    await expect(storage.readEntityData({ entityName: 'Missing' })).rejects.toThrow(
       'Unknown graph entity: Missing',
     );
   });

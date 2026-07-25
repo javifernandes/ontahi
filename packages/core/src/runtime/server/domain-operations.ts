@@ -51,7 +51,7 @@ import type {
   TaskDefinition,
   TaskFailure,
   TaskRunRef,
-  TaskRuntimeAdapterStartOptions,
+  TaskStartOptions,
   TaskStepDefinition,
   TaskSubject,
   TaskTrigger,
@@ -471,7 +471,7 @@ const resolveDurableOperationSubject = <TInput extends OperationInput>(
 type DurableOperationStart = <TInput extends OperationInput>(
   task: TaskDefinition<TInput, unknown>,
   input: TInput,
-  options?: TaskRuntimeAdapterStartOptions,
+  options?: TaskStartOptions,
 ) => Effect.Effect<TaskRunRef, TaskFailure>;
 
 const durableOperationRunnerCache = new WeakMap<object, DomainOperationRunner<any, any, any>>();

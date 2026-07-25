@@ -9,7 +9,7 @@ import {
   type TaskContext,
   type TaskDefinition,
   type TaskFailure,
-  type TaskRunRef,
+  type TaskRunIdentity,
   type TaskRunSource,
   type TaskSnapshot,
 } from '@ontahi/core/runtime/server/tasks';
@@ -132,13 +132,10 @@ export const createVercelWorkflowTaskExecutor = ({
   writeProgressEvent,
   writeResultEvent,
 }: VercelWorkflowTaskExecutorOptions) => {
-  const loadTaskRunSource = (ref: Pick<TaskRunRef, 'taskId' | 'runId'>) =>
-    runTaskEffect(taskRunStore.loadSource(ref));
+  const loadTaskRunSource = (ref: TaskRunIdentity) => runTaskEffect(taskRunStore.loadSource(ref));
 
-  const updateTaskRun = (
-    ref: Pick<TaskRunRef, 'taskId' | 'runId'>,
-    patch: Partial<TaskRunSource>,
-  ) => runTaskEffect(taskRunStore.update(ref, patch));
+  const updateTaskRun = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
+    runTaskEffect(taskRunStore.update(ref, patch));
 
   const writeProgress = async (runId: string, progress: NonNullable<TaskSnapshot['progress']>) => {
     if (!writeProgressEvent) {

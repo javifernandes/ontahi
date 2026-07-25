@@ -32,7 +32,8 @@
     "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix --max-warnings 0"
   },
   "dependencies": {
-    "@ontahi/core": "workspace:*"
+    "@ontahi/core": "workspace:*",
+    "@ontahi/explorer-react": "workspace:*"
   },
   "peerDependencies": {
     "express": ">=4.18 <6"

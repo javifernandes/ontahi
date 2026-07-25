@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { field, value } from '../../../src/data-graph/index.js';
 import {
   architecture,
-  createInMemoryTaskRunStore,
-  createInProcessTaskRuntimeAdapter,
+  createInMemoryTaskStorage,
+  createInProcessTaskExecutor,
+  createInProcessTaskRuntime,
   createSystemTaskTrigger,
   createTaskDefinitionFromDurableDomainOperation,
   createUserTaskTrigger,
@@ -14,6 +15,7 @@ import {
   defineTask,
   defineTaskStep,
   getTaskSnapshot,
+  inProcessTasks,
   normalizeTaskTrigger,
   startTask,
   taskTriggerActorMatches,
@@ -115,14 +117,14 @@ describe('tasks', () => {
 
   it('starts tasks through the configured architecture facade', async () => {
     const sleep = createDeferred();
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: () => sleep.promise,
     });
     const { app } = architecture({
       task: {
-        adapter,
+        runtime: adapter,
       },
     });
     const task = defineTask({
@@ -159,15 +161,63 @@ describe('tasks', () => {
     });
   });
 
+  it('composes task execution and storage as separate architecture capabilities', async () => {
+    const storage = createInMemoryTaskStorage();
+    const { app } = architecture({
+      task: {
+        executor: createInProcessTaskExecutor({
+          createRunId: () => 'composed-run',
+        }),
+        storage,
+      },
+    });
+    const task = defineTask({
+      id: 'demo.composed',
+      run: () => Effect.succeed({ composed: true }),
+    });
+
+    const run = await Effect.runPromise(app.task.start(task, {}));
+
+    expect(run.runId).toBe('composed-run');
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(app.task.getSnapshot(run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { composed: true },
+      });
+    });
+  });
+
+  it('provides an in-process execution and in-memory storage preset', async () => {
+    const { app } = architecture({
+      task: inProcessTasks({
+        createRunId: () => 'preset-run',
+      }),
+    });
+    const task = defineTask({
+      id: 'demo.preset',
+      run: () => Effect.succeed({ preset: true }),
+    });
+
+    const run = await Effect.runPromise(app.task.start(task, {}));
+
+    expect(run.runId).toBe('preset-run');
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(app.task.getSnapshot(run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { preset: true },
+      });
+    });
+  });
+
   it('validates and stores parsed task input before starting a run', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const { app } = architecture({
       task: {
-        adapter,
+        runtime: adapter,
       },
     });
     const task = defineTask({
@@ -199,14 +249,14 @@ describe('tasks', () => {
   });
 
   it('validates step input before running the step', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const { app } = architecture({
       task: {
-        adapter,
+        runtime: adapter,
       },
     });
     const countedStep = defineTaskStep<{ count: number }, { count: number }>({
@@ -238,9 +288,9 @@ describe('tasks', () => {
   });
 
   it('validates progress snapshots before storing them', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const task = defineTask({
@@ -268,9 +318,9 @@ describe('tasks', () => {
   });
 
   it('validates step output before returning it to the task', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const countedStep = defineTaskStep({
@@ -299,9 +349,9 @@ describe('tasks', () => {
   });
 
   it('validates final task output before completing the run', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const task = defineTask({
@@ -325,14 +375,14 @@ describe('tasks', () => {
   });
 
   it('binds task methods onto an entity-facing API', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const { app } = architecture({
       task: {
-        adapter,
+        runtime: adapter,
       },
     });
     const task = defineTask({
@@ -353,9 +403,9 @@ describe('tasks', () => {
   });
 
   it('binds configured tasks declared on graph entities', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const graph = {
@@ -364,7 +414,7 @@ describe('tasks', () => {
     const { app } = architecture({
       graph,
       task: {
-        adapter,
+        runtime: adapter,
       },
     });
     const task = defineTask({
@@ -390,7 +440,7 @@ describe('tasks', () => {
     });
   });
 
-  it('fails clearly when no task adapter is configured', async () => {
+  it('fails clearly when task execution is not configured', async () => {
     const { app } = architecture({});
     const task = defineTask({
       id: 'demo.say-hello',
@@ -398,13 +448,13 @@ describe('tasks', () => {
     });
 
     await expect(Effect.runPromise(Effect.flip(app.task.start(task, {})))).resolves.toMatchObject({
-      reason: 'task_adapter_missing',
-      message: 'No task runtime adapter is configured for this architecture.',
+      reason: 'task_runtime_missing',
+      message: 'Task execution requires both an executor and storage.',
     });
   });
 
   it('creates, reads, and patches in-memory task snapshots without changing identity', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
 
     const created = await Effect.runPromise(
       store.create({
@@ -453,7 +503,7 @@ describe('tasks', () => {
   });
 
   it('separates public task snapshots from engine task run sources', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
     const trigger = {
       cause: 'user_request',
       actor: {
@@ -554,7 +604,7 @@ describe('tasks', () => {
   });
 
   it('lists recent in-memory task runs as summaries without task inputs', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
 
     await Effect.runPromise(
       store.create({
@@ -636,7 +686,7 @@ describe('tasks', () => {
   });
 
   it('lists recent in-memory task runs scoped to an actor', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
 
     await Effect.runPromise(
       store.create({
@@ -676,7 +726,7 @@ describe('tasks', () => {
   });
 
   it('returns task failures when updating unknown in-memory runs', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
 
     await expect(
       Effect.runPromise(
@@ -700,9 +750,9 @@ describe('tasks', () => {
 
   it('runs a task through the in-process adapter and updates snapshots', async () => {
     const sleep = createDeferred();
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: () => sleep.promise,
     });
     const task = defineTask({
@@ -754,9 +804,9 @@ describe('tasks', () => {
   });
 
   it('passes trigger and subject metadata through in-process task execution', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const trigger = {
@@ -822,9 +872,9 @@ describe('tasks', () => {
   });
 
   it('uses configured run id generation in the in-process adapter', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
       createRunId: () => 'generated-run',
     });
@@ -848,9 +898,9 @@ describe('tasks', () => {
   });
 
   it('marks in-process task runs as failed when the task effect fails', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const task = defineTask({
@@ -877,9 +927,9 @@ describe('tasks', () => {
 
   it('exposes a portable task step boundary in task context', async () => {
     const calls: string[] = [];
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const prepareHelloStep = defineTaskStep({
@@ -923,9 +973,9 @@ describe('tasks', () => {
   });
 
   it('marks in-process task runs as failed when a step is missing', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const task = defineTask({
@@ -1004,7 +1054,7 @@ describe('tasks', () => {
   });
 
   it('returns task failures for unknown runs', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
 
     await expect(
       Effect.runPromise(
@@ -1022,7 +1072,7 @@ describe('tasks', () => {
   });
 
   it('rejects duplicate task run ids instead of overwriting snapshots', async () => {
-    const store = createInMemoryTaskRunStore();
+    const store = createInMemoryTaskStorage();
 
     const first = await Effect.runPromise(
       store.create({
@@ -1062,9 +1112,9 @@ describe('tasks', () => {
   });
 
   it('surfaces duplicate caller-provided run ids through the in-process adapter', async () => {
-    const store = createInMemoryTaskRunStore();
-    const adapter = createInProcessTaskRuntimeAdapter({
-      store,
+    const store = createInMemoryTaskStorage();
+    const adapter = createInProcessTaskRuntime({
+      storage: store,
       sleep: async () => {},
     });
     const task = defineTask({

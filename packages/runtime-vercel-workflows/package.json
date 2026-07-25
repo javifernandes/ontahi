@@ -11,10 +11,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
-    "./adapter": {
-      "types": "./dist/adapter.d.ts",
-      "import": "./dist/adapter.js",
-      "require": "./dist/adapter.js"
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js",
+      "require": "./dist/runtime.js"
     },
     "./executor": {
       "types": "./dist/executor.d.ts",

@@ -3,13 +3,13 @@ import 'server-only';
 import {
   createOperationFailure,
   type TaskFailure,
-  type TaskRuntimeAdapter,
+  type TaskRuntime,
   validateTaskInput,
 } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { start } from 'workflow/api';
 
-import type { VercelWorkflowTaskRuntimeAdapterOptions } from './contracts.js';
+import type { VercelWorkflowTaskRuntimeOptions } from './contracts.js';
 import { mapVercelWorkflowStatus, reconcileTaskSnapshot } from './reconciliation.js';
 
 const now = () => new Date().toISOString();
@@ -23,11 +23,11 @@ const defaultCreateRunId = () =>
   globalThis.crypto?.randomUUID?.() ??
   `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 
-export const createVercelWorkflowTaskRuntimeAdapter = ({
+export const createVercelWorkflowTaskRuntime = ({
   taskRunStore,
   resolveWorkflow,
   createRunId = defaultCreateRunId,
-}: VercelWorkflowTaskRuntimeAdapterOptions): TaskRuntimeAdapter => ({
+}: VercelWorkflowTaskRuntimeOptions): TaskRuntime => ({
   start: (task, input, options) =>
     Effect.gen(function* () {
       const parsedInput = yield* validateTaskInput(task, input);

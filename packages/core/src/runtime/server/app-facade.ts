@@ -81,8 +81,9 @@ import { toOperationInvocationResult, type OperationInvocationResult } from './o
 import { combineRequirements } from './requirements.js';
 import { runServerEffect } from './runtime-effect.js';
 import {
-  createInMemoryTaskRunStore,
-  createInProcessTaskRuntimeAdapter,
+  createInMemoryTaskStorage,
+  createInProcessTaskExecutor,
+  createInProcessTaskRuntime,
   createConfiguredTaskFacade,
   defineTask,
   defineTaskStep,
@@ -90,6 +91,7 @@ import {
   type TaskFailure,
   type TaskRunRef,
   startTask,
+  inProcessTasks,
 } from './tasks.js';
 import { failIfError, fromNullable, fromValueOrPromise } from './values.js';
 
@@ -299,15 +301,14 @@ const createTaskFacadeBase = <TEvent, TDefinition extends ArchitectureDefinition
 
   return {
     ...configured,
-    createInMemoryRunStore: createInMemoryTaskRunStore,
-    createInMemoryTaskRunStore,
-    createInProcessRuntimeAdapter: createInProcessTaskRuntimeAdapter,
-    createInProcessTaskRuntimeAdapter,
+    createInMemoryTaskStorage,
+    createInProcessTaskExecutor,
+    createInProcessTaskRuntime,
+    inProcessTasks,
     define: defineTask,
     defineTask,
     defineStep: defineTaskStep,
     defineTaskStep,
-    startWithAdapter: startTask,
     startTask,
   };
 };
