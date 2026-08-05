@@ -8,6 +8,14 @@ import {
   type AnyEntityDefinition,
 } from '@ontahi/core/data-graph';
 
+export {
+  applySupabaseDataGraphMappings,
+  supabaseNaming,
+  type ApplySupabaseDataGraphMappingsOptions,
+  type SupabaseDataGraphMappingOverrides,
+  type SupabaseDataGraphNaming,
+} from './mapping.js';
+
 export type SupabaseFieldPredicate =
   | { operator: 'eq'; fieldName: string; value: unknown }
   | { operator: 'in'; fieldName: string; values: readonly unknown[] }

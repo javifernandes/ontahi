@@ -1,88 +1,264 @@
 import type {
+  AnyEntityDefinition,
   DataGraphDefaultStorage,
   DataGraphExecutionRuntime,
   GraphApi,
 } from '../../data-graph/index.js';
 
-import type { ArchitectureAppFacade } from './app-facade.js';
+import type { ArchitectureAppFacade, RegisteredArchitecture } from './app-facade.js';
 import { defineOntahiApplication, type OntahiApplication } from './application.js';
 import { architecture } from './architecture-registry.js';
+import type { ArchitectureDefinition } from './architecture-types.js';
 import { createDataGraphArchitectureAdapter } from './data-graph-app-adapter.js';
 import {
   bindOntahiEntity,
+  getOntahiSemanticEntities,
+  isOntahiEntityDeclaration,
+  prepareOntahiEntity,
   type AnyOntahiEntityDeclaration,
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
 import type { TaskConfig } from './tasks.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
-type OntahiGraphFacade = ReturnType<
-  typeof createDataGraphArchitectureAdapter<unknown, any, any, any, AnyDataGraphRuntime>
+type RuntimeError<TRuntime> =
+  TRuntime extends DataGraphExecutionRuntime<infer TError, any, any, any> ? TError : never;
+type RuntimeReadOptions<TRuntime> =
+  TRuntime extends DataGraphExecutionRuntime<any, infer TReadOptions, any, any>
+    ? TReadOptions
+    : never;
+type RuntimeCommandOptions<TRuntime> =
+  TRuntime extends DataGraphExecutionRuntime<any, any, infer TCommandOptions, any>
+    ? TCommandOptions
+    : never;
+type StorageRuntime<TStorage> =
+  TStorage extends DataGraphDefaultStorage<infer TRuntime> ? TRuntime : never;
+type OntahiGraphFacade<TRuntime extends AnyDataGraphRuntime> = ReturnType<
+  typeof createDataGraphArchitectureAdapter<
+    unknown,
+    RuntimeError<TRuntime>,
+    RuntimeReadOptions<TRuntime>,
+    RuntimeCommandOptions<TRuntime>,
+    TRuntime
+  >
 >;
-type OntahiRuntimeDefinition = {
-  graph: OntahiGraphFacade;
+type OntahiOwnedRuntimeDefinition<TRuntime extends AnyDataGraphRuntime> = {
+  graph: OntahiGraphFacade<TRuntime>;
   task: TaskConfig;
 };
 
-export type OntahiApplicationBuilder = ArchitectureAppFacade<unknown, OntahiRuntimeDefinition>;
+export type OntahiCapabilities = Omit<ArchitectureDefinition<any>, 'graph' | 'task'> & {
+  graph?: never;
+  task?: never;
+};
+
+type OntahiCapabilityEvent<TCapabilities> =
+  TCapabilities extends ArchitectureDefinition<infer TEvent> ? TEvent : unknown;
+
+type OntahiRuntimeDefinition<
+  TCapabilities extends OntahiCapabilities,
+  TRuntime extends AnyDataGraphRuntime,
+> = Omit<TCapabilities, 'graph' | 'task'> & OntahiOwnedRuntimeDefinition<TRuntime>;
+
+export type OntahiApplicationBuilder<
+  TCapabilities extends OntahiCapabilities = {},
+  TRuntime extends AnyDataGraphRuntime = AnyDataGraphRuntime,
+> = ArchitectureAppFacade<
+  OntahiCapabilityEvent<TCapabilities>,
+  OntahiRuntimeDefinition<TCapabilities, TRuntime>
+>;
+
+export type OntahiBinderApp<
+  TCapabilities extends OntahiCapabilities = {},
+  TRuntime extends AnyDataGraphRuntime = AnyDataGraphRuntime,
+> = OntahiApplicationBuilder<TCapabilities, TRuntime>;
 
 export type OntahiOptions<
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
+  TCapabilities extends OntahiCapabilities = {},
 > = {
   storage: TStorage;
   tasks?: TaskConfig;
-  entities: TEntities | ((app: OntahiApplicationBuilder) => TEntities);
+  capabilities?: TCapabilities;
+  entities:
+    | TEntities
+    | ((app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>) => TEntities);
 };
 
-type BoundEntityRecord<TEntities> = TEntities extends readonly AnyOntahiEntityDeclaration[]
+type BoundEntityRecord<
+  TEntities,
+  TRuntime extends AnyDataGraphRuntime,
+> = TEntities extends readonly AnyOntahiEntityDeclaration[]
   ? {
-      [TEntity in TEntities[number] as TEntity['name']]: BoundOntahiEntityDeclaration<TEntity>;
+      [TEntity in TEntities[number] as TEntity['name']]: BoundOntahiEntityDeclaration<
+        TEntity,
+        TRuntime
+      >;
     }
   : TEntities extends Record<string, object>
     ? TEntities
     : never;
 
+type BoundEntityRegistrationRecord<
+  TEntities extends Record<string, object>,
+  TRuntime extends AnyDataGraphRuntime,
+> = {
+  [TName in keyof TEntities]: TEntities[TName] extends AnyOntahiEntityDeclaration
+    ? BoundOntahiEntityDeclaration<TEntities[TName], TRuntime>
+    : TEntities[TName];
+};
+
 export type ComposedOntahiApplication<
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
-> = OntahiApplication<GraphApi<BoundEntityRecord<TEntities>>> & {
+  TCapabilities extends OntahiCapabilities = {},
+> = OntahiApplication<GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>> & {
+  architecture: RegisteredArchitecture<
+    OntahiCapabilityEvent<TCapabilities>,
+    OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
+  >;
   storage: TStorage;
+  app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>;
+  registerEntity: <TDeclaration extends AnyOntahiEntityDeclaration>(
+    declaration: TDeclaration,
+  ) => BoundOntahiEntityDeclaration<TDeclaration, StorageRuntime<TStorage>>;
+  registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
+    entity: TEntity,
+    boundEntity: TBoundEntity,
+  ) => TBoundEntity;
+  registerBoundEntities: <TBoundEntities extends Record<string, object>>(
+    boundEntities: TBoundEntities,
+  ) => GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>>;
 };
 
 export const ontahi = <
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   const TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
+  const TCapabilities extends OntahiCapabilities = {},
 >(
-  options: OntahiOptions<TStorage, TEntities>,
-): ComposedOntahiApplication<TStorage, TEntities> => {
+  options: OntahiOptions<TStorage, TEntities, TCapabilities>,
+): ComposedOntahiApplication<TStorage, TEntities, TCapabilities> => {
   const graph = createDataGraphArchitectureAdapter<unknown, any, any, any, AnyDataGraphRuntime>({
     defaultStorage: options.storage,
   });
-  const registered = architecture({
+  const definition = {
+    ...options.capabilities,
     graph,
     task: options.tasks ?? {},
-  });
+  } as OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>;
+  const registered = architecture(definition);
   const declaredEntities =
     typeof options.entities === 'function' ? options.entities(registered.app) : options.entities;
+  if (Array.isArray(declaredEntities)) {
+    declaredEntities.forEach(prepareOntahiEntity);
+  }
+  const semanticDeclarations = Array.isArray(declaredEntities)
+    ? declaredEntities.flatMap(getOntahiSemanticEntities)
+    : [];
+  if (Array.isArray(declaredEntities)) {
+    options.storage.bindEntities?.(semanticDeclarations);
+  }
+  const entityCommands = Object.fromEntries(
+    semanticDeclarations.map(entity => [entity.name, graph.defineEntity(entity)]),
+  );
+  const bindingContext = { entities: entityCommands };
   const entities = (
     Array.isArray(declaredEntities)
       ? Object.fromEntries(
           declaredEntities.map(declaration => [
             declaration.name,
-            bindOntahiEntity(declaration, registered.app),
+            bindOntahiEntity(
+              declaration,
+              registered.app as unknown as OntahiApplicationBuilder,
+              bindingContext,
+            ),
           ]),
         )
       : declaredEntities
-  ) as BoundEntityRecord<TEntities>;
+  ) as BoundEntityRecord<TEntities, StorageRuntime<TStorage>>;
+  const entityRegistry = entities as Record<string, object>;
+  const semanticEntities: AnyEntityDefinition[] = semanticDeclarations;
+  const application = defineOntahiApplication({
+    entities,
+    runtime: registered.app,
+  });
 
-  return Object.assign(
-    defineOntahiApplication({
-      entities,
-      runtime: registered.app,
-    }),
-    {
-      storage: options.storage,
-    },
-  );
+  const registerEntity = <TDeclaration extends AnyOntahiEntityDeclaration>(
+    declaration: TDeclaration,
+  ): BoundOntahiEntityDeclaration<TDeclaration, StorageRuntime<TStorage>> => {
+    if (entityRegistry[declaration.name]) {
+      throw new Error(`Entity ${declaration.name} is already registered.`);
+    }
+    prepareOntahiEntity(declaration);
+    semanticEntities.push(...getOntahiSemanticEntities(declaration));
+    options.storage.bindEntities?.(semanticEntities);
+    getOntahiSemanticEntities(declaration).forEach(entity => {
+      entityCommands[entity.name] = graph.defineEntity(entity);
+    });
+    const bound = bindOntahiEntity(
+      declaration,
+      registered.app as unknown as OntahiApplicationBuilder,
+      bindingContext,
+    );
+    entityRegistry[declaration.name] = bound;
+    return bound as BoundOntahiEntityDeclaration<TDeclaration, StorageRuntime<TStorage>>;
+  };
+  const registerBoundEntity = <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
+    entity: TEntity,
+    boundEntity: TBoundEntity,
+  ): TBoundEntity => {
+    if (entityRegistry[entity.name]) {
+      throw new Error(`Entity ${entity.name} is already registered.`);
+    }
+    semanticEntities.push(entity);
+    options.storage.bindEntities?.(semanticEntities);
+    entityRegistry[entity.name] = boundEntity;
+    return boundEntity;
+  };
+  const registerBoundEntities = <TBoundEntities extends Record<string, object>>(
+    boundEntities: TBoundEntities,
+  ): GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>> => {
+    const nextSemanticEntities: AnyEntityDefinition[] = [];
+
+    Object.entries(boundEntities).forEach(([registryName, boundEntity]) => {
+      const existing = entityRegistry[registryName];
+      if (existing) {
+        if (isOntahiEntityDeclaration(boundEntity) && boundEntity.name === registryName) {
+          return;
+        }
+        if (existing !== boundEntity) {
+          throw new Error(`Entity registration ${registryName} already exists.`);
+        }
+        return;
+      }
+
+      entityRegistry[registryName] = boundEntity;
+      if (
+        'name' in boundEntity &&
+        typeof boundEntity.name === 'string' &&
+        'fields' in boundEntity
+      ) {
+        nextSemanticEntities.push(boundEntity as AnyEntityDefinition);
+      }
+    });
+
+    if (nextSemanticEntities.length > 0) {
+      semanticEntities.push(...nextSemanticEntities);
+      options.storage.bindEntities?.(semanticEntities);
+    }
+
+    return application.graph as unknown as GraphApi<
+      BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>
+    >;
+  };
+
+  return Object.assign(application, {
+    app: registered.app,
+    architecture: registered,
+    registerBoundEntities,
+    registerBoundEntity,
+    registerEntity,
+    storage: options.storage,
+  });
 };

@@ -135,6 +135,7 @@ const executeRelatedRootRead = <TResult>(
     spec.target.root,
     spec.sourceEntity,
     spec.relationName,
+    spec.relationOwner,
   );
   const sourceEntityRows = executeEntityRows(spec.source, dataset);
   const sourceRows =
@@ -197,6 +198,7 @@ const countRead = <TParams, TResult>(
     queryOrView.target.root,
     queryOrView.sourceEntity,
     queryOrView.relationName,
+    queryOrView.relationOwner,
   );
   const sourceValues = uniqueNonNullValues(
     executeEntityRows(queryOrView.source, dataset),

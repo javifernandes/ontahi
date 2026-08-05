@@ -178,6 +178,43 @@ describe('relation-root graph reads', () => {
     });
   });
 
+  it('uses a relation declared by the source entity for reverse traversal', () => {
+    const Label = entity('Label', {
+      id: field.id(),
+      bookId: field.id(),
+    });
+    const Book = entity('Book', {
+      id: field.id(),
+    }).hasMany('labels', Label, { via: 'bookId' });
+    const runtime = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      stream: vi.fn(),
+      runCommand: vi.fn(),
+    } as unknown as DataGraphExecutionRuntime;
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const Books = api.bindSelectionEntity(Book);
+    const Labels = api.bindSelectionEntity(Label);
+
+    expect(
+      Labels.relatedTo(
+        Books.where(book => book.id.eq('book-1')),
+        {
+          through: 'labels',
+        },
+      ).build(),
+    ).toMatchObject({
+      kind: 'related-root-read',
+      relationName: 'labels',
+      relationOwner: 'source',
+      sourceEntity: Book,
+      target: {
+        root: Label,
+      },
+    });
+  });
+
   it('detects relation builders in selection shapes and materializes flat selections', () => {
     const { BookCollaboratorWithProfile, BookWithCollaborators } = defineAudienceGraph();
     const nestedRelationSelection = query(BookWithCollaborators)
@@ -238,7 +275,7 @@ describe('relation-root graph reads', () => {
         Profile,
         'collaborators' as keyof typeof BookWithCollaborators.relations & string,
       ),
-    ).toThrow('Relation Book.collaborators does not connect to source entity Profile.');
+    ).toThrow('Relation Book.collaborators does not connect Book to Profile.');
     expect(isRelatedRootReadSpec({ kind: 'query' })).toBe(false);
     expect(isRelatedRootReadSpec(null)).toBe(false);
   });

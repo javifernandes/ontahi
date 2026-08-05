@@ -32,11 +32,21 @@ import type {
   ResolvedDomainOperationDeclaration,
 } from './domain-operations.js';
 import type { LayerConcernRuntime } from './layer-types.js';
+import {
+  bindRuntimeValueRefs,
+  type BoundRuntimeValueRefs,
+  type RuntimeValueRefDeclarations,
+} from './operation/value-ref.js';
 import type { TaskDeclarations, TaskMethods } from './tasks.js';
 
 type EntityWithTaskMethods<TEntity, TTasks extends TaskDeclarations> = keyof TTasks extends never
   ? TEntity
   : TEntity & TaskMethods<TTasks> & { tasks: TaskMethods<TTasks>; taskDefinitions: TTasks };
+
+type SiblingDomainOperations = Record<
+  string,
+  ResolvedDomainOperationDeclaration<any, any, any, any>
+>;
 
 type ConfiguredEntityRefOperationInvoke = <
   TOperation extends ResolvedDomainOperationDeclaration<any, any, any, any>,
@@ -201,15 +211,22 @@ export const createDataGraphArchitectureAdapter = <
     TDomainOperations extends DomainOperationDeclarations = {},
     TLocators extends EntityRefLocatorDeclarations = {},
     TTasks extends TaskDeclarations = {},
+    TValues extends RuntimeValueRefDeclarations = {},
   >(
     entityDefinition: TEntity,
     config?: {
       exposure?: GraphEntityExposure;
       domainOperationDefaults?: DomainOperationDefaults;
       operations?: TOperations | ((entity: AdapterSelectionEntity<TEntity>) => TOperations);
-      domainOperations?: TDomainOperations;
+      domainOperations?:
+        | TDomainOperations
+        | ((context: {
+            values: BoundRuntimeValueRefs<TValues>;
+            operations: SiblingDomainOperations;
+          }) => TDomainOperations);
       locators?: TLocators;
       tasks?: TTasks;
+      values?: TValues;
     },
   ): EntityWithTaskMethods<
     GraphEntityWithOperations<
@@ -223,10 +240,40 @@ export const createDataGraphArchitectureAdapter = <
         ResolveDomainOperations<TEntity['name'], TDomainOperations>,
         EntityRefLocators<TEntity> & TLocators,
         ConfiguredEntityRefOperationInvoke
-      >,
+      > & { values: BoundRuntimeValueRefs<TValues> },
     TTasks
-  > =>
-    defineBoundGraphEntity(entityDefinition, config as never) as unknown as EntityWithTaskMethods<
+  > => {
+    const values = bindRuntimeValueRefs(entityDefinition.name, config?.values ?? ({} as TValues));
+    let resolvedDomainOperations:
+      | ResolveDomainOperations<TEntity['name'], TDomainOperations>
+      | undefined;
+    const operations = new Proxy(
+      {},
+      {
+        get: (_target, name) => {
+          if (!resolvedDomainOperations) {
+            throw new Error(
+              `Domain operation ${entityDefinition.name}.${String(name)} cannot be read while ${entityDefinition.name} is still binding.`,
+            );
+          }
+          return resolvedDomainOperations[name as keyof typeof resolvedDomainOperations];
+        },
+      },
+    ) as SiblingDomainOperations;
+    const domainOperations =
+      typeof config?.domainOperations === 'function'
+        ? config.domainOperations({ values, operations })
+        : config?.domainOperations;
+    const bound = defineBoundGraphEntity(entityDefinition, {
+      ...config,
+      domainOperations,
+    } as never);
+    resolvedDomainOperations = bound.domain as unknown as ResolveDomainOperations<
+      TEntity['name'],
+      TDomainOperations
+    >;
+    const withValues = Object.assign(bound, { values });
+    return withValues as unknown as EntityWithTaskMethods<
       GraphEntityWithOperations<
         TEntity,
         AdapterSelectionEntity<TEntity>,
@@ -238,9 +285,10 @@ export const createDataGraphArchitectureAdapter = <
           ResolveDomainOperations<TEntity['name'], TDomainOperations>,
           EntityRefLocators<TEntity> & TLocators,
           ConfiguredEntityRefOperationInvoke
-        >,
+        > & { values: BoundRuntimeValueRefs<TValues> },
       TTasks
     >;
+  };
 
   function namedGraphRead<TEntity extends AnyEntityDefinition, TResult>(
     name: string,

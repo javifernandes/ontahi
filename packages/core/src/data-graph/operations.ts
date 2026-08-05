@@ -1081,21 +1081,21 @@ export const createGraphEntityFactory =
 export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntity>>(
   definition: GraphApiDefinition<TEntities>,
 ): GraphApi<TEntities> => {
-  const entityEntries = Object.entries(definition.entities) as Array<
-    [keyof TEntities & string, TEntities[keyof TEntities]]
-  >;
-  const entityNames = entityEntries.map(([name]) => name);
-  const entities = entityEntries.map(([, entity]) => entity);
+  const getEntityEntries = () =>
+    Object.entries(definition.entities) as Array<
+      [keyof TEntities & string, TEntities[keyof TEntities]]
+    >;
+  const getEntities = () => getEntityEntries().map(([, entity]) => entity);
 
   const listGraphOperations = () =>
-    entities.flatMap(entity =>
+    getEntities().flatMap(entity =>
       hasGraphOperations(entity)
         ? (Object.values(entity.operations) as unknown as Array<GraphApiGraphOperation<TEntities>>)
         : [],
     );
 
   const listDomainOperations = () =>
-    entities.flatMap(entity =>
+    getEntities().flatMap(entity =>
       hasDomainOperations(entity)
         ? (Object.values(entity.domain) as unknown as Array<GraphApiDomainOperation<TEntities>>)
         : [],
@@ -1127,12 +1127,14 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
     hasDomainOperations(entity) && Object.values(entity.domain).some(isDurableDomainOperation);
 
   const listTaskEntities = () =>
-    entities.filter(entity => hasTaskDefinitions(entity) || hasDurableDomainOperations(entity));
+    getEntities().filter(
+      entity => hasTaskDefinitions(entity) || hasDurableDomainOperations(entity),
+    );
 
   const listTaskDefinitions = () => {
     const seen = new Set<string>();
 
-    return entityEntries.flatMap(([fallbackName, entity]) => {
+    return getEntityEntries().flatMap(([fallbackName, entity]) => {
       const entityName = getGraphApiEntityName(fallbackName, entity);
       const explicitTasks = hasTaskDefinitions(entity)
         ? Object.entries(entity.taskDefinitions).map(([name, task]) => ({
@@ -1164,14 +1166,13 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
     });
   };
 
-  return {
+  const api = {
     ...definition,
-    entityNames,
-    listEntities: () => [...entities],
-    listDomainEntities: () => entities.filter(hasDomainOperations),
-    listGraphOperationEntities: () => entities.filter(hasGraphOperations),
+    listEntities: () => getEntities(),
+    listDomainEntities: () => getEntities().filter(hasDomainOperations),
+    listGraphOperationEntities: () => getEntities().filter(hasGraphOperations),
     listTaskEntities,
-    getEntity: name => definition.entities[name],
+    getEntity: (name: keyof TEntities & string) => definition.entities[name],
     listGraphOperations,
     listDomainOperations,
     listBridgeDomainOperations,
@@ -1179,14 +1180,14 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
     listIngressDomainOperations,
     listHttpIngress,
     listTaskDefinitions,
-    getDomainOperation: operationId =>
+    getDomainOperation: (operationId: string) =>
       listDomainOperations().find(operation => operation.id === operationId),
-    getOperation: operationId =>
+    getOperation: (operationId: string) =>
       listGraphOperations().find(operation => operation.id === operationId) ??
       listDomainOperations().find(operation => operation.id === operationId),
-    getTaskDefinition: taskId => listTaskDefinitions().find(task => task.id === taskId),
+    getTaskDefinition: (taskId: string) => listTaskDefinitions().find(task => task.id === taskId),
     describe: () => ({
-      entities: entityEntries.map(([name, entity]) => ({
+      entities: getEntityEntries().map(([name, entity]) => ({
         name,
         graphExposure: hasGraphMetadata(entity) ? entity.graph.exposure : undefined,
         graphOperationNames: hasGraphOperations(entity) ? Object.keys(entity.operations) : [],
@@ -1234,4 +1235,11 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
       taskDefinitions: listTaskDefinitions(),
     }),
   };
+
+  Object.defineProperty(api, 'entityNames', {
+    enumerable: true,
+    get: () => getEntityEntries().map(([name]) => name),
+  });
+
+  return api as GraphApi<TEntities>;
 };

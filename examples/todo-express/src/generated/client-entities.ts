@@ -5,12 +5,19 @@
 import {
   defineClientDomainOperation,
   defineClientEntity,
+  entity as defineEntitySchema,
   field,
   graphSchema,
   value,
 } from '@ontahi/core/data-graph';
 
-import { Todo as TodoSchema } from '../todo.js';
+export const TodoSchema = defineEntitySchema('Todo', {
+  id: field.id(),
+  title: field.nonEmptyString({ trim: true }),
+  completed: field.boolean(),
+})
+  .locators({ refById: 'id' })
+  .identity('refById');
 
 export const Todo = defineClientEntity(TodoSchema, {
   domainOperations: {

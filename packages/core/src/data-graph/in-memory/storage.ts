@@ -15,17 +15,36 @@ export type InMemoryDataGraphStorage = DataGraphDefaultStorage<
   dataset: InMemoryDataset;
 };
 
-export const createInMemoryDataGraphStorage = (options: {
-  dataset: InMemoryDataset;
-  entities: readonly AnyEntityDefinition[];
-  pageSizeOptions?: InMemoryReflectedEntityDataReaderOptions['pageSizeOptions'];
-}): InMemoryDataGraphStorage => {
-  const reader = createInMemoryReflectedEntityDataReader(options);
+export const createInMemoryDataGraphStorage = (
+  options: {
+    dataset?: InMemoryDataset;
+    entities?: readonly AnyEntityDefinition[];
+    pageSizeOptions?: InMemoryReflectedEntityDataReaderOptions['pageSizeOptions'];
+  } = {},
+): InMemoryDataGraphStorage => {
+  const dataset = options.dataset ?? {};
+  let entities = options.entities;
+  const getEntities = () => {
+    if (!entities) {
+      throw new Error(
+        'In-memory storage has no entities. Pass it to ontahi({ storage, entities }) or provide entities explicitly.',
+      );
+    }
+    return entities;
+  };
 
   return {
     kind: 'in-memory',
-    dataset: options.dataset,
-    createRuntime: () => createInMemoryDataGraphRuntime({ dataset: options.dataset }),
-    readEntityData: reader.readEntityData,
+    dataset,
+    bindEntities: declarations => {
+      entities = declarations;
+    },
+    createRuntime: () => createInMemoryDataGraphRuntime({ dataset }),
+    readEntityData: query =>
+      createInMemoryReflectedEntityDataReader({
+        dataset,
+        entities: getEntities(),
+        pageSizeOptions: options.pageSizeOptions,
+      }).readEntityData(query),
   };
 };

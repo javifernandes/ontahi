@@ -8,8 +8,6 @@ import {
   type TaskStatus,
 } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
-import { getRun } from 'workflow/api';
-import { getWorld } from 'workflow/runtime';
 
 const now = () => new Date().toISOString();
 
@@ -142,6 +140,7 @@ const toDateTime = (value: Date | string | undefined) => {
 const readFailedWorkflowStepError = async (
   workflowRunId: string,
 ): Promise<NonNullable<TaskSnapshot['error']> | undefined> => {
+  const { getWorld } = await import('workflow/runtime');
   const steps = (await getWorld().steps.list({
     runId: workflowRunId,
     resolveData: 'none',
@@ -158,6 +157,7 @@ const readFailedWorkflowStepError = async (
 };
 
 const readVercelWorkflowSnapshot = async (workflowRunId: string): Promise<RuntimeTaskSnapshot> => {
+  const { getRun } = await import('workflow/api');
   const run = getRun<unknown>(workflowRunId);
   const status = mapVercelWorkflowStatus(await run.status);
   const completedAt = await run.completedAt;

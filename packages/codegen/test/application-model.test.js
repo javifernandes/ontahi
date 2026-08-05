@@ -23,6 +23,36 @@ afterEach(async () => {
 });
 
 describe('Ontahi application declaration analysis', () => {
+  it('discovers entities from a transitional application registry batch', () => {
+    const analysis = analyzeGraphApiModule(`
+      import { Note } from './note';
+      import { Notebook } from './notebook';
+
+      export const NotesApplication = application.registerBoundEntities({
+        ...application.graph.entities,
+        Note,
+        Notebook,
+      });
+    `);
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.definition).toMatchObject({
+      apiExportName: 'NotesApplication',
+      entities: [
+        {
+          entityExportName: 'Note',
+          importedIdentifier: 'Note',
+          importPath: './note',
+        },
+        {
+          entityExportName: 'Notebook',
+          importedIdentifier: 'Notebook',
+          importPath: './notebook',
+        },
+      ],
+    });
+  });
+
   it('discovers graph entities without application-specific imports', () => {
     const analysis = analyzeGraphApiModule(`
       import { defineGraphApi } from '@ontahi/core/data-graph';
@@ -124,12 +154,158 @@ describe('Ontahi application declaration analysis', () => {
       entityName: 'Note',
       entityDefinitionName: 'Note',
       entityDefinitionLocalName: 'NoteSchema',
+      entitySchemaProjection: {
+        name: 'Note',
+        fieldsText: '{}',
+      },
       operations: [
         {
           name: 'list',
           authority: 'server',
           exposure: 'bridge',
           outputSchemaText: 'graphSchema.array(NoteSchema)',
+        },
+      ],
+    });
+  });
+
+  it('inlines imported field declarations into browser schema projections', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { SharedFields } from './shared-fields';
+        import { entity } from '@ontahi/core/entity';
+
+        export const Note = entity({
+          name: 'Note',
+          fields: SharedFields,
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+          },
+          operations: ({ operation }) => ({
+            list: operation({
+              bridge: {},
+              run: () => [],
+            }),
+          }),
+        });
+      `,
+      'Note',
+      {
+        sourcePath: '/app/note.ts',
+        resolveImportSource: (_sourcePath, importPath) =>
+          importPath === './shared-fields'
+            ? {
+                sourcePath: '/app/shared-fields.ts',
+                sourceText: `
+                  import { field } from '@ontahi/core/data-graph';
+                  export const SharedFields = {
+                    id: field.id(),
+                    title: field.string(),
+                  };
+                `,
+              }
+            : undefined,
+      },
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition.entitySchemaProjection?.fieldsText).toContain('id: field.id()');
+    expect(analysis?.definition.entitySchemaProjection?.fieldsText).toContain(
+      'title: field.string()',
+    );
+    expect(analysis?.definition.entitySchemaProjection?.fieldsText).not.toBe('SharedFields');
+  });
+
+  it('projects an imported entity schema for a deferred server binder', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { NoteEntity } from './note-schema';
+
+        export const NoteModule = entityModule({
+          entity: NoteEntity,
+          bind: app => app.graph.defineEntity(NoteEntity, {
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+            },
+            domainOperations: {
+              list: app.operation.define({
+                bridge: {},
+                run: () => [],
+              }),
+            },
+          }),
+        });
+      `,
+      'NoteModule',
+      {
+        sourcePath: '/app/note.ts',
+        resolveImportSource: (_sourcePath, importPath) =>
+          importPath === './note-schema'
+            ? {
+                sourcePath: '/app/note-schema.ts',
+                sourceText: `
+                  import { field } from '@ontahi/core/data-graph';
+                  import { entity } from '@ontahi/core/entity';
+
+                  export const NoteEntity = entity({
+                    name: 'Note',
+                    fields: { id: field.id(), title: field.string() },
+                    display: { primary: 'title' },
+                    locators: { byId: 'id' },
+                    identity: 'byId',
+                  });
+                `,
+              }
+            : undefined,
+      },
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Note',
+      entitySchemaProjection: {
+        name: 'Note',
+        fieldsText: '{ id: field.id(), title: field.string() }',
+        displayText: "{ primary: 'title' }",
+        locatorsText: "{ byId: 'id' }",
+        identityText: "'byId'",
+      },
+    });
+  });
+
+  it('projects operations from a transitionally registered bound entity', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        export const Note = application.registerBoundEntity(
+          NoteEntity,
+          app.graph.defineEntity(NoteEntity, {
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+              layer: 'notes',
+            },
+            domainOperations: {
+              list: app.operation.define({
+                run: () => [],
+              }),
+            },
+          }),
+        );
+      `,
+      'Note',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Note',
+      entityDefinitionName: 'NoteEntity',
+      operations: [
+        {
+          name: 'list',
+          authority: 'server',
+          exposure: 'bridge',
         },
       ],
     });
@@ -216,8 +392,8 @@ describe('Ontahi application declaration analysis', () => {
       `
         import { graphSchema, value } from '@ontahi/core/data-graph';
         import { app } from './application';
+        import { BookEntity } from '@/features/books/schema';
 
-        const BookEntity = { name: 'Book' };
         const DeleteBooksInput = value('DeleteBooksInput', {
           books: graphSchema.selection(BookEntity, { cardinality: 'many' }),
         });
@@ -247,6 +423,9 @@ describe('Ontahi application declaration analysis', () => {
         "value('DeleteBooksInput', {\n          books: graphSchema.selection(BookEntity, { cardinality: 'many' }),\n        })",
       outputSchemaText: 'graphSchema.array(BookEntity)',
     });
+    expect(analysis?.definition).toMatchObject({
+      entityDefinitionImportPath: '@/features/books/schema',
+    });
 
     const source = renderGeneratedClientEntityModule({
       entities: [analysis.definition],
@@ -254,11 +433,186 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(source).toContain('  graphSchema,');
     expect(source).toContain('  value,');
-    expect(source).toContain("import { BookEntity } from './schema';");
+    expect(source).toContain("import { BookEntity } from '@/features/books/schema';");
     expect(source).toMatch(
       /input: value\('DeleteBooksInput', \{\s+books: graphSchema\.selection\(BookEntity, \{ cardinality: 'many' \}\),\s+\}\),/,
     );
     expect(source).toContain('output: graphSchema.array(BookEntity),');
+  });
+
+  it('analyzes domain operations declared from bound entity values', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { app } from './application';
+        import { BookEntity } from './schema';
+
+        export const Book = app.graph.defineEntity(BookEntity, {
+          values: {
+            bySlug: valueRef((slug: string) => [slug]),
+          },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'books',
+          },
+          domainOperations: ({ values }) => ({
+            findBySlug: app.operation.define({
+              cache: {
+                value: input => values.bySlug(input.slug),
+              },
+              run: input => input,
+            }),
+          }),
+        });
+      `,
+      'Book',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Book',
+      operations: [
+        {
+          name: 'findBySlug',
+          authority: 'server',
+          exposure: 'bridge',
+        },
+      ],
+    });
+  });
+
+  it('analyzes domain operations behind a deferred entity module binder', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entityModuleWithCapabilities } from '@ontahi/core/runtime/server';
+        import { TaskRunEntity } from './schema';
+
+        const selectCapabilities = app => ({ require: app.require });
+        const defineTaskRunOperations = (app, capabilities) => ({
+          getMine: app.operation.define({
+            bridge: {
+              query: [input => input.taskId],
+            },
+            requires: [capabilities.require.authRequired()],
+            run: input => input,
+          }),
+        });
+        const bindTaskRun = (app, capabilities) =>
+          app.graph.defineEntity(TaskRunEntity, {
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+            },
+            domainOperations: defineTaskRunOperations(app, capabilities),
+          });
+
+        export const TaskRunModule = entityModuleWithCapabilities<
+          typeof TaskRunEntity,
+          ReturnType<typeof bindTaskRun>,
+          {},
+          ReturnType<typeof selectCapabilities>
+        >({
+          entity: TaskRunEntity,
+          capabilities: selectCapabilities,
+          bind: bindTaskRun,
+        });
+      `,
+      'TaskRunModule',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'TaskRun',
+      operations: [
+        {
+          name: 'getMine',
+          authority: 'server',
+          exposure: 'bridge',
+        },
+      ],
+    });
+  });
+
+  it('analyzes a deferred entity module whose binder returns a local entity declaration', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entityModuleWithCapabilities } from '@ontahi/core/runtime/server';
+        import { BookEntity } from './schema';
+
+        const bindBook = app => {
+          const listOperation = app.operation.define({
+            run: () => [],
+          });
+          const Book = app.graph.defineEntity(BookEntity, {
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+            },
+            domainOperations: {
+              list: listOperation,
+            },
+          });
+
+          return Book;
+        };
+
+        export const BookModule = entityModuleWithCapabilities({
+          entity: BookEntity,
+          capabilities: () => ({}),
+          bind: bindBook,
+        });
+      `,
+      'BookModule',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Book',
+      operations: [{ name: 'list' }],
+    });
+  });
+
+  it('analyzes domain operations behind a deferred relation module binder', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { relationModule } from '@ontahi/core/runtime/server';
+        import { BookWithCollaboratorsEntity } from './schema';
+
+        export const BookCollaboratorsModule = relationModule({
+          name: 'BookCollaborators',
+          bind: app =>
+            app.graph.defineRelation(BookWithCollaboratorsEntity, 'collaborators', {
+              entityName: 'BookCollaborators',
+              domainOperationDefaults: {
+                authority: 'server',
+                exposure: 'bridge',
+              },
+              domainOperations: {
+                invite: app.operation.define({
+                  run: input => input,
+                }),
+              },
+            }),
+        });
+      `,
+      'BookCollaboratorsModule',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'BookCollaborators',
+      relation: {
+        sourceName: 'Book',
+        relationName: 'collaborators',
+      },
+      operations: [
+        {
+          name: 'invite',
+          authority: 'server',
+          exposure: 'bridge',
+        },
+      ],
+    });
   });
 
   it('analyzes a filesystem application once into a serializable projection-neutral model', async () => {
@@ -558,6 +912,105 @@ describe('Ontahi application declaration analysis', () => {
     expect(source).toContain('find: defineClientDomainOperation({');
     expect(source).toContain('input: graphSchema.void(),');
     expect(source).not.toContain('input: undefined,');
+  });
+
+  it('renders a self-contained browser entity schema projection', () => {
+    const source = renderGeneratedClientEntityModule({
+      entities: [
+        {
+          entityName: 'Note',
+          entityExportName: 'Note',
+          entityDefinitionName: 'Note',
+          entityDefinitionLocalName: 'NoteSchema',
+          entitySchemaProjection: {
+            name: 'Note',
+            fieldsText: '{ id: field.id(), title: field.string() }',
+            displayText: "{ primary: 'title' }",
+            locatorsText: "{ byId: 'id' }",
+            identityText: "'byId'",
+          },
+          helperTexts: [],
+          operations: [
+            {
+              name: 'find',
+              authority: 'server',
+              exposure: 'bridge',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(source).toContain('entity as defineEntitySchema');
+    expect(source).toContain(
+      "export const NoteSchema = defineEntitySchema('Note', { id: field.id(), title: field.string() })",
+    );
+    expect(source).toContain(".display({ primary: 'title' })");
+    expect(source).toContain(".locators({ byId: 'id' })");
+    expect(source).toContain(".identity('byId')");
+    expect(source).toContain('export const Note = defineClientEntity(NoteSchema');
+    expect(source).not.toContain("from './schema';");
+  });
+
+  it('projects schema-only relation targets before their consumers', () => {
+    const source = renderGeneratedClientEntityModule({
+      entities: [
+        {
+          entityName: 'Book',
+          entityExportName: 'Book',
+          entityDefinitionName: 'Book',
+          entityDefinitionLocalName: 'BookSchema',
+          entitySchemaProjection: {
+            name: 'Book',
+            fieldsText: '{ id: field.id() }',
+            relations: [
+              {
+                kind: 'hasMany',
+                name: 'progress',
+                targetName: 'ReadingProgress',
+                via: 'bookId',
+              },
+            ],
+          },
+          helperTexts: [],
+          operations: [{ name: 'find', authority: 'server', exposure: 'bridge' }],
+        },
+      ],
+      schemaEntities: [
+        {
+          entityName: 'Book',
+          entityDefinitionName: 'Book',
+          entityDefinitionLocalName: 'BookSchema',
+          entitySchemaProjection: {
+            name: 'Book',
+            fieldsText: '{ id: field.id() }',
+            relations: [
+              {
+                kind: 'hasMany',
+                name: 'progress',
+                targetName: 'ReadingProgress',
+                via: 'bookId',
+              },
+            ],
+          },
+        },
+        {
+          entityName: 'ReadingProgress',
+          entityDefinitionName: 'ReadingProgress',
+          entityDefinitionLocalName: 'ReadingProgressSchema',
+          entitySchemaProjection: {
+            name: 'ReadingProgress',
+            fieldsText: '{ bookId: field.id() }',
+          },
+        },
+      ],
+    });
+
+    expect(source.indexOf('export const ReadingProgressSchema')).toBeLessThan(
+      source.indexOf('export const BookSchema'),
+    );
+    expect(source).toContain(".hasMany('progress', ReadingProgressSchema, { via: 'bookId' })");
+    expect(source).not.toContain("from './schema';");
   });
 
   it('renders a lightweight task registry projection', () => {

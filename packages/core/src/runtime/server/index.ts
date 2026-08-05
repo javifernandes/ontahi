@@ -14,21 +14,34 @@ export {
 } from './application.js';
 export {
   ontahi,
+  type OntahiBinderApp,
   type ComposedOntahiApplication,
   type OntahiApplicationBuilder,
+  type OntahiCapabilities,
   type OntahiOptions,
 } from './ontahi.js';
 export {
   bindOntahiEntity,
   entity,
+  entityModule,
+  entityModuleWithCapabilities,
+  getOntahiSemanticEntities,
   isOntahiEntityDeclaration,
+  relation,
+  relationModule,
+  relationModuleWithCapabilities,
   type AnyOntahiEntityDeclaration,
   type BoundOntahiEntity,
   type BoundOntahiEntityDeclaration,
+  type OntahiEntityBindingContext,
+  type OntahiEntityCommandCatalog,
   type OntahiEntityCommands,
   type OntahiEntityConfig,
   type OntahiEntityDeclaration,
+  type OntahiEntityModule,
   type OntahiEntityOperationContext,
+  type OntahiRelationDeclaration,
+  type OntahiRelationModule,
 } from './entity.js';
 export {
   DATA_GRAPH_RUNTIME_RESOURCE_KEY,
@@ -300,4 +313,10 @@ export type {
   OperationRequirement,
   OperationRequirementBindingContext,
 } from './operation/requirement-types.js';
-export type { ServerRuntimeValueRef } from './operation/value-ref.js';
+export { valueRef } from './operation/value-ref.js';
+export type {
+  BoundRuntimeValueRefs,
+  RuntimeValueRefDeclaration,
+  RuntimeValueRefDeclarations,
+  ServerRuntimeValueRef,
+} from './operation/value-ref.js';

@@ -300,6 +300,7 @@ const buildRelatedRootTargetSpec = <TTarget extends AnyEntityDefinition>(
     spec.target.root,
     spec.sourceEntity,
     spec.relationName,
+    spec.relationOwner,
   );
 
   return {
@@ -446,6 +447,7 @@ const executeSupabaseRelatedRootRunEffect = <
       spec.target.root,
       spec.sourceEntity,
       spec.relationName,
+      spec.relationOwner,
     );
     const sourceContext = yield* resolveRelatedRootSourceContextEffect(
       deps,
@@ -490,6 +492,7 @@ const executeSupabaseRelatedRootCountEffect = <
       spec.target.root,
       spec.sourceEntity,
       spec.relationName,
+      spec.relationOwner,
     );
     const sourceEntityRows = yield* resolveRelatedRootEntityRowsEffect(deps, spec.source, options);
 

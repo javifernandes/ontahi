@@ -340,7 +340,7 @@ export type BoundSelectionEntityBase<
       TCommandOptions
     >,
     options: {
-      through: keyof TEntity['relations'] & string;
+      through: (keyof TEntity['relations'] | keyof TSource['relations']) & string;
     },
   ) => RelationRootSelection<
     TEntity,
@@ -528,10 +528,23 @@ export const createGraphSelectionAssembly = <
           TCommandOptions
         >,
         options: {
-          through: keyof TEntity['relations'] & string;
+          through: (keyof TEntity['relations'] | keyof TSource['relations']) & string;
         },
-      ) =>
-        new RelationRootSelection({
+      ) => {
+        const sourceEntity =
+          'root' in sourceSelection ? sourceSelection.root : sourceSelection.entity;
+        const relationOwner =
+          options.through in entityDefinition.relations
+            ? 'target'
+            : options.through in sourceEntity.relations
+              ? 'source'
+              : undefined;
+        if (!relationOwner) {
+          throw new Error(
+            `Relation ${options.through} is not declared by ${entityDefinition.name} or ${sourceEntity.name}.`,
+          );
+        }
+        return new RelationRootSelection({
           targetEntity: entityDefinition as RelationRootTargetEntity<
             TEntity,
             TReadError,
@@ -541,8 +554,10 @@ export const createGraphSelectionAssembly = <
           >,
           sourceSelection,
           relationName: options.through,
+          relationOwner,
           createExecutableGraphRead,
-        }),
+        });
+      },
       pipe: <TValue>(fn: (entity: TEntity) => TValue) => fn(entityDefinition),
     });
 

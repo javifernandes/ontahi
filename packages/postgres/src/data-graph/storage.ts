@@ -1,7 +1,12 @@
 import type { DataGraphDefaultStorage } from '@ontahi/core/data-graph';
 import type { Pool } from 'pg';
 
-import type { PostgresEntityMapping } from './mapping.js';
+import {
+  inferPostgresMappings,
+  type PostgresDataGraphMappingOverrides,
+  type PostgresDataGraphNaming,
+  type PostgresEntityMapping,
+} from './mapping.js';
 import {
   createPostgresReflectedEntityDataReader,
   type PostgresReflectedEntityDataReaderOptions,
@@ -16,18 +21,37 @@ export type PostgresDataGraphStorage = DataGraphDefaultStorage<
 
 export const createPostgresDataGraphStorage = (options: {
   pool: Pick<Pool, 'query'>;
-  mappings: readonly PostgresEntityMapping[];
+  mappings?: readonly PostgresEntityMapping[];
+  naming?: PostgresDataGraphNaming;
+  overrides?: PostgresDataGraphMappingOverrides;
   pageSizeOptions?: PostgresReflectedEntityDataReaderOptions['pageSizeOptions'];
 }): PostgresDataGraphStorage => {
-  const reader = createPostgresReflectedEntityDataReader(options);
+  let mappings = options.mappings;
+  const hasExplicitMappings = Boolean(options.mappings);
+  const getMappings = () => {
+    if (!mappings) {
+      throw new Error(
+        'PostgreSQL storage has no entities. Pass it to ontahi({ storage, entities }) or provide mappings explicitly.',
+      );
+    }
+    return mappings;
+  };
 
   return {
     kind: 'postgres',
+    bindEntities: entities => {
+      if (!hasExplicitMappings) mappings = inferPostgresMappings(entities, options);
+    },
     createRuntime: () =>
       createPostgresDataGraphRuntime({
         pool: options.pool,
-        mappings: options.mappings,
+        mappings: getMappings(),
       }),
-    readEntityData: reader.readEntityData,
+    readEntityData: query =>
+      createPostgresReflectedEntityDataReader({
+        pool: options.pool,
+        mappings: getMappings(),
+        pageSizeOptions: options.pageSizeOptions,
+      }).readEntityData(query),
   };
 };

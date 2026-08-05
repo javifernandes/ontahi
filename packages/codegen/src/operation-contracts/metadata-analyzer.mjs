@@ -119,6 +119,13 @@ const isGraphEntityDefineCall = expression =>
 const isOntahiEntityDeclarationCall = expression =>
   ts.isIdentifier(expression) && expression.text === 'entity';
 
+const isOntahiEntityModuleCall = expression =>
+  ts.isIdentifier(expression) &&
+  (expression.text === 'entityModule' ||
+    expression.text === 'entityModuleWithCapabilities' ||
+    expression.text === 'relationModule' ||
+    expression.text === 'relationModuleWithCapabilities');
+
 const isGraphRelationDefineCall = expression =>
   (ts.isIdentifier(expression) && expression.text === 'defineGraphRelation') ||
   (ts.isPropertyAccessExpression(expression) &&
@@ -1089,6 +1096,90 @@ const parseIngressDefinitions = (operationName, ingressNode) => {
   };
 };
 
+const resolveOperationInitializer = (initializer, declarations, visited = new Set()) => {
+  if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
+    return resolveOperationInitializer(initializer.expression, declarations, visited);
+  }
+
+  if (ts.isCallExpression(initializer) && isDomainOperationDefineCall(initializer.expression)) {
+    return initializer;
+  }
+
+  const resolveIdentifier = identifier => {
+    if (visited.has(identifier.text)) {
+      return undefined;
+    }
+    const declaration = declarations.get(identifier.text);
+    if (!declaration?.initializer) {
+      return undefined;
+    }
+    visited.add(identifier.text);
+    return resolveOperationInitializer(declaration.initializer, declarations, visited);
+  };
+
+  if (ts.isIdentifier(initializer)) {
+    return resolveIdentifier(initializer);
+  }
+
+  if (ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression)) {
+    return resolveIdentifier(initializer.expression);
+  }
+
+  if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+    if (!ts.isBlock(initializer.body)) {
+      return resolveOperationInitializer(initializer.body, declarations, visited);
+    }
+    const returned = initializer.body.statements.find(statement => ts.isReturnStatement(statement));
+    return returned?.expression
+      ? resolveOperationInitializer(returned.expression, declarations, visited)
+      : undefined;
+  }
+
+  return undefined;
+};
+
+const resolveObjectLiteralInitializer = (initializer, declarations, visited = new Set()) => {
+  if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
+    return resolveObjectLiteralInitializer(initializer.expression, declarations, visited);
+  }
+
+  if (ts.isObjectLiteralExpression(initializer)) {
+    return initializer;
+  }
+
+  const resolveIdentifier = identifier => {
+    if (visited.has(identifier.text)) {
+      return undefined;
+    }
+    const declaration = declarations.get(identifier.text);
+    if (!declaration?.initializer) {
+      return undefined;
+    }
+    visited.add(identifier.text);
+    return resolveObjectLiteralInitializer(declaration.initializer, declarations, visited);
+  };
+
+  if (ts.isIdentifier(initializer)) {
+    return resolveIdentifier(initializer);
+  }
+
+  if (ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression)) {
+    return resolveIdentifier(initializer.expression);
+  }
+
+  if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+    if (!ts.isBlock(initializer.body)) {
+      return resolveObjectLiteralInitializer(initializer.body, declarations, visited);
+    }
+    const returned = initializer.body.statements.find(statement => ts.isReturnStatement(statement));
+    return returned?.expression
+      ? resolveObjectLiteralInitializer(returned.expression, declarations, visited)
+      : undefined;
+  }
+
+  return undefined;
+};
+
 const parseOperationDefinition = (
   property,
   declarations,
@@ -1101,9 +1192,9 @@ const parseOperationDefinition = (
   }
 
   const operationName = property.name.text;
-  const initializer = property.initializer;
+  const initializer = resolveOperationInitializer(property.initializer, declarations);
 
-  if (!ts.isCallExpression(initializer) || !isDomainOperationDefineCall(initializer.expression)) {
+  if (!initializer) {
     return undefined;
   }
 
@@ -1372,6 +1463,8 @@ const collectConstDeclarations = sourceFile => {
   return declarations;
 };
 
+const graphInitializerDeclarations = new WeakMap();
+
 const resolveGraphEntityInitializer = (initializer, declarations, visited = new Set()) => {
   if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
     return resolveGraphEntityInitializer(initializer.expression, declarations, visited);
@@ -1386,15 +1479,50 @@ const resolveGraphEntityInitializer = (initializer, declarations, visited = new 
     return initializer;
   }
 
+  if (ts.isCallExpression(initializer) && isOntahiEntityModuleCall(initializer.expression)) {
+    const config = initializer.arguments[0];
+    if (!config || !ts.isObjectLiteralExpression(config)) {
+      return undefined;
+    }
+    const bindProperty = config.properties.find(
+      property =>
+        ts.isPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === 'bind',
+    );
+    return bindProperty && ts.isPropertyAssignment(bindProperty)
+      ? resolveGraphEntityInitializer(bindProperty.initializer, declarations, visited)
+      : undefined;
+  }
+
+  if (
+    ts.isCallExpression(initializer) &&
+    ts.isPropertyAccessExpression(initializer.expression) &&
+    initializer.expression.name.text === 'registerBoundEntity'
+  ) {
+    const boundEntity = initializer.arguments[1];
+    return boundEntity
+      ? resolveGraphEntityInitializer(boundEntity, declarations, visited)
+      : undefined;
+  }
+
   if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
     if (!ts.isBlock(initializer.body)) {
       return resolveGraphEntityInitializer(initializer.body, declarations, visited);
     }
 
+    const scopedDeclarations = new Map([
+      ...declarations,
+      ...collectConstDeclarations(initializer.body),
+    ]);
     const returned = initializer.body.statements.find(statement => ts.isReturnStatement(statement));
-    return returned?.expression
-      ? resolveGraphEntityInitializer(returned.expression, declarations, visited)
+    const resolved = returned?.expression
+      ? resolveGraphEntityInitializer(returned.expression, scopedDeclarations, visited)
       : undefined;
+    if (resolved) {
+      graphInitializerDeclarations.set(resolved, scopedDeclarations);
+    }
+    return resolved;
   }
 
   if (ts.isIdentifier(initializer)) {
@@ -1512,6 +1640,121 @@ const resolveGraphDomainDefinition = (entityExportName, initializer) => {
   };
 };
 
+const resolveProjectionValueText = (node, context, visited = new Set()) => {
+  const expression = unwrapExpression(node);
+  if (!ts.isIdentifier(expression)) {
+    return expression.getText();
+  }
+
+  const visitKey = `${context?.sourcePath ?? context?.sourceFile.fileName}:${expression.text}`;
+  if (!context || visited.has(visitKey)) {
+    return expression.getText();
+  }
+
+  visited.add(visitKey);
+  const declaration = context.declarations.get(expression.text);
+  if (declaration?.initializer) {
+    return resolveProjectionValueText(declaration.initializer, context, visited);
+  }
+
+  const importedContext = resolveImportedSchemaContext(expression.text, context);
+  return importedContext
+    ? resolveProjectionValueText(expression, importedContext, visited)
+    : expression.getText();
+};
+
+const projectEntitySchemaConfig = (configArg, context) => {
+  const propertyText = name => {
+    const property = readObjectLiteralProperty(configArg, name);
+    return property && ts.isPropertyAssignment(property)
+      ? resolveProjectionValueText(property.initializer, context)
+      : undefined;
+  };
+  const name = readStringLiteralObjectProperty(configArg, 'name');
+  const fieldsText = propertyText('fields');
+
+  if (!name || !fieldsText) {
+    return undefined;
+  }
+
+  const relationsProperty = readObjectLiteralProperty(configArg, 'relations');
+  const relations =
+    relationsProperty &&
+    ts.isPropertyAssignment(relationsProperty) &&
+    ts.isObjectLiteralExpression(relationsProperty.initializer)
+      ? relationsProperty.initializer.properties.flatMap(property => {
+          if (
+            !ts.isPropertyAssignment(property) ||
+            !ts.isIdentifier(property.name) ||
+            !ts.isCallExpression(property.initializer) ||
+            !ts.isPropertyAccessExpression(property.initializer.expression) ||
+            !ts.isIdentifier(property.initializer.expression.expression) ||
+            property.initializer.expression.expression.text !== 'relation'
+          ) {
+            return [];
+          }
+          const relationKind = property.initializer.expression.name.text;
+          const [targetArg, optionsArg] = property.initializer.arguments;
+          if (
+            (relationKind !== 'hasMany' && relationKind !== 'belongsTo') ||
+            !targetArg ||
+            !ts.isIdentifier(targetArg)
+          ) {
+            return [];
+          }
+          const via =
+            optionsArg && ts.isObjectLiteralExpression(optionsArg)
+              ? readStringLiteralObjectProperty(optionsArg, 'via')
+              : undefined;
+          return [
+            {
+              name: property.name.text,
+              kind: relationKind,
+              targetName: targetArg.text,
+              ...(context?.importMap.get(targetArg.text)
+                ? { targetImportPath: context.importMap.get(targetArg.text) }
+                : {}),
+              ...(via ? { via } : {}),
+            },
+          ];
+        })
+      : [];
+
+  return {
+    name,
+    fieldsText,
+    ...(propertyText('display') ? { displayText: propertyText('display') } : {}),
+    ...(propertyText('freshness') ? { freshnessText: propertyText('freshness') } : {}),
+    ...(propertyText('locators') ? { locatorsText: propertyText('locators') } : {}),
+    ...(propertyText('identity') ? { identityText: propertyText('identity') } : {}),
+    ...(relations.length > 0 ? { relations } : {}),
+  };
+};
+
+const resolveEntitySchemaProjection = (identifierName, context, visited = new Set()) => {
+  const visitKey = `${context.sourcePath ?? context.sourceFile.fileName}:${identifierName}`;
+  if (!identifierName || visited.has(visitKey)) {
+    return undefined;
+  }
+
+  visited.add(visitKey);
+  const declaration = context.declarations.get(identifierName);
+  if (declaration?.initializer) {
+    const initializer = unwrapExpression(declaration.initializer);
+    if (ts.isCallExpression(initializer) && isOntahiEntityDeclarationCall(initializer.expression)) {
+      const [configArg] = initializer.arguments;
+      return configArg && ts.isObjectLiteralExpression(configArg)
+        ? projectEntitySchemaConfig(configArg, context)
+        : undefined;
+    }
+  }
+
+  const importedContext = resolveImportedSchemaContext(identifierName, context);
+  return importedContext
+    ? resolveEntitySchemaProjection(identifierName, importedContext, visited)
+    : undefined;
+};
+
 const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}) => {
   const strict = options.strict ?? true;
   const declarations = collectConstDeclarations(sourceFile);
@@ -1543,6 +1786,7 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
       if (!initializer) {
         continue;
       }
+      const graphDeclarations = graphInitializerDeclarations.get(initializer) ?? declarations;
 
       const graphDefinition = resolveGraphDomainDefinition(entityExportName, initializer);
       if (graphDefinition.diagnostics) {
@@ -1560,6 +1804,12 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
         unifiedDeclaration,
         entityDefinitionLocalName,
       } = graphDefinition;
+      const entityDefinitionImportPath = entityDefinitionName
+        ? importMap.get(entityDefinitionName)
+        : undefined;
+      const entitySchemaProjection = unifiedDeclaration
+        ? projectEntitySchemaConfig(configArg, schemaContext)
+        : resolveEntitySchemaProjection(entityDefinitionName, schemaContext);
 
       const parsedTasks = parseTaskDefinitions(configArg, importMap);
 
@@ -1571,18 +1821,7 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
       );
       const operationsInitializer =
         domainOperationsProperty && ts.isPropertyAssignment(domainOperationsProperty)
-          ? unifiedDeclaration && ts.isArrowFunction(domainOperationsProperty.initializer)
-            ? ts.isObjectLiteralExpression(domainOperationsProperty.initializer.body)
-              ? domainOperationsProperty.initializer.body
-              : ts.isParenthesizedExpression(domainOperationsProperty.initializer.body) &&
-                  ts.isObjectLiteralExpression(domainOperationsProperty.initializer.body.expression)
-                ? domainOperationsProperty.initializer.body.expression
-                : ts.isBlock(domainOperationsProperty.initializer.body)
-                  ? domainOperationsProperty.initializer.body.statements.find(
-                      statement => ts.isReturnStatement(statement) && statement.expression,
-                    )?.expression
-                  : undefined
-            : domainOperationsProperty.initializer
+          ? resolveObjectLiteralInitializer(domainOperationsProperty.initializer, graphDeclarations)
           : undefined;
 
       if (
@@ -1599,6 +1838,8 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
               clientCollectionName: `${entityExportName}ClientDomainOperations`,
               entityName,
               ...(entityDefinitionName ? { entityDefinitionName } : {}),
+              ...(entityDefinitionImportPath ? { entityDefinitionImportPath } : {}),
+              ...(entitySchemaProjection ? { entitySchemaProjection } : {}),
               ...(relation ? { relation } : {}),
               entityExportName,
               helperTexts: [],
@@ -1619,7 +1860,7 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
           : undefined;
       }
 
-      const defaults = parseDomainOperationDefaults(configArg, declarations);
+      const defaults = parseDomainOperationDefaults(configArg, graphDeclarations);
       const operations = [];
       const clientOperations = [];
       const durableTasks = [];
@@ -1629,7 +1870,7 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
       for (const property of operationsInitializer.properties) {
         const parsed = parseOperationDefinition(
           property,
-          declarations,
+          graphDeclarations,
           importMap,
           defaults,
           schemaContext,
@@ -1707,7 +1948,9 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
           clientCollectionName: `${entityExportName}ClientDomainOperations`,
           entityName,
           ...(entityDefinitionName ? { entityDefinitionName } : {}),
+          ...(entityDefinitionImportPath ? { entityDefinitionImportPath } : {}),
           ...(entityDefinitionLocalName ? { entityDefinitionLocalName } : {}),
+          ...(entitySchemaProjection ? { entitySchemaProjection } : {}),
           ...(relation ? { relation } : {}),
           entityExportName,
           helperTexts,
@@ -1759,6 +2002,7 @@ export const analyzeGraphApiModule = sourceText => {
     'defineGraphApi',
     'defineOntahiApplication',
     'ontahi',
+    'registerBoundEntities',
   ]);
   let unsupportedGraphApplication;
 
@@ -1775,13 +2019,15 @@ export const analyzeGraphApiModule = sourceText => {
       const apiExportName = declaration.name.text;
       const initializer = declaration.initializer;
 
-      if (
-        !ts.isCallExpression(initializer) ||
-        !ts.isIdentifier(initializer.expression) ||
-        !graphDeclarationFunctions.has(initializer.expression.text)
-      ) {
+      if (!ts.isCallExpression(initializer)) {
         continue;
       }
+      const declarationFunction = ts.isIdentifier(initializer.expression)
+        ? initializer.expression.text
+        : ts.isPropertyAccessExpression(initializer.expression)
+          ? initializer.expression.name.text
+          : undefined;
+      if (!declarationFunction || !graphDeclarationFunctions.has(declarationFunction)) continue;
 
       const [configArg] = initializer.arguments;
 
@@ -1798,7 +2044,10 @@ export const analyzeGraphApiModule = sourceText => {
           item.name.text === 'entities',
       );
 
-      if (!entitiesProperty || !ts.isPropertyAssignment(entitiesProperty)) {
+      if (
+        declarationFunction !== 'registerBoundEntities' &&
+        (!entitiesProperty || !ts.isPropertyAssignment(entitiesProperty))
+      ) {
         const graphProperty = configArg.properties.find(
           item =>
             ts.isPropertyAssignment(item) &&
@@ -1807,7 +2056,7 @@ export const analyzeGraphApiModule = sourceText => {
         );
 
         if (
-          initializer.expression.text === 'defineOntahiApplication' &&
+          declarationFunction === 'defineOntahiApplication' &&
           graphProperty &&
           ts.isPropertyAssignment(graphProperty)
         ) {
@@ -1820,7 +2069,8 @@ export const analyzeGraphApiModule = sourceText => {
         };
       }
 
-      const entitiesInitializer = entitiesProperty.initializer;
+      const entitiesInitializer =
+        declarationFunction === 'registerBoundEntities' ? configArg : entitiesProperty.initializer;
       const entitiesObject = ts.isObjectLiteralExpression(entitiesInitializer)
         ? entitiesInitializer
         : ts.isArrowFunction(entitiesInitializer)

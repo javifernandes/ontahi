@@ -373,6 +373,8 @@ export type RelationDefinition<
   kind: 'relation';
   relationKind: TKind;
   target: TTarget;
+  sourceField?: string;
+  targetField?: string;
   mapping?: ParsedRelationMapping;
 };
 
@@ -431,6 +433,7 @@ export type EntityDefinition<
   hasMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
+    options?: { via?: keyof TTarget['fields'] & string },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -681,11 +684,12 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
 
       return viewDefinition;
     },
-    hasMany(relationName: string, target: AnyEntityDefinition) {
+    hasMany(relationName: string, target: AnyEntityDefinition, options?: { via?: string }) {
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'hasMany',
         target,
+        ...(options?.via ? { targetField: options.via } : {}),
       };
       return this as never;
     },

@@ -4,26 +4,56 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const getRun = vi.fn();
-const stepsList = vi.fn();
-
-vi.mock('workflow/api', () => ({
-  getRun,
+const workflowMocks = vi.hoisted(() => ({
+  apiLoads: 0,
+  runtimeLoads: 0,
+  getRun: vi.fn(),
+  stepsList: vi.fn(),
 }));
 
-vi.mock('workflow/runtime', () => ({
-  getWorld: () => ({
-    steps: {
-      list: stepsList,
-    },
-  }),
-}));
+vi.mock('workflow/api', () => {
+  workflowMocks.apiLoads += 1;
+  return {
+    getRun: workflowMocks.getRun,
+  };
+});
+
+vi.mock('workflow/runtime', () => {
+  workflowMocks.runtimeLoads += 1;
+  return {
+    getWorld: () => ({
+      steps: {
+        list: workflowMocks.stepsList,
+      },
+    }),
+  };
+});
+
+const getRun = workflowMocks.getRun;
+const stepsList = workflowMocks.stepsList;
 
 describe('task run reconciliation', () => {
   beforeEach(() => {
     getRun.mockReset();
     stepsList.mockReset();
     stepsList.mockResolvedValue({ data: [] });
+  });
+
+  it('does not load the Workflow SDK for runs that do not require reconciliation', async () => {
+    const store = createInMemoryTaskStorage();
+    const source = await Effect.runPromise(
+      store.create({
+        taskId: 'fixture.say-hello',
+        runId: 'run-without-runtime',
+      }),
+    );
+
+    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const reconciled = await Effect.runPromise(reconcileTaskRunSource(source, store));
+
+    expect(reconciled).toEqual(source);
+    expect(workflowMocks.apiLoads).toBe(0);
+    expect(workflowMocks.runtimeLoads).toBe(0);
   });
 
   it('patches stale non-terminal Vercel task runs from runtime status', async () => {

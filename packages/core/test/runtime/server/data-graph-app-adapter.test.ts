@@ -2,7 +2,11 @@ import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import { entity, field, type DataGraphExecutionRuntime } from '../../../src/data-graph/index.js';
-import { createDataGraphArchitectureAdapter, layer } from '../../../src/runtime/server/index.js';
+import {
+  createDataGraphArchitectureAdapter,
+  defineDomainOperation,
+  layer,
+} from '../../../src/runtime/server/index.js';
 
 describe('data graph architecture adapter', () => {
   const BookDefinition = entity('Book', {
@@ -102,5 +106,38 @@ describe('data graph architecture adapter', () => {
     });
 
     expect(graph.readEntityData).toBe(readEntityData);
+  });
+
+  it('exposes late-bound sibling domain operations to operation closures', () => {
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      never,
+      { authority: 'viewer' },
+      { authority: 'system' }
+    >({
+      createRuntime: () => createRuntime('default'),
+    });
+    let siblingOperation: unknown;
+    const Book = graph.defineEntity(BookDefinition, {
+      domainOperationDefaults: {
+        authority: 'server',
+        exposure: 'server-only',
+      },
+      domainOperations: ({ operations }) => ({
+        first: defineDomainOperation({
+          run: () =>
+            Effect.sync(() => {
+              siblingOperation = operations.second;
+            }),
+        }),
+        second: defineDomainOperation({
+          run: () => Effect.void,
+        }),
+      }),
+    });
+
+    Effect.runSync(Book.domain.first.run({}) as Effect.Effect<void>);
+
+    expect(siblingOperation).toBe(Book.domain.second);
   });
 });

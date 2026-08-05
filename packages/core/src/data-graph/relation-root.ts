@@ -63,7 +63,8 @@ export type RelatedRootReadSpec<
   target: QuerySpec<TTarget, TResult>;
   source: RelatedRootSourceRead<TSourceResult>;
   sourceEntity: TSource;
-  relationName: keyof TTarget['relations'] & string;
+  relationName: string;
+  relationOwner?: 'target' | 'source';
   __result?: RelatedRootReadResult<TMode, TSourceResult, TResult, TTarget>;
 };
 
@@ -81,7 +82,8 @@ export const createRelatedRootReadSpec = <
   target: QuerySpec<TTarget, TResult>;
   source: RelatedRootSourceRead<TSourceResult>;
   sourceEntity: TSource;
-  relationName: keyof TTarget['relations'] & string;
+  relationName: string;
+  relationOwner?: 'target' | 'source';
 }): RelatedRootReadSpec<TTarget, TSource, TResult, TSourceResult, TMode> => ({
   kind: 'related-root-read',
   mode: input.mode,
@@ -89,6 +91,7 @@ export const createRelatedRootReadSpec = <
   source: input.source,
   sourceEntity: input.sourceEntity,
   relationName: input.relationName,
+  ...(input.relationOwner ? { relationOwner: input.relationOwner } : {}),
 });
 
 export type RelationRootTargetEntity<
@@ -159,7 +162,8 @@ type RelationRootSelectionOptions<
     TCommandError,
     TCommandOptions
   >;
-  relationName: keyof TTarget['relations'] & string;
+  relationName: string;
+  relationOwner?: 'target' | 'source';
   createExecutableGraphRead: CreateExecutableRelatedRootRead<TReadError, TReadOptions>;
   targetSelection?: BoundGraphSelection<
     TTarget,
@@ -281,7 +285,8 @@ export class RelationRootSelection<
     TCommandOptions
   >;
 
-  private readonly relationName: keyof TTarget['relations'] & string;
+  private readonly relationName: string;
+  private readonly relationOwner: 'target' | 'source';
 
   private readonly createExecutableGraphRead: CreateExecutableRelatedRootRead<
     TReadError,
@@ -301,6 +306,7 @@ export class RelationRootSelection<
     targetEntity,
     sourceSelection,
     relationName,
+    relationOwner = 'target',
     createExecutableGraphRead,
     targetSelection = targetEntity.all() as BoundGraphSelection<
       TTarget,
@@ -323,6 +329,7 @@ export class RelationRootSelection<
     this.targetEntity = targetEntity;
     this.sourceSelection = sourceSelection;
     this.relationName = relationName;
+    this.relationOwner = relationOwner;
     this.createExecutableGraphRead = createExecutableGraphRead;
     this.targetSelection = targetSelection;
   }
@@ -353,6 +360,7 @@ export class RelationRootSelection<
       targetEntity: this.targetEntity,
       sourceSelection: this.sourceSelection,
       relationName: this.relationName,
+      relationOwner: this.relationOwner,
       createExecutableGraphRead: this.createExecutableGraphRead,
       targetSelection: this.targetSelection.where(build),
     });
@@ -385,6 +393,7 @@ export class RelationRootSelection<
       targetEntity: this.targetEntity,
       sourceSelection: this.sourceSelection,
       relationName: this.relationName,
+      relationOwner: this.relationOwner,
       createExecutableGraphRead: this.createExecutableGraphRead,
       targetSelection: nextSelection,
     });
@@ -406,6 +415,7 @@ export class RelationRootSelection<
       targetEntity: this.targetEntity,
       sourceSelection: this.sourceSelection,
       relationName: this.relationName,
+      relationOwner: this.relationOwner,
       createExecutableGraphRead: this.createExecutableGraphRead,
       targetSelection: this.targetSelection.orderBy(build),
     });
@@ -427,6 +437,7 @@ export class RelationRootSelection<
       targetEntity: this.targetEntity,
       sourceSelection: this.sourceSelection,
       relationName: this.relationName,
+      relationOwner: this.relationOwner,
       createExecutableGraphRead: this.createExecutableGraphRead,
       targetSelection: this.targetSelection.limit(limitValue),
     });
@@ -445,6 +456,7 @@ export class RelationRootSelection<
       source: buildRelationRootSourceRead(this.sourceSelection),
       sourceEntity: getRelationRootSourceEntity(this.sourceSelection),
       relationName: this.relationName,
+      relationOwner: this.relationOwner,
     });
   }
 
@@ -495,12 +507,14 @@ export const resolveRelatedRootFields = <
 >(
   targetEntity: TTarget,
   sourceEntity: TSource,
-  relationName: keyof TTarget['relations'] & string,
+  relationName: string,
+  relationOwner: 'target' | 'source' = 'target',
 ) => {
-  const relationDefinition = targetEntity.relations[relationName];
+  const relationEntity = relationOwner === 'target' ? targetEntity : sourceEntity;
+  const relationDefinition = relationEntity.relations[relationName];
   const mapping = relationDefinition?.mapping;
   if (!relationDefinition || !mapping) {
-    throw new Error(`Relation ${targetEntity.name}.${relationName} is missing mapping metadata.`);
+    throw new Error(`Relation ${relationEntity.name}.${relationName} is missing mapping metadata.`);
   }
 
   const targetTable = getEntityMapping(targetEntity).tableName;
@@ -511,7 +525,7 @@ export const resolveRelatedRootFields = <
 
   if (!targetUsesFrom && !targetUsesTo) {
     throw new Error(
-      `Relation ${targetEntity.name}.${relationName} does not connect to source entity ${sourceEntity.name}.`,
+      `Relation ${relationEntity.name}.${relationName} does not connect ${targetEntity.name} to ${sourceEntity.name}.`,
     );
   }
 
