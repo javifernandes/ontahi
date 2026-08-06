@@ -443,6 +443,7 @@ export type EntityDefinition<
   belongsTo: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
+    options?: { via?: keyof TFields & string },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -693,11 +694,12 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       };
       return this as never;
     },
-    belongsTo(relationName: string, target: AnyEntityDefinition) {
+    belongsTo(relationName: string, target: AnyEntityDefinition, options?: { via?: string }) {
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'belongsTo',
         target,
+        ...(options?.via ? { sourceField: options.via } : {}),
       };
       return this as never;
     },

@@ -272,6 +272,32 @@ export const dataGraphRuntimeConformance = (
             ),
           ),
         ).resolves.toEqual([{ id: 'book-1', title: 'Alpha revised' }]);
+        await expect(
+          Effect.runPromise(
+            runtime.runCommand<Array<{ id: string; title: string }>>({
+              kind: 'command',
+              operation: 'upsert',
+              root: BookWithChapters,
+              selection: { kind: 'none' },
+              payload: [
+                {
+                  id: 'ignored-again',
+                  slug: 'alpha',
+                  title: 'Ignored again',
+                  published: true,
+                },
+                {
+                  id: 'book-3',
+                  slug: 'gamma',
+                  title: 'Gamma',
+                  published: false,
+                },
+              ],
+              upsert: { conflictOn: ['slug'], strategy: 'ignore' },
+              returning: ['id', 'title'],
+            }),
+          ),
+        ).resolves.toEqual([{ id: 'book-3', title: 'Gamma' }]);
       }));
 
     it('rejects malformed upsert commands', async () =>

@@ -11,13 +11,99 @@ import {
   value,
 } from '@ontahi/core/data-graph';
 
+export const TodoListSchema = defineEntitySchema('TodoList', {
+  id: field.id(),
+  name: field.nonEmptyString({ trim: true }),
+})
+  .locators({ refById: 'id' })
+  .identity('refById');
+
+export const TagSchema = defineEntitySchema('Tag', {
+  id: field.id(),
+  name: field.nonEmptyString({ trim: true }),
+  color: field.nonEmptyString({ trim: true }),
+})
+  .locators({ refById: 'id' })
+  .identity('refById');
+
+export const TodoTagSchema = defineEntitySchema('TodoTag', {
+  todoId: field.id(),
+  tagId: field.id(),
+})
+  .locators({ refByTodoAndTag: ['todoId', 'tagId'] })
+  .identity('refByTodoAndTag')
+  .belongsTo('tag', TagSchema, { via: 'tagId' });
+
 export const TodoSchema = defineEntitySchema('Todo', {
   id: field.id(),
+  listId: field.id(),
   title: field.nonEmptyString({ trim: true }),
   completed: field.boolean(),
 })
   .locators({ refById: 'id' })
-  .identity('refById');
+  .identity('refById')
+  .belongsTo('list', TodoListSchema, { via: 'listId' })
+  .hasMany('tagAssignments', TodoTagSchema, { via: 'todoId' });
+
+export const TodoList = defineClientEntity(TodoListSchema, {
+  domainOperations: {
+    list: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        query: [() => 'all'],
+      },
+      input: graphSchema.void(),
+      output: graphSchema.array(TodoListSchema),
+    }),
+    create: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList']],
+      },
+      input: graphSchema.pick(TodoListSchema, ['id', 'name']).named('CreateTodoListInput'),
+      output: TodoListSchema,
+    }),
+  },
+});
+
+export const Tag = defineClientEntity(TagSchema, {
+  domainOperations: {
+    list: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        query: [() => 'all'],
+      },
+      input: graphSchema.void(),
+      output: graphSchema.array(TagSchema),
+    }),
+    create: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['Tag']],
+      },
+      input: graphSchema.pick(TagSchema, ['id', 'name', 'color']).named('CreateTagInput'),
+      output: TagSchema,
+    }),
+  },
+});
+
+export const TodoTag = defineClientEntity(TodoTagSchema, {
+  domainOperations: {
+    list: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        query: [() => 'all'],
+      },
+      input: graphSchema.void(),
+      output: graphSchema.array(TodoTagSchema),
+    }),
+  },
+});
 
 export const Todo = defineClientEntity(TodoSchema, {
   domainOperations: {
@@ -36,7 +122,7 @@ export const Todo = defineClientEntity(TodoSchema, {
       bridge: {
         invalidate: [['Todo']],
       },
-      input: graphSchema.pick(TodoSchema, ['id', 'title']).named('CreateTodoInput'),
+      input: graphSchema.pick(TodoSchema, ['id', 'listId', 'title']).named('CreateTodoInput'),
       output: TodoSchema,
     }),
     complete: defineClientDomainOperation({
@@ -53,9 +139,31 @@ export const Todo = defineClientEntity(TodoSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['Todo']],
+        invalidate: [['Todo'], ['TodoTag']],
       },
       input: graphSchema.void(),
+    }),
+    assignTags: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoTag']],
+      },
+      input: graphSchema.object({
+        todos: graphSchema.selection(TodoSchema, { cardinality: 'many' }),
+        tagIds: graphSchema.array(field.id()),
+      }),
+    }),
+    removeTags: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoTag']],
+      },
+      input: graphSchema.object({
+        todos: graphSchema.selection(TodoSchema, { cardinality: 'many' }),
+        tagIds: graphSchema.array(field.id()),
+      }),
     }),
     completeAll: defineClientDomainOperation({
       authority: 'server',

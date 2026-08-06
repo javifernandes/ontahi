@@ -25,10 +25,14 @@ export class InMemoryDataGraphError extends Error {
 }
 
 const payloadRows = (command: GraphCommandSpec<any, any, any>) => {
-  if (command.operation === 'insert_many') {
+  if (command.operation === 'insert_many' || command.operation === 'upsert') {
+    if (command.operation === 'upsert' && !Array.isArray(command.payload)) {
+      return command.payload ? [{ ...(command.payload as Record<string, unknown>) }] : [];
+    }
+
     if (!Array.isArray(command.payload)) {
       throw new InMemoryDataGraphError(
-        'Bulk insert commands require an array payload.',
+        'Bulk commands require an array payload.',
         'invalid_command',
       );
     }
@@ -73,14 +77,16 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
     affectedRows = payloadRows(command);
     nextRows = [...currentRows, ...affectedRows];
   } else if (command.operation === 'upsert') {
-    const payload = payloadRows(command)[0];
+    const payloads = payloadRows(command);
     const conflictFields = command.upsert?.conflictOn ?? [];
 
     if (
-      !payload ||
+      payloads.length === 0 ||
       conflictFields.length === 0 ||
       (command.upsert?.strategy !== 'ignore' && command.upsert?.strategy !== 'merge') ||
-      conflictFields.some(field => !Object.prototype.hasOwnProperty.call(payload, field))
+      payloads.some(payload =>
+        conflictFields.some(field => !Object.prototype.hasOwnProperty.call(payload, field)),
+      )
     ) {
       throw new InMemoryDataGraphError(
         'Upsert commands require a strategy and payload values for every conflict field.',
@@ -88,17 +94,19 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
       );
     }
 
-    const existingIndex = currentRows.findIndex(row =>
-      conflictFields.every(field => row[field] === payload[field]),
-    );
+    for (const payload of payloads) {
+      const existingIndex = nextRows.findIndex(row =>
+        conflictFields.every(field => row[field] === payload[field]),
+      );
 
-    if (existingIndex < 0) {
-      affectedRows = [payload];
-      nextRows = [...currentRows, payload];
-    } else if (command.upsert?.strategy === 'merge') {
-      const merged = { ...currentRows[existingIndex], ...payload };
-      affectedRows = [merged];
-      nextRows = currentRows.map((row, index) => (index === existingIndex ? merged : row));
+      if (existingIndex < 0) {
+        affectedRows.push(payload);
+        nextRows = [...nextRows, payload];
+      } else if (command.upsert?.strategy === 'merge') {
+        const merged = { ...nextRows[existingIndex], ...payload };
+        affectedRows.push(merged);
+        nextRows = nextRows.map((row, index) => (index === existingIndex ? merged : row));
+      }
     }
   } else if (command.operation === 'update') {
     const [payload] = payloadRows(command);

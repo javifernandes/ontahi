@@ -9,6 +9,7 @@ import {
   createInsertCommandSpec,
   createInsertManyCommandSpec,
   createUpsertCommandSpec,
+  createUpsertManyCommandSpec,
   createUpdateCommandSpec,
   entity,
   field,
@@ -241,6 +242,17 @@ describe('data-graph selection helpers', () => {
       ),
     ).toMatchObject({
       operation: 'upsert',
+      upsert: { conflictOn: ['slug'], strategy: 'ignore' },
+    });
+
+    expect(
+      createUpsertManyCommandSpec(Book, [{ slug: 'progbook' }, { slug: 'living-systems' }], {
+        conflictOn: ['slug'],
+        strategy: 'ignore',
+      }),
+    ).toMatchObject({
+      operation: 'upsert',
+      payload: [{ slug: 'progbook' }, { slug: 'living-systems' }],
       upsert: { conflictOn: ['slug'], strategy: 'ignore' },
     });
 

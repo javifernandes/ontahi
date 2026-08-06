@@ -115,6 +115,23 @@ describe('in-memory graph commands', () => {
         upsert({ id: 'book-2', slug: 'beta', title: 'Beta', published: false }, 'merge'),
       ),
     ).resolves.toEqual([{ id: 'book-2', title: 'Beta' }]);
+    await expect(
+      Effect.runPromise(
+        runtime.runCommand<Array<{ id: string; title: string }>>({
+          kind: 'command',
+          operation: 'upsert',
+          root: Book,
+          selection: { kind: 'none' },
+          payload: [
+            { id: 'ignored-again', slug: 'alpha', title: 'Ignored again', published: true },
+            { id: 'book-3', slug: 'gamma', title: 'Gamma', published: false },
+            { id: 'duplicate-gamma', slug: 'gamma', title: 'Duplicate', published: true },
+          ],
+          upsert: { conflictOn: ['slug'], strategy: 'ignore' },
+          returning: ['id', 'title'],
+        }),
+      ),
+    ).resolves.toEqual([{ id: 'book-3', title: 'Gamma' }]);
 
     const updated = await Effect.runPromise(
       runtime.runCommand<{ id: string; published: boolean }>({
@@ -143,7 +160,9 @@ describe('in-memory graph commands', () => {
 
     expect(updated).toEqual({ id: 'book-2', published: true });
     expect(deleted).toEqual([{ id: 'book-1' }, { id: 'book-2' }]);
-    expect(dataset.Book).toEqual([]);
+    expect(dataset.Book).toEqual([
+      { id: 'book-3', slug: 'gamma', title: 'Gamma', published: false },
+    ]);
   });
 
   it('reports invalid commands and one-row cardinality mismatches as typed failures', async () => {

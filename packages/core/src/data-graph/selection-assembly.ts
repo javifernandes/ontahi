@@ -24,6 +24,7 @@ import {
   createInsertCommandSpec,
   createInsertManyCommandSpec,
   createUpsertCommandSpec,
+  createUpsertManyCommandSpec,
   type EntityFieldName,
   type GraphSelectionFactories,
   type QueryIncludeArg,
@@ -330,6 +331,19 @@ export type BoundSelectionEntityBase<
     TCommandError,
     TCommandOptions
   >;
+  upsertMany: (
+    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    options: {
+      conflictOn: readonly EntityFieldName<TEntity>[];
+      strategy: 'ignore' | 'merge';
+    },
+  ) => BoundGraphCommand<
+    TEntity,
+    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    void,
+    TCommandError,
+    TCommandOptions
+  >;
   relatedTo: <TSource extends AnyEntityDefinition, TSourceResult>(
     sourceSelection: RelationRootSourceSelection<
       TSource,
@@ -518,6 +532,13 @@ export const createGraphSelectionAssembly = <
           strategy: 'ignore' | 'merge';
         },
       ) => createCommand(createUpsertCommandSpec(entityDefinition, payload, options)),
+      upsertMany: (
+        payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+        options: {
+          conflictOn: readonly EntityFieldName<TEntity>[];
+          strategy: 'ignore' | 'merge';
+        },
+      ) => createCommand(createUpsertManyCommandSpec(entityDefinition, payloads, options)),
       relatedTo: <TSource extends AnyEntityDefinition, TSourceResult>(
         sourceSelection: RelationRootSourceSelection<
           TSource,

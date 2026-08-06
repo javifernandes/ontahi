@@ -1,9 +1,10 @@
 # Ontahi Todo Express Example
 
 This is a small Ontahi application with interchangeable in-memory and direct PostgreSQL graph
-storage. It declares a Todo entity, transports graph-native Selections into synchronous operations
-over Express, includes an in-process durable operation, generates a browser-safe client declaration,
-and renders a React UI through the public Ontahi hooks. It imports no BookOps code.
+storage. It declares lists, todos, tags, and the associative entity between todos and tags;
+transports graph-native Selections into synchronous operations over Express; includes an in-process
+durable operation; generates browser-safe client declarations; and renders a React UI through the
+public Ontahi hooks. It imports no BookOps code.
 
 ## Run it
 
@@ -28,12 +29,17 @@ pnpm --filter @ontahi/example-todo-express dev:postgres
 The Compose service persists data in a named volume. Use `db:stop` to stop it or `db:reset` to
 recreate the database and reapply `migrations/001-create-todos.sql`.
 
-You can also create a Todo directly through Ontahi's transport-neutral invocation protocol:
+You can also create a list and then a Todo directly through Ontahi's transport-neutral invocation
+protocol:
 
 ```sh
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"Todo.create","input":{"id":"todo-1","title":"Read the guide"}}'
+  -d '{"kind":"invoke","operationId":"TodoList.create","input":{"id":"list-1","name":"Inbox"}}'
+
+curl -X POST http://localhost:3001/operations \
+  -H 'content-type: application/json' \
+  -d '{"kind":"invoke","operationId":"Todo.create","input":{"id":"todo-1","listId":"list-1","title":"Read the guide"}}'
 ```
 
 Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded in the same Vite
@@ -42,12 +48,23 @@ durable task snapshots, application metadata, Explorer snapshot, reflected entit
 Explorer SPA. Execute panels use the same `/operations` bridge as the Todo UI, while reflected data
 comes from whichever graph storage is active.
 
-## Entity, Selection, and Operation
+## Entities, Relations, Selections, and Operations
 
-`Todo` is one semantic declaration containing its fields, `refById` identity, and operations.
+The example deliberately exercises two different domain structures:
+
+- `Todo belongsTo TodoList` expresses composition: every todo lives in one list.
+- `Todo hasMany TodoTag` and `TodoTag belongsTo Tag` express association through an explicit
+  semantic join entity. Ontahi does not hide the association behind a storage-only join table.
+
+Each entity owns its fields, identity, relations, and operations in one semantic declaration.
 `Todo.complete` accepts `graphSchema.selection(self, { cardinality: 'many' })` inside that
 declaration, so its target is part of the validated operation contract instead of an example-local
 list of IDs.
+
+`Todo.assignTags` combines that semantic target with explicit tag identities. It validates those
+identities, resolves the Todo Selection at execution time, and creates all idempotent `TodoTag`
+associations with one bulk upsert. The UI can therefore assign one tag to any explicit set of todos
+without multiplying the operation API by list or filter.
 
 A caller can define membership by reference:
 
@@ -104,8 +121,9 @@ more expressive than explicit IDs.
 1. [`src/storage.ts`](./src/storage.ts) selects one default graph storage—either in-memory
    or PostgreSQL. The host owns the physical mapping, migration, database connection, process
    lifetime, and error reporting policy.
-2. [`src/todo.ts`](./src/todo.ts) exports the single `Todo` declaration containing its fields,
-   locators, identity, synchronous operations, and durable operation.
+2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `Todo`, `Tag`, and `TodoTag`
+   declarations, including their identities, relations, synchronous operations, and durable
+   operation.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,
    `inProcessTasks()`, and the public entities into the complete `TodoApplication` used by
    reflection, execution, tasks, ingress, and code generation. Task executor and storage can be
@@ -131,7 +149,10 @@ pnpm --filter @ontahi/example-todo-express typecheck
 pnpm --filter @ontahi/example-todo-express test
 ```
 
-The integration test starts a real ephemeral HTTP server, verifies reference-defined and predicate-defined Selections mutate only their target entities, exercises the durable operation, and verifies invalid input returns Ontahi's canonical `input_invalid` result.
+The integration test starts a real ephemeral HTTP server, verifies reference-defined and
+predicate-defined Selections mutate only their target entities, assigns tags through the
+associative entity, exercises the durable operation, and verifies invalid input returns Ontahi's
+canonical `input_invalid` result.
 
 ## Host responsibilities exposed by the example
 

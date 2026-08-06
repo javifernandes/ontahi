@@ -1,7 +1,7 @@
 import { useDurableOperation, useOperation, useOperationQuery } from '@ontahi/react/graph';
 import { FormEvent, useEffect, useState } from 'react';
 
-import { Todo } from '../../src/generated/client-entities.js';
+import { Tag, Todo, TodoList, TodoTag } from '../../src/generated/client-entities.js';
 
 const ExpressMark = () => (
   <svg aria-hidden='true' viewBox='0 0 32 32'>
@@ -26,11 +26,22 @@ const MemoryMark = () => (
 
 export const App = () => {
   const [title, setTitle] = useState('');
+  const [listName, setListName] = useState('');
+  const [tagName, setTagName] = useState('');
+  const [selectedListId, setSelectedListId] = useState('');
+  const [selectedTagId, setSelectedTagId] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [storage, setStorage] = useState<'in-memory' | 'postgres'>();
+  const lists = useOperationQuery(TodoList.domain.list);
+  const tags = useOperationQuery(Tag.domain.list);
+  const assignments = useOperationQuery(TodoTag.domain.list);
   const todos = useOperationQuery(Todo.domain.list);
+  const createList = useOperation(TodoList.domain.create);
+  const createTag = useOperation(Tag.domain.create);
   const createTodo = useOperation(Todo.domain.create);
   const completeTodos = useOperation(Todo.domain.complete);
+  const assignTags = useOperation(Todo.domain.assignTags);
+  const removeTags = useOperation(Todo.domain.removeTags);
   const deleteAll = useOperation(Todo.domain.deleteAll);
   const completeAll = useDurableOperation(Todo.domain.completeAll);
 
@@ -40,16 +51,55 @@ export const App = () => {
       .then(runtime => setStorage(runtime.storage));
   }, []);
 
+  useEffect(() => {
+    if (!selectedListId && lists.data?.[0]) setSelectedListId(lists.data[0].id);
+  }, [lists.data, selectedListId]);
+
+  useEffect(() => {
+    if (!selectedTagId && tags.data?.[0]) setSelectedTagId(tags.data[0].id);
+  }, [selectedTagId, tags.data]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const normalizedTitle = title.trim();
-    if (!normalizedTitle) return;
+    if (!normalizedTitle || !selectedListId) return;
 
     const result = await createTodo.executeAsync({
       id: globalThis.crypto.randomUUID(),
+      listId: selectedListId,
       title: normalizedTitle,
     });
     if (result.ok) setTitle('');
+  };
+
+  const submitList = async (event: FormEvent) => {
+    event.preventDefault();
+    const name = listName.trim();
+    if (!name) return;
+    const id = globalThis.crypto.randomUUID();
+    const result = await createList.executeAsync({ id, name });
+    if (result.ok) {
+      setListName('');
+      setSelectedListId(id);
+      setSelectedIds([]);
+    }
+  };
+
+  const submitTag = async (event: FormEvent) => {
+    event.preventDefault();
+    const name = tagName.trim();
+    if (!name) return;
+    const id = globalThis.crypto.randomUUID();
+    const colors = ['#d95d4f', '#708b62', '#527d8c', '#a77b45'];
+    const result = await createTag.executeAsync({
+      id,
+      name,
+      color: colors[(tags.data?.length ?? 0) % colors.length]!,
+    });
+    if (result.ok) {
+      setTagName('');
+      setSelectedTagId(id);
+    }
   };
 
   const completeSelected = async () => {
@@ -58,6 +108,22 @@ export const App = () => {
     });
     setSelectedIds([]);
   };
+
+  const changeSelectedTags = async (mode: 'assign' | 'remove') => {
+    if (!selectedTagId || selectedIds.length === 0) return;
+    const operation = mode === 'assign' ? assignTags : removeTags;
+    await operation.executeAsync({ todos: selectedIds, tagIds: [selectedTagId] });
+  };
+
+  const visibleTodos = todos.data?.filter(todo => todo.listId === selectedListId) ?? [];
+  const tagById = new Map(tags.data?.map(tag => [tag.id, tag]) ?? []);
+  const tagIdsByTodo = new Map<string, string[]>();
+  assignments.data?.forEach(assignment => {
+    tagIdsByTodo.set(assignment.todoId, [
+      ...(tagIdsByTodo.get(assignment.todoId) ?? []),
+      assignment.tagId,
+    ]);
+  });
 
   return (
     <main className='todo-app'>
@@ -80,84 +146,168 @@ export const App = () => {
         </a>
       </header>
 
-      <section className='card'>
-        <form onSubmit={submit}>
-          <input
-            aria-label='Todo title'
-            value={title}
-            onChange={event => setTitle(event.target.value)}
-            placeholder='What should happen next?'
-          />
-          <button disabled={createTodo.isExecuting}>Add todo</button>
-        </form>
-
-        {todos.isLoading && <p className='muted'>Loading graph state…</p>}
-        {todos.isError && <p className='error'>Could not load todos.</p>}
-        <ul>
-          {todos.data?.map(todo => (
-            <li key={todo.id} className={todo.completed ? 'completed' : ''}>
-              <label>
-                <input
-                  type='checkbox'
-                  checked={selectedIds.includes(todo.id)}
-                  disabled={todo.completed}
-                  onChange={event =>
-                    setSelectedIds(current =>
-                      event.target.checked
-                        ? [...current, todo.id]
-                        : current.filter(id => id !== todo.id),
-                    )
-                  }
-                />
-                <span>{todo.title}</span>
-              </label>
-              <small>{todo.completed ? 'complete' : 'open'}</small>
-            </li>
-          ))}
-        </ul>
-
-        <footer>
-          <button
-            className='secondary'
-            disabled={selectedIds.length === 0 || completeTodos.isExecuting}
-            onClick={completeSelected}
-          >
-            Complete selected
-          </button>
-          <button
-            className='ghost'
-            disabled={completeAll.isExecuting}
-            onClick={() => completeAll.execute()}
-          >
-            Complete all durably
-          </button>
-          <button
-            className='danger'
-            disabled={!todos.data?.length || deleteAll.isExecuting}
-            onClick={() => deleteAll.execute()}
-          >
-            Delete all
-          </button>
-        </footer>
-
-        {completeAll.value && (
-          <div className='run' aria-live='polite'>
-            <span>Run {completeAll.value.runId}</span>
-            {completeAll.isQueued && <strong>Queued…</strong>}
-            {completeAll.isRunning && (
-              <strong>
-                {completeAll.progress?.phase === 'updating' ? 'Completing todos…' : 'Running…'}
-              </strong>
-            )}
-            {completeAll.isCompleted && (
-              <strong>Completed {completeAll.finalValue?.completed ?? 0} todos.</strong>
-            )}
-            {completeAll.isFailed && (
-              <strong className='error'>{completeAll.runError?.message ?? 'Run failed.'}</strong>
-            )}
-            {completeAll.isCancelled && <strong>Cancelled.</strong>}
+      <section className='workspace'>
+        <aside className='organizer'>
+          <div>
+            <span className='section-label'>Lists</span>
+            <nav className='list-nav' aria-label='Todo lists'>
+              {lists.data?.map(list => (
+                <button
+                  key={list.id}
+                  className={list.id === selectedListId ? 'active' : ''}
+                  onClick={() => {
+                    setSelectedListId(list.id);
+                    setSelectedIds([]);
+                  }}
+                >
+                  {list.name}
+                </button>
+              ))}
+            </nav>
+            <form className='compact-form' onSubmit={submitList}>
+              <input
+                aria-label='List name'
+                value={listName}
+                onChange={event => setListName(event.target.value)}
+                placeholder='New list'
+              />
+              <button disabled={createList.isExecuting}>+</button>
+            </form>
           </div>
-        )}
+
+          <div>
+            <span className='section-label'>Tags</span>
+            <div className='tag-picker'>
+              {tags.data?.map(tag => (
+                <button
+                  key={tag.id}
+                  className={tag.id === selectedTagId ? 'active' : ''}
+                  onClick={() => setSelectedTagId(tag.id)}
+                >
+                  <i style={{ background: tag.color }} />
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+            <form className='compact-form' onSubmit={submitTag}>
+              <input
+                aria-label='Tag name'
+                value={tagName}
+                onChange={event => setTagName(event.target.value)}
+                placeholder='New tag'
+              />
+              <button disabled={createTag.isExecuting}>+</button>
+            </form>
+          </div>
+        </aside>
+
+        <div className='card'>
+          <form onSubmit={submit}>
+            <input
+              aria-label='Todo title'
+              value={title}
+              onChange={event => setTitle(event.target.value)}
+              placeholder='What should happen next?'
+            />
+            <button disabled={!selectedListId || createTodo.isExecuting}>Add todo</button>
+          </form>
+
+          {!lists.data?.length && <p className='empty-hint'>Create a list to begin.</p>}
+
+          {todos.isLoading && <p className='muted'>Loading graph state…</p>}
+          {todos.isError && <p className='error'>Could not load todos.</p>}
+          <ul>
+            {visibleTodos.map(todo => (
+              <li key={todo.id} className={todo.completed ? 'completed' : ''}>
+                <label>
+                  <input
+                    type='checkbox'
+                    checked={selectedIds.includes(todo.id)}
+                    disabled={todo.completed}
+                    onChange={event =>
+                      setSelectedIds(current =>
+                        event.target.checked
+                          ? [...current, todo.id]
+                          : current.filter(id => id !== todo.id),
+                      )
+                    }
+                  />
+                  <span className='todo-copy'>
+                    <span>{todo.title}</span>
+                    <span className='todo-tags'>
+                      {(tagIdsByTodo.get(todo.id) ?? []).map(tagId => {
+                        const tag = tagById.get(tagId);
+                        return tag ? (
+                          <small key={tag.id} style={{ borderColor: tag.color }}>
+                            {tag.name}
+                          </small>
+                        ) : null;
+                      })}
+                    </span>
+                  </span>
+                </label>
+                <small className='todo-state'>{todo.completed ? 'complete' : 'open'}</small>
+              </li>
+            ))}
+          </ul>
+
+          <footer>
+            <button
+              className='secondary'
+              disabled={selectedIds.length === 0 || completeTodos.isExecuting}
+              onClick={completeSelected}
+            >
+              Complete selected
+            </button>
+            <button
+              className='secondary'
+              disabled={!selectedTagId || selectedIds.length === 0 || assignTags.isExecuting}
+              onClick={() => changeSelectedTags('assign')}
+            >
+              Assign tag
+            </button>
+            <button
+              className='ghost'
+              disabled={!selectedTagId || selectedIds.length === 0 || removeTags.isExecuting}
+              onClick={() => changeSelectedTags('remove')}
+            >
+              Remove tag
+            </button>
+            <button
+              className='ghost'
+              disabled={completeAll.isExecuting}
+              onClick={() => completeAll.execute()}
+            >
+              Complete all durably
+            </button>
+            <button
+              className='danger'
+              disabled={!todos.data?.length || deleteAll.isExecuting}
+              onClick={() => deleteAll.execute()}
+            >
+              Delete all
+            </button>
+          </footer>
+
+          {completeAll.value && (
+            <div className='run' aria-live='polite'>
+              <span>Run {completeAll.value.runId}</span>
+              {completeAll.isQueued && <strong>Queued…</strong>}
+              {completeAll.isRunning && (
+                <strong>
+                  {completeAll.progress?.phase === 'updating' ? 'Completing todos…' : 'Running…'}
+                </strong>
+              )}
+              {completeAll.isCompleted && (
+                <strong>Completed {completeAll.finalValue?.completed ?? 0} todos.</strong>
+              )}
+              {completeAll.isFailed && (
+                <strong className='error'>{completeAll.runError?.message ?? 'Run failed.'}</strong>
+              )}
+              {completeAll.isCancelled && <strong>Cancelled.</strong>}
+            </div>
+          )}
+        </div>
       </section>
     </main>
   );

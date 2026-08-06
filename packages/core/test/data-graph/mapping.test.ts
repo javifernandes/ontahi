@@ -35,4 +35,18 @@ describe('data-graph mapping', () => {
     expect(resolveFieldNameForEntity(Book, 'title')).toBe('title');
     expect(resolveFieldNameForEntity(Book, 'owner_id')).toBe('ownerId');
   });
+
+  it('keeps local foreign-key evidence on schema-level belongs-to relations', () => {
+    const TodoList = entity('TodoList', { id: field.id() });
+    const Todo = entity('Todo', {
+      id: field.id(),
+      listId: field.id(),
+    }).belongsTo('list', TodoList, { via: 'listId' });
+
+    expect(Todo.relations.list).toMatchObject({
+      relationKind: 'belongsTo',
+      target: TodoList,
+      sourceField: 'listId',
+    });
+  });
 });

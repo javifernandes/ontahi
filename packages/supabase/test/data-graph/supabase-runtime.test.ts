@@ -622,10 +622,16 @@ describe('data-graph supabase runtime helpers', () => {
           operation: 'insert',
           root: Book,
           selection: { kind: 'none' },
-          payload: {
-            ownerId: 'owner-1',
-            title: 'Book',
-          },
+          payload: [
+            {
+              ownerId: 'owner-1',
+              title: 'Book',
+            },
+            {
+              ownerId: 'owner-2',
+              title: 'Another book',
+            },
+          ],
           cardinality: 'one',
         },
       ),
@@ -636,10 +642,16 @@ describe('data-graph supabase runtime helpers', () => {
       {
         method: 'insert',
         args: [
-          {
-            owner_id: 'owner-1',
-            title: 'Book',
-          },
+          [
+            {
+              owner_id: 'owner-1',
+              title: 'Book',
+            },
+            {
+              owner_id: 'owner-2',
+              title: 'Another book',
+            },
+          ],
         ],
       },
       {

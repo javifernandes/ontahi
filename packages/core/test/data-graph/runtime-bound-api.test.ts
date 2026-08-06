@@ -112,6 +112,24 @@ describe('runtime-bound data graph api', () => {
     });
     await expect(
       Effect.runPromise(
+        BookEntity.upsertMany(
+          [
+            { slug: 'progbook', title: 'Progbook' },
+            { slug: 'living-systems', title: 'Living Systems' },
+          ],
+          { conflictOn: ['slug'], strategy: 'ignore' },
+        ).run({ authority: 'system' }),
+      ),
+    ).resolves.toMatchObject({
+      operation: 'upsert',
+      payload: [
+        { slug: 'progbook', title: 'Progbook' },
+        { slug: 'living-systems', title: 'Living Systems' },
+      ],
+      upsert: { conflictOn: ['slug'], strategy: 'ignore' },
+    });
+    await expect(
+      Effect.runPromise(
         selection.updateOneReturning({ title: 'Updated' }, ['id']).run({ authority: 'system' }),
       ),
     ).resolves.toMatchObject({

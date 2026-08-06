@@ -133,6 +133,25 @@ export const createUpsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   },
 });
 
+export const createUpsertManyCommandSpec = <TEntity extends AnyEntityDefinition>(
+  root: TEntity,
+  payload: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+  options: {
+    conflictOn: readonly EntityFieldName<TEntity>[];
+    strategy: 'ignore' | 'merge';
+  },
+): GraphCommandSpec<TEntity, Array<Partial<InferEntityRecord<TEntity['fields']>>>> => ({
+  kind: 'command',
+  operation: 'upsert',
+  root,
+  selection: selectionNone(),
+  payload,
+  upsert: {
+    conflictOn: [...options.conflictOn],
+    strategy: options.strategy,
+  },
+});
+
 export interface GraphSelectionFactories {
   createSelection<TEntity extends AnyEntityDefinition, TResult>(
     builder: QueryBuilder<TEntity, TResult>,
