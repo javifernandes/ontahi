@@ -90,6 +90,11 @@ describe('data-graph selection helpers', () => {
       selection: visible.build(),
       payload: { title: 'Visible' },
     });
+    expect(visible.delete().build()).toMatchObject({
+      operation: 'delete',
+      root: Book,
+      selection: visible.build(),
+    });
   });
 
   it('provides all and none selections and rejects cross-entity composition', () => {
@@ -119,6 +124,8 @@ describe('data-graph selection helpers', () => {
     expect(selected.updateMany({ title: 'Updated' }).build().cardinality).toBe('one');
     expect(selected.delete().build().cardinality).toBe('one');
     expect(selected.deleteMany().build().cardinality).toBe('one');
+    expect(exactBook.update({ title: 'Updated' }).build().cardinality).toBe('one');
+    expect(exactBook.delete().build().cardinality).toBe('one');
     expect(exactBook.and(book => book.ownerId.eq('owner-1')).cardinality).toBe('one');
   });
 

@@ -85,4 +85,35 @@ describe('createFetchReflectedOperationInvoker', () => {
       message: 'No operation runtime is available.',
     });
   });
+
+  it('only advertises operations exposed through the server bridge', () => {
+    const invoker = createFetchReflectedOperationInvoker();
+    const operation = {
+      id: 'Book.fetchInfo',
+      entityName: 'Book',
+      name: 'fetchInfo',
+    };
+
+    expect(
+      invoker.canInvokeOperation?.({
+        ...operation,
+        kind: 'domain',
+        exposure: 'bridge',
+      }),
+    ).toBe(true);
+    expect(
+      invoker.canInvokeOperation?.({
+        ...operation,
+        kind: 'graph',
+        exposure: 'browser-direct',
+      }),
+    ).toBe(false);
+    expect(
+      invoker.canInvokeOperation?.({
+        ...operation,
+        kind: 'domain',
+        exposure: 'server-only',
+      }),
+    ).toBe(false);
+  });
 });

@@ -1,5 +1,6 @@
 import type { AnyEntityDefinition } from '../definitions.js';
 import {
+  createRelationAwareReflectedEntityDataReader,
   describeReflectedEntityDisplay,
   type ReflectedEntityDataFilter,
   type ReflectedEntityDataQuery,
@@ -64,6 +65,7 @@ const matchesFilter = (
 
   const current = row[filter.field];
   if (filter.operator === 'isNull') return current == null;
+  if (filter.operator === 'in') return filter.values?.includes(current) ?? true;
 
   const expected = parseFilterValue(field, filter.value);
   if (expected === undefined) return true;
@@ -157,6 +159,8 @@ export const listInMemoryReflectedEntityData = (
 
 export const createInMemoryReflectedEntityDataReader = (
   options: InMemoryReflectedEntityDataReaderOptions,
-): ReflectedEntityDataReader => ({
-  readEntityData: async query => listInMemoryReflectedEntityData(options, query),
-});
+): ReflectedEntityDataReader =>
+  createRelationAwareReflectedEntityDataReader({
+    entities: options.entities,
+    readEntityData: async query => listInMemoryReflectedEntityData(options, query),
+  });

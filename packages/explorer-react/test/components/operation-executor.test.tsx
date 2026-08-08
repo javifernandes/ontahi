@@ -473,9 +473,14 @@ describe('useExplorerOperationExecutor helpers', () => {
     ).toEqual([]);
   });
 
-  it('only marks bridged domain and durable operations executable', () => {
+  it('marks bridged server operations and browser-direct graph operations executable', () => {
     expect(isExplorerOperationExecutable(buildOperation())).toBe(true);
     expect(isExplorerOperationExecutable(buildOperation({ kind: 'graph' }))).toBe(false);
+    expect(
+      isExplorerOperationExecutable(
+        buildOperation({ kind: 'graph', authority: 'client-safe', exposure: 'browser-direct' }),
+      ),
+    ).toBe(true);
     expect(isExplorerOperationExecutable(buildOperation({ exposure: 'server-only' }))).toBe(false);
   });
 

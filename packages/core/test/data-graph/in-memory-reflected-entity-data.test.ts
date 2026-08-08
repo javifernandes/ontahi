@@ -5,6 +5,8 @@ import {
   createInMemoryDataGraphStorage,
   entity,
   field,
+  mapEntity,
+  mapRelation,
   query,
   type InMemoryDataset,
 } from '../../src/data-graph/index.js';
@@ -76,5 +78,64 @@ describe('in-memory reflected entity data', () => {
     await expect(storage.readEntityData({ entityName: 'Missing' })).rejects.toThrow(
       'Unknown graph entity: Missing',
     );
+  });
+
+  it('hydrates belongs-to display paths in batches', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const Profile = entity('Profile', {
+      id: field.id(),
+      displayName: field.string(),
+    });
+    const ReadingProgress = entity('ReadingProgress', {
+      userId: field.id(),
+      bookId: field.id(),
+    })
+      .display({
+        primary: 'book.title',
+        secondary: ['reader.displayName'],
+      })
+      .belongsTo('book', Book, { via: 'bookId' })
+      .belongsTo('reader', Profile, { via: 'userId' });
+
+    mapEntity(Book).toTable('books');
+    mapEntity(Profile).toTable('profiles');
+    mapEntity(ReadingProgress).toTable('reading_progress');
+    mapRelation(ReadingProgress, 'book', {
+      type: 'many-to-one',
+      from: 'reading_progress.bookId',
+      to: 'books.id',
+    });
+    mapRelation(ReadingProgress, 'reader', {
+      type: 'many-to-one',
+      from: 'reading_progress.userId',
+      to: 'profiles.id',
+    });
+
+    const storage = createInMemoryDataGraphStorage({
+      entities: [Book, Profile, ReadingProgress],
+      dataset: {
+        Book: [{ id: 'book-1', title: 'Programming Book' }],
+        Profile: [{ id: 'user-1', displayName: 'Javi' }],
+        ReadingProgress: [{ userId: 'user-1', bookId: 'book-1' }],
+      },
+    });
+
+    await expect(storage.readEntityData({ entityName: 'ReadingProgress' })).resolves.toMatchObject({
+      display: {
+        primary: 'book.title',
+        secondary: ['reader.displayName'],
+      },
+      rows: [
+        {
+          userId: 'user-1',
+          bookId: 'book-1',
+          'book.title': 'Programming Book',
+          'reader.displayName': 'Javi',
+        },
+      ],
+    });
   });
 });

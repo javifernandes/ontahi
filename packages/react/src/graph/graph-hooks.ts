@@ -1,6 +1,11 @@
 'use client';
 
-import type { GraphCommandSpec, QueryOrView, ViewDefinition } from '@ontahi/core/data-graph';
+import {
+  normalizeGraphSchemaClientInput,
+  type GraphCommandSpec,
+  type QueryOrView,
+  type ViewDefinition,
+} from '@ontahi/core/data-graph';
 import {
   useMutation,
   useQuery,
@@ -17,6 +22,8 @@ import type {
   GraphCommandBuilder,
   GraphCommandHookOptions,
   GraphOperationLike,
+  GraphOperationClientInput,
+  GraphOperationResult,
   GraphQueryData,
   GraphQueryMode,
   GraphQueryOptions,
@@ -126,17 +133,35 @@ export function useGraphCommand<
 }
 
 export function useGraphOperation<
-  TVariables,
-  TResult = void,
+  TOperation extends GraphOperationLike<any, any>,
   TContext = unknown,
   TReadOptions = unknown,
   TCommandOptions = TReadOptions,
 >(
-  operation: GraphOperationLike<TVariables, TResult>,
-  options?: GraphCommandHookOptions<TResult, TVariables, TContext, TCommandOptions>,
-): UseMutationResult<TResult, Error, TVariables, TContext> {
+  operation: TOperation,
+  options?: GraphCommandHookOptions<
+    GraphOperationResult<TOperation>,
+    GraphOperationClientInput<TOperation>,
+    TContext,
+    TCommandOptions
+  >,
+): UseMutationResult<
+  GraphOperationResult<TOperation>,
+  Error,
+  GraphOperationClientInput<TOperation>,
+  TContext
+> {
+  type TVariables = GraphOperationClientInput<TOperation>;
+  type TResult = GraphOperationResult<TOperation>;
+  const buildCommand = (variables: TVariables) =>
+    operation.run(
+      (operation.input
+        ? normalizeGraphSchemaClientInput(operation.input, variables)
+        : variables) as never,
+    );
+
   return useGraphCommand<TVariables, TResult, TContext, TReadOptions, TCommandOptions>(
-    operation.run,
+    buildCommand,
     {
       mutationKey: options?.mutationKey ?? ['graph-operation', operation.id],
       ...options,

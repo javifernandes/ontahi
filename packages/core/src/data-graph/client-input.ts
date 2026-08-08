@@ -54,9 +54,29 @@ type IdentityScalar<TEntity extends AnyEntityDefinition> =
     ? never
     : SingleLocatorArgument<TEntity['refLocators'][keyof TEntity['refLocators']]>;
 
+type IdentityLocator<TEntity extends AnyEntityDefinition> =
+  TEntity['identityLocatorName'] extends keyof TEntity['refLocators']
+    ? TEntity['refLocators'][TEntity['identityLocatorName']]
+    : never;
+
+type IdentityFieldNames<TEntity extends AnyEntityDefinition> =
+  IdentityLocator<TEntity> extends { fields: readonly (infer TFieldName extends string)[] }
+    ? TFieldName
+    : never;
+
+type IdentityRecord<TEntity extends AnyEntityDefinition> = [IdentityFieldNames<TEntity>] extends [
+  never,
+]
+  ? never
+  : Pick<
+      InferEntityRecord<TEntity['fields']>,
+      Extract<IdentityFieldNames<TEntity>, keyof InferEntityRecord<TEntity['fields']>>
+    >;
+
 export type EntitySelectionInputItem<TEntity extends AnyEntityDefinition> =
   | EntityRef<TEntity['name']>
   | InferEntityRecord<TEntity['fields']>
+  | IdentityRecord<TEntity>
   | IdentityScalar<TEntity>;
 
 export type GraphSelectionClientInput<
@@ -133,6 +153,7 @@ const normalizeSelectionInput = (
   return Selection.references(
     schema.entity,
     values.map(item => selectionInputItemToRef(schema.entity, item)),
+    schema.cardinality,
   );
 };
 

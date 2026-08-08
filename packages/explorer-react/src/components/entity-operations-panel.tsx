@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  useHasReflectedEntityDataReader,
-  useHasReflectedOperationInvoker,
-} from '@ontahi/react/graph';
+import { useHasReflectedEntityDataReader, useReflectedOperationSupport } from '@ontahi/react/graph';
 import { ChevronRight, Search } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 
@@ -121,10 +118,10 @@ const OperationPanel = ({
   renderRefInput?: ExplorerOperationRefInputRenderer;
 }) => {
   const hasReflectedEntityDataReader = useHasReflectedEntityDataReader();
-  const hasReflectedOperationInvoker = useHasReflectedOperationInvoker();
+  const supportsOperation = useReflectedOperationSupport();
   const hasExecutePanel = canShowExplorerOperationExecutePanel({
     hasReflectedEntityDataReader,
-    hasReflectedOperationInvoker,
+    hasReflectedOperationInvoker: supportsOperation(operation),
     operation,
     renderExecutePanel,
     renderRefInput,

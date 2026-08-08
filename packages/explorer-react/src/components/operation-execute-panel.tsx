@@ -29,6 +29,7 @@ import {
   updateExplorerInputFieldDraft,
   useExplorerOperationExecutor,
 } from './operation-executor.js';
+import { ExplorerSelect } from './select.js';
 import { ExplorerSelectionInput } from './selection-input.js';
 import type { ExplorerThemePreference } from './theme.js';
 
@@ -52,23 +53,6 @@ export type ExplorerOperationExecutePanelProps = {
   renderRefInput?: ExplorerOperationRefInputRenderer;
   theme?: ExplorerThemePreference;
   className?: string;
-};
-
-type ExplorerSelectOption = {
-  value: string;
-  label: string;
-};
-
-type ExplorerSelectProps = {
-  value: string;
-  onValueChange: (value: string) => void;
-  options: ExplorerSelectOption[];
-  placeholder?: string;
-  className?: string;
-  required?: boolean;
-  'aria-describedby'?: string;
-  'aria-invalid'?: boolean;
-  'aria-label'?: string;
 };
 
 const formatJsonValue = (value: unknown) => JSON.stringify(value, null, 2);
@@ -397,46 +381,6 @@ const getEditableInputValue = (
 ) =>
   parsedInputPreview.ok ? parsedInputPreview.value : buildExplorerOperationInputDraft(operation);
 
-const ExplorerSelect = ({
-  'aria-describedby': ariaDescribedBy,
-  'aria-invalid': ariaInvalid,
-  'aria-label': ariaLabel,
-  className,
-  onValueChange,
-  options,
-  placeholder,
-  required,
-  value,
-}: ExplorerSelectProps) => {
-  const showPlaceholder = Boolean(placeholder) && !options.some(option => option.value === '');
-
-  return (
-    <select
-      aria-describedby={ariaDescribedBy}
-      aria-invalid={ariaInvalid}
-      aria-label={ariaLabel}
-      required={required}
-      value={value}
-      onChange={event => onValueChange(event.target.value)}
-      className={cx(
-        'min-h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:border-primary aria-[invalid=true]:border-destructive',
-        className,
-      )}
-    >
-      {showPlaceholder ? (
-        <option value='' disabled>
-          {placeholder}
-        </option>
-      ) : null}
-      {options.map(option => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-};
-
 const ExplorerBooleanChoice = ({
   field,
   value,
@@ -565,7 +509,7 @@ const ExplorerRefInputRow = ({
         value: locator.name,
         label: formatLocatorName(locator.name),
       }))}
-      className='font-mono text-xs text-muted-foreground'
+      triggerClassName='font-mono text-xs text-muted-foreground'
       placeholder='Locator'
       aria-label={`${inputRef.path} locator`}
     />
@@ -688,7 +632,7 @@ const ExplorerScalarInputRow = ({
       }
       options={enumOptions}
       placeholder={variant === 'compact' ? field.path : field.type}
-      className={cx(
+      triggerClassName={cx(
         'justify-between',
         variant === 'compact'
           ? 'h-8 min-h-8 border-0 bg-transparent px-0 text-sm font-medium text-foreground shadow-none hover:bg-transparent'

@@ -4,6 +4,7 @@ import type { QueryBuilder, QuerySpec } from './query.js';
 import {
   selectionNone,
   type EntitySelectionSource,
+  type SemanticSelection,
   type SelectionExpression,
 } from './selection-ast.js';
 
@@ -35,14 +36,15 @@ export type PickEntityFields<
 
 type EntitySelection<TEntity extends AnyEntityDefinition> =
   | SelectionExpression
-  | EntitySelectionSource<TEntity>;
+  | EntitySelectionSource<TEntity>
+  | SemanticSelection<TEntity['name']>;
 
 const resolveEntitySelection = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
   selection: EntitySelection<TEntity>,
 ) => {
   if (!('expression' in selection)) return selection;
-  if (selection.root !== root) {
+  if (selection.root !== root && selection.root.name !== root.name) {
     throw new Error(`Cannot target ${root.name} with a ${selection.root.name} selection.`);
   }
   return selection.expression;

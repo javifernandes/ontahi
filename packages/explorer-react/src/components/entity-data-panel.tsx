@@ -10,46 +10,12 @@ import {
   type ExplorerEntityDataPageSize,
   useExplorerEntityDataBrowser,
 } from './entity-data-browser.js';
+import { ExplorerSelect } from './select.js';
 
 export type ExplorerEntityDataPanelProps = {
   entity: ExplorerEntityDetail;
   showHeader?: boolean;
 };
-
-type ExplorerSelectProps = {
-  value: string;
-  options: Array<{
-    value: string;
-    label: string;
-  }>;
-  onValueChange: (value: string) => void;
-  className?: string;
-  'aria-label'?: string;
-};
-
-const ExplorerSelect = ({
-  'aria-label': ariaLabel,
-  className,
-  onValueChange,
-  options,
-  value,
-}: ExplorerSelectProps) => (
-  <select
-    aria-label={ariaLabel}
-    value={value}
-    onChange={event => onValueChange(event.target.value)}
-    className={cx(
-      'min-h-10 rounded-md border bg-background px-3 text-sm outline-none focus:border-primary',
-      className,
-    )}
-  >
-    {options.map(option => (
-      <option key={option.value} value={option.value}>
-        {option.label}
-      </option>
-    ))}
-  </select>
-);
 
 const formatCellValue = (value: unknown) => {
   if (value == null) {
@@ -242,7 +208,8 @@ export function ExplorerEntityDataPanel({
                 browser.setPageSize(Number(value) as ExplorerEntityDataPageSize)
               }
               options={pageSizeOptions}
-              className='h-9 min-h-9 min-w-[112px] px-2 pr-3'
+              className='min-w-[112px]'
+              triggerClassName='h-9 min-h-9 px-2 pr-3'
             />
             <button
               type='button'

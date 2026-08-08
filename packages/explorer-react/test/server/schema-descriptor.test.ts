@@ -23,6 +23,25 @@ const expectPlainObjects = (value: unknown) => {
 };
 
 describe('graph ops schema descriptor', () => {
+  it('preserves void output semantics', () => {
+    expect(describeRuntimeSchema(graphSchema.void(), { io: 'output' })).toEqual({
+      source: 'ontahi',
+      summary: 'void',
+      fields: [],
+      jsonSchema: {},
+    });
+    expect(
+      describeRuntimeSchema(graphSchema.named('CommandOutput', graphSchema.void()), {
+        io: 'output',
+      }),
+    ).toEqual({
+      source: 'ontahi',
+      summary: 'void',
+      fields: [],
+      jsonSchema: { title: 'CommandOutput' },
+    });
+  });
+
   it('preserves selection semantics for Explorer controls', () => {
     const Notification = entity('UserNotification', {
       id: field.id(),

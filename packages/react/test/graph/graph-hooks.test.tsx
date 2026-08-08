@@ -1,4 +1,11 @@
-import { entity, field, query, view, type GraphCommandSpec } from '@ontahi/core/data-graph';
+import {
+  entity,
+  field,
+  graphSchema,
+  query,
+  view,
+  type GraphCommandSpec,
+} from '@ontahi/core/data-graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -28,6 +35,13 @@ const booksIndexView = view('booksIndex', BookEntity, ({ root }) =>
     title: book.title,
   })),
 );
+
+const ReadingProgressEntity = entity('ReadingProgress', {
+  userId: field.id(),
+  bookId: field.id(),
+})
+  .locators({ refByUserAndBook: ['userId', 'bookId'] })
+  .identity('refByUserAndBook');
 
 type BookSummary = {
   slug: string;
@@ -189,5 +203,51 @@ describe('graph query and command hooks', () => {
     });
 
     expect(graphExecutor.runCommand).toHaveBeenCalledWith(command, undefined);
+  });
+
+  it('normalizes composite identity records into graph operation selections', async () => {
+    const graphExecutor = createExecutorMock();
+    const operation = {
+      id: 'ReadingProgress.reset',
+      kind: 'graph-operation',
+      authority: 'client-safe',
+      exposure: 'browser-direct',
+      input: graphSchema.object({
+        progress: graphSchema.selection(ReadingProgressEntity, { cardinality: 'one' }),
+      }),
+      run: ({
+        progress,
+      }: {
+        progress: import('@ontahi/core/data-graph').Selection<typeof ReadingProgressEntity>;
+      }) => progress.delete(),
+    } as const;
+
+    const { result } = renderHook(() => useGraphOperation(operation), {
+      wrapper: createWrapper(graphExecutor),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        progress: { userId: 'user-1', bookId: 'book-1' },
+      });
+    });
+
+    expect(graphExecutor.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'delete',
+        cardinality: 'one',
+        selection: {
+          kind: 'references',
+          refs: [
+            {
+              kind: 'entity-ref',
+              entityName: 'ReadingProgress',
+              locator: { userId: 'user-1', bookId: 'book-1' },
+            },
+          ],
+        },
+      }),
+      undefined,
+    );
   });
 });

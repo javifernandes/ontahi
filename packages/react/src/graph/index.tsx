@@ -7,3 +7,4 @@ export * from './operation-cache.js';
 export * from './operation-hooks.js';
 export * from './operation-types.js';
 export * from './reflected-entity-data-hooks.js';
+export * from './reflected-operation-invoker.js';

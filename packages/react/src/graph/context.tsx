@@ -4,10 +4,12 @@ import {
   createGraphClientCache,
   type GraphClientCache,
   type ReflectedEntityDataReader,
+  type ReflectedOperationDescriptor,
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
   useState,
@@ -18,6 +20,12 @@ import {
 import type { AnyOperationBridgeAdapter } from '../actions/index.js';
 
 import type { ReactGraphExecutor } from './executor.js';
+import {
+  createReflectedOperationInvoker,
+  type ReflectedGraphOperationLike,
+} from './reflected-operation-invoker.js';
+
+const noReflectedGraphOperations: readonly ReflectedGraphOperationLike[] = [];
 
 const GraphRuntimeContext = createContext<unknown | null>(null);
 const GraphExecutorContext = createContext<ReactGraphExecutor<any, any> | null>(null);
@@ -39,6 +47,7 @@ export type OntahiGraphProviderProps<
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
+  reflectedGraphOperations?: readonly ReflectedGraphOperationLike[];
   clientCache?: GraphClientCache;
 };
 
@@ -53,6 +62,7 @@ export function OntahiGraphProvider<
   operationBridgeAdapters = [],
   reflectedEntityDataReader,
   reflectedOperationInvoker,
+  reflectedGraphOperations = noReflectedGraphOperations,
   clientCache,
 }: OntahiGraphProviderProps<TGraphRuntime, TReadOptions, TCommandOptions>) {
   const [defaultClientCache] = useState(() => createGraphClientCache());
@@ -61,9 +71,20 @@ export function OntahiGraphProvider<
     () => new Map(operationBridgeAdapters.map(adapter => [adapter.name, adapter])),
     [operationBridgeAdapters],
   );
+  const resolvedReflectedOperationInvoker = useMemo(
+    () =>
+      reflectedGraphOperations.length > 0
+        ? createReflectedOperationInvoker({
+            fallback: reflectedOperationInvoker,
+            graphExecutor,
+            graphOperations: reflectedGraphOperations,
+          })
+        : (reflectedOperationInvoker ?? null),
+    [graphExecutor, reflectedGraphOperations, reflectedOperationInvoker],
+  );
 
   return (
-    <ReflectedOperationInvokerContext.Provider value={reflectedOperationInvoker ?? null}>
+    <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
       <ReflectedEntityDataReaderContext.Provider value={reflectedEntityDataReader ?? null}>
         <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
           <GraphClientCacheContext.Provider value={graphClientCache}>
@@ -193,6 +214,16 @@ export function useReflectedOperationInvoker() {
 
 export function useHasReflectedOperationInvoker() {
   return useContext(ReflectedOperationInvokerContext) !== null;
+}
+
+export function useReflectedOperationSupport() {
+  const invoker = useContext(ReflectedOperationInvokerContext);
+
+  return useCallback(
+    (operation: ReflectedOperationDescriptor) =>
+      Boolean(invoker && (invoker.canInvokeOperation?.(operation) ?? true)),
+    [invoker],
+  );
 }
 
 export type { GraphClientCache };

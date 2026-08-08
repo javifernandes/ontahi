@@ -1163,6 +1163,15 @@ const resolveObjectLiteralInitializer = (initializer, declarations, visited = ne
     return resolveIdentifier(initializer);
   }
 
+  if (
+    ts.isCallExpression(initializer) &&
+    ts.isIdentifier(initializer.expression) &&
+    initializer.expression.text === 'operationGroup'
+  ) {
+    const factory = initializer.arguments[1];
+    return factory ? resolveObjectLiteralInitializer(factory, declarations, visited) : undefined;
+  }
+
   if (ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression)) {
     return resolveIdentifier(initializer.expression);
   }
@@ -1695,13 +1704,25 @@ const projectEntitySchemaConfig = (configArg, context) => {
           }
           const relationKind = property.initializer.expression.name.text;
           const [targetArg, optionsArg] = property.initializer.arguments;
+          const nominalTarget =
+            targetArg &&
+            ts.isCallExpression(targetArg) &&
+            ts.isPropertyAccessExpression(targetArg.expression) &&
+            ts.isIdentifier(targetArg.expression.expression) &&
+            targetArg.expression.expression.text === 'entity' &&
+            targetArg.expression.name.text === 'ref' &&
+            targetArg.arguments[0] &&
+            ts.isStringLiteral(targetArg.arguments[0])
+              ? targetArg.arguments[0].text
+              : undefined;
           if (
             (relationKind !== 'hasMany' && relationKind !== 'belongsTo') ||
             !targetArg ||
-            !ts.isIdentifier(targetArg)
+            (!ts.isIdentifier(targetArg) && !nominalTarget)
           ) {
             return [];
           }
+          const targetName = nominalTarget ?? targetArg.text;
           const via =
             optionsArg && ts.isObjectLiteralExpression(optionsArg)
               ? readStringLiteralObjectProperty(optionsArg, 'via')
@@ -1710,9 +1731,10 @@ const projectEntitySchemaConfig = (configArg, context) => {
             {
               name: property.name.text,
               kind: relationKind,
-              targetName: targetArg.text,
-              ...(context?.importMap.get(targetArg.text)
-                ? { targetImportPath: context.importMap.get(targetArg.text) }
+              targetName,
+              ...(nominalTarget ? { deferred: true } : {}),
+              ...(context?.importMap.get(targetName)
+                ? { targetImportPath: context.importMap.get(targetName) }
                 : {}),
               ...(via ? { via } : {}),
             },
@@ -1830,7 +1852,10 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
         !operationsInitializer ||
         !ts.isObjectLiteralExpression(operationsInitializer)
       ) {
-        if (options.includeTasks && parsedTasks.tasks.length > 0) {
+        if (
+          (options.includeTasks && parsedTasks.tasks.length > 0) ||
+          (unifiedDeclaration && entitySchemaProjection)
+        ) {
           return {
             diagnostics: parsedTasks.diagnostics,
             definition: {
@@ -1839,6 +1864,7 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
               entityName,
               ...(entityDefinitionName ? { entityDefinitionName } : {}),
               ...(entityDefinitionImportPath ? { entityDefinitionImportPath } : {}),
+              ...(entityDefinitionLocalName ? { entityDefinitionLocalName } : {}),
               ...(entitySchemaProjection ? { entitySchemaProjection } : {}),
               ...(relation ? { relation } : {}),
               entityExportName,

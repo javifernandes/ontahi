@@ -109,4 +109,18 @@ describe('selection scalar operator contract', () => {
       Effect.runPromise(runtime.run(query(Item).where(notEqual), undefined)),
     ).resolves.toMatchObject([{ id: 'item-1' }, { id: 'item-3' }]);
   });
+
+  it('applies selections authored against another projection of the same semantic entity', async () => {
+    const ProjectedItem = entity('SelectionOperatorItem', {
+      id: field.id(),
+      score: field.integer(),
+      note: field.nullable(field.string()),
+    });
+    const projectedSelection = selection(ProjectedItem, item => item.score.gte(2));
+    const runtime = createInMemoryDataGraphRuntime({ dataset });
+
+    await expect(
+      Effect.runPromise(runtime.run(query(Item).where(projectedSelection), undefined)),
+    ).resolves.toMatchObject([{ id: 'item-2' }, { id: 'item-3' }]);
+  });
 });

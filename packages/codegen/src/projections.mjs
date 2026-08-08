@@ -5,6 +5,16 @@ const normalizeInlineBridgeQueryInputType = typeText => typeText.replace(/\s+/g,
 const collectEntityDefinitionNamesFromText = text =>
   Array.from(text.matchAll(/\b[A-Z][A-Za-z0-9_]*Entity\b/g), match => match[0]);
 
+const replaceProjectedEntityNames = (text, projectedNames) => {
+  if (!text) return text;
+
+  return Array.from(projectedNames.entries()).reduce(
+    (current, [sourceName, projectedName]) =>
+      current.replace(new RegExp(`\\b${sourceName}\\b`, 'g'), projectedName),
+    text,
+  );
+};
+
 const shouldRenderInputContract = (operation, operationContracts) =>
   Boolean(operation.inputSchemaText) &&
   (operationContracts === 'all' ||
@@ -50,6 +60,7 @@ const renderClientEntityExport = (
   definition,
   relationDefinitionsBySource = new Map(),
   operationContracts = 'all',
+  projectedNames = new Map(),
 ) => {
   const entityExportName = definition.entityName;
   const entityArgument = definition.entitySchemaProjection
@@ -76,6 +87,10 @@ ${relationDefinitions
       : '';
   const operationBlocks = definition.operations
     .map(operation => {
+      const graphOutputText = replaceProjectedEntityNames(
+        operation.graphOutputText,
+        projectedNames,
+      );
       const lines = [
         `    ${operation.name}: defineClientDomainOperation({`,
         `      authority: '${operation.authority}',`,
@@ -108,8 +123,8 @@ ${relationDefinitions
         lines.push('      },');
       }
 
-      if (operation.graphOutputText) {
-        lines.push(`      graphOutput: ${operation.graphOutputText},`);
+      if (graphOutputText) {
+        lines.push(`      graphOutput: ${graphOutputText},`);
       }
 
       if (operation.clientCacheText) {
@@ -142,32 +157,47 @@ const renderEntitySchemaProjection = (definition, projectedNames = new Map()) =>
     ...(projection.freshnessText ? [`.freshness(${projection.freshnessText})`] : []),
     ...(projection.locatorsText ? [`.locators(${projection.locatorsText})`] : []),
     ...(projection.identityText ? [`.identity(${projection.identityText})`] : []),
-    ...(projection.relations ?? []).map(
-      relation =>
-        `.${relation.kind}('${relation.name}', ${
-          projectedNames.get(relation.targetName) ?? relation.targetName
-        }${relation.via ? `, { via: '${relation.via}' }` : ''})`,
-    ),
+    ...(projection.relations ?? [])
+      .filter(relation => !relation.deferred)
+      .map(
+        relation =>
+          `.${relation.kind}('${relation.name}', ${
+            projectedNames.get(relation.targetName) ?? relation.targetName
+          }${relation.via ? `, { via: '${relation.via}' }` : ''})`,
+      ),
   ];
 
   return {
     localName,
     text: `export const ${localName} = ${steps.join('\n  ')};`,
+    deferredTexts: (projection.relations ?? [])
+      .filter(relation => relation.deferred)
+      .map(
+        relation =>
+          `${localName}.${relation.kind}('${relation.name}', ${
+            projectedNames.get(relation.targetName) ?? relation.targetName
+          }${relation.via ? `, { via: '${relation.via}' }` : ''});`,
+      ),
   };
 };
 
 const orderSchemaProjections = definitions => {
-  const definitionsByName = new Map(
-    definitions
-      .filter(definition => definition.entityDefinitionName)
-      .map(definition => [definition.entityDefinitionName, definition]),
-  );
+  const definitionsByName = new Map();
+  definitions.forEach(definition => {
+    if (definition.entityDefinitionName) {
+      definitionsByName.set(definition.entityDefinitionName, definition);
+    }
+    if (definition.entityName) {
+      definitionsByName.set(definition.entityName, definition);
+    }
+  });
   const ordered = [];
   const visited = new Set();
   const visit = definition => {
     if (visited.has(definition)) return;
     visited.add(definition);
     for (const relation of definition.entitySchemaProjection?.relations ?? []) {
+      if (relation.deferred) continue;
       const target = definitionsByName.get(relation.targetName);
       if (target) visit(target);
     }
@@ -229,18 +259,25 @@ export const renderGeneratedClientEntityModule = ({
   const projectedNames = new Map(
     schemaEntities
       .filter(entity => entity.entitySchemaProjection && entity.entityDefinitionName)
-      .map(entity => [
-        entity.entityDefinitionName,
-        entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`,
-      ]),
+      .flatMap(entity => {
+        const projectedName = entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
+
+        return [
+          [entity.entityDefinitionName, projectedName],
+          [entity.entityName, projectedName],
+        ];
+      }),
   );
   const entitySchemaProjections = orderSchemaProjections(schemaEntities)
     .map(entity => renderEntitySchemaProjection(entity, projectedNames))
     .filter(Boolean);
+  const deferredEntityRelationTexts = entitySchemaProjections.flatMap(
+    projection => projection.deferredTexts,
+  );
   const projectedEntityNames = new Set(
     schemaEntities
       .filter(entity => entity.entitySchemaProjection)
-      .map(entity => entity.entityDefinitionName)
+      .flatMap(entity => [entity.entityDefinitionName, entity.entityName])
       .filter(Boolean),
   );
   const relationDefinitionsBySource = new Map();
@@ -253,7 +290,12 @@ export const renderGeneratedClientEntityModule = ({
   const orderedEntities = [...relationDefinitions, ...entities.filter(entity => !entity.relation)];
   const entityExports = orderedEntities
     .map(entity =>
-      renderClientEntityExport(entity, relationDefinitionsBySource, operationContracts),
+      renderClientEntityExport(
+        entity,
+        relationDefinitionsBySource,
+        operationContracts,
+        projectedNames,
+      ),
     )
     .join('\n\n');
   const entityDefinitionImports = Array.from(
@@ -351,6 +393,8 @@ ${coreImports.map(name => `  ${name},`).join('\n')}
 
 ${schemaImportSection}${entitySchemaProjections.map(projection => projection.text).join('\n\n')}${
     entitySchemaProjections.length > 0 ? '\n\n' : ''
+  }${deferredEntityRelationTexts.join('\n')}${
+    deferredEntityRelationTexts.length > 0 ? '\n\n' : ''
   }${helperSection}${entityExports}
 `);
 };

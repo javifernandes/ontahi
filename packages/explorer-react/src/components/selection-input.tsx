@@ -51,7 +51,7 @@ const displayValue = (value: unknown) =>
       ? String(value)
       : JSON.stringify(value);
 
-const rowLabel = (row: Record<string, unknown>, primary?: string) =>
+const rowPrimaryLabel = (row: Record<string, unknown>, primary?: string) =>
   (primary ? displayValue(row[primary]) : '') ||
   displayValue(row.title) ||
   displayValue(row.displayName) ||
@@ -59,6 +59,23 @@ const rowLabel = (row: Record<string, unknown>, primary?: string) =>
   displayValue(row.slug) ||
   displayValue(row.id) ||
   'Untitled row';
+
+const rowSecondaryLabel = (
+  row: Record<string, unknown>,
+  secondary: readonly string[] = [],
+  identityFields: readonly string[] = [],
+) =>
+  [
+    ...new Set([
+      ...secondary.map(field => displayValue(row[field])),
+      identityFields
+        .map(field => displayValue(row[field]))
+        .filter(Boolean)
+        .join(' · '),
+    ]),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
 const refKey = (ref: SelectionRef) => JSON.stringify(ref.locator);
 
@@ -89,7 +106,11 @@ export const ExplorerSelectionInput = ({
       search: deferredQuery,
       pageSize: 8,
     },
-    { enabled: Boolean(identity) && isOpen },
+    {
+      enabled: Boolean(identity) && isOpen,
+      refetchOnMount: 'always',
+      staleTime: 0,
+    },
   );
   const selectExpression = (expression: Record<string, unknown>) =>
     onChange({
@@ -169,45 +190,58 @@ export const ExplorerSelectionInput = ({
             aria-label={`Choose ${field.selection.entityName}`}
             className='min-h-8 w-full rounded-md border bg-background pl-8 pr-8 text-sm outline-none focus:border-primary'
           />
-          {dataQuery.isFetching ? (
-            <Loader2 className='absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground' />
-          ) : refs.length > 0 ? (
+          {refs.length > 0 ? (
             <span className='absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-primary'>
               {refs.length}
             </span>
           ) : null}
           {isOpen ? (
             <div className='absolute left-0 right-0 top-[calc(100%+0.25rem)] z-30 max-h-64 overflow-y-auto rounded-md border bg-popover p-1 shadow-lg'>
-              {(dataQuery.data?.rows ?? []).map((row, index) => {
-                const locator = Object.fromEntries(
-                  identity.fields.map(locatorField => [locatorField, row[locatorField]]),
-                );
-                const selected = selectedKeys.has(JSON.stringify(locator));
+              {dataQuery.isFetching ? (
+                <div
+                  role='status'
+                  className='flex items-center gap-2 px-2.5 py-3 text-sm text-muted-foreground'
+                >
+                  <Loader2 className='size-3.5 shrink-0 animate-spin' />
+                  <span>Loading {field.selection.entityName}…</span>
+                </div>
+              ) : null}
+              {!dataQuery.isFetching
+                ? (dataQuery.data?.rows ?? []).map((row, index) => {
+                    const locator = Object.fromEntries(
+                      identity.fields.map(locatorField => [locatorField, row[locatorField]]),
+                    );
+                    const selected = selectedKeys.has(JSON.stringify(locator));
+                    const primary = rowPrimaryLabel(row, dataQuery.data?.display?.primary);
+                    const secondary = rowSecondaryLabel(
+                      row,
+                      dataQuery.data?.display?.secondary,
+                      identity.fields,
+                    );
 
-                return (
-                  <button
-                    key={`${JSON.stringify(locator)}-${index}`}
-                    type='button'
-                    role={field.selection.cardinality === 'one' ? 'radio' : 'checkbox'}
-                    aria-checked={selected}
-                    onMouseDown={event => event.preventDefault()}
-                    onClick={() => toggleRow(row)}
-                    className={cx(
-                      'flex w-full items-center justify-between gap-3 rounded px-2.5 py-2 text-left text-sm hover:bg-muted',
-                      selected && 'bg-primary/10 text-primary',
-                    )}
-                  >
-                    <span className='truncate'>
-                      {rowLabel(row, dataQuery.data?.display?.primary)}
-                    </span>
-                    <span className='shrink-0 font-mono text-xs text-muted-foreground'>
-                      {identity.fields
-                        .map(locatorField => displayValue(row[locatorField]))
-                        .join(' · ')}
-                    </span>
-                  </button>
-                );
-              })}
+                    return (
+                      <button
+                        key={`${JSON.stringify(locator)}-${index}`}
+                        type='button'
+                        role={field.selection.cardinality === 'one' ? 'radio' : 'checkbox'}
+                        aria-checked={selected}
+                        onMouseDown={event => event.preventDefault()}
+                        onClick={() => toggleRow(row)}
+                        className={cx(
+                          'grid w-full gap-0.5 rounded px-2.5 py-2 text-left text-sm hover:bg-muted',
+                          selected && 'bg-primary/10 text-primary',
+                        )}
+                      >
+                        <span className='truncate font-medium'>{primary}</span>
+                        {secondary && secondary !== primary ? (
+                          <span className='truncate font-mono text-xs text-muted-foreground'>
+                            {secondary}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                : null}
               {!dataQuery.isFetching && dataQuery.data?.rows.length === 0 ? (
                 <p className='px-2.5 py-3 text-sm text-muted-foreground'>No matching entities.</p>
               ) : null}

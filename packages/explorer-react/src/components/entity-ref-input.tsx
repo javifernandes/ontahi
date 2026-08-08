@@ -35,8 +35,11 @@ const toDisplayString = (value: unknown) => {
     : JSON.stringify(value);
 };
 
+const getEntityRowDisplayValues = (row: Record<string, unknown>, fields: readonly string[] = []) =>
+  fields.map(field => toDisplayString(row[field])).filter(Boolean);
+
 const getEntityRowDisplayValue = (row: Record<string, unknown>, fields: readonly string[] = []) =>
-  fields.map(field => toDisplayString(row[field])).find(Boolean) ?? '';
+  getEntityRowDisplayValues(row, fields)[0] ?? '';
 
 const getFallbackEntityRowPrimaryLabel = (row: Record<string, unknown>) =>
   toDisplayString(row.title) ||
@@ -53,6 +56,11 @@ const getEntityRowPrimaryLabel = (
 ) =>
   getEntityRowDisplayValue(row, display?.primary ? [display.primary] : []) ||
   getFallbackEntityRowPrimaryLabel(row);
+
+const getEntityRowSecondaryLabel = (
+  row: Record<string, unknown>,
+  display?: ExplorerEntityDisplayDescriptor,
+) => [...new Set(getEntityRowDisplayValues(row, display?.secondary))].join(' · ');
 
 const getEntityRowLocatorLabel = (
   row: Record<string, unknown>,
@@ -88,6 +96,7 @@ export function ExplorerEntityRefInput({
   const [query, setQuery] = useState(currentValue);
   const [selectedDisplay, setSelectedDisplay] = useState<{
     label: string;
+    secondary: string;
     value: string;
   } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -100,6 +109,8 @@ export function ExplorerEntityRefInput({
     },
     {
       enabled: isOpen,
+      refetchOnMount: 'always',
+      staleTime: 0,
     },
   );
   const rows = dataQuery.data?.rows ?? [];
@@ -135,9 +146,11 @@ export function ExplorerEntityRefInput({
     const locatorValues = resolveLocatorValuesFromRow(row, locator, query);
     const nextValue = toDisplayString(locatorValues[locatorField]);
     const nextLabel = getEntityRowPrimaryLabel(row, display);
+    const nextSecondary = getEntityRowSecondaryLabel(row, display);
 
     setSelectedDisplay({
       label: nextLabel,
+      secondary: nextSecondary,
       value: nextValue,
     });
     setQuery(nextLabel);
@@ -196,46 +209,56 @@ export function ExplorerEntityRefInput({
               )}
             >
               <span className='min-w-0 truncate text-foreground'>{selectedDisplay?.label}</span>
+              {selectedDisplay?.secondary ? (
+                <span className='ml-2.5 min-w-0 truncate text-xs font-normal text-muted-foreground'>
+                  {selectedDisplay.secondary}
+                </span>
+              ) : null}
               <span className='ml-2.5 max-w-[52%] shrink-0 truncate font-mono text-xs font-normal text-muted-foreground'>
                 {selectedRefLabel}
               </span>
             </div>
           ) : null}
         </div>
-        {isLoading ? (
-          <Loader2
-            className={cx(
-              'pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground',
-              compact ? 'right-0' : 'right-3',
-            )}
-          />
-        ) : null}
-
         {isOpen ? (
           <div className='absolute left-0 right-0 top-[calc(100%+0.375rem)] z-20 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg'>
             <div className='max-h-64 overflow-auto py-1'>
-              {rows.map((row, index) => {
-                const primary = getEntityRowPrimaryLabel(row, display);
-                const locatorLabel = getEntityRowLocatorLabel(row, locator);
-                const secondary = locatorLabel === primary ? '' : locatorLabel;
+              {isLoading ? (
+                <div
+                  role='status'
+                  className='flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground'
+                >
+                  <Loader2 className='size-4 shrink-0 animate-spin' />
+                  <span>Loading {inputRef.entityName}…</span>
+                </div>
+              ) : null}
+              {!isLoading
+                ? rows.map((row, index) => {
+                    const primary = getEntityRowPrimaryLabel(row, display);
+                    const locatorLabel = getEntityRowLocatorLabel(row, locator);
+                    const displaySecondary = getEntityRowSecondaryLabel(row, display);
+                    const secondary = [...new Set([displaySecondary, locatorLabel])]
+                      .filter(value => value && value !== primary)
+                      .join(' · ');
 
-                return (
-                  <button
-                    key={`${primary}-${index}`}
-                    type='button'
-                    onMouseDown={event => event.preventDefault()}
-                    onClick={() => selectRow(row)}
-                    className='grid w-full gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent'
-                  >
-                    <span className='truncate font-medium'>{primary}</span>
-                    {secondary ? (
-                      <span className='truncate font-mono text-xs text-muted-foreground'>
-                        {secondary}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+                    return (
+                      <button
+                        key={`${primary}-${index}`}
+                        type='button'
+                        onMouseDown={event => event.preventDefault()}
+                        onClick={() => selectRow(row)}
+                        className='grid w-full gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent'
+                      >
+                        <span className='truncate font-medium'>{primary}</span>
+                        {secondary ? (
+                          <span className='truncate font-mono text-xs text-muted-foreground'>
+                            {secondary}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                : null}
               {!isLoading && rows.length === 0 ? (
                 <div className='px-3 py-3 text-sm text-muted-foreground'>
                   {error ?? 'No rows found. You can still use the typed value.'}

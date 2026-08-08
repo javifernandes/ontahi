@@ -101,6 +101,7 @@ export {
 } from './routes.js';
 export { ExplorerSectionNav, type ExplorerSectionNavProps } from './section-nav.js';
 export { ExplorerSchemaPanel, type ExplorerSchemaPanelProps } from './schema-panel.js';
+export { ExplorerSelect, type ExplorerSelectOption, type ExplorerSelectProps } from './select.js';
 export {
   ExplorerFieldRow,
   ExplorerSchemaFields,

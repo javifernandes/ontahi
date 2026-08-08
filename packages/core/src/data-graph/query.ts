@@ -9,6 +9,7 @@ import {
   selectionAll,
   selectionAnd,
   type EntitySelectionSource,
+  type SemanticSelection,
   type SelectionExpression,
   type SelectionPredicate,
 } from './selection-ast.js';
@@ -254,9 +255,16 @@ export class QueryBuilder<
   constructor(readonly spec: QuerySpec<TEntity, TResult>) {}
 
   where(
-    build: ((root: EntityProxy<TEntity>) => SelectionExpression) | EntitySelectionSource<TEntity>,
+    build:
+      | ((root: EntityProxy<TEntity>) => SelectionExpression)
+      | EntitySelectionSource<TEntity>
+      | SemanticSelection<TEntity['name']>,
   ) {
-    if (typeof build !== 'function' && build.root !== this.spec.root) {
+    if (
+      typeof build !== 'function' &&
+      build.root !== this.spec.root &&
+      build.root.name !== this.spec.root.name
+    ) {
       throw new Error(`Cannot apply a ${build.root.name} selection to ${this.spec.root.name}.`);
     }
 

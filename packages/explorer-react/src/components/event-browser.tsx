@@ -7,6 +7,7 @@ import { cx } from '../internal/cx.js';
 
 import { useExplorerConfig, useExplorerRoutes } from './config.js';
 import { ExplorerEventDetail } from './entity-detail-panels.js';
+import { ExplorerSelect } from './select.js';
 
 export type ExplorerEventBrowserProps = {
   events: ExplorerEventDescriptor[];
@@ -140,18 +141,13 @@ export function ExplorerEventBrowser({
               aria-label='Search events'
               className='min-h-10 flex-1 rounded-md border bg-background px-3 text-sm outline-none focus:border-primary'
             />
-            <select
+            <ExplorerSelect
               value={domain}
-              onChange={event => setDomain(event.target.value)}
+              onValueChange={setDomain}
+              options={domainOptions}
               aria-label='Filter events by domain'
-              className='min-h-10 rounded-md border bg-background px-3 text-sm outline-none focus:border-primary md:w-[180px]'
-            >
-              {domainOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              className='md:w-[180px]'
+            />
           </div>
 
           <div className='min-w-0 overflow-hidden rounded-lg border bg-card'>

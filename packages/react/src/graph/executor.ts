@@ -1,6 +1,8 @@
 import type {
   GraphCommandSpec,
   GraphOperationDeclaration,
+  GraphSchemaLike,
+  InferGraphSchemaClientInput,
   QueryOrView,
   QuerySpec,
 } from '@ontahi/core/data-graph';
@@ -79,6 +81,20 @@ export type GraphOperationLike<TVariables, TResult> = GraphOperationDeclaration<
 > & {
   id: string;
 };
+
+export type GraphOperationClientInput<TOperation> = TOperation extends {
+  input: infer TSchema extends GraphSchemaLike;
+}
+  ? InferGraphSchemaClientInput<TSchema>
+  : TOperation extends GraphOperationDeclaration<infer TInput, any>
+    ? TInput
+    : never;
+
+export type GraphOperationResult<TOperation> = TOperation extends {
+  run: (...args: any[]) => CommandLike<infer TResult>;
+}
+  ? TResult
+  : never;
 
 export type GraphCommandHookOptions<
   TResult,

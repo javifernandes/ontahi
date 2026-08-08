@@ -1,4 +1,4 @@
-import { entity, field, mapEntity } from '@ontahi/core/data-graph';
+import { entity, field, mapEntity, mapRelation } from '@ontahi/core/data-graph';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createSupabaseReflectedEntityDataReader } from '../../src/data-graph/index.js';
@@ -14,7 +14,9 @@ const supabaseMock = {
   }>,
 };
 
-const createSupabaseClient = () => ({
+const createSupabaseClient = (
+  rowsByTable: Record<string, Array<Record<string, unknown>>> = {},
+) => ({
   from: (table: string) => {
     const attempt = {
       filters: [] as unknown[],
@@ -31,6 +33,10 @@ const createSupabaseClient = () => ({
       },
       ilike: (column: string, value: unknown) => {
         attempt.filters.push({ column, operator: 'ilike', value });
+        return query;
+      },
+      in: (column: string, values: unknown[]) => {
+        attempt.filters.push({ column, operator: 'in', values });
         return query;
       },
       is: (column: string, value: null) => {
@@ -59,14 +65,38 @@ const createSupabaseClient = () => ({
           };
         }
 
+        const configuredRows = rowsByTable[table];
+        const rows = configuredRows
+          ? configuredRows.filter(row =>
+              attempt.filters.every(filter => {
+                const candidate = filter as {
+                  column: string;
+                  operator: string;
+                  value?: unknown;
+                  values?: unknown[];
+                };
+
+                if (candidate.operator === 'in') {
+                  return candidate.values?.includes(row[candidate.column]);
+                }
+
+                if (candidate.operator === 'eq') {
+                  return row[candidate.column] === candidate.value;
+                }
+
+                return true;
+              }),
+            )
+          : [
+              {
+                id: 'node-1',
+                title: 'Intro',
+              },
+            ];
+
         return {
-          count: 1,
-          data: [
-            {
-              id: 'node-1',
-              title: 'Intro',
-            },
-          ],
+          count: rows.length,
+          data: rows.slice(from, to + 1),
           error: null,
         };
       },
@@ -165,5 +195,97 @@ describe('Supabase reflected entity data reader', () => {
     expect(supabaseMock.attempts[0]?.filters).toEqual([
       { column: 'id', operator: 'eq', value: 'book-1' },
     ]);
+  });
+
+  it('supports batched reflected relation filters', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const reader = createSupabaseReflectedEntityDataReader({
+      entities: [Book],
+      getClient: createSupabaseClient,
+    });
+
+    await reader.readEntityData({
+      entityName: 'Book',
+      filters: [{ field: 'id', operator: 'in', values: ['book-1', 'book-2'] }],
+    });
+
+    expect(supabaseMock.attempts[0]?.filters).toEqual([
+      { column: 'id', operator: 'in', values: ['book-1', 'book-2'] },
+    ]);
+  });
+
+  it('hydrates relation display paths with batched target reads', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const Profile = entity('Profile', {
+      id: field.id(),
+      displayName: field.string(),
+      email: field.string(),
+    });
+    const ReadingProgress = entity('ReadingProgress', {
+      userId: field.id(),
+      bookId: field.id(),
+    })
+      .display({
+        primary: 'book.title',
+        secondary: ['reader.displayName', 'reader.email'],
+      })
+      .belongsTo('book', Book, { via: 'bookId' })
+      .belongsTo('reader', Profile, { via: 'userId' });
+
+    mapEntity(Book).toTable('books');
+    mapEntity(Profile).toTable('profiles', { displayName: 'display_name' });
+    mapEntity(ReadingProgress).toTable('reading_progress', {
+      userId: 'user_id',
+      bookId: 'book_id',
+    });
+    mapRelation(ReadingProgress, 'book', {
+      type: 'many-to-one',
+      from: 'reading_progress.book_id',
+      to: 'books.id',
+    });
+    mapRelation(ReadingProgress, 'reader', {
+      type: 'many-to-one',
+      from: 'reading_progress.user_id',
+      to: 'profiles.id',
+    });
+
+    const reader = createSupabaseReflectedEntityDataReader({
+      entities: [Book, Profile, ReadingProgress],
+      getClient: () =>
+        createSupabaseClient({
+          books: [{ id: 'book-1', title: 'Programming Book' }],
+          profiles: [{ id: 'user-1', display_name: 'Javi', email: 'javi@example.com' }],
+          reading_progress: [{ user_id: 'user-1', book_id: 'book-1' }],
+        }),
+    });
+
+    await expect(
+      reader.readEntityData({ entityName: 'ReadingProgress', pageSize: 10 }),
+    ).resolves.toMatchObject({
+      display: {
+        primary: 'book.title',
+        secondary: ['reader.displayName', 'reader.email'],
+      },
+      rows: [
+        {
+          userId: 'user-1',
+          bookId: 'book-1',
+          'book.title': 'Programming Book',
+          'reader.displayName': 'Javi',
+          'reader.email': 'javi@example.com',
+        },
+      ],
+    });
+    expect(
+      supabaseMock.attempts.filter(attempt =>
+        attempt.filters.some(filter => (filter as { operator?: string }).operator === 'in'),
+      ),
+    ).toHaveLength(2);
   });
 });

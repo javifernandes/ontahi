@@ -160,6 +160,7 @@ describe('ExplorerOperationExecutePanel', () => {
           id: 'Book.getSharingInfo',
           entityName: 'Book',
           name: 'getSharingInfo',
+          kind: 'domain',
           authority: 'server',
           exposure: 'bridge',
         },
@@ -466,13 +467,71 @@ describe('ExplorerOperationExecutePanel', () => {
     });
   });
 
+  it('renders selection loading feedback inside the open dropdown', async () => {
+    const user = userEvent.setup();
+    readEntityDataMock.mockImplementationOnce(
+      () =>
+        new Promise<never>(() => {
+          // Keep the reflected read pending while asserting the loading placement.
+        }),
+    );
+
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({
+          inputRefs: [],
+          inputSchema: {
+            source: 'ontahi',
+            summary: 'object',
+            fields: [
+              {
+                path: 'progress',
+                type: 'Selection<ReadingProgress>',
+                required: true,
+                selection: {
+                  entityName: 'ReadingProgress',
+                  cardinality: 'one',
+                  identity: {
+                    name: 'refByUserAndBook',
+                    fields: ['userId', 'bookId'],
+                  },
+                },
+              },
+            ],
+          },
+        })}
+        variant='compact'
+      />,
+    );
+
+    await user.click(screen.getByRole('textbox', { name: 'Choose ReadingProgress' }));
+
+    const loading = await screen.findByRole('status');
+    expect(loading.textContent).toContain('Loading ReadingProgress…');
+    expect(loading.parentElement?.className).toContain('max-h-64');
+  });
+
   it('uses single-choice semantics for one-cardinality selections', async () => {
     const user = userEvent.setup();
     readEntityDataMock.mockResolvedValueOnce({
-      entityName: 'Book',
-      columns: [{ field: 'id', type: 'id', nullable: false }],
-      display: { primary: 'title' },
-      rows: [{ id: 'book-1', title: 'Programming Book' }],
+      entityName: 'ReadingProgress',
+      columns: [
+        { field: 'userId', type: 'id', nullable: false },
+        { field: 'bookId', type: 'id', nullable: false },
+      ],
+      display: {
+        primary: 'book.title',
+        secondary: ['reader.displayName', 'reader.email'],
+      },
+      rows: [
+        {
+          userId: 'user-1',
+          bookId: 'book-1',
+          'book.title': 'Programming Book',
+          'reader.displayName': 'Javi',
+          'reader.email': 'javi@example.com',
+        },
+      ],
       page: 1,
       pageSize: 8,
       totalCount: 1,
@@ -489,13 +548,16 @@ describe('ExplorerOperationExecutePanel', () => {
             summary: 'object',
             fields: [
               {
-                path: 'book',
-                type: 'Selection<Book>',
+                path: 'progress',
+                type: 'Selection<ReadingProgress>',
                 required: true,
                 selection: {
-                  entityName: 'Book',
+                  entityName: 'ReadingProgress',
                   cardinality: 'one',
-                  identity: { name: 'refById', fields: ['id'] },
+                  identity: {
+                    name: 'refByUserAndBook',
+                    fields: ['userId', 'bookId'],
+                  },
                 },
               },
             ],
@@ -506,8 +568,12 @@ describe('ExplorerOperationExecutePanel', () => {
     );
 
     expect(screen.queryByRole('radio', { name: 'All' })).toBeNull();
-    await user.click(screen.getByRole('textbox', { name: 'Choose Book' }));
-    await user.click(await screen.findByRole('radio', { name: /Programming Book/ }));
+    await user.click(screen.getByRole('textbox', { name: 'Choose ReadingProgress' }));
+    const option = await screen.findByRole('radio', { name: /Programming Book/ });
+    expect(within(option).getByText(/Javi/)).toBeTruthy();
+    expect(within(option).getByText(/javi@example.com/)).toBeTruthy();
+    expect(within(option).getByText(/user-1.*book-1/)).toBeTruthy();
+    await user.click(option);
     expect(screen.getByRole('radio', { name: 'Selected (1)' }).getAttribute('aria-checked')).toBe(
       'true',
     );
@@ -517,12 +583,18 @@ describe('ExplorerOperationExecutePanel', () => {
       expect(invokeOperationMock).toHaveBeenCalledWith(
         expect.objectContaining({
           input: {
-            book: {
+            progress: {
               kind: 'selection',
-              entityName: 'Book',
+              entityName: 'ReadingProgress',
               expression: {
                 kind: 'references',
-                refs: [{ kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } }],
+                refs: [
+                  {
+                    kind: 'entity-ref',
+                    entityName: 'ReadingProgress',
+                    locator: { userId: 'user-1', bookId: 'book-1' },
+                  },
+                ],
               },
             },
           },
@@ -653,7 +725,8 @@ describe('ExplorerOperationExecutePanel', () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText('sort'), 'newest');
+    await user.click(screen.getByLabelText('sort'));
+    await user.click(screen.getByRole('option', { name: 'newest' }));
     await user.click(screen.getByRole('button', { name: /^run$/i }));
 
     await waitFor(() => {

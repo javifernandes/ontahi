@@ -4,7 +4,7 @@ import type {
   OperationInvocationResult,
   OperationValidationIssue,
 } from '@ontahi/core/runtime/contracts';
-import { useReflectedOperationRunner } from '@ontahi/react/graph';
+import { useReflectedOperationRunner, useReflectedOperationSupport } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 
 import type {
@@ -14,7 +14,9 @@ import type {
 } from '../contracts/index.js';
 
 export const isExplorerOperationExecutable = (operation: ExplorerOperationDescriptor) =>
-  operation.kind !== 'graph' && operation.exposure === 'bridge';
+  operation.kind === 'graph'
+    ? operation.exposure === 'browser-direct'
+    : operation.exposure === 'bridge';
 
 export const isExplorerOperationPotentiallyDestructive = (operation: ExplorerOperationDescriptor) =>
   /(delete|remove|reset)/i.test(operation.name);
@@ -1020,19 +1022,29 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
   const reflectedOperation = useMemo(
     () => ({
       id: operation.id,
+      kind: operation.kind,
       entityName: operation.entityName,
       name: operation.name,
       authority: operation.authority,
       exposure: operation.exposure,
     }),
-    [operation.authority, operation.entityName, operation.exposure, operation.id, operation.name],
+    [
+      operation.authority,
+      operation.entityName,
+      operation.exposure,
+      operation.id,
+      operation.kind,
+      operation.name,
+    ],
   );
   const runOperation = useReflectedOperationRunner(reflectedOperation);
+  const supportsOperation = useReflectedOperationSupport();
   const inputDraftText = useMemo(() => formatExplorerOperationInputDraft(operation), [operation]);
   const [inputJson, setInputJson] = useState(() => inputDraftText);
   const [confirmed, setConfirmed] = useState(false);
   const [state, setState] = useState<ExplorerOperationExecutionState>({ status: 'idle' });
-  const executable = isExplorerOperationExecutable(operation);
+  const executable =
+    isExplorerOperationExecutable(operation) && supportsOperation(reflectedOperation);
   const destructive = isExplorerOperationPotentiallyDestructive(operation);
   const inputSyntax = (operation.inputRefs?.length ?? 0) > 0 ? 'expression' : 'json';
 

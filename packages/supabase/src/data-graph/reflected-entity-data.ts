@@ -1,4 +1,5 @@
 import {
+  createRelationAwareReflectedEntityDataReader,
   describeReflectedEntityDisplay,
   getEntityMapping,
   resolveColumnNameForEntity,
@@ -110,6 +111,12 @@ const applyFilter = (
 
   if (filter.operator === 'isNull') {
     return query.is(columnName, null);
+  }
+
+  if (filter.operator === 'in') {
+    return filter.values && filter.values.length > 0
+      ? query.in(columnName, [...filter.values])
+      : query;
   }
 
   const value = parseFilterValue(field, filter.value);
@@ -287,6 +294,11 @@ export const listSupabaseReflectedEntityData = async <TClient extends SupabaseLi
 
 export const createSupabaseReflectedEntityDataReader = <TClient extends SupabaseLikeClient>(
   options: SupabaseReflectedEntityDataReaderOptions<TClient>,
-): ReflectedEntityDataReader => ({
-  readEntityData: query => listSupabaseReflectedEntityData(options, query),
-});
+): ReflectedEntityDataReader => {
+  const entities = options.entities.map(entity => entity as AnyEntityDefinition);
+
+  return createRelationAwareReflectedEntityDataReader({
+    entities,
+    readEntityData: query => listSupabaseReflectedEntityData(options, query),
+  });
+};

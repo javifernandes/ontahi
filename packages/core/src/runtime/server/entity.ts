@@ -11,6 +11,7 @@ import {
   type EntityFreshnessMetadata,
   type EntityLocatorDeclarations,
   type RelationDefinition,
+  type RelationKind,
   type EntityRefLocatorFactories,
   type EntityRefLocators,
   type GraphEntityWithOperations,
@@ -21,8 +22,11 @@ import {
   type RuntimeBoundSelectionEntity,
 } from '../../data-graph/index.js';
 
-import type { ResolvedDomainOperationDeclaration } from './domain-operations.js';
-import type { OntahiApplicationBuilder, OntahiCapabilities } from './ontahi.js';
+import type {
+  DomainOperationDeclaration,
+  ResolvedDomainOperationDeclaration,
+} from './domain-operations.js';
+import type { OntahiApplicationBuilder, OntahiBinderApp, OntahiCapabilities } from './ontahi.js';
 import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './operation/value-ref.js';
 
 const ONTAHI_ENTITY_DECLARATION = Symbol('ontahi.entity.declaration');
@@ -34,44 +38,160 @@ type FieldDefinitions = Record<string, AnyFieldDefinition>;
 export type OntahiRelationDeclaration<
   TKind extends 'belongsTo' | 'hasMany',
   TTarget extends AnyEntityDefinition,
+  TTyped extends boolean = boolean,
 > = {
   relationKind: TKind;
-  target: TTarget;
+  target: OntahiSemanticEntityTarget<TTarget>;
+  typed: TTyped;
   sourceField?: string;
   targetField?: string;
 };
 
+export type OntahiSemanticEntityRef<
+  TEntity extends AnyEntityDefinition,
+  TTyped extends boolean = false,
+> = {
+  readonly kind: 'ontahi.entity-ref';
+  readonly typed: TTyped;
+  readonly name?: string;
+  readonly resolve?: () => TEntity;
+};
+
+export type OntahiSemanticEntityTarget<TEntity extends AnyEntityDefinition> =
+  | TEntity
+  | OntahiSemanticEntityRef<TEntity, boolean>;
+
+export type OntahiEntityContract<
+  TName extends string,
+  TFields extends FieldDefinitions,
+  TLocators extends EntityLocatorDeclarations<TFields> = EntityLocatorDeclarations<TFields>,
+> = EntityDefinition<TName, TFields, {}, EntityRefLocatorFactories<TFields, TLocators>>;
+
+type ResolvedSemanticEntityTarget<TTarget> =
+  TTarget extends OntahiSemanticEntityRef<infer TEntity, boolean> ? TEntity : TTarget;
+
 type OntahiRelationDeclarations = Record<
   string,
-  OntahiRelationDeclaration<'belongsTo' | 'hasMany', AnyEntityDefinition>
+  OntahiRelationDeclaration<'belongsTo' | 'hasMany', AnyEntityDefinition, boolean>
 >;
 
 type EntityRelationsFrom<TDeclarations extends OntahiRelationDeclarations> = {
-  [TName in keyof TDeclarations]: TDeclarations[TName] extends OntahiRelationDeclaration<
-    infer TKind,
-    infer TTarget
+  [TName in keyof TDeclarations as TDeclarations[TName] extends OntahiRelationDeclaration<
+    RelationKind,
+    AnyEntityDefinition,
+    infer TTyped
   >
+    ? TTyped extends true
+      ? TName
+      : never
+    : never]: TDeclarations[TName] extends OntahiRelationDeclaration<infer TKind, infer TTarget>
     ? RelationDefinition<TKind, TTarget>
     : never;
 };
 
-export const relation = {
-  belongsTo: <TTarget extends AnyEntityDefinition>(
-    target: TTarget,
-    options?: { via?: string },
-  ): OntahiRelationDeclaration<'belongsTo', TTarget> => ({
+type EntityRelationDisplayPaths<TDeclarations extends OntahiRelationDeclarations> = {
+  [TName in keyof TDeclarations & string]: TDeclarations[TName] extends OntahiRelationDeclaration<
+    'belongsTo',
+    infer TTarget
+  >
+    ? `${TName}.${keyof TTarget['fields'] & string}`
+    : never;
+}[keyof TDeclarations & string];
+
+export function semanticEntityRef<
+  const TName extends string,
+  const TFields extends FieldDefinitions,
+  const TLocators extends EntityLocatorDeclarations<TFields>,
+>(
+  target: TName,
+  contract: { fields: TFields; locators: TLocators },
+): OntahiSemanticEntityRef<OntahiEntityContract<TName, TFields, TLocators>, true>;
+export function semanticEntityRef<
+  const TName extends string,
+  const TFields extends FieldDefinitions,
+>(
+  target: TName,
+  contract: { fields: TFields },
+): OntahiSemanticEntityRef<OntahiEntityContract<TName, TFields>, true>;
+export function semanticEntityRef<TEntity extends AnyEntityDefinition = AnyEntityDefinition>(
+  target: string | (() => unknown),
+): OntahiSemanticEntityRef<TEntity, false>;
+export function semanticEntityRef(
+  target: string | (() => unknown),
+  _contract?: { fields: FieldDefinitions; locators?: EntityLocatorDeclarations<FieldDefinitions> },
+): OntahiSemanticEntityRef<AnyEntityDefinition, boolean> {
+  return typeof target === 'string'
+    ? { kind: 'ontahi.entity-ref', typed: Boolean(_contract), name: target }
+    : {
+        kind: 'ontahi.entity-ref',
+        typed: Boolean(_contract),
+        resolve: () => target() as AnyEntityDefinition,
+      };
+}
+
+const isSemanticEntityRef = (
+  target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
+): target is OntahiSemanticEntityRef<AnyEntityDefinition, boolean> =>
+  target.kind === 'ontahi.entity-ref';
+
+const resolveSemanticEntityTarget = <TEntity extends AnyEntityDefinition>(
+  target: OntahiSemanticEntityTarget<TEntity>,
+  entitiesByName?: ReadonlyMap<string, AnyEntityDefinition>,
+): TEntity => {
+  if (!isSemanticEntityRef(target)) return target;
+  const resolved = target.name ? entitiesByName?.get(target.name) : target.resolve?.();
+  if (!resolved) {
+    throw new Error(
+      target.name
+        ? `Entity reference ${target.name} is not registered.`
+        : 'Deferred entity reference did not resolve to an entity.',
+    );
+  }
+  return resolved as TEntity;
+};
+
+function belongsTo<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
+  target: OntahiSemanticEntityRef<TTarget, TTyped>,
+  options?: { via?: string },
+): OntahiRelationDeclaration<'belongsTo', TTarget, TTyped>;
+function belongsTo<TTarget extends AnyEntityDefinition>(
+  target: TTarget,
+  options?: { via?: string },
+): OntahiRelationDeclaration<'belongsTo', TTarget, true>;
+function belongsTo(
+  target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
+  options?: { via?: string },
+) {
+  return {
     relationKind: 'belongsTo',
     target,
+    typed: !isSemanticEntityRef(target) || target.typed,
     ...(options?.via ? { sourceField: options.via } : {}),
-  }),
-  hasMany: <TTarget extends AnyEntityDefinition>(
-    target: TTarget,
-    options?: { via?: string },
-  ): OntahiRelationDeclaration<'hasMany', TTarget> => ({
+  };
+}
+function hasMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
+  target: OntahiSemanticEntityRef<TTarget, TTyped>,
+  options?: { via?: string },
+): OntahiRelationDeclaration<'hasMany', TTarget, TTyped>;
+function hasMany<TTarget extends AnyEntityDefinition>(
+  target: TTarget,
+  options?: { via?: string },
+): OntahiRelationDeclaration<'hasMany', TTarget, true>;
+function hasMany(
+  target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
+  options?: { via?: string },
+) {
+  return {
     relationKind: 'hasMany',
     target,
+    typed: !isSemanticEntityRef(target) || target.typed,
     ...(options?.via ? { targetField: options.via } : {}),
-  }),
+  };
+}
+
+export const relation = {
+  belongsTo,
+  hasMany,
 };
 
 type RuntimeError<TRuntime> =
@@ -124,11 +244,65 @@ export type OntahiEntityOperationContext<TEntity extends AnyEntityDefinition> = 
   app: OntahiApplicationBuilder;
 };
 
-type OntahiEntityDependencies = Record<string, AnyEntityDefinition>;
+type OntahiEntityDependencies = Record<string, OntahiSemanticEntityTarget<AnyEntityDefinition>>;
 type OntahiOperationDeclaration =
   | GraphOperationDeclaration<any, any>
   | DomainOperationDeclarations[string];
 type OntahiOperationDeclarations = Record<string, OntahiOperationDeclaration>;
+
+export type OntahiOperationGroupDeclaration = DomainOperationDeclaration<
+  any,
+  any,
+  any,
+  any,
+  any
+> & {
+  kind: 'domain-operation';
+  authority: 'server';
+  input: NonNullable<DomainOperationDeclaration<any, any, any, any, any>['input']>;
+};
+
+export type OntahiOperationGroupContext = {
+  app: OntahiBinderApp;
+  self: AnyEntityDefinition;
+};
+
+export type OntahiOperationGroup<TName extends string> = (
+  context: OntahiOperationGroupContext,
+) => Record<TName, OntahiOperationGroupDeclaration>;
+
+export const operationGroup = <const TName extends string>(
+  names: readonly TName[],
+  define: unknown,
+): OntahiOperationGroup<TName> => {
+  if (typeof define !== 'function') {
+    throw new TypeError('An Ontahi operation group requires a factory function.');
+  }
+
+  return context => {
+    const declarations = define(context) as Record<string, OntahiOperationGroupDeclaration>;
+    if (!declarations || typeof declarations !== 'object') {
+      throw new TypeError('An Ontahi operation group factory must return an operation record.');
+    }
+
+    const expectedNames = new Set<string>(names);
+    const missingNames = names.filter(name => !(name in declarations));
+    const unexpectedNames = Object.keys(declarations).filter(name => !expectedNames.has(name));
+    if (missingNames.length > 0 || unexpectedNames.length > 0) {
+      const details = [
+        missingNames.length > 0 ? `missing: ${missingNames.join(', ')}` : undefined,
+        unexpectedNames.length > 0 ? `unexpected: ${unexpectedNames.join(', ')}` : undefined,
+      ]
+        .filter(Boolean)
+        .join('; ');
+      throw new Error(
+        `Ontahi operation group declaration does not match its public names (${details}).`,
+      );
+    }
+
+    return declarations as Record<TName, OntahiOperationGroupDeclaration>;
+  };
+};
 type GraphOperationsFrom<TOperations extends OntahiOperationDeclarations> = {
   [TName in keyof TOperations as TOperations[TName] extends GraphOperationDeclaration<any, any>
     ? TName
@@ -141,7 +315,9 @@ type DomainOperationsFrom<TOperations extends OntahiOperationDeclarations> = {
 };
 
 type OntahiEntityDependencyCommands<TDependencies extends OntahiEntityDependencies> = {
-  [TName in keyof TDependencies]: BoundOntahiEntityCommands<TDependencies[TName]>;
+  [TName in keyof TDependencies]: BoundOntahiEntityCommands<
+    Extract<ResolvedSemanticEntityTarget<TDependencies[TName]>, AnyEntityDefinition>
+  >;
 };
 
 export type OntahiEntityUses<
@@ -161,7 +337,7 @@ export type OntahiEntityOperationContextWithUses<
   app: OntahiApplicationBuilder<TCapabilities>;
   entities: OntahiEntityDependencyCommands<TEntities>;
   commandsFor: <TEntity extends AnyEntityDefinition>(
-    entity: TEntity,
+    entity: OntahiSemanticEntityTarget<TEntity>,
   ) => BoundOntahiEntityCommands<TEntity>;
   values: BoundRuntimeValueRefs<TValues>;
   operations: Record<string, ResolvedDomainOperationDeclaration<any, any, any, any>>;
@@ -179,7 +355,7 @@ export type OntahiEntityConfig<
 > = {
   name: TName;
   fields: TFields;
-  display?: EntityDisplayMetadata<TFields>;
+  display?: EntityDisplayMetadata<TFields, EntityRelationDisplayPaths<TRelations>>;
   freshness?: EntityFreshnessMetadata<TFields>;
   locators?: TLocators;
   identity?: keyof TLocators & string;
@@ -262,6 +438,7 @@ type OntahiBindableDeclaration<
   readonly [ONTAHI_ENTITY_DECLARATION]: {
     prepare(): void;
     semanticEntities(): readonly AnyEntityDefinition[];
+    resolveReferences(entities: ReadonlyMap<string, AnyEntityDefinition>): void;
     bind(app: OntahiApplicationBuilder<TCapabilities>, context: OntahiEntityBindingContext): object;
   };
 };
@@ -279,6 +456,7 @@ export type OntahiEntityModule<
   readonly [ONTAHI_ENTITY_DECLARATION]: {
     prepare(): void;
     semanticEntities(): readonly AnyEntityDefinition[];
+    resolveReferences(entities: ReadonlyMap<string, AnyEntityDefinition>): void;
     bind(
       app: OntahiApplicationBuilder<TCapabilities>,
       context: OntahiEntityBindingContext,
@@ -318,8 +496,13 @@ export type BoundOntahiEntityDeclaration<
     ? BoundOntahiEntity<TEntity, TOperations, TValues, TRuntime>
     : never;
 
-type BoundOntahiEntityCommands<TEntity extends AnyEntityDefinition> =
-  TEntity extends AnyOntahiEntityDeclaration
+type BoundOntahiEntityCommands<TEntity extends AnyEntityDefinition> = TEntity extends {
+  readonly [ONTAHI_UNIFIED_ENTITY_TYPE]: {
+    entity: infer TSchema extends AnyEntityDefinition;
+  };
+}
+  ? OntahiEntityCommands<TSchema>
+  : TEntity extends AnyOntahiEntityDeclaration
     ? BoundOntahiEntityDeclaration<TEntity>
     : OntahiEntityCommands<TEntity>;
 
@@ -343,6 +526,11 @@ export const bindOntahiEntity = <TDeclaration extends AnyOntahiEntityDeclaration
 
 export const prepareOntahiEntity = (declaration: AnyOntahiEntityDeclaration) =>
   declaration[ONTAHI_ENTITY_DECLARATION].prepare();
+
+export const resolveOntahiEntityReferences = (
+  declaration: AnyOntahiEntityDeclaration,
+  entities: ReadonlyMap<string, AnyEntityDefinition>,
+) => declaration[ONTAHI_ENTITY_DECLARATION].resolveReferences(entities);
 
 export const getOntahiSemanticEntities = (declaration: AnyOntahiEntityDeclaration) =>
   declaration[ONTAHI_ENTITY_DECLARATION].semanticEntities();
@@ -372,6 +560,8 @@ export const entityModule = <
         options.prepare?.();
       },
       semanticEntities: () => [options.entity],
+      resolveReferences: (entities: ReadonlyMap<string, AnyEntityDefinition>) =>
+        existingDeclaration?.resolveReferences(entities),
       bind: options.bind as (
         app: OntahiApplicationBuilder<TCapabilities>,
         context: OntahiEntityBindingContext,
@@ -426,6 +616,7 @@ export const relationModule = <
     value: {
       prepare: options.prepare ?? (() => undefined),
       semanticEntities: () => [],
+      resolveReferences: () => undefined,
       bind: options.bind as (
         app: OntahiApplicationBuilder,
         context: OntahiEntityBindingContext,
@@ -462,7 +653,7 @@ export const relationModuleWithCapabilities = <
       ),
   });
 
-export const entity = <
+const defineOntahiEntity = <
   const TName extends string,
   const TFields extends FieldDefinitions,
   const TLocators extends EntityLocatorDeclarations<TFields>,
@@ -496,58 +687,85 @@ export const entity = <
       ? (withLocators.identity as (name: string) => typeof withLocators)(config.identity)
       : withLocators
   ) as EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>;
-  let prepared = false;
-  const prepare = () => {
-    if (prepared) return;
-
+  let referencesResolved = false;
+  let entityDependencyNames: Record<string, string> | undefined;
+  const materializeRelations = (
+    declarations: OntahiRelationDeclarations,
+    entitiesByName: ReadonlyMap<string, AnyEntityDefinition>,
+    skipSemanticRefs = false,
+  ) => {
     const relations = schema.relations as Record<
       string,
       RelationDefinition<'belongsTo' | 'hasMany', AnyEntityDefinition>
     >;
-    const declarations = (
-      typeof config.relations === 'function' ? config.relations() : (config.relations ?? {})
-    ) as OntahiRelationDeclarations;
     Object.entries(declarations).forEach(([name, declaration]) => {
+      if (skipSemanticRefs && isSemanticEntityRef(declaration.target)) return;
+      const target = resolveSemanticEntityTarget(declaration.target, entitiesByName);
+      if (!target || target.kind !== 'entity') {
+        throw new Error(`Relation ${schema.name}.${name} did not resolve to an entity.`);
+      }
+      if (entitiesByName.get(target.name) !== target) {
+        throw new Error(
+          `Relation ${schema.name}.${name} targets entity ${target.name}, but it is not registered.`,
+        );
+      }
       if (declaration.sourceField && !(declaration.sourceField in schema.fields)) {
         throw new Error(
           `Unknown relation source field ${declaration.sourceField} on entity ${schema.name}`,
         );
       }
-      if (declaration.targetField && !(declaration.targetField in declaration.target.fields)) {
+      if (declaration.targetField && !(declaration.targetField in target.fields)) {
         throw new Error(
-          `Unknown relation target field ${declaration.targetField} on entity ${declaration.target.name}`,
+          `Unknown relation target field ${declaration.targetField} on entity ${target.name}`,
         );
       }
       relations[name] = {
         kind: 'relation',
         relationKind: declaration.relationKind,
-        target: declaration.target,
+        target,
         ...(declaration.sourceField ? { sourceField: declaration.sourceField } : {}),
         ...(declaration.targetField ? { targetField: declaration.targetField } : {}),
       };
     });
-    prepared = true;
+  };
+  const resolveReferences = (entitiesByName: ReadonlyMap<string, AnyEntityDefinition>) => {
+    referencesResolved = false;
+
+    const declarations = (
+      typeof config.relations === 'function' ? config.relations() : (config.relations ?? {})
+    ) as OntahiRelationDeclarations;
+    materializeRelations(declarations, entitiesByName);
+    const entityDependencies =
+      typeof config.uses?.entities === 'function'
+        ? config.uses.entities()
+        : (config.uses?.entities ?? ({} as TEntities));
+    entityDependencyNames = Object.fromEntries(
+      Object.entries(entityDependencies).map(([name, declaration]) => [
+        name,
+        resolveSemanticEntityTarget(declaration, entitiesByName).name,
+      ]),
+    );
+    referencesResolved = true;
   };
 
   Object.defineProperty(schema, ONTAHI_ENTITY_DECLARATION, {
     configurable: true,
     enumerable: false,
     value: {
-      prepare,
+      prepare: () => undefined,
       semanticEntities: () => [schema],
+      resolveReferences,
       bind(app: OntahiApplicationBuilder, context: OntahiEntityBindingContext) {
-        prepare();
+        if (!referencesResolved) {
+          throw new Error(`Entity ${schema.name} references have not been resolved.`);
+        }
         const commands = app.graph.defineEntity(schema) as OntahiEntityCommands<typeof schema>;
-        const entityDependencies: TEntities =
-          typeof config.uses?.entities === 'function'
-            ? config.uses.entities()
-            : (config.uses?.entities ?? ({} as TEntities));
         const entities = Object.fromEntries(
-          Object.entries(entityDependencies).map(([name, declaration]) => {
-            const dependency = context.entities[declaration.name];
+          Object.entries(entityDependencyNames ?? {}).map(([name, targetName]) => {
+            const dependency = context.entities[targetName];
             if (!dependency) {
               throw new Error(
-                `Entity ${schema.name} requires entity ${declaration.name}, but it is not registered.`,
+                `Entity ${schema.name} requires entity ${targetName}, but it is not registered.`,
               );
             }
             return [name, dependency];
@@ -580,6 +798,21 @@ export const entity = <
             },
           },
         );
+        const commandsFor = <TDependency extends AnyEntityDefinition>(
+          declaration: OntahiSemanticEntityTarget<TDependency>,
+        ): BoundOntahiEntityCommands<TDependency> => {
+          const targetName =
+            isSemanticEntityRef(declaration) && declaration.name
+              ? declaration.name
+              : resolveSemanticEntityTarget(declaration).name;
+          const dependency = context.entities[targetName];
+          if (!dependency) {
+            throw new Error(
+              `Entity ${schema.name} requires entity ${targetName}, but it is not registered.`,
+            );
+          }
+          return dependency as unknown as BoundOntahiEntityCommands<TDependency>;
+        };
         const declarations =
           config.operations?.({
             self: schema,
@@ -588,15 +821,7 @@ export const entity = <
             ingress: app.ingress,
             app: app as OntahiApplicationBuilder<TCapabilities>,
             entities,
-            commandsFor: declaration => {
-              const dependency = context.entities[declaration.name];
-              if (!dependency) {
-                throw new Error(
-                  `Entity ${schema.name} requires entity ${declaration.name}, but it is not registered.`,
-                );
-              }
-              return dependency as unknown as BoundOntahiEntityCommands<typeof declaration>;
-            },
+            commandsFor,
             values,
             operations,
           }) ?? ({} as TOperations);
@@ -626,7 +851,21 @@ export const entity = <
     },
   });
   if (config.relations && typeof config.relations !== 'function') {
-    prepare();
+    const declarations = Object.values(config.relations);
+    const directTargets = declarations.flatMap(declaration =>
+      isSemanticEntityRef(declaration.target)
+        ? []
+        : [[declaration.target.name, declaration.target] as const],
+    );
+    const directEntitiesByName = new Map(directTargets);
+    if (
+      declarations.every(declaration => !isSemanticEntityRef(declaration.target)) &&
+      !config.uses?.entities
+    ) {
+      resolveReferences(directEntitiesByName);
+    } else {
+      materializeRelations(config.relations, directEntitiesByName, true);
+    }
   }
 
   return schema as OntahiEntityDeclaration<
@@ -635,3 +874,7 @@ export const entity = <
     TValues
   >;
 };
+
+export const entity = Object.assign(defineOntahiEntity, {
+  ref: semanticEntityRef,
+});

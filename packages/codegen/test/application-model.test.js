@@ -169,6 +169,119 @@ describe('Ontahi application declaration analysis', () => {
     });
   });
 
+  it('projects a schema-only unified entity', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity } from '@ontahi/core/entity';
+
+        export const Comment = entity({
+          name: 'Comment',
+          fields: { id: field.id(), body: field.string() },
+          locators: { refById: 'id' },
+          identity: 'refById',
+        });
+      `,
+      'Comment',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition).toMatchObject({
+      entityName: 'Comment',
+      entityDefinitionName: 'Comment',
+      entityDefinitionLocalName: 'CommentSchema',
+      entitySchemaProjection: {
+        name: 'Comment',
+        fieldsText: '{ id: field.id(), body: field.string() }',
+      },
+      operations: [],
+    });
+  });
+
+  it('projects operations through an opaque operation group boundary', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity, operationGroup } from '@ontahi/core/runtime/server';
+
+        const NoteOutput = graphSchema.object({ id: graphSchema.string() });
+        const ArchiveNoteInput = graphSchema.object({ id: graphSchema.string() });
+
+        const defineNoteOperations = app => ({
+          list: app.operation.define({
+            output: graphSchema.array(NoteOutput),
+            bridge: { query: [() => 'all'] },
+            run: () => [],
+          }),
+          archive: app.operation.define({
+            input: ArchiveNoteInput,
+            bridge: { invalidate: [['Note']] },
+            run: () => ({ archived: true }),
+          }),
+        });
+
+        const NoteOperations = operationGroup(
+          ['list', 'archive'],
+          defineNoteOperations,
+        );
+
+        export const Note = entity({
+          name: 'Note',
+          fields: {},
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'notes',
+          },
+          operations: ({ app }) => NoteOperations(app),
+        });
+      `,
+      'Note',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition.operations).toMatchObject([
+      { name: 'list', outputSchemaText: 'graphSchema.array(NoteOutput)' },
+      {
+        name: 'archive',
+        inputSchemaText: 'graphSchema.object({ id: graphSchema.string() })',
+      },
+    ]);
+  });
+
+  it('projects nominal semantic relation references from unified entities', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity, relation } from '@ontahi/core/runtime/server';
+
+        export const Folder = entity({
+          name: 'Folder',
+          fields: { id: field.id() },
+          relations: {
+            entries: relation.hasMany(entity.ref('FolderEntry'), { via: 'folderId' }),
+          },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+          },
+          operations: ({ operation }) => ({
+            list: operation({ bridge: {}, run: () => [] }),
+          }),
+        });
+      `,
+      'Folder',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition.entitySchemaProjection?.relations).toEqual([
+      {
+        name: 'entries',
+        kind: 'hasMany',
+        targetName: 'FolderEntry',
+        via: 'folderId',
+        deferred: true,
+      },
+    ]);
+  });
+
   it('inlines imported field declarations into browser schema projections', () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
@@ -952,6 +1065,49 @@ describe('Ontahi application declaration analysis', () => {
     expect(source).not.toContain("from './schema';");
   });
 
+  it('rewrites semantic entity names in graph outputs to browser projections', () => {
+    const source = renderGeneratedClientEntityModule({
+      entities: [
+        {
+          entityName: 'CommentMessage',
+          entityExportName: 'CommentMessage',
+          entityDefinitionName: 'CommentMessage',
+          entityDefinitionLocalName: 'CommentMessageSchema',
+          entitySchemaProjection: {
+            name: 'CommentMessage',
+            fieldsText: '{ id: field.id() }',
+          },
+          helperTexts: [],
+          operations: [],
+        },
+        {
+          entityName: 'CommentThread',
+          entityExportName: 'CommentThread',
+          entityDefinitionName: 'CommentThread',
+          entityDefinitionLocalName: 'CommentThreadSchema',
+          entitySchemaProjection: {
+            name: 'CommentThread',
+            fieldsText: '{ id: field.id() }',
+          },
+          helperTexts: [],
+          operations: [
+            {
+              name: 'list',
+              authority: 'server',
+              exposure: 'bridge',
+              graphOutputText:
+                'graphOutput.array(graphOutput.entity(CommentThreadSchema, { messages: graphOutput.array(graphOutput.entity(CommentMessage)) }))',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(source).toContain('graphOutput.entity(CommentThreadSchema');
+    expect(source).toContain('graphOutput.entity(CommentMessageSchema)');
+    expect(source).not.toContain("from './schema.js'");
+  });
+
   it('projects schema-only relation targets before their consumers', () => {
     const source = renderGeneratedClientEntityModule({
       entities: [
@@ -996,7 +1152,7 @@ describe('Ontahi application declaration analysis', () => {
         },
         {
           entityName: 'ReadingProgress',
-          entityDefinitionName: 'ReadingProgress',
+          entityDefinitionName: 'ReadingProgressEntity',
           entityDefinitionLocalName: 'ReadingProgressSchema',
           entitySchemaProjection: {
             name: 'ReadingProgress',

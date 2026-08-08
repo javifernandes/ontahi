@@ -85,6 +85,52 @@ afterEach(() => {
 });
 
 describe('ExplorerEntityRefInput', () => {
+  it('renders the loading state inside the open options panel', async () => {
+    const user = userEvent.setup();
+    const reader = {
+      readEntityData: vi.fn(
+        () =>
+          new Promise<never>(() => {
+            // Keep the request pending so the loading placement can be asserted.
+          }),
+      ),
+    };
+
+    renderControlledInput({ reader });
+
+    await user.click(screen.getByPlaceholderText('book'));
+
+    const loading = await screen.findByRole('status');
+    expect(loading.textContent).toContain('Loading Book…');
+    expect(loading.parentElement?.className).toContain('max-h-64');
+  });
+
+  it('refreshes reflected rows whenever the picker is reopened', async () => {
+    const user = userEvent.setup();
+    const reader = {
+      readEntityData: vi.fn().mockResolvedValue({
+        entityName: 'Book',
+        columns: [],
+        rows: [],
+        page: 1,
+        pageSize: 6,
+        totalCount: 0,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      }),
+    };
+
+    renderControlledInput({ reader });
+
+    const input = screen.getByPlaceholderText('book');
+    await user.click(input);
+    await waitFor(() => expect(reader.readEntityData).toHaveBeenCalledTimes(1));
+    await user.tab();
+    await waitFor(() => expect(screen.queryByText(/No rows found/)).toBeNull());
+    await user.click(input);
+    await waitFor(() => expect(reader.readEntityData).toHaveBeenCalledTimes(2));
+  });
+
   it('lets users select an entity row and writes a canonical ref draft', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -122,7 +168,7 @@ describe('ExplorerEntityRefInput', () => {
     const option = (await screen.findByText('Programming Book')).closest('button');
 
     expect(option).not.toBeNull();
-    expect(within(option as HTMLButtonElement).getByText('progbook')).toBeTruthy();
+    expect(within(option as HTMLButtonElement).getByText(/progbook/)).toBeTruthy();
     await user.click(option as HTMLButtonElement);
 
     expect(onChange).toHaveBeenLastCalledWith({
@@ -146,13 +192,14 @@ describe('ExplorerEntityRefInput', () => {
         columns: [],
         display: {
           primary: 'displayName',
-          secondary: ['slug'],
+          secondary: ['author.displayName'],
         },
         rows: [
           {
             id: 'book-1',
             displayName: 'Readable Book',
             slug: 'progbook',
+            'author.displayName': 'Javi',
           },
         ],
         page: 1,
@@ -170,7 +217,8 @@ describe('ExplorerEntityRefInput', () => {
     const option = (await screen.findByText('Readable Book')).closest('button');
 
     expect(option).not.toBeNull();
-    expect(within(option as HTMLButtonElement).getByText('progbook')).toBeTruthy();
+    expect(within(option as HTMLButtonElement).getByText(/Javi/)).toBeTruthy();
+    expect(within(option as HTMLButtonElement).getByText(/progbook/)).toBeTruthy();
     expect(screen.queryByText('book-1')).toBeNull();
   });
 });

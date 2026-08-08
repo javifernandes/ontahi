@@ -20,6 +20,8 @@ import {
   type EntityRefLocatorDeclarations,
 } from './ref.js';
 import { isGraphSchemaDefinition } from './schema-descriptor.js';
+import type { SemanticSelection } from './selection-ast.js';
+import type { Selection } from './selection-value.js';
 
 export type GraphEntityExposure = 'browser-direct' | 'bridge' | 'server-only';
 export type GraphOperationAuthority = 'client-safe' | 'server-required';
@@ -250,11 +252,28 @@ export type DomainOperationDeclarationMetadata<
     durable?: DurableOperationDeclarationMetadata<TInput, TResult>;
   };
 
+export type HydratedGraphOperationInput<TInput> =
+  TInput extends SemanticSelection<any, infer TEntity>
+    ? TEntity extends AnyEntityDefinition
+      ? Selection<TEntity>
+      : TInput
+    : TInput extends Date
+      ? TInput
+      : TInput extends (infer TItem)[]
+        ? HydratedGraphOperationInput<TItem>[]
+        : TInput extends readonly (infer TItem)[]
+          ? readonly HydratedGraphOperationInput<TItem>[]
+          : TInput extends object
+            ? { [TKey in keyof TInput]: HydratedGraphOperationInput<TInput[TKey]> }
+            : TInput;
+
 export type GraphOperationDeclaration<TInput, TResult> = {
   kind: 'graph-operation';
   authority: GraphOperationAuthority;
   exposure: GraphEntityExposure;
-  run: (input: TInput) => TResult;
+  input?: GraphSchemaLike<TInput>;
+  output?: GraphSchemaLike;
+  run: (input: HydratedGraphOperationInput<TInput>) => TResult;
 };
 
 export type ClientDomainOperationDeclaration<TInput, TData> = DomainOperationMetadata<
@@ -574,15 +593,27 @@ export const resolveGraphOperations = <
   operations: TOperations,
 ): ResolveGraphOperations<TEntityName, TOperations> =>
   Object.fromEntries(
-    Object.entries(operations).map(([name, operation]) => [
-      name,
-      {
-        ...operation,
-        entityName,
+    Object.entries(operations).map(([name, operation]) => {
+      const operationId = resolveOperationId(entityName, name);
+
+      if (operation.input !== undefined && !isGraphSchemaDefinition(operation.input)) {
+        throw new Error(`Graph operation "${operationId}" input must be an Ontahi schema.`);
+      }
+
+      if (operation.output !== undefined && !isGraphSchemaDefinition(operation.output)) {
+        throw new Error(`Graph operation "${operationId}" output must be an Ontahi schema.`);
+      }
+
+      return [
         name,
-        id: resolveOperationId(entityName, name),
-      },
-    ]),
+        {
+          ...operation,
+          entityName,
+          name,
+          id: operationId,
+        },
+      ];
+    }),
   ) as ResolveGraphOperations<TEntityName, TOperations>;
 
 export const resolveDomainOperations = <

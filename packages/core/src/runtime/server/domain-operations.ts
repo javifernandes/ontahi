@@ -3,6 +3,8 @@ import { Effect } from 'effect';
 import { GraphCommand } from '../../data-graph/command.js';
 import {
   graphSchema,
+  type AnyEntityDefinition,
+  type InferEntityRecord,
   type GraphSchemaDefinition,
   type GraphSchemaLike,
   type InferGraphSchemaValue,
@@ -26,6 +28,7 @@ import {
   type EntityRefInputRunInput,
 } from '../../data-graph/ref.js';
 import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
+import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 
 import type { OperationContracts } from './concerns/contract-types.js';
@@ -64,6 +67,27 @@ type OutputSchemaLike<TResult = unknown> = OperationSchema<TResult>;
 const EmptyInputSchema = graphSchema.object({});
 
 export type DomainOperationSuccess = unknown;
+
+export type HydratedSemanticSelection<TEntity extends AnyEntityDefinition> = SemanticSelection<
+  TEntity['name']
+> & {
+  update(payload: Partial<InferEntityRecord<TEntity['fields']>>): GraphCommand<any, any, unknown>;
+};
+
+export type HydratedOperationInput<TInput> =
+  TInput extends SemanticSelection<any, infer TEntity>
+    ? TEntity extends AnyEntityDefinition
+      ? HydratedSemanticSelection<TEntity>
+      : TInput
+    : TInput extends Date
+      ? TInput
+      : TInput extends (infer TItem)[]
+        ? HydratedOperationInput<TItem>[]
+        : TInput extends readonly (infer TItem)[]
+          ? readonly HydratedOperationInput<TItem>[]
+          : TInput extends object
+            ? { [TKey in keyof TInput]: HydratedOperationInput<TInput[TKey]> }
+            : TInput;
 
 type DomainOperationGraphRead<TResult> = TResult extends readonly (infer TItem)[]
   ? { build: () => QuerySpec<any, TItem> }
@@ -130,7 +154,7 @@ export type DomainOperationDeclaration<
   graphOps?: DomainOperationGraphOpsMetadata;
   layer?: string;
   run: DomainOperationRun<
-    EntityRefInputRunInput<TInput, TInputRefs>,
+    EntityRefInputRunInput<HydratedOperationInput<NoInfer<TInput>>, TInputRefs>,
     TResult,
     TFailure,
     TInfraError

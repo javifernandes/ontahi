@@ -79,7 +79,8 @@ describe('ExplorerEventBrowser', () => {
 
     render(<ExplorerEventBrowser events={events} />);
 
-    await user.selectOptions(screen.getByLabelText('Filter events by domain'), 'reading');
+    await user.click(screen.getByLabelText('Filter events by domain'));
+    await user.click(screen.getByRole('option', { name: 'reading' }));
 
     expect(screen.queryByRole('link', { name: /BookShared/ })).toBeNull();
     expect(screen.getByRole('link', { name: /ReadProgressed/ })).toBeTruthy();

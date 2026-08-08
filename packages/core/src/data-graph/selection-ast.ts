@@ -78,6 +78,14 @@ export type EntitySelectionSource<TEntity = { readonly name: string }> = {
   readonly cardinality?: 'one' | 'many';
 };
 
+export type SemanticSelection<
+  TEntityName extends string = string,
+  TEntity extends { readonly name: TEntityName } = { readonly name: TEntityName },
+> = EntitySelectionSource<TEntity> & {
+  readonly name?: string;
+  build(): SelectionExpression;
+};
+
 const copyPredicate = (predicate: SelectionPredicate): SelectionPredicate =>
   predicate.operator === 'in'
     ? {

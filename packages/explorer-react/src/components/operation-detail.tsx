@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  useHasReflectedEntityDataReader,
-  useHasReflectedOperationInvoker,
-} from '@ontahi/react/graph';
+import { useHasReflectedEntityDataReader, useReflectedOperationSupport } from '@ontahi/react/graph';
 import type { ReactNode } from 'react';
 
 import type { ExplorerOperationDescriptor } from '../contracts/index.js';
@@ -92,10 +89,10 @@ export const ExplorerOperationDetailPanel = ({
   renderRefInput,
 }: ExplorerOperationDetailPanelProps) => {
   const hasReflectedEntityDataReader = useHasReflectedEntityDataReader();
-  const hasReflectedOperationInvoker = useHasReflectedOperationInvoker();
+  const supportsOperation = useReflectedOperationSupport();
   const hasDefaultExecutePanel = canUseDefaultExplorerOperationExecutePanel({
     hasReflectedEntityDataReader,
-    hasReflectedOperationInvoker,
+    hasReflectedOperationInvoker: supportsOperation(operation),
     operation,
     renderRefInput,
   });

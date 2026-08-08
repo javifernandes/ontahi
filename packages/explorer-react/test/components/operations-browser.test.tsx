@@ -187,7 +187,8 @@ describe('ExplorerOperationsBrowser', () => {
 
     render(<ExplorerOperationsBrowser operations={operations} />);
 
-    await user.selectOptions(screen.getByLabelText('Filter operations by kind'), 'durable');
+    await user.click(screen.getByLabelText('Filter operations by kind'));
+    await user.click(screen.getByRole('option', { name: 'durable' }));
 
     expect(screen.queryByRole('link', { name: /Get Sharing Info/ })).toBeNull();
     expect(screen.getByRole('link', { name: /Import Book/ })).toBeTruthy();

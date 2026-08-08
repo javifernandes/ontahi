@@ -125,6 +125,10 @@ export const createFetchReflectedOperationInvoker = (
   const endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
 
   return {
+    canInvokeOperation: operation =>
+      operation.kind === undefined
+        ? operation.exposure === undefined || operation.exposure === 'bridge'
+        : operation.kind !== 'graph' && operation.exposure === 'bridge',
     invokeOperation: async <TInput = unknown, TData = unknown>({
       input,
       operationId,

@@ -41,6 +41,12 @@ type JsonSchemaObject = {
   };
 };
 
+const isVoidGraphSchema = (schema: GraphSchemaDefinition): boolean =>
+  schema.kind === 'schema.void' ||
+  (schema.kind === 'schema.named' &&
+    isGraphSchemaDefinition(schema.item) &&
+    isVoidGraphSchema(schema.item));
+
 type JsonSchemaContext = {
   definitions: Record<string, JsonSchemaObject>;
 };
@@ -575,6 +581,16 @@ export const describeGraphSchema = (
   try {
     const io = options?.io ?? 'input';
     const jsonSchema = toGraphJsonSchema(schema) as JsonSchemaObject;
+
+    if (isVoidGraphSchema(schema)) {
+      return {
+        source: 'ontahi',
+        summary: 'void',
+        fields: [],
+        jsonSchema,
+      };
+    }
+
     const context = {
       definitions: jsonSchema.$defs ?? {},
     };

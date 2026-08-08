@@ -15,7 +15,7 @@ import {
   type SelectionAst,
   type SelectionExpression,
 } from './selection-ast.js';
-import { createUpdateCommandSpec } from './selection.js';
+import { createDeleteCommandSpec, createUpdateCommandSpec } from './selection.js';
 
 export type SelectionBuilder<TEntity extends AnyEntityDefinition> = (
   root: EntityProxy<TEntity>,
@@ -58,12 +58,18 @@ export class Selection<
   static references<TEntity extends AnyEntityDefinition>(
     root: TEntity,
     refs: readonly EntityRef<TEntity['name']>[],
+    cardinality?: 'one' | 'many',
   ) {
     const mismatchedRef = refs.find(ref => ref.entityName !== root.name);
     if (mismatchedRef) {
       throw new Error(`Cannot select ${root.name} using a ${mismatchedRef.entityName} reference.`);
     }
-    return new Selection(root, selectionReferences(refs as readonly AnyEntityRef[]));
+    return new Selection(
+      root,
+      selectionReferences(refs as readonly AnyEntityRef[]),
+      undefined,
+      cardinality,
+    );
   }
 
   and(operand: SelectionOperand<TEntity>) {
@@ -100,7 +106,19 @@ export class Selection<
   }
 
   update(payload: Partial<InferEntityRecord<TEntity['fields']>>) {
-    return new GraphCommand(createUpdateCommandSpec(this.root, this, payload));
+    return new GraphCommand(
+      createUpdateCommandSpec(this.root, this, payload, {
+        ...(this.cardinality ? { cardinality: this.cardinality } : {}),
+      }),
+    );
+  }
+
+  delete() {
+    return new GraphCommand(
+      createDeleteCommandSpec(this.root, this, {
+        ...(this.cardinality ? { cardinality: this.cardinality } : {}),
+      }),
+    );
   }
 
   toAst(): SelectionAst<TEntity['name']> {

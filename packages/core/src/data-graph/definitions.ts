@@ -5,7 +5,7 @@ import type {
   EntityRefLocatorFactory,
   EntityRefLocatorValue,
 } from './ref.js';
-import type { Selection } from './selection-value.js';
+import type { SemanticSelection } from './selection-ast.js';
 
 export type FieldDefinition<TValue> = {
   kind: 'field';
@@ -265,7 +265,7 @@ export interface GraphSelectionDefinition<
   kind: 'schema.selection';
   entity: TEntity;
   cardinality: 'one' | 'many';
-  __value?: Selection<TEntity>;
+  __value?: SemanticSelection<TEntity['name'], TEntity>;
 }
 
 export type EntityViewDefinition<
@@ -324,10 +324,17 @@ export type EntityDisplayDescriptor = {
   search?: readonly string[];
 };
 
-export type EntityDisplayMetadata<TFields extends FieldDefinitions = FieldDefinitions> = {
-  primary?: keyof TFields & string;
-  secondary?: readonly (keyof TFields & string)[];
-  search?: readonly (keyof TFields & string)[];
+type EntityDisplayFieldPath<TFields extends FieldDefinitions, TRelationPath extends string> =
+  | (keyof TFields & string)
+  | TRelationPath;
+
+export type EntityDisplayMetadata<
+  TFields extends FieldDefinitions = FieldDefinitions,
+  TRelationPath extends string = `${string}.${string}`,
+> = {
+  primary?: EntityDisplayFieldPath<TFields, TRelationPath>;
+  secondary?: readonly EntityDisplayFieldPath<TFields, TRelationPath>[];
+  search?: readonly EntityDisplayFieldPath<TFields, TRelationPath>[];
 };
 
 export type EntityFreshnessDescriptor = {
@@ -345,7 +352,20 @@ export type EntityFreshnessMetadata<TFields extends FieldDefinitions = FieldDefi
 type FieldLocatorFactory<
   TFields extends FieldDefinitions,
   TField extends keyof TFields & string,
-> = (value: Extract<InferFieldValue<TFields[TField]>, EntityRefLocatorValue>) => EntityRefLocator;
+> = ((
+  value: Extract<InferFieldValue<TFields[TField]>, EntityRefLocatorValue>,
+) => EntityRefLocator) & { fields: readonly [TField] };
+
+type CompositeFieldLocatorFactory<
+  TFields extends FieldDefinitions,
+  TFieldNames extends readonly (keyof TFields & string)[],
+> = ((
+  ...values: {
+    [TIndex in keyof TFieldNames]: TFieldNames[TIndex] extends keyof TFields
+      ? Extract<InferFieldValue<TFields[TFieldNames[TIndex]]>, EntityRefLocatorValue>
+      : never;
+  }
+) => EntityRefLocator) & { fields: TFieldNames };
 
 export type EntityRefLocatorFactories<
   TFields extends FieldDefinitions,
@@ -353,9 +373,11 @@ export type EntityRefLocatorFactories<
 > = {
   [TName in keyof TLocators]: TLocators[TName] extends keyof TFields & string
     ? FieldLocatorFactory<TFields, TLocators[TName]>
-    : TLocators[TName] extends EntityRefLocatorFactory
-      ? TLocators[TName]
-      : EntityRefLocatorFactory;
+    : TLocators[TName] extends readonly (keyof TFields & string)[]
+      ? CompositeFieldLocatorFactory<TFields, TLocators[TName]>
+      : TLocators[TName] extends EntityRefLocatorFactory
+        ? TLocators[TName]
+        : EntityRefLocatorFactory;
 };
 
 type ParsedRelationMapping = {

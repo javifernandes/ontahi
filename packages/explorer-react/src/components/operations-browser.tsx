@@ -1,9 +1,6 @@
 'use client';
 
-import {
-  useHasReflectedEntityDataReader,
-  useHasReflectedOperationInvoker,
-} from '@ontahi/react/graph';
+import { useHasReflectedEntityDataReader, useReflectedOperationSupport } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 
 import type { ExplorerOperationDescriptor } from '../contracts/index.js';
@@ -24,6 +21,7 @@ import {
   parseExplorerOperationBrowserTab,
   type ExplorerOperationBrowserTab,
 } from './routes.js';
+import { ExplorerSelect } from './select.js';
 
 export type ExplorerOperationExecutePanelRenderer = ExplorerOperationExecutePanelRendererType;
 export { explorerOperationBrowserTabs };
@@ -81,13 +79,13 @@ const getOperationIdFromPathname = (pathname: string, basePath: string) => {
 
 const getCanShowExecutePanel = ({
   hasReflectedEntityDataReader,
-  hasReflectedOperationInvoker,
+  supportsReflectedOperation,
   operation,
   renderExecutePanel,
   renderRefInput,
 }: {
   hasReflectedEntityDataReader: boolean;
-  hasReflectedOperationInvoker: boolean;
+  supportsReflectedOperation: (operation: ExplorerOperationDescriptor) => boolean;
   operation?: ExplorerOperationDescriptor;
   renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
   renderRefInput?: ExplorerOperationRefInputRenderer;
@@ -95,7 +93,7 @@ const getCanShowExecutePanel = ({
   operation
     ? canShowExplorerOperationExecutePanel({
         hasReflectedEntityDataReader,
-        hasReflectedOperationInvoker,
+        hasReflectedOperationInvoker: supportsReflectedOperation(operation),
         operation,
         renderExecutePanel,
         renderRefInput,
@@ -148,14 +146,14 @@ export function ExplorerOperationsBrowser({
   const { basePath } = useExplorerConfig();
   const routes = useExplorerRoutes();
   const hasReflectedEntityDataReader = useHasReflectedEntityDataReader();
-  const hasReflectedOperationInvoker = useHasReflectedOperationInvoker();
+  const supportsReflectedOperation = useReflectedOperationSupport();
   const initialSelectedOperation =
     operations.find(
       operation => operation.id === getSelectedOperationId(operations, selectedOperationId),
     ) ?? operations[0];
   const initialHasExecutePanel = getCanShowExecutePanel({
     hasReflectedEntityDataReader,
-    hasReflectedOperationInvoker,
+    supportsReflectedOperation,
     operation: initialSelectedOperation,
     renderExecutePanel,
     renderRefInput,
@@ -192,7 +190,7 @@ export function ExplorerOperationsBrowser({
     operations[0];
   const hasExecutePanel = getCanShowExecutePanel({
     hasReflectedEntityDataReader,
-    hasReflectedOperationInvoker,
+    supportsReflectedOperation,
     operation: selectedOperation,
     renderExecutePanel,
     renderRefInput,
@@ -211,7 +209,7 @@ export function ExplorerOperationsBrowser({
         operations.find(operation => operation.id === nextSelectedId) ?? operations[0];
       const nextHasExecutePanel = getCanShowExecutePanel({
         hasReflectedEntityDataReader,
-        hasReflectedOperationInvoker,
+        supportsReflectedOperation,
         operation: nextSelectedOperation,
         renderExecutePanel,
         renderRefInput,
@@ -224,7 +222,7 @@ export function ExplorerOperationsBrowser({
     });
   }, [
     hasReflectedEntityDataReader,
-    hasReflectedOperationInvoker,
+    supportsReflectedOperation,
     operations,
     renderExecutePanel,
     renderRefInput,
@@ -245,7 +243,7 @@ export function ExplorerOperationsBrowser({
         : selectedOperation;
       const nextHasExecutePanel = getCanShowExecutePanel({
         hasReflectedEntityDataReader,
-        hasReflectedOperationInvoker,
+        supportsReflectedOperation,
         operation: nextSelectedOperation,
         renderExecutePanel,
         renderRefInput,
@@ -264,7 +262,7 @@ export function ExplorerOperationsBrowser({
   }, [
     basePath,
     hasReflectedEntityDataReader,
-    hasReflectedOperationInvoker,
+    supportsReflectedOperation,
     operations,
     renderExecutePanel,
     renderRefInput,
@@ -287,7 +285,7 @@ export function ExplorerOperationsBrowser({
     const nextOperation = operations.find(operation => operation.id === operationId);
     const nextHasExecutePanel = getCanShowExecutePanel({
       hasReflectedEntityDataReader,
-      hasReflectedOperationInvoker,
+      supportsReflectedOperation,
       operation: nextOperation,
       renderExecutePanel,
       renderRefInput,
@@ -331,18 +329,12 @@ export function ExplorerOperationsBrowser({
             aria-label='Search operations'
             className='min-h-10 rounded-md border bg-background px-3 text-sm outline-none focus:border-primary'
           />
-          <select
+          <ExplorerSelect
             value={kind}
-            onChange={event => setKind(event.target.value)}
+            onValueChange={setKind}
+            options={kindOptions}
             aria-label='Filter operations by kind'
-            className='min-h-10 rounded-md border bg-background px-3 text-sm outline-none focus:border-primary'
-          >
-            {kindOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          />
           <div className='min-h-0 overflow-y-auto rounded-lg border bg-card'>
             {filteredOperations.map(operation => (
               <a

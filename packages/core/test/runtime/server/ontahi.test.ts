@@ -8,6 +8,7 @@ import {
   field,
   graphSchema,
   mapRelation,
+  Selection,
   type InMemoryDataset,
 } from '../../../src/data-graph/index.js';
 import {
@@ -15,13 +16,92 @@ import {
   entityModule,
   entityModuleWithCapabilities,
   ontahi,
+  operationGroup,
   relation,
   relationModule,
   valueRef,
 } from '../../../src/runtime/server/index.js';
-import type { OntahiApplicationBuilder } from '../../../src/runtime/server/ontahi.js';
+import type {
+  OntahiApplicationBuilder,
+  OntahiBinderApp,
+} from '../../../src/runtime/server/ontahi.js';
 
 describe('ontahi application composition root', () => {
+  it('hydrates semantic selection inputs before operation implementations run', async () => {
+    const Todo = entity({
+      name: 'Todo',
+      fields: {
+        id: field.id(),
+        completed: field.boolean(),
+      },
+      domainOperationDefaults: {
+        authority: 'server',
+        exposure: 'server-only',
+        layer: 'todos',
+      },
+      operations: ({ self, operation }) => ({
+        complete: operation({
+          input: graphSchema.object({
+            todos: graphSchema.selection(self, { cardinality: 'many' }),
+          }),
+          run: ({ todos }) => todos.update({ completed: true }),
+        }),
+      }),
+    });
+    const dataset: InMemoryDataset = {
+      Todo: [{ id: 'todo-1', completed: false }],
+    };
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset }),
+      entities: [Todo],
+    });
+
+    await expect(
+      application.invokeOperation(application.graph.entities.Todo.domain.complete, {
+        todos: Selection.all(Todo),
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(dataset.Todo).toEqual([{ id: 'todo-1', completed: true }]);
+  });
+
+  it('binds opaque operation groups without exposing their implementation type', async () => {
+    const defineNoteOperations = ({ app }: { app: OntahiBinderApp }) => ({
+      inspect: app.operation.define({
+        run: () => Effect.succeed('ok'),
+      }),
+    });
+    const NoteOperations = operationGroup(['inspect'] as const, defineNoteOperations);
+    const Note = entity({
+      name: 'Note',
+      fields: { id: field.id() },
+      domainOperationDefaults: {
+        authority: 'server',
+        exposure: 'server-only',
+        layer: 'notes',
+      },
+      operations: context => NoteOperations(context),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { Note: [] } }),
+      entities: [Note],
+    });
+
+    expect(application.graph.entities.Note.domain.inspect.id).toBe('Note.inspect');
+    await expect(
+      application.invokeOperation(application.graph.entities.Note.domain.inspect, undefined),
+    ).resolves.toMatchObject({ ok: true, value: 'ok' });
+  });
+
+  it('rejects an operation group whose public names drift from its factory', () => {
+    const NoteOperations = operationGroup(['inspect', 'archive'] as const, () => ({
+      inspect: { kind: 'domain-operation' },
+    }));
+
+    expect(() =>
+      NoteOperations({ app: {} as OntahiApplicationBuilder, self: {} as never }),
+    ).toThrow('missing: archive');
+  });
+
   it('binds storage, entities, operations, runtime, and reflection in one declaration', async () => {
     const Note = entity({
       name: 'Note',
@@ -129,11 +209,13 @@ describe('ontahi application composition root', () => {
       },
       operations: ({ app, entities }) => ({
         inspectDependencies: app.operation.define({
-          run: () =>
-            Effect.succeed({
+          run: () => {
+            expect(typeof entities.Label.upsertMany).toBe('function');
+            return Effect.succeed({
               requirement: app.require.requiresTenant(),
               labelEntity: entities.Label.entityName,
-            }),
+            });
+          },
         }),
       }),
     });
@@ -249,6 +331,133 @@ describe('ontahi application composition root', () => {
       target: Book,
     });
     expect(application.graph.getEntity('BookLabel')?.relations.book?.target).toBe(Book);
+  });
+
+  it('resolves recursive semantic entity references independently of registration order', () => {
+    const FolderEntryFields = {
+      id: field.id(),
+      folderId: field.id(),
+    };
+    const Folder = entity({
+      name: 'Folder',
+      fields: {
+        id: field.id(),
+      },
+      relations: {
+        entries: relation.hasMany(entity.ref('FolderEntry'), { via: 'folderId' }),
+      },
+      uses: {
+        entities: {
+          FolderEntry: entity.ref('FolderEntry'),
+        },
+      },
+      operations: ({ commandsFor, entities }) => {
+        expect(entities.FolderEntry.entityName).toBe('FolderEntry');
+        commandsFor(entity.ref('FolderEntry', { fields: FolderEntryFields })).where(entry =>
+          entry.folderId.eq('folder-1'),
+        );
+        return {};
+      },
+    });
+    const FolderEntry = entity({
+      name: 'FolderEntry',
+      fields: FolderEntryFields,
+      relations: {
+        folder: relation.belongsTo(entity.ref('Folder'), { via: 'folderId' }),
+      },
+    });
+
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { Folder: [], FolderEntry: [] } }),
+      entities: [FolderEntry, Folder],
+    });
+
+    expect((Folder.relations as Record<string, any>).entries.target).toBe(FolderEntry);
+    expect((FolderEntry.relations as Record<string, any>).folder.target).toBe(Folder);
+    expect((application.graph.getEntity('Folder') as any)?.relations.entries.target).toBe(
+      FolderEntry,
+    );
+  });
+
+  it('scopes reusable semantic refs to each application entity registry', () => {
+    const TargetFields = { id: field.id() };
+    const TargetRef = entity.ref('Target', { fields: TargetFields });
+    const TargetA = entity({
+      name: 'Target',
+      fields: TargetFields,
+    });
+    const SourceA = entity({
+      name: 'SourceA',
+      fields: { id: field.id(), targetId: field.id() },
+      relations: {
+        target: relation.belongsTo(TargetRef, { via: 'targetId' }),
+      },
+    });
+    ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { SourceA: [], Target: [] } }),
+      entities: [SourceA, TargetA],
+    });
+
+    const TargetB = entity({
+      name: 'Target',
+      fields: TargetFields,
+    });
+    const SourceB = entity({
+      name: 'SourceB',
+      fields: { id: field.id(), targetId: field.id() },
+      relations: {
+        target: relation.belongsTo(TargetRef, { via: 'targetId' }),
+      },
+    });
+    ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { SourceB: [], Target: [] } }),
+      entities: [SourceB, TargetB],
+    });
+
+    expect(SourceA.relations.target.target).toBe(TargetA);
+    expect(SourceB.relations.target.target).toBe(TargetB);
+  });
+
+  it('validates a reused declaration against every application entity registry', () => {
+    const Target = entity({
+      name: 'Target',
+      fields: { id: field.id() },
+    });
+    const Source = entity({
+      name: 'Source',
+      fields: { id: field.id(), targetId: field.id() },
+      relations: {
+        target: relation.belongsTo(entity.ref('Target'), { via: 'targetId' }),
+      },
+    });
+    ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { Source: [], Target: [] } }),
+      entities: [Source, Target],
+    });
+
+    expect(() =>
+      ontahi({
+        storage: createInMemoryDataGraphStorage({ dataset: { Source: [] } }),
+        entities: [Source],
+      }),
+    ).toThrow('Entity reference Target is not registered.');
+  });
+
+  it('rejects semantic entity references to entities outside the application', () => {
+    const Note = entity({
+      name: 'Note',
+      fields: { id: field.id(), externalId: field.id() },
+      relations: {
+        external: relation.belongsTo(entity.ref('External'), { via: 'externalId' }),
+      },
+    });
+
+    expect(() =>
+      ontahi({
+        storage: createInMemoryDataGraphStorage({ dataset: { Note: [] } }),
+        entities: [Note],
+      }),
+    ).toThrow('Entity reference External is not registered.');
   });
 
   it('declares a has-many relation through the target foreign-key field', () => {

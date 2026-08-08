@@ -76,6 +76,10 @@ describe('data-graph operations', () => {
   });
 
   it('resolves canonical operation ids for graph and domain operations', () => {
+    const FetchBooksInputSchema = value('FetchBooksInput', {
+      limit: field.number(),
+    });
+    const FetchBooksOutputSchema = graphSchema.array(field.string());
     const ReindexBookSearchResultSchema = value('ReindexBookSearchResult', {
       indexed: field.boolean(),
     });
@@ -83,7 +87,9 @@ describe('data-graph operations', () => {
       fetchBooks: defineGraphOperation({
         authority: 'client-safe',
         exposure: 'browser-direct',
-        run: () => ['progbook'],
+        input: FetchBooksInputSchema,
+        output: FetchBooksOutputSchema,
+        run: ({ limit }) => ['progbook'].slice(0, limit),
       }),
     });
     const domainOperations = resolveDomainOperations(
@@ -108,6 +114,8 @@ describe('data-graph operations', () => {
     expect(graphOperations.fetchBooks).toMatchObject({
       kind: 'graph-operation',
       id: 'Book.fetchBooks',
+      input: FetchBooksInputSchema,
+      output: FetchBooksOutputSchema,
       entityName: 'Book',
       name: 'fetchBooks',
       authority: 'client-safe',

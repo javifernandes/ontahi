@@ -15,6 +15,7 @@ import {
   getOntahiSemanticEntities,
   isOntahiEntityDeclaration,
   prepareOntahiEntity,
+  resolveOntahiEntityReferences,
   type AnyOntahiEntityDeclaration,
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
@@ -156,7 +157,18 @@ export const ontahi = <
   const semanticDeclarations = Array.isArray(declaredEntities)
     ? declaredEntities.flatMap(getOntahiSemanticEntities)
     : [];
+  const semanticEntitiesByName = new Map<string, AnyEntityDefinition>();
+  semanticDeclarations.forEach(entity => {
+    const existing = semanticEntitiesByName.get(entity.name);
+    if (existing && existing !== entity) {
+      throw new Error(`Semantic entity ${entity.name} is declared more than once.`);
+    }
+    semanticEntitiesByName.set(entity.name, entity);
+  });
   if (Array.isArray(declaredEntities)) {
+    declaredEntities.forEach(declaration =>
+      resolveOntahiEntityReferences(declaration, semanticEntitiesByName),
+    );
     options.storage.bindEntities?.(semanticDeclarations);
   }
   const entityCommands = Object.fromEntries(
@@ -191,7 +203,16 @@ export const ontahi = <
       throw new Error(`Entity ${declaration.name} is already registered.`);
     }
     prepareOntahiEntity(declaration);
-    semanticEntities.push(...getOntahiSemanticEntities(declaration));
+    const nextSemanticEntities = getOntahiSemanticEntities(declaration);
+    nextSemanticEntities.forEach(entity => {
+      const existing = semanticEntitiesByName.get(entity.name);
+      if (existing && existing !== entity) {
+        throw new Error(`Semantic entity ${entity.name} is declared more than once.`);
+      }
+      semanticEntitiesByName.set(entity.name, entity);
+    });
+    resolveOntahiEntityReferences(declaration, semanticEntitiesByName);
+    semanticEntities.push(...nextSemanticEntities);
     options.storage.bindEntities?.(semanticEntities);
     getOntahiSemanticEntities(declaration).forEach(entity => {
       entityCommands[entity.name] = graph.defineEntity(entity);
