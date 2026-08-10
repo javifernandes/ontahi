@@ -35,3 +35,19 @@ reference runtime and a real ephemeral PostgreSQL instance. A host may pass eith
 transaction-scoped `PoolClient`, since the adapter only requires the PostgreSQL `query` surface.
 
 Migration generation and schema evolution remain host responsibilities.
+
+Hosts can validate their bound Entity mappings against a migration-built PostgreSQL database
+without starting the application runtime:
+
+```ts
+const inspection = await inspectPostgresDataGraphSchemaAtConnection({
+  connection: { connectionString: testDatabaseUrl },
+  entities: semanticEntities,
+});
+
+if (!inspection.ok) throw new Error(JSON.stringify(inspection.issues, null, 2));
+```
+
+The first contract reports mapped tables and columns that do not exist. Extra database columns are
+allowed because an Entity may intentionally model a projection. Type, constraint, index, policy,
+and migration generation remain outside this initial check.
