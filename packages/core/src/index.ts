@@ -1,4 +1,5 @@
 export * from './computation/async.js';
+export * from './computation/conditional.js';
 export * from './computation/effect.js';
 export * from './computation/stream.js';
 export * from './data-graph/index.js';

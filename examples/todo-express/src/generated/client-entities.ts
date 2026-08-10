@@ -13,7 +13,16 @@ import {
 
 export const TodoListSchema = defineEntitySchema('TodoList', {
   id: field.id(),
-  name: field.nonEmptyString({ trim: true }),
+  name: field.nonEmptyString({
+    trim: true,
+    exclude: {
+      values: ['archive'],
+      caseInsensitive: true,
+    },
+    messages: {
+      exclude: 'Archive is reserved for system use.',
+    },
+  }),
 })
   .locators({ refById: 'id' })
   .identity('refById');
@@ -65,6 +74,28 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       input: graphSchema.pick(TodoListSchema, ['id', 'name']).named('CreateTodoListInput'),
       output: TodoListSchema,
     }),
+    rename: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList']],
+      },
+      input: graphSchema.object({
+        list: graphSchema.selection(TodoListSchema, { cardinality: 'one' }),
+        name: TodoListSchema.fields.name,
+      }),
+      output: TodoListSchema,
+    }),
+    delete: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList']],
+      },
+      input: graphSchema.object({
+        list: graphSchema.selection(TodoListSchema, { cardinality: 'one' }),
+      }),
+    }),
   },
 });
 
@@ -102,6 +133,16 @@ export const TodoTag = defineClientEntity(TodoTagSchema, {
       input: graphSchema.void(),
       output: graphSchema.array(TodoTagSchema),
     }),
+    remove: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoTag']],
+      },
+      input: graphSchema.object({
+        assignment: graphSchema.selection(TodoTagSchema, { cardinality: 'one' }),
+      }),
+    }),
   },
 });
 
@@ -111,9 +152,20 @@ export const Todo = defineClientEntity(TodoSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        query: [() => 'all'],
+        query: [(todos: unknown) => todos],
       },
-      input: graphSchema.void(),
+      input: graphSchema.selection(TodoSchema, { cardinality: 'many' }),
+      output: graphSchema.array(TodoSchema),
+    }),
+    listForList: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        query: [(input: unknown) => input],
+      },
+      input: graphSchema.object({
+        list: graphSchema.selection(TodoListSchema, { cardinality: 'one' }),
+      }),
       output: graphSchema.array(TodoSchema),
     }),
     create: defineClientDomainOperation({

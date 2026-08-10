@@ -1,5 +1,5 @@
 import { useDurableOperation, useOperation, useOperationQuery } from '@ontahi/react/graph';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import { Tag, Todo, TodoList, TodoTag } from '../../src/generated/client-entities.js';
 
@@ -31,12 +31,23 @@ export const App = () => {
   const [selectedListId, setSelectedListId] = useState('');
   const [selectedTagId, setSelectedTagId] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [storage, setStorage] = useState<'in-memory' | 'postgres'>();
   const lists = useOperationQuery(TodoList.domain.list);
   const tags = useOperationQuery(Tag.domain.list);
   const assignments = useOperationQuery(TodoTag.domain.list);
-  const todos = useOperationQuery(Todo.domain.list);
+  const todoSelection = useMemo(() => {
+    const inSelectedList = Todo.selection(todo => todo.listId.eq(selectedListId));
+    return statusFilter === 'all'
+      ? inSelectedList
+      : inSelectedList.and(todo => todo.completed.eq(statusFilter === 'completed'));
+  }, [selectedListId, statusFilter]);
+  const todos = useOperationQuery(Todo.domain.list, todoSelection, {
+    enabled: Boolean(selectedListId),
+  });
   const createList = useOperation(TodoList.domain.create);
+  const renameList = useOperation(TodoList.domain.rename);
+  const deleteList = useOperation(TodoList.domain.delete);
   const createTag = useOperation(Tag.domain.create);
   const createTodo = useOperation(Todo.domain.create);
   const completeTodos = useOperation(Todo.domain.complete);
@@ -102,10 +113,32 @@ export const App = () => {
     }
   };
 
+  const renameSelectedList = async () => {
+    const currentList = lists.data?.find(list => list.id === selectedListId);
+    if (!currentList) return;
+    const name = globalThis.prompt('List name', currentList.name)?.trim();
+    if (!name || name === currentList.name) return;
+    await renameList.executeAsync({ list: TodoList.refById(selectedListId), name });
+  };
+
+  const deleteSelectedList = async () => {
+    if (!selectedListId || !globalThis.confirm('Delete this empty list?')) return;
+    const result = await deleteList.executeAsync({ list: TodoList.refById(selectedListId) });
+    if (result.ok) {
+      setSelectedListId('');
+      setSelectedIds([]);
+    }
+  };
+
   const completeSelected = async () => {
     await completeTodos.executeAsync({
       todos: selectedIds,
     });
+    setSelectedIds([]);
+  };
+
+  const completeVisible = async () => {
+    await completeTodos.executeAsync({ todos: todoSelection });
     setSelectedIds([]);
   };
 
@@ -115,7 +148,7 @@ export const App = () => {
     await operation.executeAsync({ todos: selectedIds, tagIds: [selectedTagId] });
   };
 
-  const visibleTodos = todos.data?.filter(todo => todo.listId === selectedListId) ?? [];
+  const visibleTodos = todos.data ?? [];
   const tagById = new Map(tags.data?.map(tag => [tag.id, tag]) ?? []);
   const tagIdsByTodo = new Map<string, string[]>();
   assignments.data?.forEach(assignment => {
@@ -173,6 +206,23 @@ export const App = () => {
               />
               <button disabled={createList.isExecuting}>+</button>
             </form>
+            <div className='list-actions'>
+              <button
+                className='ghost'
+                disabled={!selectedListId || renameList.isExecuting}
+                onClick={renameSelectedList}
+              >
+                Rename
+              </button>
+              <button
+                className='danger'
+                disabled={!selectedListId || visibleTodos.length > 0 || deleteList.isExecuting}
+                onClick={deleteSelectedList}
+                title={visibleTodos.length > 0 ? 'Delete the todos in this list first.' : undefined}
+              >
+                Delete
+              </button>
+            </div>
           </div>
 
           <div>
@@ -211,6 +261,21 @@ export const App = () => {
             />
             <button disabled={!selectedListId || createTodo.isExecuting}>Add todo</button>
           </form>
+
+          <div className='status-filter' aria-label='Filter todos by status'>
+            {(['all', 'open', 'completed'] as const).map(status => (
+              <button
+                key={status}
+                className={status === statusFilter ? 'active' : ''}
+                onClick={() => {
+                  setStatusFilter(status);
+                  setSelectedIds([]);
+                }}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
 
           {!lists.data?.length && <p className='empty-hint'>Create a list to begin.</p>}
 
@@ -258,6 +323,13 @@ export const App = () => {
               onClick={completeSelected}
             >
               Complete selected
+            </button>
+            <button
+              className='secondary'
+              disabled={visibleTodos.length === 0 || completeTodos.isExecuting}
+              onClick={completeVisible}
+            >
+              Complete visible
             </button>
             <button
               className='secondary'

@@ -3,6 +3,7 @@ import {
   createGraphClientCache,
   defineClientDomainOperation,
   defineClientDomainOperationsForEntity,
+  defineClientEntity,
   entity,
   field,
   graphOutput,
@@ -66,6 +67,82 @@ const defineBookEntity = () =>
     .identity('refById');
 
 describe('operation hooks', () => {
+  it('manages and validates one operation input before executing it', async () => {
+    const TodoList = entity('TodoList', {
+      id: field.id(),
+      name: field.nonEmptyString({
+        trim: true,
+        exclude: { values: ['archive'], caseInsensitive: true },
+        messages: { exclude: 'Archive is reserved for system use.' },
+      }),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const operation = defineClientDomainOperationsForEntity(TodoList, {
+      rename: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        input: graphSchema.object({
+          list: graphSchema.selection(TodoList, { cardinality: 'one' }),
+          name: TodoList.fields.name,
+        }),
+        output: TodoList,
+      }),
+    }).rename;
+    const bridgeAction = vi.fn().mockResolvedValue({
+      data: { id: 'list-1', name: 'Reading queue' },
+    });
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result } = renderHook(
+      () => useOperation(operation, { list: 'list-1', name: 'Archive' }),
+      { wrapper: Wrapper },
+    );
+
+    expect(result.current.input.isValid).toBe(false);
+    expect(result.current.input.issue('name')?.message).toBe('Archive is reserved for system use.');
+
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+
+    expect(bridgeAction).not.toHaveBeenCalled();
+    expect(result.current.result).toMatchObject({
+      ok: false,
+      kind: 'input_invalid',
+      executed: false,
+    });
+
+    act(() => result.current.input.setField('name', '  Reading queue  '));
+    await waitFor(() => expect(result.current.input.isValid).toBe(true));
+    expect(result.current.input.value).toMatchObject({ name: 'Reading queue' });
+
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+
+    expect(JSON.parse(JSON.stringify(bridgeAction.mock.calls[0]?.[0]))).toEqual({
+      operationId: 'TodoList.rename',
+      input: {
+        list: {
+          kind: 'selection',
+          entityName: 'TodoList',
+          expression: {
+            kind: 'references',
+            refs: [
+              {
+                kind: 'entity-ref',
+                entityName: 'TodoList',
+                locator: { id: 'list-1' },
+              },
+            ],
+          },
+        },
+        name: 'Reading queue',
+      },
+    });
+  });
+
   it('preserves legacy query inputs when generated schema metadata is absent', async () => {
     const bridgeAction = vi.fn().mockResolvedValue({ data: { title: 'Ontahi' } });
     const operation = defineClientDomainOperationsForEntity('Book', {
@@ -209,6 +286,60 @@ describe('operation hooks', () => {
     });
     expect(result.current.input).toEqual({
       todos: ['todo-1', { id: 'todo-2', title: 'Second', completed: false }],
+    });
+  });
+
+  it('accepts an entity ref for a singleton selection query input', async () => {
+    const TodoListSchema = entity('TodoList', {
+      id: field.id(),
+      name: field.string(),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const TodoList = defineClientEntity(TodoListSchema);
+    const operation = defineClientDomainOperationsForEntity('Todo', {
+      listForList: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: { query: [(input: { list: unknown }) => input.list] },
+        input: graphSchema.object({
+          list: graphSchema.selection(TodoListSchema, { cardinality: 'one' }),
+        }),
+        output: graphSchema.array(
+          entity('Todo', {
+            id: field.id(),
+            listId: field.id(),
+            title: field.string(),
+          }),
+        ),
+      }),
+    }).listForList;
+    const bridgeAction = vi.fn().mockResolvedValue({ data: [] });
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result } = renderHook(
+      () => useOperationQuery(operation, { list: TodoList.refById('list-research') }),
+      { wrapper: Wrapper },
+    );
+
+    await waitFor(() => expect(result.current.data).toEqual([]));
+    expect(JSON.parse(JSON.stringify(bridgeAction.mock.calls[0]?.[0]))).toEqual({
+      operationId: 'Todo.listForList',
+      input: {
+        list: {
+          kind: 'selection',
+          entityName: 'TodoList',
+          expression: {
+            kind: 'references',
+            refs: [
+              {
+                kind: 'entity-ref',
+                entityName: 'TodoList',
+                locator: { id: 'list-research' },
+              },
+            ],
+          },
+        },
+      },
     });
   });
 

@@ -4,11 +4,48 @@ import { describe, expect, it } from 'vitest';
 import {
   createInMemoryDataGraphRuntime,
   createRuntimeBoundDataGraphApi,
+  entity,
+  field,
 } from '../../src/data-graph/index.js';
 
 import { defineAudienceGraph } from './fixtures.js';
 
 describe('in-memory relation-root reads', () => {
+  it('uses semantic belongs-to fields without physical mapping metadata', async () => {
+    const TodoList = entity('TodoList', {
+      id: field.id(),
+      name: field.string(),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const Todo = entity('Todo', {
+      id: field.id(),
+      listId: field.id(),
+      title: field.string(),
+    }).belongsTo('list', TodoList, { via: 'listId' });
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        TodoList: [{ id: 'list-research', name: 'Research' }],
+        Todo: [
+          { id: 'todo-1', listId: 'list-research', title: 'Read Ontahi guide' },
+          { id: 'todo-2', listId: 'list-personal', title: 'Buy milk' },
+        ],
+      },
+    });
+    const graph = createRuntimeBoundDataGraphApi(() => runtime);
+    const Lists = graph.bindSelectionEntity(TodoList);
+    const Todos = graph.bindSelectionEntity(Todo);
+
+    await expect(
+      Effect.runPromise(
+        Todos.relatedTo(
+          Lists.where(list => list.id.eq('list-research')),
+          { through: 'list' },
+        ).run(),
+      ),
+    ).resolves.toEqual([{ id: 'todo-1', listId: 'list-research', title: 'Read Ontahi guide' }]);
+  });
+
   it('supports rows, entity rows, resolve, count, grouped count, and streams', async () => {
     const { BookCollaboratorWithProfile, BookWithCollaborators } = defineAudienceGraph();
     const runtime = createInMemoryDataGraphRuntime({

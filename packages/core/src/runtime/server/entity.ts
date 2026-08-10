@@ -14,12 +14,16 @@ import {
   type RelationKind,
   type EntityRefLocatorFactories,
   type EntityRefLocators,
+  type EntityRefInputPublicInput,
+  type EntitySelectionFactory,
   type GraphEntityWithOperations,
   type GraphEntityExposure,
   type GraphOperationDeclaration,
   type GraphOperationDeclarations,
   type ResolveDomainOperations,
   type RuntimeBoundSelectionEntity,
+  selection,
+  type SelectionBuilder,
 } from '../../data-graph/index.js';
 
 import type {
@@ -28,8 +32,11 @@ import type {
 } from './domain-operations.js';
 import type { OntahiApplicationBuilder, OntahiBinderApp, OntahiCapabilities } from './ontahi.js';
 import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './operation/value-ref.js';
+import type { OperationInvocationResult } from './operation-result.js';
+import type { TaskFailure, TaskRunRef } from './tasks.js';
 
 const ONTAHI_ENTITY_DECLARATION = Symbol('ontahi.entity.declaration');
+const ONTAHI_DIRECT_OPERATION_NAMES = Symbol('ontahi.entity.direct-operation-names');
 declare const ONTAHI_CUSTOM_ENTITY_TYPE: unique symbol;
 declare const ONTAHI_UNIFIED_ENTITY_TYPE: unique symbol;
 
@@ -314,6 +321,37 @@ type DomainOperationsFrom<TOperations extends OntahiOperationDeclarations> = {
     : TName]: Extract<TOperations[TName], DomainOperationDeclarations[string]>;
 };
 
+type DirectDomainOperationMethod<TOperation> =
+  TOperation extends DomainOperationDeclaration<
+    infer TInput,
+    infer TResult,
+    infer TFailure,
+    any,
+    infer TInputRefs
+  >
+    ? (
+        ...args: object extends TInput
+          ? []
+          : keyof TInput extends never
+            ? []
+            : [input: EntityRefInputPublicInput<TInput, TInputRefs>]
+      ) => Promise<
+        OperationInvocationResult<
+          TOperation extends { durable: object } ? TaskRunRef : TResult,
+          TOperation extends { durable: object } ? TFailure | TaskFailure : TFailure
+        >
+      >
+    : never;
+
+type DirectDomainOperationMethods<
+  TOperations extends Record<string, unknown>,
+  TReservedNames extends PropertyKey = never,
+> = {
+  [TName in keyof TOperations as TName extends TReservedNames
+    ? never
+    : TName]: DirectDomainOperationMethod<TOperations[TName]>;
+};
+
 type OntahiEntityDependencyCommands<TDependencies extends OntahiEntityDependencies> = {
   [TName in keyof TDependencies]: BoundOntahiEntityCommands<
     Extract<ResolvedSemanticEntityTarget<TDependencies[TName]>, AnyEntityDefinition>
@@ -396,7 +434,7 @@ type EntitySchemaFromConfig<
   EntityRefLocatorsFrom<TFields, TLocators>
 >;
 
-export type BoundOntahiEntity<
+type BoundOntahiEntityBase<
   TEntity extends AnyEntityDefinition,
   TOperations extends OntahiOperationDeclarations,
   TValues extends RuntimeValueRefDeclarations = {},
@@ -412,6 +450,7 @@ export type BoundOntahiEntity<
   GraphOperationsFrom<TOperations>,
   DomainOperationsFrom<TOperations>
 > &
+  EntitySelectionFactory<TEntity> &
   BoundEntityRefLocators<
     TEntity,
     ResolveDomainOperations<TEntity['name'], DomainOperationsFrom<TOperations>>,
@@ -419,16 +458,68 @@ export type BoundOntahiEntity<
     unknown
   > & { values: BoundRuntimeValueRefs<TValues> };
 
+export type BoundOntahiEntity<
+  TEntity extends AnyEntityDefinition,
+  TOperations extends OntahiOperationDeclarations,
+  TValues extends RuntimeValueRefDeclarations = {},
+  TRuntime extends DataGraphExecutionRuntime<any, any, any, any> = DataGraphExecutionRuntime<
+    any,
+    any,
+    any,
+    any
+  >,
+> = BoundOntahiEntityBase<TEntity, TOperations, TValues, TRuntime> &
+  DirectDomainOperationMethods<
+    DomainOperationsFrom<TOperations>,
+    keyof BoundOntahiEntityBase<TEntity, TOperations, TValues, TRuntime>
+  >;
+
 export type OntahiEntityDeclaration<
   TEntity extends AnyEntityDefinition,
   TOperations extends OntahiOperationDeclarations,
   TValues extends RuntimeValueRefDeclarations = {},
-> = OntahiBindableEntity<TEntity> & {
-  readonly [ONTAHI_UNIFIED_ENTITY_TYPE]: {
-    entity: TEntity;
-    operations: TOperations;
-    values: TValues;
+> = OntahiBindableEntity<TEntity> &
+  EntitySelectionFactory<TEntity> &
+  BoundEntityRefLocators<
+    TEntity,
+    ResolveDomainOperations<TEntity['name'], DomainOperationsFrom<TOperations>>,
+    EntityRefLocators<TEntity>,
+    unknown
+  > &
+  DirectDomainOperationMethods<DomainOperationsFrom<TOperations>, keyof TEntity> & {
+    readonly [ONTAHI_UNIFIED_ENTITY_TYPE]: {
+      entity: TEntity;
+      operations: TOperations;
+      values: TValues;
+    };
   };
+
+const attachDirectDomainOperationMethods = (
+  entity: object,
+  operations: Record<string, ResolvedDomainOperationDeclaration<any, any, any, any>>,
+  invoke: OntahiApplicationBuilder['operation']['invoke'],
+) => {
+  const boundNames =
+    (entity as { [ONTAHI_DIRECT_OPERATION_NAMES]?: Set<string> })[ONTAHI_DIRECT_OPERATION_NAMES] ??
+    new Set<string>();
+
+  for (const [name, operation] of Object.entries(operations)) {
+    if (name in entity && !boundNames.has(name)) continue;
+
+    Object.defineProperty(entity, name, {
+      configurable: true,
+      enumerable: false,
+      value: (...args: readonly unknown[]) => invoke(operation, args[0] as never),
+    });
+    boundNames.add(name);
+  }
+
+  Object.defineProperty(entity, ONTAHI_DIRECT_OPERATION_NAMES, {
+    configurable: true,
+    value: boundNames,
+  });
+
+  return entity;
 };
 
 type OntahiBindableDeclaration<
@@ -687,6 +778,12 @@ const defineOntahiEntity = <
       ? (withLocators.identity as (name: string) => typeof withLocators)(config.identity)
       : withLocators
   ) as EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>;
+  Object.defineProperty(schema, 'selection', {
+    configurable: true,
+    enumerable: false,
+    writable: true,
+    value: (build: SelectionBuilder<typeof schema>) => selection(schema, build),
+  });
   let referencesResolved = false;
   let entityDependencyNames: Record<string, string> | undefined;
   const materializeRelations = (
@@ -836,7 +933,7 @@ const defineOntahiEntity = <
           ),
         ) as DomainOperationsFrom<TOperations>;
 
-        return app.graph.defineEntity(schema, {
+        const boundEntity = app.graph.defineEntity(schema, {
           exposure: config.exposure,
           domainOperationDefaults: config.domainOperationDefaults,
           operations: graphOperations,
@@ -847,6 +944,15 @@ const defineOntahiEntity = <
           },
           values: config.values,
         });
+
+        return attachDirectDomainOperationMethods(
+          boundEntity,
+          boundEntity.domain as unknown as Record<
+            string,
+            ResolvedDomainOperationDeclaration<any, any, any, any>
+          >,
+          app.operation.invoke,
+        );
       },
     },
   });

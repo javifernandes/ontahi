@@ -91,6 +91,14 @@ ${relationDefinitions
         operation.graphOutputText,
         projectedNames,
       );
+      const inputSchemaText = replaceProjectedEntityNames(
+        operation.inputSchemaText,
+        projectedNames,
+      );
+      const outputSchemaText = replaceProjectedEntityNames(
+        operation.outputSchemaText,
+        projectedNames,
+      );
       const lines = [
         `    ${operation.name}: defineClientDomainOperation({`,
         `      authority: '${operation.authority}',`,
@@ -109,12 +117,12 @@ ${relationDefinitions
       lines.push('      },');
 
       if (shouldRenderInputContract(operation, operationContracts)) {
-        lines.push(`      input: ${operation.inputSchemaText},`);
+        lines.push(`      input: ${inputSchemaText},`);
       } else if (operationContracts === 'all') {
         lines.push('      input: graphSchema.void(),');
       }
-      if (operationContracts === 'all' && operation.outputSchemaText) {
-        lines.push(`      output: ${operation.outputSchemaText},`);
+      if (operationContracts === 'all' && outputSchemaText) {
+        lines.push(`      output: ${outputSchemaText},`);
       }
 
       if (operation.durableRuntime) {

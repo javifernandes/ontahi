@@ -16,6 +16,11 @@
       "import": "./dist/computation/async.js",
       "require": "./dist/computation/async.js"
     },
+    "./computation/conditional": {
+      "types": "./dist/computation/conditional.d.ts",
+      "import": "./dist/computation/conditional.js",
+      "require": "./dist/computation/conditional.js"
+    },
     "./computation/effect": {
       "types": "./dist/computation/effect.d.ts",
       "import": "./dist/computation/effect.js",

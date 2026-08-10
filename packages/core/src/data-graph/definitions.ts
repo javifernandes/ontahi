@@ -24,6 +24,10 @@ export type StringFieldConstraints = {
   minLength?: number;
   maxLength?: number;
   trim?: true;
+  exclude?: {
+    values: readonly string[];
+    caseInsensitive?: true;
+  };
   pattern?: {
     source: string;
     flags?: string;
@@ -33,6 +37,7 @@ export type StringFieldConstraints = {
     required?: string;
     minLength?: string;
     maxLength?: string;
+    exclude?: string;
     pattern?: string;
     format?: string;
   };

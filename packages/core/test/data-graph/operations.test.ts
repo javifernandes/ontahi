@@ -26,6 +26,45 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph operations', () => {
+  it('safe parses public drafts through the operation input contract', () => {
+    const TodoList = entity('TodoList', {
+      id: field.id(),
+      name: field.nonEmptyString({
+        trim: true,
+        exclude: { values: ['archive'], caseInsensitive: true },
+        messages: { exclude: 'Archive is reserved for system use.' },
+      }),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const rename = defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {},
+      input: graphSchema.object({
+        list: graphSchema.selection(TodoList, { cardinality: 'one' }),
+        name: TodoList.fields.name,
+      }),
+    });
+
+    expect(rename.input.safeParse({ list: 'list-1', name: '  ARCHIVE  ' })).toMatchObject({
+      success: false,
+      issues: [{ path: ['name'], message: 'Archive is reserved for system use.' }],
+    });
+
+    const parsed = rename.input.safeParse({ list: 'list-1', name: '  Reading queue  ' });
+    expect(parsed).toMatchObject({
+      success: true,
+      data: {
+        name: 'Reading queue',
+        list: {
+          root: { name: 'TodoList' },
+          cardinality: 'one',
+        },
+      },
+    });
+  });
+
   it('accepts first-class selections as transport-safe operation inputs', () => {
     const Book = entity('Book', {
       id: field.id(),
@@ -40,10 +79,6 @@ describe('data-graph operations', () => {
         input: DeleteBooksInput,
       }),
     });
-    const oldBooks = selection(Book, book =>
-      book.createdAt.lt(new Date('2026-01-01T00:00:00.000Z')),
-    );
-    const invocation = operations.deleteBooks({ books: oldBooks });
     const clientBook = defineClientEntity(Book, {
       exposure: 'bridge',
       domainOperations: {
@@ -55,12 +90,20 @@ describe('data-graph operations', () => {
         }),
       },
     });
-    const clientInvocation = clientBook.domain.deleteBooks({ books: oldBooks });
+    const oldBooks = selection(Book, book =>
+      book.createdAt.lt(new Date('2026-01-01T00:00:00.000Z')),
+    );
+    const clientOldBooks = clientBook.selection(book =>
+      book.createdAt.lt(new Date('2026-01-01T00:00:00.000Z')),
+    );
+    const invocation = operations.deleteBooks({ books: oldBooks });
+    const clientInvocation = clientBook.domain.deleteBooks({ books: clientOldBooks });
 
     expect(graphSchema.selection(Book).cardinality).toBe('many');
     expect(DeleteBooksInput.fields.books.cardinality).toBe('many');
     expect(invocation.input.books).toBe(oldBooks);
-    expect(clientInvocation.input.books).toBe(oldBooks);
+    expect(clientInvocation.input.books).toBe(clientOldBooks);
+    expect(clientOldBooks.build()).toEqual(oldBooks.build());
     expect(JSON.parse(JSON.stringify(invocation.input))).toEqual({
       books: {
         kind: 'selection',

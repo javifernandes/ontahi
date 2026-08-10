@@ -1,5 +1,7 @@
 import { Effect } from 'effect';
 
+import { booleanComputation } from '../computation/conditional.js';
+
 import type { ExecutableGraphRead } from './binding.js';
 import {
   getEntityMapping,
@@ -17,6 +19,7 @@ import {
   type SelectionObject,
   type ViewDefinition,
 } from './query.js';
+import { getEntityIdentityLocator } from './ref.js';
 import type { BoundGraphSelection } from './selection-assembly.js';
 import type { QueryOrderByArg, QuerySelectArg, QueryWhereArg } from './selection.js';
 
@@ -483,7 +486,7 @@ export class RelationRootSelection<
   }
 
   exists(options?: TReadOptions) {
-    return this.count(options).pipe(Effect.map(count => count > 0));
+    return booleanComputation(this.count(options).pipe(Effect.map(count => count > 0)));
   }
 
   countBySource(options?: TReadOptions) {
@@ -512,6 +515,30 @@ export const resolveRelatedRootFields = <
 ) => {
   const relationEntity = relationOwner === 'target' ? targetEntity : sourceEntity;
   const relationDefinition = relationEntity.relations[relationName];
+  const expectedRelatedEntity = relationOwner === 'target' ? sourceEntity : targetEntity;
+  if (relationDefinition?.target.name !== expectedRelatedEntity.name) {
+    throw new Error(
+      `Relation ${relationEntity.name}.${relationName} does not connect ${targetEntity.name} to ${sourceEntity.name}.`,
+    );
+  }
+
+  const identityEntity =
+    relationDefinition.relationKind === 'belongsTo' ? relationDefinition.target : relationEntity;
+  const identityFields = getEntityIdentityLocator(identityEntity)?.locator.fields;
+  const identityField = identityFields?.length === 1 ? identityFields[0] : undefined;
+  const semanticFields =
+    relationDefinition.relationKind === 'belongsTo'
+      ? relationOwner === 'target'
+        ? { targetField: relationDefinition.sourceField, sourceField: identityField }
+        : { targetField: identityField, sourceField: relationDefinition.sourceField }
+      : relationOwner === 'target'
+        ? { targetField: identityField, sourceField: relationDefinition.targetField }
+        : { targetField: relationDefinition.targetField, sourceField: identityField };
+
+  if (semanticFields.targetField && semanticFields.sourceField) {
+    return semanticFields as { targetField: string; sourceField: string };
+  }
+
   const mapping = relationDefinition?.mapping;
   if (!relationDefinition || !mapping) {
     throw new Error(`Relation ${relationEntity.name}.${relationName} is missing mapping metadata.`);

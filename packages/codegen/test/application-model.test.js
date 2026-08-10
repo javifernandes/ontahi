@@ -1108,6 +1108,51 @@ describe('Ontahi application declaration analysis', () => {
     expect(source).not.toContain("from './schema.js'");
   });
 
+  it('rewrites semantic entity names in operation schemas to browser projections', () => {
+    const source = renderGeneratedClientEntityModule({
+      entities: [
+        {
+          entityName: 'TodoList',
+          entityExportName: 'TodoList',
+          entityDefinitionName: 'TodoList',
+          entityDefinitionLocalName: 'TodoListSchema',
+          entitySchemaProjection: {
+            name: 'TodoList',
+            fieldsText: '{ id: field.id() }',
+          },
+          helperTexts: [],
+          operations: [],
+        },
+        {
+          entityName: 'Todo',
+          entityExportName: 'Todo',
+          entityDefinitionName: 'Todo',
+          entityDefinitionLocalName: 'TodoSchema',
+          entitySchemaProjection: {
+            name: 'Todo',
+            fieldsText: '{ id: field.id(), listId: field.id() }',
+          },
+          helperTexts: [],
+          operations: [
+            {
+              name: 'listForList',
+              authority: 'server',
+              exposure: 'bridge',
+              inputSchemaText:
+                "graphSchema.object({ list: graphSchema.selection(TodoList, { cardinality: 'one' }) })",
+              outputSchemaText: 'graphSchema.array(Todo)',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(source).toContain(
+      "input: graphSchema.object({ list: graphSchema.selection(TodoListSchema, { cardinality: 'one' }) }),",
+    );
+    expect(source).toContain('output: graphSchema.array(TodoSchema),');
+  });
+
   it('projects schema-only relation targets before their consumers', () => {
     const source = renderGeneratedClientEntityModule({
       entities: [

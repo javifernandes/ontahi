@@ -1,7 +1,8 @@
 import { isPlainObject } from '../value/object.js';
 
-import type { AnyEntityDefinition } from './definitions.js';
+import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
 import type { EntityName } from './operations.js';
+import type { SemanticSelection } from './selection-ast.js';
 
 export type EntityRefLocatorValue =
   | string
@@ -18,6 +19,48 @@ export type EntityRefLocatorFactory = ((...args: readonly any[]) => EntityRefLoc
 };
 
 export type EntityRefLocatorDeclarations = Record<string, EntityRefLocatorFactory>;
+
+type SingleLocatorArgument<TLocator> = TLocator extends (...args: infer TArguments) => unknown
+  ? TArguments extends [infer TValue]
+    ? TValue
+    : never
+  : never;
+
+type IsUnion<TValue, TWhole = TValue> = TValue extends unknown
+  ? [TWhole] extends [TValue]
+    ? false
+    : true
+  : never;
+
+type IdentityScalar<TEntity extends AnyEntityDefinition> =
+  IsUnion<keyof TEntity['refLocators']> extends true
+    ? never
+    : SingleLocatorArgument<TEntity['refLocators'][keyof TEntity['refLocators']]>;
+
+type IdentityLocator<TEntity extends AnyEntityDefinition> =
+  TEntity['identityLocatorName'] extends keyof TEntity['refLocators']
+    ? TEntity['refLocators'][TEntity['identityLocatorName']]
+    : never;
+
+type IdentityFieldNames<TEntity extends AnyEntityDefinition> =
+  IdentityLocator<TEntity> extends { fields: readonly (infer TFieldName extends string)[] }
+    ? TFieldName
+    : never;
+
+type IdentityRecord<TEntity extends AnyEntityDefinition> = [IdentityFieldNames<TEntity>] extends [
+  never,
+]
+  ? never
+  : Pick<
+      InferEntityRecord<TEntity['fields']>,
+      Extract<IdentityFieldNames<TEntity>, keyof InferEntityRecord<TEntity['fields']>>
+    >;
+
+export type EntitySelectionInputItem<TEntity extends AnyEntityDefinition> =
+  | EntityRef<TEntity['name']>
+  | InferEntityRecord<TEntity['fields']>
+  | IdentityRecord<TEntity>
+  | IdentityScalar<TEntity>;
 
 export type EntityRefInputLocator = {
   name: string;
@@ -82,14 +125,30 @@ export type EntityRefInputDirectRefs<TInputRefs extends EntityRefInputDeclaratio
   [TName in OptionalEntityRefInputNames<TInputRefs>]?: EntityRefInputDirectRef<TInputRefs[TName]>;
 };
 
+export type SemanticSelectionPublicInput<TInput> =
+  TInput extends SemanticSelection<infer TEntityName, infer TEntity>
+    ? TEntity extends AnyEntityDefinition
+      ? TInput | EntitySelectionInputItem<TEntity> | readonly EntitySelectionInputItem<TEntity>[]
+      : TInput | EntityRef<TEntityName>
+    : TInput extends Date
+      ? TInput
+      : TInput extends readonly (infer TItem)[]
+        ? readonly SemanticSelectionPublicInput<TItem>[]
+        : TInput extends object
+          ? { [TKey in keyof TInput]: SemanticSelectionPublicInput<TInput[TKey]> }
+          : TInput;
+
 export type EntityRefInputPublicInput<
   TInput,
   TInputRefs extends EntityRefInputDeclarations,
 > = keyof TInputRefs extends never
-  ? TInput
+  ? SemanticSelectionPublicInput<TInput>
   : string extends keyof TInputRefs
-    ? TInput | (Partial<TInput> & Record<string, unknown>)
-    : TInput | (Omit<TInput, keyof TInputRefs> & EntityRefInputDirectRefs<TInputRefs>);
+    ? SemanticSelectionPublicInput<TInput> | (Partial<TInput> & Record<string, unknown>)
+    :
+        | SemanticSelectionPublicInput<TInput>
+        | (Omit<SemanticSelectionPublicInput<TInput>, keyof TInputRefs> &
+            EntityRefInputDirectRefs<TInputRefs>);
 
 export type EntityRefInputRunInput<
   TInput,

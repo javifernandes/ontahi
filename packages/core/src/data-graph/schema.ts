@@ -25,7 +25,7 @@ import type {
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import { isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref.js';
 import type { SelectionExpression } from './selection-ast.js';
-import { Selection } from './selection-value.js';
+import { isSelection, Selection } from './selection-value.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object';
@@ -258,7 +258,7 @@ const hydrateSelectionValues = (
 const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
   z
     .preprocess(
-      value => (value instanceof Selection ? value.toAst() : value),
+      value => (isSelection(value) ? value.toAst() : value),
       z.object({
         kind: z.literal('selection'),
         entityName: z.literal(schema.entity.name),
@@ -315,6 +315,20 @@ const toZodFieldSchema = (field: AnyFieldDefinition): ZodType => {
 
     if (field.stringConstraints?.trim) {
       stringSchema = stringSchema.trim();
+    }
+
+    if (field.stringConstraints?.exclude) {
+      const { values, caseInsensitive } = field.stringConstraints.exclude;
+      const normalizeExcludedValue = (value: string) => {
+        const normalized = field.stringConstraints?.trim ? value.trim() : value;
+        return caseInsensitive ? normalized.toLowerCase() : normalized;
+      };
+      const excludedValues = new Set(values.map(normalizeExcludedValue));
+
+      stringSchema = stringSchema.refine(
+        value => !excludedValues.has(normalizeExcludedValue(value)),
+        { message: field.stringConstraints.messages?.exclude },
+      );
     }
 
     if (field.stringConstraints?.pattern) {

@@ -5,6 +5,7 @@ import type {
   GraphSchemaLike,
   RelationKind,
 } from './definitions.js';
+import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import {
   bindEntityRefOperationProxy,
@@ -21,7 +22,12 @@ import {
 } from './ref.js';
 import { isGraphSchemaDefinition } from './schema-descriptor.js';
 import type { SemanticSelection } from './selection-ast.js';
-import type { Selection } from './selection-value.js';
+import {
+  selection,
+  type EntitySelectionFactory,
+  type Selection,
+  type SelectionBuilder,
+} from './selection-value.js';
 
 export type GraphEntityExposure = 'browser-direct' | 'bridge' | 'server-only';
 export type GraphOperationAuthority = 'client-safe' | 'server-required';
@@ -396,7 +402,7 @@ export type ClientEntityWithDomainOperations<
     exposure?: GraphEntityExposure;
   };
   domain: ResolveDomainOperations<EntityName<TEntity>, TOperations>;
-};
+} & (TEntity extends AnyEntityDefinition ? EntitySelectionFactory<TEntity> : {});
 
 export type ClientEntityRelationDeclaration<
   TOperations extends Record<string, unknown> = Record<string, unknown>,
@@ -637,13 +643,11 @@ export const resolveDomainOperations = <
       }
 
       const authority = operation.authority ?? defaults?.authority ?? 'server';
-      const exposure = operation.exposure ?? defaults?.exposure;
-
-      if (!exposure) {
-        throw new Error(
-          `Domain operation "${operationId}" must declare exposure or inherit it from domainOperationDefaults.`,
-        );
-      }
+      const exposure = operation.exposure ?? defaults?.exposure ?? 'server-only';
+      const operationLayer =
+        'layer' in operation && typeof operation.layer === 'string'
+          ? operation.layer
+          : (defaults?.layer ?? entityName);
 
       const bridge =
         operation.bridge ??
@@ -677,8 +681,8 @@ export const resolveDomainOperations = <
       Object.assign(resolvedOperation, operation, {
         authority,
         exposure,
+        layer: operationLayer,
         graphOutput: operation.graphOutput ?? getGraphOutputDescriptor(operation.output),
-        ...(defaults?.layer && !('layer' in operation) ? { layer: defaults.layer } : {}),
         ...(bridge ? { bridge } : {}),
         ...(durable ? { durable } : {}),
         entityName,
@@ -811,6 +815,7 @@ type DefinedClientDomainOperation<TOperation> = TOperation & {
   kind: 'domain-operation';
 } & (TOperation extends { input: GraphSchemaLike }
     ? {
+        input: OperationInputSchema<TOperation['input'], InferClientOperationInput<TOperation>>;
         __clientTypes?: {
           input: InferClientOperationInput<TOperation>;
           output: TOperation extends { output: GraphSchemaLike<infer TOutput> } ? TOutput : unknown;
@@ -826,6 +831,7 @@ export const defineClientDomainOperation = <
   ({
     kind: 'domain-operation',
     ...operation,
+    ...(operation.input ? { input: attachOperationInputSchema(operation.input) } : {}),
   }) as DefinedClientDomainOperation<TOperation>;
 
 export const defineDomainOperationsForEntity = <
@@ -886,6 +892,12 @@ export const defineClientEntity = <
       exposure: config?.exposure,
     },
     domain,
+    ...(typeof entityOrName === 'object' && 'fields' in entityOrName
+      ? {
+          selection: (build: SelectionBuilder<AnyEntityDefinition>) =>
+            selection(entityOrName as AnyEntityDefinition, build),
+        }
+      : {}),
   };
   const entityLocators = hasEntityRefLocators(entityOrName) ? entityOrName.refLocators : {};
   const relations = (config?.relations ?? {}) as TRelations;

@@ -24,12 +24,29 @@ import type * as OperationBridge from './operation-bridge.js';
 import { useServerMutation, useServerQuery } from './react-query.js';
 import type { ActionResultLike } from './use-action.js';
 
-type FetchOperationBridgeOptions = {
+export type FetchOperationBridgeOptions = {
+  mountPath?: string;
   endpoint?: string;
   taskEndpoint?: string;
 };
 
 const DEFAULT_ENDPOINT = '/api/data-graph/domain-operations';
+
+const normalizeMountPath = (value: string) => {
+  const path = value.startsWith('/') ? value : `/${value}`;
+  return path === '/' ? '' : path.replace(/\/+$/, '');
+};
+
+const mountedEndpoint = (mountPath: string, endpoint: string) =>
+  `${normalizeMountPath(mountPath)}/${endpoint}`;
+
+const operationEndpoint = (options: FetchOperationBridgeOptions) =>
+  options.endpoint ??
+  (options.mountPath ? mountedEndpoint(options.mountPath, 'operations') : DEFAULT_ENDPOINT);
+
+const operationTaskEndpoint = (options: FetchOperationBridgeOptions) =>
+  options.taskEndpoint ??
+  (options.mountPath ? mountedEndpoint(options.mountPath, 'operations/tasks') : undefined);
 
 const fetchTaskSnapshot = async <TResult>(
   endpoint: string,
@@ -122,7 +139,7 @@ const createFetchPermissionAction =
 export const createFetchReflectedOperationInvoker = (
   options: FetchOperationBridgeOptions = {},
 ): ReflectedOperationInvoker => {
-  const endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
+  const endpoint = operationEndpoint(options);
 
   return {
     canInvokeOperation: operation =>
@@ -146,8 +163,8 @@ export const createFetchReflectedOperationInvoker = (
 export const createFetchOperationBridgeAdapter = (
   options: FetchOperationBridgeOptions = {},
 ): OperationBridge.AnyOperationBridgeAdapter => {
-  const endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
-  const taskEndpoint = options.taskEndpoint;
+  const endpoint = operationEndpoint(options);
+  const taskEndpoint = operationTaskEndpoint(options);
   const buildRuntimeAction = <TInput, TData>(
     operation: OperationBridge.BridgedOperationLike<TInput, TData>,
   ) => createFetchBridgeAction(endpoint, operation);

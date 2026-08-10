@@ -3,8 +3,8 @@
 This is a small Ontahi application with interchangeable in-memory and direct PostgreSQL graph
 storage. It declares lists, todos, tags, and the associative entity between todos and tags;
 transports graph-native Selections into synchronous operations over Express; includes an in-process
-durable operation; generates browser-safe client declarations; and renders a React UI through the
-public Ontahi hooks. It imports no BookOps code.
+durable operation and a host-supplied notification Capability; generates browser-safe client
+declarations; and renders a React UI through the public Ontahi hooks. It imports no BookOps code.
 
 ## Run it
 
@@ -56,6 +56,10 @@ The example deliberately exercises two different domain structures:
 - `Todo hasMany TodoTag` and `TodoTag belongsTo Tag` express association through an explicit
   semantic join entity. Ontahi does not hide the association behind a storage-only join table.
 
+`TodoTag.remove` accepts that association as a semantic target, so
+`TodoTag.refByTodoAndTag(todoId, tagId)` can remove one assignment without inventing a synthetic
+join identity.
+
 Each entity owns its fields, identity, relations, and operations in one semantic declaration.
 `Todo.complete` accepts `graphSchema.selection(self, { cardinality: 'many' })` inside that
 declaration, so its target is part of the validated operation contract instead of an example-local
@@ -94,7 +98,8 @@ Send either value as the `todos` field when invoking `Todo.complete`. Ontahi val
 The generated client preserves operation input and output schemas, so React infers hook types without local record declarations or generic arguments:
 
 ```ts
-const todos = useOperationQuery(Todo.domain.list);
+const visibleTodos = Todo.selection(todo => todo.listId.eq(selectedListId));
+const todos = useOperationQuery(Todo.domain.list, visibleTodos);
 const createTodo = useOperation(Todo.domain.create);
 const completeAll = useDurableOperation(Todo.domain.completeAll);
 
@@ -112,9 +117,9 @@ await completeTodos.executeAsync({ todos: selectedIds });
 ```
 
 The operation still receives `Selection<typeof Todo>` on the server, and the transport still
-carries an explicit Selection AST containing refs. Callers use `Selection.where`,
-`Selection.references`, and Boolean composition when membership is predicate-based or otherwise
-more expressive than explicit IDs.
+carries an explicit Selection AST containing refs. `Todo.selection(...)` authors predicate-based
+membership from either the bound Node entity or its generated browser projection; Boolean
+composition refines that same value without creating a UI-only filter language.
 
 ## How the application fits together
 
@@ -125,9 +130,9 @@ more expressive than explicit IDs.
    declarations, including their identities, relations, synchronous operations, and durable
    operation.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,
-   `inProcessTasks()`, and the public entities into the complete `TodoApplication` used by
-   reflection, execution, tasks, ingress, and code generation. Task executor and storage can be
-   configured separately when durable state must outlive the process.
+   `inProcessTasks()`, the notification Capability, and the public entities into the complete
+   `TodoApplication` used by reflection, execution, tasks, ingress, and code generation. Task
+   executor and storage can be configured separately when durable state must outlive the process.
 4. [`src/application.ts`](./src/application.ts) mounts that application through one
    `ontahiExpress(...)` middleware.
 5. [`scripts/generate-client.mjs`](./scripts/generate-client.mjs) analyzes the graph declaration through `@ontahi/codegen` and reproducibly emits `src/generated/client-entities.ts`.
@@ -159,6 +164,7 @@ canonical `input_invalid` result.
 - Choose graph storage and, when durable operations are used, task executor and storage.
 - Own process lifecycle, port selection, JSON parsing, routing, and logging.
 - Supply persistent adapters when process-local state is insufficient.
+- Supply the application Capabilities declared by Entities.
 - Choose which operations are bridge-exposed or server-only.
 - Run code generation at build time and commit or check its deterministic outputs.
 - Mount `@ontahi/explorer-react` in a React host when the full visual Explorer is useful.

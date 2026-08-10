@@ -17,9 +17,15 @@ import {
 } from './selection-ast.js';
 import { createDeleteCommandSpec, createUpdateCommandSpec } from './selection.js';
 
+const ONTAHI_SELECTION = Symbol.for('@ontahi/core/data-graph/selection');
+
 export type SelectionBuilder<TEntity extends AnyEntityDefinition> = (
   root: EntityProxy<TEntity>,
 ) => SelectionExpression;
+
+export type EntitySelectionFactory<TEntity extends AnyEntityDefinition> = {
+  selection: (build: SelectionBuilder<TEntity>) => Selection<TEntity>;
+};
 
 type SelectionOperand<TEntity extends AnyEntityDefinition> =
   | Selection<TEntity>
@@ -38,7 +44,9 @@ export class Selection<
     readonly expression: SelectionExpression,
     readonly name?: string,
     readonly cardinality?: 'one' | 'many',
-  ) {}
+  ) {
+    Object.defineProperty(this, ONTAHI_SELECTION, { value: true });
+  }
 
   static all<TEntity extends AnyEntityDefinition>(root: TEntity) {
     return new Selection(root, selectionAll());
@@ -147,6 +155,14 @@ export class Selection<
     return operand.expression;
   }
 }
+
+export const isSelection = (value: unknown): value is Selection<AnyEntityDefinition> =>
+  value instanceof Selection ||
+  (typeof value === 'object' &&
+    value !== null &&
+    (value as Record<PropertyKey, unknown>)[ONTAHI_SELECTION] === true &&
+    typeof (value as { toAst?: unknown }).toAst === 'function' &&
+    typeof (value as { build?: unknown }).build === 'function');
 
 export const selection = <TEntity extends AnyEntityDefinition>(
   root: TEntity,

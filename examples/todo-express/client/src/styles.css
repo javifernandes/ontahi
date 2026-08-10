@@ -146,6 +146,15 @@ input {
 .compact-form button {
   padding: 8px 11px;
 }
+.list-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.list-actions button {
+  flex: 1;
+  padding: 8px 10px;
+}
 .card {
   min-width: 0;
   padding: 24px;
@@ -165,6 +174,22 @@ input {
   border: 1px solid #bdcac1;
   border-radius: 10px;
   background: white;
+}
+.status-filter {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+.status-filter button {
+  padding: 7px 11px;
+  color: #52645c;
+  background: #e8efea;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+.status-filter button.active {
+  color: white;
+  background: #286449;
 }
 button {
   padding: 12px 16px;

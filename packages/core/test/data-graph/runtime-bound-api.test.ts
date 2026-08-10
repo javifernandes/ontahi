@@ -9,6 +9,7 @@ import {
   query,
   type DataGraphExecutionRuntime,
 } from '../../src/data-graph/index.js';
+import { failOperation } from '../../src/runtime/server/failures.js';
 
 describe('runtime-bound data graph api', () => {
   const Book = entity('Book', {
@@ -65,6 +66,34 @@ describe('runtime-bound data graph api', () => {
       Effect.runPromise(runCollectArray(selection.stream({ authority: 'viewer' }))),
     ).resolves.toEqual([{ id: 'book-1' }]);
     await expect(Effect.runPromise(selection.exists({ authority: 'viewer' }))).resolves.toBe(true);
+    await expect(
+      Effect.runPromise(
+        selection
+          .exists({ authority: 'viewer' })
+          .thenIf(Effect.succeed('exists'), Effect.succeed('missing')),
+      ),
+    ).resolves.toBe('exists');
+
+    vi.mocked(runtime.get).mockReturnValueOnce(Effect.succeed(null));
+    await expect(
+      Effect.runPromise(
+        selection
+          .exists({ authority: 'viewer' })
+          .thenIf(Effect.succeed('exists'), Effect.succeed('missing')),
+      ),
+    ).resolves.toBe('missing');
+    expect(runtime.count).toHaveBeenCalledTimes(1);
+
+    const duplicate = { reason: 'duplicate', message: 'Book already exists.' } as const;
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          selection
+            .exists({ authority: 'viewer' })
+            .thenIf(failOperation(duplicate.reason, duplicate.message)),
+        ),
+      ),
+    ).resolves.toEqual(duplicate);
     const executable = selection.exec();
     expect(executable.pipe(value => value)).toBe(executable);
     expect(selection.pipe(value => value)).toBe(selection);

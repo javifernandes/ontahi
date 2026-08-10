@@ -1,7 +1,12 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import { isEffectLike, recoverEffect, toEffect } from '../../src/computation/effect.js';
+import {
+  adaptEffectMethods,
+  isEffectLike,
+  recoverEffect,
+  toEffect,
+} from '../../src/computation/effect.js';
 
 describe('isEffectLike', () => {
   it('returns true for Effect values', () => {
@@ -24,6 +29,40 @@ describe('toEffect', () => {
 
   it('passes through Effect values', async () => {
     await expect(Effect.runPromise(toEffect(() => Effect.succeed('ok')))).resolves.toBe('ok');
+  });
+});
+
+describe('adaptEffectMethods', () => {
+  type Notifications = {
+    record(input: string): Effect.Effect<void>;
+    resolve(input: string): Effect.Effect<string>;
+  };
+
+  it('accepts synchronous implementations and keeps their execution lazy', async () => {
+    const recorded: string[] = [];
+    const notifications = adaptEffectMethods<Notifications>({
+      record: input => recorded.push(input),
+      resolve: input => input.toUpperCase(),
+    });
+
+    const recording = notifications.record('todo-list-created');
+
+    expect(recorded).toEqual([]);
+    await Effect.runPromise(recording);
+    expect(recorded).toEqual(['todo-list-created']);
+    await expect(Effect.runPromise(notifications.resolve('inbox'))).resolves.toBe('INBOX');
+  });
+
+  it('accepts asynchronous and Effect implementations', async () => {
+    const notifications = adaptEffectMethods<Notifications>({
+      record: async () => Promise.resolve(),
+      resolve: input => Effect.succeed(input.toUpperCase()),
+    });
+
+    await expect(Effect.runPromise(notifications.record('todo-list-created'))).resolves.toBe(
+      undefined,
+    );
+    await expect(Effect.runPromise(notifications.resolve('inbox'))).resolves.toBe('INBOX');
   });
 });
 

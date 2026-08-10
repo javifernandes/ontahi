@@ -54,8 +54,20 @@ export type GraphSchemaScalarDescriptor = {
     minLength?: number;
     maxLength?: number;
     trim?: true;
+    exclude?: {
+      values: readonly string[];
+      caseInsensitive?: true;
+    };
     pattern?: { source: string; flags?: string };
     format?: 'email' | 'url' | 'uuid' | 'datetime';
+    messages?: {
+      required?: string;
+      minLength?: string;
+      maxLength?: string;
+      exclude?: string;
+      pattern?: string;
+      format?: string;
+    };
   };
   numberConstraints?: {
     coerce?: true;
@@ -187,6 +199,11 @@ export type GraphJsonSchema = {
   $ref?: string;
   $defs?: Record<string, GraphJsonSchema>;
   presentation?: GraphSchemaPresentation;
+  'x-ontahi-string-exclusion'?: {
+    values: readonly string[];
+    caseInsensitive?: true;
+    message?: string;
+  };
   'x-ontahi-selection'?: {
     entityName: string;
     cardinality: 'one' | 'many';
@@ -485,6 +502,16 @@ const scalarJsonSchema = (descriptor: GraphSchemaScalarDescriptor): GraphJsonSch
       : {}),
     ...(isString && stringConstraints?.maxLength !== undefined
       ? { maxLength: stringConstraints.maxLength }
+      : {}),
+    ...(isString && stringConstraints?.exclude
+      ? {
+          'x-ontahi-string-exclusion': {
+            ...stringConstraints.exclude,
+            ...(stringConstraints.messages?.exclude
+              ? { message: stringConstraints.messages.exclude }
+              : {}),
+          },
+        }
       : {}),
     ...(isString && stringConstraints?.pattern
       ? { pattern: stringConstraints.pattern.source }

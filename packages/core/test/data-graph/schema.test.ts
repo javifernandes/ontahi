@@ -20,6 +20,49 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph schema DSL', () => {
+  it('declares excluded string values as a reflected constraint', () => {
+    const ListName = field.nonEmptyString({
+      trim: true,
+      exclude: {
+        values: ['archive'],
+        caseInsensitive: true,
+      },
+      messages: {
+        exclude: 'Archive is reserved for system use.',
+      },
+    });
+
+    expect(safeParseGraphSchema(ListName, 'Research')).toEqual({
+      success: true,
+      data: 'Research',
+    });
+    expect(safeParseGraphSchema(ListName, '  ARCHIVE  ')).toMatchObject({
+      success: false,
+      issues: [{ message: 'Archive is reserved for system use.' }],
+    });
+    expect(toGraphSchemaDescriptor(ListName)).toMatchObject({
+      kind: 'scalar',
+      stringConstraints: {
+        trim: true,
+        exclude: {
+          values: ['archive'],
+          caseInsensitive: true,
+        },
+        messages: {
+          exclude: 'Archive is reserved for system use.',
+        },
+      },
+    });
+    expect(toGraphJsonSchema(ListName)).toMatchObject({
+      type: 'string',
+      'x-ontahi-string-exclusion': {
+        values: ['archive'],
+        caseInsensitive: true,
+        message: 'Archive is reserved for system use.',
+      },
+    });
+  });
+
   it('derives named value contracts from model fields without duplicating them', () => {
     const Todo = entity('Todo', {
       id: field.id(),
@@ -156,6 +199,39 @@ describe('data-graph schema DSL', () => {
               locator: { id: 'todo-2' },
             },
           ],
+        },
+      },
+    });
+  });
+
+  it('recognizes selections created by another loaded Ontahi entrypoint', () => {
+    const Book = entity('CrossEntrypointBook', {
+      id: field.id(),
+      status: field.string(),
+    });
+    const Input = value('CrossEntrypointInput', {
+      books: graphSchema.selection(Book, { cardinality: 'many' }),
+    });
+    const authored = selection(Book, book => book.status.eq('draft'));
+    const foreignSelection = {
+      root: authored.root,
+      expression: authored.expression,
+      toAst: () => authored.toAst(),
+      build: () => authored.build(),
+      [Symbol.for('@ontahi/core/data-graph/selection')]: true,
+    };
+
+    expect(foreignSelection).not.toBeInstanceOf(Selection);
+    expect(normalizeGraphSchemaClientInput(Input, { books: foreignSelection })).toMatchObject({
+      books: foreignSelection,
+    });
+    expect(safeParseGraphSchema(Input, { books: foreignSelection })).toMatchObject({
+      success: true,
+      data: {
+        books: {
+          root: Book,
+          expression: authored.expression,
+          cardinality: 'many',
         },
       },
     });

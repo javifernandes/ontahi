@@ -1,8 +1,11 @@
 import type {
   ClientDomainOperationDeclaration as ClientOperationDeclaration,
   DurableOperationMetadata,
+  GraphSchemaParseResult,
   GraphSchemaLike,
+  GraphSchemaValidationIssue,
   GraphClientCache,
+  OperationInputSchema,
   ReflectedOperationDescriptor,
 } from '@ontahi/core/data-graph';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
@@ -33,7 +36,7 @@ export type ClientSchemaOperationLike<TInput = unknown, TData = unknown> = Omit<
   id: string;
   entityName: string;
   name: string;
-  input: GraphSchemaLike;
+  input: OperationInputSchema<GraphSchemaLike, TInput>;
   __clientTypes?: {
     input: TInput;
     output: TData;
@@ -110,6 +113,31 @@ export type OperationHookResult<TInput, TData> = {
   isPending: boolean;
   hasSucceeded: boolean;
   hasErrored: boolean;
+};
+
+export type OperationInputController<TInput> = {
+  /** The editable public input, before schema normalization. */
+  draft: TInput;
+  setDraft: (next: TInput | ((current: TInput) => TInput)) => void;
+  setField: <TField extends keyof TInput>(field: TField, value: TInput[TField]) => void;
+  reset: (next?: TInput) => void;
+  /** The complete validation result for the current draft. */
+  validation: GraphSchemaParseResult<TInput>;
+  issues: GraphSchemaValidationIssue[];
+  issue: (path: string | ReadonlyArray<string | number>) => GraphSchemaValidationIssue | undefined;
+  isValid: boolean;
+  /** The parsed and normalized input, available only while the draft is valid. */
+  value: TInput | undefined;
+};
+
+export type OperationInputHookResult<TInput, TData> = Omit<
+  OperationHookResult<TInput, TData>,
+  'execute' | 'executeAsync' | 'input'
+> & {
+  execute: () => void;
+  executeAsync: () => Promise<OperationInvocationResult<TData>>;
+  input: OperationInputController<TInput>;
+  lastInput: TInput | undefined;
 };
 
 export type OperationRunner<TInput, TData> = (

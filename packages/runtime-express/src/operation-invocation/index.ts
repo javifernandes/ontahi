@@ -12,3 +12,4 @@ export {
   type OntahiExpressExplorerOptions,
   type OntahiExpressOptions,
 } from '../application.js';
+export type { OntahiExpressIngressOptions } from '../http-ingress.js';

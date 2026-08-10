@@ -1,6 +1,6 @@
 import { field, graphSchema } from '@ontahi/core/data-graph';
 import { entity, relation } from '@ontahi/core/entity';
-import { failOperation } from '@ontahi/core/runtime/server';
+import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 
 import {
@@ -15,16 +15,43 @@ const entityDefaults = {
   layer: 'todos',
 } as const;
 
+const todoFields = {
+  id: field.id(),
+  listId: field.id(),
+  title: field.nonEmptyString({ trim: true }),
+  completed: field.boolean(),
+};
+
+export type TodoCapabilities = OntahiCapabilities & {
+  runtime: {
+    notifications: {
+      todoListCreated(input: { listId: string; name: string }): Effect.Effect<void>;
+    };
+  };
+};
+
 export const TodoList = entity({
   name: 'TodoList',
   fields: {
     id: field.id(),
-    name: field.nonEmptyString({ trim: true }),
+    name: field.nonEmptyString({
+      trim: true,
+      exclude: {
+        values: ['archive'],
+        caseInsensitive: true,
+      },
+      messages: {
+        exclude: 'Archive is reserved for system use.',
+      },
+    }),
   },
   locators: { refById: 'id' },
   identity: 'refById',
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation }) => ({
+  uses: {
+    capabilities: {} as TodoCapabilities,
+  },
+  operations: ({ self, commands, operation, app }) => ({
     list: operation({
       output: graphSchema.array(self),
       bridge: { query: [() => 'all'] },
@@ -34,7 +61,33 @@ export const TodoList = entity({
       input: graphSchema.pick(self, ['id', 'name']).named('CreateTodoListInput'),
       output: self,
       bridge: { invalidate: [['TodoList']] },
-      run: input => commands.insertReturning(input, ['id', 'name']),
+      run: input =>
+        Effect.gen(function* () {
+          const created = yield* commands.insertReturning(input, ['id', 'name']).run();
+
+          yield* app.runtime.notifications.todoListCreated({
+            listId: created.id,
+            name: created.name,
+          });
+
+          return created;
+        }),
+    }),
+    rename: operation({
+      input: graphSchema.object({
+        list: graphSchema.selection(self, { cardinality: 'one' }),
+        name: self.fields.name,
+      }),
+      output: self,
+      bridge: { invalidate: [['TodoList']] },
+      run: ({ list, name }) => commands.where(list).updateOneReturning({ name }, ['id', 'name']),
+    }),
+    delete: operation({
+      input: graphSchema.object({
+        list: graphSchema.selection(self, { cardinality: 'one' }),
+      }),
+      bridge: { invalidate: [['TodoList']] },
+      run: ({ list }) => commands.where(list).deleteOne(),
     }),
   }),
 });
@@ -82,17 +135,19 @@ export const TodoTag = entity({
       bridge: { query: [() => 'all'] },
       run: () => commands.all().orderBy(assignment => assignment.todoId),
     }),
+    remove: operation({
+      input: graphSchema.object({
+        assignment: graphSchema.selection(self, { cardinality: 'one' }),
+      }),
+      bridge: { invalidate: [['TodoTag']] },
+      run: ({ assignment }) => commands.where(assignment).deleteOne(),
+    }),
   }),
 });
 
 export const Todo = entity({
   name: 'Todo',
-  fields: {
-    id: field.id(),
-    listId: field.id(),
-    title: field.nonEmptyString({ trim: true }),
-    completed: field.boolean(),
-  },
+  fields: todoFields,
   locators: { refById: 'id' },
   identity: 'refById',
   relations: {
@@ -117,9 +172,21 @@ export const Todo = entity({
 
     return {
       list: operation({
+        input: graphSchema.selection(self, { cardinality: 'many' }),
         output: graphSchema.array(self),
-        bridge: { query: [() => 'all'] },
-        run: () => commands.all().orderBy(todo => todo.title),
+        bridge: { query: [(todos: unknown) => todos] },
+        run: todos => commands.where(todos).orderBy(todo => todo.title),
+      }),
+      listForList: operation({
+        input: graphSchema.object({
+          list: graphSchema.selection(TodoList, { cardinality: 'one' }),
+        }),
+        output: graphSchema.array(self),
+        bridge: { query: [(input: unknown) => input] },
+        run: ({ list }) =>
+          commands
+            .relatedTo(entities.TodoList.where(list), { through: 'list' })
+            .orderBy(todo => todo.title),
       }),
       create: operation({
         input: graphSchema.pick(self, ['id', 'listId', 'title']).named('CreateTodoInput'),

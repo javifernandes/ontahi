@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
   createInMemoryDataGraphStorage,
@@ -8,7 +8,6 @@ import {
   field,
   graphSchema,
   mapRelation,
-  Selection,
   type InMemoryDataset,
 } from '../../../src/data-graph/index.js';
 import {
@@ -27,6 +26,78 @@ import type {
 } from '../../../src/runtime/server/ontahi.js';
 
 describe('ontahi application composition root', () => {
+  it('invokes bound entity operations directly and promotes refs to singleton selections', async () => {
+    const TodoList = entity({
+      name: 'TodoList',
+      fields: {
+        id: field.id(),
+        name: field.nonEmptyString({ trim: true }),
+      },
+      locators: { refById: 'id' },
+      identity: 'refById',
+      operations: ({ self, commands, operation }) => ({
+        list: operation({
+          output: graphSchema.array(self),
+          run: () => commands.all().orderBy(list => list.name),
+        }),
+        rename: operation({
+          input: graphSchema.object({
+            list: graphSchema.selection(self, { cardinality: 'one' }),
+            name: field.nonEmptyString({ trim: true }),
+          }),
+          output: self,
+          run: ({ list, name }) =>
+            commands.where(list).updateOneReturning({ name }, ['id', 'name']),
+        }),
+      }),
+    });
+    const dataset: InMemoryDataset = {
+      TodoList: [{ id: 'list-research', name: 'Research backlog' }],
+    };
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset }),
+      entities: [TodoList],
+    });
+
+    expect(application.graph.entities.TodoList).toBe(TodoList);
+    expect(application.graph.entities.TodoList.domain.list.exposure).toBe('server-only');
+    expect(application.graph.entities.TodoList.domain.list.layer).toBe('TodoList');
+    await expect(TodoList.list()).resolves.toMatchObject({
+      ok: true,
+      value: [{ id: 'list-research', name: 'Research backlog' }],
+    });
+
+    const list = TodoList.refById('list-research');
+    await expect(TodoList.rename({ list, name: 'Research queue' })).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'list-research', name: 'Research queue' },
+    });
+    expect(dataset.TodoList).toEqual([{ id: 'list-research', name: 'Research queue' }]);
+
+    type RenameInput = Parameters<typeof TodoList.rename>[0];
+    expectTypeOf<{ list: string; name: string }>().toMatchTypeOf<RenameInput>();
+    expectTypeOf<{
+      list: { id: string; name: string };
+      name: string;
+    }>().toMatchTypeOf<RenameInput>();
+    await expect(
+      TodoList.rename({ list: 'list-research', name: 'Research archive' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'list-research', name: 'Research archive' },
+    });
+    await expect(
+      TodoList.rename({
+        list: { id: 'list-research', name: 'Stale browser snapshot' },
+        name: 'Research library',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'list-research', name: 'Research library' },
+    });
+    expect(dataset.TodoList).toEqual([{ id: 'list-research', name: 'Research library' }]);
+  });
+
   it('hydrates semantic selection inputs before operation implementations run', async () => {
     const Todo = entity({
       name: 'Todo',
@@ -34,6 +105,8 @@ describe('ontahi application composition root', () => {
         id: field.id(),
         completed: field.boolean(),
       },
+      locators: { refById: 'id' },
+      identity: 'refById',
       domainOperationDefaults: {
         authority: 'server',
         exposure: 'server-only',
@@ -56,10 +129,31 @@ describe('ontahi application composition root', () => {
       entities: [Todo],
     });
 
+    await expect(Todo.complete({ todos: Todo.refById('todo-1') })).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(dataset.Todo).toEqual([{ id: 'todo-1', completed: true }]);
+
+    dataset.Todo = [{ id: 'todo-1', completed: false }];
+    const incompleteTodos = application.graph.entities.Todo.selection(todo =>
+      todo.completed.eq(false),
+    );
+    await expect(Todo.complete({ todos: incompleteTodos })).resolves.toMatchObject({ ok: true });
+    expect(dataset.Todo).toEqual([{ id: 'todo-1', completed: true }]);
+
+    type CompleteInput = Parameters<typeof Todo.complete>[0];
+    expectTypeOf<{ todos: string[] }>().toMatchTypeOf<CompleteInput>();
+    expectTypeOf<{
+      todos: Array<{ id: string; completed: boolean }>;
+    }>().toMatchTypeOf<CompleteInput>();
+
+    dataset.Todo = [{ id: 'todo-1', completed: false }];
+    await expect(Todo.complete({ todos: ['todo-1'] })).resolves.toMatchObject({ ok: true });
+    expect(dataset.Todo).toEqual([{ id: 'todo-1', completed: true }]);
+
+    dataset.Todo = [{ id: 'todo-1', completed: false }];
     await expect(
-      application.invokeOperation(application.graph.entities.Todo.domain.complete, {
-        todos: Selection.all(Todo),
-      }),
+      Todo.complete({ todos: [{ id: 'todo-1', completed: false }] }),
     ).resolves.toMatchObject({ ok: true });
     expect(dataset.Todo).toEqual([{ id: 'todo-1', completed: true }]);
   });

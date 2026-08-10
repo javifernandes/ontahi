@@ -15,6 +15,7 @@ export * from './in-memory/runtime.js';
 export * from './in-memory/storage.js';
 export * from './mapping-conventions.js';
 export * from './operations.js';
+export * from './operation-input.js';
 export * from './output/index.js';
 export * from './planning.js';
 export * from './query.js';

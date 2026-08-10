@@ -1,5 +1,7 @@
 import { Effect } from 'effect';
 
+import { booleanComputation, type BooleanComputation } from '../computation/conditional.js';
+
 import type { BoundGraphRead, ExecutableGraphRead } from './binding.js';
 import type { BoundGraphCommand } from './command-binding.js';
 import type { GraphCommandSpec } from './command.js';
@@ -19,6 +21,11 @@ import {
   type RelationRootSourceSelection,
   type RelationRootTargetEntity,
 } from './relation-root.js';
+import {
+  selection,
+  type EntitySelectionFactory,
+  type SelectionBuilder,
+} from './selection-value.js';
 import {
   GraphSelection as BaseGraphSelection,
   createInsertCommandSpec,
@@ -211,7 +218,7 @@ export type BoundGraphSelectionRuntimeApi<
   ) => ReturnType<
     ExecutableGraphRead<QueryBuilder<TEntity, TResult>, TReadError, TReadOptions>['stream']
   >;
-  exists: (options?: TReadOptions) => Effect.Effect<boolean, TReadError>;
+  exists: (options?: TReadOptions) => BooleanComputation<TReadError>;
   named: (
     name: string,
   ) => BoundGraphRead<ViewDefinition<undefined, TEntity, TResult>, TReadError, TReadOptions>;
@@ -252,132 +259,133 @@ export type BoundSelectionEntityBase<
   TReadOptions = undefined,
   TCommandError = TReadError,
   TCommandOptions = TReadOptions,
-> = TEntity & {
-  all: () => BoundGraphSelection<
-    TEntity,
-    InferEntityRecord<TEntity['fields']>,
-    TReadError,
-    TReadOptions,
-    TCommandError,
-    TCommandOptions
-  >;
-  where: (
-    build: Parameters<
-      BoundGraphSelection<
-        TEntity,
-        InferEntityRecord<TEntity['fields']>,
-        TReadError,
-        TReadOptions,
-        TCommandError,
-        TCommandOptions
-      >['where']
-    >[0],
-  ) => BoundGraphSelection<
-    TEntity,
-    InferEntityRecord<TEntity['fields']>,
-    TReadError,
-    TReadOptions,
-    TCommandError,
-    TCommandOptions
-  >;
-  insert: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
-  ) => BoundGraphCommand<
-    TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
-    void,
-    TCommandError,
-    TCommandOptions
-  >;
-  insertReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
-    fieldNames: TFieldNames,
-  ) => BoundGraphCommand<
-    TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
-    PickEntityFields<TEntity, TFieldNames>,
-    TCommandError,
-    TCommandOptions
-  >;
-  insertMany: (
-    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-  ) => BoundGraphCommand<
-    TEntity,
-    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-    void,
-    TCommandError,
-    TCommandOptions
-  >;
-  insertManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-    fieldNames: TFieldNames,
-  ) => BoundGraphCommand<
-    TEntity,
-    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-    Array<PickEntityFields<TEntity, TFieldNames>>,
-    TCommandError,
-    TCommandOptions
-  >;
-  upsert: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
-    options: {
-      conflictOn: readonly EntityFieldName<TEntity>[];
-      strategy: 'ignore' | 'merge';
-    },
-  ) => BoundGraphCommand<
-    TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
-    void,
-    TCommandError,
-    TCommandOptions
-  >;
-  upsertMany: (
-    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-    options: {
-      conflictOn: readonly EntityFieldName<TEntity>[];
-      strategy: 'ignore' | 'merge';
-    },
-  ) => BoundGraphCommand<
-    TEntity,
-    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-    void,
-    TCommandError,
-    TCommandOptions
-  >;
-  relatedTo: <TSource extends AnyEntityDefinition, TSourceResult>(
-    sourceSelection: RelationRootSourceSelection<
-      TSource,
-      TSourceResult,
+> = TEntity &
+  EntitySelectionFactory<TEntity> & {
+    all: () => BoundGraphSelection<
+      TEntity,
+      InferEntityRecord<TEntity['fields']>,
       TReadError,
       TReadOptions,
       TCommandError,
       TCommandOptions
-    >,
-    options: {
-      through: (keyof TEntity['relations'] | keyof TSource['relations']) & string;
-    },
-  ) => RelationRootSelection<
-    TEntity,
-    TSource,
-    InferEntityRecord<TEntity['fields']>,
-    TSourceResult,
-    TReadError,
-    TReadOptions,
-    TCommandError,
-    TCommandOptions
-  >;
-  pipe: <TValue>(
-    fn: (
-      entity: BoundSelectionEntityBase<
-        TEntity,
+    >;
+    where: (
+      build: Parameters<
+        BoundGraphSelection<
+          TEntity,
+          InferEntityRecord<TEntity['fields']>,
+          TReadError,
+          TReadOptions,
+          TCommandError,
+          TCommandOptions
+        >['where']
+      >[0],
+    ) => BoundGraphSelection<
+      TEntity,
+      InferEntityRecord<TEntity['fields']>,
+      TReadError,
+      TReadOptions,
+      TCommandError,
+      TCommandOptions
+    >;
+    insert: (
+      payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    ) => BoundGraphCommand<
+      TEntity,
+      Partial<InferEntityRecord<TEntity['fields']>>,
+      void,
+      TCommandError,
+      TCommandOptions
+    >;
+    insertReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+      payload: Partial<InferEntityRecord<TEntity['fields']>>,
+      fieldNames: TFieldNames,
+    ) => BoundGraphCommand<
+      TEntity,
+      Partial<InferEntityRecord<TEntity['fields']>>,
+      PickEntityFields<TEntity, TFieldNames>,
+      TCommandError,
+      TCommandOptions
+    >;
+    insertMany: (
+      payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    ) => BoundGraphCommand<
+      TEntity,
+      Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+      void,
+      TCommandError,
+      TCommandOptions
+    >;
+    insertManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+      payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+      fieldNames: TFieldNames,
+    ) => BoundGraphCommand<
+      TEntity,
+      Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+      Array<PickEntityFields<TEntity, TFieldNames>>,
+      TCommandError,
+      TCommandOptions
+    >;
+    upsert: (
+      payload: Partial<InferEntityRecord<TEntity['fields']>>,
+      options: {
+        conflictOn: readonly EntityFieldName<TEntity>[];
+        strategy: 'ignore' | 'merge';
+      },
+    ) => BoundGraphCommand<
+      TEntity,
+      Partial<InferEntityRecord<TEntity['fields']>>,
+      void,
+      TCommandError,
+      TCommandOptions
+    >;
+    upsertMany: (
+      payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+      options: {
+        conflictOn: readonly EntityFieldName<TEntity>[];
+        strategy: 'ignore' | 'merge';
+      },
+    ) => BoundGraphCommand<
+      TEntity,
+      Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+      void,
+      TCommandError,
+      TCommandOptions
+    >;
+    relatedTo: <TSource extends AnyEntityDefinition, TSourceResult>(
+      sourceSelection: RelationRootSourceSelection<
+        TSource,
+        TSourceResult,
         TReadError,
         TReadOptions,
         TCommandError,
         TCommandOptions
       >,
-    ) => TValue,
-  ) => TValue;
-};
+      options: {
+        through: (keyof TEntity['relations'] | keyof TSource['relations']) & string;
+      },
+    ) => RelationRootSelection<
+      TEntity,
+      TSource,
+      InferEntityRecord<TEntity['fields']>,
+      TSourceResult,
+      TReadError,
+      TReadOptions,
+      TCommandError,
+      TCommandOptions
+    >;
+    pipe: <TValue>(
+      fn: (
+        entity: BoundSelectionEntityBase<
+          TEntity,
+          TReadError,
+          TReadOptions,
+          TCommandError,
+          TCommandOptions
+        >,
+      ) => TValue,
+    ) => TValue;
+  };
 
 type CreateCommand<TError, TOptions> = <
   TEntity extends AnyEntityDefinition,
@@ -477,9 +485,11 @@ export const createGraphSelectionAssembly = <
     stream: (options?: TReadOptions) =>
       createExecutableGraphRead(selection.build()).stream(undefined, options),
     exists: (options?: TReadOptions) =>
-      createExecutableGraphRead(selection.build())
-        .get(undefined, options)
-        .pipe(Effect.map(row => row != null)),
+      booleanComputation(
+        createExecutableGraphRead(selection.build())
+          .get(undefined, options)
+          .pipe(Effect.map(row => row != null)),
+      ),
     named: (name: string) => namedGraphRead(name, selection),
   });
 
@@ -495,6 +505,7 @@ export const createGraphSelectionAssembly = <
 
   const bindSelectionEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) =>
     Object.assign(entityDefinition, {
+      selection: (build: SelectionBuilder<TEntity>) => selection(entityDefinition, build),
       all: () => createGraphSelection(query(entityDefinition)),
       where: (build: QueryWhereArg<TEntity, any>) =>
         createGraphSelection(query(entityDefinition).where(build)),

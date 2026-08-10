@@ -2,23 +2,24 @@
 
 Direct PostgreSQL storage for Ontahi applications.
 
-The host owns its PostgreSQL schema and migrations. The adapter requires an explicit mapping between
-semantic entities and physical tables, then binds execution and reflected browsing together:
+The host owns its PostgreSQL schema and migrations. When the storage is composed through
+`ontahi(...)`, the adapter conventionally maps registered Entities to plural snake-case tables and
+snake-case columns, then binds execution and reflected browsing together:
 
 ```ts
 const defaultStorage = createPostgresDataGraphStorage({
   pool,
-  mappings: [
-    postgresMapping({
-      entity: TodoEntity,
-      table: 'todos',
-      columns: { id: 'id', title: 'title', completed: 'completed' },
-    }),
-  ],
 });
 
-const graph = createDataGraphArchitectureAdapter({ defaultStorage });
+const application = ontahi({
+  storage: defaultStorage,
+  entities: [TodoList, Todo, Tag, TodoTag],
+});
 ```
+
+Use `overrides` for focused table or column exceptions without restating conventional mappings.
+Explicit `mappings` remain available when the host needs full control or constructs the lower-level
+runtime directly.
 
 The runtime supports semantic selections, ordering, limits, counts, streams, projections, nested
 relation includes, relation-root reads, inserts, bulk inserts, upserts, updates, deletes, returning

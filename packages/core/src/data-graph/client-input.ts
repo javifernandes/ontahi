@@ -2,7 +2,6 @@ import type {
   AnyEntityDefinition,
   GraphSchemaFields,
   GraphSchemaLike,
-  InferEntityRecord,
   InferGraphSchemaValue,
 } from './definitions.js';
 import {
@@ -13,8 +12,9 @@ import {
   isEntityRefLocatorValue,
   type EntityRef,
   type EntityRefLocatorValue,
+  type EntitySelectionInputItem,
 } from './ref.js';
-import { Selection } from './selection-value.js';
+import { isSelection, Selection } from './selection-value.js';
 
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
 
@@ -36,48 +36,6 @@ type ClientInputFields<TFields extends GraphSchemaFields> = Simplify<
     >;
   }
 >;
-
-type SingleLocatorArgument<TLocator> = TLocator extends (...args: infer TArguments) => unknown
-  ? TArguments extends [infer TValue]
-    ? TValue
-    : never
-  : never;
-
-type IsUnion<TValue, TWhole = TValue> = TValue extends unknown
-  ? [TWhole] extends [TValue]
-    ? false
-    : true
-  : never;
-
-type IdentityScalar<TEntity extends AnyEntityDefinition> =
-  IsUnion<keyof TEntity['refLocators']> extends true
-    ? never
-    : SingleLocatorArgument<TEntity['refLocators'][keyof TEntity['refLocators']]>;
-
-type IdentityLocator<TEntity extends AnyEntityDefinition> =
-  TEntity['identityLocatorName'] extends keyof TEntity['refLocators']
-    ? TEntity['refLocators'][TEntity['identityLocatorName']]
-    : never;
-
-type IdentityFieldNames<TEntity extends AnyEntityDefinition> =
-  IdentityLocator<TEntity> extends { fields: readonly (infer TFieldName extends string)[] }
-    ? TFieldName
-    : never;
-
-type IdentityRecord<TEntity extends AnyEntityDefinition> = [IdentityFieldNames<TEntity>] extends [
-  never,
-]
-  ? never
-  : Pick<
-      InferEntityRecord<TEntity['fields']>,
-      Extract<IdentityFieldNames<TEntity>, keyof InferEntityRecord<TEntity['fields']>>
-    >;
-
-export type EntitySelectionInputItem<TEntity extends AnyEntityDefinition> =
-  | EntityRef<TEntity['name']>
-  | InferEntityRecord<TEntity['fields']>
-  | IdentityRecord<TEntity>
-  | IdentityScalar<TEntity>;
 
 export type GraphSelectionClientInput<
   TEntity extends AnyEntityDefinition,
@@ -145,11 +103,8 @@ const normalizeSelectionInput = (
   },
   value: unknown,
 ) => {
-  if (value instanceof Selection) return value;
-  const values = schema.cardinality === 'many' ? value : [value];
-  if (!Array.isArray(values)) {
-    throw new Error(`Expected an array of ${schema.entity.name} selection inputs.`);
-  }
+  if (isSelection(value)) return value;
+  const values = schema.cardinality === 'many' && Array.isArray(value) ? value : [value];
   return Selection.references(
     schema.entity,
     values.map(item => selectionInputItemToRef(schema.entity, item)),

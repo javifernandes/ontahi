@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createFetchReflectedOperationInvoker } from '../../src/actions/index.js';
+import {
+  createFetchOperationBridgeAdapter,
+  createFetchReflectedOperationInvoker,
+} from '../../src/actions/index.js';
 
 describe('createFetchReflectedOperationInvoker', () => {
   afterEach(() => {
@@ -115,5 +118,51 @@ describe('createFetchReflectedOperationInvoker', () => {
         exposure: 'server-only',
       }),
     ).toBe(false);
+  });
+
+  it('derives bridge and task endpoints from the runtime mount path', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          taskId: 'Todo.completeAll',
+          runId: 'run-1',
+          status: 'completed',
+          updatedAt: '2026-08-09T00:00:00.000Z',
+          result: { completed: 3 },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          kind: 'invocation-result',
+          result: { ok: true, kind: 'success', value: [] },
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const adapter = createFetchOperationBridgeAdapter({
+      mountPath: '/internal/ontahi/',
+    });
+    const invoker = createFetchReflectedOperationInvoker({
+      mountPath: '/internal/ontahi/',
+    });
+
+    await adapter.getTaskSnapshot?.({ taskId: 'Todo.completeAll', runId: 'run-1' });
+    await expect(
+      invoker.invokeOperation({ operationId: 'Todo.list', input: {} }),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/internal/ontahi/operations/tasks/Todo.completeAll/run-1',
+      { credentials: 'same-origin' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/internal/ontahi/operations',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });

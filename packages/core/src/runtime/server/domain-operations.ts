@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { normalizeGraphSchemaClientInput } from '../../data-graph/client-input.js';
 import { GraphCommand } from '../../data-graph/command.js';
 import {
   graphSchema,
@@ -10,6 +11,10 @@ import {
   type InferGraphSchemaValue,
 } from '../../data-graph/definitions.js';
 import {
+  attachOperationInputSchema,
+  type OperationInputSchema,
+} from '../../data-graph/operation-input.js';
+import {
   resolveDomainOperations,
   type DurableOperationDeclarationMetadata,
   type DomainOperationBridgeMetadata,
@@ -19,7 +24,7 @@ import {
   type ResolveDomainOperations,
 } from '../../data-graph/operations.js';
 import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
-import type { QuerySpec } from '../../data-graph/query.js';
+import type { GraphReadSpec } from '../../data-graph/query.js';
 import {
   attachEntityRefInputRefs,
   normalizeEntityRefInput,
@@ -27,6 +32,7 @@ import {
   type EntityRefInputPublicInput,
   type EntityRefInputRunInput,
 } from '../../data-graph/ref.js';
+import { RelationRootSelection } from '../../data-graph/relation-root.js';
 import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { GraphSelection } from '../../data-graph/selection.js';
@@ -90,13 +96,13 @@ export type HydratedOperationInput<TInput> =
             : TInput;
 
 type DomainOperationGraphRead<TResult> = TResult extends readonly (infer TItem)[]
-  ? { build: () => QuerySpec<any, TItem> }
+  ? { build: () => GraphReadSpec<any, TItem> }
   : never;
 
-type AnyDomainOperationGraphRead = { build: () => QuerySpec<any, any> };
+type AnyDomainOperationGraphRead = { build: () => GraphReadSpec<any, any> };
 
 const isDomainOperationGraphRead = (value: unknown): value is AnyDomainOperationGraphRead =>
-  value instanceof GraphSelection;
+  value instanceof GraphSelection || value instanceof RelationRootSelection;
 
 export type DomainOperationRun<
   TInput extends OperationInput,
@@ -210,7 +216,7 @@ type DefinedDomainOperation<
   TInputRefs extends EntityRefInputDeclarations,
 > = DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs> & {
   authority: 'server';
-  input: InputSchemaLike<TInput>;
+  input: OperationInputSchema<InputSchemaLike<TInput>, TInput>;
 };
 
 type DefineDomainOperation = {
@@ -249,8 +255,8 @@ const defineDomainOperationImplementation = (
 ) => ({
   kind: 'domain-operation',
   authority: 'server',
-  input: EmptyInputSchema as InputSchemaLike<any>,
   ...operation,
+  input: attachOperationInputSchema((operation.input ?? EmptyInputSchema) as InputSchemaLike<any>),
 });
 
 export const defineDomainOperation = defineDomainOperationImplementation as DefineDomainOperation;
@@ -338,10 +344,10 @@ const resolveDomainOperationRunner = <
   const normalizeOperationInput = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
   ): EntityRefInputPublicInput<TInput, TInputRefs> =>
-    normalizeEntityRefInput(input as object, operation.inputRefs) as EntityRefInputPublicInput<
-      TInput,
-      TInputRefs
-    >;
+    normalizeEntityRefInput(
+      normalizeGraphSchemaClientInput(operation.input, input) as object,
+      operation.inputRefs,
+    ) as EntityRefInputPublicInput<TInput, TInputRefs>;
 
   const runOperation = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
@@ -431,7 +437,11 @@ export const invokeServerDomainOperation = async <
 ): Promise<OperationInvocationResult<TResult, TFailure>> => {
   const result = await runServerDomainOperationRaw(operation, input);
 
-  await runDomainOperationSuccessHook(operation, input, result);
+  await runDomainOperationSuccessHook<TInput, TResult, TFailure, TInfraError, TInputRefs>(
+    operation,
+    input,
+    result,
+  );
 
   return toOperationInvocationResult<TResult, TFailure>(result);
 };
@@ -566,8 +576,8 @@ export const runConfiguredServerDomainOperationRaw = <
           TInfraError
         >,
         startDurableOperation,
-      )(input)
-    : resolveDomainOperationRunner(operation)(input);
+      )(input as EntityRefInputPublicInput<TInput, {}>)
+    : resolveDomainOperationRunner(operation)(input as EntityRefInputPublicInput<TInput, {}>);
 
 export const invokeConfiguredServerDomainOperation = async <
   TInput extends OperationInput,
@@ -585,7 +595,11 @@ export const invokeConfiguredServerDomainOperation = async <
     startDurableOperation,
   );
 
-  await runDomainOperationSuccessHook(operation, input, result);
+  await runDomainOperationSuccessHook<TInput, TResult, TFailure, TInfraError, {}>(
+    operation,
+    input as EntityRefInputPublicInput<TInput, {}>,
+    result,
+  );
 
   return toOperationInvocationResult<TResult | TaskRunRef, TFailure | TaskFailure>(result);
 };

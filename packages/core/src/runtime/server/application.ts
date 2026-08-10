@@ -40,7 +40,7 @@ export type OntahiApplication<TGraph extends AnyGraphApi = AnyGraphApi> = {
   resolveOperation: (operationId: string) => OperationInvocationOperation | undefined;
   invokeOperation: (
     operation: OperationInvocationOperation,
-    input: unknown,
+    input?: unknown,
   ) => Promise<OperationInvocationResult>;
   checkPermission: (
     operation: OperationInvocationOperation,

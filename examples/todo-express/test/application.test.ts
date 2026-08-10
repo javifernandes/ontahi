@@ -1,10 +1,11 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTodoExpressApp } from '../src/application.js';
-import { TodoApplication } from '../src/graph.js';
+import { Todo, TodoApplication, TodoList, TodoTag, todoNotifications } from '../src/graph.js';
 
 const getTodoDataset = () => {
   if (TodoApplication.storage.kind !== 'in-memory') {
@@ -33,7 +34,10 @@ describe('Ontahi todo portability example', () => {
     };
   });
 
-  afterEach(async () => closeServer?.());
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await closeServer?.();
+  });
 
   const invoke = (operationId: string, input: unknown) =>
     fetch(endpoint, {
@@ -41,6 +45,73 @@ describe('Ontahi todo portability example', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ kind: 'invoke', operationId, input }),
     });
+
+  const selectTodoList = (id: string) => ({
+    kind: 'selection',
+    entityName: 'TodoList',
+    expression: {
+      kind: 'references',
+      refs: [{ kind: 'entity-ref', entityName: 'TodoList', locator: { id } }],
+    },
+  });
+
+  it('uses the bound TodoList directly from Node', async () => {
+    await expect(TodoList.list()).resolves.toMatchObject({
+      ok: true,
+      value: [{ id: 'list-1', name: 'Inbox' }],
+    });
+
+    const list = TodoList.refById('list-1');
+    await expect(TodoList.rename({ list, name: 'Research backlog' })).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'list-1', name: 'Research backlog' },
+    });
+    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Research backlog' }]);
+  });
+
+  it('runs a TodoList operation with the capability supplied by its application', async () => {
+    const notified = vi
+      .spyOn(todoNotifications, 'todoListCreated')
+      .mockImplementation(() => Effect.succeed(undefined));
+
+    await expect(TodoList.create({ id: 'list-2', name: 'Reading queue' })).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'list-2', name: 'Reading queue' },
+    });
+    expect(notified).toHaveBeenCalledWith({
+      listId: 'list-2',
+      name: 'Reading queue',
+    });
+  });
+
+  it('lists the Todos related to one TodoList from Node', async () => {
+    getTodoDataset().Todo = [
+      { id: 'todo-2', listId: 'list-2', title: 'Ignore me', completed: false },
+      { id: 'todo-1', listId: 'list-1', title: 'Read Ontahi guide', completed: false },
+    ];
+
+    await expect(Todo.listForList({ list: TodoList.refById('list-1') })).resolves.toMatchObject({
+      ok: true,
+      value: [{ id: 'todo-1', listId: 'list-1', title: 'Read Ontahi guide', completed: false }],
+    });
+  });
+
+  it('acts on an association through its composite identity from Node', async () => {
+    getTodoDataset().TodoTag = [
+      { todoId: 'todo-write-guide', tagId: 'tag-urgent' },
+      { todoId: 'todo-review-guide', tagId: 'tag-urgent' },
+    ];
+
+    const assignment = TodoTag.refByTodoAndTag('todo-write-guide', 'tag-urgent');
+
+    await expect(TodoTag.remove({ assignment })).resolves.toMatchObject({
+      ok: true,
+      kind: 'success',
+    });
+    expect(getTodoDataset().TodoTag).toEqual([
+      { todoId: 'todo-review-guide', tagId: 'tag-urgent' },
+    ]);
+  });
 
   it('invokes a successful operation over Express end to end', async () => {
     const response = await invoke('Todo.create', {
@@ -68,6 +139,35 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
+  it('renames one TodoList by identity', async () => {
+    const response = await invoke('TodoList.rename', {
+      list: selectTodoList('list-1'),
+      name: 'Reading',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: true,
+        kind: 'success',
+        value: { id: 'list-1', name: 'Reading' },
+      },
+    });
+    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Reading' }]);
+  });
+
+  it('deletes an empty TodoList by identity', async () => {
+    const response = await invoke('TodoList.delete', { list: selectTodoList('list-1') });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, kind: 'success' },
+    });
+    expect(getTodoDataset().TodoList).toEqual([]);
+  });
+
   it('returns the canonical validation result for invalid input', async () => {
     const response = await invoke('Todo.create', { id: 'todo-1', listId: 'list-1', title: '' });
 
@@ -82,6 +182,25 @@ describe('Ontahi todo portability example', () => {
       },
     });
     expect(getTodoDataset().Todo).toEqual([]);
+  });
+
+  it('rejects a statically excluded TodoList name before execution', async () => {
+    const response = await invoke('TodoList.rename', {
+      list: selectTodoList('list-1'),
+      name: '  ARCHIVE  ',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: false,
+        kind: 'input_invalid',
+        executed: false,
+        issues: [{ path: 'name', message: 'Archive is reserved for system use.' }],
+      },
+    });
+    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Inbox' }]);
   });
 
   it('rejects creating a Todo in an unknown list', async () => {
@@ -107,16 +226,22 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().Todo).toEqual([]);
   });
 
-  it('invokes a void-input operation when the transport omits input', async () => {
+  it('uses one predicate Selection from Node and Express', async () => {
     getTodoDataset().Todo = [
-      { id: 'todo-1', listId: 'list-1', title: 'Persisted', completed: false },
+      { id: 'todo-1', listId: 'list-1', title: 'Open', completed: false },
+      { id: 'todo-2', listId: 'list-1', title: 'Completed', completed: true },
+      { id: 'todo-3', listId: 'list-2', title: 'Another list', completed: false },
     ];
+    const openTodos = Todo.selection(todo => todo.listId.eq('list-1')).and(todo =>
+      todo.completed.eq(false),
+    );
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'invoke', operationId: 'Todo.list' }),
+    await expect(Todo.list(openTodos)).resolves.toMatchObject({
+      ok: true,
+      value: [{ id: 'todo-1', listId: 'list-1', title: 'Open', completed: false }],
     });
+
+    const response = await invoke('Todo.list', openTodos);
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -124,7 +249,7 @@ describe('Ontahi todo portability example', () => {
       result: {
         ok: true,
         kind: 'success',
-        value: [{ id: 'todo-1', listId: 'list-1', title: 'Persisted', completed: false }],
+        value: [{ id: 'todo-1', listId: 'list-1', title: 'Open', completed: false }],
       },
     });
   });
