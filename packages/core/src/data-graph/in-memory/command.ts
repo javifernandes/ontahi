@@ -1,6 +1,11 @@
 import { Effect } from 'effect';
 
 import type { GraphCommandSpec } from '../command.js';
+import {
+  liftEntityReferenceRecord,
+  lowerEntityReferenceRecord,
+  lowerEntityReferenceSelection,
+} from '../reference-field.js';
 
 import type { InMemoryDataset } from './materialization.js';
 import { applySelectionExpression } from './query.js';
@@ -27,7 +32,9 @@ export class InMemoryDataGraphError extends Error {
 const payloadRows = (command: GraphCommandSpec<any, any, any>) => {
   if (command.operation === 'insert_many' || command.operation === 'upsert') {
     if (command.operation === 'upsert' && !Array.isArray(command.payload)) {
-      return command.payload ? [{ ...(command.payload as Record<string, unknown>) }] : [];
+      return command.payload
+        ? [lowerEntityReferenceRecord(command.root, command.payload as Record<string, unknown>)]
+        : [];
     }
 
     if (!Array.isArray(command.payload)) {
@@ -37,7 +44,9 @@ const payloadRows = (command: GraphCommandSpec<any, any, any>) => {
       );
     }
 
-    return command.payload.map(row => ({ ...(row as Record<string, unknown>) }));
+    return command.payload.map(row =>
+      lowerEntityReferenceRecord(command.root, row as Record<string, unknown>),
+    );
   }
 
   if (!command.payload || Array.isArray(command.payload)) {
@@ -47,13 +56,17 @@ const payloadRows = (command: GraphCommandSpec<any, any, any>) => {
     );
   }
 
-  return [{ ...(command.payload as Record<string, unknown>) }];
+  return [lowerEntityReferenceRecord(command.root, command.payload as Record<string, unknown>)];
 };
 
 const projectReturningRows = (
+  entity: GraphCommandSpec['root'],
   rows: ReadonlyArray<Record<string, unknown>>,
   fields: readonly string[],
-) => rows.map(row => Object.fromEntries(fields.map(field => [field, row[field]])));
+) =>
+  rows.map(row =>
+    liftEntityReferenceRecord(entity, Object.fromEntries(fields.map(field => [field, row[field]]))),
+  );
 
 const assertOneAffectedRow = (
   command: GraphCommandSpec<any, any, any>,
@@ -110,7 +123,12 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
     }
   } else if (command.operation === 'update') {
     const [payload] = payloadRows(command);
-    const matches = new Set(applySelectionExpression(currentRows, command.selection));
+    const matches = new Set(
+      applySelectionExpression(
+        currentRows,
+        lowerEntityReferenceSelection(command.root, command.selection),
+      ),
+    );
 
     nextRows = currentRows.map(row => {
       if (!matches.has(row)) {
@@ -122,7 +140,12 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
       return updated;
     });
   } else {
-    const matches = new Set(applySelectionExpression(currentRows, command.selection));
+    const matches = new Set(
+      applySelectionExpression(
+        currentRows,
+        lowerEntityReferenceSelection(command.root, command.selection),
+      ),
+    );
     affectedRows = currentRows.filter(row => matches.has(row));
     nextRows = currentRows.filter(row => !matches.has(row));
   }
@@ -134,7 +157,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
     return undefined;
   }
 
-  const returnedRows = projectReturningRows(affectedRows, command.returning);
+  const returnedRows = projectReturningRows(command.root, affectedRows, command.returning);
   return command.cardinality === 'one' ? returnedRows[0] : returnedRows;
 };
 

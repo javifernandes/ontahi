@@ -162,8 +162,9 @@ const renderEntitySchemaProjection = (definition, projectedNames = new Map()) =>
   }
 
   const localName = definition.entityDefinitionLocalName ?? `${definition.entityName}Schema`;
+  const fieldsText = replaceProjectedEntityNames(projection.fieldsText, projectedNames);
   const steps = [
-    `defineEntitySchema('${projection.name}', ${projection.fieldsText})`,
+    `defineEntitySchema('${projection.name}', ${fieldsText})`,
     ...(projection.displayText ? [`.display(${projection.displayText})`] : []),
     ...(projection.freshnessText ? [`.freshness(${projection.freshnessText})`] : []),
     ...(projection.locatorsText ? [`.locators(${projection.locatorsText})`] : []),
@@ -207,6 +208,10 @@ const orderSchemaProjections = definitions => {
   const visit = definition => {
     if (visited.has(definition)) return;
     visited.add(definition);
+    for (const referenceField of definition.entitySchemaProjection?.referenceFields ?? []) {
+      const target = definitionsByName.get(referenceField.targetName);
+      if (target) visit(target);
+    }
     for (const relation of definition.entitySchemaProjection?.relations ?? []) {
       if (relation.deferred) continue;
       const target = definitionsByName.get(relation.targetName);
@@ -314,6 +319,7 @@ export const renderGeneratedClientEntityModule = ({
       entities.flatMap(entity =>
         [
           ...(entity.entityDefinitionName ? [entity.entityDefinitionName] : []),
+          ...(entity.entitySchemaProjection?.referenceFields?.map(field => field.targetName) ?? []),
           ...(entity.entitySchemaProjection?.relations?.map(relation => relation.targetName) ?? []),
           ...collectEntityDefinitionNamesFromText(
             [
@@ -346,6 +352,11 @@ export const renderGeneratedClientEntityModule = ({
         : []),
       ...(entity.entitySchemaProjection?.relations?.flatMap(relation =>
         relation.targetImportPath ? [[relation.targetName, relation.targetImportPath]] : [],
+      ) ?? []),
+      ...(entity.entitySchemaProjection?.referenceFields?.flatMap(referenceField =>
+        referenceField.targetImportPath
+          ? [[referenceField.targetName, referenceField.targetImportPath]]
+          : [],
       ) ?? []),
     ]),
   );

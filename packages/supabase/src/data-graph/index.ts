@@ -3,6 +3,9 @@ import {
   type CompiledPredicate,
   type CompiledSelectionExpression,
   getEntityMapping,
+  liftEntityReferenceRecord,
+  lowerEntityReferenceRecord,
+  lowerEntityReferenceSelection,
   resolveColumnNameForEntity,
   resolveFieldNameForEntity,
   type AnyEntityDefinition,
@@ -175,21 +178,23 @@ export const mapEntityPayloadToSupabaseColumns = <TEntity extends AnyEntityDefin
   payload: Record<string, unknown>,
 ) =>
   Object.fromEntries(
-    Object.entries(payload).map(([fieldName, value]) => [
-      resolveColumnNameForEntity(entityDefinition, fieldName),
-      value,
-    ]),
+    Object.entries(lowerEntityReferenceRecord(entityDefinition, payload)).map(
+      ([fieldName, value]) => [resolveColumnNameForEntity(entityDefinition, fieldName), value],
+    ),
   );
 
 export const mapSupabaseRowToEntityFields = <TEntity extends AnyEntityDefinition>(
   entityDefinition: TEntity,
   row: Record<string, unknown>,
 ) =>
-  Object.fromEntries(
-    Object.entries(row).map(([columnName, value]) => [
-      resolveFieldNameForEntity(entityDefinition, columnName),
-      value,
-    ]),
+  liftEntityReferenceRecord(
+    entityDefinition,
+    Object.fromEntries(
+      Object.entries(row).map(([columnName, value]) => [
+        resolveFieldNameForEntity(entityDefinition, columnName),
+        value,
+      ]),
+    ),
   );
 
 export const applySupabasePredicates = <
@@ -203,12 +208,23 @@ export const applySupabasePredicates = <
   let nextQuery = query;
 
   for (const predicate of predicates) {
+    let loweredPredicate: SupabasePredicateLike = predicate;
+    if ('fieldName' in predicate) {
+      const lowered = lowerEntityReferenceSelection(entityDefinition, {
+        kind: 'predicate',
+        ...predicate,
+      });
+      if (lowered.kind !== 'predicate') {
+        throw new Error('Expected a Supabase selection predicate.');
+      }
+      loweredPredicate = lowered;
+    }
     const columnName =
-      'column' in predicate
-        ? predicate.column
-        : resolveColumnNameForEntity(entityDefinition, predicate.fieldName);
+      'column' in loweredPredicate
+        ? loweredPredicate.column
+        : resolveColumnNameForEntity(entityDefinition, loweredPredicate.fieldName);
 
-    nextQuery = applySupabasePredicate(nextQuery, columnName, predicate);
+    nextQuery = applySupabasePredicate(nextQuery, columnName, loweredPredicate);
   }
 
   return nextQuery;

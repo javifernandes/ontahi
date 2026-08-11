@@ -1,3 +1,4 @@
+import { lowerEntityReferenceSelection } from '../reference-field.js';
 import {
   lowerSelectionReferences,
   selectionAnd,
@@ -89,6 +90,12 @@ export const applySelectionExpression = (
   rows: ReadonlyArray<Record<string, unknown>>,
   expression: SelectionExpression,
 ) => rows.filter(row => matchesSelectionExpression(row, expression));
+
+export const applyEntitySelectionExpression = (
+  entity: import('../definitions.js').AnyEntityDefinition,
+  rows: ReadonlyArray<Record<string, unknown>>,
+  expression: SelectionExpression,
+) => applySelectionExpression(rows, lowerEntityReferenceSelection(entity, expression));
 
 export const applyPredicates = (
   rows: ReadonlyArray<Record<string, unknown>>,

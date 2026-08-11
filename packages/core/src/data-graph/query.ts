@@ -4,10 +4,12 @@ import {
   type RelationDefinition,
   type RelationKind,
 } from './definitions.js';
+import { isEntityRef, type EntityRef } from './ref.js';
 import type { RelatedRootReadSpec } from './relation-root.js';
 import {
   selectionAll,
   selectionAnd,
+  selectionReferences,
   type EntitySelectionSource,
   type SemanticSelection,
   type SelectionExpression,
@@ -38,6 +40,11 @@ type FieldReference<TValue = unknown> = {
 
 type AnyFieldReference = FieldReference<any>;
 
+type ReferenceFieldReference<TValue> = Pick<
+  FieldReference<TValue>,
+  'kind' | 'fieldName' | 'eq' | 'in' | 'isNull'
+>;
+
 const createFieldReference = <TValue>(fieldName: string): FieldReference<TValue> => ({
   kind: 'field-ref',
   fieldName,
@@ -58,18 +65,17 @@ export interface SelectionObject {
 
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
 
-type RelationResult<TRelationKind extends RelationKind, TItem> = TRelationKind extends 'belongsTo'
-  ? TItem | null
-  : TItem[];
+type RelationResult<
+  TRelationKind extends RelationKind,
+  TItem,
+  TNullable extends boolean,
+> = TRelationKind extends 'belongsTo' ? (TNullable extends false ? TItem : TItem | null) : TItem[];
 
-type InferRelationBuilderResult<TRelationBuilder> =
-  TRelationBuilder extends RelationQueryBuilder<
-    AnyEntityDefinition,
-    infer TRelationKind,
-    infer TItem
-  >
-    ? RelationResult<TRelationKind, TItem>
-    : never;
+type InferRelationBuilderResult<TRelationBuilder extends AnyRelationQueryBuilder> = RelationResult<
+  TRelationBuilder['relationKind'],
+  TRelationBuilder['__item'],
+  TRelationBuilder['__nullable']
+>;
 
 type InferSelectionValue<TValue> =
   TValue extends FieldReference<infer TFieldValue>
@@ -88,7 +94,7 @@ export type InferIncludeShape<TInclude extends Record<string, AnyRelationQueryBu
   [TKey in keyof TInclude]: InferRelationBuilderResult<TInclude[TKey]>;
 }>;
 
-export type AnyRelationQueryBuilder = RelationQueryBuilder<any, any, any>;
+export type AnyRelationQueryBuilder = RelationQueryBuilder<any, any, any, any>;
 
 export type SelectionValue = AnyFieldReference | AnyRelationQueryBuilder | SelectionObject;
 
@@ -106,8 +112,11 @@ export class RelationQueryBuilder<
   TEntity extends AnyEntityDefinition,
   TRelationKind extends RelationKind = RelationKind,
   TItem = InferEntityRecord<TEntity['fields']>,
+  TNullable extends boolean = boolean,
 > {
   readonly kind = 'relation-builder';
+  declare readonly __item: TItem;
+  declare readonly __nullable: TNullable;
 
   constructor(
     readonly relationName: string,
@@ -120,42 +129,48 @@ export class RelationQueryBuilder<
   ) {}
 
   include<TInclude extends Record<string, AnyRelationQueryBuilder>>(
-    build: (root: EntityProxy<TEntity>) => TInclude,
+    build: (root: EntityIncludeProxy<TEntity>) => TInclude,
   ) {
     return new RelationQueryBuilder<
       TEntity,
       TRelationKind,
-      Simplify<TItem & InferIncludeShape<TInclude>>
+      Simplify<Omit<TItem, keyof TInclude> & InferIncludeShape<TInclude>>,
+      TNullable
     >(
       this.relationName,
       this.relationKind,
       this.entity,
       this.selectShape,
-      build(createEntityProxy(this.entity)),
+      build(createEntityIncludeProxy(this.entity)),
       this.orderBySpecs,
       this.limitValue,
     );
   }
 
   select<TSelection extends Record<string, SelectionValue>>(
-    build: (root: EntityProxy<TEntity>) => TSelection,
+    build: (root: EntitySelectionProxy<TEntity>) => TSelection,
   ) {
-    return new RelationQueryBuilder<TEntity, TRelationKind, InferSelectionShape<TSelection>>(
+    return new RelationQueryBuilder<
+      TEntity,
+      TRelationKind,
+      InferSelectionShape<TSelection>,
+      TNullable
+    >(
       this.relationName,
       this.relationKind,
       this.entity,
-      build(createEntityProxy(this.entity)),
+      build(createEntitySelectionProxy(this.entity)),
       this.includeShape,
       this.orderBySpecs,
       this.limitValue,
     );
   }
 
-  orderBy(build: (root: EntityProxy<TEntity>) => AnyFieldReference | OrderSpec) {
-    const result = build(createEntityProxy(this.entity));
+  orderBy(build: (root: EntityFieldProxy<TEntity>) => AnyFieldReference | OrderSpec) {
+    const result = build(createEntityFieldProxy(this.entity));
     const orderSpec = result.kind === 'field-ref' ? result.asc() : result;
 
-    return new RelationQueryBuilder<TEntity, TRelationKind, TItem>(
+    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable>(
       this.relationName,
       this.relationKind,
       this.entity,
@@ -167,7 +182,7 @@ export class RelationQueryBuilder<
   }
 
   limit(limitValue: number) {
-    return new RelationQueryBuilder<TEntity, TRelationKind, TItem>(
+    return new RelationQueryBuilder<TEntity, TRelationKind, TItem, TNullable>(
       this.relationName,
       this.relationKind,
       this.entity,
@@ -192,33 +207,76 @@ export class RelationQueryBuilder<
 }
 
 type RelationReferences<TEntity extends AnyEntityDefinition> = {
-  [TRelationName in keyof TEntity['relations']]: TEntity['relations'][TRelationName] extends RelationDefinition<
-    infer TRelationKind,
-    infer TTarget
-  >
-    ? RelationQueryBuilder<TTarget, TRelationKind, InferEntityRecord<TTarget['fields']>> & {
+  [TRelationName in keyof TEntity['relations']]: TEntity['relations'][TRelationName] extends {
+    relationKind: infer TRelationKind extends RelationKind;
+    target: infer TTarget extends AnyEntityDefinition;
+  }
+    ? RelationQueryBuilder<
+        TTarget,
+        TRelationKind,
+        InferEntityRecord<TTarget['fields']>,
+        NonNullable<TEntity['relations'][TRelationName]['nullable']>
+      > & {
         relationKind: TRelationKind;
       }
     : never;
 };
 
 type FieldReferences<TEntity extends AnyEntityDefinition> = {
-  [TFieldName in keyof InferEntityRecord<TEntity['fields']>]: FieldReference<
-    InferEntityRecord<TEntity['fields']>[TFieldName]
-  >;
+  [TFieldName in keyof InferEntityRecord<
+    TEntity['fields']
+  >]: TFieldName extends keyof TEntity['fields']
+    ? TEntity['fields'][TFieldName] extends { fieldType: 'reference' }
+      ? ReferenceFieldReference<InferEntityRecord<TEntity['fields']>[TFieldName]>
+      : FieldReference<InferEntityRecord<TEntity['fields']>[TFieldName]>
+    : never;
 };
 
-export type EntityProxy<TEntity extends AnyEntityDefinition> = FieldReferences<TEntity> &
-  RelationReferences<TEntity>;
+export type EntityFieldProxy<TEntity extends AnyEntityDefinition> = FieldReferences<TEntity>;
 
-const createEntityProxy = <TEntity extends AnyEntityDefinition>(
+export type EntitySelectionProxy<TEntity extends AnyEntityDefinition> = FieldReferences<TEntity> &
+  Omit<RelationReferences<TEntity>, keyof FieldReferences<TEntity>>;
+
+export type EntityIncludeProxy<TEntity extends AnyEntityDefinition> = RelationReferences<TEntity>;
+
+/** @deprecated Prefer the proxy type that matches the Query clause. */
+export type EntityProxy<TEntity extends AnyEntityDefinition> = EntityFieldProxy<TEntity>;
+
+const createEntityFieldProxy = <TEntity extends AnyEntityDefinition>(
   entityDefinition: TEntity,
-): EntityProxy<TEntity> => {
+): EntityFieldProxy<TEntity> => {
   const proxy: Record<string, unknown> = {};
 
   for (const fieldName of Object.keys(entityDefinition.fields)) {
     proxy[fieldName] = createFieldReference(fieldName);
   }
+
+  return proxy as EntityFieldProxy<TEntity>;
+};
+
+const createEntitySelectionProxy = <TEntity extends AnyEntityDefinition>(
+  entityDefinition: TEntity,
+): EntitySelectionProxy<TEntity> => {
+  const proxy = createEntityFieldProxy(entityDefinition) as Record<string, unknown>;
+
+  for (const [relationName, relationDefinition] of Object.entries(
+    entityDefinition.relations,
+  ) as Array<[string, RelationDefinition<RelationKind, AnyEntityDefinition>]>) {
+    if (relationName in entityDefinition.fields) continue;
+    proxy[relationName] = new RelationQueryBuilder(
+      relationName,
+      relationDefinition.relationKind,
+      relationDefinition.target,
+    );
+  }
+
+  return proxy as EntitySelectionProxy<TEntity>;
+};
+
+const createEntityIncludeProxy = <TEntity extends AnyEntityDefinition>(
+  entityDefinition: TEntity,
+): EntityIncludeProxy<TEntity> => {
+  const proxy: Record<string, unknown> = {};
 
   for (const [relationName, relationDefinition] of Object.entries(
     entityDefinition.relations,
@@ -230,7 +288,7 @@ const createEntityProxy = <TEntity extends AnyEntityDefinition>(
     );
   }
 
-  return proxy as EntityProxy<TEntity>;
+  return proxy as EntityIncludeProxy<TEntity>;
 };
 
 export type QuerySpec<
@@ -252,29 +310,41 @@ export class QueryBuilder<
   TEntity extends AnyEntityDefinition,
   TResult = InferEntityRecord<TEntity['fields']>,
 > {
+  declare readonly __result?: TResult;
+
   constructor(readonly spec: QuerySpec<TEntity, TResult>) {}
 
   where(
     build:
-      | ((root: EntityProxy<TEntity>) => SelectionExpression)
+      | ((root: EntityFieldProxy<TEntity>) => SelectionExpression)
       | EntitySelectionSource<TEntity>
-      | SemanticSelection<TEntity['name']>,
+      | SemanticSelection<TEntity['name']>
+      | EntityRef<TEntity['name']>,
   ) {
+    if (isEntityRef(build) && build.entityName !== this.spec.root.name) {
+      throw new Error(`Cannot apply a ${build.entityName} reference to ${this.spec.root.name}.`);
+    }
     if (
       typeof build !== 'function' &&
+      !isEntityRef(build) &&
       build.root !== this.spec.root &&
       build.root.name !== this.spec.root.name
     ) {
       throw new Error(`Cannot apply a ${build.root.name} selection to ${this.spec.root.name}.`);
     }
 
+    const expression =
+      typeof build === 'function'
+        ? build(createEntityFieldProxy(this.spec.root))
+        : isEntityRef(build)
+          ? selectionReferences([build])
+          : build.expression;
+
     return new QueryBuilder<TEntity, TResult>({
       ...this.spec,
-      selection: selectionAnd(
-        this.spec.selection,
-        typeof build === 'function' ? build(createEntityProxy(this.spec.root)) : build.expression,
-      ),
+      selection: selectionAnd(this.spec.selection, expression),
       ...(typeof build !== 'function' &&
+      !isEntityRef(build) &&
       (this.spec.cardinality === 'one' || build.cardinality === 'one')
         ? { cardinality: 'one' as const }
         : {}),
@@ -282,28 +352,34 @@ export class QueryBuilder<
   }
 
   select<TSelection extends Record<string, SelectionValue>>(
-    build: (root: EntityProxy<TEntity>) => TSelection,
+    build: (root: EntitySelectionProxy<TEntity>) => TSelection,
   ) {
     return new QueryBuilder<TEntity, InferSelectionShape<TSelection>>({
       ...this.spec,
-      select: build(createEntityProxy(this.spec.root)),
+      select: build(createEntitySelectionProxy(this.spec.root)),
     } as QuerySpec<TEntity, InferSelectionShape<TSelection>>);
   }
 
   include<TInclude extends Record<string, AnyRelationQueryBuilder>>(
-    build: (root: EntityProxy<TEntity>) => TInclude,
+    build: (root: EntityIncludeProxy<TEntity>) => TInclude,
   ) {
-    return new QueryBuilder<TEntity, Simplify<TResult & InferIncludeShape<TInclude>>>({
+    return new QueryBuilder<
+      TEntity,
+      Simplify<Omit<TResult, keyof TInclude> & InferIncludeShape<TInclude>>
+    >({
       ...this.spec,
       includes: {
         ...(this.spec.includes ?? {}),
-        ...build(createEntityProxy(this.spec.root)),
+        ...build(createEntityIncludeProxy(this.spec.root)),
       },
-    });
+    } as unknown as QuerySpec<
+      TEntity,
+      Simplify<Omit<TResult, keyof TInclude> & InferIncludeShape<TInclude>>
+    >);
   }
 
-  orderBy(build: (root: EntityProxy<TEntity>) => AnyFieldReference | OrderSpec) {
-    const result = build(createEntityProxy(this.spec.root));
+  orderBy(build: (root: EntityFieldProxy<TEntity>) => AnyFieldReference | OrderSpec) {
+    const result = build(createEntityFieldProxy(this.spec.root));
     const orderSpec = result.kind === 'field-ref' ? result.asc() : result;
 
     return new QueryBuilder<TEntity, TResult>({
@@ -323,6 +399,10 @@ export class QueryBuilder<
     return this.spec;
   }
 }
+
+export type InferQueryResult<TQuery extends QueryBuilder<any, any>> = NonNullable<
+  TQuery['__result']
+>;
 
 export const query = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) =>
   new QueryBuilder<TEntity>({

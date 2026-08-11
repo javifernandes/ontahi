@@ -3,6 +3,7 @@ import type {
   AnyEntityViewDefinition,
   AnyFieldDefinition,
   AnyGraphObjectDefinition,
+  AnyReferenceFieldDefinition,
   AnyValueDefinition,
   GraphArrayDefinition,
   GraphLiteralDefinition,
@@ -19,6 +20,7 @@ import type {
   GraphTransformDefinition,
   GraphUnionDefinition,
 } from './definitions.js';
+import { isReferenceFieldDefinition } from './definitions.js';
 
 export type GraphSchemaScalarType =
   | 'id'
@@ -31,6 +33,7 @@ export type GraphSchemaScalarType =
 
 export type GraphSchemaDescriptor =
   | GraphSchemaScalarDescriptor
+  | GraphSchemaReferenceDescriptor
   | GraphSchemaObjectDescriptor
   | GraphSchemaArrayDescriptor
   | GraphSchemaNullableDescriptor
@@ -75,6 +78,17 @@ export type GraphSchemaScalarDescriptor = {
     min?: number;
     max?: number;
     multipleOf?: number;
+  };
+  description?: string;
+  presentation?: GraphSchemaPresentation;
+};
+
+export type GraphSchemaReferenceDescriptor = {
+  kind: 'entity-ref';
+  entityName: string;
+  identity?: {
+    name: string;
+    fields: string[];
   };
   description?: string;
   presentation?: GraphSchemaPresentation;
@@ -212,6 +226,13 @@ export type GraphJsonSchema = {
       fields: string[];
     };
   };
+  'x-ontahi-entity-ref'?: {
+    entityName: string;
+    identity?: {
+      name: string;
+      fields: string[];
+    };
+  };
 };
 
 const descriptorFields = (fields: GraphSchemaFields, resolvingLazyNames: Set<string>) =>
@@ -261,15 +282,37 @@ const entityViewFields = (view: AnyEntityViewDefinition): GraphSchemaFields => {
   };
 };
 
-const describeField = (field: AnyFieldDefinition): GraphSchemaScalarDescriptor => ({
-  kind: 'scalar',
-  type: field.fieldType,
-  ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
-  ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
-  ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
-  ...(field.description ? { description: field.description } : {}),
-  ...(field.presentation ? { presentation: field.presentation } : {}),
-});
+const describeReferenceField = (
+  field: AnyReferenceFieldDefinition,
+): GraphSchemaReferenceDescriptor => {
+  const identityName = field.target.identityLocatorName;
+  const identity = identityName ? field.target.refLocators[identityName] : undefined;
+
+  return {
+    kind: 'entity-ref',
+    entityName: field.target.name,
+    ...(identityName && identity?.fields
+      ? { identity: { name: identityName, fields: [...identity.fields] } }
+      : {}),
+    ...(field.description ? { description: field.description } : {}),
+    ...(field.presentation ? { presentation: field.presentation } : {}),
+  };
+};
+
+const describeField = (
+  field: AnyFieldDefinition,
+): GraphSchemaScalarDescriptor | GraphSchemaReferenceDescriptor =>
+  isReferenceFieldDefinition(field)
+    ? describeReferenceField(field)
+    : {
+        kind: 'scalar',
+        type: field.fieldType as GraphSchemaScalarType,
+        ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
+        ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
+        ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
+        ...(field.description ? { description: field.description } : {}),
+        ...(field.presentation ? { presentation: field.presentation } : {}),
+      };
 
 const describeEntity = (
   entity: AnyEntityDefinition,
@@ -541,6 +584,25 @@ const descriptorToJsonSchema = (
 ): GraphJsonSchema => {
   if (descriptor.kind === 'scalar') {
     return scalarJsonSchema(descriptor);
+  }
+
+  if (descriptor.kind === 'entity-ref') {
+    return {
+      type: 'object',
+      properties: {
+        kind: { const: 'entity-ref' },
+        entityName: { const: descriptor.entityName },
+        locator: { type: 'object', additionalProperties: true },
+      },
+      required: ['kind', 'entityName', 'locator'],
+      additionalProperties: false,
+      ...(descriptor.description ? { description: descriptor.description } : {}),
+      ...(descriptor.presentation ? { presentation: descriptor.presentation } : {}),
+      'x-ontahi-entity-ref': {
+        entityName: descriptor.entityName,
+        ...(descriptor.identity ? { identity: descriptor.identity } : {}),
+      },
+    };
   }
 
   if (descriptor.kind === 'object') {

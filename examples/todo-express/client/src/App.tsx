@@ -1,7 +1,7 @@
 import { useDurableOperation, useOperation, useOperationQuery } from '@ontahi/react/graph';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-import { Tag, Todo, TodoList, TodoTag } from '../../src/generated/client-entities.js';
+import { Tag, TodoItem, TodoList, TodoTag } from '../../src/generated/client-entities.js';
 
 const ExpressMark = () => (
   <svg aria-hidden='true' viewBox='0 0 32 32'>
@@ -37,24 +37,24 @@ export const App = () => {
   const tags = useOperationQuery(Tag.domain.list);
   const assignments = useOperationQuery(TodoTag.domain.list);
   const todoSelection = useMemo(() => {
-    const inSelectedList = Todo.selection(todo => todo.listId.eq(selectedListId));
+    const inSelectedList = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
     return statusFilter === 'all'
       ? inSelectedList
       : inSelectedList.and(todo => todo.completed.eq(statusFilter === 'completed'));
   }, [selectedListId, statusFilter]);
-  const todos = useOperationQuery(Todo.domain.list, todoSelection, {
+  const todos = useOperationQuery(TodoItem.domain.list, todoSelection, {
     enabled: Boolean(selectedListId),
   });
   const createList = useOperation(TodoList.domain.create);
   const renameList = useOperation(TodoList.domain.rename);
   const deleteList = useOperation(TodoList.domain.delete);
   const createTag = useOperation(Tag.domain.create);
-  const createTodo = useOperation(Todo.domain.create);
-  const completeTodos = useOperation(Todo.domain.complete);
-  const assignTags = useOperation(Todo.domain.assignTags);
-  const removeTags = useOperation(Todo.domain.removeTags);
-  const deleteAll = useOperation(Todo.domain.deleteAll);
-  const completeAll = useDurableOperation(Todo.domain.completeAll);
+  const createTodo = useOperation(TodoItem.domain.create);
+  const completeTodos = useOperation(TodoItem.domain.complete);
+  const assignTags = useOperation(TodoItem.domain.assignTags);
+  const removeTags = useOperation(TodoItem.domain.removeTags);
+  const deleteAll = useOperation(TodoItem.domain.deleteAll);
+  const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
   useEffect(() => {
     void fetch('/runtime')
@@ -77,7 +77,7 @@ export const App = () => {
 
     const result = await createTodo.executeAsync({
       id: globalThis.crypto.randomUUID(),
-      listId: selectedListId,
+      list: TodoList.refById(selectedListId),
       title: normalizedTitle,
     });
     if (result.ok) setTitle('');
@@ -254,7 +254,7 @@ export const App = () => {
         <div className='card'>
           <form onSubmit={submit}>
             <input
-              aria-label='Todo title'
+              aria-label='Todo item title'
               value={title}
               onChange={event => setTitle(event.target.value)}
               placeholder='What should happen next?'

@@ -1,6 +1,11 @@
 import {
   RelationQueryBuilder,
   isRelatedRootReadSpec,
+  getEntityReferenceField,
+  liftEntityReferenceFieldValues,
+  liftEntityReferenceRecord,
+  liftEntityReferenceValue,
+  normalizeEntityReferenceJoinValue,
   resolveQuerySpec,
   resolveRelatedRootFields,
   resolveRelationFields,
@@ -97,7 +102,14 @@ export const createPostgresDataGraphRuntime = (input: {
       await Promise.all(
         Object.entries(selection).map(async ([key, value]) => {
           if ((value as { kind?: string }).kind === 'field-ref') {
-            return [key, row[(value as { fieldName: string }).fieldName]];
+            const fieldName = (value as { fieldName: string }).fieldName;
+            const referenceField = getEntityReferenceField(entity, fieldName);
+            return [
+              key,
+              referenceField
+                ? liftEntityReferenceValue(referenceField, row[fieldName])
+                : row[fieldName],
+            ];
           }
           if (value instanceof RelationQueryBuilder) {
             return [key, await loadRelation(row, entity, value)];
@@ -116,7 +128,10 @@ export const createPostgresDataGraphRuntime = (input: {
   ): Promise<Record<string, unknown>> => {
     const materialized = spec.select
       ? await materializeSelection(row, spec.root, spec.select)
-      : Object.fromEntries(Object.keys(spec.root.fields).map(field => [field, row[field]]));
+      : liftEntityReferenceRecord(
+          spec.root,
+          Object.fromEntries(Object.keys(spec.root.fields).map(field => [field, row[field]])),
+        );
 
     for (const [name, relation] of Object.entries(spec.includes ?? {})) {
       materialized[name] = await loadRelation(row, spec.root, relation);
@@ -149,23 +164,34 @@ export const createPostgresDataGraphRuntime = (input: {
       : Promise.all(result.rows.map(row => materializeRow(row, spec)));
   };
 
-  const uniqueNonNullValues = (rows: Record<string, unknown>[], field: string) => [
-    ...new Set(rows.map(row => row[field]).filter(value => value != null)),
+  const uniqueNonNullValues = (
+    rows: Record<string, unknown>[],
+    entity: AnyEntityDefinition,
+    field: string,
+  ) => [
+    ...new Set(
+      rows
+        .map(row => normalizeEntityReferenceJoinValue(entity, field, row[field]))
+        .filter(value => value != null),
+    ),
   ];
 
   const withRelatedTargetPredicate = (
     spec: RelatedRootReadSpec,
     targetField: string,
     sourceValues: readonly unknown[],
-  ): QuerySpec => ({
-    ...spec.target,
-    selection: selectionAnd(spec.target.selection, {
-      kind: 'predicate',
-      operator: 'in',
-      fieldName: targetField,
-      values: sourceValues,
-    }),
-  });
+  ): QuerySpec => {
+    const values = liftEntityReferenceFieldValues(spec.target.root, targetField, sourceValues);
+    return {
+      ...spec.target,
+      selection: selectionAnd(spec.target.selection, {
+        kind: 'predicate',
+        operator: 'in',
+        fieldName: targetField,
+        values,
+      }),
+    };
+  };
 
   const executeEntityRows = async (
     read: QueryOrView<any, any>,
@@ -189,7 +215,7 @@ export const createPostgresDataGraphRuntime = (input: {
       spec.mode === 'resolve' || spec.mode === 'countBySource'
         ? await executeRead(spec.source, undefined)
         : sourceEntityRows;
-    const sourceValues = uniqueNonNullValues(sourceEntityRows, sourceField);
+    const sourceValues = uniqueNonNullValues(sourceEntityRows, spec.sourceEntity, sourceField);
 
     if (sourceValues.length === 0) {
       if (spec.mode === 'resolve') return [{ sourceRows, rows: [] }];
@@ -205,7 +231,11 @@ export const createPostgresDataGraphRuntime = (input: {
     if (spec.mode === 'countBySource') {
       const countsBySource = new Map<unknown, number>(sourceValues.map(value => [value, 0]));
       for (const row of entityRows) {
-        const value = row[targetField];
+        const value = normalizeEntityReferenceJoinValue(
+          spec.target.root,
+          targetField,
+          row[targetField],
+        );
         if (value != null) countsBySource.set(value, (countsBySource.get(value) ?? 0) + 1);
       }
       return [{ sourceRows, countsBySource }];
@@ -255,6 +285,7 @@ export const createPostgresDataGraphRuntime = (input: {
             );
             const sourceValues = uniqueNonNullValues(
               await executeEntityRows(queryOrView.source),
+              queryOrView.sourceEntity,
               sourceField,
             );
             if (sourceValues.length === 0) return 0;
@@ -316,7 +347,9 @@ export const createPostgresDataGraphRuntime = (input: {
                 (command.returning
                   ? command.cardinality === 'one'
                     ? result.rows[0]
-                    : result.rows
+                      ? liftEntityReferenceRecord(command.root, result.rows[0])
+                      : result.rows[0]
+                    : result.rows.map(row => liftEntityReferenceRecord(command.root, row))
                   : undefined) as TResult,
               ),
         ),

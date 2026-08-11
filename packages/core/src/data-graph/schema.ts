@@ -22,8 +22,10 @@ import type {
   GraphUnionDefinition,
   GraphVoidDefinition,
 } from './definitions.js';
+import { isReferenceFieldDefinition } from './definitions.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
-import { isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref.js';
+import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref.js';
+import { lowerEntityReferenceValue } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
 import { isSelection, Selection } from './selection-value.js';
 
@@ -296,7 +298,22 @@ const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
 const toZodFieldSchema = (field: AnyFieldDefinition): ZodType => {
   let schema: ZodType;
 
-  if (field.fieldType === 'id' || field.fieldType === 'string' || field.fieldType === 'date') {
+  if (isReferenceFieldDefinition(field)) {
+    schema = z.custom(isEntityRef).superRefine((value, context) => {
+      try {
+        lowerEntityReferenceValue(field, value);
+      } catch (cause) {
+        context.addIssue({
+          code: 'custom',
+          message: cause instanceof Error ? cause.message : `Invalid ${field.target.name} Ref.`,
+        });
+      }
+    });
+  } else if (
+    field.fieldType === 'id' ||
+    field.fieldType === 'string' ||
+    field.fieldType === 'date'
+  ) {
     let stringSchema = z.string({ error: field.stringConstraints?.messages?.required });
 
     if (field.stringConstraints?.minLength !== undefined) {

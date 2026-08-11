@@ -340,6 +340,42 @@ describe('Ontahi application declaration analysis', () => {
     expect(analysis?.definition.entitySchemaProjection?.fieldsText).not.toBe('SharedFields');
   });
 
+  it('discovers semantic reference fields in unified entities', () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { TodoList } from './todo-list';
+        import { entity } from '@ontahi/core/entity';
+
+        const TodoFields = {
+          id: field.id(),
+          list: field.ref(TodoList),
+        };
+
+        export const Todo = entity({
+          name: 'Todo',
+          fields: TodoFields,
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+          },
+          operations: ({ operation }) => ({
+            list: operation({ bridge: {}, run: () => [] }),
+          }),
+        });
+      `,
+      'Todo',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition.entitySchemaProjection?.referenceFields).toEqual([
+      {
+        name: 'list',
+        targetName: 'TodoList',
+        targetImportPath: './todo-list',
+      },
+    ]);
+  });
+
   it('projects an imported entity schema for a deferred server binder', () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
@@ -1218,6 +1254,53 @@ describe('Ontahi application declaration analysis', () => {
       source.indexOf('export const BookSchema'),
     );
     expect(source).toContain(".hasMany('progress', ReadingProgressSchema, { via: 'bookId' })");
+    expect(source).not.toContain("from './schema';");
+  });
+
+  it('projects semantic reference targets before their consumers', () => {
+    const source = renderGeneratedClientEntityModule({
+      entities: [
+        {
+          entityName: 'Todo',
+          entityExportName: 'Todo',
+          entityDefinitionName: 'Todo',
+          entityDefinitionLocalName: 'TodoSchema',
+          entitySchemaProjection: {
+            name: 'Todo',
+            fieldsText: '{ id: field.id(), list: field.ref(TodoList) }',
+            referenceFields: [{ name: 'list', targetName: 'TodoList' }],
+          },
+          helperTexts: [],
+          operations: [],
+        },
+      ],
+      schemaEntities: [
+        {
+          entityName: 'Todo',
+          entityDefinitionName: 'Todo',
+          entityDefinitionLocalName: 'TodoSchema',
+          entitySchemaProjection: {
+            name: 'Todo',
+            fieldsText: '{ id: field.id(), list: field.ref(TodoList) }',
+            referenceFields: [{ name: 'list', targetName: 'TodoList' }],
+          },
+        },
+        {
+          entityName: 'TodoList',
+          entityDefinitionName: 'TodoList',
+          entityDefinitionLocalName: 'TodoListSchema',
+          entitySchemaProjection: {
+            name: 'TodoList',
+            fieldsText: '{ id: field.id() }',
+          },
+        },
+      ],
+    });
+
+    expect(source.indexOf('export const TodoListSchema')).toBeLessThan(
+      source.indexOf('export const TodoSchema'),
+    );
+    expect(source).toContain('list: field.ref(TodoListSchema)');
     expect(source).not.toContain("from './schema';");
   });
 

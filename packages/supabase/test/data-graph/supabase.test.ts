@@ -1,5 +1,6 @@
 import {
   compileSelectionExpression,
+  createEntityRef,
   entity,
   field,
   mapEntity,
@@ -98,6 +99,30 @@ describe('data-graph supabase adapter helpers', () => {
       ownerId: 'owner-1',
       title: 'Book',
     });
+  });
+
+  it('lowers reference fields at the Supabase boundary and lifts them on reads', () => {
+    const Profile = entity('Profile', { id: field.id(), name: field.string() });
+    const Book = entity('Book', {
+      id: field.id(),
+      owner: field.ref(Profile),
+      title: field.string(),
+    });
+    const owner = createEntityRef(Profile, { id: 'profile-1' });
+
+    mapEntity(Book).toTable('books', { owner: 'owner_id' });
+
+    expect(mapEntityPayloadToSupabaseColumns(Book, { owner, title: 'Book' })).toEqual({
+      owner_id: 'profile-1',
+      title: 'Book',
+    });
+    expect(
+      mapSupabaseRowToEntityFields(Book, {
+        id: 'book-1',
+        owner_id: 'profile-1',
+        title: 'Book',
+      }),
+    ).toEqual({ id: 'book-1', owner, title: 'Book' });
   });
 
   it('applies predicates and orderBy using resolved columns', () => {

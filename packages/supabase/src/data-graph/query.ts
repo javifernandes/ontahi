@@ -1,4 +1,4 @@
-import { getEntityMapping, type CompiledIncludePlan } from '@ontahi/core/data-graph';
+import { getEntityMapping, isEntityRef, type CompiledIncludePlan } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 
 import {
@@ -93,6 +93,12 @@ type HydrateSupabaseEntityRowsInput<TClient extends SupabaseLikeClient, TError> 
 type RelationNode = ReturnType<IncludeShape[string]['toNodeSpec']>;
 type RelationSourceValue = string | number | boolean;
 
+const relationKey = (value: unknown): unknown => {
+  if (!isEntityRef(value)) return value;
+  const locatorValues = Object.values(value.locator);
+  return locatorValues.length === 1 ? locatorValues[0] : value;
+};
+
 const collectRelationSourceValues = (
   rows: EntityRow[],
   sourceField: string,
@@ -100,7 +106,7 @@ const collectRelationSourceValues = (
   Array.from(
     new Set(
       rows
-        .map(row => row[sourceField])
+        .map(row => relationKey(row[sourceField]))
         .filter((value): value is RelationSourceValue => value != null),
     ),
   );
@@ -154,7 +160,7 @@ const groupRelationRows = (
   const grouped = new Map<unknown, unknown[]>();
 
   for (const row of rows) {
-    const key = row[includePlan.targetField];
+    const key = relationKey(row[includePlan.targetField]);
     const materialized = materializeSupabaseEntityRow(
       row,
       relationNode.entity,
@@ -176,7 +182,7 @@ const assignRelationRows = (
   grouped: Map<unknown, unknown[]>,
 ) => {
   for (const row of rows) {
-    const groupedRows = grouped.get(row[includePlan.sourceField]) ?? [];
+    const groupedRows = grouped.get(relationKey(row[includePlan.sourceField])) ?? [];
     const limitedRows =
       relationNode.limit != null ? groupedRows.slice(0, relationNode.limit) : groupedRows;
 

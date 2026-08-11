@@ -2,6 +2,7 @@ import { Effect, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createEntityRef,
   createInMemoryDataGraphRuntime,
   createRuntimeBoundDataGraphApi,
   entity,
@@ -18,32 +19,32 @@ describe('in-memory relation-root reads', () => {
     })
       .locators({ refById: 'id' })
       .identity('refById');
-    const Todo = entity('Todo', {
+    const TodoItem = entity('TodoItem', {
       id: field.id(),
-      listId: field.id(),
+      list: field.ref(TodoList),
       title: field.string(),
-    }).belongsTo('list', TodoList, { via: 'listId' });
+    });
     const runtime = createInMemoryDataGraphRuntime({
       dataset: {
         TodoList: [{ id: 'list-research', name: 'Research' }],
-        Todo: [
-          { id: 'todo-1', listId: 'list-research', title: 'Read Ontahi guide' },
-          { id: 'todo-2', listId: 'list-personal', title: 'Buy milk' },
+        TodoItem: [
+          { id: 'todo-1', list: 'list-research', title: 'Read Ontahi guide' },
+          { id: 'todo-2', list: 'list-personal', title: 'Buy milk' },
         ],
       },
     });
     const graph = createRuntimeBoundDataGraphApi(() => runtime);
     const Lists = graph.bindSelectionEntity(TodoList);
-    const Todos = graph.bindSelectionEntity(Todo);
+    const TodoItems = graph.bindSelectionEntity(TodoItem);
+    const research = Lists.selection(list => list.id.eq('list-research'));
 
-    await expect(
-      Effect.runPromise(
-        Todos.relatedTo(
-          Lists.where(list => list.id.eq('list-research')),
-          { through: 'list' },
-        ).run(),
-      ),
-    ).resolves.toEqual([{ id: 'todo-1', listId: 'list-research', title: 'Read Ontahi guide' }]);
+    await expect(Effect.runPromise(TodoItems.relatedTo(research).run())).resolves.toEqual([
+      {
+        id: 'todo-1',
+        list: createEntityRef(TodoList, { id: 'list-research' }),
+        title: 'Read Ontahi guide',
+      },
+    ]);
   });
 
   it('supports rows, entity rows, resolve, count, grouped count, and streams', async () => {

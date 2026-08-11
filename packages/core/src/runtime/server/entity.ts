@@ -9,13 +9,16 @@ import {
   type EffectiveEntityLocatorDeclarations,
   type EntityDisplayMetadata,
   type EntityDefinition,
+  type EntityRelationsFromFields,
   type EntityFreshnessMetadata,
+  type EntityReferenceFieldSource,
   type EntityLocatorDeclarations,
   type RelationDefinition,
   type RelationKind,
   type EntityRefLocatorFactories,
   type EntityRefLocators,
   type EntityRefInputPublicInput,
+  isReferenceFieldDefinition,
   type EntitySelectionFactory,
   type GraphEntityWithOperations,
   type GraphEntityExposure,
@@ -53,6 +56,7 @@ export type OntahiRelationDeclaration<
   typed: TTyped;
   sourceField?: string;
   targetField?: string;
+  inverseTarget?: OntahiSemanticEntityTarget<AnyEntityDefinition>;
 };
 
 export type OntahiSemanticEntityRef<
@@ -63,6 +67,7 @@ export type OntahiSemanticEntityRef<
   readonly typed: TTyped;
   readonly name?: string;
   readonly resolve?: () => TEntity;
+  readonly __entity?: TEntity;
 };
 
 export type OntahiSemanticEntityTarget<TEntity extends AnyEntityDefinition> =
@@ -76,7 +81,7 @@ export type OntahiEntityContract<
 > = EntityDefinition<
   TName,
   TFields,
-  {},
+  EntityRelationsFromFields<TFields>,
   EntityRefLocatorFactories<TFields, EffectiveEntityLocatorDeclarations<TFields, TLocators>>
 >;
 
@@ -202,9 +207,35 @@ function hasMany(
   };
 }
 
+type EntityFromReferenceFieldSource<TSource extends EntityReferenceFieldSource> =
+  TSource extends EntityReferenceFieldSource<
+    infer TName,
+    infer TFields,
+    infer TRelations,
+    infer TLocators
+  >
+    ? EntityDefinition<TName, TFields, TRelations, TLocators>
+    : never;
+
+const inverse = <TSource extends EntityReferenceFieldSource>(
+  referenceField: AnyFieldDefinition & {
+    fieldType: 'reference';
+    source: TSource;
+    fieldName: keyof TSource['fields'] & string;
+    target: OntahiSemanticEntityTarget<AnyEntityDefinition>;
+  },
+): OntahiRelationDeclaration<'hasMany', EntityFromReferenceFieldSource<TSource>, true> => ({
+  relationKind: 'hasMany',
+  target: referenceField.source as unknown as EntityFromReferenceFieldSource<TSource>,
+  typed: true,
+  targetField: referenceField.fieldName,
+  inverseTarget: referenceField.target,
+});
+
 export const relation = {
   belongsTo,
   hasMany,
+  inverse,
 };
 
 type RuntimeError<TRuntime> =
@@ -413,7 +444,7 @@ export type OntahiEntityConfig<
       EntityDefinition<
         TName,
         TFields,
-        EntityRelationsFrom<TRelations>,
+        EntityRelationsFromFields<TFields, EntityRelationsFrom<TRelations>>,
         EntityRefLocatorsFrom<TFields, TLocators>
       >,
       TCapabilities,
@@ -436,7 +467,7 @@ type EntitySchemaFromConfig<
 > = EntityDefinition<
   TName,
   TFields,
-  EntityRelationsFrom<TRelations>,
+  EntityRelationsFromFields<TFields, EntityRelationsFrom<TRelations>>,
   EntityRefLocatorsFrom<TFields, TLocators>
 >;
 
@@ -779,11 +810,9 @@ const defineOntahiEntity = <
   const withDisplay = config.display ? base.display(config.display) : base;
   const withFreshness = config.freshness ? withDisplay.freshness(config.freshness) : withDisplay;
   const withLocators = config.locators ? withFreshness.locators(config.locators) : withFreshness;
-  const schema = (
-    config.identity
-      ? (withLocators.identity as (name: string) => typeof withLocators)(config.identity)
-      : withLocators
-  ) as EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>;
+  const schema = (config.identity
+    ? (withLocators.identity as (name: string) => typeof withLocators)(config.identity)
+    : withLocators) as unknown as EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>;
   Object.defineProperty(schema, 'selection', {
     configurable: true,
     enumerable: false,
@@ -806,6 +835,17 @@ const defineOntahiEntity = <
       const target = resolveSemanticEntityTarget(declaration.target, entitiesByName);
       if (!target || target.kind !== 'entity') {
         throw new Error(`Relation ${schema.name}.${name} did not resolve to an entity.`);
+      }
+      if (declaration.inverseTarget) {
+        const inverseTarget = resolveSemanticEntityTarget(
+          declaration.inverseTarget,
+          entitiesByName,
+        );
+        if (inverseTarget !== schema) {
+          throw new Error(
+            `Inverse relation ${schema.name}.${name} points through a reference to ${inverseTarget.name}.`,
+          );
+        }
       }
       if (entitiesByName.get(target.name) !== target) {
         throw new Error(
@@ -833,6 +873,19 @@ const defineOntahiEntity = <
   };
   const resolveReferences = (entitiesByName: ReadonlyMap<string, AnyEntityDefinition>) => {
     referencesResolved = false;
+
+    Object.entries(schema.fields).forEach(([fieldName, fieldDefinition]) => {
+      if (!isReferenceFieldDefinition(fieldDefinition)) return;
+      const target = resolveSemanticEntityTarget(
+        fieldDefinition.target as OntahiSemanticEntityTarget<AnyEntityDefinition>,
+        entitiesByName,
+      );
+      fieldDefinition.target = target;
+      const relation = (schema.relations as Record<string, RelationDefinition>)[fieldName];
+      if (relation?.relationKind === 'belongsTo' && relation.sourceField === fieldName) {
+        relation.target = target;
+      }
+    });
 
     const declarations = (
       typeof config.relations === 'function' ? config.relations() : (config.relations ?? {})

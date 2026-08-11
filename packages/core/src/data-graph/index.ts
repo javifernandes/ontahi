@@ -19,6 +19,7 @@ export * from './operation-input.js';
 export * from './output/index.js';
 export * from './planning.js';
 export * from './query.js';
+export * from './reference-field.js';
 export * from './ref.js';
 export * from './reflection.js';
 export * from './relation-root.js';

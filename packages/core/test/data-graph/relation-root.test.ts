@@ -169,9 +169,9 @@ describe('relation-root graph reads', () => {
       BookCollaborator.where(collaborator => collaborator.userId.eq('user-1')),
       { through: 'collaborators' },
     );
-    const nestedBooks = Book.relatedTo(booksForUser, { through: 'collaborators' });
+    const nestedCollaborators = BookCollaborator.relatedTo(booksForUser);
 
-    expect(nestedBooks.build().source).toMatchObject({
+    expect(nestedCollaborators.build().source).toMatchObject({
       kind: 'related-root-read',
       mode: 'rows',
       relationName: 'collaborators',
@@ -197,14 +197,7 @@ describe('relation-root graph reads', () => {
     const Books = api.bindSelectionEntity(Book);
     const Labels = api.bindSelectionEntity(Label);
 
-    expect(
-      Labels.relatedTo(
-        Books.where(book => book.id.eq('book-1')),
-        {
-          through: 'labels',
-        },
-      ).build(),
-    ).toMatchObject({
+    expect(Labels.relatedTo(Books.where(book => book.id.eq('book-1'))).build()).toMatchObject({
       kind: 'related-root-read',
       relationName: 'labels',
       relationOwner: 'source',
@@ -213,6 +206,54 @@ describe('relation-root graph reads', () => {
         root: Label,
       },
     });
+  });
+
+  it('requires through only when more than one relation connects the entities', () => {
+    const User = entity('User', { id: field.id() });
+    const Membership = entity('Membership', {
+      id: field.id(),
+      primaryUser: field.ref(User),
+      invitedBy: field.ref(User),
+    });
+    const runtime = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      stream: vi.fn(),
+      runCommand: vi.fn(),
+    } as unknown as DataGraphExecutionRuntime;
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const Users = api.bindSelectionEntity(User);
+    const Memberships = api.bindSelectionEntity(Membership);
+    const user = Users.selection(candidate => candidate.id.eq('user-1'));
+
+    expect(() => Memberships.relatedTo(user)).toThrow(
+      'Cannot infer a unique relation between Membership and User: found Membership.primaryUser, Membership.invitedBy. Pass { through } to disambiguate.',
+    );
+    expect(Memberships.relatedTo(user, { through: 'primaryUser' }).build()).toMatchObject({
+      relationName: 'primaryUser',
+      relationOwner: 'target',
+      sourceEntity: User,
+    });
+  });
+
+  it('reports when no relation connects the entities', () => {
+    const User = entity('User', { id: field.id() });
+    const Label = entity('Label', { id: field.id() });
+    const runtime = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      stream: vi.fn(),
+      runCommand: vi.fn(),
+    } as unknown as DataGraphExecutionRuntime;
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const Users = api.bindSelectionEntity(User);
+    const Labels = api.bindSelectionEntity(Label);
+
+    expect(() => Labels.relatedTo(Users.selection(user => user.id.eq('user-1')))).toThrow(
+      'Cannot infer a relation between Label and User: no declared relation connects them.',
+    );
   });
 
   it('detects relation builders in selection shapes and materializes flat selections', () => {

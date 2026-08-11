@@ -1,10 +1,12 @@
 import {
   type AnyEntityDefinition,
   getEntityMapping,
+  isReferenceFieldDefinition,
   mapEntity,
   mapRelation,
   type RelationDefinition,
 } from './definitions.js';
+import { getEntityReferenceIdentity } from './reference-field.js';
 
 export type DataGraphMappingNaming = {
   table: (entityName: string) => string;
@@ -44,10 +46,21 @@ export const applyConventionalDataGraphMappings = ({
       Object.fromEntries(
         Object.keys(entity.fields).map(fieldName => [
           fieldName,
-          override?.columns?.[fieldName] ?? naming.column(fieldName),
+          override?.columns?.[fieldName] ??
+            naming.column(
+              isReferenceFieldDefinition(entity.fields[fieldName]!)
+                ? fieldName.endsWith('Id')
+                  ? fieldName
+                  : `${fieldName}Id`
+                : fieldName,
+            ),
         ]),
       ),
     );
+
+    Object.values(entity.fields)
+      .filter(isReferenceFieldDefinition)
+      .forEach(referenceField => getEntityReferenceIdentity(referenceField.target));
   });
 
   entities.forEach(entity => {

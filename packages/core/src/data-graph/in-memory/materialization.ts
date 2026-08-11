@@ -1,5 +1,10 @@
 import { resolveRelationFields, type AnyEntityDefinition } from '../definitions.js';
 import { RelationQueryBuilder, type SelectionValue } from '../query.js';
+import {
+  getEntityReferenceField,
+  liftEntityReferenceRecord,
+  liftEntityReferenceValue,
+} from '../reference-field.js';
 
 import { applyOrder, applyPredicates } from './query.js';
 
@@ -21,7 +26,11 @@ const materializeSelection = (
     }
 
     if ((value as { kind?: string }).kind === 'field-ref') {
-      result[key] = row[(value as { fieldName: string }).fieldName];
+      const fieldName = (value as { fieldName: string }).fieldName;
+      const referenceField = getEntityReferenceField(context.entity, fieldName);
+      result[key] = referenceField
+        ? liftEntityReferenceValue(referenceField, row[fieldName])
+        : row[fieldName];
       continue;
     }
 
@@ -42,8 +51,11 @@ const materializeDefaultEntity = (
   row: Record<string, unknown>,
   entityDefinition: AnyEntityDefinition,
 ) =>
-  Object.fromEntries(
-    Object.keys(entityDefinition.fields).map(fieldName => [fieldName, row[fieldName]]),
+  liftEntityReferenceRecord(
+    entityDefinition,
+    Object.fromEntries(
+      Object.keys(entityDefinition.fields).map(fieldName => [fieldName, row[fieldName]]),
+    ),
   );
 
 export const materializeRelation = (

@@ -15,13 +15,6 @@ const entityDefaults = {
   layer: 'todos',
 } as const;
 
-const todoFields = {
-  id: field.id(),
-  listId: field.id(),
-  title: field.nonEmptyString({ trim: true }),
-  completed: field.boolean(),
-};
-
 export type TodoCapabilities = OntahiCapabilities & {
   runtime: {
     notifications: {
@@ -90,6 +83,13 @@ export const TodoList = entity({
   }),
 });
 
+const todoItemFields = {
+  id: field.id(),
+  list: field.ref(TodoList),
+  title: field.nonEmptyString({ trim: true }),
+  completed: field.boolean(),
+};
+
 export const Tag = entity({
   name: 'Tag',
   fields: {
@@ -141,11 +141,10 @@ export const TodoTag = entity({
   }),
 });
 
-export const Todo = entity({
-  name: 'Todo',
-  fields: todoFields,
+export const TodoItem = entity({
+  name: 'TodoItem',
+  fields: todoItemFields,
   relations: {
-    list: relation.belongsTo(TodoList, { via: 'listId' }),
     tagAssignments: relation.hasMany(TodoTag, { via: 'todoId' }),
   },
   uses: {
@@ -171,37 +170,34 @@ export const Todo = entity({
         bridge: { query: [(todos: unknown) => todos] },
         run: todos => todos.orderBy(todo => todo.title),
       }),
-      listForList: operation({
+      itemsForList: operation({
         input: graphSchema.object({
           list: TodoList.one(),
         }),
         output: self.array(),
         bridge: { query: [(input: unknown) => input] },
-        run: ({ list }) =>
-          commands
-            .relatedTo(entities.TodoList.where(list), { through: 'list' })
-            .orderBy(todo => todo.title),
+        run: ({ list }) => commands.relatedTo(list).orderBy(todo => todo.title),
       }),
       create: operation({
-        input: graphSchema.pick(self, ['id', 'listId', 'title']).named('CreateTodoInput'),
+        input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
         output: self,
-        bridge: { invalidate: [['Todo']] },
-        run: ({ id, listId, title }) =>
+        bridge: { invalidate: [['TodoItem']] },
+        run: ({ id, list, title }) =>
           Effect.gen(function* () {
-            const lists = yield* entities.TodoList.where(list => list.id.eq(listId))
+            const lists = yield* entities.TodoList.where(list)
               .select(list => ({ id: list.id }))
               .run();
 
             if (lists.length === 0) {
               return yield* failOperation('todo_list_not_found', 'Todo list does not exist.', {
-                listId,
+                list,
               });
             }
 
             return yield* commands
-              .insertReturning({ id, listId, title, completed: false }, [
+              .insertReturning({ id, list, title, completed: false }, [
                 'id',
-                'listId',
+                'list',
                 'title',
                 'completed',
               ])
@@ -212,11 +208,11 @@ export const Todo = entity({
         input: graphSchema.object({
           todos: self.many(),
         }),
-        bridge: { invalidate: [['Todo']] },
+        bridge: { invalidate: [['TodoItem']] },
         run: ({ todos }) => todos.update({ completed: true }),
       }),
       deleteAll: operation({
-        bridge: { invalidate: [['Todo'], ['TodoTag']] },
+        bridge: { invalidate: [['TodoItem'], ['TodoTag']] },
         run: () =>
           Effect.gen(function* () {
             yield* entities.TodoTag.all().delete().run();
@@ -285,11 +281,11 @@ export const Todo = entity({
       }),
       completeAll: operation({
         output: CompleteAllOutput,
-        bridge: { invalidate: [['Todo']] },
+        bridge: { invalidate: [['TodoItem']] },
         ingress: [
           ingress.http({
             method: 'POST',
-            route: '/operations/Todo.completeAll',
+            route: '/operations/TodoItem.completeAll',
             provider: 'express',
             channel: 'todo.complete-all',
           }),

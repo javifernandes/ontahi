@@ -12,6 +12,7 @@ import {
   type QueryOrView,
   type SelectionValue,
 } from './query.js';
+import { lowerEntityReferenceSelection } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
 import { getConjunctiveSelectionPredicates, lowerSelectionReferences } from './selection-ast.js';
 
@@ -184,18 +185,27 @@ export const compileSelectionExpression = (
     };
   }
 
-  const field = expression.fieldName;
+  const loweredExpression = lowerEntityReferenceSelection(entityDefinition, expression);
+  if (loweredExpression.kind !== 'predicate') {
+    throw new Error('Expected a compiled selection predicate.');
+  }
+  const field = loweredExpression.fieldName;
   const column = resolveColumnNameForEntity(entityDefinition, field);
 
-  if (expression.operator === 'in') {
-    return { operator: 'in', field, column, values: expression.values };
+  if (loweredExpression.operator === 'in') {
+    return { operator: 'in', field, column, values: loweredExpression.values };
   }
 
-  if (expression.operator === 'isNull') {
+  if (loweredExpression.operator === 'isNull') {
     return { operator: 'isNull', field, column };
   }
 
-  return { operator: expression.operator, field, column, value: expression.value };
+  return {
+    operator: loweredExpression.operator,
+    field,
+    column,
+    value: loweredExpression.value,
+  };
 };
 
 export const compileConjunctiveSelectionPredicates = (

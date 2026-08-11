@@ -29,7 +29,7 @@ pnpm --filter @ontahi/example-todo-express dev:postgres
 The Compose service persists data in a named volume. Use `db:stop` to stop it or `db:reset` to
 recreate the database and reapply `migrations/001-create-todos.sql`.
 
-You can also create a list and then a Todo directly through Ontahi's transport-neutral invocation
+You can also create a list and then a todo item directly through Ontahi's transport-neutral invocation
 protocol:
 
 ```sh
@@ -39,7 +39,7 @@ curl -X POST http://localhost:3001/operations \
 
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"Todo.create","input":{"id":"todo-1","listId":"list-1","title":"Read the guide"}}'
+  -d '{"kind":"invoke","operationId":"TodoItem.create","input":{"id":"todo-1","list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}'
 ```
 
 Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded in the same Vite
@@ -52,21 +52,37 @@ comes from whichever graph storage is active.
 
 The example deliberately exercises two different domain structures:
 
-- `Todo belongsTo TodoList` expresses composition: every todo lives in one list.
-- `Todo hasMany TodoTag` and `TodoTag belongsTo Tag` express association through an explicit
+- `TodoItem.list: field.ref(TodoList)` expresses composition: every todo item lives in one list. The same
+  declaration is a Ref-valued field and the `belongsTo` relation; PostgreSQL lowers it to
+  `list_id` only at the storage boundary.
+- `TodoItem hasMany TodoTag` and `TodoTag belongsTo Tag` express association through an explicit
   semantic join entity. Ontahi does not hide the association behind a storage-only join table.
 
 `TodoTag.remove` accepts that association as a semantic target, so
 `TodoTag.refByTodoAndTag(todoId, tagId)` can remove one assignment without inventing a synthetic
 join identity.
 
+The inverse traversal stays at the same semantic level:
+
+```ts
+itemsForList: operation({
+  input: graphSchema.object({ list: TodoList.one() }),
+  output: self.array(),
+  run: ({ list }) => commands.relatedTo(list).orderBy(item => item.title),
+}),
+```
+
+`list` already carries its source Entity and selection criterion. Because `TodoItem.list` is the
+only relation connecting both Entities, Ontahi infers the traversal. If two relations connect the
+same pair, the operation names the intended one with `{ through: 'relationName' }`.
+
 Each entity owns its fields, identity, relations, and operations in one semantic declaration.
-`Todo.complete` accepts `self.many()` inside that declaration, so its target cardinality is part of
+`TodoItem.complete` accepts `self.many()` inside that declaration, so its target cardinality is part of
 the validated operation contract instead of an example-local list of IDs. Ontahi keeps the
 selection representation behind the entity-facing API.
 
-`Todo.assignTags` combines that semantic target with explicit tag identities. It validates those
-identities, resolves the Todo Selection at execution time, and creates all idempotent `TodoTag`
+`TodoItem.assignTags` combines that semantic target with explicit tag identities. It validates those
+identities, resolves the `TodoItem` Selection at execution time, and creates all idempotent `TodoTag`
 associations with one bulk upsert. The UI can therefore assign one tag to any explicit set of todos
 without multiplying the operation API by list or filter.
 
@@ -75,10 +91,10 @@ A caller can define membership by reference:
 ```json
 {
   "kind": "selection",
-  "entityName": "Todo",
+  "entityName": "TodoItem",
   "expression": {
     "kind": "references",
-    "refs": [{ "kind": "entity-ref", "entityName": "Todo", "locator": { "id": "todo-1" } }]
+    "refs": [{ "kind": "entity-ref", "entityName": "TodoItem", "locator": { "id": "todo-1" } }]
   }
 }
 ```
@@ -88,25 +104,29 @@ Or by predicate:
 ```json
 {
   "kind": "selection",
-  "entityName": "Todo",
+  "entityName": "TodoItem",
   "expression": { "kind": "predicate", "operator": "eq", "fieldName": "completed", "value": false }
 }
 ```
 
-Send either value as the `todos` field when invoking `Todo.complete`. Ontahi validates the Selection, hydrates it at the transport boundary, and evaluates the same settled Selection algebra in the in-memory update command.
+Send either value as the `todos` field when invoking `TodoItem.complete`. Ontahi validates the
+Selection, hydrates it at the transport boundary, and evaluates the same settled Selection algebra
+in the in-memory update command.
 
 The generated client preserves operation input and output schemas, so React infers hook types without local record declarations or generic arguments:
 
 ```ts
-const visibleTodos = Todo.selection(todo => todo.listId.eq(selectedListId));
-const todos = useOperationQuery(Todo.domain.list, visibleTodos);
-const createTodo = useOperation(Todo.domain.create);
-const completeAll = useDurableOperation(Todo.domain.completeAll);
+const visibleTodos = TodoItem.selection(todo =>
+  todo.list.eq(TodoList.refById(selectedListId)),
+);
+const todos = useOperationQuery(TodoItem.domain.list, visibleTodos);
+const createTodo = useOperation(TodoItem.domain.create);
+const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
 completeAll.execute();
 ```
 
-`Todo.deleteAll` demonstrates a void-input delete command and lets the UI clear whichever storage
+`TodoItem.deleteAll` demonstrates a void-input delete command and lets the UI clear whichever storage
 runtime is active.
 
 For explicit members, the hook accepts IDs or entity records and derives refs through the entity's
@@ -116,8 +136,8 @@ default identity:
 await completeTodos.executeAsync({ todos: selectedIds });
 ```
 
-The operation still receives `Selection<typeof Todo>` on the server, and the transport still
-carries an explicit Selection AST containing refs. `Todo.selection(...)` authors predicate-based
+The operation still receives `Selection<typeof TodoItem>` on the server, and the transport still
+carries an explicit Selection AST containing refs. `TodoItem.selection(...)` authors predicate-based
 membership from either the bound Node entity or its generated browser projection; Boolean
 composition refines that same value without creating a UI-only filter language.
 
@@ -126,7 +146,7 @@ composition refines that same value without creating a UI-only filter language.
 1. [`src/storage.ts`](./src/storage.ts) selects one default graph storage—either in-memory
    or PostgreSQL. The host owns the physical mapping, migration, database connection, process
    lifetime, and error reporting policy.
-2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `Todo`, `Tag`, and `TodoTag`
+2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `TodoItem`, `Tag`, and `TodoTag`
    declarations, including their identities, relations, synchronous operations, and durable
    operation.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,

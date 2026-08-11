@@ -3,7 +3,7 @@ CREATE TABLE todo_lists (
   name text NOT NULL
 );
 
-CREATE TABLE todos (
+CREATE TABLE todo_items (
   id text PRIMARY KEY,
   list_id text NOT NULL REFERENCES todo_lists(id),
   title text NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE tags (
 );
 
 CREATE TABLE todo_tags (
-  todo_id text NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+  todo_id text NOT NULL REFERENCES todo_items(id) ON DELETE CASCADE,
   tag_id text NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   PRIMARY KEY (todo_id, tag_id)
 );

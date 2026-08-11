@@ -39,14 +39,12 @@ export const TodoTagSchema = defineEntitySchema('TodoTag', {
   .identity('refByTodoAndTag')
   .belongsTo('tag', TagSchema, { via: 'tagId' });
 
-export const TodoSchema = defineEntitySchema('Todo', {
+export const TodoItemSchema = defineEntitySchema('TodoItem', {
   id: field.id(),
-  listId: field.id(),
+  list: field.ref(TodoListSchema),
   title: field.nonEmptyString({ trim: true }),
   completed: field.boolean(),
-})
-  .belongsTo('list', TodoListSchema, { via: 'listId' })
-  .hasMany('tagAssignments', TodoTagSchema, { via: 'todoId' });
+}).hasMany('tagAssignments', TodoTagSchema, { via: 'todoId' });
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
@@ -140,7 +138,7 @@ export const TodoTag = defineClientEntity(TodoTagSchema, {
   },
 });
 
-export const Todo = defineClientEntity(TodoSchema, {
+export const TodoItem = defineClientEntity(TodoItemSchema, {
   domainOperations: {
     list: defineClientDomainOperation({
       authority: 'server',
@@ -148,10 +146,10 @@ export const Todo = defineClientEntity(TodoSchema, {
       bridge: {
         query: [(todos: unknown) => todos],
       },
-      input: TodoSchema.many(),
-      output: TodoSchema.array(),
+      input: TodoItemSchema.many(),
+      output: TodoItemSchema.array(),
     }),
-    listForList: defineClientDomainOperation({
+    itemsForList: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {
@@ -160,32 +158,32 @@ export const Todo = defineClientEntity(TodoSchema, {
       input: graphSchema.object({
         list: TodoListSchema.one(),
       }),
-      output: TodoSchema.array(),
+      output: TodoItemSchema.array(),
     }),
     create: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['Todo']],
+        invalidate: [['TodoItem']],
       },
-      input: graphSchema.pick(TodoSchema, ['id', 'listId', 'title']).named('CreateTodoInput'),
-      output: TodoSchema,
+      input: graphSchema.pick(TodoItemSchema, ['id', 'list', 'title']).named('CreateTodoItemInput'),
+      output: TodoItemSchema,
     }),
     complete: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['Todo']],
+        invalidate: [['TodoItem']],
       },
       input: graphSchema.object({
-        todos: TodoSchema.many(),
+        todos: TodoItemSchema.many(),
       }),
     }),
     deleteAll: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['Todo'], ['TodoTag']],
+        invalidate: [['TodoItem'], ['TodoTag']],
       },
       input: graphSchema.void(),
     }),
@@ -196,7 +194,7 @@ export const Todo = defineClientEntity(TodoSchema, {
         invalidate: [['TodoTag']],
       },
       input: graphSchema.object({
-        todos: TodoSchema.many(),
+        todos: TodoItemSchema.many(),
         tagIds: graphSchema.array(field.id()),
       }),
     }),
@@ -207,7 +205,7 @@ export const Todo = defineClientEntity(TodoSchema, {
         invalidate: [['TodoTag']],
       },
       input: graphSchema.object({
-        todos: TodoSchema.many(),
+        todos: TodoItemSchema.many(),
         tagIds: graphSchema.array(field.id()),
       }),
     }),
@@ -215,7 +213,7 @@ export const Todo = defineClientEntity(TodoSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['Todo']],
+        invalidate: [['TodoItem']],
       },
       input: graphSchema.void(),
       output: value('CompleteAllOutput', {

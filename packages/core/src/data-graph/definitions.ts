@@ -1,5 +1,6 @@
 import type { RelationNodeSpec } from './query.js';
 import type {
+  EntityRef,
   EntityRefLocator,
   EntityRefLocatorDeclarations,
   EntityRefLocatorFactory,
@@ -9,7 +10,7 @@ import type { SemanticSelection } from './selection-ast.js';
 
 export type FieldDefinition<TValue> = {
   kind: 'field';
-  fieldType: 'id' | 'string' | 'number' | 'boolean' | 'date' | 'json' | 'enum';
+  fieldType: 'id' | 'string' | 'number' | 'boolean' | 'date' | 'json' | 'enum' | 'reference';
   enumValues?: readonly string[];
   stringConstraints?: StringFieldConstraints;
   numberConstraints?: NumberFieldConstraints;
@@ -25,6 +26,21 @@ export type IdFieldDefinition = FieldDefinition<string> & {
   nullable?: never;
   optional?: never;
 };
+
+export type DeferredEntityReference<TEntity extends AnyEntityDefinition> = {
+  readonly kind: 'ontahi.entity-ref';
+  readonly __entity?: TEntity;
+};
+
+export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEntityDefinition> =
+  FieldDefinition<EntityRef<TTarget['name']>> & {
+    fieldType: 'reference';
+    target: TTarget;
+    source?: AnyEntityDefinition;
+    fieldName?: string;
+  };
+
+export type AnyReferenceFieldDefinition = ReferenceFieldDefinition<AnyEntityDefinition>;
 
 export type StringFieldConstraints = {
   minLength?: number;
@@ -76,8 +92,15 @@ export type GraphSchemaPresentation = {
 export type FieldDefinitions = Record<string, FieldDefinition<unknown>>;
 export type AnyFieldDefinition = FieldDefinition<unknown>;
 
-export type InferFieldValue<TField extends AnyFieldDefinition> =
-  TField extends FieldDefinition<infer TValue> ? TValue : never;
+export const isReferenceFieldDefinition = (
+  definition: AnyFieldDefinition,
+): definition is AnyReferenceFieldDefinition => definition.fieldType === 'reference';
+
+export type InferFieldValue<TField extends AnyFieldDefinition> = TField extends {
+  __value?: infer TValue;
+}
+  ? TValue
+  : never;
 
 export type InferEntityRecord<TFields extends FieldDefinitions> = {
   [TKey in keyof TFields]: InferFieldValue<TFields[TKey]>;
@@ -411,16 +434,70 @@ type ParsedRelationMapping = {
 export type RelationDefinition<
   TKind extends RelationKind = RelationKind,
   TTarget extends AnyEntityDefinition = AnyEntityDefinition,
+  TNullable extends boolean = boolean,
 > = {
   kind: 'relation';
   relationKind: TKind;
   target: TTarget;
   sourceField?: string;
   targetField?: string;
+  nullable?: TNullable;
   mapping?: ParsedRelationMapping;
 };
 
 type RelationDefinitions = Record<string, RelationDefinition<RelationKind, any>>;
+
+export type ReferenceFieldRelations<TFields extends FieldDefinitions> = {
+  [TFieldName in keyof TFields as TFields[TFieldName] extends {
+    fieldType: 'reference';
+    target: AnyEntityDefinition;
+  }
+    ? TFieldName
+    : never]: TFields[TFieldName] extends {
+    fieldType: 'reference';
+    target: infer TTarget extends AnyEntityDefinition;
+  }
+    ? RelationDefinition<
+        'belongsTo',
+        TTarget,
+        TFields[TFieldName] extends { nullable: true } | { optional: true } ? true : false
+      >
+    : never;
+};
+
+export type EntityRelationsFromFields<
+  TFields extends FieldDefinitions,
+  TRelations extends RelationDefinitions = {},
+> = Omit<ReferenceFieldRelations<TFields>, keyof TRelations> & TRelations;
+
+export type EntityReferenceFieldSource<
+  TName extends string = string,
+  TFields extends FieldDefinitions = FieldDefinitions,
+  TRelations extends RelationDefinitions = RelationDefinitions,
+  TLocators extends EntityRefLocatorDeclarations = EntityRefLocatorDeclarations,
+> = {
+  kind: 'entity';
+  name: TName;
+  fields: TFields;
+  relations: TRelations;
+  refLocators: TLocators;
+};
+
+export type BindReferenceFieldSources<
+  TSource extends EntityReferenceFieldSource,
+  TFields extends FieldDefinitions,
+> = {
+  [TFieldName in keyof TFields]: TFields[TFieldName] extends {
+    fieldType: 'reference';
+    target: infer TTarget extends AnyEntityDefinition;
+  }
+    ? TFields[TFieldName] & {
+        source: TSource;
+        fieldName: TFieldName & string;
+        target: TTarget;
+      }
+    : TFields[TFieldName];
+};
 
 export type EntityDefinition<
   TName extends string = string,
@@ -430,7 +507,10 @@ export type EntityDefinition<
 > = {
   kind: 'entity';
   name: TName;
-  fields: TFields;
+  fields: BindReferenceFieldSources<
+    EntityReferenceFieldSource<TName, TFields, TRelations, TLocators>,
+    TFields
+  >;
   __value?: InferEntityRecord<TFields>;
   relations: TRelations;
   refLocators: TLocators;
@@ -639,14 +719,39 @@ export const field = {
     fieldType: 'enum',
     enumValues: values,
   }),
-  nullable: <TValue>(definition: FieldDefinition<TValue>): FieldDefinition<TValue | null> => ({
-    ...definition,
-    nullable: true,
+  ref: <TTarget extends AnyEntityDefinition>(
+    target: TTarget | DeferredEntityReference<TTarget>,
+  ): ReferenceFieldDefinition<TTarget> => ({
+    kind: 'field',
+    fieldType: 'reference',
+    target: target as TTarget,
   }),
-  optional: <TValue>(definition: FieldDefinition<TValue>): FieldDefinition<TValue | undefined> => ({
-    ...definition,
-    optional: true,
-  }),
+  nullable: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+  ): Omit<TDefinition, '__value' | 'nullable'> & {
+    nullable: true;
+    __value?: InferFieldValue<TDefinition> | null;
+  } =>
+    ({
+      ...definition,
+      nullable: true,
+    }) as Omit<TDefinition, '__value' | 'nullable'> & {
+      nullable: true;
+      __value?: InferFieldValue<TDefinition> | null;
+    },
+  optional: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+  ): Omit<TDefinition, '__value' | 'optional'> & {
+    optional: true;
+    __value?: InferFieldValue<TDefinition> | undefined;
+  } =>
+    ({
+      ...definition,
+      optional: true,
+    }) as Omit<TDefinition, '__value' | 'optional'> & {
+      optional: true;
+      __value?: InferFieldValue<TDefinition> | undefined;
+    },
 };
 
 const normalizeEntityLocatorDeclaration = <TFields extends FieldDefinitions>(
@@ -695,20 +800,44 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
 ): EntityDefinition<
   TName,
   TFields,
-  {},
+  ReferenceFieldRelations<TFields>,
   EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
 > => {
+  const entityFields = Object.fromEntries(
+    Object.entries(fields).map(([fieldName, definition]) => [
+      fieldName,
+      isReferenceFieldDefinition(definition) ? { ...definition } : definition,
+    ]),
+  ) as TFields;
   const hasConventionalId =
-    fields.id?.fieldType === 'id' && !fields.id.nullable && !fields.id.optional;
+    entityFields.id?.fieldType === 'id' && !entityFields.id.nullable && !entityFields.id.optional;
   const conventionalLocators = normalizeEntityLocatorDeclarations<
     TFields,
     ConventionalEntityLocatorDeclarations<TFields>
   >((hasConventionalId ? { refById: 'id' } : {}) as ConventionalEntityLocatorDeclarations<TFields>);
+  const referenceRelations = Object.fromEntries(
+    Object.entries(entityFields).flatMap(([fieldName, definition]) =>
+      isReferenceFieldDefinition(definition)
+        ? [
+            [
+              fieldName,
+              {
+                kind: 'relation' as const,
+                relationKind: 'belongsTo' as const,
+                target: definition.target,
+                sourceField: fieldName,
+                nullable: Boolean(definition.nullable || definition.optional),
+              },
+            ],
+          ]
+        : [],
+    ),
+  ) as ReferenceFieldRelations<TFields>;
   const entityDefinition = {
     kind: 'entity' as const,
     name,
-    fields,
-    relations: {} as RelationDefinitions,
+    fields: entityFields,
+    relations: referenceRelations as RelationDefinitions,
     refLocators: conventionalLocators as EntityRefLocatorDeclarations,
     identityLocatorName: (hasConventionalId ? 'refById' : undefined) as string | undefined,
     displayMetadata: undefined as EntityDisplayDescriptor | undefined,
@@ -778,10 +907,18 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     },
   };
 
+  Object.entries(entityFields).forEach(([fieldName, definition]) => {
+    if (!isReferenceFieldDefinition(definition)) return;
+    Object.defineProperties(definition, {
+      source: { configurable: true, value: entityDefinition },
+      fieldName: { configurable: true, value: fieldName },
+    });
+  });
+
   return entityDefinition as unknown as EntityDefinition<
     TName,
     TFields,
-    {},
+    ReferenceFieldRelations<TFields>,
     EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
   >;
 };
@@ -1031,6 +1168,7 @@ export const graphSchema = {
   date: field.date,
   json: field.json,
   enum: field.enum,
+  ref: field.ref,
 };
 
 export const mapEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) => ({

@@ -41,6 +41,69 @@ import {
   type PickEntityFields,
 } from './selection.js';
 
+type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
+
+type RelatedToOptions<TTarget extends AnyEntityDefinition, TSource extends AnyEntityDefinition> = {
+  through: (keyof TTarget['relations'] | keyof TSource['relations']) & string;
+};
+
+type RelationTraversal = {
+  relationName: string;
+  relationOwner: 'target' | 'source';
+};
+
+const resolveRelationTraversal = (
+  targetEntity: AnyEntityDefinition,
+  sourceEntity: AnyEntityDefinition,
+  through?: string,
+): RelationTraversal => {
+  const candidates: RelationTraversal[] = [
+    ...Object.entries(targetEntity.relations)
+      .filter(([, relation]) => relation.target.name === sourceEntity.name)
+      .map(([relationName]) => ({ relationName, relationOwner: 'target' as const })),
+    ...(targetEntity === sourceEntity
+      ? []
+      : Object.entries(sourceEntity.relations)
+          .filter(([, relation]) => relation.target.name === targetEntity.name)
+          .map(([relationName]) => ({ relationName, relationOwner: 'source' as const }))),
+  ];
+
+  if (through) {
+    const candidate = candidates.find(relation => relation.relationName === through);
+    if (candidate) {
+      return candidate;
+    }
+    if (through in targetEntity.relations || through in sourceEntity.relations) {
+      throw new Error(
+        `Relation ${through} does not connect ${targetEntity.name} and ${sourceEntity.name}.`,
+      );
+    }
+    throw new Error(
+      `Relation ${through} is not declared by ${targetEntity.name} or ${sourceEntity.name}.`,
+    );
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0]!;
+  }
+
+  if (candidates.length === 0) {
+    throw new Error(
+      `Cannot infer a relation between ${targetEntity.name} and ${sourceEntity.name}: no declared relation connects them.`,
+    );
+  }
+
+  const candidateNames = candidates
+    .map(
+      candidate =>
+        `${candidate.relationOwner === 'target' ? targetEntity.name : sourceEntity.name}.${candidate.relationName}`,
+    )
+    .join(', ');
+  throw new Error(
+    `Cannot infer a unique relation between ${targetEntity.name} and ${sourceEntity.name}: found ${candidateNames}. Pass { through } to disambiguate.`,
+  );
+};
+
 export type BoundGraphSelectionSemanticApi<
   TEntity extends AnyEntityDefinition,
   TResult = InferEntityRecord<TEntity['fields']>,
@@ -73,7 +136,7 @@ export type BoundGraphSelectionSemanticApi<
     build: (root: Parameters<QueryIncludeArg<TEntity, TResult>>[0]) => TInclude,
   ) => BoundGraphSelection<
     TEntity,
-    TResult & InferIncludeShape<TInclude>,
+    Simplify<Omit<TResult, keyof TInclude> & InferIncludeShape<TInclude>>,
     TReadError,
     TReadOptions,
     TCommandError,
@@ -352,7 +415,10 @@ export type BoundSelectionEntityBase<
       TCommandError,
       TCommandOptions
     >;
-    relatedTo: <TSource extends AnyEntityDefinition, TSourceResult>(
+    relatedTo: <
+      TSource extends AnyEntityDefinition,
+      TSourceResult = InferEntityRecord<TSource['fields']>,
+    >(
       sourceSelection: RelationRootSourceSelection<
         TSource,
         TSourceResult,
@@ -361,9 +427,7 @@ export type BoundSelectionEntityBase<
         TCommandError,
         TCommandOptions
       >,
-      options: {
-        through: (keyof TEntity['relations'] | keyof TSource['relations']) & string;
-      },
+      options?: RelatedToOptions<TEntity, TSource>,
     ) => RelationRootSelection<
       TEntity,
       TSource,
@@ -550,7 +614,10 @@ export const createGraphSelectionAssembly = <
           strategy: 'ignore' | 'merge';
         },
       ) => createCommand(createUpsertManyCommandSpec(entityDefinition, payloads, options)),
-      relatedTo: <TSource extends AnyEntityDefinition, TSourceResult>(
+      relatedTo: <
+        TSource extends AnyEntityDefinition,
+        TSourceResult = InferEntityRecord<TSource['fields']>,
+      >(
         sourceSelection: RelationRootSourceSelection<
           TSource,
           TSourceResult,
@@ -559,23 +626,15 @@ export const createGraphSelectionAssembly = <
           TCommandError,
           TCommandOptions
         >,
-        options: {
-          through: (keyof TEntity['relations'] | keyof TSource['relations']) & string;
-        },
+        options?: RelatedToOptions<TEntity, TSource>,
       ) => {
         const sourceEntity =
           'root' in sourceSelection ? sourceSelection.root : sourceSelection.entity;
-        const relationOwner =
-          options.through in entityDefinition.relations
-            ? 'target'
-            : options.through in sourceEntity.relations
-              ? 'source'
-              : undefined;
-        if (!relationOwner) {
-          throw new Error(
-            `Relation ${options.through} is not declared by ${entityDefinition.name} or ${sourceEntity.name}.`,
-          );
-        }
+        const { relationName, relationOwner } = resolveRelationTraversal(
+          entityDefinition,
+          sourceEntity,
+          options?.through,
+        );
         return new RelationRootSelection({
           targetEntity: entityDefinition as RelationRootTargetEntity<
             TEntity,
@@ -585,7 +644,7 @@ export const createGraphSelectionAssembly = <
             TCommandOptions
           >,
           sourceSelection,
-          relationName: options.through,
+          relationName,
           relationOwner,
           createExecutableGraphRead,
         });

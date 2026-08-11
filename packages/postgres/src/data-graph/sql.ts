@@ -1,5 +1,7 @@
 import {
   lowerSelectionReferences,
+  lowerEntityReferenceRecord,
+  lowerEntityReferenceSelection,
   resolveQuerySpec,
   type GraphCommandSpec,
   type QueryOrView,
@@ -37,28 +39,35 @@ const compileSelection = (
     throw new Error('PostgreSQL selection references could not be lowered.');
   }
 
-  const column = mapping.columns[lowered.fieldName];
-  if (!column) throw new Error(`Field ${mapping.entity.name}.${lowered.fieldName} is not mapped.`);
+  const predicate = lowerEntityReferenceSelection(mapping.entity, lowered);
+  if (predicate.kind !== 'predicate') {
+    throw new Error('PostgreSQL selection predicate could not be lowered.');
+  }
+
+  const column = mapping.columns[predicate.fieldName];
+  if (!column) {
+    throw new Error(`Field ${mapping.entity.name}.${predicate.fieldName} is not mapped.`);
+  }
   const quotedColumn = quoteIdentifier(column);
 
-  if (lowered.operator === 'isNull') return `${quotedColumn} IS NULL`;
-  if (lowered.operator === 'in') {
-    if (lowered.values.length === 0) return 'FALSE';
-    const placeholders = lowered.values.map(value => {
+  if (predicate.operator === 'isNull') return `${quotedColumn} IS NULL`;
+  if (predicate.operator === 'in') {
+    if (predicate.values.length === 0) return 'FALSE';
+    const placeholders = predicate.values.map(value => {
       values.push(value);
       return `$${values.length}`;
     });
     return `${quotedColumn} IN (${placeholders.join(', ')})`;
   }
 
-  values.push(lowered.value);
+  values.push(predicate.value);
   const operator = {
     eq: '=',
     lte: '<=',
     lt: '<',
     gte: '>=',
     gt: '>',
-  }[lowered.operator];
+  }[predicate.operator];
   return `${quotedColumn} ${operator} $${values.length}`;
 };
 
@@ -139,7 +148,9 @@ export const compilePostgresCommand = (
     command.operation === 'insert_many' ||
     command.operation === 'upsert'
   ) {
-    const rows = payloads as Array<Record<string, unknown>>;
+    const rows = (payloads as Array<Record<string, unknown>>).map(row =>
+      lowerEntityReferenceRecord(command.root, row),
+    );
     if (rows.length === 0) {
       throw new Error('PostgreSQL insert requires at least one row.');
     }
@@ -199,7 +210,10 @@ export const compilePostgresCommand = (
     };
   }
 
-  const payload = command.payload as Record<string, unknown>;
+  const payload = lowerEntityReferenceRecord(
+    command.root,
+    command.payload as Record<string, unknown>,
+  );
   const assignments = Object.entries(payload).map(([field, value]) => {
     values.push(value);
     return `${quoteIdentifier(mapping.columns[field]!)} = $${values.length}`;

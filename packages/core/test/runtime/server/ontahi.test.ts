@@ -645,6 +645,48 @@ describe('ontahi application composition root', () => {
     });
   });
 
+  it('derives an inverse relation from a target reference field', () => {
+    const TodoFields = {
+      id: field.id(),
+      title: field.string(),
+    };
+    const TodoRef = entity.ref('Todo', { fields: TodoFields });
+    const Todo = entity({
+      name: 'Todo',
+      fields: TodoFields,
+      relations: () => ({
+        tagAssignments: relation.inverse(TodoTag.fields.todo),
+      }),
+    });
+    const Tag = entity({
+      name: 'Tag',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const TodoTag = entity({
+      name: 'TodoTag',
+      fields: {
+        todo: field.ref(TodoRef),
+        tag: field.ref(Tag),
+      },
+    });
+
+    ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { Todo: [], Tag: [], TodoTag: [] } }),
+      entities: [Todo, Tag, TodoTag],
+    });
+
+    expect(TodoTag.relations.todo).toMatchObject({
+      relationKind: 'belongsTo',
+      target: Todo,
+      sourceField: 'todo',
+    });
+    expect(Todo.relations.tagAssignments).toMatchObject({
+      relationKind: 'hasMany',
+      target: TodoTag,
+      targetField: 'todo',
+    });
+  });
+
   it('prepares immediate relations for existing physical mapping declarations', () => {
     const Book = entity({
       name: 'Book',

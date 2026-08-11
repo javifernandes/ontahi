@@ -4,6 +4,8 @@ import {
   createRelatedRootReadSpec,
   getPublicSourceFieldAccessor,
   isRelatedRootReadSpec,
+  liftEntityReferenceFieldValues,
+  normalizeEntityReferenceJoinValue,
   materializeFlatSelection,
   resolveQuerySpec,
   resolveRelatedRootFields,
@@ -276,7 +278,7 @@ const resolveRelatedRootPublicSourceValuesEffect = <
       sourceValues: [
         ...new Set(
           (sourceRows as Array<Record<string, unknown>>)
-            .map(row => accessor(row))
+            .map(row => normalizeEntityReferenceJoinValue(spec.root, sourceField, accessor(row)))
             .filter(value => value != null),
         ),
       ],
@@ -286,8 +288,15 @@ const resolveRelatedRootPublicSourceValuesEffect = <
 
 const resolveRelatedRootSourceValues = (
   sourceRows: Array<Record<string, unknown>>,
+  sourceEntity: AnyEntityDefinition,
   sourceField: string,
-) => [...new Set(sourceRows.map(row => row[sourceField]).filter(value => value != null))];
+) => [
+  ...new Set(
+    sourceRows
+      .map(row => normalizeEntityReferenceJoinValue(sourceEntity, sourceField, row[sourceField]))
+      .filter(value => value != null),
+  ),
+];
 
 const buildRelatedRootTargetSpec = <TTarget extends AnyEntityDefinition>(
   spec: RelatedRootReadSpec<TTarget, any, any, any, any>,
@@ -302,6 +311,7 @@ const buildRelatedRootTargetSpec = <TTarget extends AnyEntityDefinition>(
     spec.relationName,
     spec.relationOwner,
   );
+  const values = liftEntityReferenceFieldValues(spec.target.root, targetField, sourceValues);
 
   return {
     ...(options?.stripShape ? stripQueryShape(spec.target) : spec.target),
@@ -309,7 +319,7 @@ const buildRelatedRootTargetSpec = <TTarget extends AnyEntityDefinition>(
       kind: 'predicate',
       operator: 'in',
       fieldName: targetField,
-      values: sourceValues,
+      values,
     }),
   };
 };
@@ -365,7 +375,11 @@ const resolveRelatedRootSourceContextEffect = <
     return {
       sourceRows,
       sourceEntityRows,
-      sourceValues: resolveRelatedRootSourceValues(sourceEntityRows, sourceField),
+      sourceValues: resolveRelatedRootSourceValues(
+        sourceEntityRows,
+        spec.sourceEntity,
+        sourceField,
+      ),
       hasPublicSourceValues: false,
     };
   });
@@ -388,6 +402,7 @@ const emptyRelatedRootResult = <TResult>(
 const countRowsBySource = (
   sourceValues: readonly unknown[],
   rows: Array<Record<string, unknown>>,
+  targetEntity: AnyEntityDefinition,
   targetField: string,
 ) => {
   const countsBySource = new Map<unknown, number>();
@@ -396,7 +411,7 @@ const countRowsBySource = (
   }
 
   for (const row of rows) {
-    const key = row[targetField];
+    const key = normalizeEntityReferenceJoinValue(targetEntity, targetField, row[targetField]);
     if (key != null) {
       countsBySource.set(key, (countsBySource.get(key) ?? 0) + 1);
     }
@@ -423,6 +438,7 @@ const materializeRelatedRootResult = <TResult>(
         countsBySource: countRowsBySource(
           sourceValues,
           rows as Array<Record<string, unknown>>,
+          spec.target.root,
           targetField,
         ),
       },
@@ -500,7 +516,11 @@ const executeSupabaseRelatedRootCountEffect = <
       return 0;
     }
 
-    const sourceValues = resolveRelatedRootSourceValues(sourceEntityRows, sourceField);
+    const sourceValues = resolveRelatedRootSourceValues(
+      sourceEntityRows,
+      spec.sourceEntity,
+      sourceField,
+    );
     if (sourceValues.length === 0) {
       return 0;
     }

@@ -1,6 +1,6 @@
 import { GraphCommand } from './command.js';
 import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
-import { query, type EntityProxy, type QueryBuilder } from './query.js';
+import { query, type EntityFieldProxy, type QueryBuilder } from './query.js';
 import type { AnyEntityRef, EntityRef } from './ref.js';
 import {
   copySelectionExpression,
@@ -30,7 +30,7 @@ import {
 const ONTAHI_SELECTION = Symbol.for('@ontahi/core/data-graph/selection');
 
 export type SelectionBuilder<TEntity extends AnyEntityDefinition> = (
-  root: EntityProxy<TEntity>,
+  root: EntityFieldProxy<TEntity>,
 ) => SelectionExpression;
 
 export type EntitySelectionFactory<TEntity extends AnyEntityDefinition> = {

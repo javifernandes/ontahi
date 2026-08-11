@@ -1,12 +1,17 @@
 import { Effect, Stream } from 'effect';
 
 import type { GraphCommandSpec } from '../command.js';
+import type { AnyEntityDefinition } from '../definitions.js';
 import {
   resolveQuerySpec,
   type PlainGraphRead,
   type QueryOrView,
   type QuerySpec,
 } from '../query.js';
+import {
+  liftEntityReferenceFieldValues,
+  normalizeEntityReferenceJoinValue,
+} from '../reference-field.js';
 import {
   isRelatedRootReadSpec,
   resolveRelatedRootFields,
@@ -18,7 +23,7 @@ import { selectionAnd } from '../selection-ast.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { materializeRecord, type InMemoryDataset } from './materialization.js';
-import { applyOrder, applySelectionExpression } from './query.js';
+import { applyEntitySelectionExpression, applyOrder } from './query.js';
 
 const selectRows = (
   spec: QuerySpec<any, any>,
@@ -26,7 +31,7 @@ const selectRows = (
   options?: { applyLimit?: boolean },
 ) => {
   const rows = applyOrder(
-    applySelectionExpression(dataset[spec.root.name] ?? [], spec.selection),
+    applyEntitySelectionExpression(spec.root, dataset[spec.root.name] ?? [], spec.selection),
     spec.orderBy,
   );
 
@@ -69,23 +74,34 @@ const executePlainRead = <TParams, TResult>(
   return rows;
 };
 
-const uniqueNonNullValues = (rows: Array<Record<string, unknown>>, field: string) => [
-  ...new Set(rows.map(row => row[field]).filter(value => value != null)),
+const uniqueNonNullValues = (
+  rows: Array<Record<string, unknown>>,
+  entity: AnyEntityDefinition,
+  field: string,
+) => [
+  ...new Set(
+    rows
+      .map(row => normalizeEntityReferenceJoinValue(entity, field, row[field]))
+      .filter(value => value != null),
+  ),
 ];
 
 const withRelatedTargetPredicate = (
   spec: RelatedRootReadSpec,
   targetField: string,
   sourceValues: readonly unknown[],
-): QuerySpec<any, any> => ({
-  ...spec.target,
-  selection: selectionAnd(spec.target.selection, {
-    kind: 'predicate',
-    operator: 'in',
-    fieldName: targetField,
-    values: sourceValues,
-  }),
-});
+): QuerySpec<any, any> => {
+  const values = liftEntityReferenceFieldValues(spec.target.root, targetField, sourceValues);
+  return {
+    ...spec.target,
+    selection: selectionAnd(spec.target.selection, {
+      kind: 'predicate',
+      operator: 'in',
+      fieldName: targetField,
+      values,
+    }),
+  };
+};
 
 const emptyRelatedRootResult = <TResult>(mode: RelatedRootReadMode, sourceRows: unknown[]) => {
   if (mode === 'resolve') return [{ sourceRows, rows: [] }] as TResult[];
@@ -99,12 +115,13 @@ const emptyRelatedRootResult = <TResult>(mode: RelatedRootReadMode, sourceRows: 
 const countRowsBySource = (
   sourceValues: readonly unknown[],
   rows: Array<Record<string, unknown>>,
+  targetEntity: AnyEntityDefinition,
   targetField: string,
 ) => {
   const counts = new Map<unknown, number>(sourceValues.map(value => [value, 0]));
 
   for (const row of rows) {
-    const value = row[targetField];
+    const value = normalizeEntityReferenceJoinValue(targetEntity, targetField, row[targetField]);
     if (value != null) counts.set(value, (counts.get(value) ?? 0) + 1);
   }
 
@@ -142,7 +159,7 @@ const executeRelatedRootRead = <TResult>(
     spec.mode === 'resolve' || spec.mode === 'countBySource'
       ? executeRead(spec.source, undefined, dataset)
       : sourceEntityRows;
-  const sourceValues = uniqueNonNullValues(sourceEntityRows, sourceField);
+  const sourceValues = uniqueNonNullValues(sourceEntityRows, spec.sourceEntity, sourceField);
 
   if (sourceEntityRows.length === 0 || sourceValues.length === 0) {
     return emptyRelatedRootResult(spec.mode, sourceRows);
@@ -159,7 +176,7 @@ const executeRelatedRootRead = <TResult>(
     return [
       {
         sourceRows,
-        countsBySource: countRowsBySource(sourceValues, entityRows, targetField),
+        countsBySource: countRowsBySource(sourceValues, entityRows, spec.target.root, targetField),
       },
     ] as TResult[];
   }
@@ -202,6 +219,7 @@ const countRead = <TParams, TResult>(
   );
   const sourceValues = uniqueNonNullValues(
     executeEntityRows(queryOrView.source, dataset),
+    queryOrView.sourceEntity,
     sourceField,
   );
 

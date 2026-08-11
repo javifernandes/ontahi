@@ -10,6 +10,7 @@ import {
   type AnyEntityDefinition,
 } from './definitions.js';
 import {
+  query,
   QueryBuilder,
   RelationQueryBuilder,
   type AnyRelationQueryBuilder,
@@ -21,6 +22,7 @@ import {
 } from './query.js';
 import { getEntityIdentityLocator } from './ref.js';
 import type { BoundGraphSelection } from './selection-assembly.js';
+import type { EntitySelectionSource } from './selection-ast.js';
 import type { QueryOrderByArg, QuerySelectArg, QueryWhereArg } from './selection.js';
 
 type RelatedRootSourceRead<TResult> =
@@ -116,12 +118,13 @@ export type RelationRootTargetEntity<
 
 export type RelationRootSourceSelection<
   TEntity extends AnyEntityDefinition,
-  TResult,
+  TResult = InferEntityRecord<TEntity['fields']>,
   TReadError = never,
   TReadOptions = undefined,
   TCommandError = TReadError,
   TCommandOptions = TReadOptions,
 > =
+  | EntitySelectionSource<TEntity>
   | BoundGraphSelection<TEntity, TResult, TReadError, TReadOptions, TCommandError, TCommandOptions>
   | RelationRootSelection<
       TEntity,
@@ -256,6 +259,12 @@ const buildRelationRootSourceRead = <
     )
   ) {
     return sourceSelection.build();
+  }
+
+  if ('expression' in sourceSelection) {
+    return query(sourceSelection.root)
+      .where(sourceSelection)
+      .build() as RelatedRootSourceRead<TResult>;
   }
 
   return sourceSelection.build();
