@@ -6,6 +6,7 @@ import {
   type DomainOperationDeclarations,
   type DataGraphExecutionRuntime,
   type AnyFieldDefinition,
+  type EffectiveEntityLocatorDeclarations,
   type EntityDisplayMetadata,
   type EntityDefinition,
   type EntityFreshnessMetadata,
@@ -71,8 +72,13 @@ export type OntahiSemanticEntityTarget<TEntity extends AnyEntityDefinition> =
 export type OntahiEntityContract<
   TName extends string,
   TFields extends FieldDefinitions,
-  TLocators extends EntityLocatorDeclarations<TFields> = EntityLocatorDeclarations<TFields>,
-> = EntityDefinition<TName, TFields, {}, EntityRefLocatorFactories<TFields, TLocators>>;
+  TLocators extends EntityLocatorDeclarations<TFields> = {},
+> = EntityDefinition<
+  TName,
+  TFields,
+  {},
+  EntityRefLocatorFactories<TFields, EffectiveEntityLocatorDeclarations<TFields, TLocators>>
+>;
 
 type ResolvedSemanticEntityTarget<TTarget> =
   TTarget extends OntahiSemanticEntityRef<infer TEntity, boolean> ? TEntity : TTarget;
@@ -126,7 +132,7 @@ export function semanticEntityRef<TEntity extends AnyEntityDefinition = AnyEntit
 export function semanticEntityRef(
   target: string | (() => unknown),
   _contract?: { fields: FieldDefinitions; locators?: EntityLocatorDeclarations<FieldDefinitions> },
-): OntahiSemanticEntityRef<AnyEntityDefinition, boolean> {
+): OntahiSemanticEntityRef<any, boolean> {
   return typeof target === 'string'
     ? { kind: 'ontahi.entity-ref', typed: Boolean(_contract), name: target }
     : {
@@ -271,7 +277,7 @@ export type OntahiOperationGroupDeclaration = DomainOperationDeclaration<
 
 export type OntahiOperationGroupContext = {
   app: OntahiBinderApp;
-  self: AnyEntityDefinition;
+  self: AnyEntityDefinition & Pick<EntityDefinition<any, any, any, any>, 'one' | 'many' | 'array'>;
 };
 
 export type OntahiOperationGroup<TName extends string> = (
@@ -396,7 +402,7 @@ export type OntahiEntityConfig<
   display?: EntityDisplayMetadata<TFields, EntityRelationDisplayPaths<TRelations>>;
   freshness?: EntityFreshnessMetadata<TFields>;
   locators?: TLocators;
-  identity?: keyof TLocators & string;
+  identity?: keyof EffectiveEntityLocatorDeclarations<TFields, TLocators> & string;
   exposure?: GraphEntityExposure;
   relations?: TRelations | (() => TRelations);
   domainOperationDefaults?: DomainOperationDefaults;
@@ -420,7 +426,7 @@ export type OntahiEntityConfig<
 type EntityRefLocatorsFrom<
   TFields extends FieldDefinitions,
   TLocators extends EntityLocatorDeclarations<TFields>,
-> = EntityRefLocatorFactories<TFields, TLocators>;
+> = EntityRefLocatorFactories<TFields, EffectiveEntityLocatorDeclarations<TFields, TLocators>>;
 
 type EntitySchemaFromConfig<
   TName extends string,
@@ -747,10 +753,10 @@ export const relationModuleWithCapabilities = <
 const defineOntahiEntity = <
   const TName extends string,
   const TFields extends FieldDefinitions,
-  const TLocators extends EntityLocatorDeclarations<TFields>,
   const TRelations extends OntahiRelationDeclarations,
   TOperations extends OntahiOperationDeclarations,
   const TValues extends RuntimeValueRefDeclarations,
+  const TLocators extends EntityLocatorDeclarations<TFields> = {},
   const TCapabilities extends OntahiCapabilities = {},
   const TEntities extends OntahiEntityDependencies = {},
 >(

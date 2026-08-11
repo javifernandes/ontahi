@@ -217,7 +217,14 @@ describe('data-graph entity refs', () => {
           fields: ['id'],
         },
       ],
-      inferredLocators: [],
+      inferredLocators: [
+        {
+          name: 'refById',
+          fields: ['id'],
+          sourceFields: ['id'],
+          toLocator: expect.any(Function),
+        },
+      ],
     });
   });
 

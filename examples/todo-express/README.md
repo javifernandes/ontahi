@@ -61,9 +61,9 @@ The example deliberately exercises two different domain structures:
 join identity.
 
 Each entity owns its fields, identity, relations, and operations in one semantic declaration.
-`Todo.complete` accepts `graphSchema.selection(self, { cardinality: 'many' })` inside that
-declaration, so its target is part of the validated operation contract instead of an example-local
-list of IDs.
+`Todo.complete` accepts `self.many()` inside that declaration, so its target cardinality is part of
+the validated operation contract instead of an example-local list of IDs. Ontahi keeps the
+selection representation behind the entity-facing API.
 
 `Todo.assignTags` combines that semantic target with explicit tag identities. It validates those
 identities, resolves the Todo Selection at execution time, and creates all idempotent `TodoTag`

@@ -45,15 +45,13 @@ export const TodoList = entity({
       },
     }),
   },
-  locators: { refById: 'id' },
-  identity: 'refById',
   domainOperationDefaults: entityDefaults,
   uses: {
     capabilities: {} as TodoCapabilities,
   },
   operations: ({ self, commands, operation, app }) => ({
     list: operation({
-      output: graphSchema.array(self),
+      output: self.array(),
       bridge: { query: [() => 'all'] },
       run: () => commands.all().orderBy(list => list.name),
     }),
@@ -75,19 +73,19 @@ export const TodoList = entity({
     }),
     rename: operation({
       input: graphSchema.object({
-        list: graphSchema.selection(self, { cardinality: 'one' }),
+        list: self.one(),
         name: self.fields.name,
       }),
       output: self,
       bridge: { invalidate: [['TodoList']] },
-      run: ({ list, name }) => commands.where(list).updateOneReturning({ name }, ['id', 'name']),
+      run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name']),
     }),
     delete: operation({
       input: graphSchema.object({
-        list: graphSchema.selection(self, { cardinality: 'one' }),
+        list: self.one(),
       }),
       bridge: { invalidate: [['TodoList']] },
-      run: ({ list }) => commands.where(list).deleteOne(),
+      run: ({ list }) => list.delete(),
     }),
   }),
 });
@@ -99,12 +97,10 @@ export const Tag = entity({
     name: field.nonEmptyString({ trim: true }),
     color: field.nonEmptyString({ trim: true }),
   },
-  locators: { refById: 'id' },
-  identity: 'refById',
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, operation }) => ({
     list: operation({
-      output: graphSchema.array(self),
+      output: self.array(),
       bridge: { query: [() => 'all'] },
       run: () => commands.all().orderBy(tag => tag.name),
     }),
@@ -131,16 +127,16 @@ export const TodoTag = entity({
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, operation }) => ({
     list: operation({
-      output: graphSchema.array(self),
+      output: self.array(),
       bridge: { query: [() => 'all'] },
       run: () => commands.all().orderBy(assignment => assignment.todoId),
     }),
     remove: operation({
       input: graphSchema.object({
-        assignment: graphSchema.selection(self, { cardinality: 'one' }),
+        assignment: self.one(),
       }),
       bridge: { invalidate: [['TodoTag']] },
-      run: ({ assignment }) => commands.where(assignment).deleteOne(),
+      run: ({ assignment }) => assignment.delete(),
     }),
   }),
 });
@@ -148,8 +144,6 @@ export const TodoTag = entity({
 export const Todo = entity({
   name: 'Todo',
   fields: todoFields,
-  locators: { refById: 'id' },
-  identity: 'refById',
   relations: {
     list: relation.belongsTo(TodoList, { via: 'listId' }),
     tagAssignments: relation.hasMany(TodoTag, { via: 'todoId' }),
@@ -172,16 +166,16 @@ export const Todo = entity({
 
     return {
       list: operation({
-        input: graphSchema.selection(self, { cardinality: 'many' }),
-        output: graphSchema.array(self),
+        input: self.many(),
+        output: self.array(),
         bridge: { query: [(todos: unknown) => todos] },
-        run: todos => commands.where(todos).orderBy(todo => todo.title),
+        run: todos => todos.orderBy(todo => todo.title),
       }),
       listForList: operation({
         input: graphSchema.object({
-          list: graphSchema.selection(TodoList, { cardinality: 'one' }),
+          list: TodoList.one(),
         }),
-        output: graphSchema.array(self),
+        output: self.array(),
         bridge: { query: [(input: unknown) => input] },
         run: ({ list }) =>
           commands
@@ -216,7 +210,7 @@ export const Todo = entity({
       }),
       complete: operation({
         input: graphSchema.object({
-          todos: graphSchema.selection(self, { cardinality: 'many' }),
+          todos: self.many(),
         }),
         bridge: { invalidate: [['Todo']] },
         run: ({ todos }) => todos.update({ completed: true }),
@@ -231,7 +225,7 @@ export const Todo = entity({
       }),
       assignTags: operation({
         input: graphSchema.object({
-          todos: graphSchema.selection(self, { cardinality: 'many' }),
+          todos: self.many(),
           tagIds: graphSchema.array(field.id()),
         }),
         bridge: { invalidate: [['TodoTag']] },
@@ -270,7 +264,7 @@ export const Todo = entity({
       }),
       removeTags: operation({
         input: graphSchema.object({
-          todos: graphSchema.selection(self, { cardinality: 'many' }),
+          todos: self.many(),
           tagIds: graphSchema.array(field.id()),
         }),
         bridge: { invalidate: [['TodoTag']] },

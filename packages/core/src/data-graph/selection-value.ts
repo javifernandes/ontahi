@@ -15,7 +15,17 @@ import {
   type SelectionAst,
   type SelectionExpression,
 } from './selection-ast.js';
-import { createDeleteCommandSpec, createUpdateCommandSpec } from './selection.js';
+import {
+  GraphSelection,
+  createDeleteCommandSpec,
+  createUpdateCommandSpec,
+  type EntityFieldName,
+  type PickEntityFields,
+  type QueryIncludeArg,
+  type QueryOrderByArg,
+  type QuerySelectArg,
+  type QueryWhereArg,
+} from './selection.js';
 
 const ONTAHI_SELECTION = Symbol.for('@ontahi/core/data-graph/selection');
 
@@ -27,9 +37,19 @@ export type EntitySelectionFactory<TEntity extends AnyEntityDefinition> = {
   selection: (build: SelectionBuilder<TEntity>) => Selection<TEntity>;
 };
 
+type SelectionCardinality = 'one' | 'many' | undefined;
+
 type SelectionOperand<TEntity extends AnyEntityDefinition> =
   | Selection<TEntity>
   | SelectionBuilder<TEntity>;
+
+type SelectionReturningResult<
+  TEntity extends AnyEntityDefinition,
+  TFieldNames extends readonly EntityFieldName<TEntity>[],
+  TCardinality extends SelectionCardinality,
+> = TCardinality extends 'one'
+  ? PickEntityFields<TEntity, TFieldNames>
+  : Array<PickEntityFields<TEntity, TFieldNames>>;
 
 const expressionFromBuilder = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
@@ -38,12 +58,13 @@ const expressionFromBuilder = <TEntity extends AnyEntityDefinition>(
 
 export class Selection<
   TEntity extends AnyEntityDefinition,
+  TCardinality extends SelectionCardinality = SelectionCardinality,
 > implements EntitySelectionSource<TEntity> {
   constructor(
     readonly root: TEntity,
     readonly expression: SelectionExpression,
     readonly name?: string,
-    readonly cardinality?: 'one' | 'many',
+    readonly cardinality?: TCardinality,
   ) {
     Object.defineProperty(this, ONTAHI_SELECTION, { value: true });
   }
@@ -63,11 +84,10 @@ export class Selection<
     return new Selection(root, expressionFromBuilder(root, build));
   }
 
-  static references<TEntity extends AnyEntityDefinition>(
-    root: TEntity,
-    refs: readonly EntityRef<TEntity['name']>[],
-    cardinality?: 'one' | 'many',
-  ) {
+  static references<
+    TEntity extends AnyEntityDefinition,
+    TCardinality extends SelectionCardinality = undefined,
+  >(root: TEntity, refs: readonly EntityRef<TEntity['name']>[], cardinality?: TCardinality) {
     const mismatchedRef = refs.find(ref => ref.entityName !== root.name);
     if (mismatchedRef) {
       throw new Error(`Cannot select ${root.name} using a ${mismatchedRef.entityName} reference.`);
@@ -113,6 +133,26 @@ export class Selection<
     return query(this.root).where(this);
   }
 
+  where(build: QueryWhereArg<TEntity, InferEntityRecord<TEntity['fields']>>) {
+    return this.toGraphSelection().where(build);
+  }
+
+  select(build: QuerySelectArg<TEntity, InferEntityRecord<TEntity['fields']>>) {
+    return this.toGraphSelection().select(build);
+  }
+
+  include(build: QueryIncludeArg<TEntity, InferEntityRecord<TEntity['fields']>>) {
+    return this.toGraphSelection().include(build);
+  }
+
+  orderBy(build: QueryOrderByArg<TEntity, InferEntityRecord<TEntity['fields']>>) {
+    return this.toGraphSelection().orderBy(build);
+  }
+
+  limit(limitValue: number) {
+    return this.toGraphSelection().limit(limitValue);
+  }
+
   update(payload: Partial<InferEntityRecord<TEntity['fields']>>) {
     return new GraphCommand(
       createUpdateCommandSpec(this.root, this, payload, {
@@ -121,9 +161,40 @@ export class Selection<
     );
   }
 
+  updateReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    fieldNames: TFieldNames,
+  ): GraphCommand<
+    TEntity,
+    Partial<InferEntityRecord<TEntity['fields']>>,
+    SelectionReturningResult<TEntity, TFieldNames, TCardinality>
+  > {
+    return new GraphCommand(
+      createUpdateCommandSpec(this.root, this, payload, {
+        returning: fieldNames,
+        ...(this.cardinality ? { cardinality: this.cardinality } : {}),
+      }),
+    ) as GraphCommand<
+      TEntity,
+      Partial<InferEntityRecord<TEntity['fields']>>,
+      SelectionReturningResult<TEntity, TFieldNames, TCardinality>
+    >;
+  }
+
   delete() {
     return new GraphCommand(
       createDeleteCommandSpec(this.root, this, {
+        ...(this.cardinality ? { cardinality: this.cardinality } : {}),
+      }),
+    );
+  }
+
+  deleteReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+    fieldNames: TFieldNames,
+  ): GraphCommand<TEntity, never, SelectionReturningResult<TEntity, TFieldNames, TCardinality>> {
+    return new GraphCommand(
+      createDeleteCommandSpec(this.root, this, {
+        returning: fieldNames,
         ...(this.cardinality ? { cardinality: this.cardinality } : {}),
       }),
     );
@@ -143,6 +214,10 @@ export class Selection<
 
   pipe<TValue>(fn: (selection: this) => TValue): TValue {
     return fn(this);
+  }
+
+  private toGraphSelection() {
+    return new GraphSelection(this.toQuery());
   }
 
   private resolveOperand(operand: SelectionOperand<TEntity>) {

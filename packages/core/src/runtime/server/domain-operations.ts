@@ -5,7 +5,6 @@ import { GraphCommand } from '../../data-graph/command.js';
 import {
   graphSchema,
   type AnyEntityDefinition,
-  type InferEntityRecord,
   type GraphSchemaDefinition,
   type GraphSchemaLike,
   type InferGraphSchemaValue,
@@ -35,6 +34,7 @@ import {
 import { RelationRootSelection } from '../../data-graph/relation-root.js';
 import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
+import type { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 
 import type { OperationContracts } from './concerns/contract-types.js';
@@ -74,16 +74,15 @@ const EmptyInputSchema = graphSchema.object({});
 
 export type DomainOperationSuccess = unknown;
 
-export type HydratedSemanticSelection<TEntity extends AnyEntityDefinition> = SemanticSelection<
-  TEntity['name']
-> & {
-  update(payload: Partial<InferEntityRecord<TEntity['fields']>>): GraphCommand<any, any, unknown>;
-};
+export type HydratedSemanticSelection<
+  TEntity extends AnyEntityDefinition,
+  TCardinality extends 'one' | 'many' | undefined = 'one' | 'many' | undefined,
+> = Selection<TEntity, TCardinality>;
 
 export type HydratedOperationInput<TInput> =
-  TInput extends SemanticSelection<any, infer TEntity>
+  TInput extends SemanticSelection<any, infer TEntity, infer TCardinality>
     ? TEntity extends AnyEntityDefinition
-      ? HydratedSemanticSelection<TEntity>
+      ? HydratedSemanticSelection<TEntity, TCardinality>
       : TInput
     : TInput extends Date
       ? TInput

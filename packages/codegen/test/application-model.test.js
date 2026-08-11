@@ -139,7 +139,8 @@ describe('Ontahi application declaration analysis', () => {
           },
           operations: ({ self, operation }) => ({
             list: operation({
-              output: graphSchema.array(self),
+              input: graphSchema.object({ notes: self.many() }),
+              output: self.array(),
               bridge: { query: [() => 'all'] },
               run: () => [],
             }),
@@ -163,10 +164,19 @@ describe('Ontahi application declaration analysis', () => {
           name: 'list',
           authority: 'server',
           exposure: 'bridge',
-          outputSchemaText: 'graphSchema.array(NoteSchema)',
+          inputSchemaText: 'graphSchema.object({ notes: NoteSchema.many() })',
+          outputSchemaText: 'NoteSchema.array()',
         },
       ],
     });
+
+    const source = renderGeneratedClientEntityModule({
+      entities: [analysis.definition],
+      operationContracts: 'selection',
+    });
+
+    expect(source).toContain('input: graphSchema.object({ notes: NoteSchema.many() }),');
+    expect(source).not.toContain('output: NoteSchema.array(),');
   });
 
   it('projects a schema-only unified entity', () => {
@@ -1138,19 +1148,16 @@ describe('Ontahi application declaration analysis', () => {
               name: 'listForList',
               authority: 'server',
               exposure: 'bridge',
-              inputSchemaText:
-                "graphSchema.object({ list: graphSchema.selection(TodoList, { cardinality: 'one' }) })",
-              outputSchemaText: 'graphSchema.array(Todo)',
+              inputSchemaText: 'graphSchema.object({ list: TodoList.one() })',
+              outputSchemaText: 'Todo.array()',
             },
           ],
         },
       ],
     });
 
-    expect(source).toContain(
-      "input: graphSchema.object({ list: graphSchema.selection(TodoListSchema, { cardinality: 'one' }) }),",
-    );
-    expect(source).toContain('output: graphSchema.array(TodoSchema),');
+    expect(source).toContain('input: graphSchema.object({ list: TodoListSchema.one() }),');
+    expect(source).toContain('output: TodoSchema.array(),');
   });
 
   it('projects schema-only relation targets before their consumers', () => {

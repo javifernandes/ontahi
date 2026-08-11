@@ -95,6 +95,44 @@ describe('data-graph schema DSL', () => {
     });
   });
 
+  it('expresses entity cardinality for inputs and materialized outputs', () => {
+    const Todo = entity('Todo', {
+      id: field.id(),
+      title: field.string(),
+    })
+      .locators({ refById: 'id' })
+      .identity('refById');
+    const one = Todo.one();
+    const many = Todo.many();
+    const array = Todo.array();
+
+    expect({
+      one: toGraphSchemaDescriptor(one),
+      many: toGraphSchemaDescriptor(many),
+      array: toGraphOutputDescriptor(array),
+    }).toEqual({
+      one: {
+        kind: 'selection',
+        entityName: 'Todo',
+        cardinality: 'one',
+        identity: { name: 'refById', fields: ['id'] },
+      },
+      many: {
+        kind: 'selection',
+        entityName: 'Todo',
+        cardinality: 'many',
+        identity: { name: 'refById', fields: ['id'] },
+      },
+      array: {
+        kind: 'graph-output.array',
+        item: { kind: 'graph-output.entity', entity: Todo },
+      },
+    });
+    expectTypeOf<string>().toMatchTypeOf<InferGraphSchemaClientInput<typeof one>>();
+    expectTypeOf<string[]>().toMatchTypeOf<InferGraphSchemaClientInput<typeof many>>();
+    expectTypeOf(array.__value).toEqualTypeOf<{ id: string; title: string }[] | undefined>();
+  });
+
   it('describes, transports, and validates entity selections as operation values', () => {
     const Book = entity('Book', {
       id: field.id(),

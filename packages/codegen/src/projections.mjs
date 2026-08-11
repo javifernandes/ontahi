@@ -15,11 +15,14 @@ const replaceProjectedEntityNames = (text, projectedNames) => {
   );
 };
 
+const containsEntityTargetSchema = text =>
+  /\b(?:graphSelection|graphSchema\.selection)\b/.test(text) ||
+  /\b[A-Z][A-Za-z0-9_$]*\.(?:one|many)\s*\(/.test(text);
+
 const shouldRenderInputContract = (operation, operationContracts) =>
   Boolean(operation.inputSchemaText) &&
   (operationContracts === 'all' ||
-    (operationContracts === 'selection' &&
-      /\b(?:graphSelection|graphSchema\.selection)\b/.test(operation.inputSchemaText)));
+    (operationContracts === 'selection' && containsEntityTargetSchema(operation.inputSchemaText)));
 
 const hoistClientBridgeQueryInputTypes = sourceText => {
   const aliasesByType = new Map();

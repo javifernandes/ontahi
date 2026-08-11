@@ -83,6 +83,16 @@ describe('data-graph selection helpers', () => {
     });
     expect(query(Book).where(visible).build().selection).toEqual(visible.build());
     expect(visible.toQuery().build().selection).toEqual(visible.build());
+    expect(
+      visible
+        .orderBy(book => book.title)
+        .limit(10)
+        .build(),
+    ).toMatchObject({
+      selection: visible.build(),
+      orderBy: [{ fieldName: 'title', direction: 'asc' }],
+      limit: 10,
+    });
     expect(createDeleteCommandSpec(Book, visible).selection).toEqual(visible.build());
     expect(visible.update({ title: 'Visible' }).build()).toMatchObject({
       operation: 'update',
@@ -125,7 +135,15 @@ describe('data-graph selection helpers', () => {
     expect(selected.delete().build().cardinality).toBe('one');
     expect(selected.deleteMany().build().cardinality).toBe('one');
     expect(exactBook.update({ title: 'Updated' }).build().cardinality).toBe('one');
+    expect(exactBook.updateReturning({ title: 'Updated' }, ['id']).build()).toMatchObject({
+      cardinality: 'one',
+      returning: ['id'],
+    });
     expect(exactBook.delete().build().cardinality).toBe('one');
+    expect(exactBook.deleteReturning(['id']).build()).toMatchObject({
+      cardinality: 'one',
+      returning: ['id'],
+    });
     expect(exactBook.and(book => book.ownerId.eq('owner-1')).cardinality).toBe('one');
   });
 

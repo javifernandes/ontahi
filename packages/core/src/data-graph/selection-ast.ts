@@ -81,8 +81,10 @@ export type EntitySelectionSource<TEntity = { readonly name: string }> = {
 export type SemanticSelection<
   TEntityName extends string = string,
   TEntity extends { readonly name: TEntityName } = { readonly name: TEntityName },
+  TCardinality extends 'one' | 'many' | undefined = 'one' | 'many' | undefined,
 > = EntitySelectionSource<TEntity> & {
   readonly name?: string;
+  readonly __cardinality?: TCardinality;
   build(): SelectionExpression;
 };
 

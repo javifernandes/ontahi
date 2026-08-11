@@ -18,12 +18,10 @@ import {
   operationGroup,
   relation,
   relationModule,
+  type OntahiOperationGroupContext,
   valueRef,
 } from '../../../src/runtime/server/index.js';
-import type {
-  OntahiApplicationBuilder,
-  OntahiBinderApp,
-} from '../../../src/runtime/server/ontahi.js';
+import type { OntahiApplicationBuilder } from '../../../src/runtime/server/ontahi.js';
 
 describe('ontahi application composition root', () => {
   it('invokes bound entity operations directly and promotes refs to singleton selections', async () => {
@@ -33,21 +31,18 @@ describe('ontahi application composition root', () => {
         id: field.id(),
         name: field.nonEmptyString({ trim: true }),
       },
-      locators: { refById: 'id' },
-      identity: 'refById',
       operations: ({ self, commands, operation }) => ({
         list: operation({
-          output: graphSchema.array(self),
+          output: self.array(),
           run: () => commands.all().orderBy(list => list.name),
         }),
         rename: operation({
           input: graphSchema.object({
-            list: graphSchema.selection(self, { cardinality: 'one' }),
+            list: self.one(),
             name: field.nonEmptyString({ trim: true }),
           }),
           output: self,
-          run: ({ list, name }) =>
-            commands.where(list).updateOneReturning({ name }, ['id', 'name']),
+          run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name']),
         }),
       }),
     });
@@ -60,6 +55,8 @@ describe('ontahi application composition root', () => {
     });
 
     expect(application.graph.entities.TodoList).toBe(TodoList);
+    expect(TodoList.identityLocatorName).toBe('refById');
+    expect(TodoList.refLocators.refById?.fields).toEqual(['id']);
     expect(application.graph.entities.TodoList.domain.list.exposure).toBe('server-only');
     expect(application.graph.entities.TodoList.domain.list.layer).toBe('TodoList');
     await expect(TodoList.list()).resolves.toMatchObject({
@@ -98,6 +95,31 @@ describe('ontahi application composition root', () => {
     expect(dataset.TodoList).toEqual([{ id: 'list-research', name: 'Research library' }]);
   });
 
+  it('merges alternate locators into the conventional id identity', () => {
+    const Profile = entity({
+      name: 'Profile',
+      fields: {
+        id: field.id(),
+        email: field.email(),
+      },
+      locators: {
+        refByEmail: 'email',
+      },
+    });
+    ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { Profile: [] } }),
+      entities: [Profile],
+    });
+
+    expect(Profile.identityLocatorName).toBe('refById');
+    expect(Profile.refLocators.refById?.fields).toEqual(['id']);
+    expect(Profile.refLocators.refByEmail?.fields).toEqual(['email']);
+    expect(Profile.refById('profile-1')).toMatchObject({ locator: { id: 'profile-1' } });
+    expect(Profile.refByEmail('reader@example.com')).toMatchObject({
+      locator: { email: 'reader@example.com' },
+    });
+  });
+
   it('hydrates semantic selection inputs before operation implementations run', async () => {
     const Todo = entity({
       name: 'Todo',
@@ -115,7 +137,7 @@ describe('ontahi application composition root', () => {
       operations: ({ self, operation }) => ({
         complete: operation({
           input: graphSchema.object({
-            todos: graphSchema.selection(self, { cardinality: 'many' }),
+            todos: self.many(),
           }),
           run: ({ todos }) => todos.update({ completed: true }),
         }),
@@ -158,10 +180,51 @@ describe('ontahi application composition root', () => {
     expect(dataset.Todo).toEqual([{ id: 'todo-1', completed: true }]);
   });
 
+  it('projects reads directly from hydrated selection inputs', async () => {
+    const Todo = entity({
+      name: 'Todo',
+      fields: {
+        id: field.id(),
+        title: field.string(),
+      },
+      locators: { refById: 'id' },
+      identity: 'refById',
+      operations: ({ self, operation }) => ({
+        list: operation({
+          input: self.many(),
+          output: self.array(),
+          run: todos => todos.orderBy(todo => todo.title),
+        }),
+      }),
+    });
+    ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: {
+          Todo: [
+            { id: 'todo-b', title: 'Write examples' },
+            { id: 'todo-a', title: 'Design fluent selections' },
+          ],
+        },
+      }),
+      entities: [Todo],
+    });
+
+    await expect(
+      Todo.list(Todo.selection(todo => todo.id.in(['todo-a', 'todo-b']))),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: [
+        { id: 'todo-a', title: 'Design fluent selections' },
+        { id: 'todo-b', title: 'Write examples' },
+      ],
+    });
+  });
+
   it('binds opaque operation groups without exposing their implementation type', async () => {
-    const defineNoteOperations = ({ app }: { app: OntahiBinderApp }) => ({
+    const defineNoteOperations = ({ app, self }: OntahiOperationGroupContext) => ({
       inspect: app.operation.define({
-        run: () => Effect.succeed('ok'),
+        output: self.array(),
+        run: () => Effect.succeed([]),
       }),
     });
     const NoteOperations = operationGroup(['inspect'] as const, defineNoteOperations);
@@ -183,7 +246,7 @@ describe('ontahi application composition root', () => {
     expect(application.graph.entities.Note.domain.inspect.id).toBe('Note.inspect');
     await expect(
       application.invokeOperation(application.graph.entities.Note.domain.inspect, undefined),
-    ).resolves.toMatchObject({ ok: true, value: 'ok' });
+    ).resolves.toMatchObject({ ok: true, value: [] });
   });
 
   it('rejects an operation group whose public names drift from its factory', () => {
@@ -224,7 +287,7 @@ describe('ontahi application composition root', () => {
       },
       operations: ({ self, commands, operation }) => ({
         list: operation({
-          output: graphSchema.array(self),
+          output: self.array(),
           run: () => commands.all(),
         }),
       }),
@@ -240,6 +303,9 @@ describe('ontahi application composition root', () => {
     });
 
     expect(bindEntities).toHaveBeenCalledWith([Note]);
+    expect(Note.identityLocatorName).toBe('byId');
+    expect(Note.refLocators.refById?.fields).toEqual(['id']);
+    expect(Note.refLocators.byId?.fields).toEqual(['id']);
     const operation = application.graph.getDomainOperation('Note.list');
     expect(operation).toBeDefined();
     expect(application.graph.getEntity('Note')?.entityName).toBe('Note');

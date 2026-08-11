@@ -20,6 +20,12 @@ export type FieldDefinition<TValue> = {
   __value?: TValue;
 };
 
+export type IdFieldDefinition = FieldDefinition<string> & {
+  fieldType: 'id';
+  nullable?: never;
+  optional?: never;
+};
+
 export type StringFieldConstraints = {
   minLength?: number;
   maxLength?: number;
@@ -67,7 +73,7 @@ export type GraphSchemaPresentation = {
   control?: 'text' | 'textarea' | 'password' | 'email' | 'url';
 };
 
-type FieldDefinitions = Record<string, FieldDefinition<unknown>>;
+export type FieldDefinitions = Record<string, FieldDefinition<unknown>>;
 export type AnyFieldDefinition = FieldDefinition<unknown>;
 
 export type InferFieldValue<TField extends AnyFieldDefinition> =
@@ -266,11 +272,12 @@ export interface GraphVoidDefinition {
 
 export interface GraphSelectionDefinition<
   TEntity extends AnyEntityDefinition = AnyEntityDefinition,
+  TCardinality extends 'one' | 'many' = 'one' | 'many',
 > {
   kind: 'schema.selection';
   entity: TEntity;
-  cardinality: 'one' | 'many';
-  __value?: SemanticSelection<TEntity['name'], TEntity>;
+  cardinality: TCardinality;
+  __value?: SemanticSelection<TEntity['name'], TEntity, TCardinality>;
 }
 
 export type EntityViewDefinition<
@@ -322,6 +329,14 @@ export type EntityLocatorDeclarations<TFields extends FieldDefinitions = FieldDe
   string,
   EntityLocatorDeclaration<TFields>
 >;
+
+export type ConventionalEntityLocatorDeclarations<TFields extends FieldDefinitions> =
+  TFields extends { readonly id: IdFieldDefinition } ? { readonly refById: 'id' } : {};
+
+export type EffectiveEntityLocatorDeclarations<
+  TFields extends FieldDefinitions,
+  TLocators extends EntityLocatorDeclarations<TFields>,
+> = Omit<ConventionalEntityLocatorDeclarations<TFields>, keyof TLocators> & TLocators;
 
 export type EntityDisplayDescriptor = {
   primary?: string;
@@ -423,6 +438,15 @@ export type EntityDefinition<
   displayMetadata?: EntityDisplayDescriptor;
   freshnessMetadata?: EntityFreshnessDescriptor;
   mapping?: EntityMapping<TFields>;
+  one: () => GraphSelectionDefinition<
+    EntityDefinition<TName, TFields, TRelations, TLocators>,
+    'one'
+  >;
+  many: () => GraphSelectionDefinition<
+    EntityDefinition<TName, TFields, TRelations, TLocators>,
+    'many'
+  >;
+  array: () => GraphArrayDefinition<EntityDefinition<TName, TFields, TRelations, TLocators>>;
   display: (
     metadata: EntityDisplayMetadata<TFields>,
   ) => EntityDefinition<TName, TFields, TRelations, TLocators>;
@@ -435,7 +459,8 @@ export type EntityDefinition<
     TName,
     TFields,
     TRelations,
-    EntityRefLocatorFactories<TFields, TLocatorDeclarations>
+    Omit<TLocators, keyof TLocatorDeclarations> &
+      EntityRefLocatorFactories<TFields, TLocatorDeclarations>
   >;
   identity: <TLocatorName extends keyof TLocators & string>(
     locatorName: TLocatorName,
@@ -528,7 +553,7 @@ const normalizeStringConstraints = (
 };
 
 export const field = {
-  id: (): FieldDefinition<string> => ({
+  id: (): IdFieldDefinition => ({
     kind: 'field',
     fieldType: 'id',
     stringConstraints: identifierStringConstraints,
@@ -667,16 +692,36 @@ const normalizeEntityLocatorDeclarations = <
 export const entity = <TName extends string, TFields extends FieldDefinitions>(
   name: TName,
   fields: TFields,
-): EntityDefinition<TName, TFields, {}, {}> => {
+): EntityDefinition<
+  TName,
+  TFields,
+  {},
+  EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
+> => {
+  const hasConventionalId =
+    fields.id?.fieldType === 'id' && !fields.id.nullable && !fields.id.optional;
+  const conventionalLocators = normalizeEntityLocatorDeclarations<
+    TFields,
+    ConventionalEntityLocatorDeclarations<TFields>
+  >((hasConventionalId ? { refById: 'id' } : {}) as ConventionalEntityLocatorDeclarations<TFields>);
   const entityDefinition = {
     kind: 'entity' as const,
     name,
     fields,
     relations: {} as RelationDefinitions,
-    refLocators: {} as EntityRefLocatorDeclarations,
-    identityLocatorName: undefined as string | undefined,
+    refLocators: conventionalLocators as EntityRefLocatorDeclarations,
+    identityLocatorName: (hasConventionalId ? 'refById' : undefined) as string | undefined,
     displayMetadata: undefined as EntityDisplayDescriptor | undefined,
     freshnessMetadata: undefined as EntityFreshnessDescriptor | undefined,
+    one() {
+      return { kind: 'schema.selection' as const, entity: this, cardinality: 'one' as const };
+    },
+    many() {
+      return { kind: 'schema.selection' as const, entity: this, cardinality: 'many' as const };
+    },
+    array() {
+      return { kind: 'schema.array' as const, item: this };
+    },
     display(displayMetadata: EntityDisplayMetadata<TFields>) {
       this.displayMetadata = displayMetadata;
       return this as never;
@@ -688,9 +733,10 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     locators<TLocatorDeclarations extends EntityLocatorDeclarations<TFields>>(
       locators: TLocatorDeclarations,
     ) {
-      this.refLocators = normalizeEntityLocatorDeclarations<TFields, TLocatorDeclarations>(
-        locators,
-      );
+      this.refLocators = {
+        ...this.refLocators,
+        ...normalizeEntityLocatorDeclarations<TFields, TLocatorDeclarations>(locators),
+      };
       return this as never;
     },
     identity(locatorName: string) {
@@ -732,7 +778,12 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     },
   };
 
-  return entityDefinition as unknown as EntityDefinition<TName, TFields, {}, {}>;
+  return entityDefinition as unknown as EntityDefinition<
+    TName,
+    TFields,
+    {},
+    EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
+  >;
 };
 
 export const value = <TName extends string, TFields extends GraphSchemaFields>(
@@ -921,13 +972,16 @@ export const graphNamed = <TItem extends GraphSchemaLike>(
 
 export const graphVoid = (): GraphVoidDefinition => ({ kind: 'schema.void' });
 
-export const graphSelection = <TEntity extends AnyEntityDefinition>(
+export const graphSelection = <
+  TEntity extends AnyEntityDefinition,
+  const TCardinality extends 'one' | 'many' = 'many',
+>(
   entityDefinition: TEntity,
-  options?: { cardinality?: 'one' | 'many' },
-): GraphSelectionDefinition<TEntity> => ({
+  options?: { cardinality?: TCardinality },
+): GraphSelectionDefinition<TEntity, TCardinality> => ({
   kind: 'schema.selection',
   entity: entityDefinition,
-  cardinality: options?.cardinality ?? 'many',
+  cardinality: options?.cardinality ?? ('many' as TCardinality),
 });
 
 export const describeGraphSchema = <TSchema extends object>(
