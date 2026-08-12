@@ -112,20 +112,26 @@ const normalizeSelectionInput = (
   );
 };
 
+export type NormalizeGraphSchemaClientInputOptions = {
+  bindSelection?: (selection: Selection<AnyEntityDefinition, 'one' | 'many'>) => unknown;
+};
+
 export const normalizeGraphSchemaClientInput = (
   schema: GraphSchemaLike,
   value: unknown,
+  options: NormalizeGraphSchemaClientInputOptions = {},
 ): unknown => {
   const definition = schema as GraphSchemaLike & Record<string, unknown>;
 
   if (definition.kind === 'schema.selection') {
-    return normalizeSelectionInput(
+    const normalized = normalizeSelectionInput(
       definition as unknown as {
         entity: AnyEntityDefinition;
         cardinality: 'one' | 'many';
       },
       value,
     );
+    return options.bindSelection?.(normalized) ?? normalized;
   }
 
   if (
@@ -138,14 +144,16 @@ export const normalizeGraphSchemaClientInput = (
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, fieldValue]) => [
         key,
-        fields[key] ? normalizeGraphSchemaClientInput(fields[key], fieldValue) : fieldValue,
+        fields[key]
+          ? normalizeGraphSchemaClientInput(fields[key], fieldValue, options)
+          : fieldValue,
       ]),
     );
   }
 
   if (definition.kind === 'schema.array' && Array.isArray(value)) {
     return value.map(item =>
-      normalizeGraphSchemaClientInput(definition.item as GraphSchemaLike, item),
+      normalizeGraphSchemaClientInput(definition.item as GraphSchemaLike, item, options),
     );
   }
 
@@ -159,7 +167,7 @@ export const normalizeGraphSchemaClientInput = (
   ) {
     return value == null
       ? value
-      : normalizeGraphSchemaClientInput(definition.item as GraphSchemaLike, value);
+      : normalizeGraphSchemaClientInput(definition.item as GraphSchemaLike, value, options);
   }
 
   return value;

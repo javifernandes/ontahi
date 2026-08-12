@@ -487,7 +487,6 @@ type BoundOntahiEntityBase<
   GraphOperationsFrom<TOperations>,
   DomainOperationsFrom<TOperations>
 > &
-  EntitySelectionFactory<TEntity> &
   BoundEntityRefLocators<
     TEntity,
     ResolveDomainOperations<TEntity['name'], DomainOperationsFrom<TOperations>>,

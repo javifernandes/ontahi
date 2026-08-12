@@ -32,9 +32,12 @@ import {
   type EntityRefInputRunInput,
 } from '../../data-graph/ref.js';
 import { RelationRootSelection } from '../../data-graph/relation-root.js';
+import {
+  createRuntimeBoundDataGraphApi,
+  type RuntimeBoundSelection,
+} from '../../data-graph/runtime-bound-api.js';
 import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
-import type { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 
 import type { OperationContracts } from './concerns/contract-types.js';
@@ -72,12 +75,30 @@ type InputSchemaLike<TInput> = OperationSchema<TInput>;
 type OutputSchemaLike<TResult = unknown> = OperationSchema<TResult>;
 const EmptyInputSchema = graphSchema.object({});
 
+const operationInputDataGraph = createRuntimeBoundDataGraphApi<
+  OperationRuntimeError,
+  undefined,
+  undefined,
+  OperationRuntimeError
+>(() =>
+  getRequiredDataGraphRuntime<
+    DataGraphExecutionRuntime<OperationRuntimeError, undefined, undefined, OperationRuntimeError>
+  >(),
+);
+
 export type DomainOperationSuccess = unknown;
 
 export type HydratedSemanticSelection<
   TEntity extends AnyEntityDefinition,
   TCardinality extends 'one' | 'many' | undefined = 'one' | 'many' | undefined,
-> = Selection<TEntity, TCardinality>;
+> = RuntimeBoundSelection<
+  TEntity,
+  TCardinality,
+  OperationRuntimeError,
+  undefined,
+  undefined,
+  OperationRuntimeError
+>;
 
 export type HydratedOperationInput<TInput> =
   TInput extends SemanticSelection<any, infer TEntity, infer TCardinality>
@@ -344,7 +365,9 @@ const resolveDomainOperationRunner = <
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
   ): EntityRefInputPublicInput<TInput, TInputRefs> =>
     normalizeEntityRefInput(
-      normalizeGraphSchemaClientInput(operation.input, input) as object,
+      normalizeGraphSchemaClientInput(operation.input, input, {
+        bindSelection: selection => operationInputDataGraph.bindSelection(selection),
+      }) as object,
       operation.inputRefs,
     ) as EntityRefInputPublicInput<TInput, TInputRefs>;
 

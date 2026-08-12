@@ -7,6 +7,7 @@ import {
   entity,
   field,
   query,
+  selection,
   type DataGraphExecutionRuntime,
 } from '../../src/data-graph/index.js';
 import { failOperation } from '../../src/runtime/server/failures.js';
@@ -97,6 +98,53 @@ describe('runtime-bound data graph api', () => {
     const executable = selection.exec();
     expect(executable.pipe(value => value)).toBe(executable);
     expect(selection.pipe(value => value)).toBe(selection);
+  });
+
+  it('keeps semantic selections portable while binding their read and command branches', async () => {
+    const runtime = createRuntime();
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const BookEntity = api.bindSelectionEntity(Book);
+    const portableSelection = selection(Book, book => book.slug.eq('progbook'));
+    const executableSelection = api.bindSelection(portableSelection);
+    const visibleBooks = BookEntity.selection(book => book.slug.eq('progbook'))
+      .and(book => book.title.eq('Progbook'))
+      .named('visibleBooks');
+
+    expect(executableSelection).not.toBe(portableSelection);
+    expect('run' in portableSelection).toBe(false);
+    expect(executableSelection.toAst()).toEqual(portableSelection.toAst());
+    expect(JSON.parse(JSON.stringify(visibleBooks))).toEqual(visibleBooks.toAst());
+    expect(JSON.stringify(visibleBooks)).not.toContain('runtime');
+    expect(visibleBooks.name).toBe('visibleBooks');
+
+    await expect(Effect.runPromise(visibleBooks.run({ authority: 'viewer' }))).resolves.toEqual([
+      { id: 'book-1', optionAuthority: 'viewer' },
+    ]);
+    await expect(
+      Effect.runPromise(
+        visibleBooks
+          .orderBy(book => book.title)
+          .select(book => ({ id: book.id, title: book.title }))
+          .run({ authority: 'viewer' }),
+      ),
+    ).resolves.toEqual([{ id: 'book-1', optionAuthority: 'viewer' }]);
+    await expect(
+      Effect.runPromise(
+        visibleBooks
+          .updateReturning({ title: 'Updated' }, ['id', 'title'])
+          .run({ authority: 'system' }),
+      ),
+    ).resolves.toMatchObject({
+      operation: 'update',
+      returning: ['id', 'title'],
+      authority: 'system',
+    });
+    await expect(
+      Effect.runPromise(visibleBooks.delete().run({ authority: 'system' })),
+    ).resolves.toMatchObject({
+      operation: 'delete',
+      authority: 'system',
+    });
   });
 
   it('creates runtime-bound insert, update, delete, upsert, and named-read helpers', async () => {

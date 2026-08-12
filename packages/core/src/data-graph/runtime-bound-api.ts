@@ -13,8 +13,10 @@ import type { DataGraphExecutionRuntime } from './runtime.js';
 import {
   createGraphSelectionAssembly,
   type BoundGraphSelection,
+  type BoundSelection,
   type BoundSelectionEntityBase,
 } from './selection-assembly.js';
+import type { Selection } from './selection-value.js';
 
 export type RuntimeBoundGraphCommand<
   TEntity extends AnyEntityDefinition,
@@ -32,6 +34,15 @@ export type RuntimeBoundGraphSelection<
   TCommandOptions = TReadOptions,
   TCommandError = TError,
 > = BoundGraphSelection<TEntity, TResult, TError, TReadOptions, TCommandError, TCommandOptions>;
+
+export type RuntimeBoundSelection<
+  TEntity extends AnyEntityDefinition,
+  TCardinality extends 'one' | 'many' | undefined = undefined,
+  TError = never,
+  TReadOptions = undefined,
+  TCommandOptions = TReadOptions,
+  TCommandError = TError,
+> = BoundSelection<TEntity, TCardinality, TError, TReadOptions, TCommandError, TCommandOptions>;
 
 export type RuntimeBoundSelectionEntity<
   TEntity extends AnyEntityDefinition,
@@ -105,6 +116,27 @@ export const createRuntimeBoundDataGraphApi = <
         entityDefinition,
       ) as unknown as RuntimeBoundSelectionEntity<
         TEntity,
+        TError,
+        TReadOptions,
+        TCommandOptions,
+        TCommandError
+      >,
+    bindSelection: <
+      TEntity extends AnyEntityDefinition,
+      TCardinality extends 'one' | 'many' | undefined = undefined,
+    >(
+      semanticSelection: Selection<TEntity, TCardinality>,
+    ): RuntimeBoundSelection<
+      TEntity,
+      TCardinality,
+      TError,
+      TReadOptions,
+      TCommandOptions,
+      TCommandError
+    > =>
+      selectionAssembly.bindSelection(semanticSelection) as RuntimeBoundSelection<
+        TEntity,
+        TCardinality,
         TError,
         TReadOptions,
         TCommandOptions,

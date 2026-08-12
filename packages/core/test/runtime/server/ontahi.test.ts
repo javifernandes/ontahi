@@ -193,7 +193,7 @@ describe('ontahi application composition root', () => {
         list: operation({
           input: self.many(),
           output: self.array(),
-          run: todos => todos.orderBy(todo => todo.title),
+          run: todos => todos.orderBy(todo => todo.title).run(),
         }),
       }),
     });

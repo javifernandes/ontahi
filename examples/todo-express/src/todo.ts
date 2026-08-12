@@ -242,10 +242,7 @@ export const TodoItem = entity({
               });
             }
 
-            const selectedTodos = yield* commands
-              .where(todos)
-              .select(todo => ({ id: todo.id }))
-              .run();
+            const selectedTodos = yield* todos.select(todo => ({ id: todo.id })).run();
             const assignments = selectedTodos.flatMap(todo =>
               uniqueTagIds.map(tagId => ({ todoId: todo.id, tagId })),
             );
