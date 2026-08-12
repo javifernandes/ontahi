@@ -1,0 +1,250 @@
+import {
+  getEntityMapping,
+  resolveColumnNameForEntity,
+  resolveRelationFields,
+  type AnyEntityDefinition,
+} from './definitions.js';
+import {
+  RelationQueryBuilder,
+  resolveQuerySpec,
+  type QuerySpec,
+  type AnyRelationQueryBuilder,
+  type QueryOrView,
+  type SelectionValue,
+} from './query.js';
+import { lowerEntityReferenceSelection } from './reference-field.js';
+import type { SelectionExpression } from './selection-ast.js';
+import { getConjunctiveSelectionPredicates, lowerSelectionReferences } from './selection-ast.js';
+
+const collectSelectionFieldNames = (
+  selection: Record<string, SelectionValue> | undefined,
+): string[] => {
+  if (!selection) {
+    return [];
+  }
+
+  const fieldNames = new Set<string>();
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== 'object') {
+      return;
+    }
+
+    if ((value as { kind?: string }).kind === 'field-ref') {
+      fieldNames.add((value as { fieldName: string }).fieldName);
+      return;
+    }
+
+    if (value instanceof RelationQueryBuilder) {
+      return;
+    }
+
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      visit(nestedValue);
+    }
+  };
+
+  for (const value of Object.values(selection)) {
+    visit(value);
+  }
+
+  return [...fieldNames];
+};
+
+export const getSelectColumnsForQuery = ({
+  entityDefinition,
+  selectShape,
+  includeShape,
+}: {
+  entityDefinition: AnyEntityDefinition;
+  selectShape?: Record<string, SelectionValue>;
+  includeShape?: Record<string, AnyRelationQueryBuilder>;
+}) => {
+  const fieldNames =
+    selectShape == null
+      ? Object.keys(entityDefinition.fields)
+      : collectSelectionFieldNames(selectShape);
+
+  const columns = new Set(
+    fieldNames.map(fieldName => resolveColumnNameForEntity(entityDefinition, fieldName)),
+  );
+
+  for (const [relationName, relationBuilder] of Object.entries(includeShape ?? {})) {
+    const relationNode = relationBuilder.toNodeSpec();
+    const { sourceField } = resolveRelationFields(entityDefinition, relationName, relationNode);
+    columns.add(resolveColumnNameForEntity(entityDefinition, sourceField));
+  }
+
+  return [...columns];
+};
+
+export type CompiledPredicate =
+  | { operator: 'eq'; field: string; column: string; value: unknown }
+  | { operator: 'in'; field: string; column: string; values: readonly unknown[] }
+  | { operator: 'isNull'; field: string; column: string }
+  | { operator: 'lte'; field: string; column: string; value: unknown }
+  | { operator: 'lt'; field: string; column: string; value: unknown }
+  | { operator: 'gte'; field: string; column: string; value: unknown }
+  | { operator: 'gt'; field: string; column: string; value: unknown };
+
+export type CompiledSelectionExpression =
+  | CompiledPredicate
+  | { kind: 'all' }
+  | { kind: 'none' }
+  | { kind: 'and'; operands: CompiledSelectionExpression[] }
+  | { kind: 'or'; operands: CompiledSelectionExpression[] }
+  | { kind: 'not'; operand: CompiledSelectionExpression };
+
+export type CompiledOrderBy = {
+  field: string;
+  column: string;
+  direction: 'asc' | 'desc';
+};
+
+export type CompiledIncludePlan = {
+  relationName: string;
+  relationKind: 'hasMany' | 'belongsTo';
+  sourceField: string;
+  sourceColumn: string;
+  targetField: string;
+  targetColumn: string;
+  targetEntity: string;
+  targetTable: string;
+  orderBy: CompiledOrderBy[];
+  limit?: number;
+  includes: CompiledIncludePlan[];
+};
+
+export type CompiledQueryPlan = {
+  rootEntity: string;
+  rootTable: string;
+  selection: CompiledSelectionExpression;
+  where: CompiledPredicate[];
+  orderBy: CompiledOrderBy[];
+  limit?: number;
+  includes: CompiledIncludePlan[];
+};
+
+const compileOrderBy = (
+  entityDefinition: AnyEntityDefinition,
+  orderBy: Array<{ fieldName: string; direction: 'asc' | 'desc' }>,
+): CompiledOrderBy[] =>
+  orderBy.map(order => ({
+    field: order.fieldName,
+    column: resolveColumnNameForEntity(entityDefinition, order.fieldName),
+    direction: order.direction,
+  }));
+
+const compileIncludes = (
+  entityDefinition: AnyEntityDefinition,
+  includeShape: Record<string, AnyRelationQueryBuilder> | undefined,
+): CompiledIncludePlan[] =>
+  Object.entries(includeShape ?? {}).map(([relationName, relationBuilder]) => {
+    const node = relationBuilder.toNodeSpec();
+    const fields = resolveRelationFields(entityDefinition, relationName, node);
+    const targetMapping = getEntityMapping(node.entity);
+
+    return {
+      relationName,
+      relationKind: node.relationKind,
+      sourceField: fields.sourceField,
+      sourceColumn: resolveColumnNameForEntity(entityDefinition, fields.sourceField),
+      targetField: fields.targetField,
+      targetColumn: resolveColumnNameForEntity(node.entity, fields.targetField),
+      targetEntity: node.entity.name,
+      targetTable: targetMapping.tableName,
+      orderBy: compileOrderBy(node.entity, node.orderBy),
+      limit: node.limit,
+      includes: compileIncludes(node.entity, node.includes),
+    };
+  });
+
+export const compileSelectionExpression = (
+  entityDefinition: AnyEntityDefinition,
+  expression: SelectionExpression,
+): CompiledSelectionExpression => {
+  if (expression.kind === 'references') {
+    return compileSelectionExpression(entityDefinition, lowerSelectionReferences(expression));
+  }
+  if (expression.kind === 'all' || expression.kind === 'none') {
+    return { kind: expression.kind };
+  }
+
+  if (expression.kind === 'and' || expression.kind === 'or') {
+    return {
+      kind: expression.kind,
+      operands: expression.operands.map(operand =>
+        compileSelectionExpression(entityDefinition, operand),
+      ),
+    };
+  }
+
+  if (expression.kind === 'not') {
+    return {
+      kind: 'not',
+      operand: compileSelectionExpression(entityDefinition, expression.operand),
+    };
+  }
+
+  const loweredExpression = lowerEntityReferenceSelection(entityDefinition, expression);
+  if (loweredExpression.kind !== 'predicate') {
+    throw new Error('Expected a compiled selection predicate.');
+  }
+  const field = loweredExpression.fieldName;
+  const column = resolveColumnNameForEntity(entityDefinition, field);
+
+  if (loweredExpression.operator === 'in') {
+    return { operator: 'in', field, column, values: loweredExpression.values };
+  }
+
+  if (loweredExpression.operator === 'isNull') {
+    return { operator: 'isNull', field, column };
+  }
+
+  return {
+    operator: loweredExpression.operator,
+    field,
+    column,
+    value: loweredExpression.value,
+  };
+};
+
+export const compileConjunctiveSelectionPredicates = (
+  entityDefinition: AnyEntityDefinition,
+  expression: SelectionExpression,
+): CompiledPredicate[] => {
+  const predicates = getConjunctiveSelectionPredicates(lowerSelectionReferences(expression));
+
+  if (!predicates) {
+    throw new Error('This data graph provider only supports conjunctive selections.');
+  }
+
+  return predicates.map(predicate => {
+    const compiled = compileSelectionExpression(entityDefinition, predicate);
+    return compiled as CompiledPredicate;
+  });
+};
+
+export const compileResolvedQueryPlan = <TEntity extends AnyEntityDefinition, TResult>(
+  spec: QuerySpec<TEntity, TResult>,
+): CompiledQueryPlan => {
+  const rootMapping = getEntityMapping(spec.root);
+  const loweredSelection = lowerSelectionReferences(spec.selection);
+
+  return {
+    rootEntity: spec.root.name,
+    rootTable: rootMapping.tableName,
+    selection: compileSelectionExpression(spec.root, loweredSelection),
+    where:
+      (getConjunctiveSelectionPredicates(loweredSelection)?.map(predicate =>
+        compileSelectionExpression(spec.root, predicate),
+      ) as CompiledPredicate[] | undefined) ?? [],
+    orderBy: compileOrderBy(spec.root, spec.orderBy),
+    limit: spec.limit,
+    includes: compileIncludes(spec.root, spec.includes),
+  };
+};
+
+export const compileQueryPlan = <TParams, TResult>(
+  queryOrView: QueryOrView<TParams, TResult>,
+  params: TParams,
+): CompiledQueryPlan => compileResolvedQueryPlan(resolveQuerySpec(queryOrView, params));
