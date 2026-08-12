@@ -1,17 +1,23 @@
-# Current Ontahi Mental Model
+# Historical `@ontahi/core` Mental Model
 
-This document explains the current `@ontahi/core` mental model.
+This document preserves the computational/layer model that preceded Ontahi's unified Application,
+Entity, Selection, Query, Command, and Operation language. It remains useful implementation history,
+but it is not the canonical developer documentation.
 
-It is a working snapshot after the first extraction slice, not final framework documentation. The code still uses names such as `architecture(...)`, `ArchitectureDefinition`, and `web/src/architecture`; those names describe the runtime vocabulary that existed before the package rename. The package direction is now:
+Use *Ontahi for Developers* for the current public model. Names such as `architecture(...)`,
+`ArchitectureDefinition`, use case layers, and the BookOps architecture facade below describe the
+runtime vocabulary that existed during extraction.
 
 1. Ontahi is the generic framework.
 2. BookOps is an application built with Ontahi.
-3. BookOps keeps an app-local architecture facade while the generic pieces move out.
+3. Reusable framework packages now live under the extractable `ontahi/` subtree.
 
 See also:
 
-1. [Plan 100: Ontahi Framework Extraction](../../plans/current/100-ontahi-framework-extraction.md)
-2. [Plan 99: Semantic Editorial Workflows](../../plans/backlog/99-semantic-editorial-workflows.md)
+1. [Plan 100: Ontahi Framework Extraction](../../../../plans/done/100-ontahi-framework-extraction.md)
+2. [Plan 99: Semantic Editorial Workflows](../../../../plans/backlog/99-semantic-editorial-workflows.md)
+3. [Plan 122: Ontahi Developer Book](../../../../plans/done/122-ontahi-developer-book.md)
+4. [Plan 129: Independent Repository And Release Readiness](../../../../plans/research/129-ontahi-independent-repository-and-release-readiness.md)
 
 It describes:
 
@@ -22,9 +28,9 @@ It describes:
 5. what still belongs in `@ontahi/core` versus future package slices
 6. where the current design still feels frictiony or boilerplate-heavy
 
-## Current Extraction Boundary
+## Historical Extraction Boundary
 
-`@ontahi/core` is intentionally imperfect right now, but its public surface is getting narrower.
+`@ontahi/core` remains intentionally focused on technology-free graph and runtime vocabulary.
 
 It should be read as the first stable name for the generic framework surface, not as final framework documentation. Core owns technology-free graph and runtime vocabulary. Technology adapters, React integration, Explorer, and code generation now live in focused `@ontahi/*` packages.
 
@@ -45,6 +51,7 @@ The current package boundaries are:
 7. `@ontahi/runtime-vercel-workflows`
 8. `@ontahi/react`
 9. `@ontahi/explorer-react`
+10. `@ontahi/postgres`
 
 Docs in this folder should explain which ideas are generic and which examples are still inherited from BookOps.
 
@@ -58,6 +65,7 @@ The current split is:
 6. `@ontahi/runtime-vercel-workflows` for durable Vercel Workflow execution
 7. `@ontahi/react` for non-visual React hooks and graph runtime integration
 8. `@ontahi/explorer-react` for the reusable reflective Explorer UI
+9. `@ontahi/postgres` for direct PostgreSQL Data Graph execution
 
 ## Core Idea
 
@@ -189,18 +197,10 @@ They cover the generic language of:
 4. in-process task execution
 5. task facades exposed through the runtime
 
-Durable workflow is still not fully extracted as a standalone Ontahi runtime tier.
-
-The remaining package boundary is about:
-
-1. waits
-2. resumability
-3. signals
-4. long-lived state transitions
-5. schedule-triggered durable runs
-6. Vercel Workflow-specific execution
-
-BookOps has a working local workflow integration, but the generic package split should happen after the adapter boundaries are clearer.
+`@ontahi/runtime-vercel-workflows` now owns the Vercel Workflow adapter, run reconciliation, and
+durable lifecycle executor. Core owns transport-neutral task and durable-operation contracts;
+applications still own their task registrations, concrete stores, generated host entrypoints, and
+deployment composition. Additional durable engines remain adapters over that semantic boundary.
 
 ## Purpose-Shaped Layers
 

@@ -4,14 +4,16 @@
 
 It also contains the zero-infrastructure in-memory graph and task-run implementations used by local hosts, examples, and tests.
 
-This package is not fully standalone yet. BookOps is still the host application that wires real domain models, runtime adapters, and product-specific policies. The extraction direction is tracked in:
+This package is source-independent from BookOps, which remains the first production host. Ontahi's
+packages are not yet independently published or validated as registry artifacts. The completed
+source extraction and the current distribution study are tracked in:
 
-1. [Plan 100: Ontahi Framework Extraction](../../../plans/current/100-ontahi-framework-extraction.md)
-2. [Plan 99: Semantic Editorial Workflows](../../../plans/backlog/99-semantic-editorial-workflows.md)
+1. [Plan 100: Ontahi Framework Extraction](../../../plans/done/100-ontahi-framework-extraction.md)
+2. [Plan 129: Independent Repository And Release Readiness](../../../plans/research/129-ontahi-independent-repository-and-release-readiness.md)
 
 Current docs:
 
-1. [Current Mental Model](./docs/current-mental-model.md) - working explanation of Ontahi core, layer purpose, runtime boundaries, and current frictions
+1. [Historical Core Mental Model](./docs/current-mental-model.md) - computational and layer vocabulary retained from the extraction path
 2. [Boundary Schemas](./docs/boundary-schemas.md) - graph-native operation contracts and the narrower role of transport validation adapters
 3. [Entity Lifecycle Modules](./docs/entity-lifecycle.md) - current house style for richer domain areas that need entity folders, policy modules, lifecycle transitions, and explicit event outputs
 
@@ -25,20 +27,13 @@ adapters and Explorer:
 const application = ontahi({
   storage,
   tasks: inProcessTasks(),
-  entities: app => ({
-    Todo: defineTodo(app),
-  }),
+  entities: [TodoList, TodoItem],
 });
 ```
 
 The configured storage remains available as `application.storage`. Provider-specific capabilities
 stay typed: in-memory applications expose their dataset for test setup, while persistent providers
 do not pretend to offer an in-process dataset.
-
-The entity builder callback is transitional: it gives entity modules access to operation and graph
-declaration primitives without requiring a separate public `architecture(...)` root. A future entity
-declaration refinement can make that binding fully declarative without changing the application
-composition model.
 
 ## In-Memory Graph
 
@@ -47,12 +42,12 @@ composition model.
 the application configures its default storage once:
 
 ```ts
-const defaultStorage = createInMemoryDataGraphStorage({
-  entities: [TodoEntity],
-  dataset,
-});
+const storage = createInMemoryDataGraphStorage();
 
-const graph = createDataGraphArchitectureAdapter({ defaultStorage });
+const application = ontahi({
+  storage,
+  entities: [TodoList, TodoItem],
+});
 ```
 
 Queries, relation-root reads, streams, counts, inserts, bulk inserts, upserts, updates, deletes, and

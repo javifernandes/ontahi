@@ -2,7 +2,7 @@
 
 This document describes the current schema rules for Ontahi operations and transport boundaries.
 
-For the broader extraction direction, see [Plan 100: Ontahi Framework Extraction](../../../../plans/current/100-ontahi-framework-extraction.md). The graph-native schema implementation is recorded in [Plan 79: Graph-Native Schema DSL](../../../../plans/done/79-graph-native-schema-dsl.md).
+For the broader extraction direction, see [Plan 100: Ontahi Framework Extraction](../../../../plans/done/100-ontahi-framework-extraction.md). The graph-native schema implementation is recorded in [Plan 79: Graph-Native Schema DSL](../../../../plans/done/79-graph-native-schema-dsl.md).
 
 ## Direction
 
