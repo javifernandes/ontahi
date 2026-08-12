@@ -13,8 +13,10 @@ import {
   useQueryClient,
   type QueryClient,
   type InfiniteData,
+  type UseInfiniteQueryResult,
   type UseInfiniteQueryOptions,
   type UseQueryOptions,
+  type UseQueryResult,
 } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
@@ -96,9 +98,9 @@ const invalidateActionQueries = async <TAction extends ActionFnLike>(
   );
 };
 
-export function useServerQuery<TAction extends ActionFnLike, TSelected = InferData<TAction>>(
+export const useServerQuery = <TAction extends ActionFnLike, TSelected = InferData<TAction>>(
   options: UseServerQueryOptions<TAction, TSelected>,
-) {
+): UseQueryResult<TSelected, ActionResultError> => {
   const { action, input, key, ...queryOptions } = options;
   const queryKey = useMemo(() => resolveActionQueryKey(action, input, key), [action, input, key]);
 
@@ -114,13 +116,15 @@ export function useServerQuery<TAction extends ActionFnLike, TSelected = InferDa
       return result.data as InferData<TAction>;
     },
   });
-}
+};
 
-export function useServerInfiniteQuery<
+export const useServerInfiniteQuery = <
   TAction extends ActionFnLike,
   TPageParam,
   TSelected = InfiniteData<InferData<TAction>, TPageParam>,
->(options: UseServerInfiniteQueryOptions<TAction, TPageParam, TSelected>) {
+>(
+  options: UseServerInfiniteQueryOptions<TAction, TPageParam, TSelected>,
+): UseInfiniteQueryResult<TSelected, ActionResultError> => {
   const { action, getPageInput, input, key, ...queryOptions } = options;
   const queryKey = useMemo(() => resolveActionQueryKey(action, input, key), [action, input, key]);
 
@@ -142,7 +146,7 @@ export function useServerInfiniteQuery<
       return result.data as InferData<TAction>;
     },
   });
-}
+};
 
 type UseServerMutationOptions<TAction extends ActionFnLike> = UseActionOptions<TAction> & {
   invalidateOnSuccess?: boolean;

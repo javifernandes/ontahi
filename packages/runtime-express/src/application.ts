@@ -2,7 +2,6 @@ import {
   createOperationInvocationDispatcher,
   type OntahiApplication,
 } from '@ontahi/core/runtime/server';
-import { buildExplorerSnapshot, getExplorerEntityDetail } from '@ontahi/explorer-react/server';
 import express, { type Request, type Router } from 'express';
 
 import { mountExpressHttpIngress, type OntahiExpressIngressOptions } from './http-ingress.js';
@@ -10,6 +9,7 @@ import { createExpressOperationInvocationHandler } from './operation-invocation/
 import { createExpressTaskSnapshotHandler } from './task-snapshot/handler.js';
 
 export type OntahiExpressExplorerOptions = {
+  buildSnapshot(application: OntahiApplication): unknown;
   path?: string;
   indexFile?: string;
 };
@@ -18,7 +18,7 @@ export type OntahiExpressOptions = {
   mountPath?: string;
   operationsPath?: string;
   applicationPath?: string | false;
-  explorer?: boolean | OntahiExpressExplorerOptions;
+  explorer?: OntahiExpressExplorerOptions;
   ingress?: OntahiExpressIngressOptions;
   reportError?: (error: unknown, request: Request) => void;
 };
@@ -27,31 +27,6 @@ const routePath = (value: string) => (value.startsWith('/') ? value : `/${value}
 const mountPath = (value: string) => {
   const path = routePath(value);
   return path === '/' ? path : path.replace(/\/+$/, '');
-};
-
-const getExplorerOptions = (
-  explorer: OntahiExpressOptions['explorer'],
-): OntahiExpressExplorerOptions | undefined =>
-  explorer === true ? {} : explorer === false || explorer === undefined ? undefined : explorer;
-
-const buildApplicationExplorerSnapshot = (application: OntahiApplication) => {
-  const { graph } = application;
-  const entities = graph.listEntities();
-  const graphSummary = graph.describe();
-
-  return {
-    snapshot: buildExplorerSnapshot({
-      entities,
-      graphSummary,
-      graphOperations: graph.listGraphOperations(),
-      domainOperations: graph.listDomainOperations(),
-      tasks: graph.listTaskDefinitions(),
-      httpIngress: graph.listHttpIngress(),
-    }),
-    entityDetails: entities
-      .map(entity => getExplorerEntityDetail({ entities, graphSummary }, entity.name))
-      .filter(detail => detail !== null),
-  };
 };
 
 export const ontahiExpress = (
@@ -64,7 +39,7 @@ export const ontahiExpress = (
     options.applicationPath === false
       ? undefined
       : routePath(options.applicationPath ?? '/application');
-  const explorer = getExplorerOptions(options.explorer);
+  const explorer = options.explorer;
   const dispatcher = createOperationInvocationDispatcher({
     resolveOperation: application.resolveOperation,
     invokeOperation: application.invokeOperation,
@@ -108,7 +83,7 @@ export const ontahiExpress = (
     const explorerPath = routePath(explorer.path ?? '/explorer');
 
     router.get(`${explorerPath}/snapshot`, (_request, response) =>
-      response.json(buildApplicationExplorerSnapshot(application)),
+      response.json(explorer.buildSnapshot(application)),
     );
     router.post(`${explorerPath}/entities`, express.json(), (request, response, next) => {
       if (!application.reflectedEntityDataReader) {

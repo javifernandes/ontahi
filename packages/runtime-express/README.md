@@ -6,11 +6,12 @@ Mount a complete Ontahi application with one middleware:
 
 ```ts
 import { ontahiExpress } from '@ontahi/runtime-express';
+import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 
 server.use(
   ontahiExpress(TodoApplication, {
     mountPath: '/runtime/ontahi',
-    explorer: true,
+    explorer: createOntahiExpressExplorer(),
   }),
 );
 ```
@@ -23,8 +24,12 @@ server.use(
 - `GET /runtime/ontahi/application` for reflected application metadata.
 - `/runtime/ontahi/explorer/*` when Explorer is enabled.
 
-Pass `explorer: { indexFile }` to serve an embedded Explorer SPA from that file. Paths remain
-configurable for hosts that need different conventions.
+Pass `indexFile` to `createOntahiExpressExplorer(...)` to serve an embedded Explorer SPA from that
+file. Paths remain configurable for hosts that need different conventions.
+
+Explorer composition is an optional subpath. Installing the base Express runtime does not install
+React, Monaco, or Explorer UI dependencies; hosts that import `@ontahi/runtime-express/explorer`
+install `@ontahi/explorer-react` explicitly.
 
 The Fetch bridge accepts the same mount root and derives both operation endpoints:
 

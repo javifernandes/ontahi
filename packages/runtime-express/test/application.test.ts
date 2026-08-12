@@ -7,6 +7,7 @@ import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ontahiExpress } from '../src/application.js';
+import { createOntahiExpressExplorer } from '../src/explorer/index.js';
 
 const TodoEntity = entity('Todo', {
   id: field.id(),
@@ -104,7 +105,11 @@ describe('Ontahi Express application middleware', () => {
   it('mounts invocation, tasks, metadata, and Explorer endpoints with defaults', async () => {
     const application = createApplication();
     const expressApp = express();
-    expressApp.use(ontahiExpress(application, { explorer: true }));
+    expressApp.use(
+      ontahiExpress(application, {
+        explorer: createOntahiExpressExplorer(),
+      }),
+    );
     server = await new Promise<Server>(resolve => {
       const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
     });
@@ -154,7 +159,7 @@ describe('Ontahi Express application middleware', () => {
     expressApp.use(
       ontahiExpress(application, {
         mountPath: '/internal/ontahi',
-        explorer: true,
+        explorer: createOntahiExpressExplorer(),
       }),
     );
     server = await new Promise<Server>(resolve => {

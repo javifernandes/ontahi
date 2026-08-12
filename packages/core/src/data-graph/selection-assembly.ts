@@ -650,6 +650,57 @@ type BindGraphReadFn<TError, TOptions> = <TRead extends import('./query.js').Que
   read: TRead,
 ) => BoundGraphRead<TRead, TError, TOptions>;
 
+type GraphSelectionRead<TEntity extends AnyEntityDefinition, TResult> = Pick<
+  BaseGraphSelection<TEntity, TResult>,
+  'build' | 'root'
+>;
+
+export type GraphSelectionAssembly<
+  TReadError = never,
+  TReadOptions = undefined,
+  TCommandError = TReadError,
+  TCommandOptions = TReadOptions,
+> = {
+  bindSelection: <
+    TEntity extends AnyEntityDefinition,
+    TCardinality extends BoundSelectionCardinality = undefined,
+  >(
+    semanticSelection: Selection<TEntity, TCardinality>,
+  ) => BoundSelection<
+    TEntity,
+    TCardinality,
+    TReadError,
+    TReadOptions,
+    TCommandError,
+    TCommandOptions
+  >;
+  bindSelectionEntity: <TEntity extends AnyEntityDefinition>(
+    entityDefinition: TEntity,
+  ) => BoundSelectionEntityBase<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions>;
+  createGraphSelection: <
+    TEntity extends AnyEntityDefinition,
+    TResult = InferEntityRecord<TEntity['fields']>,
+  >(
+    builder: QueryBuilder<TEntity, TResult>,
+  ) => BoundGraphSelection<
+    TEntity,
+    TResult,
+    TReadError,
+    TReadOptions,
+    TCommandError,
+    TCommandOptions
+  >;
+  namedGraphRead: <TParams, TEntity extends AnyEntityDefinition, TResult>(
+    name: string,
+    selectionOrEntity: GraphSelectionRead<TEntity, TResult> | TEntity,
+    build?: (params: TParams) => GraphSelectionRead<TEntity, TResult>,
+  ) => BoundGraphRead<
+    ViewDefinition<TParams | undefined, TEntity, TResult>,
+    TReadError,
+    TReadOptions
+  >;
+};
+
 export const createGraphSelectionAssembly = <
   TReadError = never,
   TReadOptions = undefined,
@@ -663,11 +714,11 @@ export const createGraphSelectionAssembly = <
   createCommand: CreateCommand<TCommandError, TCommandOptions>;
   createExecutableGraphRead: CreateExecutableGraphRead<TReadError, TReadOptions>;
   bindGraphRead: BindGraphReadFn<TReadError, TReadOptions>;
-}) => {
+}): GraphSelectionAssembly<TReadError, TReadOptions, TCommandError, TCommandOptions> => {
   const namedGraphRead = <TParams, TEntity extends AnyEntityDefinition, TResult>(
     name: string,
-    selectionOrEntity: BaseGraphSelection<TEntity, TResult> | TEntity,
-    build?: (params: TParams) => BaseGraphSelection<TEntity, any>,
+    selectionOrEntity: GraphSelectionRead<TEntity, TResult> | TEntity,
+    build?: (params: TParams) => GraphSelectionRead<TEntity, TResult>,
   ): BoundGraphRead<
     ViewDefinition<TParams | undefined, TEntity, TResult>,
     TReadError,
@@ -843,7 +894,9 @@ export const createGraphSelectionAssembly = <
     >;
   };
 
-  const bindSelectionEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) =>
+  const bindSelectionEntity = <TEntity extends AnyEntityDefinition>(
+    entityDefinition: TEntity,
+  ): BoundSelectionEntityBase<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions> =>
     Object.assign(entityDefinition, {
       selection: (build: SelectionBuilder<TEntity>) =>
         createBoundSelection(selection(entityDefinition, build)),
@@ -927,7 +980,13 @@ export const createGraphSelectionAssembly = <
         });
       },
       pipe: <TValue>(fn: (entity: TEntity) => TValue) => fn(entityDefinition),
-    });
+    }) as unknown as BoundSelectionEntityBase<
+      TEntity,
+      TReadError,
+      TReadOptions,
+      TCommandError,
+      TCommandOptions
+    >;
 
   return {
     bindSelection: createBoundSelection,

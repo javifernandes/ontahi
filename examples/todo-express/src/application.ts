@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { ontahiExpress } from '@ontahi/runtime-express';
+import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import express, { type Express } from 'express';
 
 import { TodoApplication } from './graph.js';
@@ -14,7 +15,9 @@ export const createTodoExpressApp = (): Express => {
   // Setup Express for Ontahi App
   server.use(
     ontahiExpress(TodoApplication, {
-      explorer: { indexFile: path.join(clientDirectory, 'index.html') },
+      explorer: createOntahiExpressExplorer({
+        indexFile: path.join(clientDirectory, 'index.html'),
+      }),
     }),
   );
 
