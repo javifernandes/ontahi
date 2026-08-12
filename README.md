@@ -45,3 +45,18 @@ base Express runtime installs without React, Monaco, or Explorer UI packages.
 
 CI may pass `--skip-build` after its package build step while retaining all pack, install, type, and
 runtime checks.
+
+## Verify the BookOps consumer
+
+The artifact check is also exercised through an isolated BookOps workspace with no Ontahi source or
+workspace links:
+
+```sh
+pnpm run verify:ontahi-bookops-consumer:quick
+pnpm run verify:ontahi-bookops-consumer
+```
+
+The quick form runs representative package builds, codegen, web typecheck, and graph/runtime tests.
+The full form adds the production web build and is the CI/release-candidate gate. Version pinning,
+prerelease, rollback, and compatibility ownership are defined in
+[`DEVELOPMENT.md`](./DEVELOPMENT.md).
