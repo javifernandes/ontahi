@@ -5,13 +5,30 @@
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "pnpm --filter @ontahi/www build",
+    "build": "pnpm run build:packages && pnpm run build:www",
+    "build:packages": "pnpm --recursive --filter './packages/**' run build",
+    "build:www": "pnpm --filter @ontahi/www build",
     "dev": "pnpm --filter @ontahi/www dev",
-    "lint": "pnpm --filter @ontahi/www lint",
+    "dev:packages": "pnpm --parallel --recursive --filter './packages/**' --if-present run build:watch",
+    "lint": "pnpm --recursive --if-present run lint",
+    "test:packages": "pnpm --recursive --filter './packages/**' run test",
+    "todo:build": "pnpm --filter @ontahi/example-todo-express build",
+    "todo:dev": "pnpm --filter @ontahi/example-todo-express dev",
+    "typecheck:packages": "pnpm --recursive --filter './packages/**' run typecheck",
+    "verify:artifacts": "node scripts/ci/verify-ontahi-package-artifacts.mjs",
     "verify:local": "node scripts/verify-local-page.mjs"
   },
+  "pnpm": {
+    "overrides": {
+      "effect": "3.21.0",
+      "typescript": "5.9.3",
+      "typia": "12.0.1",
+      "zod": "4.3.6"
+    }
+  },
   "devDependencies": {
+    "eslint": "8.57.1",
     "playwright": "1.58.2",
-    "typescript": "5.4.5"
+    "typescript": "5.9.3"
   }
 }

@@ -1,0 +1,61 @@
+{
+  "name": "@ontahi/postgres",
+  "version": "0.1.0-alpha.0",
+  "description": "Direct PostgreSQL data graph runtime for Ontahi",
+  "license": "Apache-2.0",
+  "author": "Javier Fernandes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/postgres"
+  },
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/postgres",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": ["dist", "LICENSE", "NOTICE"],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./data-graph": {
+      "types": "./dist/data-graph/index.d.ts",
+      "import": "./dist/data-graph/index.js",
+      "require": "./dist/data-graph/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "test:unit": "pnpm exec vitest run test/data-graph/sql.test.ts",
+    "test:integration": "pnpm exec vitest run test/data-graph/postgres-runtime.integration.test.ts",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@ontahi/core": "workspace:*",
+    "@types/pg": "^8.15.5",
+    "effect": "^3.21.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.7.2",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "testcontainers": "^11.7.2",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  }
+}
