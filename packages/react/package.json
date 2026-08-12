@@ -6,10 +6,10 @@
   "author": "Javier Fernandes",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/javifernandes/bookops.git",
-    "directory": "ontahi/packages/react"
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/react"
   },
-  "homepage": "https://github.com/javifernandes/bookops/tree/main/ontahi/packages/react",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/react",
   "engines": {
     "node": ">=20.19.0"
   },
@@ -37,7 +37,7 @@
       "require": "./dist/graph/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "LICENSE", "NOTICE"],
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",

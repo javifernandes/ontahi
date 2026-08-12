@@ -6,10 +6,10 @@
   "author": "Javier Fernandes",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/javifernandes/bookops.git",
-    "directory": "ontahi/packages/core"
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/core"
   },
-  "homepage": "https://github.com/javifernandes/bookops/tree/main/ontahi/packages/core",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/core",
   "engines": {
     "node": ">=20.19.0"
   },
@@ -127,7 +127,7 @@
       "require": "./dist/value/date-time.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "LICENSE", "NOTICE"],
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",

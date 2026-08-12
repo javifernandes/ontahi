@@ -6,10 +6,10 @@
   "author": "Javier Fernandes",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/javifernandes/bookops.git",
-    "directory": "ontahi/packages/codegen"
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/codegen"
   },
-  "homepage": "https://github.com/javifernandes/bookops/tree/main/ontahi/packages/codegen",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/codegen",
   "engines": {
     "node": ">=20.19.0"
   },
@@ -21,7 +21,9 @@
   "types": "./types/index.d.mts",
   "files": [
     "src",
-    "types"
+    "types",
+    "LICENSE",
+    "NOTICE"
   ],
   "type": "module",
   "exports": {

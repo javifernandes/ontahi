@@ -6,10 +6,10 @@
   "author": "Javier Fernandes",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/javifernandes/bookops.git",
-    "directory": "ontahi/packages/postgres"
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/postgres"
   },
-  "homepage": "https://github.com/javifernandes/bookops/tree/main/ontahi/packages/postgres",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/postgres",
   "engines": {
     "node": ">=20.19.0"
   },
@@ -17,7 +17,7 @@
     "access": "public",
     "provenance": true
   },
-  "files": ["dist"],
+  "files": ["dist", "LICENSE", "NOTICE"],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -6,10 +6,10 @@
   "author": "Javier Fernandes",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/javifernandes/bookops.git",
-    "directory": "ontahi/packages/opentelemetry"
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/opentelemetry"
   },
-  "homepage": "https://github.com/javifernandes/bookops/tree/main/ontahi/packages/opentelemetry",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/opentelemetry",
   "engines": {
     "node": ">=20.19.0"
   },
@@ -27,7 +27,7 @@
       "require": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "LICENSE", "NOTICE"],
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
