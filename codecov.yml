@@ -7,9 +7,52 @@ coverage:
         threshold: 1%
 
 comment:
-  layout: reach,diff,files
+  layout: reach,diff,components,files
   behavior: default
   require_changes: true
+
+component_management:
+  individual_components:
+    - component_id: package_codegen
+      name: '@ontahi/codegen'
+      paths:
+        - packages/codegen/**
+    - component_id: package_core
+      name: '@ontahi/core'
+      paths:
+        - packages/core/**
+    - component_id: package_explorer_react
+      name: '@ontahi/explorer-react'
+      paths:
+        - packages/explorer-react/**
+    - component_id: package_opentelemetry
+      name: '@ontahi/opentelemetry'
+      paths:
+        - packages/opentelemetry/**
+    - component_id: package_postgres
+      name: '@ontahi/postgres'
+      paths:
+        - packages/postgres/**
+    - component_id: package_react
+      name: '@ontahi/react'
+      paths:
+        - packages/react/**
+    - component_id: package_runtime_express
+      name: '@ontahi/runtime-express'
+      paths:
+        - packages/runtime-express/**
+    - component_id: package_runtime_nextjs
+      name: '@ontahi/runtime-nextjs'
+      paths:
+        - packages/runtime-nextjs/**
+    - component_id: package_runtime_vercel_workflows
+      name: '@ontahi/runtime-vercel-workflows'
+      paths:
+        - packages/runtime-vercel-workflows/**
+    - component_id: package_supabase
+      name: '@ontahi/supabase'
+      paths:
+        - packages/supabase/**
 
 ignore:
   - apps/**
