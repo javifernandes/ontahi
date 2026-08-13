@@ -4,14 +4,13 @@
 [![Codecov](https://codecov.io/gh/javifernandes/ontahi/graph/badge.svg?token=Q6uxUP5uQS)](https://codecov.io/gh/javifernandes/ontahi)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/javifernandes/ontahi?utm_source=oss&utm_medium=github&utm_campaign=javifernandes%2Fontahi&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 Ontahi is an executable ontology: a language for naming the world of a software system so that the
 world can be executed.
 
-Website: https://ontahi.org
-
-Repository: https://github.com/javifernandes/ontahi
+Website: [https://ontahi.org](https://ontahi.org)
+Developer Documentation: [https://bookops.net/ontahi-library-ontahi-for-dev/](https://bookops.net/ontahi-library-ontahi-for-dev/)
 
 ## Workspace
 
