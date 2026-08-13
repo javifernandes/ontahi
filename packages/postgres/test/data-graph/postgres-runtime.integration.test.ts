@@ -20,16 +20,15 @@ describe('PostgreSQL data graph runtime', () => {
   let container: StartedPostgreSqlContainer | undefined;
   let pool: Pool;
 
-  beforeAll(
-    async () => {
-      const externalConnectionUri = process.env.ONTAHI_POSTGRES_TEST_URL;
-      if (externalConnectionUri) {
-        pool = new Pool({ connectionString: externalConnectionUri });
-      } else {
-        container = await new PostgreSqlContainer('postgres:17-alpine').start();
-        pool = new Pool({ connectionString: container.getConnectionUri() });
-      }
-      await pool.query(`
+  beforeAll(async () => {
+    const externalConnectionUri = process.env.ONTAHI_POSTGRES_TEST_URL;
+    if (externalConnectionUri) {
+      pool = new Pool({ connectionString: externalConnectionUri });
+    } else {
+      container = await new PostgreSqlContainer('postgres:17-alpine').start();
+      pool = new Pool({ connectionString: container.getConnectionUri() });
+    }
+    await pool.query(`
       CREATE TABLE todos (
         todo_id text PRIMARY KEY,
         todo_title text NOT NULL,
@@ -55,9 +54,7 @@ describe('PostgreSQL data graph runtime', () => {
         position integer NOT NULL
       )
     `);
-    },
-    180_000,
-  );
+  }, 180_000);
 
   afterAll(async () => {
     await pool?.end();

@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
-  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "pnpm run build:packages && pnpm run build:www",
     "build:packages": "pnpm --recursive --filter './packages/**' run build",
     "build:www": "pnpm --filter @ontahi/www build",
     "dev": "pnpm --filter @ontahi/www dev",
     "dev:packages": "pnpm --parallel --recursive --filter './packages/**' --if-present run build:watch",
-    "lint": "pnpm --recursive --if-present run lint",
+    "format": "pnpm exec oxfmt --write .",
+    "format:check": "pnpm exec oxfmt --check .",
+    "lint": "pnpm run lint:root && pnpm --recursive --if-present run lint",
+    "lint:root": "pnpm exec eslint \"scripts/**/*.{js,mjs,cjs,ts,mts,cts}\" --max-warnings 0",
     "test:coverage:packages": "pnpm --recursive --filter './packages/**' run test:coverage",
     "test:examples": "pnpm --recursive --filter './examples/**' --if-present run test",
     "test:packages": "pnpm --recursive --filter './packages/**' run test",
@@ -20,14 +22,6 @@
     "typecheck:packages": "pnpm --recursive --filter './packages/**' run typecheck",
     "verify:artifacts": "node scripts/ci/verify-ontahi-package-artifacts.mjs",
     "verify:local": "node scripts/verify-local-page.mjs"
-  },
-  "pnpm": {
-    "overrides": {
-      "effect": "3.21.0",
-      "typescript": "5.9.3",
-      "typia": "12.0.1",
-      "zod": "4.3.6"
-    }
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.46.1",
@@ -39,5 +33,14 @@
     "oxfmt": "^0.53.0",
     "playwright": "1.58.2",
     "typescript": "5.9.3"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "overrides": {
+      "effect": "3.21.0",
+      "typescript": "5.9.3",
+      "typia": "12.0.1",
+      "zod": "4.3.6"
+    }
   }
 }

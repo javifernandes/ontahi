@@ -2,6 +2,7 @@
   "name": "@ontahi/supabase",
   "version": "0.1.0-alpha.0",
   "description": "Supabase adapters for Ontahi graph and task runtimes",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/supabase",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,17 +10,14 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/supabase"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/supabase",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -37,7 +35,10 @@
       "require": "./dist/tasks/index.js"
     }
   },
-  "files": ["dist", "LICENSE", "NOTICE"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
@@ -57,5 +58,8 @@
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

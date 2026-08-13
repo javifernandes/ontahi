@@ -2,6 +2,7 @@
   "name": "@ontahi/codegen",
   "version": "0.1.0-alpha.0",
   "description": "Build-time analysis and code generation primitives for Ontahi applications",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/codegen",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,16 +10,6 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/codegen"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/codegen",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
-  "main": "./src/index.mjs",
-  "types": "./types/index.d.mts",
   "files": [
     "src",
     "types",
@@ -26,6 +17,8 @@
     "NOTICE"
   ],
   "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./types/index.d.mts",
   "exports": {
     ".": {
       "types": "./types/index.d.mts",
@@ -52,8 +45,13 @@
       "import": "./src/source-loader.mjs"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "node --check src/index.mjs && node --check src/application-analysis.mjs && node --check src/source-loader.mjs && node --check src/operation-contracts/metadata-analyzer.mjs && node --check src/projections.mjs && node --check src/runner.mjs && pnpm exec tsc -p tsconfig.types.json",
+    "lint": "pnpm exec eslint \"src/**/*.mjs\" \"test/**/*.js\" \"vitest.config.mjs\" --max-warnings 0",
     "test": "pnpm exec vitest run",
     "test:coverage": "pnpm exec vitest run --coverage",
     "test:watch": "pnpm exec vitest",
@@ -65,5 +63,8 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",
     "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

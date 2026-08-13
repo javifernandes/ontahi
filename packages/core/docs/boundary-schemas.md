@@ -23,12 +23,7 @@ Zod remains an internal validation adapter and may still be used by transport-on
 Prefer a named graph value for structured input and output:
 
 ```ts
-import {
-  field,
-  graphSchema,
-  type InferGraphSchemaValue,
-  value,
-} from '@ontahi/core/data-graph';
+import { field, graphSchema, type InferGraphSchemaValue, value } from '@ontahi/core/data-graph';
 
 export const CreateThingInputSchema = value('CreateThingInput', {
   bookSlug: field.slug(),

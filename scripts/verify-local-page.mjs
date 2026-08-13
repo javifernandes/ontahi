@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+
 import { chromium } from 'playwright';
 
 const url = process.argv[2] ?? 'http://127.0.0.1:3003';
@@ -33,13 +34,13 @@ for (const viewport of viewports) {
     deviceScaleFactor: 1,
   });
 
-  page.on('console', (message) => {
+  page.on('console', message => {
     if (message.type() === 'error' || message.type() === 'warning') {
       consoleMessages.push({ viewport: viewport.name, type: message.type(), text: message.text() });
     }
   });
 
-  page.on('response', (response) => {
+  page.on('response', response => {
     if (response.status() >= 400) {
       failedResponses.push({
         viewport: viewport.name,

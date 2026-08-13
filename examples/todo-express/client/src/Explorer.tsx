@@ -5,10 +5,7 @@ import {
   ExplorerProvider,
   ExplorerTasksBrowser,
 } from '@ontahi/explorer-react/components';
-import type {
-  ExplorerEntityDetail,
-  ExplorerSnapshot,
-} from '@ontahi/explorer-react/contracts';
+import type { ExplorerEntityDetail, ExplorerSnapshot } from '@ontahi/explorer-react/contracts';
 import { useEffect, useState } from 'react';
 
 type TodoExplorerSnapshot = {

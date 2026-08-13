@@ -37,7 +37,9 @@ export const App = () => {
   const tags = useOperationQuery(Tag.domain.list);
   const assignments = useOperationQuery(TodoTag.domain.list);
   const todoSelection = useMemo(() => {
-    const inSelectedList = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
+    const inSelectedList = TodoItem.selection(todo =>
+      todo.list.eq(TodoList.refById(selectedListId)),
+    );
     return statusFilter === 'all'
       ? inSelectedList
       : inSelectedList.and(todo => todo.completed.eq(statusFilter === 'completed'));

@@ -2,6 +2,7 @@
   "name": "@ontahi/runtime-express",
   "version": "0.1.0-alpha.0",
   "description": "Express runtime and transport adapters for Ontahi applications",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-express",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,17 +10,14 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/runtime-express"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-express",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
   "main": "dist/operation-invocation/index.js",
   "types": "dist/operation-invocation/index.d.ts",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/operation-invocation/index.d.ts",
@@ -37,7 +35,10 @@
       "require": "./dist/explorer/index.js"
     }
   },
-  "files": ["dist", "LICENSE", "NOTICE"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
@@ -52,6 +53,14 @@
     "@ontahi/core": "workspace:*",
     "@types/express": "^4.17.21"
   },
+  "devDependencies": {
+    "@ontahi/explorer-react": "workspace:*",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "express": "^4.22.2",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  },
   "peerDependencies": {
     "@ontahi/explorer-react": "workspace:*",
     "express": ">=4.18 <6"
@@ -61,12 +70,7 @@
       "optional": true
     }
   },
-  "devDependencies": {
-    "@ontahi/explorer-react": "workspace:*",
-    "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^4.0.18",
-    "express": "^4.22.2",
-    "typescript": "^5.0.0",
-    "vitest": "^4.0.18"
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

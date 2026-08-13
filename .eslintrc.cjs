@@ -18,7 +18,11 @@ module.exports = {
   ignorePatterns: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'apps/www/.next/**'],
   overrides: [
     {
-      files: ['packages/**/*.{ts,tsx}', 'examples/**/*.{ts,tsx,mts,mjs}'],
+      files: [
+        'packages/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
+        'examples/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
+        'scripts/**/*.{js,mjs,cjs,ts,mts,cts}',
+      ],
       parser: '@typescript-eslint/parser',
       parserOptions: {
         ecmaVersion: 'latest',

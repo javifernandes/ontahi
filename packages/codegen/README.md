@@ -5,10 +5,7 @@ Build-time analysis and projection tooling for Ontahi application declarations.
 This package evaluates the supported TypeScript/JavaScript DSL shape into a serializable application model that can be consumed by generic projections and runtime-specific emitters. Application declarations, target selection, alias values, and output paths remain host-owned.
 
 ```js
-import {
-  analyzeOntahiApplication,
-  createFileSystemSourceLoader,
-} from '@ontahi/codegen';
+import { analyzeOntahiApplication, createFileSystemSourceLoader } from '@ontahi/codegen';
 
 const application = analyzeOntahiApplication({
   graphApiPath: './src/graph/api.ts',

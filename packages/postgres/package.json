@@ -2,6 +2,7 @@
   "name": "@ontahi/postgres",
   "version": "0.1.0-alpha.0",
   "description": "Direct PostgreSQL data graph runtime for Ontahi",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/postgres",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,15 +10,11 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/postgres"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/postgres",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
-  "files": ["dist", "LICENSE", "NOTICE"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,6 +29,10 @@
       "import": "./dist/data-graph/index.js",
       "require": "./dist/data-graph/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
@@ -57,5 +58,8 @@
     "testcontainers": "^11.7.2",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }
