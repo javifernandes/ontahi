@@ -10,6 +10,7 @@ Ontahi is an executable ontology: a language for naming the world of a software 
 world can be executed.
 
 Website: [https://ontahi.org](https://ontahi.org)
+
 Developer Documentation: [https://bookops.net/ontahi-library-ontahi-for-dev/](https://bookops.net/ontahi-library-ontahi-for-dev/)
 
 ## Workspace
