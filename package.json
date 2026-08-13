@@ -12,7 +12,7 @@
     "format": "pnpm exec oxfmt --write .",
     "format:check": "pnpm exec oxfmt --check .",
     "lint": "pnpm run lint:root && pnpm --recursive --if-present run lint",
-    "lint:root": "pnpm exec eslint \"scripts/**/*.{js,mjs,cjs}\" --max-warnings 0",
+    "lint:root": "pnpm exec eslint \"scripts/**/*.{js,mjs,cjs,ts,mts,cts}\" --max-warnings 0",
     "test:coverage:packages": "pnpm --recursive --filter './packages/**' run test:coverage",
     "test:examples": "pnpm --recursive --filter './examples/**' --if-present run test",
     "test:packages": "pnpm --recursive --filter './packages/**' run test",

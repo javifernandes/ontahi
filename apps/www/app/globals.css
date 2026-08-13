@@ -13,8 +13,8 @@
   --ontahi-paper-shade: #d9d1c0;
   --ontahi-paper-deep: #c2b7a4;
   --font-ontahi-serif: Fraunces, Lora, Georgia, ui-serif, serif;
-  --font-ontahi-sans: 'Alegreya Sans', Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-ontahi-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-ontahi-sans: 'Alegreya Sans', inter, ui-sans-serif, system-ui, sans-serif;
+  --font-ontahi-mono: 'JetBrains Mono', 'SFMono-Regular', consolas, monospace;
 }
 
 * {

@@ -135,11 +135,8 @@ export const listPostgresReflectedEntityData = async (
         ? 'id'
         : undefined;
   const sort = requestedSort ?? columns.find(column => column.field === defaultSortField);
-  const direction = requestedSort
-    ? query.sort?.direction
-    : defaultSortField === 'id'
-      ? 'asc'
-      : 'desc';
+  const defaultDirection = defaultSortField === 'id' ? 'asc' : 'desc';
+  const direction = requestedSort ? query.sort?.direction : defaultDirection;
   const order = sort
     ? ` ORDER BY ${quoteIdentifier(sort.column)} ${direction?.toUpperCase()}` +
       (direction === 'asc' ? ' NULLS FIRST' : ' NULLS LAST')
