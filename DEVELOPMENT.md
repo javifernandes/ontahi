@@ -89,6 +89,9 @@ consumer cannot see.
 The tarball override exists only inside the temporary verifier workspace. It does not mutate or
 enter the BookOps lockfile.
 
+The repository release mechanics, first-package bootstrap, OIDC configuration, and partial-release
+recovery live in [`RELEASING.md`](./RELEASING.md).
+
 ## Compatibility ownership
 
 - Ontahi owns failures caused by missing exports, incomplete declarations or artifacts, invalid

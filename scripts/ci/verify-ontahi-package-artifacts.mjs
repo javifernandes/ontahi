@@ -5,17 +5,26 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const repositoryRoot = path.resolve(import.meta.dirname, '../..');
-const packagesRoot = path.join(repositoryRoot, 'packages');
+import {
+  assert,
+  expectedPublicPackageCount,
+  internalDependencies,
+  lockstepVersion,
+  packageByName,
+  prereleaseChannel,
+  publicPackages as packages,
+  releaseOrder,
+  repositoryRoot,
+} from '../release/public-packages.mjs';
+
 const fixtureRoot = path.join(repositoryRoot, 'fixtures/package-consumer');
-const expectedVersion = '0.1.0-alpha.0';
+const expectedVersion = lockstepVersion();
 const expectedRepositoryUrl = 'git+https://github.com/javifernandes/ontahi.git';
 const expectedLicense = readFileSync(path.join(repositoryRoot, 'LICENSE'), 'utf8');
 const expectedNotice = readFileSync(path.join(repositoryRoot, 'NOTICE'), 'utf8');
@@ -50,56 +59,12 @@ const run = (command, args, options = {}) => {
   });
 };
 
-const assert = (condition, message) => {
-  if (!condition) throw new Error(message);
-};
-
-const readJson = filePath => JSON.parse(readFileSync(filePath, 'utf8'));
-
-const packages = readdirSync(packagesRoot, { withFileTypes: true })
-  .filter(
-    entry => entry.isDirectory() && existsSync(path.join(packagesRoot, entry.name, 'package.json')),
-  )
-  .map(entry => {
-    const directory = path.join(packagesRoot, entry.name);
-    return { directory, manifest: readJson(path.join(directory, 'package.json')) };
-  })
-  .sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
-
-const packageNames = new Set(packages.map(entry => entry.manifest.name));
-const internalDependencies = manifest =>
-  Object.entries({
-    ...manifest.dependencies,
-    ...manifest.peerDependencies,
-  }).filter(([name]) => packageNames.has(name));
-
-const releaseOrder = () => {
-  const remaining = new Map(
-    packages.map(entry => [
-      entry.manifest.name,
-      new Set(internalDependencies(entry.manifest).map(([name]) => name)),
-    ]),
-  );
-  const ordered = [];
-
-  while (remaining.size > 0) {
-    const ready = [...remaining.entries()]
-      .filter(([, dependencies]) => [...dependencies].every(name => ordered.includes(name)))
-      .map(([name]) => name)
-      .sort();
-
-    assert(ready.length > 0, 'Ontahi package dependencies contain a cycle.');
-    ready.forEach(name => {
-      ordered.push(name);
-      remaining.delete(name);
-    });
-  }
-
-  return ordered;
-};
-
 const validateSourceManifests = () => {
-  assert(packages.length === 10, `Expected 10 public Ontahi packages, found ${packages.length}.`);
+  assert(
+    packages.length === expectedPublicPackageCount,
+    `Expected ${expectedPublicPackageCount} public Ontahi packages, found ${packages.length}.`,
+  );
+  prereleaseChannel(expectedVersion);
 
   packages.forEach(({ directory, manifest }) => {
     const packageDirectory = `packages/${path.basename(directory)}`;
@@ -170,7 +135,7 @@ const validateSourceManifests = () => {
 const packPackages = artifactsDirectory =>
   Object.fromEntries(
     releaseOrder().map(name => {
-      const entry = packages.find(candidate => candidate.manifest.name === name);
+      const entry = packageByName(name);
       const packed = JSON.parse(
         run('pnpm', ['pack', '--pack-destination', artifactsDirectory, '--json'], {
           cwd: entry.directory,

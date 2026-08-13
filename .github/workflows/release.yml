@@ -1,0 +1,156 @@
+name: npm prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate only, or publish the exact prerelease
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - publish
+      version:
+        description: Exact lockstep package version from source
+        required: true
+        default: 0.1.0-alpha.0
+        type: string
+      channel:
+        description: npm dist-tag matching the prerelease identifier
+        required: true
+        default: alpha
+        type: choice
+        options:
+          - alpha
+          - next
+      authentication:
+        description: OIDC after bootstrap; token only for the first package creation
+        required: true
+        default: trusted-publisher
+        type: choice
+        options:
+          - trusted-publisher
+          - bootstrap-token
+
+permissions:
+  contents: read
+
+env:
+  NPM_VERSION: '11.17.0'
+  PNPM_VERSION: '10.33.0'
+  RELEASE_OUTPUT: .artifacts/npm
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_CHANNEL: ${{ inputs.channel }}
+
+jobs:
+  preflight:
+    name: Build and dry-run every package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          if [[ "$RELEASE_REF" != "refs/heads/main" ]]; then
+            echo "Releases must run from main, received $RELEASE_REF." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node for npm
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Pin trusted-publishing npm CLI
+        run: npm install --global "npm@$NPM_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Verify publishable artifacts
+        run: pnpm verify:artifacts -- --skip-build
+
+      - name: Prepare release tarballs
+        run: >-
+          pnpm release:npm:prepare --
+          --version "$RELEASE_VERSION"
+          --tag "$RELEASE_CHANNEL"
+          --output "$RELEASE_OUTPUT/$RELEASE_VERSION"
+
+      - name: Dry-run npm publication
+        run: >-
+          pnpm release:npm:dry-run --
+          --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
+
+  publish:
+    name: Publish every package
+    if: inputs.mode == 'publish'
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node for npm
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Pin trusted-publishing npm CLI
+        run: npm install --global "npm@$NPM_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Prepare immutable release tarballs
+        run: >-
+          pnpm release:npm:prepare --
+          --version "$RELEASE_VERSION"
+          --tag "$RELEASE_CHANNEL"
+          --output "$RELEASE_OUTPUT/$RELEASE_VERSION"
+
+      - name: Publish with npm trusted publishing
+        if: inputs.authentication == 'trusted-publisher'
+        run: >-
+          pnpm release:npm:publish --
+          --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
+
+      - name: Bootstrap packages with the temporary npm token
+        if: inputs.authentication == 'bootstrap-token'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [[ -z "$NODE_AUTH_TOKEN" ]]; then
+            echo "The bootstrap-token mode requires the NPM_TOKEN repository secret." >&2
+            exit 1
+          fi
+          pnpm release:npm:publish -- \
+            --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
