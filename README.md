@@ -1,5 +1,11 @@
 # Ontahi
 
+[![CI](https://github.com/javifernandes/ontahi/actions/workflows/ci.yml/badge.svg)](https://github.com/javifernandes/ontahi/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/javifernandes/ontahi/graph/badge.svg?token=Q6uxUP5uQS)](https://codecov.io/gh/javifernandes/ontahi)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
+
 Ontahi is an executable ontology: a language for naming the world of a software system so that the
 world can be executed.
 
