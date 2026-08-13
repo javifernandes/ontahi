@@ -49,6 +49,10 @@ Node.js `>=20.19.0`, publish publicly with npm provenance, and carry the Apache-
 Internal `workspace:*` dependencies are rewritten by `pnpm pack` to the exact lockstep version. A
 public alpha release therefore publishes the complete changed dependency closure.
 
+Releases are manually dispatched, dry-run all ten artifacts, and publish from `main` with npm
+provenance. See [`RELEASING.md`](./RELEASING.md) for the one-time package bootstrap and the normal
+OIDC trusted-publishing flow.
+
 ## Verify artifacts
 
 ```bash
