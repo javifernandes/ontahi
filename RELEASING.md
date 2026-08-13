@@ -28,13 +28,16 @@ version that already exists with different contents.
 npm can only configure a trusted publisher after a package exists. The first alpha therefore has a
 one-time token bootstrap:
 
-1. Verify the `@ontahi` scope and publishing membership on npm.
-2. Protect the GitHub `npm-release` environment so publication requires approval from `main`.
-3. Create a short-lived granular npm token limited to the `@ontahi` scope and add it as the
-   `NPM_TOKEN` repository secret.
-4. Dispatch **npm prerelease** from `main` with `publish`, the exact source version, its matching
+1. From the npm profile menu, choose **Add an Organization**, create the `ontahi` organization,
+   and select the free **Unlimited public packages** plan. The organization owns the `@ontahi`
+   scope; stop if that name is unavailable rather than publishing under another scope.
+2. Confirm that the publishing npm account is an owner or member allowed to publish for `@ontahi`.
+3. Protect the GitHub `npm-release` environment so publication requires approval from `main`.
+4. Create a short-lived granular npm token limited to the `@ontahi` scope and add it as the
+   `NPM_TOKEN` secret of the `npm-release` GitHub environment.
+5. Dispatch **npm prerelease** from `main` with `publish`, the exact source version, its matching
    channel, and `bootstrap-token` authentication.
-5. Confirm all ten packages and their provenance on npm.
+6. Confirm all ten packages and their provenance on npm.
 
 Then configure the same trusted publisher for every package with npm CLI 11.15 or newer and an
 interactive, 2FA-authenticated npm session:
