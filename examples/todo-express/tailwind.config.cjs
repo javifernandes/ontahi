@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    './client/**/*.{ts,tsx}',
-    '../../packages/explorer-react/src/components/**/*.{ts,tsx}',
-  ],
+  content: ['./client/**/*.{ts,tsx}', '../../packages/explorer-react/src/components/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {

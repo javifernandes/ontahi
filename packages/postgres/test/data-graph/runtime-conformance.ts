@@ -115,7 +115,9 @@ export const dataGraphRuntimeConformance = (
     it('does not apply result limits to counts', async () =>
       withHarness(async ({ runtime }) => {
         const { BookWithChapters } = conformanceGraph;
-        const limited = query(BookWithChapters).orderBy(book => book.id).limit(1);
+        const limited = query(BookWithChapters)
+          .orderBy(book => book.id)
+          .limit(1);
 
         await expect(Effect.runPromise(runtime.run(limited, undefined))).resolves.toHaveLength(1);
         await expect(Effect.runPromise(runtime.count(limited, undefined))).resolves.toBe(2);

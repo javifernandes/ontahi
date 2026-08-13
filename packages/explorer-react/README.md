@@ -8,7 +8,7 @@ The browser package exports the Explorer shell and focused components:
 import { ExplorerOverview, ExplorerShell } from '@ontahi/explorer-react';
 
 export const Explorer = ({ snapshot }) => (
-  <ExplorerShell basePath="/explorer">
+  <ExplorerShell basePath='/explorer'>
     <ExplorerOverview snapshot={snapshot} />
   </ExplorerShell>
 );

@@ -2,6 +2,7 @@
   "name": "@ontahi/core",
   "version": "0.1.0-alpha.0",
   "description": "Core runtime, graph, and computation primitives for Ontahi applications",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/core",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,17 +10,14 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/core",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -127,7 +125,10 @@
       "require": "./dist/value/date-time.js"
     }
   },
-  "files": ["dist", "LICENSE", "NOTICE"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
@@ -140,13 +141,16 @@
   },
   "dependencies": {
     "effect": "^3.21.0",
-    "zod": "^4.3.6",
-    "typia": "^12.0.1"
+    "typia": "^12.0.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "vitest": "^4.0.18",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

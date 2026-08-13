@@ -3,9 +3,7 @@
     "target": "ES2020",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": [
-      "ES2021"
-    ],
+    "lib": ["ES2021"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,13 +12,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": [
-    "src/**/*",
-    "test/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "coverage"
-  ]
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist", "coverage"]
 }

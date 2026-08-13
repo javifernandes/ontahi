@@ -10,11 +10,11 @@ export {
   renderGeneratedClientEntityModule,
   renderGeneratedTaskDefinitionRegistryModule,
 } from './projections.mjs';
+export { analyzeOntahiApplication, formatCodegenDiagnostic } from './application.mjs';
 export {
-  analyzeOntahiApplication,
-  formatCodegenDiagnostic,
-} from './application.mjs';
-export { createFileSystemSourceLoader, type FileSystemSourceLoaderOptions } from './source-loader.mjs';
+  createFileSystemSourceLoader,
+  type FileSystemSourceLoaderOptions,
+} from './source-loader.mjs';
 export {
   createOntahiCodegenRunner,
   createStdinCommandFormatter,

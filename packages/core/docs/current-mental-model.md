@@ -4,7 +4,7 @@ This document preserves the computational/layer model that preceded Ontahi's uni
 Entity, Selection, Query, Command, and Operation language. It remains useful implementation history,
 but it is not the canonical developer documentation.
 
-Use *Ontahi for Developers* for the current public model. Names such as `architecture(...)`,
+Use _Ontahi for Developers_ for the current public model. Names such as `architecture(...)`,
 `ArchitectureDefinition`, use case layers, and the BookOps architecture facade below describe the
 runtime vocabulary that existed during extraction.
 

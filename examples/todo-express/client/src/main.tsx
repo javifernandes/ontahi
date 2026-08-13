@@ -1,7 +1,4 @@
-import type {
-  ReflectedEntityDataQuery,
-  ReflectedEntityDataResult,
-} from '@ontahi/core/data-graph';
+import type { ReflectedEntityDataQuery, ReflectedEntityDataResult } from '@ontahi/core/data-graph';
 import {
   createFetchOperationBridgeAdapter,
   createFetchReflectedOperationInvoker,

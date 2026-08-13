@@ -2,6 +2,7 @@
   "name": "@ontahi/opentelemetry",
   "version": "0.1.0-alpha.0",
   "description": "OpenTelemetry adapter for Ontahi server runtimes",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/opentelemetry",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,17 +10,14 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/opentelemetry"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/opentelemetry",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -27,7 +25,10 @@
       "require": "./dist/index.js"
     }
   },
-  "files": ["dist", "LICENSE", "NOTICE"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
@@ -41,14 +42,17 @@
   "dependencies": {
     "@ontahi/core": "workspace:*"
   },
-  "peerDependencies": {
-    "@opentelemetry/api": ">=1.9.0 <2.0.0"
-  },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": ">=1.9.0 <2.0.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

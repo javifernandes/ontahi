@@ -2,6 +2,7 @@
   "name": "@ontahi/runtime-vercel-workflows",
   "version": "0.1.0-alpha.0",
   "description": "Vercel Workflow runtime integration for Ontahi durable tasks",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-vercel-workflows",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
   "repository": {
@@ -9,17 +10,14 @@
     "url": "git+https://github.com/javifernandes/ontahi.git",
     "directory": "packages/runtime-vercel-workflows"
   },
-  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-vercel-workflows",
-  "engines": {
-    "node": ">=20.19.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -47,7 +45,10 @@
       "require": "./dist/codegen.js"
     }
   },
-  "files": ["dist", "LICENSE", "NOTICE"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
     "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
@@ -70,5 +71,8 @@
     "typescript": "^5.0.0",
     "vitest": "^4.0.18",
     "zod": "^4.3.6"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }

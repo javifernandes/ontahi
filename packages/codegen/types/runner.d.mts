@@ -7,9 +7,9 @@ import type {
 
 export type CodegenRunnerOptions<TTarget extends CodegenTarget> = {
   targets: readonly TTarget[];
-  analyzeApplication(sourcePath: string):
-    | OntahiApplicationAnalysis
-    | Promise<OntahiApplicationAnalysis>;
+  analyzeApplication(
+    sourcePath: string,
+  ): OntahiApplicationAnalysis | Promise<OntahiApplicationAnalysis>;
   renderTarget(input: {
     application: OntahiApplicationAnalysis;
     target: TTarget;

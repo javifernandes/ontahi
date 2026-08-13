@@ -116,9 +116,7 @@ in the in-memory update command.
 The generated client preserves operation input and output schemas, so React infers hook types without local record declarations or generic arguments:
 
 ```ts
-const visibleTodos = TodoItem.selection(todo =>
-  todo.list.eq(TodoList.refById(selectedListId)),
-);
+const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
 const todos = useOperationQuery(TodoItem.domain.list, visibleTodos);
 const createTodo = useOperation(TodoItem.domain.create);
 const completeAll = useDurableOperation(TodoItem.domain.completeAll);

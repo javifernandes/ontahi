@@ -36,9 +36,7 @@ export const analyzeSpecificDomainEntityExport: (
   ingress?: readonly Record<string, unknown>[];
 }> | null;
 
-export const analyzeGraphApiModule: (
-  sourceText: string,
-) => MetadataAnalysis<{
+export const analyzeGraphApiModule: (sourceText: string) => MetadataAnalysis<{
   apiExportName?: string;
   entities: readonly {
     entityExportName: string;
