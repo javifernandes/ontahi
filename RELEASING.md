@@ -8,14 +8,15 @@ is manual: merging `main` never publishes to npm.
 Build and validate the package boundary before dispatching GitHub Actions:
 
 ```sh
+RELEASE_VERSION=0.1.0-alpha.1
 pnpm build:packages
 pnpm verify:artifacts -- --skip-build
 pnpm release:npm:prepare -- \
-  --version 0.1.0-alpha.0 \
+  --version "$RELEASE_VERSION" \
   --tag alpha \
-  --output .artifacts/npm/0.1.0-alpha.0
+  --output ".artifacts/npm/$RELEASE_VERSION"
 pnpm release:npm:dry-run -- \
-  --manifest .artifacts/npm/0.1.0-alpha.0/release-manifest.json
+  --manifest ".artifacts/npm/$RELEASE_VERSION/release-manifest.json"
 ```
 
 The release manifest records every tarball in dependency order and its integrity. The offline npm
@@ -23,24 +24,14 @@ dry-run validates the exact public payload without credentials. The publish step
 incomplete package set, changed tarballs, a source/version mismatch, a stable version, or an npm
 version that already exists with different contents.
 
-## First publication bootstrap
+## Trusted publishing
 
-npm can only configure a trusted publisher after a package exists. The first alpha therefore has a
-one-time token bootstrap:
+Every package authorizes the same GitHub Actions workflow through npm trusted publishing. The
+`npm-release` environment and `release.yml` workflow are the publishing identity; the repository
+does not use a long-lived npm token.
 
-1. From the npm profile menu, choose **Add an Organization**, create the `ontahi` organization,
-   and select the free **Unlimited public packages** plan. The organization owns the `@ontahi`
-   scope; stop if that name is unavailable rather than publishing under another scope.
-2. Confirm that the publishing npm account is an owner or member allowed to publish for `@ontahi`.
-3. Protect the GitHub `npm-release` environment so publication requires approval from `main`.
-4. Create a short-lived granular npm token limited to the `@ontahi` scope and add it as the
-   `NPM_TOKEN` secret of the `npm-release` GitHub environment.
-5. Dispatch **npm prerelease** from `main` with `publish`, the exact source version, its matching
-   channel, and `bootstrap-token` authentication.
-6. Confirm all ten packages and their provenance on npm.
-
-Then configure the same trusted publisher for every package with npm CLI 11.15 or newer and an
-interactive, 2FA-authenticated npm session:
+The trust can be inspected or restored with npm CLI 11.15 or newer and an interactive,
+2FA-authenticated npm session:
 
 ```sh
 for package in codegen core explorer-react opentelemetry postgres react \
@@ -53,16 +44,14 @@ for package in codegen core explorer-react opentelemetry postgres react \
 done
 ```
 
-Delete `NPM_TOKEN` after trusted publishing is configured. Later dispatches use
-`trusted-publisher`; GitHub's OIDC identity replaces the long-lived npm credential.
-
 ## Normal prerelease
 
-1. Give all package manifests the same new immutable `alpha` or `next` version.
+1. Run `pnpm release:version 0.1.0-alpha.1` with the intended new immutable version and review the
+   package manifest changes.
 2. Run the local proof and the BookOps packed-artifact compatibility gate.
 3. Merge the candidate to `main` and wait for CI.
 4. Dispatch **npm prerelease** in `dry-run` mode if an independent rehearsal is useful.
-5. Dispatch it in `publish` mode with `trusted-publisher` authentication.
+5. Dispatch it in `publish` mode. GitHub OIDC is the only supported npm authentication path.
 6. Create a matching GitHub prerelease and record the consumer-visible changes.
 7. Pin the exact version in BookOps and commit its manifests and lockfile together.
 

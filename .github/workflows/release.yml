@@ -24,15 +24,6 @@ on:
         options:
           - alpha
           - next
-      authentication:
-        description: OIDC after bootstrap; token only for the first package creation
-        required: true
-        default: trusted-publisher
-        type: choice
-        options:
-          - trusted-publisher
-          - bootstrap-token
-
 permissions:
   contents: read
 
@@ -138,19 +129,6 @@ jobs:
           --output "$RELEASE_OUTPUT/$RELEASE_VERSION"
 
       - name: Publish with npm trusted publishing
-        if: inputs.authentication == 'trusted-publisher'
         run: >-
           pnpm release:npm:publish --
           --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
-
-      - name: Bootstrap packages with the temporary npm token
-        if: inputs.authentication == 'bootstrap-token'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [[ -z "$NODE_AUTH_TOKEN" ]]; then
-            echo "The bootstrap-token mode requires the NPM_TOKEN repository secret." >&2
-            exit 1
-          fi
-          pnpm release:npm:publish -- \
-            --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"

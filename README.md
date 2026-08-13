@@ -42,16 +42,16 @@ pnpm todo:dev
 
 ## Public alpha policy
 
-The ten framework packages currently share the lockstep version `0.1.0-alpha.0`. They require
-Node.js `>=20.19.0`, publish publicly with npm provenance, and carry the Apache-2.0 `LICENSE` and
-`NOTICE` in every artifact.
+The ten framework packages share one exact lockstep prerelease version. They require Node.js
+`>=20.19.0`, publish publicly with npm provenance, and carry the Apache-2.0 `LICENSE` and `NOTICE`
+in every artifact.
 
 Internal `workspace:*` dependencies are rewritten by `pnpm pack` to the exact lockstep version. A
 public alpha release therefore publishes the complete changed dependency closure.
 
-Releases are manually dispatched, dry-run all ten artifacts, and publish from `main` with npm
-provenance. See [`RELEASING.md`](./RELEASING.md) for the one-time package bootstrap and the normal
-OIDC trusted-publishing flow.
+Releases are manually dispatched, dry-run all ten artifacts, and publish from `main` through npm
+OIDC trusted publishing. See [`RELEASING.md`](./RELEASING.md) for the versioning and publication
+flow.
 
 ## Verify artifacts
 

@@ -16,6 +16,7 @@
     "release:npm:dry-run": "node scripts/release/npm-release.mjs dry-run",
     "release:npm:prepare": "node scripts/release/npm-release.mjs prepare",
     "release:npm:publish": "node scripts/release/npm-release.mjs publish",
+    "release:version": "node scripts/release/set-version.mjs",
     "test:coverage:packages": "pnpm --recursive --filter './packages/**' run test:coverage",
     "test:examples": "pnpm --recursive --filter './examples/**' --if-present run test",
     "test:packages": "pnpm --recursive --filter './packages/**' run test",
