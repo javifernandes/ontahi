@@ -89,8 +89,8 @@ consumer cannot see.
 The tarball override exists only inside the temporary verifier workspace. It does not mutate or
 enter the BookOps lockfile.
 
-The repository release mechanics, first-package bootstrap, OIDC configuration, and partial-release
-recovery live in [`RELEASING.md`](./RELEASING.md).
+The repository release mechanics, OIDC configuration, and partial-release recovery live in
+[`RELEASING.md`](./RELEASING.md).
 
 ## Compatibility ownership
 
