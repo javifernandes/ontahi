@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@ontahi/codegen",
+      "@ontahi/core",
+      "@ontahi/explorer-react",
+      "@ontahi/opentelemetry",
+      "@ontahi/postgres",
+      "@ontahi/react",
+      "@ontahi/runtime-express",
+      "@ontahi/runtime-nextjs",
+      "@ontahi/runtime-vercel-workflows",
+      "@ontahi/supabase"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "bumpVersionsWithWorkspaceProtocolOnly": true,
+  "ignore": [],
+  "format": "oxfmt",
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  }
+}

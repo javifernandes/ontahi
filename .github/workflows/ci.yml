@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -39,6 +41,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate Changesets state
+        run: pnpm exec changeset status --since=origin/main
 
       - name: Check formatting
         run: pnpm format:check
@@ -79,7 +84,7 @@ jobs:
       contents: read
       id-token: write
     env:
-      TEST_POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:5432/ontahi
+      ONTAHI_POSTGRES_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/ontahi
     strategy:
       fail-fast: false
       matrix:
