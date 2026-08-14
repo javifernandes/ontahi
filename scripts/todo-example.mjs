@@ -3,6 +3,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -16,17 +17,29 @@ const todoPackageName = '@ontahi/example-todo-express';
 const todoSourceDirectory = path.join(repositoryRoot, 'examples/todo-express');
 const registryArtifactsRoot = path.join(repositoryRoot, '.artifacts/todo-registry');
 const ignoredCopyEntries = new Set(['coverage', 'dist', 'node_modules']);
+const usage = 'Usage: node scripts/todo-example.mjs <local|registry> [--version <version>]';
 
-const args = process.argv.slice(2).filter(argument => argument !== '--');
-const mode = args.shift();
+const parseArguments = rawArguments => {
+  const args = rawArguments.filter(argument => argument !== '--');
+  const mode = args.shift();
+  assert(mode === 'local' || mode === 'registry', usage);
 
-const optionValue = option => {
-  const index = args.indexOf(option);
-  if (index === -1) return undefined;
-  const value = args[index + 1];
-  assert(value && !value.startsWith('--'), `${option} requires a value.`);
-  return value;
+  let version;
+  while (args.length > 0) {
+    const option = args.shift();
+    assert(option === '--version', `Unknown argument ${JSON.stringify(option)}. ${usage}`);
+    assert(mode === 'registry', '--version is only valid in registry mode.');
+    assert(version === undefined, '--version may only be provided once.');
+
+    const value = args.shift();
+    assert(value && !value.startsWith('--'), '--version requires a value.');
+    version = value;
+  }
+
+  return { mode, version };
 };
+
+const cli = parseArguments(process.argv.slice(2));
 
 const printCommand = (command, commandArgs, cwd) => {
   const relativeCwd = path.relative(repositoryRoot, cwd) || '.';
@@ -138,14 +151,18 @@ const copyRegistryExample = version => {
     /^[0-9A-Za-z][0-9A-Za-z.+-]*$/.test(version),
     `Invalid registry version ${JSON.stringify(version)}.`,
   );
-  const targetDirectory = path.join(registryArtifactsRoot, version);
+  const versionDirectory = path.join(registryArtifactsRoot, version);
   assert(
-    targetDirectory.startsWith(`${registryArtifactsRoot}${path.sep}`),
+    versionDirectory.startsWith(`${registryArtifactsRoot}${path.sep}`),
     'Registry artifact target escaped its expected root.',
   );
 
-  rmSync(targetDirectory, { force: true, recursive: true });
-  mkdirSync(registryArtifactsRoot, { recursive: true });
+  mkdirSync(versionDirectory, { recursive: true });
+  const targetDirectory = mkdtempSync(path.join(versionDirectory, 'run-'));
+  assert(
+    targetDirectory.startsWith(`${versionDirectory}${path.sep}`),
+    'Registry run target escaped its expected version directory.',
+  );
   cpSync(todoSourceDirectory, targetDirectory, {
     recursive: true,
     filter: source =>
@@ -199,29 +216,34 @@ const verifyRegistryResolution = ({ manifest, targetDirectory, version }) => {
     });
 };
 
-const runRegistryExample = async () => {
-  const version = optionValue('--version') ?? process.env.ONTAHI_VERSION ?? lockstepVersion();
+const runRegistryExample = async requestedVersion => {
+  const version = requestedVersion ?? process.env.ONTAHI_VERSION ?? lockstepVersion();
   const { manifest, targetDirectory } = copyRegistryExample(version);
-  run(
-    'pnpm',
-    ['--ignore-workspace', 'install', '--no-frozen-lockfile', '--strict-peer-dependencies'],
-    { cwd: targetDirectory },
-  );
-  verifyRegistryResolution({ manifest, targetDirectory, version });
-  run('pnpm', ['--ignore-workspace', 'run', 'codegen'], { cwd: targetDirectory });
-  run('pnpm', ['--ignore-workspace', 'run', 'build:client'], { cwd: targetDirectory });
+  try {
+    run(
+      'pnpm',
+      ['--ignore-workspace', 'install', '--no-frozen-lockfile', '--strict-peer-dependencies'],
+      { cwd: targetDirectory },
+    );
+    verifyRegistryResolution({ manifest, targetDirectory, version });
+    run('pnpm', ['--ignore-workspace', 'run', 'codegen'], { cwd: targetDirectory });
+    run('pnpm', ['--ignore-workspace', 'run', 'build:client'], { cwd: targetDirectory });
 
-  process.stdout.write(
-    `\nTodo uses exact published Ontahi ${version} packages at http://localhost:3001\n` +
-      `Isolated application: ${targetDirectory}\n\n`,
-  );
-  await waitForProcesses([
-    start('pnpm', ['--ignore-workspace', 'run', 'dev'], { cwd: targetDirectory }),
-  ]);
+    process.stdout.write(
+      `\nTodo uses exact published Ontahi ${version} packages at http://localhost:3001\n` +
+        `Isolated application: ${targetDirectory}\n\n`,
+    );
+    await waitForProcesses([
+      start('pnpm', ['--ignore-workspace', 'run', 'dev'], { cwd: targetDirectory }),
+    ]);
+  } finally {
+    assert(
+      targetDirectory.startsWith(`${registryArtifactsRoot}${path.sep}`),
+      'Registry cleanup target escaped its expected root.',
+    );
+    rmSync(targetDirectory, { force: true, recursive: true });
+  }
 };
 
-if (mode === 'local') await runLocalExample();
-else if (mode === 'registry') await runRegistryExample();
-else {
-  throw new Error('Usage: node scripts/todo-example.mjs <local|registry> [--version <version>]');
-}
+if (cli.mode === 'local') await runLocalExample();
+else await runRegistryExample(cli.version);
