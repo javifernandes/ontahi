@@ -6,17 +6,43 @@ transports graph-native Selections into synchronous operations over Express; inc
 durable operation and a host-supplied notification Capability; generates browser-safe client
 declarations; and renders a React UI through the public Ontahi hooks. It imports no BookOps code.
 
-## Run it
+## Run it against local Ontahi source
 
-From a fresh repository checkout:
+From a fresh repository checkout, start the Todo application and the Ontahi package watchers
+together:
 
 ```sh
 pnpm install
-pnpm --filter @ontahi/example-todo-express codegen
-pnpm --filter @ontahi/example-todo-express start
+pnpm todo:dev:local
 ```
 
-Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`, the Fetch operation bridge, `useOperationQuery`, `useOperation`, and `useDurableOperation` against the same Express process.
+`todo:dev` is an alias for the same local-source mode. It builds only the example's Ontahi
+dependencies, regenerates the client, builds the browser bundle, watches package output, and
+restarts Express when framework code changes.
+
+Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`, the Fetch operation
+bridge, `useOperationQuery`, `useOperation`, and `useDurableOperation` against the same Express
+process.
+
+## Run it against a published Ontahi version
+
+The registry mode copies the example into an ignored `.artifacts` directory, replaces every
+Ontahi workspace dependency with one exact published version, installs it outside the workspace,
+verifies the resolved package versions and paths, and starts that isolated application:
+
+```sh
+pnpm todo:dev:registry
+```
+
+It defaults to the lockstep version declared by the packages in this checkout. To test another
+published version explicitly:
+
+```sh
+pnpm todo:dev:registry -- --version 0.1.0-alpha.0
+```
+
+Neither mode changes the example manifest or the repository lockfile. Use `PORT=3002` or another
+port when the default `3001` is already in use.
 
 The default remains zero-infrastructure in-memory storage. To exercise the direct PostgreSQL
 adapter with the host-owned migration:
