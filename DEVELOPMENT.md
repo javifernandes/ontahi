@@ -4,6 +4,41 @@ BookOps treats installed Ontahi artifacts as its compatibility boundary. A works
 while authoring, but it is not evidence that the packages can be released or consumed from another
 repository.
 
+## Todo application development
+
+Todo Express is the executable framework application for local Ontahi development. From the Ontahi
+repository, start it against the package workspaces with:
+
+```sh
+pnpm install
+pnpm todo:dev:local
+```
+
+`pnpm todo:dev` is the short alias for the same mode. The command builds only the example's Ontahi
+dependencies, regenerates its browser client, builds the React bundle, starts package compilers in
+watch mode, and restarts Express when framework output changes. Open `http://localhost:3001` for
+the application and `http://localhost:3001/explorer` for the embedded Ontahi Explorer.
+
+To exercise the same application as an external npm consumer, run:
+
+```sh
+pnpm todo:dev:registry
+```
+
+This creates an isolated copy under `.artifacts/todo-registry`, replaces every Ontahi workspace
+dependency with the checkout's exact lockstep version, installs it outside the pnpm workspace, and
+verifies that every `@ontahi/*` package resolves from the registry store. Test another published
+version explicitly with:
+
+```sh
+pnpm todo:dev:registry -- --version 0.1.0-alpha.0
+```
+
+The registry proof changes neither the source example manifest nor the repository lockfile. Both
+modes use in-memory storage by default and accept `PORT` when `3001` is occupied. PostgreSQL setup
+and the example's API walkthrough live in the
+[`Todo Express README`](./examples/todo-express/README.md).
+
 ## Sibling-checkout authoring
 
 Keep the repositories beside each other:

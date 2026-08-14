@@ -1,6 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./client/**/*.{ts,tsx}', '../../packages/explorer-react/src/components/**/*.{ts,tsx}'],
+  content: [
+    './client/**/*.{ts,tsx}',
+    '../../packages/explorer-react/src/components/**/*.{ts,tsx}',
+    './node_modules/@ontahi/explorer-react/dist/**/*.{js,mjs}',
+  ],
   theme: {
     extend: {
       colors: {

@@ -34,11 +34,21 @@ Run the website with:
 pnpm dev
 ```
 
-Run Todo Express with:
+Run Todo Express against the local framework source with:
 
 ```bash
-pnpm todo:dev
+pnpm todo:dev:local
 ```
+
+Run an isolated copy against the exact published version declared by this checkout with:
+
+```bash
+pnpm todo:dev:registry
+```
+
+`pnpm todo:dev` remains the short alias for local-source development. See the
+[`Todo Express README`](./examples/todo-express/README.md) for explicit-version and PostgreSQL
+options.
 
 ## Public alpha policy
 
