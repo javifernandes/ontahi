@@ -43,6 +43,9 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Validate Changesets state
+        # The generated version PR has already consumed its changesets into package versions and
+        # changelogs. Every source PR and direct main run must still carry a valid changeset.
+        if: github.head_ref != 'changeset-release/main' && github.ref_name != 'changeset-release/main'
         run: pnpm exec changeset status --since=origin/main
 
       - name: Check formatting
