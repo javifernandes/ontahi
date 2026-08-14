@@ -2,10 +2,24 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { Effect } from 'effect';
+import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTodoExpressApp } from '../src/application.js';
+import type { TodoAuthenticationAdapter } from '../src/authentication.js';
 import { TodoItem, TodoApplication, TodoList, TodoTag, todoNotifications } from '../src/graph.js';
+
+const testPrincipal = {
+  subject: 'github-user-123',
+  kind: 'user' as const,
+  issuer: 'https://github.com',
+};
+
+const testAuthentication: TodoAuthenticationAdapter = {
+  mount: () => undefined,
+  principal: (request: Request) =>
+    request.header('x-test-principal') === testPrincipal.subject ? testPrincipal : null,
+};
 
 const getTodoDataset = () => {
   if (TodoApplication.storage.kind !== 'in-memory') {
@@ -25,7 +39,11 @@ describe('Ontahi todo portability example', () => {
     getTodoDataset().TodoTag = [];
     getTodoDataset().TodoItem = [];
     const server = await new Promise<Server>(resolve => {
-      const started = createTodoExpressApp().listen(0, '127.0.0.1', () => resolve(started));
+      const started = createTodoExpressApp({ authentication: testAuthentication }).listen(
+        0,
+        '127.0.0.1',
+        () => resolve(started),
+      );
     });
     endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}/operations`;
     closeServer = async () => {
@@ -39,10 +57,13 @@ describe('Ontahi todo portability example', () => {
     await closeServer?.();
   });
 
-  const invoke = (operationId: string, input: unknown) =>
+  const invoke = (operationId: string, input: unknown, authenticated = false) =>
     fetch(endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(authenticated ? { 'x-test-principal': testPrincipal.subject } : {}),
+      },
       body: JSON.stringify({ kind: 'invoke', operationId, input }),
     });
 
@@ -273,6 +294,52 @@ describe('Ontahi todo portability example', () => {
     });
   });
 
+  it('requires one explicit Principal for a protected operation from Node', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
+    ];
+
+    await expect(TodoItem.complete({ todos: ['todo-1'] })).resolves.toMatchObject({
+      ok: false,
+      kind: 'failed',
+      failure: { reason: 'not_authenticated' },
+    });
+    await expect(
+      TodoApplication.app.runtime.withInvocationContext({ principal: testPrincipal }, () =>
+        TodoItem.complete({ todos: ['todo-1'] }),
+      ),
+    ).resolves.toMatchObject({ ok: true, kind: 'success' });
+    expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
+  });
+
+  it('rejects a protected operation over Express without a Principal', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
+    ];
+
+    const response = await invoke('TodoItem.complete', {
+      todos: {
+        kind: 'selection',
+        entityName: 'TodoItem',
+        expression: {
+          kind: 'references',
+          refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: false,
+        kind: 'failed',
+        failure: { reason: 'not_authenticated' },
+      },
+    });
+    expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
+  });
+
   it('deletes every TodoItem through a void-input operation', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
@@ -354,9 +421,13 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
     ];
 
-    const response = await invoke('TodoItem.complete', {
-      todos: { kind: 'selection', entityName: 'TodoItem', expression },
-    });
+    const response = await invoke(
+      'TodoItem.complete',
+      {
+        todos: { kind: 'selection', entityName: 'TodoItem', expression },
+      },
+      true,
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({

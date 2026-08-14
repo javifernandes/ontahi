@@ -43,6 +43,22 @@ There is no global route discovery. A mount root is host and deployment configur
 client runtime receives it explicitly. This also allows more than one Ontahi application to coexist
 under different roots.
 
+The host can derive an Ontahi invocation context from each Express request. This keeps Passport,
+Auth0, Okta, or another authentication mechanism outside the adapter:
+
+```ts
+server.use(
+  ontahiExpress(TodoApplication, {
+    invocationContext: request => ({
+      principal: request.user ? toPrincipal(request.user) : null,
+    }),
+  }),
+);
+```
+
+The callback may be asynchronous. It runs once for each operation invocation or permission check;
+the returned Principal and resource map remain scoped to that request.
+
 Operation-declared HTTP ingress can be mounted from the same middleware:
 
 ```ts

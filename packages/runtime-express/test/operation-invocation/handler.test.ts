@@ -1,3 +1,4 @@
+import { getCurrentPrincipal } from '@ontahi/core/runtime/server';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +7,11 @@ import {
   createExpressTaskSnapshotHandler,
 } from '../../src/operation-invocation/index.js';
 
-const invokeHandler = async (handler: RequestHandler, body: unknown) => {
+const invokeHandler = async (
+  handler: RequestHandler,
+  body: unknown,
+  requestOverrides: Partial<Request> = {},
+) => {
   let status = 200;
   let payload: unknown;
   const response = {
@@ -20,7 +25,7 @@ const invokeHandler = async (handler: RequestHandler, body: unknown) => {
     }),
   } as unknown as Response;
 
-  await handler({ body } as Request, response, vi.fn() as NextFunction);
+  await handler({ body, ...requestOverrides } as Request, response, vi.fn() as NextFunction);
 
   return { status, payload };
 };
@@ -91,6 +96,44 @@ describe('Express operation invocation adapter', () => {
     });
 
     expect(dispatcher).toHaveBeenCalledWith(requestBody);
+  });
+
+  it('runs dispatch inside the invocation context derived from the Express request', async () => {
+    const dispatcher = vi.fn(async () => ({
+      kind: 'invocation-result' as const,
+      result: {
+        ok: true as const,
+        kind: 'success' as const,
+        value: getCurrentPrincipal(),
+      },
+    }));
+    const requestBody = {
+      kind: 'invoke' as const,
+      operationId: 'Todo.complete',
+      input: { id: 'todo-123' },
+    };
+    const principal = {
+      subject: 'github:123',
+      kind: 'user' as const,
+      issuer: 'https://github.com',
+    };
+
+    const response = await invokeHandler(
+      createExpressOperationInvocationHandler({
+        dispatcher,
+        invocationContext: request => ({
+          principal: (request as Request & { user?: unknown }).user ? principal : null,
+        }),
+      }),
+      requestBody,
+      { user: { id: '123' } } as Partial<Request>,
+    );
+
+    expect(response.payload).toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, value: principal },
+    });
+    expect(getCurrentPrincipal()).toBeNull();
   });
 
   it('maps unavailable dispatch to an HTTP 500 protocol error', async () => {

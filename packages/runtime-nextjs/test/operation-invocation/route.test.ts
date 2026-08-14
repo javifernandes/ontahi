@@ -1,3 +1,4 @@
+import { getCurrentPrincipal } from '@ontahi/core/runtime/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNextOperationInvocationRouteHandler } from '../../src/operation-invocation/index.js';
@@ -47,6 +48,44 @@ describe('Next.js operation invocation route adapter', () => {
       result: { ok: true, kind: 'success', value: { renamed: true } },
     });
     expect(dispatcher).toHaveBeenCalledWith(requestBody);
+  });
+
+  it('runs dispatch inside the invocation context derived from the web request', async () => {
+    const dispatcher = vi.fn(async () => ({
+      kind: 'invocation-result' as const,
+      result: {
+        ok: true as const,
+        kind: 'success' as const,
+        value: getCurrentPrincipal(),
+      },
+    }));
+    const principal = {
+      subject: 'supabase-user-123',
+      kind: 'user' as const,
+      issuer: 'https://supabase.example/auth/v1',
+    };
+    const handler = createNextOperationInvocationRouteHandler({
+      dispatcher,
+      invocationContext: request => ({
+        principal: request.headers.get('x-test-principal') ? principal : null,
+      }),
+    });
+    const response = await handler(
+      new Request('http://localhost/operations', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-test-principal': principal.subject,
+        },
+        body: JSON.stringify({ kind: 'invoke', operationId: 'Book.rename', input: {} }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, value: principal },
+    });
+    expect(getCurrentPrincipal()).toBeNull();
   });
 
   it('maps unavailable dispatch to an HTTP 500 protocol error', async () => {

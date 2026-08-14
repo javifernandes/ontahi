@@ -24,6 +24,30 @@ Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`, th
 bridge, `useOperationQuery`, `useOperation`, and `useDurableOperation` against the same Express
 process.
 
+The application remains usable without credentials, but `TodoItem.complete` demonstrates an
+authenticated operation. To exercise it, create a GitHub OAuth App with
+`http://localhost:3001/auth/github/callback` as its callback URL and start Todo with:
+
+```sh
+TODO_GITHUB_CLIENT_ID=... \
+TODO_GITHUB_CLIENT_SECRET=... \
+TODO_SESSION_SECRET=... \
+pnpm todo:dev:local
+```
+
+Passport and GitHub OAuth belong to this Express host. `@ontahi/runtime-express` only maps the
+authenticated `request.user` to a provider-neutral Principal through `invocationContext`. The same
+operation can be invoked from plain Node by establishing that scope explicitly:
+
+```ts
+await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
+  TodoItem.complete({ todos: ['todo-123'] }),
+);
+```
+
+The default `express-session` memory store is intentional for this local example. A deployed host
+must choose its own persistent session store and cookie policy.
+
 ## Run it against a published Ontahi version
 
 The registry mode copies the example into an ignored `.artifacts` directory, replaces every
@@ -209,6 +233,7 @@ canonical `input_invalid` result.
 - Own process lifecycle, port selection, JSON parsing, routing, and logging.
 - Supply persistent adapters when process-local state is insufficient.
 - Supply the application Capabilities declared by Entities.
+- Authenticate native requests and map provider users to an Ontahi Principal.
 - Choose which operations are bridge-exposed or server-only.
 - Run code generation at build time and commit or check its deterministic outputs.
 - Mount `@ontahi/explorer-react` in a React host when the full visual Explorer is useful.
