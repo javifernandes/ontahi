@@ -12,9 +12,8 @@ on:
           - dry-run
           - publish
       version:
-        description: Exact lockstep package version from source
+        description: Exact committed lockstep package version from the Changesets version PR
         required: true
-        default: 0.1.0-alpha.0
         type: string
       channel:
         description: npm dist-tag matching the prerelease identifier

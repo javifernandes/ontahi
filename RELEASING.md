@@ -1,22 +1,37 @@
 # Releasing Ontahi
 
 Ontahi publishes all ten `@ontahi/*` packages at one exact lockstep prerelease version. Publication
-is manual: merging `main` never publishes to npm.
+is manual: merging `main` or a version pull request never publishes to npm.
+
+## Record a public change
+
+A pull request that changes a package's behavior or public contract includes a changeset:
+
+```sh
+pnpm changeset
+```
+
+Select the directly affected packages and describe the consumer-visible result. Ontahi's ten public
+packages are a fixed group: the highest requested release type determines one shared version for
+the complete set. Documentation, CI, examples, and repository-only tooling normally need no
+changeset.
+
+After changesets reach `main`, the **Changesets** workflow creates or updates a ready
+`chore: version Ontahi packages` pull request. It consumes those files, writes package changelogs,
+and advances the current alpha train. Package versions are never edited by hand.
 
 ## Local release proof
 
 Build and validate the package boundary before dispatching GitHub Actions:
 
 ```sh
-RELEASE_VERSION=0.1.0-alpha.1
 pnpm build:packages
 pnpm verify:artifacts -- --skip-build
 pnpm release:npm:prepare -- \
-  --version "$RELEASE_VERSION" \
   --tag alpha \
-  --output ".artifacts/npm/$RELEASE_VERSION"
+  --output ".artifacts/npm/candidate"
 pnpm release:npm:dry-run -- \
-  --manifest ".artifacts/npm/$RELEASE_VERSION/release-manifest.json"
+  --manifest ".artifacts/npm/candidate/release-manifest.json"
 ```
 
 The release manifest records every tarball in dependency order and its integrity. The offline npm
@@ -46,17 +61,17 @@ done
 
 ## Normal prerelease
 
-1. Run `pnpm release:version 0.1.0-alpha.1` with the intended new immutable version and review the
-   package manifest changes.
-2. Run the local proof and the BookOps packed-artifact compatibility gate.
-3. Merge the candidate to `main` and wait for CI.
-4. Dispatch **npm prerelease** in `dry-run` mode if an independent rehearsal is useful.
-5. Dispatch it in `publish` mode. GitHub OIDC is the only supported npm authentication path.
-6. Create a matching GitHub prerelease and record the consumer-visible changes.
-7. Pin the exact version in BookOps and commit its manifests and lockfile together.
+1. Merge the accumulated `chore: version Ontahi packages` pull request and wait for CI.
+2. Run the local proof and the BookOps packed-artifact compatibility gate against that commit.
+3. Dispatch **npm prerelease** with the exact committed package version, first in `dry-run` mode if
+   an independent rehearsal is useful.
+4. Dispatch it in `publish` mode. GitHub OIDC is the only supported npm authentication path.
+5. Create a matching GitHub prerelease from the generated changelogs.
+6. Pin the exact version in BookOps and commit its manifests and lockfile together.
 
 `alpha` and `next` are discovery channels only. Consumers and BookOps commit exact versions, never
-floating dist-tags.
+floating dist-tags. The repository remains in Changesets alpha prerelease mode until a deliberate
+stable-release change exits that train.
 
 ## Failure and rollback
 

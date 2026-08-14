@@ -1,0 +1,62 @@
+name: Changesets
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changesets-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: '10.33.0'
+
+jobs:
+  version:
+    name: Maintain version pull request
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Create or update ready version pull request
+        id: version
+        uses: changesets/action/version@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v2.1.0
+        with:
+          script: pnpm changeset:version
+          commit-message: 'chore: version Ontahi packages'
+          pr-title: 'chore: version Ontahi packages'
+
+      - name: Run CI for version pull request
+        if: steps.version.outputs.pr-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_PR_NUMBER: ${{ steps.version.outputs.pr-number }}
+        run: |
+          head_ref="$(gh pr view "$VERSION_PR_NUMBER" --json headRefName --jq .headRefName)"
+          gh workflow run ci.yml --ref "$head_ref"

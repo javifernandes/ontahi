@@ -7,6 +7,9 @@
     "build": "pnpm run build:packages && pnpm run build:www",
     "build:packages": "pnpm --recursive --filter './packages/**' run build",
     "build:www": "pnpm --filter @ontahi/www build",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "changeset:version": "changeset version",
     "dev": "pnpm --filter @ontahi/www dev",
     "dev:packages": "pnpm --parallel --recursive --filter './packages/**' --if-present run build:watch",
     "format": "pnpm exec oxfmt --write .",
@@ -16,7 +19,6 @@
     "release:npm:dry-run": "node scripts/release/npm-release.mjs dry-run",
     "release:npm:prepare": "node scripts/release/npm-release.mjs prepare",
     "release:npm:publish": "node scripts/release/npm-release.mjs publish",
-    "release:version": "node scripts/release/set-version.mjs",
     "test:coverage:packages": "pnpm --recursive --filter './packages/**' run test:coverage",
     "test:examples": "pnpm --recursive --filter './examples/**' --if-present run test",
     "test:packages": "pnpm --recursive --filter './packages/**' run test",
@@ -30,6 +32,7 @@
     "verify:local": "node scripts/verify-local-page.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.0",
     "@typescript-eslint/eslint-plugin": "^8.46.1",
     "@typescript-eslint/parser": "^8.46.1",
     "eslint": "8.57.1",
