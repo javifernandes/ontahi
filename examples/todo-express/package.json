@@ -16,7 +16,7 @@
     "db:reset": "docker compose down -v && docker compose up -d --wait",
     "prestart": "pnpm -w build:packages && pnpm run codegen && pnpm run build:client",
     "start": "pnpm exec tsx src/server.ts",
-    "test": "pnpm exec vitest run",
+    "test": "TODO_AUTH_MODE=github pnpm exec vitest run",
     "typecheck": "pnpm run codegen:check && pnpm exec tsc -p tsconfig.json && pnpm exec tsc -p client/tsconfig.json",
     "lint": "pnpm exec eslint \"src/**/*.ts\" \"client/**/*.{ts,tsx}\" \"test/**/*.ts\" --max-warnings 0"
   },

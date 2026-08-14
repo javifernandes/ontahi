@@ -16,6 +16,7 @@ const testPrincipal = {
 };
 
 const testAuthentication: TodoAuthenticationAdapter = {
+  mode: 'github',
   mount: () => undefined,
   principal: (request: Request) =>
     request.header('x-test-principal') === testPrincipal.subject ? testPrincipal : null,

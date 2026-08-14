@@ -1,10 +1,10 @@
-import { randomBytes } from 'node:crypto';
-
 import type { Principal } from '@ontahi/core/runtime/server';
 import type { Express, Request } from 'express';
 import session from 'express-session';
 import { Passport } from 'passport';
 import { Strategy as GitHubStrategy, type Profile } from 'passport-github2';
+
+import { todoAuthenticationMode, type TodoAuthenticationMode } from './authentication-mode.js';
 
 export type TodoAuthenticatedUser = {
   subject: string;
@@ -17,17 +17,18 @@ type AuthenticatedRequest = Request & {
 };
 
 export type TodoAuthenticationAdapter = {
+  mode: TodoAuthenticationMode;
   mount(server: Express): void;
   principal(request: Request): Principal | null;
 };
 
 export type TodoPassportAuthenticationOptions = {
-  github?: {
+  github: {
     clientId: string;
     clientSecret: string;
     callbackUrl: string;
   };
-  sessionSecret?: string;
+  sessionSecret: string;
 };
 
 const githubUser = (profile: Profile): TodoAuthenticatedUser => ({
@@ -42,56 +43,67 @@ export const todoPrincipal = (user: TodoAuthenticatedUser): Principal => ({
   issuer: 'https://github.com',
 });
 
-const configuredGithub = (): TodoPassportAuthenticationOptions['github'] | undefined => {
-  const clientId = process.env.TODO_GITHUB_CLIENT_ID;
-  const clientSecret = process.env.TODO_GITHUB_CLIENT_SECRET;
-
-  return clientId && clientSecret
-    ? {
-        clientId,
-        clientSecret,
-        callbackUrl:
-          process.env.TODO_GITHUB_CALLBACK_URL ??
-          `http://localhost:${process.env.PORT ?? '3001'}/auth/github/callback`,
-      }
-    : undefined;
+const requiredEnvironmentVariable = (name: string): string => {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required when TODO_AUTH_MODE=github.`);
+  return value;
 };
 
+const configuredGithub = (): TodoPassportAuthenticationOptions => ({
+  github: {
+    clientId: requiredEnvironmentVariable('TODO_GITHUB_CLIENT_ID'),
+    clientSecret: requiredEnvironmentVariable('TODO_GITHUB_CLIENT_SECRET'),
+    callbackUrl:
+      process.env.TODO_GITHUB_CALLBACK_URL ??
+      `http://localhost:${process.env.PORT ?? '3001'}/auth/github/callback`,
+  },
+  sessionSecret: requiredEnvironmentVariable('TODO_SESSION_SECRET'),
+});
+
+export const createDisabledTodoAuthentication = (): TodoAuthenticationAdapter => ({
+  mode: 'disabled',
+  mount: server => {
+    server.get('/auth/session', (_request, response) =>
+      response.json({
+        mode: 'disabled',
+        authenticated: false,
+      }),
+    );
+  },
+  principal: () => null,
+});
+
 export const createTodoPassportAuthentication = (
-  options: TodoPassportAuthenticationOptions = {},
+  options: TodoPassportAuthenticationOptions,
 ): TodoAuthenticationAdapter => {
-  const github = options.github ?? configuredGithub();
+  const { github } = options;
   const passport = new Passport();
 
   passport.serializeUser((user, done) => done(null, user));
   passport.deserializeUser((user: TodoAuthenticatedUser, done) => done(null, user));
 
-  if (github) {
-    passport.use(
-      new GitHubStrategy(
-        {
-          clientID: github.clientId,
-          clientSecret: github.clientSecret,
-          callbackURL: github.callbackUrl,
-        },
-        (
-          _accessToken: string,
-          _refreshToken: string,
-          profile: Profile,
-          done: (error: Error | null, user?: TodoAuthenticatedUser | false) => void,
-        ) => done(null, githubUser(profile)),
-      ),
-    );
-  }
+  passport.use(
+    new GitHubStrategy(
+      {
+        clientID: github.clientId,
+        clientSecret: github.clientSecret,
+        callbackURL: github.callbackUrl,
+      },
+      (
+        _accessToken: string,
+        _refreshToken: string,
+        profile: Profile,
+        done: (error: Error | null, user?: TodoAuthenticatedUser | false) => void,
+      ) => done(null, githubUser(profile)),
+    ),
+  );
 
   return {
+    mode: 'github',
     mount: server => {
       server.use(
         session({
-          secret:
-            options.sessionSecret ??
-            process.env.TODO_SESSION_SECRET ??
-            randomBytes(32).toString('hex'),
+          secret: options.sessionSecret,
           resave: false,
           saveUninitialized: false,
           cookie: {
@@ -108,8 +120,8 @@ export const createTodoPassportAuthentication = (
         const user = (request as AuthenticatedRequest).user;
 
         response.json({
+          mode: 'github',
           authenticated: Boolean(user),
-          providerConfigured: Boolean(github),
           ...(user
             ? {
                 principal: todoPrincipal(user),
@@ -133,20 +145,12 @@ export const createTodoPassportAuthentication = (
         });
       });
 
-      if (github) {
-        server.get('/auth/github', passport.authenticate('github'));
-        server.get(
-          '/auth/github/callback',
-          passport.authenticate('github', { failureRedirect: '/?auth=failed' }),
-          (_request, response) => response.redirect('/'),
-        );
-      } else {
-        server.get('/auth/github', (_request, response) =>
-          response.status(503).json({
-            error: 'GitHub OAuth is not configured for this Todo host.',
-          }),
-        );
-      }
+      server.get('/auth/github', passport.authenticate('github'));
+      server.get(
+        '/auth/github/callback',
+        passport.authenticate('github', { failureRedirect: '/?auth=failed' }),
+        (_request, response) => response.redirect('/'),
+      );
     },
     principal: request => {
       const user = (request as AuthenticatedRequest).user;
@@ -154,3 +158,8 @@ export const createTodoPassportAuthentication = (
     },
   };
 };
+
+export const createTodoAuthentication = (): TodoAuthenticationAdapter =>
+  todoAuthenticationMode === 'github'
+    ? createTodoPassportAuthentication(configuredGithub())
+    : createDisabledTodoAuthentication();

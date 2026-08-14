@@ -4,8 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Tag, TodoItem, TodoList, TodoTag } from '../../src/generated/client-entities.js';
 
 type AuthenticationSession = {
+  mode: 'disabled' | 'github';
   authenticated: boolean;
-  providerConfigured: boolean;
   principal?: {
     subject: string;
     kind: 'user' | 'service';
@@ -177,13 +177,14 @@ export const App = () => {
       current
         ? {
             authenticated: false,
-            providerConfigured: current.providerConfigured,
+            mode: current.mode,
           }
         : current,
     );
   };
 
   const visibleTodos = todos.data ?? [];
+  const canComplete = authentication?.mode === 'disabled' || authentication?.authenticated === true;
   const tagById = new Map(tags.data?.map(tag => [tag.id, tag]) ?? []);
   const tagIdsByTodo = new Map<string, string[]>();
   assignments.data?.forEach(assignment => {
@@ -227,12 +228,10 @@ export const App = () => {
                 Sign out
               </button>
             </>
-          ) : authentication?.providerConfigured ? (
+          ) : authentication?.mode === 'github' ? (
             <a href='/auth/github'>Sign in with GitHub to complete todos →</a>
           ) : (
-            <span className='muted'>
-              Configure GitHub OAuth to exercise authenticated operations.
-            </span>
+            <span className='muted'>Authentication is disabled for this run.</span>
           )}
         </div>
       </header>
@@ -377,25 +376,17 @@ export const App = () => {
           <footer>
             <button
               className='secondary'
-              disabled={
-                !authentication?.authenticated ||
-                selectedIds.length === 0 ||
-                completeTodos.isExecuting
-              }
+              disabled={!canComplete || selectedIds.length === 0 || completeTodos.isExecuting}
               onClick={completeSelected}
-              title={authentication?.authenticated ? undefined : 'Sign in with GitHub first.'}
+              title={canComplete ? undefined : 'Sign in with GitHub first.'}
             >
               Complete selected
             </button>
             <button
               className='secondary'
-              disabled={
-                !authentication?.authenticated ||
-                visibleTodos.length === 0 ||
-                completeTodos.isExecuting
-              }
+              disabled={!canComplete || visibleTodos.length === 0 || completeTodos.isExecuting}
               onClick={completeVisible}
-              title={authentication?.authenticated ? undefined : 'Sign in with GitHub first.'}
+              title={canComplete ? undefined : 'Sign in with GitHub first.'}
             >
               Complete visible
             </button>

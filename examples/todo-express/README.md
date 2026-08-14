@@ -24,20 +24,25 @@ Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`, th
 bridge, `useOperationQuery`, `useOperation`, and `useDurableOperation` against the same Express
 process.
 
-The application remains usable without credentials, but `TodoItem.complete` demonstrates an
-authenticated operation. To exercise it, create a GitHub OAuth App with
-`http://localhost:3001/auth/github/callback` as its callback URL and start Todo with:
+The default is an explicit public mode: the complete application works without login and
+`TodoItem.complete` has no authentication requirement.
+
+To exercise real authentication, create a GitHub OAuth App with
+`http://localhost:3001/auth/github/callback` as its callback URL and start Todo in GitHub mode:
 
 ```sh
 TODO_GITHUB_CLIENT_ID=... \
 TODO_GITHUB_CLIENT_SECRET=... \
 TODO_SESSION_SECRET=... \
-pnpm todo:dev:local
+pnpm todo:dev:local -- --auth github
 ```
 
-Passport and GitHub OAuth belong to this Express host. `@ontahi/runtime-express` only maps the
-authenticated `request.user` to a provider-neutral Principal through `invocationContext`. The same
-operation can be invoked from plain Node by establishing that scope explicitly:
+GitHub mode fails immediately when any required credential is missing, mounts real Passport login,
+session, callback, and logout routes, and adds `app.require.authenticated()` to
+`TodoItem.complete`. Passport and GitHub OAuth belong to this Express host.
+`@ontahi/runtime-express` only maps the authenticated `request.user` to a provider-neutral
+Principal through `invocationContext`. The same protected operation can be invoked from plain Node
+by establishing that scope explicitly:
 
 ```ts
 await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
@@ -63,6 +68,15 @@ published version explicitly:
 
 ```sh
 pnpm todo:dev:registry -- --version 0.1.0-alpha.0
+```
+
+Registry mode accepts the same optional authentication flag:
+
+```sh
+TODO_GITHUB_CLIENT_ID=... \
+TODO_GITHUB_CLIENT_SECRET=... \
+TODO_SESSION_SECRET=... \
+pnpm todo:dev:registry -- --version 0.1.0-alpha.0 --auth github
 ```
 
 Neither mode changes the example manifest or the repository lockfile. Use `PORT=3002` or another
