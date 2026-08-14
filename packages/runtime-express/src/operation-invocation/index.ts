@@ -1,6 +1,7 @@
 export {
   createExpressOperationInvocationHandler,
   type CreateExpressOperationInvocationHandlerOptions,
+  type ExpressInvocationContextFactory,
 } from './handler.js';
 export {
   createExpressTaskSnapshotHandler,

@@ -18,6 +18,7 @@ import {
 import { parseGraphSchema, safeParseGraphSchema } from '../../data-graph/schema.js';
 
 import type { ArchitectureDefinition, ArchitectureNamespace } from './architecture-types.js';
+import { authenticated, getCurrentPrincipal, requirePrincipal } from './authentication.js';
 import {
   contract,
   contractFromGraphSchema,
@@ -72,6 +73,7 @@ import {
   tryEffect,
   withEffects,
 } from './intents.js';
+import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
 import {
   ExternalDependencyFailedError,
   PersistenceFailedError,
@@ -236,6 +238,7 @@ const ingressFacadeBase = {
 };
 
 const requireFacadeBase = {
+  authenticated,
   combine: combineRequirements,
   combineRequirements,
 };
@@ -282,6 +285,7 @@ const runtimeFacadeBase = {
   PersistenceFailedError,
   createPersistenceFailedError,
   getOperationRuntimeContext,
+  getCurrentInvocationContext,
   layer,
   reportError: reportOperationError,
   reportOperationError,
@@ -290,9 +294,13 @@ const runtimeFacadeBase = {
   runServerEffect,
   serverContext,
   toContextRecord,
+  withInvocationContext,
 };
 
-const authFacadeBase = {};
+const authFacadeBase = {
+  currentPrincipal: getCurrentPrincipal,
+  requirePrincipal,
+};
 
 const createTaskFacadeBase = <TEvent, TDefinition extends ArchitectureDefinition<TEvent>>(
   definition: TDefinition,

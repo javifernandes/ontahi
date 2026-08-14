@@ -4,9 +4,15 @@ import {
   type OperationInvocationDispatcher,
   type OperationInvocationProtocolResponse,
 } from '@ontahi/core/runtime/operation-invocation';
+import { withInvocationContext, type InvocationContextInput } from '@ontahi/core/runtime/server';
+
+export type NextInvocationContextFactory = (
+  request: Request,
+) => InvocationContextInput | Promise<InvocationContextInput>;
 
 export type CreateNextOperationInvocationRouteHandlerOptions = {
   dispatcher: OperationInvocationDispatcher;
+  invocationContext?: NextInvocationContextFactory;
   reportError?: (error: unknown, request: Request) => void;
 };
 
@@ -14,7 +20,11 @@ const responseStatus = (response: OperationInvocationProtocolResponse) =>
   response.kind === 'protocol-error' ? 500 : 200;
 
 export const createNextOperationInvocationRouteHandler =
-  ({ dispatcher, reportError }: CreateNextOperationInvocationRouteHandlerOptions) =>
+  ({
+    dispatcher,
+    invocationContext,
+    reportError,
+  }: CreateNextOperationInvocationRouteHandlerOptions) =>
   async (request: Request): Promise<Response> => {
     const parsedRequest = parseOperationInvocationRequest(await request.json().catch(() => null));
 
@@ -23,7 +33,10 @@ export const createNextOperationInvocationRouteHandler =
     }
 
     try {
-      const response = await dispatcher(parsedRequest.request);
+      const dispatch = () => dispatcher(parsedRequest.request);
+      const response = invocationContext
+        ? await withInvocationContext(await invocationContext(request), dispatch)
+        : await dispatch();
 
       return Response.json(response, { status: responseStatus(response) });
     } catch (error) {

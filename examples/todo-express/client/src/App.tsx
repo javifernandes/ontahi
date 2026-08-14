@@ -3,6 +3,20 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import { Tag, TodoItem, TodoList, TodoTag } from '../../src/generated/client-entities.js';
 
+type AuthenticationSession = {
+  mode: 'disabled' | 'github';
+  authenticated: boolean;
+  principal?: {
+    subject: string;
+    kind: 'user' | 'service';
+    issuer?: string;
+  };
+  profile?: {
+    username?: string;
+    displayName?: string;
+  };
+};
+
 const ExpressMark = () => (
   <svg aria-hidden='true' viewBox='0 0 32 32'>
     <path d='M5 10h22M5 16h14M5 22h22' />
@@ -33,6 +47,7 @@ export const App = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [storage, setStorage] = useState<'in-memory' | 'postgres'>();
+  const [authentication, setAuthentication] = useState<AuthenticationSession>();
   const lists = useOperationQuery(TodoList.domain.list);
   const tags = useOperationQuery(Tag.domain.list);
   const assignments = useOperationQuery(TodoTag.domain.list);
@@ -62,6 +77,12 @@ export const App = () => {
     void fetch('/runtime')
       .then(response => response.json() as Promise<{ storage: 'in-memory' | 'postgres' }>)
       .then(runtime => setStorage(runtime.storage));
+  }, []);
+
+  useEffect(() => {
+    void fetch('/auth/session')
+      .then(response => response.json() as Promise<AuthenticationSession>)
+      .then(setAuthentication);
   }, []);
 
   useEffect(() => {
@@ -150,7 +171,22 @@ export const App = () => {
     await operation.executeAsync({ todos: selectedIds, tagIds: [selectedTagId] });
   };
 
+  const signOut = async () => {
+    const response = await fetch('/auth/logout', { method: 'POST' });
+    if (!response.ok) return;
+
+    setAuthentication(current =>
+      current
+        ? {
+            authenticated: false,
+            mode: current.mode,
+          }
+        : current,
+    );
+  };
+
   const visibleTodos = todos.data ?? [];
+  const canComplete = authentication?.mode === 'disabled' || authentication?.authenticated === true;
   const tagById = new Map(tags.data?.map(tag => [tag.id, tag]) ?? []);
   const tagIdsByTodo = new Map<string, string[]>();
   assignments.data?.forEach(assignment => {
@@ -179,6 +215,27 @@ export const App = () => {
         <a className='explorer-link' href='/explorer'>
           Open the embedded Ontahi Explorer →
         </a>
+        <div className='auth-session'>
+          {authentication?.authenticated ? (
+            <>
+              <span>
+                Signed in as{' '}
+                <strong>
+                  {authentication.profile?.username ??
+                    authentication.profile?.displayName ??
+                    authentication.principal?.subject}
+                </strong>
+              </span>
+              <button className='ghost' onClick={signOut}>
+                Sign out
+              </button>
+            </>
+          ) : authentication?.mode === 'github' ? (
+            <a href='/auth/github'>Sign in with GitHub to complete todos →</a>
+          ) : (
+            <span className='muted'>Authentication is disabled for this run.</span>
+          )}
+        </div>
       </header>
 
       <section className='workspace'>
@@ -321,15 +378,17 @@ export const App = () => {
           <footer>
             <button
               className='secondary'
-              disabled={selectedIds.length === 0 || completeTodos.isExecuting}
+              disabled={!canComplete || selectedIds.length === 0 || completeTodos.isExecuting}
               onClick={completeSelected}
+              title={canComplete ? undefined : 'Sign in with GitHub first.'}
             >
               Complete selected
             </button>
             <button
               className='secondary'
-              disabled={visibleTodos.length === 0 || completeTodos.isExecuting}
+              disabled={!canComplete || visibleTodos.length === 0 || completeTodos.isExecuting}
               onClick={completeVisible}
+              title={canComplete ? undefined : 'Sign in with GitHub first.'}
             >
               Complete visible
             </button>

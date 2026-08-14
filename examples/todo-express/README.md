@@ -24,6 +24,36 @@ Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`, th
 bridge, `useOperationQuery`, `useOperation`, and `useDurableOperation` against the same Express
 process.
 
+The default is an explicit public mode: the complete application works without login and
+`TodoItem.complete` has no authentication requirement.
+
+To exercise real authentication, create a GitHub OAuth App with
+`http://localhost:3001/auth/github/callback` as its callback URL and start Todo in GitHub mode:
+
+```sh
+TODO_GITHUB_CLIENT_ID=... \
+TODO_GITHUB_CLIENT_SECRET=... \
+TODO_SESSION_SECRET=... \
+pnpm todo:dev:local -- --auth github
+```
+
+GitHub mode fails immediately when any required credential is missing, mounts real Passport login,
+session, callback, and logout routes, and adds `app.require.authenticated()` to
+`TodoItem.complete`. Passport and GitHub OAuth belong to this Express host.
+The host maps Passport's authenticated `request.user` through
+`authentication.principal(request)`. The provider-neutral `@ontahi/runtime-express` adapter invokes
+that `invocationContext` factory and carries its Principal. The same protected operation can be
+invoked from plain Node by establishing that scope explicitly:
+
+```ts
+await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
+  TodoItem.complete({ todos: ['todo-123'] }),
+);
+```
+
+The default `express-session` memory store is intentional for this local example. A deployed host
+must choose its own persistent session store and cookie policy.
+
 ## Run it against a published Ontahi version
 
 The registry mode copies the example into an ignored `.artifacts` directory, replaces every
@@ -39,6 +69,15 @@ published version explicitly:
 
 ```sh
 pnpm todo:dev:registry -- --version 0.1.0-alpha.0
+```
+
+Registry mode accepts the same optional authentication flag:
+
+```sh
+TODO_GITHUB_CLIENT_ID=... \
+TODO_GITHUB_CLIENT_SECRET=... \
+TODO_SESSION_SECRET=... \
+pnpm todo:dev:registry -- --version 0.1.0-alpha.0 --auth github
 ```
 
 Neither mode changes the example manifest or the repository lockfile. Use `PORT=3002` or another
@@ -209,6 +248,7 @@ canonical `input_invalid` result.
 - Own process lifecycle, port selection, JSON parsing, routing, and logging.
 - Supply persistent adapters when process-local state is insufficient.
 - Supply the application Capabilities declared by Entities.
+- Authenticate native requests and map provider users to an Ontahi Principal.
 - Choose which operations are bridge-exposed or server-only.
 - Run code generation at build time and commit or check its deterministic outputs.
 - Mount `@ontahi/explorer-react` in a React host when the full visual Explorer is useful.

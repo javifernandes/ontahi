@@ -3,6 +3,7 @@ import { entity, relation } from '@ontahi/core/entity';
 import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 
+import { todoAuthenticationMode } from './authentication-mode.js';
 import {
   CompleteAllOutput,
   CompleteAllProgress,
@@ -151,7 +152,7 @@ export const TodoItem = entity({
     entities: () => ({ TodoList, Tag, TodoTag }),
   },
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation, ingress, entities }) => {
+  operations: ({ self, commands, operation, ingress, entities, app }) => {
     const runCompleteAll = createRunCompleteAll(() =>
       commands
         .where(todo => todo.completed.eq(false))
@@ -208,6 +209,7 @@ export const TodoItem = entity({
         input: graphSchema.object({
           todos: self.many(),
         }),
+        requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         bridge: { invalidate: [['TodoItem']] },
         run: ({ todos }) => todos.update({ completed: true }),
       }),

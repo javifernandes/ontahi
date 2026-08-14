@@ -35,6 +35,22 @@ The configured storage remains available as `application.storage`. Provider-spec
 stay typed: in-memory applications expose their dataset for test setup, while persistent providers
 do not pretend to offer an in-process dataset.
 
+## Authentication Principal
+
+Hosts authenticate their native request and enter Ontahi with a provider-neutral Principal. The
+runtime scope works the same way without HTTP:
+
+```ts
+await application.app.runtime.withInvocationContext({ principal }, () =>
+  TodoItem.complete({ todos: ['todo-123'] }),
+);
+```
+
+Operations can declare `requires: [app.require.authenticated()]`; their implementation can read
+`app.auth.currentPrincipal()` or yield `app.auth.requirePrincipal()`. `null` means unauthenticated.
+Provider sessions, OAuth tokens, claims, and user profiles remain host resources rather than part
+of the canonical Principal.
+
 ## In-Memory Graph
 
 `createInMemoryDataGraphStorage` is the recommended application binding. It supplies both the full

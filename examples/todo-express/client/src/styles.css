@@ -81,6 +81,20 @@ input {
   color: #286449;
   font-weight: 700;
 }
+.auth-session {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+.auth-session a {
+  color: #286449;
+  font-weight: 700;
+}
+.auth-session button {
+  padding: 7px 10px;
+}
 .workspace {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

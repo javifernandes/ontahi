@@ -17,29 +17,53 @@ const todoPackageName = '@ontahi/example-todo-express';
 const todoSourceDirectory = path.join(repositoryRoot, 'examples/todo-express');
 const registryArtifactsRoot = path.join(repositoryRoot, '.artifacts/todo-registry');
 const ignoredCopyEntries = new Set(['coverage', 'dist', 'node_modules']);
-const usage = 'Usage: node scripts/todo-example.mjs <local|registry> [--version <version>]';
+const usage =
+  'Usage: node scripts/todo-example.mjs <local|registry> [--auth <disabled|github>] [--version <version>]';
 
 const parseArguments = rawArguments => {
   const args = rawArguments.filter(argument => argument !== '--');
   const mode = args.shift();
   assert(mode === 'local' || mode === 'registry', usage);
 
+  let authenticationMode = process.env.TODO_AUTH_MODE ?? 'disabled';
+  assert(
+    authenticationMode === 'disabled' || authenticationMode === 'github',
+    `Unsupported TODO_AUTH_MODE ${JSON.stringify(authenticationMode)}. ${usage}`,
+  );
+  let authenticationOptionSeen = false;
   let version;
   while (args.length > 0) {
     const option = args.shift();
-    assert(option === '--version', `Unknown argument ${JSON.stringify(option)}. ${usage}`);
-    assert(mode === 'registry', '--version is only valid in registry mode.');
-    assert(version === undefined, '--version may only be provided once.');
+    if (option === '--auth') {
+      assert(!authenticationOptionSeen, '--auth may only be provided once.');
+      const value = args.shift();
+      assert(value && !value.startsWith('--'), '--auth requires a value.');
+      assert(value === 'disabled' || value === 'github', '--auth must be disabled or github.');
+      authenticationMode = value;
+      authenticationOptionSeen = true;
+    } else if (option === '--version') {
+      assert(mode === 'registry', '--version is only valid in registry mode.');
+      assert(version === undefined, '--version may only be provided once.');
 
-    const value = args.shift();
-    assert(value && !value.startsWith('--'), '--version requires a value.');
-    version = value;
+      const value = args.shift();
+      assert(value && !value.startsWith('--'), '--version requires a value.');
+      version = value;
+    } else {
+      assert(false, `Unknown argument ${JSON.stringify(option)}. ${usage}`);
+    }
   }
 
-  return { mode, version };
+  return { authenticationMode, mode, version };
 };
 
 const cli = parseArguments(process.argv.slice(2));
+const exampleEnvironment = { TODO_AUTH_MODE: cli.authenticationMode };
+
+if (cli.authenticationMode === 'github') {
+  ['TODO_GITHUB_CLIENT_ID', 'TODO_GITHUB_CLIENT_SECRET', 'TODO_SESSION_SECRET'].forEach(name =>
+    assert(process.env[name], `${name} is required with --auth github.`),
+  );
+}
 
 const printCommand = (command, commandArgs, cwd) => {
   const relativeCwd = path.relative(repositoryRoot, cwd) || '.';
@@ -117,32 +141,39 @@ const waitForProcesses = async processes => {
 };
 
 const prepareLocalExample = () => {
-  run('pnpm', [
-    '--recursive',
-    '--filter',
-    `${todoPackageName}^...`,
-    '--if-present',
-    'run',
-    'build',
-  ]);
-  run('pnpm', ['--filter', todoPackageName, 'run', 'codegen']);
-  run('pnpm', ['--filter', todoPackageName, 'run', 'build:client']);
+  run(
+    'pnpm',
+    ['--recursive', '--filter', `${todoPackageName}^...`, '--if-present', 'run', 'build'],
+    { env: exampleEnvironment },
+  );
+  run('pnpm', ['--filter', todoPackageName, 'run', 'codegen'], { env: exampleEnvironment });
+  run('pnpm', ['--filter', todoPackageName, 'run', 'build:client'], {
+    env: exampleEnvironment,
+  });
 };
 
 const runLocalExample = async () => {
   prepareLocalExample();
-  process.stdout.write('\nTodo uses local Ontahi workspace packages at http://localhost:3001\n\n');
+  process.stdout.write(
+    `\nTodo uses local Ontahi workspace packages with ${cli.authenticationMode} authentication at http://localhost:3001\n\n`,
+  );
   await waitForProcesses([
-    start('pnpm', [
-      '--parallel',
-      '--recursive',
-      '--filter',
-      `${todoPackageName}^...`,
-      '--if-present',
-      'run',
-      'build:watch',
-    ]),
-    start('pnpm', ['--filter', todoPackageName, 'run', 'dev']),
+    start(
+      'pnpm',
+      [
+        '--parallel',
+        '--recursive',
+        '--filter',
+        `${todoPackageName}^...`,
+        '--if-present',
+        'run',
+        'build:watch',
+      ],
+      { env: exampleEnvironment },
+    ),
+    start('pnpm', ['--filter', todoPackageName, 'run', 'dev'], {
+      env: exampleEnvironment,
+    }),
   ]);
 };
 
@@ -223,18 +254,27 @@ const runRegistryExample = async requestedVersion => {
     run(
       'pnpm',
       ['--ignore-workspace', 'install', '--no-frozen-lockfile', '--strict-peer-dependencies'],
-      { cwd: targetDirectory },
+      { cwd: targetDirectory, env: exampleEnvironment },
     );
     verifyRegistryResolution({ manifest, targetDirectory, version });
-    run('pnpm', ['--ignore-workspace', 'run', 'codegen'], { cwd: targetDirectory });
-    run('pnpm', ['--ignore-workspace', 'run', 'build:client'], { cwd: targetDirectory });
+    run('pnpm', ['--ignore-workspace', 'run', 'codegen'], {
+      cwd: targetDirectory,
+      env: exampleEnvironment,
+    });
+    run('pnpm', ['--ignore-workspace', 'run', 'build:client'], {
+      cwd: targetDirectory,
+      env: exampleEnvironment,
+    });
 
     process.stdout.write(
-      `\nTodo uses exact published Ontahi ${version} packages at http://localhost:3001\n` +
+      `\nTodo uses exact published Ontahi ${version} packages with ${cli.authenticationMode} authentication at http://localhost:3001\n` +
         `Isolated application: ${targetDirectory}\n\n`,
     );
     await waitForProcesses([
-      start('pnpm', ['--ignore-workspace', 'run', 'dev'], { cwd: targetDirectory }),
+      start('pnpm', ['--ignore-workspace', 'run', 'dev'], {
+        cwd: targetDirectory,
+        env: exampleEnvironment,
+      }),
     ]);
   } finally {
     assert(

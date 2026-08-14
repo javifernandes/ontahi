@@ -9,6 +9,7 @@ import type { OperationRuntimeContext } from './context-types.js';
 import { getOperationRuntimeContext, operationRuntimeContextStorage } from './context.js';
 import type { EffectSuccessPayload } from './effect-intents/types.js';
 import { executeEffectIntents, normalizeEffectSuccess } from './intents.js';
+import { getCurrentInvocationContext } from './invocation-context.js';
 import type { LayerConcern } from './layer-types.js';
 
 export const runServerEffect = async <TValue, TInput = unknown>(
@@ -23,13 +24,14 @@ export const runServerEffect = async <TValue, TInput = unknown>(
   },
 ): Promise<TValue> => {
   const parentContext = getOperationRuntimeContext();
+  const invocationContext = getCurrentInvocationContext();
   const architectureDefaults = await resolveArchitectureLayerDefaults(options.scope);
   const context: OperationRuntimeContext = {
     scope: options.scope,
     telemetrySpanName: options.telemetrySpanName ?? options.scope,
     input: options.input,
     extra: options.extra ?? options.input,
-    resources: parentContext?.resources ?? new Map(),
+    resources: parentContext?.resources ?? invocationContext?.resources ?? new Map(),
   };
   const { telemetry } = getServerRuntimeConfig();
 

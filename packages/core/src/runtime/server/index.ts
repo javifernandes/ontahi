@@ -125,6 +125,20 @@ export {
   type ServerContextResourceApi,
   type ServerRuntimeResourceMap,
 } from './context-resources.js';
+export {
+  authenticated,
+  getCurrentPrincipal,
+  requirePrincipal,
+  type AuthenticatedRequirementOptions,
+  type RequirePrincipalOptions,
+} from './authentication.js';
+export {
+  getCurrentInvocationContext,
+  withInvocationContext,
+  type InvocationContext,
+  type InvocationContextInput,
+  type Principal,
+} from './invocation-context.js';
 export type {
   RateLimitResult,
   ServerRuntimeConfig,

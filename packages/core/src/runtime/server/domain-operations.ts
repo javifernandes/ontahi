@@ -41,10 +41,15 @@ import type { SemanticSelection } from '../../data-graph/selection-ast.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 
 import type { OperationContracts } from './concerns/contract-types.js';
-import { operationRuntimeContextStorage, toContextRecord } from './context.js';
+import {
+  getOperationRuntimeContext,
+  operationRuntimeContextStorage,
+  toContextRecord,
+} from './context.js';
 import { getRequiredDataGraphRuntime } from './data-graph.js';
 import { layer } from './dsl.js';
 import type { EffectSuccessPayload } from './effect-intents/types.js';
+import { getCurrentInvocationContext } from './invocation-context.js';
 import type { LayerConcern } from './layer-types.js';
 import type { OperationCacheConfig, OperationEffectsConfig } from './operation/options-types.js';
 import type { OperationInput, OperationRequirement } from './operation/requirement-types.js';
@@ -653,12 +658,15 @@ export const checkServerDomainOperationPermission = async (
   }
 
   const inputRecord = toContextRecord(input as OperationInput);
+  const parentContext = getOperationRuntimeContext();
+  const invocationContext = getCurrentInvocationContext();
   const context = {
     scope: operation.id,
     telemetrySpanName: `${operation.id}.permission`,
     input: inputRecord,
     extra: inputRecord,
-    resources: new Map<string, unknown>(),
+    resources:
+      parentContext?.resources ?? invocationContext?.resources ?? new Map<string, unknown>(),
   };
   const effect = Effect.forEach(
     requirements,

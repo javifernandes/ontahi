@@ -9,6 +9,7 @@ import {
   toContextRecord,
 } from '../context.js';
 import type { UnwrapEffectSuccess } from '../effect-intents/types.js';
+import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
 
 import {
@@ -65,12 +66,13 @@ export const createOperationRunner = <
     const inputRecord = toContextRecord(input);
     const extra = metadata.extra ? metadata.extra(input) : inputRecord;
     const parentContext = getOperationRuntimeContext();
+    const invocationContext = getCurrentInvocationContext();
     const context: OperationRuntimeContext = {
       scope: metadata.scope,
       telemetrySpanName: metadata.telemetrySpanName,
       input: inputRecord,
       extra,
-      resources: parentContext?.resources ?? new Map(),
+      resources: parentContext?.resources ?? invocationContext?.resources ?? new Map(),
     };
     const contractConcern = toContractConcern<TInput, UnwrapEffectSuccess<TRawSuccess>, TFailure>(
       metadata.contracts,

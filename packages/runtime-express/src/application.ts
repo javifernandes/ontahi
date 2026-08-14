@@ -6,6 +6,7 @@ import express, { type Request, type Router } from 'express';
 
 import { mountExpressHttpIngress, type OntahiExpressIngressOptions } from './http-ingress.js';
 import { createExpressOperationInvocationHandler } from './operation-invocation/handler.js';
+import type { ExpressInvocationContextFactory } from './operation-invocation/handler.js';
 import { createExpressTaskSnapshotHandler } from './task-snapshot/handler.js';
 
 export type OntahiExpressExplorerOptions = {
@@ -20,6 +21,7 @@ export type OntahiExpressOptions = {
   applicationPath?: string | false;
   explorer?: OntahiExpressExplorerOptions;
   ingress?: OntahiExpressIngressOptions;
+  invocationContext?: ExpressInvocationContextFactory;
   reportError?: (error: unknown, request: Request) => void;
 };
 
@@ -51,6 +53,7 @@ export const ontahiExpress = (
     express.json(),
     createExpressOperationInvocationHandler({
       dispatcher,
+      invocationContext: options.invocationContext,
       reportError: options.reportError,
     }),
   );

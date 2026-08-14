@@ -4,11 +4,19 @@ import { ontahiExpress } from '@ontahi/runtime-express';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import express, { type Express } from 'express';
 
+import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication } from './graph.js';
 
-export const createTodoExpressApp = (): Express => {
+export type CreateTodoExpressAppOptions = {
+  authentication?: TodoAuthenticationAdapter;
+};
+
+export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}): Express => {
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
+  const authentication = options.authentication ?? createTodoAuthentication();
+
+  authentication.mount(server);
 
   server.use(express.static(clientDirectory));
 
@@ -17,6 +25,9 @@ export const createTodoExpressApp = (): Express => {
     ontahiExpress(TodoApplication, {
       explorer: createOntahiExpressExplorer({
         indexFile: path.join(clientDirectory, 'index.html'),
+      }),
+      invocationContext: request => ({
+        principal: authentication.principal(request),
       }),
     }),
   );
