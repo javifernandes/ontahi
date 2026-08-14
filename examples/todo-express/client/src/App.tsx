@@ -172,7 +172,9 @@ export const App = () => {
   };
 
   const signOut = async () => {
-    await fetch('/auth/logout', { method: 'POST' });
+    const response = await fetch('/auth/logout', { method: 'POST' });
+    if (!response.ok) return;
+
     setAuthentication(current =>
       current
         ? {

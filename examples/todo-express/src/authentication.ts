@@ -24,9 +24,12 @@ export type TodoAuthenticationAdapter = {
 
 export type TodoPassportAuthenticationOptions = {
   github: {
+    authorizationUrl?: string;
     clientId: string;
     clientSecret: string;
     callbackUrl: string;
+    tokenUrl?: string;
+    userProfileUrl?: string;
   };
   sessionSecret: string;
 };
@@ -85,9 +88,14 @@ export const createTodoPassportAuthentication = (
   passport.use(
     new GitHubStrategy(
       {
+        authorizationURL: github.authorizationUrl,
         clientID: github.clientId,
         clientSecret: github.clientSecret,
         callbackURL: github.callbackUrl,
+        // @ts-expect-error passport-github2 narrows the passport-oauth2 boolean option to string.
+        state: true,
+        tokenURL: github.tokenUrl,
+        userProfileURL: github.userProfileUrl,
       },
       (
         _accessToken: string,

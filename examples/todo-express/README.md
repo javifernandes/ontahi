@@ -40,9 +40,10 @@ pnpm todo:dev:local -- --auth github
 GitHub mode fails immediately when any required credential is missing, mounts real Passport login,
 session, callback, and logout routes, and adds `app.require.authenticated()` to
 `TodoItem.complete`. Passport and GitHub OAuth belong to this Express host.
-`@ontahi/runtime-express` only maps the authenticated `request.user` to a provider-neutral
-Principal through `invocationContext`. The same protected operation can be invoked from plain Node
-by establishing that scope explicitly:
+The host maps Passport's authenticated `request.user` through
+`authentication.principal(request)`. The provider-neutral `@ontahi/runtime-express` adapter invokes
+that `invocationContext` factory and carries its Principal. The same protected operation can be
+invoked from plain Node by establishing that scope explicitly:
 
 ```ts
 await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
