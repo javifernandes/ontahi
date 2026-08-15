@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isError, toError, toErrorMessage } from '../../src/value/error.js';
+import {
+  isError,
+  toError,
+  toErrorMessage,
+  toSerializableErrorCause,
+} from '../../src/value/error.js';
 
 describe('isError', () => {
   it('returns true for Error instances', () => {
@@ -39,5 +44,73 @@ describe('toError', () => {
 
   it('wraps non-error values in an Error', () => {
     expect(toError('boom')).toEqual(new Error('boom'));
+  });
+});
+
+describe('toSerializableErrorCause', () => {
+  it('serializes native Error chains without relying on enumerable properties', () => {
+    const nested = new Error('Relation Trip.driver is invalid.');
+    const outer = new Error('Failed to execute read.');
+    outer.name = 'GraphReadError';
+    Object.defineProperty(outer, 'cause', {
+      configurable: true,
+      value: nested,
+    });
+
+    expect(toSerializableErrorCause(outer)).toEqual({
+      name: 'GraphReadError',
+      message: 'Failed to execute read.',
+      cause: {
+        name: 'Error',
+        message: 'Relation Trip.driver is invalid.',
+      },
+    });
+  });
+
+  it('preserves names and tags from error-like records', () => {
+    expect(
+      toSerializableErrorCause({
+        name: 'DatabaseError',
+        message: 'Database read failed.',
+        cause: {
+          _tag: 'SocketClosed',
+          message: 'Connection reset.',
+        },
+      }),
+    ).toEqual({
+      name: 'DatabaseError',
+      message: 'Database read failed.',
+      cause: {
+        name: 'SocketClosed',
+        message: 'Connection reset.',
+      },
+    });
+  });
+
+  it('normalizes primitive, unknown, and circular causes safely', () => {
+    expect(toSerializableErrorCause('offline')).toEqual({
+      name: 'Error',
+      message: 'offline',
+    });
+    expect(toSerializableErrorCause(503)).toEqual({
+      name: 'Error',
+      message: '503',
+    });
+    expect(toSerializableErrorCause({})).toEqual({
+      name: 'Error',
+      message: 'Unknown error',
+    });
+
+    const circular: { message: string; cause?: unknown } = { message: 'Recursive failure.' };
+    circular.cause = circular;
+
+    expect(toSerializableErrorCause(circular)).toEqual({
+      name: 'Error',
+      message: 'Recursive failure.',
+      cause: {
+        name: 'Error',
+        message: '[Circular error cause]',
+      },
+    });
   });
 });
