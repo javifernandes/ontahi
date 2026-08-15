@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/codegen",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Build-time analysis and code generation primitives for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/codegen",
   "license": "Apache-2.0",
