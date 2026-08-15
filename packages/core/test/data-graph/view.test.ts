@@ -222,15 +222,25 @@ describe('recursive entity views', () => {
   it('rejects incompatible reflected relation metadata before execution', () => {
     const { Trip } = defineTripGraph();
     const TripTruck = Trip.view('TripTruck', { truck: { brand: true } });
-    const ast = structuredClone(TripTruck.ast);
-    const truck = ast.fields.truck;
-    if (truck?.kind !== 'relation-view') throw new Error('Expected Trip.truck relation view.');
-    truck.targetEntity = 'Driver';
-    const incompatible = { ...TripTruck, ast, toJSON: () => ast } as typeof TripTruck;
+    const mutations = [
+      ['relation', 'Trip.fake', 'Trip.truck'],
+      ['direction', 'inverse', 'forward'],
+      ['targetEntity', 'Driver', 'Truck'],
+      ['cardinality', 'many', 'one'],
+      ['nullable', true, false],
+    ] as const;
 
-    expect(() => query(Trip).as(incompatible)).toThrow(
-      'View relation Trip.truck has incompatible targetEntity: expected Truck, received Driver.',
-    );
+    for (const [property, received, expected] of mutations) {
+      const ast = structuredClone(TripTruck.ast);
+      const truck = ast.fields.truck;
+      if (truck?.kind !== 'relation-view') throw new Error('Expected Trip.truck relation view.');
+      Object.assign(truck, { [property]: received });
+      const incompatible = { ...TripTruck, ast, toJSON: () => ast } as typeof TripTruck;
+
+      expect(() => query(Trip).as(incompatible)).toThrow(
+        `View relation Trip.truck has incompatible ${property}: expected ${String(expected)}, received ${String(received)}.`,
+      );
+    }
   });
 
   it('applies a recursive view to one local Query and Selection without automatic hydration', async () => {
