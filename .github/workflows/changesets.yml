@@ -52,6 +52,13 @@ jobs:
           commit-message: 'chore: version Ontahi packages'
           pr-title: 'chore: version Ontahi packages'
 
+      - name: Name and explain the release pull request
+        if: steps.version.outputs.pr-number != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION_PR_NUMBER: ${{ steps.version.outputs.pr-number }}
+        run: node scripts/ci/release-pr.mjs update
+
       - name: Run CI for version pull request
         if: steps.version.outputs.pr-number != ''
         env:
