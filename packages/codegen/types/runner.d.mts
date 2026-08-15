@@ -49,7 +49,7 @@ export const parseCodegenRunnerArguments: (argv?: readonly string[]) => {
 
 export const createStdinCommandFormatter: (input: {
   command: string;
-  args: readonly string[];
+  args: readonly string[] | ((input: { outputPath: string }) => readonly string[]);
   cwd: string;
   label?: string;
 }) => (input: { outputPath: string; source: string }) => Promise<string>;

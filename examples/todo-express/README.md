@@ -218,7 +218,9 @@ composition refines that same value without creating a UI-only filter language.
    executor and storage can be configured separately when durable state must outlive the process.
 4. [`src/application.ts`](./src/application.ts) mounts that application through one
    `ontahiExpress(...)` middleware.
-5. [`scripts/generate-client.mjs`](./scripts/generate-client.mjs) analyzes the graph declaration through `@ontahi/codegen` and reproducibly emits `src/generated/client-entities.ts`.
+5. The `ontahi-codegen` command analyzes the conventional `src/graph.ts` composition root and
+   reproducibly emits `src/generated/client-entities.ts`; the app carries no custom generation
+   script.
 6. [`client/src/App.tsx`](./client/src/App.tsx) consumes that generated declaration exclusively through `@ontahi/react` hooks.
 7. [`client/src/Explorer.tsx`](./client/src/Explorer.tsx) embeds the reusable Explorer components;
    the Express adapter derives their server endpoints from `TodoApplication`.

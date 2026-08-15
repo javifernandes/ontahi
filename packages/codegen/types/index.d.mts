@@ -12,6 +12,12 @@ export {
 } from './projections.mjs';
 export { analyzeOntahiApplication, formatCodegenDiagnostic } from './application.mjs';
 export {
+  createClientEntityCodegenRunner,
+  parseClientEntityCodegenArguments,
+  runClientEntityCodegenCli,
+  type ClientEntityCodegenOptions,
+} from './client-entities.mjs';
+export {
   createFileSystemSourceLoader,
   type FileSystemSourceLoaderOptions,
 } from './source-loader.mjs';
