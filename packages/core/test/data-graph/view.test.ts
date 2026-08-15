@@ -219,6 +219,20 @@ describe('recursive entity views', () => {
     });
   });
 
+  it('rejects incompatible reflected relation metadata before execution', () => {
+    const { Trip } = defineTripGraph();
+    const TripTruck = Trip.view('TripTruck', { truck: { brand: true } });
+    const ast = structuredClone(TripTruck.ast);
+    const truck = ast.fields.truck;
+    if (truck?.kind !== 'relation-view') throw new Error('Expected Trip.truck relation view.');
+    truck.targetEntity = 'Driver';
+    const incompatible = { ...TripTruck, ast, toJSON: () => ast } as typeof TripTruck;
+
+    expect(() => query(Trip).as(incompatible)).toThrow(
+      'View relation Trip.truck has incompatible targetEntity: expected Truck, received Driver.',
+    );
+  });
+
   it('applies a recursive view to one local Query and Selection without automatic hydration', async () => {
     const { Company, Driver, Trip } = defineTripGraph();
     const CompanySummary = Company.view('CompanySummary', { name: true });

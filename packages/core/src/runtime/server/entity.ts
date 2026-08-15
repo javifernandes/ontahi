@@ -408,6 +408,7 @@ type ProjectableOperationCall<
   as: <TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(
     view: TView,
   ) => {
+    inspect: () => ReturnType<OntahiApplicationBuilder['operation']['inspectProjected']>;
     run: () => Promise<
       OperationInvocationResult<
         ProjectedOperationValue<TCardinality, InferEntityViewResult<TView>>,
@@ -580,6 +581,7 @@ const attachDirectDomainOperationMethods = (
   entity: object,
   operations: Record<string, ResolvedDomainOperationDeclaration<any, any, any, any>>,
   invoke: OntahiApplicationBuilder['operation']['invoke'],
+  inspectProjected: OntahiApplicationBuilder['operation']['inspectProjected'],
   invokeProjected: OntahiApplicationBuilder['operation']['invokeProjected'],
 ) => {
   const boundNames =
@@ -599,6 +601,7 @@ const attachDirectDomainOperationMethods = (
 
         return {
           as: (view: RecursiveEntityViewDefinition<any, any, any>) => ({
+            inspect: () => inspectProjected(operation, input, view),
             run: () =>
               invokeProjected(operation, input, {
                 view,
@@ -1072,6 +1075,7 @@ const defineOntahiEntity = <
             ResolvedDomainOperationDeclaration<any, any, any, any>
           >,
           app.operation.invoke,
+          app.operation.inspectProjected,
           app.operation.invokeProjected,
         );
       },

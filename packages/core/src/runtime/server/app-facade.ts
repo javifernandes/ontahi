@@ -52,6 +52,7 @@ import {
   defineDomainOperationsForEntity,
   invokeConfiguredServerDomainOperation,
   invokeConfiguredProjectedDomainOperation,
+  inspectProjectedDomainOperationQuery,
   invokeServerDomainOperation,
   type ResolvedDomainOperationDeclaration,
   runConfiguredServerDomainOperationRaw,
@@ -188,6 +189,12 @@ type ConfiguredProjectedOperationInvoke = (
   input: object,
   projection: Parameters<typeof invokeConfiguredProjectedDomainOperation>[2],
 ) => Promise<OperationInvocationResult>;
+
+type ConfiguredProjectedOperationInspect = (
+  operation: AnyResolvedDomainOperation,
+  input: object,
+  view: Parameters<typeof inspectProjectedDomainOperationQuery>[2],
+) => ReturnType<typeof inspectProjectedDomainOperationQuery>;
 
 type GraphEntityRefProvider = <
   TEntity extends Pick<AnyEntityDefinition, 'name'> | string,
@@ -460,6 +467,7 @@ type GraphFacade<TDefinition> = MergedNamespace<
 
 type ConfiguredOperationFacadeBase = Omit<typeof operationFacadeBase, 'invoke' | 'runRaw'> & {
   invoke: ConfiguredOperationInvoke;
+  inspectProjected: ConfiguredProjectedOperationInspect;
   invokeProjected: ConfiguredProjectedOperationInvoke;
   runRaw: ConfiguredOperationRawRun;
 };
@@ -609,6 +617,7 @@ const createOperationFacade = <TEvent, TDefinition extends ArchitectureDefinitio
   const configuredOperationFacade = {
     ...operationFacadeBase,
     invoke,
+    inspectProjected: inspectProjectedDomainOperationQuery,
     invokeProjected,
     runRaw,
   };

@@ -263,6 +263,19 @@ describe('ontahi application composition root', () => {
     const candidateTrips = Trip.selection(trip => trip.region.eq('south'));
     const call = Trip.available({ trips: candidateTrips }).as(TripList);
 
+    const finalQuery = call.inspect();
+    expect(finalQuery).toMatchObject({
+      kind: 'query',
+      root: { name: 'Trip' },
+      select: {
+        id: { kind: 'field-ref', fieldName: 'id' },
+        region: { kind: 'field-ref', fieldName: 'region' },
+      },
+      selection: { kind: 'and' },
+    });
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(getSpy).not.toHaveBeenCalled();
+
     await expect(call.run()).resolves.toMatchObject({
       ok: true,
       value: [{ id: 'trip-1', region: 'south' }],

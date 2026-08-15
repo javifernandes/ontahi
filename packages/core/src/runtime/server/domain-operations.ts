@@ -329,6 +329,38 @@ type DomainOperationRunner<
 
 const operationRunnerCache = new WeakMap<object, DomainOperationRunner<any, any, any, any>>();
 
+const normalizeDomainOperationInput = (
+  operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
+  input: EntityRefInputPublicInput<any, any>,
+) =>
+  normalizeEntityRefInput(
+    normalizeGraphSchemaClientInput(operation.input, input, {
+      bindSelection: selection => operationInputDataGraph.bindSelection(selection),
+    }) as object,
+    operation.inputRefs,
+  );
+
+export const inspectProjectedDomainOperationQuery = (
+  operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
+  input: OperationInput,
+  view: RecursiveEntityViewDefinition<any, any, any>,
+): GraphReadSpec<any, any> => {
+  const normalizedInput = normalizeDomainOperationInput(operation, input);
+  const result = operation.run(attachEntityRefInputRefs(normalizedInput, operation.inputRefs));
+  const read =
+    result instanceof Selection
+      ? operationInputDataGraph.bindSelection(result)
+      : result instanceof GraphSelection
+        ? result
+        : undefined;
+  if (!read) {
+    throw new Error(
+      `Projectable operation "${operation.id}" must return a declarative Selection before materialization.`,
+    );
+  }
+  return read.as(view).build();
+};
+
 const executeDomainOperationRunResult = <TResult, TFailure, TInfraError>(
   result:
     | Effect.Effect<TResult, TFailure | TInfraError>
@@ -393,12 +425,10 @@ const resolveDomainOperationRunner = <
   const normalizeOperationInput = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
   ): EntityRefInputPublicInput<TInput, TInputRefs> =>
-    normalizeEntityRefInput(
-      normalizeGraphSchemaClientInput(operation.input, input, {
-        bindSelection: selection => operationInputDataGraph.bindSelection(selection),
-      }) as object,
-      operation.inputRefs,
-    ) as EntityRefInputPublicInput<TInput, TInputRefs>;
+    normalizeDomainOperationInput(operation, input) as EntityRefInputPublicInput<
+      TInput,
+      TInputRefs
+    >;
 
   const runOperation = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,

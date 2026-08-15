@@ -25,6 +25,9 @@ const compileViewNode = (
 
   for (const [key, field] of Object.entries(node.fields)) {
     if (field.kind === 'field-view') {
+      if (!(field.field in entity.fields)) {
+        throw new Error(`View field ${entity.name}.${field.field} does not exist.`);
+      }
       select[key] = { kind: 'field-ref', fieldName: field.field } as SelectionValue;
       continue;
     }
@@ -32,6 +35,20 @@ const compileViewNode = (
     const relation = entity.relations[key];
     if (!relation) {
       throw new Error(`Unknown relation ${entity.name}.${key} in view.`);
+    }
+    const expected = {
+      relation: `${entity.name}.${key}`,
+      direction: relation.relationKind === 'belongsTo' ? 'forward' : 'inverse',
+      targetEntity: relation.target.name,
+      cardinality: relation.relationKind === 'belongsTo' ? 'one' : 'many',
+      nullable: relation.relationKind === 'belongsTo' && relation.nullable === true,
+    } as const;
+    for (const property of Object.keys(expected) as Array<keyof typeof expected>) {
+      if (field[property] !== expected[property]) {
+        throw new Error(
+          `View relation ${entity.name}.${key} has incompatible ${property}: expected ${String(expected[property])}, received ${String(field[property])}.`,
+        );
+      }
     }
     const nested = compileViewNode(relation.target, field.view);
     includes[key] = new RelationQueryBuilder(
