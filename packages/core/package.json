@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/core",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Core runtime, graph, and computation primitives for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/core",
   "license": "Apache-2.0",

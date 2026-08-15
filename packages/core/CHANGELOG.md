@@ -1,5 +1,13 @@
 # @ontahi/core
 
+## 0.1.0-alpha.3
+
+### Minor Changes
+
+- 04b573a: Add opt-in, JSON-safe internal operation error causes for development diagnostics while keeping
+  transported failures sanitized by default. Preserve transported operation failures as serializable
+  React error causes.
+
 ## 0.1.0-alpha.2
 
 ### Patch Changes
