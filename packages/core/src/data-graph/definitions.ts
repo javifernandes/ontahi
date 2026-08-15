@@ -8,6 +8,7 @@ import {
   type EntityRefLocatorValue,
 } from './ref.js';
 import type { SemanticSelection } from './selection-ast.js';
+import { createRecursiveEntityView, isRecursiveViewShape, type EntityViewFactory } from './view.js';
 
 export type FieldDefinition<TValue> = {
   kind: 'field';
@@ -546,22 +547,13 @@ export type EntityDefinition<
   identity: <TLocatorName extends keyof TLocators & string>(
     locatorName: TLocatorName,
   ) => EntityDefinition<TName, TFields, TRelations, TLocators>;
-  view: <
-    TViewName extends string,
-    TViewFields extends GraphSchemaFields = {},
-    TOmit extends readonly (keyof TFields & string)[] = readonly [],
-  >(
-    viewName: TViewName,
-    config?: EntityViewConfig<
-      EntityDefinition<TName, TFields, TRelations, TLocators>,
-      TViewFields,
-      TOmit
-    >,
-  ) => EntityViewDefinition<
+  view: EntityViewFactory<
     EntityDefinition<TName, TFields, TRelations, TLocators>,
-    TViewName,
-    TViewFields,
-    TOmit
+    BindReferenceFieldSources<
+      EntityReferenceFieldSource<TName, TFields, TRelations, TLocators>,
+      TFields
+    >,
+    TRelations
   >;
   hasMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
@@ -877,13 +869,21 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       this.identityLocatorName = locatorName;
       return this as never;
     },
-    view(viewName: string, config?: EntityViewConfig<any, GraphSchemaFields, readonly string[]>) {
+    view(viewName: string, config?: unknown) {
+      if (isRecursiveViewShape(config)) {
+        return createRecursiveEntityView(this as AnyEntityDefinition, viewName, config as never);
+      }
+
+      const legacyConfig = config as
+        | EntityViewConfig<any, GraphSchemaFields, readonly string[]>
+        | undefined;
+
       const viewDefinition: AnyEntityViewDefinition = {
         kind: 'entity-view',
         name: viewName,
         entity: this as AnyEntityDefinition,
-        fields: config?.fields ?? {},
-        omit: config?.omit ?? [],
+        fields: legacyConfig?.fields ?? {},
+        omit: legacyConfig?.omit ?? [],
       };
 
       return viewDefinition;
