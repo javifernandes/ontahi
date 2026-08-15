@@ -284,6 +284,9 @@ describe('ontahi application composition root', () => {
           output: self.many(),
           run: () => commands.all().run() as never,
         }),
+        implicitSelection: operation({
+          run: () => commands.all(),
+        }),
       }),
     });
     const TripList = Trip.view('TripList', {
@@ -378,6 +381,10 @@ describe('ontahi application composition root', () => {
     expect(() => Trip.materializedTooEarly().as(TripList).inspect()).toThrow(
       'Projectable operation "Trip.materializedTooEarly" must return a declarative Selection before materialization.',
     );
+    const DriverView = Driver.view('DriverView', { name: true });
+    expect(() => Trip.available({ trips: candidateTrips }).as(DriverView as never)).toThrow(
+      'Cannot project Trip.available (Trip) as DriverView (Driver).',
+    );
 
     await expect(call.run()).resolves.toMatchObject({
       ok: true,
@@ -406,6 +413,12 @@ describe('ontahi application composition root', () => {
     });
     expect(runSpy).toHaveBeenCalledTimes(1);
     expect(getSpy).toHaveBeenCalledTimes(1);
+
+    const eager = Trip.implicitSelection();
+    expectTypeOf(eager).toMatchTypeOf<Promise<unknown>>();
+    expect(eager).toBeInstanceOf(Promise);
+    expect('as' in eager).toBe(false);
+    await expect(eager).resolves.toMatchObject({ ok: true });
   });
 
   it('binds opaque operation groups without exposing their implementation type', async () => {

@@ -30,7 +30,6 @@ import {
   type RecursiveEntityViewDefinition,
   type ResolveDomainOperations,
   type RuntimeBoundSelectionEntity,
-  type SemanticSelection,
   selection,
   type SelectionBuilder,
 } from '../../data-graph/index.js';
@@ -371,7 +370,9 @@ type DirectDomainOperationMethod<TOperation> =
     any,
     infer TInputRefs
   >
-    ? TResult extends SemanticSelection<any, infer TEntity, infer TCardinality>
+    ? TOperation extends {
+        output: GraphSelectionDefinition<infer TEntity, infer TCardinality>;
+      }
       ? TEntity extends AnyEntityDefinition
         ? (
             ...args: object extends TInput
@@ -600,14 +601,21 @@ const attachDirectDomainOperationMethods = (
         if (output?.kind !== 'schema.selection') return invoke(operation, input);
 
         return {
-          as: (view: RecursiveEntityViewDefinition<any, any, any>) => ({
-            inspect: () => inspectProjected(operation, input, view),
-            run: () =>
-              invokeProjected(operation, input, {
-                view,
-                cardinality: output.cardinality,
-              }),
-          }),
+          as: (view: RecursiveEntityViewDefinition<any, any, any>) => {
+            if (view.ast.entity !== output.entity.name) {
+              throw new Error(
+                `Cannot project ${operation.id} (${output.entity.name}) as ${view.name} (${view.ast.entity}).`,
+              );
+            }
+            return {
+              inspect: () => inspectProjected(operation, input, view),
+              run: () =>
+                invokeProjected(operation, input, {
+                  view,
+                  cardinality: output.cardinality,
+                }),
+            };
+          },
           run: () => invoke(operation, input),
         };
       },

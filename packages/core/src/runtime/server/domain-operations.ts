@@ -243,10 +243,14 @@ type DefinedDomainOperation<
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
   TInputRefs extends EntityRefInputDeclarations,
-> = DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs> & {
+  TOutput extends OutputSchemaLike<any> | undefined,
+> = Omit<
+  DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
+  'output'
+> & {
   authority: 'server';
   input: OperationInputSchema<InputSchemaLike<TInput>, TInput>;
-};
+} & (TOutput extends OutputSchemaLike<any> ? { output: TOutput } : { output?: undefined });
 
 type DefineDomainOperation = {
   <
@@ -255,14 +259,16 @@ type DefineDomainOperation = {
     TFailure extends OperationFailure = OperationFailure,
     TInfraError extends OperationRuntimeError = never,
     TInputRefs extends EntityRefInputDeclarations = {},
+    TOutput extends OutputSchemaLike<any> | undefined = undefined,
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-      'kind' | 'durable'
+      'kind' | 'durable' | 'output'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
+      output?: TOutput;
     },
-  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs> & {
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs, TOutput> & {
     durable: DurableOperationDeclarationMetadata<TInput, TResult>;
   };
   <
@@ -271,12 +277,13 @@ type DefineDomainOperation = {
     TFailure extends OperationFailure = OperationFailure,
     TInfraError extends OperationRuntimeError = never,
     TInputRefs extends EntityRefInputDeclarations = {},
+    TOutput extends OutputSchemaLike<any> | undefined = undefined,
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-      'kind'
-    >,
-  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs>;
+      'kind' | 'output'
+    > & { output?: TOutput },
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs, TOutput>;
 };
 
 const defineDomainOperationImplementation = (
