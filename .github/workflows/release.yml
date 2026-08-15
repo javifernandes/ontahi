@@ -1,6 +1,9 @@
 name: npm prerelease
 
 on:
+  pull_request:
+    branches: [main]
+    types: [closed]
   workflow_dispatch:
     inputs:
       mode:
@@ -12,7 +15,7 @@ on:
           - dry-run
           - publish
       version:
-        description: Exact committed lockstep package version from the Changesets version PR
+        description: Exact committed lockstep package version from the release pull request
         required: true
         type: string
       channel:
@@ -23,6 +26,7 @@ on:
         options:
           - alpha
           - next
+
 permissions:
   contents: read
 
@@ -30,25 +34,55 @@ env:
   NPM_VERSION: '11.17.0'
   PNPM_VERSION: '10.33.0'
   RELEASE_OUTPUT: .artifacts/npm
-  RELEASE_VERSION: ${{ inputs.version }}
-  RELEASE_CHANNEL: ${{ inputs.channel }}
 
 jobs:
+  resolve:
+    name: Resolve immutable release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'changeset-release/main')
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.release.outputs.channel }}
+      commit: ${{ steps.release.outputs.commit }}
+      mode: ${{ steps.release.outputs.mode }}
+      pull_request: ${{ steps.release.outputs.pull_request }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      - name: Resolve release inputs
+        id: release
+        env:
+          RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          RELEASE_PULL_REQUEST: ${{ github.event.pull_request.number }}
+          REQUESTED_CHANNEL: ${{ inputs.channel }}
+          REQUESTED_MODE: ${{ inputs.mode }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: node scripts/release/resolve-release.mjs
+
   preflight:
     name: Build and dry-run every package
+    needs: resolve
     runs-on: ubuntu-latest
+    env:
+      RELEASE_CHANNEL: ${{ needs.resolve.outputs.channel }}
+      RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     steps:
-      - name: Require main
-        env:
-          RELEASE_REF: ${{ github.ref }}
-        run: |
-          if [[ "$RELEASE_REF" != "refs/heads/main" ]]; then
-            echo "Releases must run from main, received $RELEASE_REF." >&2
-            exit 1
-          fi
-
-      - name: Checkout
+      - name: Checkout release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.RELEASE_COMMIT }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -88,16 +122,22 @@ jobs:
 
   publish:
     name: Publish every package
-    if: inputs.mode == 'publish'
-    needs: preflight
+    if: needs.resolve.outputs.mode == 'publish'
+    needs: [resolve, preflight]
     runs-on: ubuntu-latest
     environment: npm-release
     permissions:
       contents: read
       id-token: write
+    env:
+      RELEASE_CHANNEL: ${{ needs.resolve.outputs.channel }}
+      RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
     steps:
-      - name: Checkout
+      - name: Checkout release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.RELEASE_COMMIT }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -131,3 +171,33 @@ jobs:
         run: >-
           pnpm release:npm:publish --
           --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
+
+  metadata:
+    name: Tag and create GitHub prerelease
+    if: >-
+      always() && needs.resolve.outputs.mode == 'publish' &&
+      needs.publish.result == 'success'
+    needs: [resolve, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+      RELEASE_PULL_REQUEST: ${{ needs.resolve.outputs.pull_request }}
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.RELEASE_COMMIT }}
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      - name: Create immutable GitHub prerelease
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/github-release.mjs

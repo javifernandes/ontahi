@@ -104,10 +104,9 @@ manifest and lockfile update together. A coordinated Ontahi plus BookOps change 
 tarballs first; this is the fast, registry-independent compatibility proof implemented by the
 commands above.
 
-After public publishing exists, a cross-repository candidate uses an exact prerelease such as
-`0.2.0-next.3` from the npm `next` channel. BookOps pins that exact prerelease and runs the same
-compatibility gate before Ontahi promotes the release. Floating tags do not belong in committed
-manifests or lockfiles.
+A cross-repository candidate uses an exact prerelease such as `0.2.0-next.3` from the npm `next`
+channel. BookOps pins that exact prerelease and runs the same compatibility gate before Ontahi
+promotes the release. Floating tags do not belong in committed manifests or lockfiles.
 
 The sibling checkout is the coordinated authoring shortcut. It does not become the merge or release
 proof because it can expose stale build output and local dependency behavior that a package
@@ -139,5 +138,4 @@ The repository release mechanics, OIDC configuration, and partial-release recove
 The first clean run measured roughly two minutes for the quick path and four minutes with the
 production build on a warm local package store. Most time was the isolated install, Workflow test
 transformation, and Next.js build; package builds, codegen, and typecheck were each seconds. A direct
-workspace test slice is faster, but it does not replace this boundary check. Registry prerelease
-latency will be measured when publication automation exists.
+workspace test slice is faster, but it does not replace this boundary check.

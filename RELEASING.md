@@ -1,7 +1,8 @@
 # Releasing Ontahi
 
-Ontahi publishes all ten `@ontahi/*` packages at one exact lockstep prerelease version. Publication
-is manual: merging `main` or a version pull request never publishes to npm.
+Ontahi publishes all ten `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
+records its consumer-visible change; merging the generated release pull request publishes that
+immutable version.
 
 ## The short version
 
@@ -12,19 +13,17 @@ For a contributor changing a public package:
 3. Commit the generated `.changeset/*.md` file with the code and open the pull request.
 
 After the feature pull request is merged, automation creates or updates the ready
-`chore: version Ontahi packages` pull request. No release has happened yet.
+`Release Ontahi <version>` pull request. No release has happened yet.
 
 For a maintainer releasing the accumulated changes:
 
-1. Review and merge `chore: version Ontahi packages`; this commits the shared version and
-   changelogs but still does not publish.
-2. Wait for `main` CI.
-3. In GitHub Actions, run **npm prerelease** from `main` with `mode: publish`, the exact version from
-   the version pull request, and `channel: alpha`.
-4. Create the matching GitHub prerelease and update consumers to that exact version.
+1. Review and merge `Release Ontahi <version>` when its accumulated notes are ready.
+2. The merge automatically builds and verifies every package, publishes through npm trusted
+   publishing, and creates the matching `v<version>` tag and GitHub prerelease.
+3. Update consumers to that exact version.
 
-Do not run `changeset version`, edit package versions, push tags, or use an npm token manually. The
-version pull request and the trusted-publishing workflow own those steps.
+Do not run `changeset version`, edit package versions, push release tags, or use an npm token
+manually. The generated pull request and trusted-publishing workflow own those steps.
 
 ## Record a public change
 
@@ -40,8 +39,9 @@ the complete set. Documentation, CI, examples, and repository-only tooling norma
 changeset.
 
 After changesets reach `main`, the **Changesets** workflow creates or updates a ready
-`chore: version Ontahi packages` pull request. It consumes those files, writes package changelogs,
-and advances the current alpha train. Package versions are never edited by hand.
+`Release Ontahi <version>` pull request. It consumes those files, writes package changelogs, and
+advances the current alpha train. Its commits and release files are bot-owned; package versions are
+never edited by hand.
 
 ## Local release proof
 
@@ -84,13 +84,16 @@ done
 
 ## Normal prerelease
 
-1. Merge the accumulated `chore: version Ontahi packages` pull request and wait for CI.
-2. Run the local proof and the BookOps packed-artifact compatibility gate against that commit.
-3. Dispatch **npm prerelease** with the exact committed package version, first in `dry-run` mode if
-   an independent rehearsal is useful.
-4. Dispatch it in `publish` mode. GitHub OIDC is the only supported npm authentication path.
-5. Create a matching GitHub prerelease from the generated changelogs.
-6. Pin the exact version in BookOps and commit its manifests and lockfile together.
+1. Review the accumulated `Release Ontahi <version>` pull request and its successful checks.
+2. Run the local proof and BookOps packed-artifact compatibility gate when the candidate warrants
+   an additional consumer rehearsal.
+3. Merge the release pull request. The merge publishes through GitHub OIDC and creates its tag and
+   GitHub prerelease automatically.
+4. Pin the exact version in BookOps and commit its manifests and lockfile together.
+
+The **npm prerelease** workflow remains manually dispatchable for an independent `dry-run` or to
+retry the exact version after an infrastructure failure. Manual `publish` uses the same immutable,
+idempotent package checks as the automatic path; it is not the normal release button.
 
 `alpha` and `next` are discovery channels only. Consumers and BookOps commit exact versions, never
 floating dist-tags. The repository remains in Changesets alpha prerelease mode until a deliberate
