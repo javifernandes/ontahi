@@ -7,6 +7,7 @@ import {
   type AnyEntityDefinition,
   type GraphSchemaDefinition,
   type GraphSchemaLike,
+  type GraphSelectionDefinition,
   type InferGraphSchemaValue,
 } from '../../data-graph/definitions.js';
 import {
@@ -38,7 +39,9 @@ import {
 } from '../../data-graph/runtime-bound-api.js';
 import type { DataGraphExecutionRuntime } from '../../data-graph/runtime.js';
 import type { SemanticSelection } from '../../data-graph/selection-ast.js';
+import { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
+import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 
 import type { OperationContracts } from './concerns/contract-types.js';
 import {
@@ -140,7 +143,8 @@ export type DomainOperationRun<
 ) =>
   | Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>
   | GraphCommand<any, any, TResult>
-  | DomainOperationGraphRead<TResult>;
+  | DomainOperationGraphRead<TResult>
+  | Selection<any, any>;
 
 export type DomainOperationCacheMetadata<TInput extends OperationInput> =
   OperationCacheConfig<TInput>;
@@ -329,7 +333,12 @@ const executeDomainOperationRunResult = <TResult, TFailure, TInfraError>(
   result:
     | Effect.Effect<TResult, TFailure | TInfraError>
     | GraphCommand<any, any, TResult>
-    | AnyDomainOperationGraphRead,
+    | AnyDomainOperationGraphRead
+    | Selection<any, any>,
+  selectionExecution?: {
+    view?: RecursiveEntityViewDefinition<any, any, any>;
+    cardinality: 'one' | 'many';
+  },
 ): Effect.Effect<TResult, TFailure | TInfraError> =>
   result instanceof GraphCommand
     ? Effect.sync(() =>
@@ -340,13 +349,24 @@ const executeDomainOperationRunResult = <TResult, TFailure, TInfraError>(
         Effect.flatMap(runtime => runtime.runCommand<TResult>(result.build())),
         Effect.orDie,
       )
-    : isDomainOperationGraphRead(result)
+    : isDomainOperationGraphRead(result) || result instanceof Selection
       ? (Effect.sync(() =>
           getRequiredDataGraphRuntime<
             DataGraphExecutionRuntime<unknown, unknown, unknown, unknown>
           >(),
         ).pipe(
-          Effect.flatMap(runtime => runtime.run(result.build(), undefined)),
+          Effect.flatMap(runtime => {
+            const read =
+              result instanceof Selection ? operationInputDataGraph.bindSelection(result) : result;
+            const spec = (
+              selectionExecution?.view
+                ? (read as GraphSelection<any, any>).as(selectionExecution.view).build()
+                : read.build()
+            ) as GraphReadSpec<any, any>;
+            return selectionExecution?.cardinality === 'one'
+              ? runtime.get(spec, undefined)
+              : runtime.run(spec, undefined);
+          }),
           Effect.orDie,
         ) as unknown as Effect.Effect<TResult, TFailure | TInfraError>)
       : result;
@@ -359,8 +379,12 @@ const resolveDomainOperationRunner = <
   TInputRefs extends EntityRefInputDeclarations,
 >(
   operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
+  projection?: {
+    view: RecursiveEntityViewDefinition<any, any, any>;
+    cardinality: 'one' | 'many';
+  },
 ): DomainOperationRunner<TInput, TResult, TFailure, TInputRefs> => {
-  const cached = operationRunnerCache.get(operation);
+  const cached = projection ? undefined : operationRunnerCache.get(operation);
 
   if (cached) {
     return cached as DomainOperationRunner<TInput, TResult, TFailure, TInputRefs>;
@@ -381,6 +405,10 @@ const resolveDomainOperationRunner = <
   ): Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError> =>
     executeDomainOperationRunResult(
       operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never),
+      projection ??
+        (operation.output?.kind === 'schema.selection'
+          ? { cardinality: (operation.output as GraphSelectionDefinition).cardinality }
+          : undefined),
     );
 
   const normalizedRunner = layer(operation.layer).operation(operation.name, runOperation, {
@@ -406,7 +434,7 @@ const resolveDomainOperationRunner = <
     TInputRefs
   >;
 
-  operationRunnerCache.set(operation, runner);
+  if (!projection) operationRunnerCache.set(operation, runner);
   return runner;
 };
 
@@ -629,6 +657,22 @@ export const invokeConfiguredServerDomainOperation = async <
   );
 
   return toOperationInvocationResult<TResult | TaskRunRef, TFailure | TaskFailure>(result);
+};
+
+export const invokeConfiguredProjectedDomainOperation = async (
+  operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
+  input: OperationInput,
+  projection: {
+    view: RecursiveEntityViewDefinition<any, any, any>;
+    cardinality: 'one' | 'many';
+  },
+): Promise<OperationInvocationResult> => {
+  if (isDurableOperation(operation)) {
+    throw new Error(`Durable operation "${operation.id}" cannot return a projectable Selection.`);
+  }
+  const result = await resolveDomainOperationRunner(operation, projection)(input);
+  await runDomainOperationSuccessHook(operation, input, result);
+  return toOperationInvocationResult(result);
 };
 
 export type DomainOperationPermissionResult =

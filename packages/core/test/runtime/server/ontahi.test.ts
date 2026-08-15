@@ -220,6 +220,66 @@ describe('ontahi application composition root', () => {
     });
   });
 
+  it('projects a Selection-shaped Operation result through one final Query', async () => {
+    const Trip = entity({
+      name: 'Trip',
+      fields: {
+        id: field.id(),
+        region: field.string(),
+        status: field.string(),
+      },
+      operations: ({ self, operation }) => ({
+        available: operation({
+          input: graphSchema.object({ trips: self.many() }),
+          output: self.many(),
+          run: ({ trips }) => trips.and(trip => trip.status.eq('available')),
+        }),
+        firstAvailable: operation({
+          input: graphSchema.object({ trips: self.many() }),
+          output: self.one(),
+          run: ({ trips }) => trips.and(trip => trip.status.eq('available')),
+        }),
+      }),
+    });
+    const TripList = Trip.view('TripList', { id: true, region: true });
+    const baseStorage = createInMemoryDataGraphStorage({
+      dataset: {
+        Trip: [
+          { id: 'trip-1', region: 'south', status: 'available' },
+          { id: 'trip-2', region: 'south', status: 'assigned' },
+          { id: 'trip-3', region: 'north', status: 'available' },
+        ],
+      },
+    });
+    const runtime = baseStorage.createRuntime();
+    const runSpy = vi.spyOn(runtime, 'run');
+    const getSpy = vi.spyOn(runtime, 'get');
+    const storage = {
+      ...baseStorage,
+      createRuntime: () => runtime,
+    };
+    ontahi({ storage, entities: [Trip] });
+
+    const candidateTrips = Trip.selection(trip => trip.region.eq('south'));
+    const call = Trip.available({ trips: candidateTrips }).as(TripList);
+
+    await expect(call.run()).resolves.toMatchObject({
+      ok: true,
+      value: [{ id: 'trip-1', region: 'south' }],
+    });
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).not.toHaveBeenCalled();
+
+    await expect(
+      Trip.firstAvailable({ trips: candidateTrips }).as(TripList).run(),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'trip-1', region: 'south' },
+    });
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('binds opaque operation groups without exposing their implementation type', async () => {
     const defineNoteOperations = ({ app, self }: OntahiOperationGroupContext) => ({
       inspect: app.operation.define({

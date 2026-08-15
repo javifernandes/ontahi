@@ -24,8 +24,13 @@ import {
   type GraphEntityExposure,
   type GraphOperationDeclaration,
   type GraphOperationDeclarations,
+  type GraphSelectionDefinition,
+  type InferEntityRecord,
+  type InferEntityViewResult,
+  type RecursiveEntityViewDefinition,
   type ResolveDomainOperations,
   type RuntimeBoundSelectionEntity,
+  type SemanticSelection,
   selection,
   type SelectionBuilder,
 } from '../../data-graph/index.js';
@@ -366,19 +371,57 @@ type DirectDomainOperationMethod<TOperation> =
     any,
     infer TInputRefs
   >
-    ? (
-        ...args: object extends TInput
-          ? []
-          : keyof TInput extends never
+    ? TResult extends SemanticSelection<any, infer TEntity, infer TCardinality>
+      ? TEntity extends AnyEntityDefinition
+        ? (
+            ...args: object extends TInput
+              ? []
+              : keyof TInput extends never
+                ? []
+                : [input: EntityRefInputPublicInput<TInput, TInputRefs>]
+          ) => ProjectableOperationCall<TEntity, NonNullable<TCardinality>, TFailure>
+        : never
+      : (
+          ...args: object extends TInput
             ? []
-            : [input: EntityRefInputPublicInput<TInput, TInputRefs>]
-      ) => Promise<
-        OperationInvocationResult<
-          TOperation extends { durable: object } ? TaskRunRef : TResult,
-          TOperation extends { durable: object } ? TFailure | TaskFailure : TFailure
+            : keyof TInput extends never
+              ? []
+              : [input: EntityRefInputPublicInput<TInput, TInputRefs>]
+        ) => Promise<
+          OperationInvocationResult<
+            TOperation extends { durable: object } ? TaskRunRef : TResult,
+            TOperation extends { durable: object } ? TFailure | TaskFailure : TFailure
+          >
         >
-      >
     : never;
+
+type ProjectedOperationValue<
+  TCardinality extends 'one' | 'many',
+  TValue,
+> = TCardinality extends 'one' ? TValue | null : TValue[];
+
+type ProjectableOperationCall<
+  TEntity extends AnyEntityDefinition,
+  TCardinality extends 'one' | 'many',
+  TFailure,
+> = {
+  as: <TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(
+    view: TView,
+  ) => {
+    run: () => Promise<
+      OperationInvocationResult<
+        ProjectedOperationValue<TCardinality, InferEntityViewResult<TView>>,
+        TFailure
+      >
+    >;
+  };
+  run: () => Promise<
+    OperationInvocationResult<
+      ProjectedOperationValue<TCardinality, InferEntityRecord<TEntity['fields']>>,
+      TFailure
+    >
+  >;
+};
 
 type DirectDomainOperationMethods<
   TOperations extends Record<string, unknown>,
@@ -444,7 +487,7 @@ export type OntahiEntityConfig<
       EntityDefinition<
         TName,
         TFields,
-        EntityRelationsFromFields<TFields, EntityRelationsFrom<TRelations>>,
+        EntityRelationsFromFields<TFields, DeclaredEntityRelations<TRelations>>,
         EntityRefLocatorsFrom<TFields, TLocators>
       >,
       TCapabilities,
@@ -453,6 +496,9 @@ export type OntahiEntityConfig<
     >,
   ) => TOperations;
 };
+
+type DeclaredEntityRelations<TRelations extends OntahiRelationDeclarations> =
+  string extends keyof TRelations ? {} : EntityRelationsFrom<TRelations>;
 
 type EntityRefLocatorsFrom<
   TFields extends FieldDefinitions,
@@ -467,7 +513,7 @@ type EntitySchemaFromConfig<
 > = EntityDefinition<
   TName,
   TFields,
-  EntityRelationsFromFields<TFields, EntityRelationsFrom<TRelations>>,
+  EntityRelationsFromFields<TFields, DeclaredEntityRelations<TRelations>>,
   EntityRefLocatorsFrom<TFields, TLocators>
 >;
 
@@ -534,6 +580,7 @@ const attachDirectDomainOperationMethods = (
   entity: object,
   operations: Record<string, ResolvedDomainOperationDeclaration<any, any, any, any>>,
   invoke: OntahiApplicationBuilder['operation']['invoke'],
+  invokeProjected: OntahiApplicationBuilder['operation']['invokeProjected'],
 ) => {
   const boundNames =
     (entity as { [ONTAHI_DIRECT_OPERATION_NAMES]?: Set<string> })[ONTAHI_DIRECT_OPERATION_NAMES] ??
@@ -545,7 +592,22 @@ const attachDirectDomainOperationMethods = (
     Object.defineProperty(entity, name, {
       configurable: true,
       enumerable: false,
-      value: (...args: readonly unknown[]) => invoke(operation, args[0] as never),
+      value: (...args: readonly unknown[]) => {
+        const input = args[0] as never;
+        const output = operation.output as GraphSelectionDefinition | undefined;
+        if (output?.kind !== 'schema.selection') return invoke(operation, input);
+
+        return {
+          as: (view: RecursiveEntityViewDefinition<any, any, any>) => ({
+            run: () =>
+              invokeProjected(operation, input, {
+                view,
+                cardinality: output.cardinality,
+              }),
+          }),
+          run: () => invoke(operation, input),
+        };
+      },
     });
     boundNames.add(name);
   }
@@ -1010,6 +1072,7 @@ const defineOntahiEntity = <
             ResolvedDomainOperationDeclaration<any, any, any, any>
           >,
           app.operation.invoke,
+          app.operation.invokeProjected,
         );
       },
     },
