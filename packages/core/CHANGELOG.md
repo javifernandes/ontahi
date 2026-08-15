@@ -1,5 +1,12 @@
 # @ontahi/core
 
+## 0.1.0-alpha.2
+
+### Patch Changes
+
+- dfd0ddc: Resolve reference-field includes from semantic identity metadata so in-memory data graphs do not
+  require physical storage mappings.
+
 ## 0.1.0-alpha.1
 
 ### Minor Changes
