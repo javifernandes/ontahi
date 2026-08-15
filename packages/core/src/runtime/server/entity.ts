@@ -30,7 +30,6 @@ import {
   type RecursiveEntityViewDefinition,
   type ResolveDomainOperations,
   type RuntimeBoundSelectionEntity,
-  type SemanticSelection,
   selection,
   type SelectionBuilder,
 } from '../../data-graph/index.js';
@@ -371,7 +370,9 @@ type DirectDomainOperationMethod<TOperation> =
     any,
     infer TInputRefs
   >
-    ? TResult extends SemanticSelection<any, infer TEntity, infer TCardinality>
+    ? TOperation extends {
+        output: GraphSelectionDefinition<infer TEntity, infer TCardinality>;
+      }
       ? TEntity extends AnyEntityDefinition
         ? (
             ...args: object extends TInput
@@ -408,6 +409,7 @@ type ProjectableOperationCall<
   as: <TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(
     view: TView,
   ) => {
+    inspect: () => ReturnType<OntahiApplicationBuilder['operation']['inspectProjected']>;
     run: () => Promise<
       OperationInvocationResult<
         ProjectedOperationValue<TCardinality, InferEntityViewResult<TView>>,
@@ -580,6 +582,7 @@ const attachDirectDomainOperationMethods = (
   entity: object,
   operations: Record<string, ResolvedDomainOperationDeclaration<any, any, any, any>>,
   invoke: OntahiApplicationBuilder['operation']['invoke'],
+  inspectProjected: OntahiApplicationBuilder['operation']['inspectProjected'],
   invokeProjected: OntahiApplicationBuilder['operation']['invokeProjected'],
 ) => {
   const boundNames =
@@ -598,13 +601,21 @@ const attachDirectDomainOperationMethods = (
         if (output?.kind !== 'schema.selection') return invoke(operation, input);
 
         return {
-          as: (view: RecursiveEntityViewDefinition<any, any, any>) => ({
-            run: () =>
-              invokeProjected(operation, input, {
-                view,
-                cardinality: output.cardinality,
-              }),
-          }),
+          as: (view: RecursiveEntityViewDefinition<any, any, any>) => {
+            if (view.ast.entity !== output.entity.name) {
+              throw new Error(
+                `Cannot project ${operation.id} (${output.entity.name}) as ${view.name} (${view.ast.entity}).`,
+              );
+            }
+            return {
+              inspect: () => inspectProjected(operation, input, view),
+              run: () =>
+                invokeProjected(operation, input, {
+                  view,
+                  cardinality: output.cardinality,
+                }),
+            };
+          },
           run: () => invoke(operation, input),
         };
       },
@@ -1072,6 +1083,7 @@ const defineOntahiEntity = <
             ResolvedDomainOperationDeclaration<any, any, any, any>
           >,
           app.operation.invoke,
+          app.operation.inspectProjected,
           app.operation.invokeProjected,
         );
       },

@@ -243,10 +243,14 @@ type DefinedDomainOperation<
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
   TInputRefs extends EntityRefInputDeclarations,
-> = DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs> & {
+  TOutput extends OutputSchemaLike<any> | undefined,
+> = Omit<
+  DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
+  'output'
+> & {
   authority: 'server';
   input: OperationInputSchema<InputSchemaLike<TInput>, TInput>;
-};
+} & (TOutput extends OutputSchemaLike<any> ? { output: TOutput } : { output?: undefined });
 
 type DefineDomainOperation = {
   <
@@ -255,14 +259,16 @@ type DefineDomainOperation = {
     TFailure extends OperationFailure = OperationFailure,
     TInfraError extends OperationRuntimeError = never,
     TInputRefs extends EntityRefInputDeclarations = {},
+    TOutput extends OutputSchemaLike<any> | undefined = undefined,
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-      'kind' | 'durable'
+      'kind' | 'durable' | 'output'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
+      output?: TOutput;
     },
-  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs> & {
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs, TOutput> & {
     durable: DurableOperationDeclarationMetadata<TInput, TResult>;
   };
   <
@@ -271,12 +277,13 @@ type DefineDomainOperation = {
     TFailure extends OperationFailure = OperationFailure,
     TInfraError extends OperationRuntimeError = never,
     TInputRefs extends EntityRefInputDeclarations = {},
+    TOutput extends OutputSchemaLike<any> | undefined = undefined,
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-      'kind'
-    >,
-  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs>;
+      'kind' | 'output'
+    > & { output?: TOutput },
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs, TOutput>;
 };
 
 const defineDomainOperationImplementation = (
@@ -328,6 +335,38 @@ type DomainOperationRunner<
 ) => Promise<OperationResult<TResult, TFailure>>;
 
 const operationRunnerCache = new WeakMap<object, DomainOperationRunner<any, any, any, any>>();
+
+const normalizeDomainOperationInput = (
+  operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
+  input: EntityRefInputPublicInput<any, any>,
+) =>
+  normalizeEntityRefInput(
+    normalizeGraphSchemaClientInput(operation.input, input, {
+      bindSelection: selection => operationInputDataGraph.bindSelection(selection),
+    }) as object,
+    operation.inputRefs,
+  );
+
+export const inspectProjectedDomainOperationQuery = (
+  operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
+  input: OperationInput,
+  view: RecursiveEntityViewDefinition<any, any, any>,
+): GraphReadSpec<any, any> => {
+  const normalizedInput = normalizeDomainOperationInput(operation, input);
+  const result = operation.run(attachEntityRefInputRefs(normalizedInput, operation.inputRefs));
+  const read =
+    result instanceof Selection
+      ? operationInputDataGraph.bindSelection(result)
+      : result instanceof GraphSelection
+        ? result
+        : undefined;
+  if (!read) {
+    throw new Error(
+      `Projectable operation "${operation.id}" must return a declarative Selection before materialization.`,
+    );
+  }
+  return read.as(view).build();
+};
 
 const executeDomainOperationRunResult = <TResult, TFailure, TInfraError>(
   result:
@@ -393,12 +432,10 @@ const resolveDomainOperationRunner = <
   const normalizeOperationInput = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
   ): EntityRefInputPublicInput<TInput, TInputRefs> =>
-    normalizeEntityRefInput(
-      normalizeGraphSchemaClientInput(operation.input, input, {
-        bindSelection: selection => operationInputDataGraph.bindSelection(selection),
-      }) as object,
-      operation.inputRefs,
-    ) as EntityRefInputPublicInput<TInput, TInputRefs>;
+    normalizeDomainOperationInput(operation, input) as EntityRefInputPublicInput<
+      TInput,
+      TInputRefs
+    >;
 
   const runOperation = (
     input: EntityRefInputPublicInput<TInput, TInputRefs>,

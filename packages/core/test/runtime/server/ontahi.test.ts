@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+  compileQueryPlan,
   createInMemoryDataGraphStorage,
   defineGraphOperation,
   entity as defineEntitySchema,
@@ -221,14 +222,54 @@ describe('ontahi application composition root', () => {
   });
 
   it('projects a Selection-shaped Operation result through one final Query', async () => {
+    const Company = entity({
+      name: 'Company',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const Owner = entity({
+      name: 'Owner',
+      fields: { id: field.id(), name: field.string(), company: field.ref(Company) },
+    });
+    const Truck = entity({
+      name: 'Truck',
+      fields: {
+        id: field.id(),
+        brand: field.string(),
+        owner: field.nullable(field.ref(Owner)),
+      },
+    });
+    const Driver = entity({
+      name: 'Driver',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const Country = entity({
+      name: 'Country',
+      fields: { id: field.id(), code: field.string() },
+    });
+    const Place = entity({
+      name: 'Place',
+      fields: { id: field.id(), name: field.string(), country: field.ref(Country) },
+    });
+    const Stop = entity({
+      name: 'Stop',
+      fields: {
+        id: field.id(),
+        tripId: field.string(),
+        order: field.integer(),
+        place: field.ref(Place),
+      },
+    });
     const Trip = entity({
       name: 'Trip',
       fields: {
         id: field.id(),
         region: field.string(),
         status: field.string(),
+        truck: field.ref(Truck),
+        driver: field.nullable(field.ref(Driver)),
       },
-      operations: ({ self, operation }) => ({
+      relations: { stops: relation.hasMany(Stop, { via: 'tripId' }) },
+      operations: ({ self, commands, operation }) => ({
         available: operation({
           input: graphSchema.object({ trips: self.many() }),
           output: self.many(),
@@ -239,15 +280,52 @@ describe('ontahi application composition root', () => {
           output: self.one(),
           run: ({ trips }) => trips.and(trip => trip.status.eq('available')),
         }),
+        materializedTooEarly: operation({
+          output: self.many(),
+          run: () => commands.all().run() as never,
+        }),
+        implicitSelection: operation({
+          run: () => commands.all(),
+        }),
       }),
     });
-    const TripList = Trip.view('TripList', { id: true, region: true });
+    const TripList = Trip.view('TripList', {
+      id: true,
+      region: true,
+      driver: true,
+      truck: {
+        brand: true,
+        owner: { name: true, company: { name: true } },
+      },
+      stops: {
+        order: true,
+        place: { name: true, country: { code: true } },
+      },
+    });
     const baseStorage = createInMemoryDataGraphStorage({
       dataset: {
+        Company: [{ id: 'company-1', name: 'Acme' }],
+        Owner: [{ id: 'owner-1', name: 'Ada', company: 'company-1' }],
+        Truck: [{ id: 'truck-1', brand: 'Volvo', owner: 'owner-1' }],
+        Driver: [{ id: 'driver-1', name: 'Grace' }],
+        Country: [{ id: 'country-1', code: 'AR' }],
+        Place: [{ id: 'place-1', name: 'Rosario', country: 'country-1' }],
+        Stop: [{ id: 'stop-1', tripId: 'trip-1', order: 1, place: 'place-1' }],
         Trip: [
-          { id: 'trip-1', region: 'south', status: 'available' },
-          { id: 'trip-2', region: 'south', status: 'assigned' },
-          { id: 'trip-3', region: 'north', status: 'available' },
+          {
+            id: 'trip-1',
+            region: 'south',
+            status: 'available',
+            truck: 'truck-1',
+            driver: 'driver-1',
+          },
+          {
+            id: 'trip-2',
+            region: 'south',
+            status: 'assigned',
+            truck: 'truck-1',
+            driver: null,
+          },
         ],
       },
     });
@@ -258,14 +336,67 @@ describe('ontahi application composition root', () => {
       ...baseStorage,
       createRuntime: () => runtime,
     };
-    ontahi({ storage, entities: [Trip] });
+    ontahi({ storage, entities: [Company, Owner, Truck, Driver, Country, Place, Stop, Trip] });
 
     const candidateTrips = Trip.selection(trip => trip.region.eq('south'));
     const call = Trip.available({ trips: candidateTrips }).as(TripList);
 
+    const finalQuery = call.inspect();
+    expect(finalQuery).toMatchObject({
+      kind: 'query',
+      root: { name: 'Trip' },
+      select: {
+        id: { kind: 'field-ref', fieldName: 'id' },
+        region: { kind: 'field-ref', fieldName: 'region' },
+        driver: { kind: 'field-ref', fieldName: 'driver' },
+      },
+      selection: { kind: 'and' },
+    });
+    expect(compileQueryPlan(finalQuery, undefined).includes).toMatchObject([
+      {
+        relationName: 'truck',
+        targetEntity: 'Truck',
+        includes: [
+          {
+            relationName: 'owner',
+            targetEntity: 'Owner',
+            includes: [{ relationName: 'company', targetEntity: 'Company', includes: [] }],
+          },
+        ],
+      },
+      {
+        relationName: 'stops',
+        targetEntity: 'Stop',
+        includes: [
+          {
+            relationName: 'place',
+            targetEntity: 'Place',
+            includes: [{ relationName: 'country', targetEntity: 'Country', includes: [] }],
+          },
+        ],
+      },
+    ]);
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(() => Trip.materializedTooEarly().as(TripList).inspect()).toThrow(
+      'Projectable operation "Trip.materializedTooEarly" must return a declarative Selection before materialization.',
+    );
+    const DriverView = Driver.view('DriverView', { name: true });
+    expect(() => Trip.available({ trips: candidateTrips }).as(DriverView as never)).toThrow(
+      'Cannot project Trip.available (Trip) as DriverView (Driver).',
+    );
+
     await expect(call.run()).resolves.toMatchObject({
       ok: true,
-      value: [{ id: 'trip-1', region: 'south' }],
+      value: [
+        {
+          id: 'trip-1',
+          region: 'south',
+          driver: { kind: 'entity-ref', entityName: 'Driver' },
+          truck: { brand: 'Volvo', owner: { name: 'Ada', company: { name: 'Acme' } } },
+          stops: [{ order: 1, place: { name: 'Rosario', country: { code: 'AR' } } }],
+        },
+      ],
     });
     expect(runSpy).toHaveBeenCalledTimes(1);
     expect(getSpy).not.toHaveBeenCalled();
@@ -274,10 +405,20 @@ describe('ontahi application composition root', () => {
       Trip.firstAvailable({ trips: candidateTrips }).as(TripList).run(),
     ).resolves.toMatchObject({
       ok: true,
-      value: { id: 'trip-1', region: 'south' },
+      value: {
+        id: 'trip-1',
+        region: 'south',
+        truck: { brand: 'Volvo' },
+      },
     });
     expect(runSpy).toHaveBeenCalledTimes(1);
     expect(getSpy).toHaveBeenCalledTimes(1);
+
+    const eager = Trip.implicitSelection();
+    expectTypeOf(eager).toMatchTypeOf<Promise<unknown>>();
+    expect(eager).toBeInstanceOf(Promise);
+    expect('as' in eager).toBe(false);
+    await expect(eager).resolves.toMatchObject({ ok: true });
   });
 
   it('binds opaque operation groups without exposing their implementation type', async () => {
