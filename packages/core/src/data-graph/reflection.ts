@@ -9,7 +9,6 @@ import {
 } from './definitions.js';
 import type { EntityViewAst } from './view.js';
 
-
 export type ReflectedOperationDescriptor<TInput = unknown, TData = unknown> = {
   id: string;
   entityName: string;
