@@ -43,6 +43,44 @@ const defineTodoGraph = () => {
 };
 
 describe('data-graph reference fields', () => {
+  it('includes reference fields in memory without physical mapping metadata', async () => {
+    const Driver = entity('Driver', {
+      id: field.id(),
+      name: field.string(),
+    });
+    const Trip = entity('Trip', {
+      id: field.id(),
+      driver: field.ref(Driver),
+      destination: field.string(),
+    });
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        Driver: [{ id: 'driver-1', name: 'Ada' }],
+        Trip: [{ id: 'trip-1', driver: 'driver-1', destination: 'Bariloche' }],
+      },
+    });
+
+    await expect(
+      Effect.runPromise(
+        runtime.run(
+          query(Trip).include(trip => ({
+            driver: trip.driver.select(driver => ({
+              id: driver.id,
+              name: driver.name,
+            })),
+          })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual([
+      {
+        id: 'trip-1',
+        driver: { id: 'driver-1', name: 'Ada' },
+        destination: 'Bariloche',
+      },
+    ]);
+  });
+
   it('declares one semantic value and synthesizes its belongs-to relation', () => {
     const { TodoList, Todo } = defineTodoGraph();
 

@@ -1,10 +1,11 @@
 import type { RelationNodeSpec } from './query.js';
-import type {
-  EntityRef,
-  EntityRefLocator,
-  EntityRefLocatorDeclarations,
-  EntityRefLocatorFactory,
-  EntityRefLocatorValue,
+import {
+  getEntityIdentityLocator,
+  type EntityRef,
+  type EntityRefLocator,
+  type EntityRefLocatorDeclarations,
+  type EntityRefLocatorFactory,
+  type EntityRefLocatorValue,
 } from './ref.js';
 import type { SemanticSelection } from './selection-ast.js';
 
@@ -1258,9 +1259,32 @@ export const resolveRelationFields = (
   const relationDefinition = sourceEntity.relations[relationName] as
     | RelationDefinition<RelationKind, AnyEntityDefinition>
     | undefined;
+  if (!relationDefinition) {
+    throw new Error(`Unknown relation ${sourceEntity.name}.${relationName}.`);
+  }
+
+  const singleIdentityField = (entityDefinition: AnyEntityDefinition) => {
+    const fields = getEntityIdentityLocator(entityDefinition)?.locator.fields;
+    return fields?.length === 1 ? fields[0] : undefined;
+  };
+  const semanticFields =
+    relationDefinition.relationKind === 'belongsTo'
+      ? {
+          sourceField: relationDefinition.sourceField,
+          targetField: singleIdentityField(relationDefinition.target),
+        }
+      : {
+          sourceField: singleIdentityField(sourceEntity),
+          targetField: relationDefinition.targetField,
+        };
+
+  if (semanticFields.sourceField && semanticFields.targetField) {
+    return semanticFields as { sourceField: string; targetField: string };
+  }
+
   const mapping = relationDefinition?.mapping;
 
-  if (!relationDefinition || !mapping) {
+  if (!mapping) {
     throw new Error(`Relation ${sourceEntity.name}.${relationName} is missing mapping metadata.`);
   }
 
