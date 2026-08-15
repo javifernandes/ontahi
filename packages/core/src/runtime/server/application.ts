@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import type { GraphApi, ReflectedEntityDataReader } from '../../data-graph/index.js';
 import { defineGraphApi } from '../../data-graph/index.js';
+import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 import type { TaskSnapshot } from '../contracts.js';
 import type { OperationPermissionResult } from '../operation-invocation.js';
 
@@ -41,6 +42,10 @@ export type OntahiApplication<TGraph extends AnyGraphApi = AnyGraphApi> = {
   invokeOperation: (
     operation: OperationInvocationOperation,
     input?: unknown,
+    projection?: {
+      view: RecursiveEntityViewDefinition<any, any, any>;
+      cardinality: 'one' | 'many';
+    },
   ) => Promise<OperationInvocationResult>;
   checkPermission: (
     operation: OperationInvocationOperation,
@@ -71,7 +76,10 @@ export function defineOntahiApplication(
     reflectedEntityDataReader,
     resolveOperation: operationId =>
       graph.getDomainOperation(operationId) as OperationInvocationOperation | undefined,
-    invokeOperation: (operation, input) => runtime.operation.invoke(operation, input as never),
+    invokeOperation: (operation, input, projection) =>
+      projection
+        ? runtime.operation.invokeProjected(operation, input as never, projection)
+        : runtime.operation.invoke(operation, input as never),
     checkPermission: (operation, input) =>
       runtime.operation.checkPermission(operation, input as never),
     getTaskSnapshot: ref => Effect.runPromise(runtime.task.getSnapshot(ref)),

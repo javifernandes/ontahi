@@ -48,6 +48,28 @@ describe('operation invocation protocol', () => {
     });
   });
 
+  it('parses a JSON-safe caller-authored View on invocation messages', () => {
+    const Trip = entity('Trip', { id: field.id(), status: field.string() });
+    const TripList = Trip.view('TripList', { id: true });
+
+    expect(
+      parseOperationInvocationRequest({
+        kind: 'invoke',
+        operationId: 'Trip.available',
+        input: {},
+        view: TripList.toJSON(),
+      }),
+    ).toEqual({
+      success: true,
+      request: {
+        kind: 'invoke',
+        operationId: 'Trip.available',
+        input: {},
+        view: TripList.toJSON(),
+      },
+    });
+  });
+
   it('rejects malformed transport messages', () => {
     expect(parseOperationInvocationRequest({ operationId: 'Book.rename', input: {} })).toEqual({
       success: false,
@@ -115,6 +137,124 @@ describe('operation invocation dispatcher', () => {
       },
     });
     expect(invokeOperation).toHaveBeenCalledWith(operation, { title: 'Ontahi' });
+  });
+
+  it('rebuilds a projected Selection result View before invoking an operation', async () => {
+    const Trip = entity('Trip', { id: field.id(), status: field.string() });
+    const TripList = Trip.view('TripList', { id: true });
+    const projectedOperation = {
+      ...operation,
+      id: 'Trip.available',
+      entityName: 'Trip',
+      name: 'available',
+      output: graphSchema.selection(Trip, { cardinality: 'many' }),
+    };
+    const invokeOperation = vi.fn(async () => ({
+      ok: true as const,
+      kind: 'success' as const,
+      value: [{ id: 'trip-1' }],
+    }));
+    const { createOperationInvocationDispatcher } =
+      await import('../../src/runtime/server/operation-invocation.js');
+    const dispatcher = createOperationInvocationDispatcher({
+      resolveOperation: () => projectedOperation,
+      invokeOperation,
+      checkPermission: async () => ({ allowed: true }),
+    });
+
+    await expect(
+      dispatcher({
+        kind: 'invoke',
+        operationId: projectedOperation.id,
+        input: { title: 'available' },
+        view: TripList.toJSON(),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, value: [{ id: 'trip-1' }] },
+    });
+    expect(invokeOperation).toHaveBeenCalledWith(
+      projectedOperation,
+      { title: 'available' },
+      expect.objectContaining({
+        cardinality: 'many',
+        view: expect.objectContaining({ ast: TripList.toJSON() }),
+      }),
+    );
+  });
+
+  it('rejects a View that does not match the projectable output Entity', async () => {
+    const Trip = entity('Trip', { id: field.id() });
+    const Book = entity('Book', { id: field.id() });
+    const projectedOperation = {
+      ...operation,
+      output: graphSchema.selection(Trip, { cardinality: 'many' }),
+    };
+    const invokeOperation = vi.fn();
+    const { createOperationInvocationDispatcher } =
+      await import('../../src/runtime/server/operation-invocation.js');
+    const dispatcher = createOperationInvocationDispatcher({
+      resolveOperation: () => projectedOperation,
+      invokeOperation,
+      checkPermission: async () => ({ allowed: true }),
+    });
+
+    await expect(
+      dispatcher({
+        kind: 'invoke',
+        operationId: projectedOperation.id,
+        input: { title: 'available' },
+        view: Book.view('BookList', { id: true }).toJSON(),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: false, kind: 'rejected', reason: 'invalid_projection' },
+    });
+    expect(invokeOperation).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: 'fixed Operation output',
+      output: graphSchema.object({ id: field.id() }),
+      view: entity('Trip', { id: field.id() }).view('TripList', { id: true }).toJSON(),
+    },
+    {
+      name: 'unknown transported field',
+      output: graphSchema.selection(entity('Trip', { id: field.id() }), {
+        cardinality: 'many',
+      }),
+      view: {
+        version: 1 as const,
+        kind: 'entity-view' as const,
+        name: 'TripList',
+        entity: 'Trip',
+        fields: { missing: { kind: 'field-view' as const, field: 'missing' } },
+      },
+    },
+  ])('rejects invalid projection metadata: $name', async ({ output, view }) => {
+    const projectedOperation = { ...operation, output };
+    const invokeOperation = vi.fn();
+    const { createOperationInvocationDispatcher } =
+      await import('../../src/runtime/server/operation-invocation.js');
+    const dispatcher = createOperationInvocationDispatcher({
+      resolveOperation: () => projectedOperation,
+      invokeOperation,
+      checkPermission: async () => ({ allowed: true }),
+    });
+
+    await expect(
+      dispatcher({
+        kind: 'invoke',
+        operationId: projectedOperation.id,
+        input: { title: 'available' },
+        view,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: false, kind: 'rejected', reason: 'invalid_projection' },
+    });
+    expect(invokeOperation).not.toHaveBeenCalled();
   });
 
   it('hydrates transported selections before invoking an operation', async () => {

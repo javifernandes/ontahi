@@ -1,9 +1,12 @@
+import type { EntityViewAst } from '../data-graph/view.js';
+
 import type { OperationInvocationResult, OperationValidationIssue } from './contracts.js';
 
 export type OperationInvokeRequest = {
   kind: 'invoke';
   operationId: string;
   input?: unknown;
+  view?: EntityViewAst;
 };
 
 export type OperationPermissionRequest = {
@@ -117,12 +120,25 @@ export const parseOperationInvocationRequest = (
     };
   }
 
+  if (value.view !== undefined && (kind !== 'invoke' || !isRecord(value.view))) {
+    return {
+      success: false,
+      error: operationInvocationProtocolError(
+        'invalid_request',
+        'Operation invocation view must be an object on an invoke request.',
+      ),
+    };
+  }
+
   return {
     success: true,
     request: {
       kind,
       operationId,
       input: value.input,
+      ...(kind === 'invoke' && value.view !== undefined
+        ? { view: value.view as EntityViewAst }
+        : {}),
     },
   };
 };

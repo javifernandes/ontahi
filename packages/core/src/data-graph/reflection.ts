@@ -7,6 +7,8 @@ import {
   type RelationDefinition,
   type RelationKind,
 } from './definitions.js';
+import type { EntityViewAst } from './view.js';
+
 
 export type ReflectedOperationDescriptor<TInput = unknown, TData = unknown> = {
   id: string;
@@ -23,6 +25,7 @@ export type ReflectedOperationInvocation<TInput = unknown> = {
   operationId: string;
   input: TInput;
   operation?: ReflectedOperationDescriptor<TInput, unknown>;
+  view?: EntityViewAst;
 };
 
 export type ReflectedOperationInvoker = {

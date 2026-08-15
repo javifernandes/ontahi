@@ -1,5 +1,7 @@
+import type { GraphSelectionDefinition } from '../../data-graph/definitions.js';
 import { normalizeEntityRefInput } from '../../data-graph/ref.js';
 import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
+import { createRecursiveEntityViewFromAst } from '../../data-graph/view.js';
 import {
   operationInputInvalid,
   operationRejected,
@@ -25,6 +27,10 @@ export type OperationInvocationResolver = (
 export type OperationInvocationExecutor = (
   operation: OperationInvocationOperation,
   input: unknown,
+  projection?: {
+    view: ReturnType<typeof createRecursiveEntityViewFromAst>;
+    cardinality: 'one' | 'many';
+  },
 ) => Promise<OperationInvocationResult>;
 
 export type OperationPermissionChecker = (
@@ -97,6 +103,23 @@ const invocationErrored = (message: string): OperationInvocationResult => ({
   message,
 });
 
+const resolveInvocationProjection = (
+  operation: OperationInvocationOperation,
+  request: Extract<OperationInvocationRequest, { kind: 'invoke' }>,
+) => {
+  if (!request.view) return undefined;
+
+  if (operation.output?.kind !== 'schema.selection') {
+    throw new Error(`Operation "${operation.id}" does not have a projectable output.`);
+  }
+
+  const output = operation.output as GraphSelectionDefinition;
+  return {
+    view: createRecursiveEntityViewFromAst(output.entity, request.view),
+    cardinality: output.cardinality,
+  };
+};
+
 export const createOperationInvocationDispatcher =
   ({
     resolveOperation,
@@ -159,10 +182,25 @@ export const createOperationInvocationDispatcher =
       }
     }
 
+    let projection;
+    try {
+      projection = resolveInvocationProjection(operation, request);
+    } catch (error) {
+      return {
+        kind: 'invocation-result',
+        result: operationRejected(
+          'invalid_projection',
+          error instanceof Error ? error.message : 'Operation projection is invalid.',
+        ),
+      };
+    }
+
     try {
       return {
         kind: 'invocation-result',
-        result: await invokeOperation(operation, validatedInput.data),
+        result: projection
+          ? await invokeOperation(operation, validatedInput.data, projection)
+          : await invokeOperation(operation, validatedInput.data),
       };
     } catch (error) {
       reportError?.(error, request);
