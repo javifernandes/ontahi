@@ -278,7 +278,7 @@
   right: -1px;
   width: 8px;
   height: 8px;
-  content: "";
+  content: '';
   border-top: 1px solid var(--ontahi-olive-dark);
   border-right: 1px solid var(--ontahi-olive-dark);
   transform: rotate(45deg);
