@@ -26,6 +26,7 @@ import {
   type QuerySelectArg,
   type QueryWhereArg,
 } from './selection.js';
+import type { RecursiveEntityViewDefinition } from './view.js';
 
 const ONTAHI_SELECTION = Symbol.for('@ontahi/core/data-graph/selection');
 
@@ -143,6 +144,10 @@ export class Selection<
 
   include(build: QueryIncludeArg<TEntity, InferEntityRecord<TEntity['fields']>>) {
     return this.toGraphSelection().include(build);
+  }
+
+  as<TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(view: TView) {
+    return this.toGraphSelection().as(view);
   }
 
   orderBy(build: QueryOrderByArg<TEntity, InferEntityRecord<TEntity['fields']>>) {

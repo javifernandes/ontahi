@@ -15,6 +15,8 @@ import {
   type SelectionExpression,
   type SelectionPredicate,
 } from './selection-ast.js';
+import { applyViewToQuerySpec } from './view-query.js';
+import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
 
 type OrderDirection = 'asc' | 'desc';
 
@@ -376,6 +378,12 @@ export class QueryBuilder<
       TEntity,
       Simplify<Omit<TResult, keyof TInclude> & InferIncludeShape<TInclude>>
     >);
+  }
+
+  as<TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(view: TView) {
+    return new QueryBuilder<TEntity, InferEntityViewResult<TView>>(
+      applyViewToQuerySpec(this.spec, view),
+    );
   }
 
   orderBy(build: (root: EntityFieldProxy<TEntity>) => AnyFieldReference | OrderSpec) {

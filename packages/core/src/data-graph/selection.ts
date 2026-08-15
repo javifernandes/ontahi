@@ -7,6 +7,7 @@ import {
   type SemanticSelection,
   type SelectionExpression,
 } from './selection-ast.js';
+import type { RecursiveEntityViewDefinition } from './view.js';
 
 export type QueryWhereArg<TEntity extends AnyEntityDefinition, TResult> = Parameters<
   QueryBuilder<TEntity, TResult>['where']
@@ -195,6 +196,11 @@ export class GraphSelection<
 
   include(build: QueryIncludeArg<TEntity, TResult>) {
     const nextBuilder = this.includeBuilder(build);
+    return this.factories.createSelection(nextBuilder) as SelectionFromBuilder<typeof nextBuilder>;
+  }
+
+  as<TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(view: TView) {
+    const nextBuilder = this.builder.as(view);
     return this.factories.createSelection(nextBuilder) as SelectionFromBuilder<typeof nextBuilder>;
   }
 
