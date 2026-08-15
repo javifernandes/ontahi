@@ -9,7 +9,11 @@ import {
 import { getActionInvalidationQueryKeys, getActionQueryKey } from '@ontahi/core/runtime/actions';
 import { describe, expect, it } from 'vitest';
 
-import { attachOperationBridgeActionRuntime } from '../../src/actions/index.js';
+import {
+  attachOperationBridgeActionRuntime,
+  OperationInvocationResultError,
+  unwrapOperationInvocationValue,
+} from '../../src/actions/index.js';
 
 describe('operation bridge query keys', () => {
   const successResult = {
@@ -154,5 +158,46 @@ describe('operation bridge query keys', () => {
         },
       }),
     ).toEqual([['CommentThread', 'thread-1']]);
+  });
+
+  it('preserves transported operation failure details as the client error cause', () => {
+    const failure = {
+      success: false,
+      reason: 'internal_error',
+      message: 'Failed to load trips',
+      cause: {
+        name: 'Error',
+        message: 'Failed to execute in-memory read.',
+        cause: {
+          name: 'Error',
+          message: 'Relation Trip.driver is missing mapping metadata.',
+        },
+      },
+    };
+    const result = {
+      ok: false,
+      kind: 'failed',
+      executed: true,
+      message: failure.message,
+      failure,
+    } as const;
+
+    expect(() => unwrapOperationInvocationValue(result)).toThrow(
+      expect.objectContaining({
+        name: 'OperationInvocationResultError',
+        cause: failure,
+        result,
+      }),
+    );
+
+    try {
+      unwrapOperationInvocationValue(result);
+    } catch (error) {
+      expect(JSON.parse(JSON.stringify(error as OperationInvocationResultError))).toMatchObject({
+        name: 'OperationInvocationResultError',
+        message: 'Failed to load trips',
+        cause: failure,
+      });
+    }
   });
 });

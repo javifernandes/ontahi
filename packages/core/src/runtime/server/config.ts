@@ -1,6 +1,7 @@
 import type { ArchitectureDefinition } from './architecture-types.js';
 import type {
   ServerRuntimeConfig,
+  ServerRuntimeDiagnostics,
   ServerRuntimeRateLimitAdapter,
   ServerRuntimeReportingAdapter,
   ServerRuntimeTelemetryAdapter,
@@ -22,6 +23,10 @@ const NOOP_REPORTING: ServerRuntimeReportingAdapter = {
   reportWarning: () => {},
 };
 
+const DEFAULT_DIAGNOSTICS: ServerRuntimeDiagnostics = {
+  exposeInternalErrorCauses: false,
+};
+
 const NOOP_RATE_LIMIT: ServerRuntimeRateLimitAdapter = {
   acquireSlot: async policy => ({
     allowed: true,
@@ -31,11 +36,12 @@ const NOOP_RATE_LIMIT: ServerRuntimeRateLimitAdapter = {
 };
 
 const DEFAULT_RUNTIME_CONFIG: Required<
-  Pick<ServerRuntimeConfig<unknown>, 'telemetry' | 'reporting' | 'rateLimit'>
+  Pick<ServerRuntimeConfig<unknown>, 'telemetry' | 'reporting' | 'diagnostics' | 'rateLimit'>
 > &
   Pick<ServerRuntimeConfig<unknown>, 'loadArchitecture'> = {
   telemetry: NOOP_TELEMETRY,
   reporting: NOOP_REPORTING,
+  diagnostics: DEFAULT_DIAGNOSTICS,
   rateLimit: NOOP_RATE_LIMIT,
   loadArchitecture: async () => ({}) as ArchitectureDefinition<unknown>,
 };
@@ -53,7 +59,7 @@ export const resetServerRuntimeForTests = (): void => {
 };
 
 export const getServerRuntimeConfig = <TEvent = unknown>(): Required<
-  Pick<ServerRuntimeConfig<TEvent>, 'telemetry' | 'reporting' | 'rateLimit'>
+  Pick<ServerRuntimeConfig<TEvent>, 'telemetry' | 'reporting' | 'diagnostics' | 'rateLimit'>
 > &
   Pick<ServerRuntimeConfig<TEvent>, 'loadArchitecture'> => {
   const configured = runtimeConfig as ServerRuntimeConfig<TEvent> | undefined;
@@ -61,6 +67,7 @@ export const getServerRuntimeConfig = <TEvent = unknown>(): Required<
   return {
     telemetry: configured?.telemetry ?? DEFAULT_RUNTIME_CONFIG.telemetry,
     reporting: configured?.reporting ?? DEFAULT_RUNTIME_CONFIG.reporting,
+    diagnostics: configured?.diagnostics ?? DEFAULT_RUNTIME_CONFIG.diagnostics,
     rateLimit: configured?.rateLimit ?? DEFAULT_RUNTIME_CONFIG.rateLimit,
     loadArchitecture: configured?.loadArchitecture ?? DEFAULT_RUNTIME_CONFIG.loadArchitecture,
   };

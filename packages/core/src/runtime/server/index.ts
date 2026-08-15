@@ -142,6 +142,7 @@ export {
 export type {
   RateLimitResult,
   ServerRuntimeConfig,
+  ServerRuntimeDiagnostics,
   ServerRuntimeRateLimitAdapter,
   ServerRuntimeReportingAdapter,
   ServerRuntimeTelemetryAdapter,

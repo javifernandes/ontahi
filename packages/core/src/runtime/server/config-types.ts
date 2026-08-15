@@ -42,6 +42,10 @@ export interface ServerRuntimeReportingAdapter {
   ) => void;
 }
 
+export type ServerRuntimeDiagnostics = {
+  exposeInternalErrorCauses?: boolean;
+};
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -56,6 +60,7 @@ export interface ServerRuntimeRateLimitAdapter {
 export type ServerRuntimeConfig<TEvent = unknown> = {
   telemetry?: ServerRuntimeTelemetryAdapter;
   reporting?: ServerRuntimeReportingAdapter;
+  diagnostics?: ServerRuntimeDiagnostics;
   rateLimit?: ServerRuntimeRateLimitAdapter;
   loadArchitecture?: () => Promise<ArchitectureDefinition<TEvent>>;
 };

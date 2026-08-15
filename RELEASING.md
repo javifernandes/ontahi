@@ -3,6 +3,29 @@
 Ontahi publishes all ten `@ontahi/*` packages at one exact lockstep prerelease version. Publication
 is manual: merging `main` or a version pull request never publishes to npm.
 
+## The short version
+
+For a contributor changing a public package:
+
+1. Run `pnpm changeset` in the feature branch.
+2. Select only the packages directly affected and describe the consumer-visible change.
+3. Commit the generated `.changeset/*.md` file with the code and open the pull request.
+
+After the feature pull request is merged, automation creates or updates the ready
+`chore: version Ontahi packages` pull request. No release has happened yet.
+
+For a maintainer releasing the accumulated changes:
+
+1. Review and merge `chore: version Ontahi packages`; this commits the shared version and
+   changelogs but still does not publish.
+2. Wait for `main` CI.
+3. In GitHub Actions, run **npm prerelease** from `main` with `mode: publish`, the exact version from
+   the version pull request, and `channel: alpha`.
+4. Create the matching GitHub prerelease and update consumers to that exact version.
+
+Do not run `changeset version`, edit package versions, push tags, or use an npm token manually. The
+version pull request and the trusted-publishing workflow own those steps.
+
 ## Record a public change
 
 A pull request that changes a package's behavior or public contract includes a changeset:

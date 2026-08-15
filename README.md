@@ -56,12 +56,16 @@ The ten framework packages share one exact lockstep prerelease version. They req
 `>=20.19.0`, publish publicly with npm provenance, and carry the Apache-2.0 `LICENSE` and `NOTICE`
 in every artifact.
 
+A public package change must include a changeset (`pnpm changeset`). Merging the change updates a
+ready version pull request; it never publishes to npm. After that version pull request is merged,
+a maintainer explicitly runs the **npm prerelease** workflow with the committed version and the
+`alpha` channel. No package version is edited by hand.
+
 Internal `workspace:*` dependencies are rewritten by `pnpm pack` to the exact lockstep version. A
 public alpha release therefore publishes the complete changed dependency closure.
 
-Releases are manually dispatched, dry-run all ten artifacts, and publish from `main` through npm
-OIDC trusted publishing. See [`RELEASING.md`](./RELEASING.md) for the versioning and publication
-flow.
+The workflow validates all ten artifacts and publishes from `main` through npm OIDC trusted
+publishing. See [`RELEASING.md`](./RELEASING.md) for the short contributor and maintainer flows.
 
 ## Verify artifacts
 
