@@ -111,6 +111,10 @@ const validateSourceManifests = () => {
         ['src', 'types', 'LICENSE', 'NOTICE'].every(file => manifest.files.includes(file)),
         '@ontahi/codegen must publish executable sources, declarations, and legal files.',
       );
+      assert(
+        manifest.bin?.['ontahi-codegen'] === './src/cli.mjs',
+        '@ontahi/codegen must publish the conventional ontahi-codegen executable.',
+      );
     } else {
       assert(
         ['dist', 'LICENSE', 'NOTICE'].every(file => manifest.files.includes(file)),
@@ -166,6 +170,10 @@ const packPackages = artifactsDirectory =>
           [...filePaths].every(filePath => !filePath.startsWith('src/')),
           `${name} leaked workspace source into its artifact.`,
         );
+      }
+
+      if (name === '@ontahi/codegen') {
+        assert(filePaths.has('src/cli.mjs'), '@ontahi/codegen artifact is missing its executable.');
       }
 
       const packedManifest = JSON.parse(
