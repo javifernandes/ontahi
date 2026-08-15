@@ -36,6 +36,7 @@ import {
   type QueryWhereArg,
   type PickEntityFields,
 } from './selection.js';
+import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
 
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
 
@@ -108,6 +109,16 @@ export type BoundGraphSelectionSemanticApi<
   TCommandError = TReadError,
   TCommandOptions = TReadOptions,
 > = {
+  as: <TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(
+    view: TView,
+  ) => BoundGraphSelection<
+    TEntity,
+    InferEntityViewResult<TView>,
+    TReadError,
+    TReadOptions,
+    TCommandError,
+    TCommandOptions
+  >;
   where: (
     build: QueryWhereArg<TEntity, TResult>,
   ) => BoundGraphSelection<
@@ -330,6 +341,16 @@ export type BoundSelectionSemanticApi<
   TCommandError = TReadError,
   TCommandOptions = TReadOptions,
 > = {
+  as: <TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(
+    view: TView,
+  ) => BoundGraphSelection<
+    TEntity,
+    InferEntityViewResult<TView>,
+    TReadError,
+    TReadOptions,
+    TCommandError,
+    TCommandOptions
+  >;
   and: (
     operand: Selection<TEntity> | SelectionBuilder<TEntity>,
   ) => BoundSelection<
@@ -861,6 +882,8 @@ export const createGraphSelectionAssembly = <
       named: (name: string) => createBoundSelection(named(name)),
       where: (build: QueryWhereArg<TEntity, InferEntityRecord<TEntity['fields']>>) =>
         asGraphSelection().where(build),
+      as: <TView extends RecursiveEntityViewDefinition<TEntity, any, any>>(view: TView) =>
+        asGraphSelection().as(view),
       select: (build: QuerySelectArg<TEntity, InferEntityRecord<TEntity['fields']>>) =>
         asGraphSelection().select(build),
       include: (build: QueryIncludeArg<TEntity, InferEntityRecord<TEntity['fields']>>) =>

@@ -1,10 +1,16 @@
+import { Effect } from 'effect';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  createEntityRef,
+  createInMemoryDataGraphRuntime,
+  createRuntimeBoundDataGraphApi,
   entity,
   field,
   type EntityRef,
   type InferEntityViewResult,
+  type InferQueryResult,
+  query,
 } from '../../src/data-graph/index.js';
 
 const defineTripGraph = () => {
@@ -48,7 +54,7 @@ const defineTripGraph = () => {
   });
   const TripGraph = Trip.hasMany('stops', Stop, { via: 'trip' });
 
-  return { Company, Trip: TripGraph };
+  return { Company, Country, Driver, Owner, Place, Stop, Trip: TripGraph, Truck };
 };
 
 describe('recursive entity views', () => {
@@ -211,5 +217,66 @@ describe('recursive entity views', () => {
       kind: 'field-view',
       field: 'trip',
     });
+  });
+
+  it('applies a recursive view to one local Query and Selection without automatic hydration', async () => {
+    const { Company, Driver, Trip } = defineTripGraph();
+    const CompanySummary = Company.view('CompanySummary', { name: true });
+    const TripList = Trip.view('TripList', {
+      id: true,
+      driver: true,
+      truck: { brand: true, owner: { name: true, company: CompanySummary } },
+      stops: {
+        order: true,
+        trip: true,
+        place: { name: true, country: { code: true } },
+      },
+    });
+    const projected = query(Trip)
+      .where(trip => trip.id.eq('trip-1'))
+      .as(TripList);
+
+    expectTypeOf<InferQueryResult<typeof projected>>().toEqualTypeOf<
+      InferEntityViewResult<typeof TripList>
+    >();
+    expect(Object.keys(projected.build().includes ?? {})).toEqual(['truck', 'stops']);
+
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        Company: [{ id: 'company-1', name: 'Acme' }],
+        Owner: [
+          { id: 'owner-1', name: 'Ada', company: 'company-1' },
+          { id: 'owner-2', name: 'Nobody', company: 'company-1' },
+        ],
+        Truck: [{ id: 'truck-1', brand: 'Volvo', owner: 'owner-1' }],
+        Driver: [{ id: 'driver-1', name: 'Grace' }],
+        Country: [{ id: 'country-1', code: 'AR' }],
+        Place: [{ id: 'place-1', name: 'Rosario', country: 'country-1' }],
+        Trip: [{ id: 'trip-1', truck: 'truck-1', driver: 'driver-1' }],
+        Stop: [{ id: 'stop-1', trip: 'trip-1', order: 1, place: 'place-1' }],
+      },
+    });
+
+    await expect(Effect.runPromise(runtime.run(projected, undefined))).resolves.toEqual([
+      {
+        id: 'trip-1',
+        driver: createEntityRef(Driver, { id: 'driver-1' }),
+        truck: { brand: 'Volvo', owner: { name: 'Ada', company: { name: 'Acme' } } },
+        stops: [
+          {
+            order: 1,
+            trip: createEntityRef(Trip, { id: 'trip-1' }),
+            place: { name: 'Rosario', country: { code: 'AR' } },
+          },
+        ],
+      },
+    ]);
+
+    const graph = createRuntimeBoundDataGraphApi(() => runtime);
+    const Trips = graph.bindSelectionEntity(Trip);
+    const selected = Trips.selection(trip => trip.id.eq('trip-1')).as(TripList);
+    await expect(Effect.runPromise(selected.run())).resolves.toEqual(
+      await Effect.runPromise(runtime.run(projected, undefined)),
+    );
   });
 });
