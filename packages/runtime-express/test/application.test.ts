@@ -1,15 +1,26 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { entity, field, value } from '@ontahi/core/data-graph';
-import type { OntahiApplication } from '@ontahi/core/runtime/server';
+import {
+  createInMemoryDataGraphStorage,
+  entity as defineEntitySchema,
+  field,
+  value,
+} from '@ontahi/core/data-graph';
+import { entity as defineOntahiEntity } from '@ontahi/core/entity';
+import {
+  configureServerRuntime,
+  ontahi,
+  resetServerRuntimeForTests,
+  type OntahiApplication,
+} from '@ontahi/core/runtime/server';
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ontahiExpress } from '../src/application.js';
 import { createOntahiExpressExplorer } from '../src/explorer/index.js';
 
-const TodoEntity = entity('Todo', {
+const TodoEntity = defineEntitySchema('Todo', {
   id: field.id(),
   title: field.string(),
 });
@@ -100,6 +111,83 @@ describe('Ontahi Express application middleware', () => {
     server?.closeAllConnections();
     server?.close();
     server = undefined;
+    resetServerRuntimeForTests();
+  });
+
+  it('transports opted-in internal error causes as JSON-safe diagnostics', async () => {
+    const Driver = defineOntahiEntity({
+      name: 'DiagnosticDriver',
+      fields: {
+        name: field.string(),
+      },
+    });
+    const Trip = defineOntahiEntity({
+      name: 'DiagnosticTrip',
+      fields: {
+        id: field.id(),
+        driver: field.ref(Driver),
+      },
+      domainOperationDefaults: {
+        authority: 'server',
+        exposure: 'bridge',
+        layer: 'trips',
+      },
+      operations: ({ self, commands, operation }) => ({
+        list: operation({
+          output: self.array(),
+          run: () =>
+            commands.all().include(trip => ({
+              driver: trip.driver.select(driver => ({ name: driver.name })),
+            })),
+        }),
+      }),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: {
+          DiagnosticDriver: [{ name: 'Ada' }],
+          DiagnosticTrip: [{ id: 'trip-1', driver: 'driver-1' }],
+        },
+      }),
+      entities: [Driver, Trip],
+    });
+    configureServerRuntime({
+      diagnostics: {
+        exposeInternalErrorCauses: true,
+      },
+    });
+    const expressApp = express();
+    expressApp.use(ontahiExpress(application));
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    await expect(
+      fetch(`${origin}/operations`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'invoke', operationId: 'DiagnosticTrip.list' }),
+      }).then(response => response.json()),
+    ).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: false,
+        kind: 'failed',
+        failure: {
+          reason: 'internal_error',
+          cause: {
+            name: 'InMemoryDataGraphError',
+            message: 'Failed to execute in-memory read.',
+            cause: {
+              name: 'Error',
+              message:
+                'Cannot store a reference to DiagnosticDriver: the target must have a single-field identity.',
+            },
+          },
+        },
+      },
+    });
   });
 
   it('mounts invocation, tasks, metadata, and Explorer endpoints with defaults', async () => {

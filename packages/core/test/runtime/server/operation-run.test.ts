@@ -179,20 +179,21 @@ describe('runServerOperation', () => {
     const reporting = createReporting();
     configureServerRuntime({ reporting });
 
-    await expect(
-      runServerOperation(Effect.die(new Error('boom')), {
-        scope: 'features.books.fetchBook',
-        defectLogMessage: 'Unexpected book failure',
-        defectPublicMessage: 'Failed to load book',
-        extra: { bookSlug: 'progbook' },
-      }),
-    ).resolves.toMatchObject({
+    const result = await runServerOperation(Effect.die(new Error('boom')), {
+      scope: 'features.books.fetchBook',
+      defectLogMessage: 'Unexpected book failure',
+      defectPublicMessage: 'Failed to load book',
+      extra: { bookSlug: 'progbook' },
+    });
+
+    expect(result).toMatchObject({
       success: false,
       reason: 'internal_error',
       message: 'Failed to load book',
       error: 'Failed to load book',
       errorType: 'internal_error',
     });
+    expect(result).not.toHaveProperty('cause');
     expect(reporting.reportError).toHaveBeenCalledWith(
       'Unexpected book failure',
       expect.any(Error),
@@ -204,5 +205,40 @@ describe('runServerOperation', () => {
         }),
       },
     );
+  });
+
+  it('exposes JSON-safe internal error causes only when diagnostics opt in', async () => {
+    const relationError = new Error('Relation Trip.driver is missing mapping metadata.');
+    const readError = new Error('Failed to execute in-memory read.');
+    Object.defineProperty(readError, 'cause', {
+      configurable: true,
+      value: relationError,
+    });
+    configureServerRuntime({
+      diagnostics: {
+        exposeInternalErrorCauses: true,
+      },
+    });
+
+    const result = await runServerOperation(Effect.die(readError), {
+      scope: 'Trip.list',
+      defectLogMessage: 'Unexpected trip read failure',
+      defectPublicMessage: 'Failed to load trips',
+    });
+    const transported = JSON.parse(JSON.stringify(result));
+
+    expect(transported).toMatchObject({
+      success: false,
+      reason: 'internal_error',
+      message: 'Failed to load trips',
+      cause: {
+        name: 'Error',
+        message: 'Failed to execute in-memory read.',
+        cause: {
+          name: 'Error',
+          message: 'Relation Trip.driver is missing mapping metadata.',
+        },
+      },
+    });
   });
 });

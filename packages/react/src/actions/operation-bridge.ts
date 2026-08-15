@@ -34,9 +34,25 @@ export type OperationInvocationFailure<TFailure = unknown> = Exclude<
 
 export class OperationInvocationResultError<TFailure = unknown> extends Error {
   readonly name = 'OperationInvocationResultError';
+  declare readonly cause?: unknown;
 
   constructor(readonly result: OperationInvocationFailure<TFailure>) {
     super(result.message);
+    if (result.kind === 'failed') {
+      Object.defineProperty(this, 'cause', {
+        configurable: true,
+        value: result.failure,
+      });
+    }
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      ...(this.cause === undefined ? {} : { cause: this.cause }),
+      result: this.result,
+    };
   }
 }
 

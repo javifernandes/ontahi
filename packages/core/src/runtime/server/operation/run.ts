@@ -1,4 +1,4 @@
-import { toError } from '@ontahi/core/value/error';
+import { toError, toSerializableErrorCause } from '@ontahi/core/value/error';
 import { Cause, Effect, Exit, Option } from 'effect';
 
 import { RateLimitExceededError } from '../concerns/rate-limit.js';
@@ -45,7 +45,7 @@ const runServerOperationEffect = async <
   >,
   options: RunServerOperationOptions,
 ): Promise<OperationResult<UnwrapEffectSuccess<TRawSuccess>, TFailure>> => {
-  const { telemetry, reporting } = getServerRuntimeConfig();
+  const { telemetry, reporting, diagnostics } = getServerRuntimeConfig();
 
   return telemetry.withSpan(
     options.telemetrySpanName ?? options.scope,
@@ -123,6 +123,9 @@ const runServerOperationEffect = async <
         message: options.defectPublicMessage ?? 'Unexpected server error',
         error: options.defectPublicMessage ?? 'Unexpected server error',
         errorType: 'internal_error',
+        ...(diagnostics.exposeInternalErrorCauses
+          ? { cause: toSerializableErrorCause(defect) }
+          : {}),
       } as OperationResult<UnwrapEffectSuccess<TRawSuccess>, TFailure>;
     },
   );

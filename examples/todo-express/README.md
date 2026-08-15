@@ -229,6 +229,29 @@ composition refines that same value without creating a UI-only filter language.
 does not infer migrations: this example deliberately keeps physical schema evolution under host
 control.
 
+## Development error diagnostics
+
+Unexpected operation defects are sanitized before crossing a transport. A production browser
+receives an `internal_error` and the operation's public failure message, never an arbitrary server
+exception.
+
+During local development, a host can explicitly expose a JSON-safe error chain:
+
+```ts
+import { configureServerRuntime } from '@ontahi/core/runtime/server';
+
+configureServerRuntime({
+  diagnostics: {
+    exposeInternalErrorCauses: process.env.NODE_ENV !== 'production',
+  },
+});
+```
+
+The bridge then includes the normalized chain under `result.failure.cause`. React throws an
+`OperationInvocationResultError` whose `cause` is that transported failure and whose `toJSON()`
+preserves the same diagnostic data. The option is disabled by default because exception messages
+can reveal server implementation details.
+
 ## Verify it
 
 ```sh
