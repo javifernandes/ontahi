@@ -101,15 +101,23 @@ describe('conventional client entity codegen', () => {
       'utf8',
     );
     await writeFile(
-      path.join(sourceDirectory, 'trip.ts'),
+      path.join(sourceDirectory, 'trip-list-item.ts'),
       `
-        import { entity, field, value } from '@ontahi/core/entity';
+        import { field, value } from '@ontahi/core/entity';
         import { Driver } from './driver';
 
-        const TripListItem = value('TripListItem', {
+        export const TripListItem = value('TripListItem', {
           id: field.id(),
           driver: field.ref(Driver),
         });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(sourceDirectory, 'trip.ts'),
+      `
+        import { entity, field } from '@ontahi/core/entity';
+        import { TripListItem } from './trip-list-item';
 
         export const Trip = entity({
           name: 'Trip',
@@ -137,6 +145,7 @@ describe('conventional client entity codegen', () => {
     expect(source).toContain("export const DriverSchema = defineEntitySchema('Driver'");
     expect(source).toContain('driver: field.ref(DriverSchema)');
     expect(source).toContain("output: value('TripListItem'");
+    expect(source).not.toContain("from './trip-list-item'");
   });
 
   it('prints concise help without trying to analyze an application', async () => {
