@@ -5,10 +5,12 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  analyzeOntahiApplication,
   createClientEntityCodegenRunner,
+  createFileSystemSourceLoader,
   parseClientEntityCodegenArguments,
   runClientEntityCodegenCli,
-} from '../src/client-entities.mjs';
+} from '../src/index.mjs';
 
 import { importGeneratedModule } from './support/generated-module.js';
 
@@ -72,15 +74,16 @@ describe('conventional client entity codegen', () => {
     ).toThrow(/either formatter or formatOutput/);
   });
 
-  it('projects entity dependencies embedded in a named Value operation output', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-client-codegen-value-output-'));
+  it('projects entity dependencies embedded in named Value operation contracts', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-client-codegen-value-contracts-'));
     const sourceDirectory = path.join(directory, 'src');
+    const graphApiPath = path.join(sourceDirectory, 'graph.ts');
     const outputPath = path.join(sourceDirectory, 'generated/client-entities.ts');
     tempDirectories.push(directory);
     await mkdir(sourceDirectory, { recursive: true });
 
     await writeFile(
-      path.join(sourceDirectory, 'graph.ts'),
+      graphApiPath,
       `
         import { defineGraphApi } from '@ontahi/core/data-graph';
         import { Driver } from './driver';
@@ -103,6 +106,18 @@ describe('conventional client entity codegen', () => {
       'utf8',
     );
     await writeFile(
+      path.join(sourceDirectory, 'trip-search-input.ts'),
+      `
+        import { field, value } from '@ontahi/core/entity';
+        import { Driver } from './driver';
+
+        export const TripSearchInput = value('TripSearchInput', {
+          driver: field.ref(Driver),
+        });
+      `,
+      'utf8',
+    );
+    await writeFile(
       path.join(sourceDirectory, 'trip-list-item.ts'),
       `
         import { field, value } from '@ontahi/core/entity';
@@ -120,6 +135,7 @@ describe('conventional client entity codegen', () => {
       `
         import { entity, field } from '@ontahi/core/entity';
         import { TripListItem } from './trip-list-item';
+        import { TripSearchInput } from './trip-search-input';
 
         export const Trip = entity({
           name: 'Trip',
@@ -131,6 +147,7 @@ describe('conventional client entity codegen', () => {
           },
           operations: ({ operation, self }) => ({
             available: operation({
+              input: TripSearchInput,
               output: TripListItem,
               run: () => [],
             }),
@@ -148,6 +165,21 @@ describe('conventional client entity codegen', () => {
       'utf8',
     );
 
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(
+      analysis.namedDefinitions.map(({ kind, name }) => ({ kind, name })),
+    ).toEqual([
+      { kind: 'entity', name: 'Trip' },
+      { kind: 'entity', name: 'Driver' },
+      { kind: 'value', name: 'TripSearchInput' },
+      { kind: 'value', name: 'TripListItem' },
+    ]);
+
     const runner = createClientEntityCodegenRunner({ rootDir: directory });
     await runner.generate();
     const source = await readFile(outputPath, 'utf8');
@@ -158,6 +190,13 @@ describe('conventional client entity codegen', () => {
       name: 'Driver',
       fields: { id: { kind: 'field' }, name: { kind: 'field' } },
     });
+    const input = generated.Trip.domain.available.input;
+    expect(input).toMatchObject({
+      kind: 'value',
+      name: 'TripSearchInput',
+      fields: { driver: { kind: 'field' } },
+    });
+    expect(input.fields.driver.target).toBe(generated.DriverSchema);
     const output = generated.Trip.domain.available.output;
     expect(output).toMatchObject({
       kind: 'value',
