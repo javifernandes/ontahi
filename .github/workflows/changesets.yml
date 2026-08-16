@@ -44,8 +44,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Detect pending changesets
+        id: pending
+        shell: bash
+        run: |
+          pending="$(find .changeset -maxdepth 1 -type f -name '*.md' ! -name README.md -print -quit)"
+          if [[ -n "$pending" ]]; then
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'found=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create or update ready version pull request
         id: version
+        if: steps.pending.outputs.found == 'true'
         uses: changesets/action/version@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v2.1.0
         with:
           script: pnpm changeset:version
@@ -53,14 +65,14 @@ jobs:
           pr-title: 'chore: version Ontahi packages'
 
       - name: Name and explain the release pull request
-        if: steps.version.outputs.pr-number != ''
+        if: steps.pending.outputs.found == 'true' && steps.version.outputs.pr-number != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
           VERSION_PR_NUMBER: ${{ steps.version.outputs.pr-number }}
         run: node scripts/ci/release-pr.mjs update
 
       - name: Run CI for version pull request
-        if: steps.version.outputs.pr-number != ''
+        if: steps.pending.outputs.found == 'true' && steps.version.outputs.pr-number != ''
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_PR_NUMBER: ${{ steps.version.outputs.pr-number }}
