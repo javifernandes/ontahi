@@ -9,4 +9,6 @@ This package depends on `@ontahi/core`. It owns React hooks and bridge adapters 
 
 The generic action metadata and result protocol comes from `@ontahi/core/runtime/actions`; Next.js-specific transport remains in `@ontahi/runtime-nextjs`.
 
-BookOps-specific graph declarations, domain entities, runtime assembly, and application policy stay in the host application. Reusable reflective UI lives in `@ontahi/explorer-react`; BookOps contributes only host routes, access control, theme/auth composition, and app-specific UI enrichments.
+Application-specific graph declarations, domain entities, runtime assembly, and policy stay in the
+host application. Reusable reflective UI lives in `@ontahi/explorer-react`; hosts contribute their
+own routes, access control, theme/auth composition, and application-specific UI enrichments.

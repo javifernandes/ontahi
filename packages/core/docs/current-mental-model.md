@@ -4,20 +4,13 @@ This document preserves the computational/layer model that preceded Ontahi's uni
 Entity, Selection, Query, Command, and Operation language. It remains useful implementation history,
 but it is not the canonical developer documentation.
 
-Use _Ontahi for Developers_ for the current public model. Names such as `architecture(...)`,
-`ArchitectureDefinition`, use case layers, and the BookOps architecture facade below describe the
-runtime vocabulary that existed during extraction.
+Use the root and package documentation for the current public model. Names such as
+`architecture(...)`, `ArchitectureDefinition`, and use case layers describe runtime vocabulary
+that existed during Ontahi's early development.
 
 1. Ontahi is the generic framework.
-2. BookOps is an application built with Ontahi.
-3. Reusable framework packages now live under the extractable `ontahi/` subtree.
-
-See also:
-
-1. [Plan 100: Ontahi Framework Extraction](../../../../plans/done/100-ontahi-framework-extraction.md)
-2. [Plan 99: Semantic Editorial Workflows](../../../../plans/backlog/99-semantic-editorial-workflows.md)
-3. [Plan 122: Ontahi Developer Book](../../../../plans/done/122-ontahi-developer-book.md)
-4. [Plan 129: Independent Repository And Release Readiness](../../../../plans/research/129-ontahi-independent-repository-and-release-readiness.md)
+2. Applications supply their domain models, adapters, and policy.
+3. Reusable framework capabilities live in focused `@ontahi/*` packages.
 
 It describes:
 
@@ -53,7 +46,7 @@ The current package boundaries are:
 9. `@ontahi/explorer-react`
 10. `@ontahi/postgres`
 
-Docs in this folder should explain which ideas are generic and which examples are still inherited from BookOps.
+Docs in this folder distinguish current public contracts from historical implementation vocabulary.
 
 The current split is:
 
@@ -536,7 +529,7 @@ Then the application wires real adapters:
 This separation is important:
 
 1. `ontahi/packages/core/` defines the generic engine and the first extracted runtime vocabulary
-2. BookOps defines real adapters, domain models, and its app-local architecture facade
+2. host applications define adapters, domain models, and application-local composition
 3. future Ontahi packages should move technology-specific adapters out of core
 
 ## Current Frictions And Boilerplate

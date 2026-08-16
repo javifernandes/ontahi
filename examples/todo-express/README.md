@@ -4,7 +4,8 @@ This is a small Ontahi application with interchangeable in-memory and direct Pos
 storage. It declares lists, todos, tags, and the associative entity between todos and tags;
 transports graph-native Selections into synchronous operations over Express; includes an in-process
 durable operation and a host-supplied notification Capability; generates browser-safe client
-declarations; and renders a React UI through the public Ontahi hooks. It imports no BookOps code.
+declarations; and renders a React UI through the public Ontahi hooks. It depends only on public
+Ontahi package exports.
 
 ## Run it against local Ontahi source
 

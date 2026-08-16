@@ -1,141 +1,105 @@
-# Ontahi and BookOps development loop
+# Ontahi development
 
-BookOps treats installed Ontahi artifacts as its compatibility boundary. A workspace link is useful
-while authoring, but it is not evidence that the packages can be released or consumed from another
-repository.
+Installed package artifacts are the compatibility boundary between Ontahi and a host application.
+A workspace or sibling link is useful while authoring, but it is not evidence that packages can be
+released or consumed from another repository.
 
-## Todo application development
-
-Todo Express is the executable framework application for local Ontahi development. From the Ontahi
-repository, start it against the package workspaces with:
+## Repository setup
 
 ```sh
 pnpm install
+pnpm build:packages
+pnpm test:packages
+```
+
+Run lint, typechecking, and artifact verification before proposing broad package changes:
+
+```sh
+pnpm lint
+pnpm typecheck
+pnpm verify:artifacts
+```
+
+## Todo application development
+
+Todo Express is the executable framework application for local Ontahi development:
+
+```sh
 pnpm todo:dev:local
 ```
 
-`pnpm todo:dev` is the short alias for the same mode. The command builds only the example's Ontahi
-dependencies, regenerates its browser client, builds the React bundle, starts package compilers in
-watch mode, and restarts Express when framework output changes. Open `http://localhost:3001` for
-the application and `http://localhost:3001/explorer` for the embedded Ontahi Explorer.
+The command builds the example's Ontahi dependencies, regenerates its browser client, builds the
+React bundle, starts package compilers in watch mode, and restarts Express when framework output
+changes. Open `http://localhost:3001` for the application and
+`http://localhost:3001/explorer` for Ontahi Explorer.
 
-To exercise the same application as an external npm consumer, run:
+Exercise the example as an external npm consumer with:
 
 ```sh
 pnpm todo:dev:registry
-```
-
-This creates an isolated copy under `.artifacts/todo-registry`, replaces every Ontahi workspace
-dependency with the checkout's exact lockstep version, installs it outside the pnpm workspace, and
-verifies that every `@ontahi/*` package resolves from the registry store. Test another published
-version explicitly with:
-
-```sh
 pnpm todo:dev:registry -- --version 0.1.0-alpha.0
 ```
 
-The registry proof changes neither the source example manifest nor the repository lockfile. Both
-modes use in-memory storage by default and accept `PORT` when `3001` is occupied. PostgreSQL setup
-and the example's API walkthrough live in the
-[`Todo Express README`](./examples/todo-express/README.md).
+This creates an isolated copy, replaces workspace dependencies with the selected exact version,
+and verifies that packages resolve from the registry store. It does not modify the source example
+manifest or repository lockfile. See the
+[`Todo Express README`](./examples/todo-express/README.md) for PostgreSQL and API details.
 
-## Sibling-checkout authoring
+## Developing with a sibling host application
 
-Keep the repositories beside each other:
+A host project may keep Ontahi in a sibling checkout:
 
-```sh
+```text
 workspace/
-├── bookops/
+├── host-application/
 └── ontahi/
 ```
 
-Install Ontahi once, then activate it from BookOps:
+Build Ontahi from either checkout:
 
 ```sh
 pnpm -C ../ontahi install
-pnpm ontahi:local
+pnpm -C ../ontahi build:packages
 ```
 
-`ontahi:local` builds the framework and asks pnpm to install the sibling packages through the
-`file:` protocol. pnpm hard-links the built artifacts, so subsequent compiler writes are visible
-to BookOps while React and other peer dependencies continue to resolve from the host application.
-BookOps manifests and its committed lockfile remain unchanged.
+The host can then install selected package directories through its package manager's local `file:`
+or override mechanism. Keep those overrides local when possible. React and other peer dependencies
+must continue to resolve from the host application, and committed manifests should return to exact
+registry versions before release.
 
-For continuous package compilation, run this beside the BookOps dev server:
+For continuous compilation while running the host:
 
 ```sh
 pnpm -C ../ontahi dev:packages
 ```
 
-Inspect or leave local mode with:
+Local links can expose stale build output and workspace-only resolution. Before merge or release,
+pack the affected Ontahi packages and install those tarballs into a clean consumer, or test the
+exact published prerelease. The host should run its representative codegen, typecheck, tests, and
+production build against those artifacts.
 
-```sh
-pnpm ontahi:status
-pnpm ontahi:registry
-```
+## Two-speed compatibility loop
 
-The source path defaults to `../ontahi`. A different checkout or worktree can be selected with
-`pnpm ontahi:local -- ../ontahi-my-branch`.
+Use sibling packages for fast coordinated authoring. Use packed artifacts or an exact prerelease
+for compatibility evidence.
 
-## Compatibility commands
+1. Build and test Ontahi locally.
+2. Pack and verify its public artifacts with `pnpm verify:artifacts`.
+3. Install the candidate artifacts in a clean host application.
+4. Run the host's representative build, codegen, typecheck, and tests.
+5. After publication, pin the exact Ontahi version and commit the host manifest and lockfile
+   together.
 
-From BookOps, the quick artifact command builds and packs all ten Ontahi packages, validates clean
-consumers, copies BookOps into a temporary workspace with no framework source, and exercises the
-representative build, codegen, typecheck, graph, runtime, and application-test slice:
-
-```sh
-pnpm run verify:ontahi-bookops-consumer:quick
-```
-
-Use the full compatibility gate before merging a release candidate:
-
-```sh
-pnpm run verify:ontahi-bookops-consumer
-```
-
-It adds the isolated BookOps production build. CI runs this full form after the normal package build
-and passes `--skip-ontahi-build` to avoid rebuilding Ontahi twice. Both forms reject lockfiles or
-installed package paths that resolve to `ontahi/packages` or the source checkout.
-
-## Chosen two-speed loop
-
-After registry publication, normal BookOps work pins exact released Ontahi versions and commits the
-manifest and lockfile update together. A coordinated Ontahi plus BookOps change uses locally packed
-tarballs first; this is the fast, registry-independent compatibility proof implemented by the
-commands above.
-
-A cross-repository candidate uses an exact prerelease such as `0.2.0-next.3` from the npm `next`
-channel. BookOps pins that exact prerelease and runs the same compatibility gate before Ontahi
-promotes the release. Floating tags do not belong in committed manifests or lockfiles.
-
-The sibling checkout is the coordinated authoring shortcut. It does not become the merge or release
-proof because it can expose stale build output and local dependency behavior that a package
-consumer cannot see.
-
-## Update, release, and rollback
-
-1. Validate the Ontahi candidate as packed artifacts in BookOps.
-2. Publish the complete changed lockstep package closure in deterministic dependency order.
-3. Update BookOps to exact package versions and commit the regenerated lockfile atomically.
-4. If BookOps fails after promotion, revert its manifest and lockfile together to the last known
-   compatible exact version. Do not repair a broken release by floating to `latest` or `next`.
-
-The tarball override exists only inside the temporary verifier workspace. It does not mutate or
-enter the BookOps lockfile.
-
-The repository release mechanics, OIDC configuration, and partial-release recovery live in
-[`RELEASING.md`](./RELEASING.md).
+Floating tags such as `alpha`, `next`, or `latest` do not belong in committed consumer manifests or
+lockfiles.
 
 ## Compatibility ownership
 
-- Ontahi owns failures caused by missing exports, incomplete declarations or artifacts, invalid
-  peer/runtime requirements, or a candidate that violates its public contract.
-- BookOps owns imports outside public exports, assumptions about framework source layout, or use of
-  behavior not present in its pinned Ontahi version.
-- A deliberate contract change is coordinated: Ontahi lands and releases the candidate first;
-  BookOps then updates its exact pins and lockfile with the compatibility command as shared evidence.
+- Ontahi owns missing exports, incomplete artifacts, invalid peer/runtime requirements, and
+  behavior that violates its public contract.
+- A host application owns imports outside public exports, assumptions about framework source
+  layout, and use of behavior absent from its pinned version.
+- Deliberate contract changes are coordinated: Ontahi releases the candidate first, then the host
+  updates its exact pins and lockfile using its compatibility suite as evidence.
 
-The first clean run measured roughly two minutes for the quick path and four minutes with the
-production build on a warm local package store. Most time was the isolated install, Workflow test
-transformation, and Next.js build; package builds, codegen, and typecheck were each seconds. A direct
-workspace test slice is faster, but it does not replace this boundary check.
+Release mechanics and recovery procedures live in [`RELEASING.md`](./RELEASING.md).

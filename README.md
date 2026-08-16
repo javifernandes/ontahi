@@ -11,13 +11,13 @@ world can be executed.
 
 Website: [https://ontahi.org](https://ontahi.org)
 
-Developer Documentation: [https://bookops.net/ontahi-library-ontahi-for-dev/](https://bookops.net/ontahi-library-ontahi-for-dev/)
+Developer documentation starts in [`DEVELOPMENT.md`](./DEVELOPMENT.md) and the package READMEs.
 
 ## Workspace
 
 - `apps/www`: the static website for `ontahi.org`.
 - `packages/*`: the public `@ontahi/*` framework packages.
-- `examples/todo-express`: an executable application using the framework without BookOps.
+- `examples/todo-express`: a standalone executable application using the public framework surface.
 - `fixtures/package-consumer`: the clean package-consumer proof.
 
 ## Local Development
@@ -50,6 +50,12 @@ pnpm todo:dev:registry
 [`Todo Express README`](./examples/todo-express/README.md) for explicit-version and PostgreSQL
 options.
 
+## Contributing
+
+Start with [`DEVELOPMENT.md`](./DEVELOPMENT.md). Repository guidance for code style, testing,
+change scope, bug fixing, and public package changes lives under [`docs/`](./docs/). Automated
+coding agents must also follow [`AGENTS.md`](./AGENTS.md).
+
 ## Public alpha policy
 
 The ten framework packages share one exact lockstep prerelease version. They require Node.js
@@ -78,9 +84,9 @@ This builds and packs every package, validates public metadata and legal files, 
 tarballs into fresh consumers, typechecks every public entrypoint, and runs Core plus Express
 runtime smokes.
 
-BookOps uses installed Ontahi artifacts as its compatibility boundary. A sibling checkout can be
-linked for fast coordinated authoring, but packed artifacts or exact registry versions remain the
-merge and release proof. See [`DEVELOPMENT.md`](./DEVELOPMENT.md).
+Host applications should use installed Ontahi artifacts as their compatibility boundary. A sibling
+checkout can be linked for fast coordinated authoring, but packed artifacts or exact registry
+versions remain the merge and release proof. See [`DEVELOPMENT.md`](./DEVELOPMENT.md).
 
 ## License
 
