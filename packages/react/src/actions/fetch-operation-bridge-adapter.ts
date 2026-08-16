@@ -119,6 +119,7 @@ const createFetchBridgeAction = <TInput, TData>(
       kind: 'invoke',
       operationId: operation.id,
       input,
+      ...(operation.view ? { view: operation.view } : {}),
     }),
   ) as OperationBridge.OperationBridgeAction<TInput, TData>;
 
@@ -149,12 +150,14 @@ export const createFetchReflectedOperationInvoker = (
     invokeOperation: async <TInput = unknown, TData = unknown>({
       input,
       operationId,
+      view,
     }: ReflectedOperationInvocation<TInput>) =>
       toOperationInvocationResult<TData>(
         await postBridgeRequest<OperationInvocationResult<TData>>(endpoint, {
           kind: 'invoke',
           operationId,
           input,
+          ...(view ? { view } : {}),
         }),
       ),
   };

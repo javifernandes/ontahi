@@ -1,3 +1,4 @@
+import { entity, field } from '@ontahi/core/data-graph';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -29,6 +30,8 @@ describe('createFetchReflectedOperationInvoker', () => {
     const invoker = createFetchReflectedOperationInvoker({
       endpoint: '/internal/reflected-operations',
     });
+    const Book = entity('Book', { id: field.id(), title: field.string() });
+    const BookInfo = Book.view('BookInfo', { title: true });
 
     await expect(
       invoker.invokeOperation({
@@ -36,6 +39,7 @@ describe('createFetchReflectedOperationInvoker', () => {
         input: {
           bookSlug: 'ontahi',
         },
+        view: BookInfo.toJSON(),
       }),
     ).resolves.toEqual({
       ok: true,
@@ -57,6 +61,7 @@ describe('createFetchReflectedOperationInvoker', () => {
         input: {
           bookSlug: 'ontahi',
         },
+        view: BookInfo.toJSON(),
       }),
     });
   });

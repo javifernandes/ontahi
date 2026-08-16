@@ -1,6 +1,10 @@
 'use client';
 
-import type { ClientDomainOperationDeclaration, QueryKeySegment } from '@ontahi/core/data-graph';
+import type {
+  ClientDomainOperationDeclaration,
+  EntityViewAst,
+  QueryKeySegment,
+} from '@ontahi/core/data-graph';
 import { normalizeEntityRefQueryInput } from '@ontahi/core/data-graph';
 import {
   attachActionRuntime,
@@ -114,11 +118,13 @@ export type BridgedOperationLike<TInput, TData> = ClientDomainOperationDeclarati
   id: string;
   entityName: string;
   name: string;
+  view?: EntityViewAst;
 };
 
 export type RunDomainOperationBridgeAction = (input: {
   operationId: string;
   input: unknown;
+  view?: EntityViewAst;
 }) => Promise<ActionResultLike>;
 
 export type GraphPermission =
@@ -192,6 +198,7 @@ export const resolveOperationBridgeQueryKey = <TInput, TData>(
   return [
     operation.entityName,
     operation.name,
+    ...(operation.view ? [operation.view] : []),
     ...(operation.bridge?.query?.map(segment =>
       resolveOperationBridgeQueryKeySegment(segment, operation, queryInput),
     ) ?? []),
@@ -216,12 +223,13 @@ export const resolveOperationBridgeInvalidationQueryKeys = <TInput, TData>(
 export const createDomainOperationBridgeAction =
   <TInput, TData>(
     bridgeAction: RunDomainOperationBridgeAction,
-    operationId: string,
+    operation: BridgedOperationLike<TInput, TData>,
   ): OperationBridgeAction<TInput, TData> =>
   (input: TInput) =>
     bridgeAction({
-      operationId,
+      operationId: operation.id,
       input,
+      ...(operation.view ? { view: operation.view } : {}),
     }) as Promise<OperationBridgeActionResult<OperationInvocationResult<TData>>>;
 
 export const attachOperationBridgeActionRuntime = <TInput, TData>(

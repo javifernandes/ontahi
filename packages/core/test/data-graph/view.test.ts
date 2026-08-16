@@ -243,6 +243,14 @@ describe('recursive entity views', () => {
     }
   });
 
+  it('rejects inherited field names unless the Entity declares them', () => {
+    const { Trip } = defineTripGraph();
+
+    expect(() => Trip.view('InheritedField', { constructor: true } as never)).toThrow(
+      'Unknown field Trip.constructor.',
+    );
+  });
+
   it('applies a recursive view to one local Query and Selection without automatic hydration', async () => {
     const { Company, Driver, Trip } = defineTripGraph();
     const CompanySummary = Company.view('CompanySummary', { name: true });

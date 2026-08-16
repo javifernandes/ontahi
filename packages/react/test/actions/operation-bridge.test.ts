@@ -4,6 +4,7 @@ import {
   defineEntityRefInput,
   entity,
   field,
+  graphSchema,
   queryRef,
 } from '@ontahi/core/data-graph';
 import { getActionInvalidationQueryKeys, getActionQueryKey } from '@ontahi/core/runtime/actions';
@@ -21,6 +22,38 @@ describe('operation bridge query keys', () => {
     kind: 'success',
     value: {},
   } as const;
+
+  it('separates caller-authored Operation Views in query identity', () => {
+    const Trip = entity('Trip', { id: field.id(), status: field.string() });
+    const operation = {
+      id: 'Trip.available',
+      entityName: 'Trip',
+      name: 'available',
+      ...defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        output: graphSchema.selection(Trip, { cardinality: 'many' }),
+      }),
+    };
+    const TripIds = Trip.view('TripIds', { id: true });
+    const TripStatuses = Trip.view('TripStatuses', { status: true });
+
+    const idsAction = attachOperationBridgeActionRuntime(
+      operation.as(TripIds),
+      async () => ({ data: successResult }),
+      { requiresAuth: false },
+    );
+    const statusesAction = attachOperationBridgeActionRuntime(
+      operation.as(TripStatuses),
+      async () => ({ data: successResult }),
+      { requiresAuth: false },
+    );
+
+    expect(getActionQueryKey(idsAction, undefined)).not.toEqual(
+      getActionQueryKey(statusesAction, undefined),
+    );
+  });
 
   it('normalizes direct entity refs before resolving action query keys', () => {
     const Book = entity('Book', {

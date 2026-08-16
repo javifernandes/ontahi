@@ -2,6 +2,7 @@ import type { InferGraphSchemaClientInput } from './client-input.js';
 import type {
   AnyEntityDefinition,
   EntityRefLocators,
+  GraphSelectionDefinition,
   GraphSchemaLike,
   RelationKind,
 } from './definitions.js';
@@ -28,6 +29,7 @@ import {
   type Selection,
   type SelectionBuilder,
 } from './selection-value.js';
+import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
 
 export type GraphEntityExposure = 'browser-direct' | 'bridge' | 'server-only';
 export type GraphOperationAuthority = 'client-safe' | 'server-required';
@@ -813,7 +815,36 @@ type InferClientOperationInput<TOperation> = TOperation extends {
 
 type DefinedClientDomainOperation<TOperation> = TOperation & {
   kind: 'domain-operation';
-} & (TOperation extends { input: GraphSchemaLike }
+} & (TOperation extends { durable: object }
+    ? {}
+    : TOperation extends {
+          output: GraphSelectionDefinition<infer TEntity, infer TCardinality>;
+        }
+      ? {
+          as: <
+            TView extends RecursiveEntityViewDefinition<TEntity, any, any>,
+            TResolved extends TOperation & { id: string; entityName: string; name: string },
+          >(
+            this: TResolved,
+            view: TView,
+          ) => Omit<TResolved, 'output' | '__clientTypes'> & {
+            kind: 'domain-operation';
+            view: TView['ast'];
+            output: GraphSchemaLike<
+              TCardinality extends 'one'
+                ? InferEntityViewResult<TView> | null
+                : InferEntityViewResult<TView>[]
+            >;
+            __clientTypes?: {
+              input: InferClientOperationInput<TOperation>;
+              output: TCardinality extends 'one'
+                ? InferEntityViewResult<TView> | null
+                : InferEntityViewResult<TView>[];
+            };
+          };
+        }
+      : {}) &
+  (TOperation extends { input: GraphSchemaLike }
     ? {
         input: OperationInputSchema<TOperation['input'], InferClientOperationInput<TOperation>>;
         __clientTypes?: {
@@ -828,11 +859,27 @@ export const defineClientDomainOperation = <
 >(
   operation: TOperation,
 ): DefinedClientDomainOperation<TOperation> =>
-  ({
-    kind: 'domain-operation',
-    ...operation,
-    ...(operation.input ? { input: attachOperationInputSchema(operation.input) } : {}),
-  }) as DefinedClientDomainOperation<TOperation>;
+  (operation => {
+    const defined = {
+      kind: 'domain-operation',
+      ...operation,
+      ...(operation.input ? { input: attachOperationInputSchema(operation.input) } : {}),
+    } as Record<string, unknown>;
+
+    if (operation.output?.kind === 'schema.selection' && !operation.durable) {
+      defined.as = function (
+        this: Record<string, unknown>,
+        view: RecursiveEntityViewDefinition<any, any, any>,
+      ) {
+        return {
+          ...this,
+          view: view.toJSON(),
+        };
+      };
+    }
+
+    return defined;
+  })(operation) as DefinedClientDomainOperation<TOperation>;
 
 export const defineDomainOperationsForEntity = <
   TEntity extends Pick<AnyEntityDefinition, 'name'> | string,

@@ -29,7 +29,7 @@ const createRuntimeBridgeAction = <TInput, TData>(
 ): OperationBridgeAction<TInput, TData> =>
   attachNextActionBridgeRuntime(
     operation,
-    createDomainOperationBridgeAction(bridgeAction, operation.id) as OperationBridgeAction<
+    createDomainOperationBridgeAction(bridgeAction, operation) as OperationBridgeAction<
       TInput,
       TData
     >,

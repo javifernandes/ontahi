@@ -187,6 +187,85 @@ const isRecursiveEntityView = (value: unknown): value is AnyRecursiveEntityViewD
   'ast' in value &&
   (value as { ast?: { kind?: string } }).ast?.kind === 'entity-view';
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const hasOwn = (record: object, key: PropertyKey) =>
+  Object.prototype.hasOwnProperty.call(record, key);
+
+const validateViewNode = (entity: AnyEntityDefinition, node: ViewNode): void => {
+  if (node.kind !== 'view-node' || node.entity !== entity.name || !isRecord(node.fields)) {
+    throw new Error(`View node does not target ${entity.name}.`);
+  }
+
+  Object.entries(node.fields).forEach(([name, child]) => {
+    if (!isRecord(child)) throw new Error(`Invalid View node ${entity.name}.${name}.`);
+
+    if (child.kind === 'field-view') {
+      if (child.field !== name || !hasOwn(entity.fields, name)) {
+        throw new Error(`Unknown field ${entity.name}.${name}.`);
+      }
+      return;
+    }
+
+    const relation = entity.relations[name];
+    if (!relation || child.kind !== 'relation-view') {
+      throw new Error(`Unknown relation ${entity.name}.${name}.`);
+    }
+
+    const expected = {
+      relation: `${entity.name}.${name}`,
+      direction: relation.relationKind === 'belongsTo' ? 'forward' : 'inverse',
+      targetEntity: relation.target.name,
+      cardinality: relation.relationKind === 'belongsTo' ? 'one' : 'many',
+      nullable: relation.relationKind === 'belongsTo' && relation.nullable === true,
+    };
+    if (
+      child.relation !== expected.relation ||
+      child.direction !== expected.direction ||
+      child.targetEntity !== expected.targetEntity ||
+      child.cardinality !== expected.cardinality ||
+      child.nullable !== expected.nullable ||
+      !isRecord(child.view)
+    ) {
+      throw new Error(`View relation ${entity.name}.${name} does not match its definition.`);
+    }
+    validateViewNode(relation.target, child.view as ViewNode);
+  });
+};
+
+export const createRecursiveEntityViewFromAst = <TEntity extends AnyEntityDefinition>(
+  entity: TEntity,
+  ast: EntityViewAst,
+): RecursiveEntityViewDefinition<TEntity, any, any> => {
+  if (
+    !isRecord(ast) ||
+    ast.version !== 1 ||
+    ast.kind !== 'entity-view' ||
+    typeof ast.name !== 'string' ||
+    ast.entity !== entity.name ||
+    !isRecord(ast.fields)
+  ) {
+    throw new Error(`View does not target ${entity.name}.`);
+  }
+
+  validateViewNode(entity, {
+    kind: 'view-node',
+    entity: ast.entity,
+    fields: ast.fields,
+  });
+
+  return {
+    kind: 'entity-view',
+    name: ast.name,
+    entity,
+    fields: {},
+    omit: [],
+    ast,
+    toJSON: () => ast,
+  } as RecursiveEntityViewDefinition<TEntity, any, any>;
+};
+
 const buildViewNode = <TEntity extends AnyEntityDefinition>(
   entity: TEntity,
   shape: EntityViewShape<TEntity>,
@@ -196,7 +275,7 @@ const buildViewNode = <TEntity extends AnyEntityDefinition>(
   fields: Object.fromEntries(
     Object.entries(shape).map(([name, value]) => {
       if (value === true) {
-        if (!(name in entity.fields)) {
+        if (!hasOwn(entity.fields, name)) {
           throw new Error(`Unknown field ${entity.name}.${name}.`);
         }
         return [name, { kind: 'field-view', field: name } satisfies FieldViewNode];

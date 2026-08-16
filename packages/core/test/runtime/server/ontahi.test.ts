@@ -13,6 +13,7 @@ import {
 } from '../../../src/data-graph/index.js';
 import {
   entity,
+  createOperationInvocationDispatcher,
   entityModule,
   entityModuleWithCapabilities,
   ontahi,
@@ -336,7 +337,10 @@ describe('ontahi application composition root', () => {
       ...baseStorage,
       createRuntime: () => runtime,
     };
-    ontahi({ storage, entities: [Company, Owner, Truck, Driver, Country, Place, Stop, Trip] });
+    const application = ontahi({
+      storage,
+      entities: [Company, Owner, Truck, Driver, Country, Place, Stop, Trip],
+    });
 
     const candidateTrips = Trip.selection(trip => trip.region.eq('south'));
     const call = Trip.available({ trips: candidateTrips }).as(TripList);
@@ -397,6 +401,31 @@ describe('ontahi application composition root', () => {
           stops: [{ order: 1, place: { name: 'Rosario', country: { code: 'AR' } } }],
         },
       ],
+    });
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).not.toHaveBeenCalled();
+
+    runSpy.mockClear();
+    const dispatcher = createOperationInvocationDispatcher(application);
+    await expect(
+      dispatcher({
+        kind: 'invoke',
+        operationId: 'Trip.available',
+        input: { trips: candidateTrips.toJSON() },
+        view: TripList.toJSON(),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: true,
+        value: [
+          {
+            id: 'trip-1',
+            truck: { owner: { company: { name: 'Acme' } } },
+            stops: [{ place: { country: { code: 'AR' } } }],
+          },
+        ],
+      },
     });
     expect(runSpy).toHaveBeenCalledTimes(1);
     expect(getSpy).not.toHaveBeenCalled();

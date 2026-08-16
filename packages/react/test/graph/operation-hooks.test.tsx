@@ -188,6 +188,32 @@ describe('operation hooks', () => {
     });
   });
 
+  it('carries a caller-authored View for a projectable Operation query', async () => {
+    const Trip = entity('Trip', { id: field.id(), status: field.string() });
+    const TripList = Trip.view('TripList', { id: true });
+    const bridgeAction = vi.fn().mockResolvedValue({
+      data: { ok: true, kind: 'success', value: [{ id: 'trip-1' }] },
+    });
+    const operation = defineClientDomainOperationsForEntity(Trip, {
+      available: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        input: graphSchema.void(),
+        output: graphSchema.selection(Trip, { cardinality: 'many' }),
+      }),
+    }).available.as(TripList);
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result } = renderHook(() => useOperationQuery(operation), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual([{ id: 'trip-1' }]));
+    expect(bridgeAction).toHaveBeenCalledWith({
+      operationId: 'Trip.available',
+      input: undefined,
+      view: TripList.toJSON(),
+    });
+  });
+
   it('runs bridge domain operations and reconciles graph outputs in the client cache', async () => {
     const BookEntity = defineBookEntity();
     const book = {
