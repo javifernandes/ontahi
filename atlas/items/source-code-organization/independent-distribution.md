@@ -38,15 +38,17 @@ manifests and its committed lockfile. Built package files are hard-linked for a 
 while React and other peers remain host-resolved. `pnpm ontahi:registry` restores the authoritative
 registry tree.
 
-All ten packages are published through the intentional `0.1.0-alpha.3` line with Apache-2.0 legal
-files, explicit public metadata, npm provenance, and Trusted Publishing. Changesets accumulates
-feature changes in a generated release PR; merging that PR is the explicit publication action and
-also creates the immutable tag and GitHub prerelease. Public-repository CI owns package tests,
-packed-artifact inspection, dependency closure, and clean-consumer verification.
+The first independent release proof published all ten packages through the intentional
+`0.1.0-alpha.3` line with Apache-2.0 legal files, explicit public metadata, npm provenance, and
+Trusted Publishing. Current package manifests have advanced in lockstep to `0.1.0-alpha.4`;
+publication and consumer verification remain release evidence rather than something inferred from
+the manifest version alone. Changesets accumulates feature changes in a generated release PR;
+merging that PR is the explicit publication action and also creates the immutable tag and GitHub
+prerelease. Public-repository CI owns package tests, packed-artifact inspection, dependency
+closure, and clean-consumer verification.
 
-BookOps contains no framework source. It pins exact npm versions and has a CI guard that rejects
-ranges, local links, installed-version drift, or resolution outside pnpm's registry store. Its
-normal build, codegen, typecheck, tests, and production build are therefore the compatibility proof
-for the public packages. Todo Express also installs and runs from the exact alpha.3 registry set.
-Remaining distribution work is stable promotion/deprecation/rollback maturity, tracked separately
-from repository extraction.
+BookOps contains no framework source. Its exact package pins and compatibility checks are
+host-owned evidence linked from the relevant plans. Todo Express established the original
+exact-registry `alpha.3` proof. Remaining distribution work is current registry verification plus
+stable promotion, deprecation, and rollback maturity, tracked separately from repository
+extraction.

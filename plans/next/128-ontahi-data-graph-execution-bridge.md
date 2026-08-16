@@ -94,7 +94,8 @@ A remote read needs the same semantics already present in a built graph read:
 2. Selection AST,
 3. projection and includes,
 4. ordering and limit/pagination,
-5. cardinality and read mode (`get`, `run`, `count`, or stream-like observation),
+5. cardinality and read mode (`get`, `run`, or `count`); stream-like observation remains a later
+   versioned transport capability,
 6. authority and request context supplied by the runtime rather than authored into the AST.
 
 A remote Command additionally needs:

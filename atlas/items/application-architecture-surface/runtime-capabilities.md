@@ -50,4 +50,8 @@ Domain declarations may depend on narrow, technology-independent application cap
 
 For observability, core owns vendor-neutral telemetry and reporting ports. `@ontahi/opentelemetry` implements span creation and Ontahi runtime attributes, while each host registers its SDK, resources, processors, and exporters. BookOps keeps Sentry reporting local until another host proves that adapter reusable; Axiom and SigNoz remain interchangeable OTLP destinations rather than Ontahi adapters.
 
-For authoritative graph state, `@ontahi/core` provides a process-local reference implementation of the complete execution port. It owns live seeded state, plain and relation-root reads, counts, commands, and reflected Explorer data. Supabase remains a production adapter with external durability; direct PostgreSQL remains future capability work.
+For authoritative graph state, `@ontahi/core` provides a process-local reference implementation of
+the complete execution port. It owns live seeded state, plain and relation-root reads, counts,
+commands, and reflected Explorer data. Supabase provides external durability, while
+`@ontahi/postgres` now provides provider-executed SQL, host-owned physical mappings, graph runtime
+conformance, and reflected Entity data over direct PostgreSQL connections.

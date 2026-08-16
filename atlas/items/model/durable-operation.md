@@ -11,6 +11,7 @@ supports:
 typeOf:
   - ontahi.model.domain-operation
 relatedPlans:
+  - ontahi://plans/132-durable-invocation-identity-and-idempotency
   - bookops://plans/75c-durable-operation-result-contracts
   - bookops://plans/75d-graph-native-durable-operation-lifecycle-contracts
   - bookops://plans/70-first-class-workflow-tier-in-architecture
@@ -29,3 +30,11 @@ React consumers use `useDurableOperation` as a lifecycle hook, not merely a star
 Cache invalidation associated with a durable operation occurs when the run completes, rather than when the runtime merely accepts the start request.
 
 Some workflow engines require a lightweight generated task artifact. That artifact must be a complete mechanical projection of the durable operation contract and must never become a separately authored model.
+
+The current runtime reflects declared durable idempotency policies but does not yet enforce them
+when starting a task. A start without an explicit `runId` receives a fresh identity, and HTTP
+ingress delivery identity does not yet reach the operation invocation. Therefore
+`allow-concurrent`, `reuse-running`, `skip-if-completed`, `replace-running`, and
+`queue-after-current` are descriptive metadata today, not runtime guarantees. Plan 132 owns the
+identity, deduplication, retry, and external-effect semantics required to make those declarations
+enforceable.

@@ -5,7 +5,7 @@ model in this repository.
 
 ## Plans
 
-Plan folder is status:
+Plan folders represent workflow state:
 
 - `plans/current/`: work actually in progress;
 - `plans/next/`: actionable work ready to be pulled;

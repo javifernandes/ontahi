@@ -37,6 +37,6 @@ answers what that Principal may do. The latter may consume relationship facts, r
 roles, or policy adapters, but those concerns do not belong in Principal resolution.
 
 The first portable proof is complete. Todo Express maps Passport/GitHub users at its Express
-boundary. BookOps maps the Supabase user at its Next.js operation-invocation boundary and seeds the
-full provider `User` as a private invocation resource, so existing host logic reuses it without a
-second auth lookup. Both consume the same Principal APIs from Ontahi `0.1.0-alpha.3`.
+boundary. The Next.js runtime also proves invocation-context propagation with a synthetic test
+Principal. Host-specific mappings, private provider resources, and consumer package pins remain
+evidence owned by their host repositories rather than claims established by this repository.

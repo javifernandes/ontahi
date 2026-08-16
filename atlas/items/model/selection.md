@@ -96,7 +96,9 @@ For a single-field identity, scalar values become refs. Entity records are proje
 default identity; the records themselves are not transported. Composite identities require records
 containing the identity fields. Across an invocation boundary, Ontahí still transports only
 `{ kind: 'selection', entityName, expression }`. Input validation checks the entity, AST structure,
-fields, operators, and values before reconstructing the server-side Selection.
+fields, operators, and values before reconstructing the server-side Selection. Cardinality is
+intentionally absent from that payload: the consuming operation input schema supplies `one` or
+`many`, and server validation attaches that requirement to the rehydrated Selection.
 
 `Book.one()` and `Book.many()` are the primary operation-contract API. They intentionally keep the
 Selection schema machinery out of ordinary declarations; `graphSchema.selection(...)` remains the

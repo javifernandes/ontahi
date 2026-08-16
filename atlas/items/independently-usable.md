@@ -41,9 +41,10 @@ Success should eventually be evidenced by:
 6. developer documentation and Ontahi learning material that teach the same concepts exposed by the code.
 7. package-owned application analysis and codegen that do not require copying BookOps build scripts.
 8. a direct PostgreSQL adapter with provider-executed SQL and host-owned physical mappings and
-   migrations.
-9. independently installable package artifacts, a release policy, and a fast tested development
-   loop between the Ontahi and BookOps repositories.
+   migrations; the adapter and conformance proof exist, while independent consumer evidence may
+   continue to expand.
+9. independently installable package artifacts, a release policy, and a fast, well-tested
+   development loop between the Ontahi and BookOps repositories.
 
 Possible runtime, source-organization, developer-experience, and open-source-readiness subgoals remain exploratory. Do not create a goal hierarchy until it improves actual planning.
 

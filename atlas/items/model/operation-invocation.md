@@ -13,6 +13,7 @@ supports:
 typeOf:
   - spec-workstream-atlas.atlas-model.model-item
 relatedPlans:
+  - ontahi://plans/132-durable-invocation-identity-and-idempotency
   - bookops://plans/75b-canonical-operation-invocation-results
   - bookops://plans/100f-operation-invocation-capability
   - bookops://plans/122-ontahi-developer-book
@@ -34,6 +35,12 @@ event into a typed channel, and reflected ingress metadata can map that channel 
 invocation. The channel behaves like a narrow subscription, but the mapping does not turn the event
 itself into an invocation. This is evidence for a future event model that can compose graph-produced
 and third-party events while preserving their different delivery and result semantics.
+
+The current invocation request carries operation identity, input, and an optional result View, but
+not stable request or delivery identity. HTTP ingress currently returns a provider `deliveryId` to
+the caller without propagating it through the dispatcher. Consumers must therefore not infer
+deduplication or replay safety from the invocation protocol yet; plan 132 defines that missing
+boundary together with durable idempotency semantics.
 
 Application code ordinarily invokes an operation through its bound entity, such as
 `TodoList.list()` or `TodoList.rename({ list, name })`. The bound method applies the operation

@@ -77,23 +77,25 @@ model. This plan instead promotes the reference itself into the Entity shape.
 ## Authoring Direction
 
 ```ts
+const TodoItemFields = {
+  id: field.id(),
+  list: field.ref(TodoList),
+  title: field.nonEmptyString({ trim: true }),
+};
+const TodoItemRef = entity.ref('TodoItem', { fields: TodoItemFields });
+const TodoItem = entity({
+  name: 'TodoItem',
+  fields: TodoItemFields,
+  relations: () => ({
+    tagAssignments: relation.inverse(TodoTag.fields.todo),
+  }),
+});
+
 const TodoTag = entity({
   name: 'TodoTag',
   fields: {
-    todo: field.ref(TodoItem),
+    todo: field.ref(TodoItemRef),
     tag: field.ref(Tag),
-  },
-});
-
-const TodoItem = entity({
-  name: 'TodoItem',
-  fields: {
-    id: field.id(),
-    list: field.ref(TodoList),
-    title: field.nonEmptyString({ trim: true }),
-  },
-  relations: {
-    tagAssignments: relation.inverse(TodoTag.fields.todo),
   },
 });
 ```
