@@ -3,6 +3,10 @@ import ts from 'typescript';
 
 import { discoverGraphApi } from './graph-discovery.mjs';
 import {
+  createTypeScriptSourceFile,
+  parseTypeScriptSource,
+} from './source-parsing.mjs';
+import {
   collectConstDeclarations,
   collectImportMap,
   createSchemaContext,
@@ -197,20 +201,6 @@ const collectIdentifierNames = node => {
   return names;
 };
 
-const createSourceFile = (sourceText, fileName = 'module.ts') =>
-  ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-
-const formatSourceParseDiagnostics = sourceFile =>
-  sourceFile.parseDiagnostics.map(item => {
-    const message = ts.flattenDiagnosticMessageText(item.messageText, '\n');
-    if (item.start === undefined) {
-      return `Invalid TypeScript source: ${message}`;
-    }
-
-    const { line, character } = sourceFile.getLineAndCharacterOfPosition(item.start);
-    return `Invalid TypeScript source at ${line + 1}:${character + 1}: ${message}`;
-  });
-
 const unwrapExpression = node => {
   if (
     node &&
@@ -289,7 +279,10 @@ const findExportedVariableInitializer = (sourceFile, exportName) => {
 };
 
 export const analyzeExportedStringConstant = (sourceText, exportName, options = {}) => {
-  const sourceFile = createSourceFile(sourceText, options.sourcePath ?? 'constant-module.ts');
+  const sourceFile = createTypeScriptSourceFile(
+    sourceText,
+    options.sourcePath ?? 'constant-module.ts',
+  );
   const initializer = findExportedVariableInitializer(sourceFile, exportName);
   const value = resolveStringExpression(initializer, collectVariableInitializers(sourceFile));
 
@@ -301,7 +294,10 @@ export const analyzeExportedStringConstant = (sourceText, exportName, options = 
 };
 
 export const analyzeExportedTaskStep = (sourceText, exportName, options = {}) => {
-  const sourceFile = createSourceFile(sourceText, options.sourcePath ?? 'task-step-module.ts');
+  const sourceFile = createTypeScriptSourceFile(
+    sourceText,
+    options.sourcePath ?? 'task-step-module.ts',
+  );
   const initializer = unwrapExpression(findExportedVariableInitializer(sourceFile, exportName));
 
   if (
@@ -2047,11 +2043,13 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
 };
 
 export const analyzeSpecificDomainEntityExport = (sourceText, exportName, options = {}) => {
-  const sourceFile = createSourceFile(sourceText, options.sourcePath ?? 'domain-entity-module.ts');
-  const parseDiagnostics = formatSourceParseDiagnostics(sourceFile);
+  const { sourceFile, diagnostics } = parseTypeScriptSource(
+    sourceText,
+    options.sourcePath ?? 'domain-entity-module.ts',
+  );
 
-  if (parseDiagnostics.length > 0) {
-    return { diagnostics: parseDiagnostics };
+  if (diagnostics.length > 0) {
+    return { diagnostics };
   }
 
   return findDomainEntityDefinition(sourceFile, exportName, {
@@ -2062,11 +2060,10 @@ export const analyzeSpecificDomainEntityExport = (sourceText, exportName, option
 };
 
 export const analyzeGraphApiModule = sourceText => {
-  const sourceFile = createSourceFile(sourceText, 'graph-api-module.ts');
-  const parseDiagnostics = formatSourceParseDiagnostics(sourceFile);
+  const { sourceFile, diagnostics } = parseTypeScriptSource(sourceText, 'graph-api-module.ts');
 
-  if (parseDiagnostics.length > 0) {
-    return { diagnostics: parseDiagnostics };
+  if (diagnostics.length > 0) {
+    return { diagnostics };
   }
 
   return discoverGraphApi(sourceFile);

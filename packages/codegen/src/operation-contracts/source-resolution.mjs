@@ -1,5 +1,7 @@
 import ts from 'typescript';
 
+import { createTypeScriptSourceFile } from './source-parsing.mjs';
+
 export const collectImportMap = sourceFile => {
   const importMap = new Map();
 
@@ -82,12 +84,9 @@ export const resolveImportedSchemaContext = (identifierName, context) => {
     return cached;
   }
 
-  const sourceFile = ts.createSourceFile(
-    resolved.sourcePath ?? importPath,
+  const sourceFile = createTypeScriptSourceFile(
     resolved.sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
+    resolved.sourcePath ?? importPath,
   );
   const importedContext = createSchemaContext({
     sourceFile,

@@ -245,6 +245,17 @@ Second analysis-pipeline cut result on 2026-08-16:
    and 78.89% lines; graph discovery has 82.53% statement, 83.54% branch, 100% function, and 83.87%
    line coverage.
 
+Third analysis-pipeline cut result on 2026-08-16:
+
+1. TypeScript `SourceFile` creation and location-bearing parse diagnostics now live in
+   `operation-contracts/source-parsing.mjs`.
+2. Graph and Entity facades consume an explicit `{ sourceFile, diagnostics }` result and reject
+   syntax before discovery. Imported schema resolution reuses the same parser while preserving its
+   existing recovery behavior until validation policy for transitive sources is designed explicitly.
+3. All 51 tests pass. Global coverage is 78.78% statements, 71.74% branches, 83.83% functions, and
+   78.90% lines; source parsing has 91.66% statement and line coverage, 75% branch coverage, and 100%
+   function coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
