@@ -150,14 +150,16 @@ describe('conventional client entity codegen', () => {
       name: 'Driver',
       fields: { id: { kind: 'field' }, name: { kind: 'field' } },
     });
-    expect(generated.Trip.domain.available.output).toMatchObject({
+    const output = generated.Trip.domain.available.output;
+    expect(output).toMatchObject({
       kind: 'value',
       name: 'TripListItem',
       fields: {
         id: { kind: 'field' },
-        driver: { kind: 'field', target: generated.DriverSchema },
+        driver: { kind: 'field' },
       },
     });
+    expect(output.fields.driver.target).toBe(generated.DriverSchema);
     expect(source).not.toContain("from './trip-list-item'");
   });
 
