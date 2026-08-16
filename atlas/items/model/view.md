@@ -22,5 +22,6 @@ Views are typed semantic values with a versioned JSON-safe AST. They shape Queri
 and they may shape Selection-producing Operations without changing the population selected by the
 Operation.
 
-A View's name is application-level nominal identity. Reusing one declaration is distinct from
-declaring another structurally equal View with the same name.
+A View's name is application-level nominal identity in the namespace shared with Entity and Value.
+A View name cannot collide with either kind. Reusing one View declaration is distinct from declaring
+another structurally equal View with the same name.

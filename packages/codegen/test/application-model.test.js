@@ -1250,6 +1250,43 @@ describe('Ontahi application declaration analysis', () => {
     expect(source).not.toContain('input: undefined,');
   });
 
+  it('avoids named Value bindings that collide with imported entity bindings', () => {
+    const namedValue = {
+      kind: 'value',
+      name: 'TripListItem',
+      declaration: 'TripListItem',
+      sourcePath: '/app/trip-list-item.ts',
+      schemaText: "value('TripListItem', { id: field.id() })",
+    };
+    const source = renderGeneratedClientEntityModule({
+      schemaImportPath: './schema.js',
+      namedDefinitions: [namedValue],
+      entities: [
+        {
+          entityName: 'Trip',
+          entityDefinitionName: 'TripListItemEntity',
+          entityDefinitionLocalName: 'TripListItemValue',
+          helperTexts: [],
+          operations: [
+            {
+              name: 'available',
+              authority: 'server',
+              exposure: 'bridge',
+              outputSchemaText: namedValue.schemaText,
+              outputNamedDefinition: namedValue,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(source).toContain(
+      "import { TripListItemEntity as TripListItemValue } from './schema.js';",
+    );
+    expect(source).toContain("const TripListItemValue2 = value('TripListItem'");
+    expect(source).toContain('output: TripListItemValue2,');
+  });
+
   it('renders a self-contained browser entity schema projection', () => {
     const source = renderGeneratedClientEntityModule({
       entities: [

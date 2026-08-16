@@ -46,6 +46,10 @@ export const TodoItemSchema = defineEntitySchema('TodoItem', {
   completed: field.boolean(),
 }).hasMany('tagAssignments', TodoTagSchema, { via: 'todoId' });
 
+const CompleteAllOutputValue = value('CompleteAllOutput', {
+  completed: field.nonNegativeInteger(),
+});
+
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
     list: defineClientDomainOperation({
@@ -216,9 +220,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
         invalidate: [['TodoItem']],
       },
       input: graphSchema.void(),
-      output: value('CompleteAllOutput', {
-        completed: field.nonNegativeInteger(),
-      }),
+      output: CompleteAllOutputValue,
       durable: {
         runtime: 'in-process',
       },

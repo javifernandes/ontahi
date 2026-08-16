@@ -296,57 +296,12 @@ export const renderGeneratedClientEntityModule = ({
   const entitySchemaProjections = orderSchemaProjections(schemaEntities)
     .map(entity => renderEntitySchemaProjection(entity, projectedNames))
     .filter(Boolean);
-  const usedGeneratedNames = new Set([
-    ...entities.map(entity => entity.entityName),
-    ...entitySchemaProjections.map(projection => projection.localName),
-  ]);
-  const namedDefinitionLocalNames = new Map();
-  const namedValueDefinitionTexts = namedValueDefinitions.map(definition => {
-    const identifierName = definition.name.replace(/[^A-Za-z0-9_$]/g, '_');
-    const safeIdentifierName = /^[A-Za-z_$]/.test(identifierName)
-      ? identifierName
-      : `_${identifierName}`;
-    let localName = `${safeIdentifierName}Value`;
-    let suffix = 2;
-    while (usedGeneratedNames.has(localName)) {
-      localName = `${safeIdentifierName}Value${suffix}`;
-      suffix += 1;
-    }
-    usedGeneratedNames.add(localName);
-    namedDefinitionLocalNames.set(definition.name, localName);
-    return `const ${localName} = ${replaceProjectedEntityNames(
-      definition.schemaText,
-      projectedNames,
-    )};`;
-  });
-  const deferredEntityRelationTexts = entitySchemaProjections.flatMap(
-    projection => projection.deferredTexts,
-  );
   const projectedEntityNames = new Set(
     schemaEntities
       .filter(entity => entity.entitySchemaProjection)
       .flatMap(entity => [entity.entityDefinitionName, entity.entityName])
       .filter(Boolean),
   );
-  const relationDefinitionsBySource = new Map();
-  for (const relationDefinition of relationDefinitions) {
-    const sourceRelations =
-      relationDefinitionsBySource.get(relationDefinition.relation.sourceName) ?? [];
-    sourceRelations.push(relationDefinition);
-    relationDefinitionsBySource.set(relationDefinition.relation.sourceName, sourceRelations);
-  }
-  const orderedEntities = [...relationDefinitions, ...entities.filter(entity => !entity.relation)];
-  const entityExports = orderedEntities
-    .map(entity =>
-      renderClientEntityExport(
-        entity,
-        relationDefinitionsBySource,
-        operationContracts,
-        projectedNames,
-        namedDefinitionLocalNames,
-      ),
-    )
-    .join('\n\n');
   const entityDefinitionImports = Array.from(
     new Set(
       entities.flatMap(entity =>
@@ -378,6 +333,52 @@ export const renderGeneratedClientEntityModule = ({
       .filter(entity => entity.entityDefinitionName && entity.entityDefinitionLocalName)
       .map(entity => [entity.entityDefinitionName, entity.entityDefinitionLocalName]),
   );
+  const usedGeneratedNames = new Set([
+    ...entities.map(entity => entity.entityName),
+    ...entitySchemaProjections.map(projection => projection.localName),
+    ...entityDefinitionImports.map(name => entityDefinitionAliases.get(name) ?? name),
+  ]);
+  const namedDefinitionLocalNames = new Map();
+  const namedValueDefinitionTexts = namedValueDefinitions.map(definition => {
+    const identifierName = definition.name.replace(/[^A-Za-z0-9_$]/g, '_');
+    const safeIdentifierName = /^[A-Za-z_$]/.test(identifierName)
+      ? identifierName
+      : `_${identifierName}`;
+    let localName = `${safeIdentifierName}Value`;
+    let suffix = 2;
+    while (usedGeneratedNames.has(localName)) {
+      localName = `${safeIdentifierName}Value${suffix}`;
+      suffix += 1;
+    }
+    usedGeneratedNames.add(localName);
+    namedDefinitionLocalNames.set(definition.name, localName);
+    return `const ${localName} = ${replaceProjectedEntityNames(
+      definition.schemaText,
+      projectedNames,
+    )};`;
+  });
+  const deferredEntityRelationTexts = entitySchemaProjections.flatMap(
+    projection => projection.deferredTexts,
+  );
+  const relationDefinitionsBySource = new Map();
+  for (const relationDefinition of relationDefinitions) {
+    const sourceRelations =
+      relationDefinitionsBySource.get(relationDefinition.relation.sourceName) ?? [];
+    sourceRelations.push(relationDefinition);
+    relationDefinitionsBySource.set(relationDefinition.relation.sourceName, sourceRelations);
+  }
+  const orderedEntities = [...relationDefinitions, ...entities.filter(entity => !entity.relation)];
+  const entityExports = orderedEntities
+    .map(entity =>
+      renderClientEntityExport(
+        entity,
+        relationDefinitionsBySource,
+        operationContracts,
+        projectedNames,
+        namedDefinitionLocalNames,
+      ),
+    )
+    .join('\n\n');
   const entityDefinitionImportPaths = new Map(
     [...schemaEntities, ...entities].flatMap(entity => [
       ...(entity.entityDefinitionName && entity.entityDefinitionImportPath
