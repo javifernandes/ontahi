@@ -113,7 +113,7 @@ describe('conventional client entity codegen', () => {
 
         export const Trip = entity({
           name: 'Trip',
-          fields: { id: field.id(), driver: field.ref(Driver) },
+          fields: { id: field.id() },
           domainOperationDefaults: {
             authority: 'server',
             exposure: 'bridge',
