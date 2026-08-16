@@ -1189,6 +1189,28 @@ const resolveObjectLiteralInitializer = (initializer, declarations, visited = ne
   return undefined;
 };
 
+const analyzeNamedValueDefinition = ({ node, declaration, context, fallbackDeclaration }) => {
+  const resolved = node ? unwrapExpression(node) : undefined;
+  if (
+    !resolved ||
+    !ts.isCallExpression(resolved) ||
+    !ts.isIdentifier(resolved.expression) ||
+    resolved.expression.text !== 'value' ||
+    !resolved.arguments[0] ||
+    !ts.isStringLiteral(resolved.arguments[0])
+  ) {
+    return undefined;
+  }
+
+  return {
+    kind: 'value',
+    name: resolved.arguments[0].text,
+    declaration: declaration?.name.getText() ?? fallbackDeclaration,
+    sourcePath: context?.sourcePath,
+    schemaText: getNodeText(resolved),
+  };
+};
+
 const parseOperationDefinition = (
   property,
   declarations,
@@ -1297,6 +1319,8 @@ const parseOperationDefinition = (
   let clientCacheText;
   let inputSchemaText;
   let outputSchemaText;
+  let inputNamedDefinition;
+  let outputNamedDefinition;
   const helperDeclarations = new Map();
 
   if (inputNode) {
@@ -1317,6 +1341,13 @@ const parseOperationDefinition = (
       unwrappedInput && ts.isIdentifier(unwrappedInput)
         ? (localInputDeclaration?.initializer ?? importedInputDeclaration?.initializer)
         : unwrappedInput;
+
+    inputNamedDefinition = analyzeNamedValueDefinition({
+      node: localInputNode,
+      declaration: localInputDeclaration ?? importedInputDeclaration,
+      context: localInputDeclaration ? schemaContext : (importedInputContext ?? schemaContext),
+      fallbackDeclaration: `${operationName}.input`,
+    });
 
     if (
       localInputNode &&
@@ -1354,6 +1385,13 @@ const parseOperationDefinition = (
       : unwrappedOutput && ts.isIdentifier(unwrappedOutput)
         ? (localOutputDeclaration?.initializer ?? importedOutputDeclaration?.initializer)
         : unwrappedOutput;
+
+    outputNamedDefinition = analyzeNamedValueDefinition({
+      node: localOutputNode,
+      declaration: localOutputDeclaration ?? importedOutputDeclaration,
+      context: localOutputDeclaration ? schemaContext : (importedOutputContext ?? schemaContext),
+      fallbackDeclaration: `${operationName}.output`,
+    });
 
     if (
       localOutputNode &&
@@ -1444,6 +1482,9 @@ const parseOperationDefinition = (
     clientCacheText,
     inputSchemaText,
     outputSchemaText,
+    inputNamedDefinition,
+    outputNamedDefinition,
+    namedDefinitions: [inputNamedDefinition, outputNamedDefinition].filter(Boolean),
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

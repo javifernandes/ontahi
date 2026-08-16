@@ -35,13 +35,15 @@ pressure test for this model. Atlas preserves the durable distinctions as APIs c
 4. [`Identity And Locator`](./model/identity-and-locator.md)
 5. [`Ref`](./model/ref.md)
 6. [`Relation`](./model/relation.md)
-7. [`Selection`](./model/selection.md)
-8. [`Query`](./model/query.md)
-9. [`Command`](./model/command.md)
-10. [`Domain Operation`](./model/domain-operation.md)
-11. [`Operation Invocation`](./model/operation-invocation.md)
-12. [`Durable Operation`](./model/durable-operation.md)
-13. [`Authority`](./model/authority.md)
+7. [`View`](./model/view.md)
+8. [`Value`](./model/value.md)
+9. [`Selection`](./model/selection.md)
+10. [`Query`](./model/query.md)
+11. [`Command`](./model/command.md)
+12. [`Domain Operation`](./model/domain-operation.md)
+13. [`Operation Invocation`](./model/operation-invocation.md)
+14. [`Durable Operation`](./model/durable-operation.md)
+15. [`Authority`](./model/authority.md)
 
 ## Adjacent Runtime Shapes
 

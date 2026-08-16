@@ -134,6 +134,10 @@ describe('conventional client entity codegen', () => {
               output: TripListItem,
               run: () => [],
             }),
+            delayed: operation({
+              output: TripListItem,
+              run: () => [],
+            }),
           }),
         });
       `,
@@ -160,6 +164,7 @@ describe('conventional client entity codegen', () => {
       },
     });
     expect(output.fields.driver.target).toBe(generated.DriverSchema);
+    expect(generated.Trip.domain.delayed.output).toBe(output);
     expect(source).not.toContain("from './trip-list-item'");
   });
 

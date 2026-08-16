@@ -1,8 +1,9 @@
-import type { AnalyzedEntity, AnalyzedTask } from './contracts.mjs';
+import type { AnalyzedEntity, AnalyzedNamedDefinition, AnalyzedTask } from './contracts.mjs';
 
 export const renderGeneratedClientEntityModule: (input: {
   entities: readonly AnalyzedEntity[];
   schemaEntities?: readonly AnalyzedEntity[];
+  namedDefinitions?: readonly AnalyzedNamedDefinition[];
   schemaImportPath?: string;
   operationContracts?: string;
 }) => string;

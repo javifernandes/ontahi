@@ -23,6 +23,183 @@ afterEach(async () => {
 });
 
 describe('Ontahi application declaration analysis', () => {
+  it('inventories one imported Value declaration reused by multiple Operations', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-nominal-reuse-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Note } from './note';
+        import { Task } from './task';
+
+        export const WorkGraph = defineGraphApi({ entities: { Note, Task } });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(directory, 'shared-output.ts'),
+      `
+        import { field, value } from '@ontahi/core/data-graph';
+
+        export const SharedOutput = value('SharedOutput', { id: field.id() });
+      `,
+      'utf8',
+    );
+    for (const [name, operationName] of [
+      ['Note', 'create'],
+      ['Task', 'schedule'],
+    ]) {
+      await writeFile(
+        path.join(directory, `${name.toLowerCase()}.ts`),
+        `
+          import { entity, field } from '@ontahi/core/entity';
+          import { SharedOutput } from './shared-output';
+
+          export const ${name} = entity({
+            name: '${name}',
+            fields: { id: field.id() },
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+              layer: 'work',
+            },
+            operations: ({ operation }) => ({
+              ${operationName}: operation({ output: SharedOutput, run: input => input }),
+            }),
+          });
+        `,
+        'utf8',
+      );
+    }
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.namedDefinitions).toEqual([
+      expect.objectContaining({ kind: 'entity', name: 'Note' }),
+      expect.objectContaining({ kind: 'entity', name: 'Task' }),
+      expect.objectContaining({
+        kind: 'value',
+        name: 'SharedOutput',
+        declaration: 'SharedOutput',
+        sourcePath: path.join(directory, 'shared-output.ts'),
+      }),
+    ]);
+  });
+
+  it('rejects distinct Value declarations with the same nominal name', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-nominal-conflict-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Note } from './note';
+        import { Task } from './task';
+
+        export const WorkGraph = defineGraphApi({ entities: { Note, Task } });
+      `,
+      'utf8',
+    );
+    for (const name of ['Note', 'Task']) {
+      await writeFile(
+        path.join(directory, `${name.toLowerCase()}.ts`),
+        `
+          import { entity, field, value } from '@ontahi/core/entity';
+
+          const Output = value('SharedOutput', { ${name.toLowerCase()}: field.id() });
+
+          export const ${name} = entity({
+            name: '${name}',
+            fields: { id: field.id() },
+            domainOperationDefaults: {
+              authority: 'server',
+              exposure: 'bridge',
+              layer: 'work',
+            },
+            operations: ({ operation }) => ({
+              run: operation({ output: Output, run: input => input }),
+            }),
+          });
+        `,
+        'utf8',
+      );
+    }
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'model-name-conflict',
+        declaration: 'Output',
+        message: expect.stringContaining('SharedOutput'),
+      }),
+    );
+  });
+
+  it('rejects an Entity and Value that claim the same nominal name', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-cross-kind-conflict-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Trip } from './trip';
+
+        export const TripsGraph = defineGraphApi({ entities: { Trip } });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(directory, 'trip.ts'),
+      `
+        import { entity, field, value } from '@ontahi/core/entity';
+
+        const TripOutput = value('Trip', { id: field.id() });
+
+        export const Trip = entity({
+          name: 'Trip',
+          fields: { id: field.id() },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'trips',
+          },
+          operations: ({ operation }) => ({
+            available: operation({ output: TripOutput, run: input => input }),
+          }),
+        });
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'model-name-conflict',
+        declaration: 'TripOutput',
+        message: expect.stringMatching(/Entity.*Value|Value.*Entity/),
+      }),
+    );
+  });
+
   it('discovers entities from a transitional application registry batch', () => {
     const analysis = analyzeGraphApiModule(`
       import { Note } from './note';
