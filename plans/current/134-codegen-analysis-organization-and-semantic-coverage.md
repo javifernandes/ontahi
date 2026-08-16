@@ -174,6 +174,17 @@ First-cut result on 2026-08-16:
    characterization-only cut. Coverage thresholds remain deferred until a later Slice 1 cut raises
    meaningful production coverage.
 
+Second characterization cut result on 2026-08-16:
+
+1. Invalid TypeScript in both the graph composition root and an imported Entity module now produces
+   a location-bearing diagnostic before analysis can consume TypeScript's recovered AST.
+2. Duplicate nominal Value coverage now fixes diagnostic ordering, both declaration origins, and
+   the existing first-declaration-wins inventory behavior.
+3. The production change is limited to parse-diagnostic guards at the two existing analyzer
+   boundaries; no analysis responsibility moved.
+4. The suite increased to 50 tests. Coverage rose to 78.63% statements, 71.63% branches, 83.20%
+   functions, and 78.75% lines. This is the baseline for choosing the first conservative thresholds.
+
 ### Slice 2. Analysis Pipeline
 
 1. Extract named-definition discovery and symbol/import resolution from

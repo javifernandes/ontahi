@@ -96,6 +96,8 @@ describe('Ontahi application declaration analysis', () => {
   it('rejects distinct Value declarations with the same nominal name', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-nominal-conflict-'));
     const graphApiPath = path.join(directory, 'graph.ts');
+    const noteSourcePath = path.join(directory, 'note.ts');
+    const taskSourcePath = path.join(directory, 'task.ts');
     tempDirectories.push(directory);
 
     await writeFile(
@@ -139,13 +141,31 @@ describe('Ontahi application declaration analysis', () => {
       sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
     });
 
-    expect(analysis.diagnostics).toContainEqual(
-      expect.objectContaining({
+    expect(analysis.diagnostics).toEqual([
+      {
         code: 'model-name-conflict',
+        sourcePath: taskSourcePath,
         declaration: 'Output',
-        message: expect.stringContaining('SharedOutput'),
-      }),
-    );
+        message: `Model name "SharedOutput" is claimed by Value Output (${noteSourcePath}) and Value Output (${taskSourcePath}). Reuse one declaration or choose distinct names.`,
+      },
+    ]);
+    expect(
+      analysis.namedDefinitions
+        .filter(definition => definition.name === 'SharedOutput')
+        .map(({ kind, name, declaration, sourcePath }) => ({
+          kind,
+          name,
+          declaration,
+          sourcePath,
+        })),
+    ).toEqual([
+      {
+        kind: 'value',
+        name: 'SharedOutput',
+        declaration: 'Output',
+        sourcePath: noteSourcePath,
+      },
+    ]);
   });
 
   it('rejects an Entity and Value that claim the same nominal name', async () => {
@@ -249,6 +269,85 @@ describe('Ontahi application declaration analysis', () => {
         { importedIdentifier: 'Notebook', importPath: './notebook' },
       ],
     });
+  });
+
+  it('rejects syntactically invalid graph source before analyzing recovered declarations', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-invalid-graph-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Note } from './note';
+
+        export const NotesGraph = defineGraphApi({ entities: { Note } });
+        export const Invalid = {
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([
+      {
+        code: 'graph-declaration-invalid',
+        message: expect.stringMatching(/^Invalid TypeScript source at \d+:\d+: /),
+        sourcePath: graphApiPath,
+      },
+    ]);
+    expect(analysis.entities).toEqual([]);
+  });
+
+  it('rejects syntactically invalid entity source before analyzing its recovered declaration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-invalid-entity-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    const noteSourcePath = path.join(directory, 'note.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Note } from './note';
+
+        export const NotesGraph = defineGraphApi({ entities: { Note } });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      noteSourcePath,
+      `
+        import { entity, field } from '@ontahi/core/entity';
+
+        export const Note = entity({
+          name: 'Note',
+          fields: { id: field.id() },
+        });
+        export const Invalid = {
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([
+      {
+        code: 'entity-declaration-invalid',
+        declaration: 'NotesGraph.entities.Note',
+        importPath: './note',
+        message: expect.stringMatching(/^Invalid TypeScript source at \d+:\d+: /),
+        sourcePath: noteSourcePath,
+      },
+    ]);
+    expect(analysis.entities).toEqual([]);
   });
 
   it('discovers entities built inside the ontahi application composition root', () => {

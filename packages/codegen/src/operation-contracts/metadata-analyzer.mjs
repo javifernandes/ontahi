@@ -220,6 +220,17 @@ const collectImportMap = sourceFile => {
 const createSourceFile = (sourceText, fileName = 'module.ts') =>
   ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 
+const formatSourceParseDiagnostics = sourceFile =>
+  sourceFile.parseDiagnostics.map(item => {
+    const message = ts.flattenDiagnosticMessageText(item.messageText, '\n');
+    if (item.start === undefined) {
+      return `Invalid TypeScript source: ${message}`;
+    }
+
+    const { line, character } = sourceFile.getLineAndCharacterOfPosition(item.start);
+    return `Invalid TypeScript source at ${line + 1}:${character + 1}: ${message}`;
+  });
+
 const unwrapExpression = node => {
   if (
     node &&
@@ -2123,6 +2134,11 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
 
 export const analyzeSpecificDomainEntityExport = (sourceText, exportName, options = {}) => {
   const sourceFile = createSourceFile(sourceText, options.sourcePath ?? 'domain-entity-module.ts');
+  const parseDiagnostics = formatSourceParseDiagnostics(sourceFile);
+
+  if (parseDiagnostics.length > 0) {
+    return { diagnostics: parseDiagnostics };
+  }
 
   return findDomainEntityDefinition(sourceFile, exportName, {
     ...options,
@@ -2132,13 +2148,12 @@ export const analyzeSpecificDomainEntityExport = (sourceText, exportName, option
 };
 
 export const analyzeGraphApiModule = sourceText => {
-  const sourceFile = ts.createSourceFile(
-    'graph-api-module.ts',
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sourceFile = createSourceFile(sourceText, 'graph-api-module.ts');
+  const parseDiagnostics = formatSourceParseDiagnostics(sourceFile);
+
+  if (parseDiagnostics.length > 0) {
+    return { diagnostics: parseDiagnostics };
+  }
 
   const importMap = collectImportMap(sourceFile);
   const graphDeclarationFunctions = new Set([
