@@ -10,6 +10,8 @@ import {
   runClientEntityCodegenCli,
 } from '../src/client-entities.mjs';
 
+import { importGeneratedModule } from './support/generated-module.js';
+
 const tempDirectories = [];
 
 afterEach(async () => {
@@ -141,10 +143,21 @@ describe('conventional client entity codegen', () => {
     const runner = createClientEntityCodegenRunner({ rootDir: directory });
     await runner.generate();
     const source = await readFile(outputPath, 'utf8');
+    const generated = await importGeneratedModule({ directory, source });
 
-    expect(source).toContain("export const DriverSchema = defineEntitySchema('Driver'");
-    expect(source).toContain('driver: field.ref(DriverSchema)');
-    expect(source).toContain("output: value('TripListItem'");
+    expect(generated.DriverSchema).toMatchObject({
+      kind: 'entity',
+      name: 'Driver',
+      fields: { id: { kind: 'field' }, name: { kind: 'field' } },
+    });
+    expect(generated.Trip.domain.available.output).toMatchObject({
+      kind: 'value',
+      name: 'TripListItem',
+      fields: {
+        id: { kind: 'field' },
+        driver: { kind: 'field', target: generated.DriverSchema },
+      },
+    });
     expect(source).not.toContain("from './trip-list-item'");
   });
 
