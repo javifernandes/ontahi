@@ -53,7 +53,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "node --check src/index.mjs && node --check src/application-analysis.mjs && node --check src/application-model/named-definitions.mjs && node --check src/client-entities.mjs && node --check src/cli.mjs && node --check src/source-loader.mjs && node --check src/operation-contracts/graph-discovery.mjs && node --check src/operation-contracts/metadata-analyzer.mjs && node --check src/operation-contracts/source-parsing.mjs && node --check src/operation-contracts/source-resolution.mjs && node --check src/projections.mjs && node --check src/runner.mjs && pnpm exec tsc -p tsconfig.types.json",
+    "build": "node --check src/index.mjs && node --check src/application-analysis.mjs && node --check src/application-model/named-definitions.mjs && node --check src/client-entities.mjs && node --check src/cli.mjs && node --check src/source-loader.mjs && node --check src/operation-contracts/entity-discovery.mjs && node --check src/operation-contracts/graph-discovery.mjs && node --check src/operation-contracts/metadata-analyzer.mjs && node --check src/operation-contracts/source-parsing.mjs && node --check src/operation-contracts/source-resolution.mjs && node --check src/projections.mjs && node --check src/runner.mjs && pnpm exec tsc -p tsconfig.types.json",
     "lint": "pnpm exec eslint \"src/**/*.mjs\" \"test/**/*.js\" \"vitest.config.mjs\" --max-warnings 0",
     "test": "pnpm exec vitest run",
     "test:coverage": "pnpm exec vitest run --coverage",

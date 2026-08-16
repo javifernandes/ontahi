@@ -266,6 +266,19 @@ Fourth analysis-pipeline cut result on 2026-08-16:
    passing tests. Global coverage remains 78.78% statements, 71.74% branches, 83.83% functions, and
    78.90% lines; the extracted nominal module has 100% statement, function, and line coverage.
 
+Fifth analysis-pipeline cut result on 2026-08-16:
+
+1. Entity/Relation declaration discovery now lives in `operation-contracts/entity-discovery.mjs`,
+   including wrapper, module binder, local factory, transitional registry, and `Object.assign`
+   resolution.
+2. Discovery now returns `{ initializer, declarations }` explicitly, replacing the analyzer's
+   shared `WeakMap` used to recover factory-local declaration scope.
+3. Schema projection and Operation analysis remain in `metadata-analyzer.mjs`; the new boundary only
+   locates and classifies the effective declaration.
+4. All 51 tests pass. Global coverage is 78.81% statements, 71.67% branches, 83.77% functions, and
+   79.22% lines; Entity discovery has 82.75% statement, 75.69% branch, 100% function, and 87.80% line
+   coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
