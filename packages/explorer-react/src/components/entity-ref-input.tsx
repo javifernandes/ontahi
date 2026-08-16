@@ -2,7 +2,7 @@
 
 import { useReflectedEntityDataQuery } from '@ontahi/react/graph';
 import { Loader2, Search } from 'lucide-react';
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 
 import type {
   ExplorerEntityDisplayDescriptor,
@@ -90,6 +90,7 @@ export function ExplorerEntityRefInput({
   onChange,
   variant = 'default',
 }: ExplorerEntityRefInputProps) {
+  const closeTimeout = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const compact = variant === 'compact';
   const locatorField = locator.sourceFields[0] ?? '';
   const currentValue = getExplorerEntityRefInputFieldValue(input, inputRef, locatorField);
@@ -118,6 +119,21 @@ export function ExplorerEntityRefInput({
   const isLoading = dataQuery.isLoading || dataQuery.isFetching;
   const error = dataQuery.error?.message ?? null;
 
+  const cancelScheduledClose = () => {
+    if (closeTimeout.current === null) return;
+    globalThis.clearTimeout(closeTimeout.current);
+    closeTimeout.current = null;
+  };
+
+  useEffect(
+    () => () => {
+      if (closeTimeout.current !== null) {
+        globalThis.clearTimeout(closeTimeout.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (selectedDisplay?.value === currentValue) {
       setQuery(selectedDisplay.label);
@@ -143,6 +159,7 @@ export function ExplorerEntityRefInput({
   };
 
   const selectRow = (row: Record<string, unknown>) => {
+    cancelScheduledClose();
     const locatorValues = resolveLocatorValuesFromRow(row, locator, query);
     const nextValue = toDisplayString(locatorValues[locatorField]);
     const nextLabel = getEntityRowPrimaryLabel(row, display);
@@ -186,9 +203,16 @@ export function ExplorerEntityRefInput({
         >
           <input
             value={query}
-            onFocus={() => setIsOpen(true)}
+            onFocus={() => {
+              cancelScheduledClose();
+              setIsOpen(true);
+            }}
             onBlur={() => {
-              globalThis.setTimeout(() => setIsOpen(false), 150);
+              cancelScheduledClose();
+              closeTimeout.current = globalThis.setTimeout(() => {
+                closeTimeout.current = null;
+                setIsOpen(false);
+              }, 150);
             }}
             onChange={event => updateTypedValue(event.target.value)}
             placeholder={compact ? inputRef.path : `Search ${inputRef.entityName}`}

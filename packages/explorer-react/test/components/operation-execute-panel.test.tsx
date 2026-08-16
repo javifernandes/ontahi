@@ -984,6 +984,49 @@ describe('ExplorerOperationExecutePanel', () => {
     });
   });
 
+  it('cancels a pending entity ref close when the input unmounts', () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    try {
+      const view = renderWithGraphRuntime(
+        <ExplorerOperationExecutePanel
+          operation={buildOperation({
+            inputRefs: [
+              {
+                path: 'book',
+                entityName: 'Book',
+                receiver: true,
+                optional: false,
+                locators: [
+                  {
+                    name: 'refBySlug',
+                    fields: ['bookSlug'],
+                    sourceFields: ['slug'],
+                  },
+                ],
+              },
+            ],
+          })}
+        />,
+      );
+      const input = screen.getByLabelText('book Book');
+
+      fireEvent.focus(input);
+      fireEvent.blur(input);
+
+      const closeCallIndex = setTimeoutSpy.mock.calls.findIndex(([, delay]) => delay === 150);
+      const closeTimer = setTimeoutSpy.mock.results[closeCallIndex]?.value;
+
+      expect(closeCallIndex).toBeGreaterThanOrEqual(0);
+      view.unmount();
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(closeTimer);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    }
+  });
+
   it('allows a host to replace one reflected ref input', async () => {
     const user = userEvent.setup();
     const renderRefInput: ExplorerOperationRefInputRenderer = ({
