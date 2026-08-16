@@ -85,17 +85,17 @@ done
 ## Normal prerelease
 
 1. Review the accumulated `Release Ontahi <version>` pull request and its successful checks.
-2. Run the local proof and BookOps packed-artifact compatibility gate when the candidate warrants
-   an additional consumer rehearsal.
+2. Run the local proof and a representative host application's packed-artifact compatibility gate
+   when the candidate warrants an additional consumer rehearsal.
 3. Merge the release pull request. The merge publishes through GitHub OIDC and creates its tag and
    GitHub prerelease automatically.
-4. Pin the exact version in BookOps and commit its manifests and lockfile together.
+4. Pin the exact version in host applications and commit each manifest and lockfile together.
 
 The **npm prerelease** workflow remains manually dispatchable for an independent `dry-run` or to
 retry the exact version after an infrastructure failure. Manual `publish` uses the same immutable,
 idempotent package checks as the automatic path; it is not the normal release button.
 
-`alpha` and `next` are discovery channels only. Consumers and BookOps commit exact versions, never
+`alpha` and `next` are discovery channels only. Consumers commit exact versions, never
 floating dist-tags. The repository remains in Changesets alpha prerelease mode until a deliberate
 stable-release change exits that train.
 
@@ -107,6 +107,7 @@ rerun the same workflow: identical existing tarballs are skipped and the missing
 in dependency order. A version that exists with different contents stops the release.
 
 Do not overwrite or unpublish a faulty release. Deprecate it when appropriate, publish a new
-prerelease version, and roll BookOps back by reverting its exact package versions and lockfile
-together. The current workflow intentionally refuses stable versions; a stable channel is enabled
-only after the prerelease has passed the real Todo Express and BookOps registry-consumer proofs.
+prerelease version, and roll host applications back by reverting their exact package versions and
+lockfiles together. The current workflow intentionally refuses stable versions; a stable channel
+is enabled only after the prerelease has passed Todo Express and representative registry-consumer
+proofs.

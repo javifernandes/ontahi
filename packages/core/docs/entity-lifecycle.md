@@ -2,9 +2,8 @@
 
 This document describes the current house style for domain areas that have real lifecycle, policy, and event behavior.
 
-It is generic guidance extracted from BookOps domain work. The examples below are BookOps examples because they are the first proof points, not because `@ontahi/core` owns those product domains.
-
-For the longer product direction that makes these domain modules more important, see [Plan 99: Semantic Editorial Workflows](../../../../plans/backlog/99-semantic-editorial-workflows.md). For package extraction, see [Plan 100: Ontahi Framework Extraction](../../../../plans/done/100-ontahi-framework-extraction.md).
+The examples are illustrative application domains; `@ontahi/core` does not own those product
+concepts.
 
 It is not a rule that every feature must use this shape.
 

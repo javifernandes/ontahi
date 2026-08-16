@@ -4,16 +4,12 @@
 
 It also contains the zero-infrastructure in-memory graph and task-run implementations used by local hosts, examples, and tests.
 
-This package is source-independent from BookOps, which remains the first production host. Ontahi's
-packages are not yet independently published or validated as registry artifacts. The completed
-source extraction and the current distribution study are tracked in:
-
-1. [Plan 100: Ontahi Framework Extraction](../../../plans/done/100-ontahi-framework-extraction.md)
-2. [Plan 129: Independent Repository And Release Readiness](../../../plans/research/129-ontahi-independent-repository-and-release-readiness.md)
+The package is source-independent from every host application and is published as a validated
+registry artifact with the rest of the lockstep `@ontahi/*` package set.
 
 Current docs:
 
-1. [Historical Core Mental Model](./docs/current-mental-model.md) - computational and layer vocabulary retained from the extraction path
+1. [Historical Core Mental Model](./docs/current-mental-model.md) - computational and layer vocabulary retained from Ontahi's early architecture
 2. [Boundary Schemas](./docs/boundary-schemas.md) - graph-native operation contracts and the narrower role of transport validation adapters
 3. [Entity Lifecycle Modules](./docs/entity-lifecycle.md) - current house style for richer domain areas that need entity folders, policy modules, lifecycle transitions, and explicit event outputs
 
