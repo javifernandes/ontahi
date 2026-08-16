@@ -8,6 +8,12 @@ export default defineConfig({
       reportsDirectory: './coverage',
       include: ['src/**/*.mjs'],
       exclude: ['test/**/*.js'],
+      thresholds: {
+        statements: 78,
+        branches: 71,
+        functions: 82,
+        lines: 78,
+      },
     },
     reporters: ['default', ['junit', { outputFile: './coverage/junit.xml' }]],
     environment: 'node',

@@ -185,6 +185,18 @@ Second characterization cut result on 2026-08-16:
 4. The suite increased to 50 tests. Coverage rose to 78.63% statements, 71.63% branches, 83.20%
    functions, and 78.75% lines. This is the baseline for choosing the first conservative thresholds.
 
+Third characterization cut result on 2026-08-16:
+
+1. Focused source-loader coverage proves that normalized overlapping aliases choose the longest
+   matching alias, including relative alias targets.
+2. Codegen coverage now enforces conservative global floors of 78% statements, 71% branches, 82%
+   functions, and 78% lines.
+3. The suite increased to 51 tests and demonstrates 78.69% statements, 71.69% branches, 83.58%
+   functions, and 78.82% lines.
+4. The remaining Slice 1 work is a narrow audit of generated-source assertions. Retain import,
+   export, ordering, and formatting assertions; replace only assertions whose contract is already
+   better represented by model, typecheck, or runtime behavior.
+
 ### Slice 2. Analysis Pipeline
 
 1. Extract named-definition discovery and symbol/import resolution from
