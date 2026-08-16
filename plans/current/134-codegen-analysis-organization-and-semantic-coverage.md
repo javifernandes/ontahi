@@ -292,6 +292,21 @@ Sixth analysis-pipeline cut result on 2026-08-16:
    functions, and 79.37% lines. Entity schema projection has 90.12% statement, 83.08% branch, 100%
    function, and 95.77% line coverage.
 
+Seventh analysis-pipeline cut result on 2026-08-16:
+
+1. Recursive graph-output derivation now lives in
+   `operation-contracts/graph-output-analysis.mjs`, including schema helper classification,
+   imported and lazy schema traversal, union field merging, Entity/View descriptors, and client
+   graph-output normalization.
+2. `metadata-analyzer.mjs` remains the Operation compatibility facade and supplies the resolved
+   schema context to the extracted analysis boundary. Operation discovery, diagnostics, and helper
+   declaration collection remain together for the next cut.
+3. The facade decreased from 1,596 to 1,280 lines while retaining all 51 passing tests. Global
+   coverage is 79.15% statements, 71.62% branches, 83.71% functions, and 80.19% lines; the new
+   graph-output analysis module has 56.34% statement, 47.36% branch, 60% function, and 59.45% line
+   coverage. These lower local numbers make the uncharacterized graph-output variants explicit for
+   a later focused semantic-coverage cut without weakening the enforced global floors.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
