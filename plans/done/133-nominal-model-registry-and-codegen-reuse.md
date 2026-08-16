@@ -125,7 +125,7 @@ Consequences:
 - Status: done
 - Nominal registry landed in: Ontahi PR #37
 - Abandoned server View registry: Ontahi PR #38, closed without merge
-- Caller-owned View ergonomic correction: pending
+- Caller-owned View ergonomic correction: Ontahi PR #39
 - Follow-ups:
   - [128. Data Graph Execution Bridge](../next/128-ontahi-data-graph-execution-bridge.md)
   - [134. Codegen Analysis Organization And Semantic Coverage](../next/134-codegen-analysis-organization-and-semantic-coverage.md)
