@@ -71,6 +71,7 @@ export const createClientEntityCodegenRunner = ({
           outputPath: resolvedOutputPath,
           source: renderGeneratedClientEntityModule({
             entities: application.clientEntities,
+            schemaEntities: application.entities,
             schemaImportPath,
             operationContracts,
           }),
