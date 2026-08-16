@@ -223,6 +223,17 @@ Possible internal boundaries include discovery, resolution, validation, graph-ou
 operation analysis, and Application IR assembly. Let behavior and dependency direction determine
 the final folders rather than imposing one file per concept mechanically.
 
+First analysis-pipeline cut result on 2026-08-16:
+
+1. Named-import inventory, `const` declaration inventory, schema-context construction, and cached
+   imported-context resolution now live in `operation-contracts/source-resolution.mjs`.
+2. `metadata-analyzer.mjs` remains the public compatibility facade and consumes the internal module
+   in one direction. Parsing and diagnostic policy intentionally remain outside the resolution
+   module for a later validation boundary.
+3. All 51 tests pass with byte- and behavior-compatible output. Global coverage is unchanged at
+   78.69% statements, 71.69% branches, 83.58% functions, and 78.82% lines; the extracted resolution
+   module has 92.50% statement and line coverage, 77.41% branch coverage, and 100% function coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
