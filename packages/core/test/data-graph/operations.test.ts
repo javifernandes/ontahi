@@ -26,6 +26,33 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph operations', () => {
+  it('authors caller-owned Views from a client Entity facade', () => {
+    const TripSchema = entity('Trip', { id: field.id(), status: field.string() });
+    const Trip = defineClientEntity(TripSchema, {
+      domainOperations: {
+        available: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          bridge: {},
+          output: graphSchema.selection(TripSchema, { cardinality: 'many' }),
+        }),
+      },
+    });
+    const TripList = Trip.view('TripList', { id: true });
+    const projected = Trip.domain.available.as(TripList);
+
+    expect(TripList.entity).toBe(TripSchema);
+    expect(TripList.toJSON()).toMatchObject({
+      kind: 'entity-view',
+      name: 'TripList',
+      entity: 'Trip',
+    });
+    expect(projected.view).toBe(TripList.ast);
+    expectTypeOf(projected.__clientTypes?.output).toEqualTypeOf<
+      Array<{ id: string }> | undefined
+    >();
+  });
+
   it('does not expose projection on durable Selection operations', () => {
     const Trip = entity('Trip', { id: field.id() });
     const durable = defineClientDomainOperation({

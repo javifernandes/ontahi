@@ -44,4 +44,9 @@ other semantic entity declarations is rewritten to the corresponding generated b
 This keeps normalized client identity intact without requiring a shared runtime entity witness or
 importing server declaration modules into browser bundles.
 
+Generated client Entity facades preserve the recursive `.view(name, shape)` authoring surface.
+Views remain client source and are transported as JSON-safe ASTs; codegen does not inventory or
+register them as server application definitions. Entity and Operation-reachable Value declarations
+form the nominal server-model inventory.
+
 `@ontahi/codegen` owns neutral source loading, configurable import resolution, diagnostics, generic client/task projections, and the reusable generation runner for cached analysis, deterministic writes, drift checks, target selection, and dependency-aware watch. `@ontahi/runtime-vercel-workflows/codegen` owns Vercel-specific static rendering. BookOps owns alias values, target/output configuration, formatting policy, and its configured workflow runtime. The generated domain-operation and HTTP ingress registries were removed because the graph API already exposes the runtime metadata needed for ordinary composition. The former Next Action client target was also removed: graph operations use the generic invocation bridge, and explicitly authored Next Actions can use `@ontahi/runtime-nextjs/actions` without codegen.

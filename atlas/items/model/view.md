@@ -22,6 +22,12 @@ Views are typed semantic values with a versioned JSON-safe AST. They shape Queri
 and they may shape Selection-producing Operations without changing the population selected by the
 Operation.
 
-A View's name is application-level nominal identity in the namespace shared with Entity and Value.
-A View name cannot collide with either kind. Reusing one View declaration is distinct from declaring
-another structurally equal View with the same name.
+A View is caller-owned, analogous to a GraphQL query document or selection set. Its name identifies
+the document for reflection, transport, and cache identity, but it does not enter the server
+application's Entity/Value namespace. Different clients may define different Views with the same
+name without changing the server schema.
+
+Browser code authors Views against the generated client Entity facade and sends only the canonical
+AST through `.as(view)`. The server rebuilds and validates that AST against the Entity declared by
+the Operation's Selection output, then composes one final Query. A future persisted or approved View
+catalog would be an optional client/deployment artifact rather than part of the Entity schema.

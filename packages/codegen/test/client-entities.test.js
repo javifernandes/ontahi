@@ -129,13 +129,17 @@ describe('conventional client entity codegen', () => {
             exposure: 'bridge',
             layer: 'trips',
           },
-          operations: ({ operation }) => ({
+          operations: ({ operation, self }) => ({
             available: operation({
               output: TripListItem,
               run: () => [],
             }),
             delayed: operation({
               output: TripListItem,
+              run: () => [],
+            }),
+            search: operation({
+              output: self.many(),
               run: () => [],
             }),
           }),
@@ -165,6 +169,9 @@ describe('conventional client entity codegen', () => {
     });
     expect(output.fields.driver.target).toBe(generated.DriverSchema);
     expect(generated.Trip.domain.delayed.output).toBe(output);
+    const TripList = generated.Trip.view('TripList', { id: true });
+    expect(TripList.entity).toBe(generated.TripSchema);
+    expect(generated.Trip.domain.search.as(TripList).view).toBe(TripList.ast);
     expect(source).not.toContain("from './trip-list-item'");
   });
 
