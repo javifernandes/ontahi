@@ -9,6 +9,8 @@ These instructions apply throughout the repository. Before changing code, read a
 5. [`docs/package-changes.md`](./docs/package-changes.md) when adding or changing a package
 6. [`DEVELOPMENT.md`](./DEVELOPMENT.md) when changing packages or consumer integration
 7. [`RELEASING.md`](./RELEASING.md) when changing a public package or release automation
+8. [`docs/planning-and-atlas.md`](./docs/planning-and-atlas.md) when creating, moving, executing, or
+   closing plans, or when changing durable Atlas knowledge
 
 Repository-wide expectations:
 
@@ -21,5 +23,7 @@ Repository-wide expectations:
 6. Public package changes require a Changeset. Package-only test or tooling changes that do not
    warrant a release require an empty Changeset so CI records that decision.
 7. Pull requests must be ready for review, scoped coherently, and include the checks actually run.
+8. Keep Ontahi-owned plans and durable framework knowledge in this repository. Use canonical source
+   URIs for relationships to work owned by another repository.
 
 More specific `AGENTS.md` files may refine these instructions for a subtree.

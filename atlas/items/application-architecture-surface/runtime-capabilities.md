@@ -1,0 +1,53 @@
+---
+id: ontahi.runtime-capability-model
+kind: system-primitive
+title: Runtime Capability Model
+parent: ontahi.application-architecture-surface
+status: shaping
+horizon: now
+supports:
+  - ontahi
+  - ontahi.durable-workflows
+  - ontahi.source-code-organization
+relatedPlans:
+  - bookops://plans/100-ontahi-framework-extraction
+  - bookops://plans/71c-ontahi-application-module-composition
+  - bookops://plans/100e-ontahi-runtime-capabilities-and-repository-topology
+  - bookops://plans/100j-ontahi-in-memory-persistence-runtime
+  - bookops://plans/100f-operation-invocation-capability
+  - bookops://plans/100i-ontahi-observability-adapter-boundary
+  - bookops://plans/125-ontahi-ai-operations
+  - bookops://plans/126-ontahi-runtime-data-reflection
+  - bookops://plans/130-ontahi-authentication-principal-and-invocation-context
+migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
+sourceCommit: 67713696
+---
+
+Runtime Capability Model defines how an Ontahi application separates semantic capabilities, technology-independent ports, technology adapters, and host composition.
+
+It distinguishes authoritative domain state, durable execution state, coordination state, derived state, event/log state, and object state. Technologies such as PostgreSQL, Redis, Supabase, Vercel Workflow, DBOS, Restate, and RabbitMQ may implement one or more capabilities, but their different guarantees should remain visible in the framework contracts.
+
+The model is the design surface for pluggable graph persistence, durable task execution, task run storage, client/server transport, identity and authority, coordination, caching, events, telemetry/reporting, object storage, clocks, IDs, and scheduling.
+
+Authentication makes the distinction between configured capabilities and live scoped resources
+concrete. Passport, Supabase, Auth0, Okta, or another host mechanism authenticates a native request;
+the host then contributes a provider-neutral Principal to the invocation scope. Operations consume
+that Principal without importing the provider or transport.
+
+Model-backed operation execution adds executor bindings, declared graph sources and tools, budgets,
+trace and evaluation sinks, and optional private workspaces to this runtime surface. Those resources
+must be scoped and composed like other host capabilities; model memory or scratch state does not
+become authoritative graph state by default.
+
+Runtime Data Reflection adds a dynamic profile over live Entity and Selection populations. Storage,
+search, cache, projection, or remote-segment adapters may contribute observations, while the
+runtime preserves exactness, freshness, cost, capabilities, and authority in a provider-neutral
+contract.
+
+BookOps remains a host composition: it chooses adapters, credentials, routes, registries, domain declarations, and application policy. Ontahi owns only the framework semantics proven reusable across hosts.
+
+Domain declarations may depend on narrow, technology-independent application capabilities without importing the host root. BookOps `ContentNode` demonstrates this boundary: its exercise operation owns the use-case policy, while host composition supplies repository and AI implementations through an `ExerciseRuntimeCapability`. This keeps one semantic entity declaration without creating application-initialization cycles.
+
+For observability, core owns vendor-neutral telemetry and reporting ports. `@ontahi/opentelemetry` implements span creation and Ontahi runtime attributes, while each host registers its SDK, resources, processors, and exporters. BookOps keeps Sentry reporting local until another host proves that adapter reusable; Axiom and SigNoz remain interchangeable OTLP destinations rather than Ontahi adapters.
+
+For authoritative graph state, `@ontahi/core` provides a process-local reference implementation of the complete execution port. It owns live seeded state, plain and relation-root reads, counts, commands, and reflected Explorer data. Supabase remains a production adapter with external durability; direct PostgreSQL remains future capability work.
