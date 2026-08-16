@@ -256,6 +256,16 @@ Third analysis-pipeline cut result on 2026-08-16:
    78.90% lines; source parsing has 91.66% statement and line coverage, 75% branch coverage, and 100%
    function coverage.
 
+Fourth analysis-pipeline cut result on 2026-08-16:
+
+1. Entity/Value nominal inventory, origin deduplication, and name-conflict validation now live in
+   `application-model/named-definitions.mjs` as a pure translation over analyzed entities.
+2. `application-analysis.mjs` remains the filesystem and orchestration boundary and merges the
+   returned definitions and diagnostics into the serializable Application IR.
+3. Reuse, Value/Value conflicts, and Entity/Value conflicts remain byte-compatible across all 51
+   passing tests. Global coverage remains 78.78% statements, 71.74% branches, 83.83% functions, and
+   78.90% lines; the extracted nominal module has 100% statement, function, and line coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
