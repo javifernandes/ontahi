@@ -1,6 +1,7 @@
 import ts from 'typescript';
 
 import { collectConstDeclarations } from './source-resolution.mjs';
+import { readStringLiteralObjectProperty } from './typescript-ast.mjs';
 
 const resolveEntityName = entityArg => {
   if (!entityArg) return undefined;
@@ -62,19 +63,6 @@ const inferRelationSourceName = (entityName, relationName) => {
     entityName?.endsWith(relationSuffix) &&
     entityName.length > relationSuffix.length
     ? entityName.slice(0, -relationSuffix.length)
-    : undefined;
-};
-
-export const readStringLiteralObjectProperty = (objectLiteral, propertyName) => {
-  const property = objectLiteral.properties.find(
-    item =>
-      ts.isPropertyAssignment(item) &&
-      ts.isIdentifier(item.name) &&
-      item.name.text === propertyName,
-  );
-
-  return property && ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer)
-    ? property.initializer.text
     : undefined;
 };
 

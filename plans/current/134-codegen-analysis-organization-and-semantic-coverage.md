@@ -279,6 +279,19 @@ Fifth analysis-pipeline cut result on 2026-08-16:
    79.22% lines; Entity discovery has 82.75% statement, 75.69% branch, 100% function, and 87.80% line
    coverage.
 
+Sixth analysis-pipeline cut result on 2026-08-16:
+
+1. Entity schema projection now lives in `operation-contracts/entity-schema-projection.mjs`,
+   including transitive config resolution, fields, reference fields, relations, display, freshness,
+   locators, and identity metadata.
+2. Shared object-property readers and expression unwrapping moved to the narrow
+   `operation-contracts/typescript-ast.mjs` utility boundary used by discovery, projection, and the
+   compatibility facade.
+3. Operation parsing and graph-output derivation remain in `metadata-analyzer.mjs` for subsequent
+   cuts. All 51 tests pass with global coverage of 78.80% statements, 71.62% branches, 83.71%
+   functions, and 79.37% lines. Entity schema projection has 90.12% statement, 83.08% branch, 100%
+   function, and 95.77% line coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
