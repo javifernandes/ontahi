@@ -1,5 +1,17 @@
 # @ontahi/core
 
+## 0.1.0-alpha.4
+
+### Minor Changes
+
+- 74dac66: Add recursive, typed entity Views with a finite JSON-safe AST that preserves relation identity,
+  direction, target, cardinality, and nullability.
+- be2af8f: Allow recursive entity Views to project Queries and local Selections with `.as(view)`.
+- d46a878: Add final Query inspection for projectable Operations and validate reflected View relation metadata.
+- 9cfa0bc: Carry recursive Views through projectable Operation invocations and expose typed `.as(view)`
+  results to React Operation queries.
+- 8321558: Add lazy projectable calls for Operations that return semantic entity Selections.
+
 ## 0.1.0-alpha.3
 
 ### Minor Changes
