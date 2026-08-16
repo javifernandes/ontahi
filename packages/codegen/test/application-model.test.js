@@ -1345,8 +1345,6 @@ describe('Ontahi application declaration analysis', () => {
     expect(source).toContain("from './schema.js';");
     expect(source).toContain('export const Note = defineClientEntity(NoteEntity');
     expect(source).toContain('find: defineClientDomainOperation({');
-    expect(source).toContain('input: graphSchema.void(),');
-    expect(source).not.toContain('input: undefined,');
   });
 
   it('avoids named Value bindings that collide with imported entity bindings', () => {

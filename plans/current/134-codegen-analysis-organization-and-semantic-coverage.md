@@ -197,6 +197,18 @@ Third characterization cut result on 2026-08-16:
    export, ordering, and formatting assertions; replace only assertions whose contract is already
    better represented by model, typecheck, or runtime behavior.
 
+Slice 1 closure on 2026-08-16:
+
+1. The generated fallback input contract moved from positive and negative source substrings to a
+   runtime assertion against the imported generated module.
+2. The remaining source assertions cover module boundaries, deterministic declaration order, or
+   focused legacy-renderer transformations. Keep those until the Generated Module Model provides a
+   structural assertion boundary in Slice 3.
+3. All 51 tests pass with real generated-module typechecking and runtime import. Coverage remains
+   78.69% statements, 71.69% branches, 83.58% functions, and 78.82% lines, above the enforced floors.
+4. Slice 1 is complete. Slice 2 may reorganize analysis behind the existing compatibility facade,
+   beginning with named-definition discovery and symbol/import resolution.
+
 ### Slice 2. Analysis Pipeline
 
 1. Extract named-definition discovery and symbol/import resolution from

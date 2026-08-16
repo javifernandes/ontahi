@@ -208,6 +208,7 @@ describe('conventional client entity codegen', () => {
     });
     expect(output.fields.driver.target).toBe(generated.DriverSchema);
     expect(generated.Trip.domain.delayed.output).toBe(output);
+    expect(generated.Trip.domain.delayed.input).toEqual({ kind: 'schema.void' });
     const TripList = generated.Trip.view('TripList', { id: true });
     expect(TripList.entity).toBe(generated.TripSchema);
     expect(generated.Trip.domain.search.as(TripList).view).toBe(TripList.ast);
