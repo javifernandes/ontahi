@@ -36,6 +36,11 @@ The executable owns application analysis, diagnostics, browser-safe projection, 
 writes, drift checks, and watch dependencies. A host only configures actual deviations from the
 convention.
 
+Generated client Entity facades expose the recursive `.view(name, shape)` factory from their
+browser-safe Entity schema. Applications define Views in client source and pass them to Query,
+Selection, or projectable Operation `.as(view)` APIs. Views are not registered in the server graph
+or emitted by codegen.
+
 ## Lower-level API
 
 This package evaluates the supported TypeScript/JavaScript DSL shape into a serializable application model that can be consumed by generic projections and runtime-specific emitters. Application declarations, target selection, alias values, and output paths remain host-owned.

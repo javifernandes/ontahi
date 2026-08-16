@@ -29,7 +29,12 @@ import {
   type Selection,
   type SelectionBuilder,
 } from './selection-value.js';
-import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
+import {
+  createRecursiveEntityView,
+  type EntityViewShape,
+  type InferEntityViewResult,
+  type RecursiveEntityViewDefinition,
+} from './view.js';
 
 export type GraphEntityExposure = 'browser-direct' | 'bridge' | 'server-only';
 export type GraphOperationAuthority = 'client-safe' | 'server-required';
@@ -404,7 +409,14 @@ export type ClientEntityWithDomainOperations<
     exposure?: GraphEntityExposure;
   };
   domain: ResolveDomainOperations<EntityName<TEntity>, TOperations>;
-} & (TEntity extends AnyEntityDefinition ? EntitySelectionFactory<TEntity> : {});
+} & (TEntity extends AnyEntityDefinition
+  ? EntitySelectionFactory<TEntity> & {
+      view: <TViewName extends string, const TShape extends EntityViewShape<TEntity>>(
+        viewName: TViewName,
+        shape: TShape,
+      ) => RecursiveEntityViewDefinition<TEntity, TShape>;
+    }
+  : {});
 
 export type ClientEntityRelationDeclaration<
   TOperations extends Record<string, unknown> = Record<string, unknown>,
@@ -943,6 +955,8 @@ export const defineClientEntity = <
       ? {
           selection: (build: SelectionBuilder<AnyEntityDefinition>) =>
             selection(entityOrName as AnyEntityDefinition, build),
+          view: (name: string, shape: EntityViewShape<AnyEntityDefinition>) =>
+            createRecursiveEntityView(entityOrName as AnyEntityDefinition, name, shape),
         }
       : {}),
   };

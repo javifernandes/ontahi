@@ -12,3 +12,14 @@ The generic action metadata and result protocol comes from `@ontahi/core/runtime
 Application-specific graph declarations, domain entities, runtime assembly, and policy stay in the
 host application. Reusable reflective UI lives in `@ontahi/explorer-react`; hosts contribute their
 own routes, access control, theme/auth composition, and application-specific UI enrichments.
+
+Projectable Operations keep population on the server and shape in the caller:
+
+```ts
+const TripList = Trip.view('TripList', { id: true, driver: { name: true } });
+const operation = Trip.domain.available.as(TripList);
+const result = useOperationQuery(operation, input);
+```
+
+React cache identity includes the transported View AST. The View remains client-owned and does not
+need a server registry entry.

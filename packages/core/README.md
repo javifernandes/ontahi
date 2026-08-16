@@ -31,6 +31,27 @@ The configured storage remains available as `application.storage`. Provider-spec
 stay typed: in-memory applications expose their dataset for test setup, while persistent providers
 do not pretend to offer an in-process dataset.
 
+## Caller-owned Views
+
+An Operation may define a semantic population by returning a declarative Selection while each
+client chooses its materialized shape:
+
+```ts
+import { Trip } from './generated/client-entities.js';
+
+const TripList = Trip.view('TripList', {
+  id: true,
+  driver: { name: true },
+});
+
+const operation = Trip.domain.available.as(TripList);
+```
+
+The View is client source, not a server graph registration. `.as(view)` transports its versioned
+JSON-safe AST; the server validates it against the Operation's Selection output Entity and combines
+population plus shape into one final Query. View names are document identity and do not share the
+server application's Entity/Value namespace.
+
 ## Authentication Principal
 
 Hosts authenticate their native request and enter Ontahi with a provider-neutral Principal. The
