@@ -3,6 +3,7 @@ export {
   analyzeExportedTaskStep,
   analyzeGraphApiModule,
   analyzeSpecificDomainEntityExport,
+  analyzeSpecificViewExport,
   type MetadataAnalysis,
   type MetadataAnalyzerOptions,
 } from './operation-contracts.mjs';

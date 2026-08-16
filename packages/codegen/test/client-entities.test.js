@@ -72,7 +72,7 @@ describe('conventional client entity codegen', () => {
     ).toThrow(/either formatter or formatOutput/);
   });
 
-  it('projects entity dependencies embedded in a named Value operation output', async () => {
+  it('projects registered Views and named Value operation outputs', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-client-codegen-value-output-'));
     const sourceDirectory = path.join(directory, 'src');
     const outputPath = path.join(sourceDirectory, 'generated/client-entities.ts');
@@ -85,8 +85,12 @@ describe('conventional client entity codegen', () => {
         import { defineGraphApi } from '@ontahi/core/data-graph';
         import { Driver } from './driver';
         import { Trip } from './trip';
+        import { TripList } from './trip-list';
 
-        export const TripsGraphApi = defineGraphApi({ entities: { Trip, Driver } });
+        export const TripsGraphApi = defineGraphApi({
+          entities: { Trip, Driver },
+          views: { TripList },
+        });
       `,
       'utf8',
     );
@@ -112,6 +116,15 @@ describe('conventional client entity codegen', () => {
           id: field.id(),
           driver: field.ref(Driver),
         });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(sourceDirectory, 'trip-list.ts'),
+      `
+        import { Trip } from './trip';
+
+        export const TripList = Trip.view('TripList', { id: true });
       `,
       'utf8',
     );
@@ -165,7 +178,18 @@ describe('conventional client entity codegen', () => {
     });
     expect(output.fields.driver.target).toBe(generated.DriverSchema);
     expect(generated.Trip.domain.delayed.output).toBe(output);
+    expect(generated.TripList).toMatchObject({
+      kind: 'entity-view',
+      name: 'TripList',
+      ast: {
+        version: 1,
+        entity: 'Trip',
+        fields: { id: { kind: 'field-view', field: 'id' } },
+      },
+    });
+    expect(generated.TripList.entity).toBe(generated.TripSchema);
     expect(source).not.toContain("from './trip-list-item'");
+    expect(source).not.toContain("from './trip-list'");
   });
 
   it('prints concise help without trying to analyze an application', async () => {

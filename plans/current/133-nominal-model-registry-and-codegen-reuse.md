@@ -128,11 +128,19 @@ reference field targets the generated Entity schema by identity.
 
 ### Slice 3: Registered Views And Unified Namespace
 
-- [ ] Define the smallest explicit application surface for Views not otherwise reachable from server
+- [x] Define the smallest explicit application surface for Views not otherwise reachable from server
       Operation declarations.
-- [ ] Include Entity, View, and Value in one collision policy.
-- [ ] Project reusable Views without introducing a second View representation.
-- [ ] Reflect the registry for Explorer and future remote Query validation.
+- [x] Include Entity, View, and Value in one collision policy.
+- [x] Project reusable Views without introducing a second View representation.
+- [x] Reflect the registry for Explorer and future remote Query validation.
+
+Implementation checkpoint: `defineGraphApi({ entities, views })` is the explicit typed authoring
+surface. Core preserves each registered View instance, exposes it through graph reflection, and
+rejects duplicate Entity/View names. Application analysis folds registered Views together with
+Entities and Operation-reachable Values into `namedDefinitions`, applies one cross-kind collision
+policy, and remains JSON-safe. Client codegen exports each registered View once against the
+browser-safe Entity schema, so callers can import it for `.as(view)` without crossing the server
+module boundary.
 
 ### Slice 4: Codegen Organization
 
@@ -143,13 +151,13 @@ reference field targets the generated Entity schema by identity.
 
 ## Verification
 
-- [ ] Reusing one declaration produces one canonical registry entry and one generated definition.
-- [ ] Separate declarations with one name fail even when their fields match.
-- [ ] Cross-kind collisions fail with both origins and kinds in the diagnostic.
-- [ ] The inventory survives JSON serialization without executable functions.
+- [x] Reusing one declaration produces one canonical registry entry and one generated definition.
+- [x] Separate declarations with one name fail even when their fields match.
+- [x] Cross-kind collisions fail with both origins and kinds in the diagnostic.
+- [x] The inventory survives JSON serialization without executable functions.
 - [x] Generated modules execute against the real Core runtime and preserve dependency identity.
-- [ ] Public types preserve the inferred result of reused Values and Views.
-- [ ] Existing inline contracts and generated client behavior remain compatible.
+- [x] Public types preserve the inferred result of reused Values and Views.
+- [x] Existing inline contracts and generated client behavior remain compatible.
 
 ## Decisions
 
@@ -162,10 +170,13 @@ reference field targets the generated Entity schema by identity.
 
 ## Open Questions
 
-1. How are standalone Views and Values registered when they are not reachable from an Operation?
+1. Standalone Views use `defineGraphApi({ views })`; named Values remain reachable through Operation
+   contracts until a concrete standalone Value consumer appears.
 2. Should `schema.named` and named lazy schemas join the same namespace or remain schema-local labels?
-3. Are generated definitions exported for application reuse or kept module-private?
-4. Does runtime application reflection expose one ordered registry or kind-specific indexed views?
+3. Generated Views are exported for caller reuse; generated Values remain module-private contract
+   bindings.
+4. Core exposes typed View accessors and serializable View summaries; application analysis exposes
+   the normalized ordered cross-kind registry.
 5. How should incremental/dynamic `registerEntity` interact with a frozen reflected registry?
 
 ## Completion Signal

@@ -23,6 +23,110 @@ afterEach(async () => {
 });
 
 describe('Ontahi application declaration analysis', () => {
+  it('inventories a View registered by the graph application', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-registered-view-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Trip } from './trip';
+        import { TripList } from './trip-list';
+
+        export const TripsGraph = defineGraphApi({
+          entities: { Trip },
+          views: { TripList },
+        });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(directory, 'trip.ts'),
+      `
+        import { entity, field } from '@ontahi/core/entity';
+        export const Trip = entity({ name: 'Trip', fields: { id: field.id() } });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(directory, 'trip-list.ts'),
+      `
+        import { Trip } from './trip';
+        export const TripList = Trip.view('TripList', { id: true });
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.graph.views).toEqual([
+      {
+        viewExportName: 'TripList',
+        importedIdentifier: 'TripList',
+        importPath: './trip-list',
+        sourcePath: path.join(directory, 'trip-list.ts'),
+      },
+    ]);
+    expect(analysis.namedDefinitions).toContainEqual(
+      expect.objectContaining({
+        kind: 'view',
+        name: 'TripList',
+        declaration: 'TripList',
+        sourcePath: path.join(directory, 'trip-list.ts'),
+      }),
+    );
+    expect(JSON.parse(JSON.stringify(analysis)).namedDefinitions).toEqual(
+      analysis.namedDefinitions,
+    );
+  });
+
+  it('rejects a registered View that claims an Entity name', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-view-conflict-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Trip, TripView } from './trip';
+        export const TripsGraph = defineGraphApi({
+          entities: { Trip },
+          views: { TripView },
+        });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(directory, 'trip.ts'),
+      `
+        import { entity, field } from '@ontahi/core/entity';
+        export const Trip = entity({ name: 'Trip', fields: { id: field.id() } });
+        export const TripView = Trip.view('Trip', { id: true });
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'model-name-conflict',
+        declaration: 'TripView',
+        message: expect.stringContaining('Entity Trip'),
+      }),
+    );
+  });
+
   it('inventories one imported Value declaration reused by multiple Operations', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-nominal-reuse-'));
     const graphApiPath = path.join(directory, 'graph.ts');

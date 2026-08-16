@@ -2131,6 +2131,55 @@ export const analyzeSpecificDomainEntityExport = (sourceText, exportName, option
   });
 };
 
+export const analyzeSpecificViewExport = (sourceText, exportName, options = {}) => {
+  const sourceFile = createSourceFile(sourceText, options.sourcePath ?? 'view-module.ts');
+
+  for (const statement of sourceFile.statements) {
+    if (!isExportedConst(statement)) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== exportName ||
+        !declaration.initializer
+      ) {
+        continue;
+      }
+
+      const initializer = unwrapExpression(declaration.initializer);
+      if (
+        !initializer ||
+        !ts.isCallExpression(initializer) ||
+        !ts.isPropertyAccessExpression(initializer.expression) ||
+        initializer.expression.name.text !== 'view' ||
+        !ts.isIdentifier(initializer.expression.expression) ||
+        !initializer.arguments[0] ||
+        !ts.isStringLiteral(initializer.arguments[0])
+      ) {
+        return {
+          diagnostics: [`${exportName} must be declared with Entity.view('Name', shape).`],
+        };
+      }
+
+      return {
+        diagnostics: [],
+        definition: {
+          kind: 'view',
+          name: initializer.arguments[0].text,
+          declaration: exportName,
+          sourcePath: options.sourcePath,
+          entityName: initializer.expression.expression.text,
+          schemaText: getNodeText(initializer),
+        },
+      };
+    }
+  }
+
+  return {
+    diagnostics: [`No exported ${exportName} View declaration found.`],
+  };
+};
+
 export const analyzeGraphApiModule = sourceText => {
   const sourceFile = ts.createSourceFile(
     'graph-api-module.ts',
@@ -2186,6 +2235,10 @@ export const analyzeGraphApiModule = sourceText => {
           ts.isIdentifier(item.name) &&
           item.name.text === 'entities',
       );
+      const viewsProperty = configArg.properties.find(
+        item =>
+          ts.isPropertyAssignment(item) && ts.isIdentifier(item.name) && item.name.text === 'views',
+      );
 
       if (
         declarationFunction !== 'registerBoundEntities' &&
@@ -2237,6 +2290,7 @@ export const analyzeGraphApiModule = sourceText => {
       }
 
       const entities = [];
+      const views = [];
       const diagnostics = [];
       const entityProperties =
         entitiesObject?.properties ??
@@ -2290,11 +2344,43 @@ export const analyzeGraphApiModule = sourceText => {
         });
       }
 
+      if (viewsProperty && ts.isPropertyAssignment(viewsProperty)) {
+        if (!ts.isObjectLiteralExpression(viewsProperty.initializer)) {
+          diagnostics.push(`${apiExportName}.views must be an object literal.`);
+        } else {
+          for (const property of viewsProperty.initializer.properties) {
+            const viewExportName =
+              ts.isShorthandPropertyAssignment(property) ||
+              (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name))
+                ? property.name.text
+                : undefined;
+            const importedIdentifier = ts.isShorthandPropertyAssignment(property)
+              ? property.name.text
+              : ts.isPropertyAssignment(property) && ts.isIdentifier(property.initializer)
+                ? property.initializer.text
+                : undefined;
+
+            if (!viewExportName || !importedIdentifier) continue;
+
+            const importPath = importMap.get(importedIdentifier);
+            if (!importPath) {
+              diagnostics.push(
+                `${apiExportName}.views.${viewExportName} must reference an imported identifier.`,
+              );
+              continue;
+            }
+
+            views.push({ viewExportName, importedIdentifier, importPath });
+          }
+        }
+      }
+
       return {
         diagnostics,
         definition: {
           apiExportName,
           entities,
+          views,
         },
       };
     }

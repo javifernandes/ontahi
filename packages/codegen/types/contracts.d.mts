@@ -44,9 +44,10 @@ export type AnalyzedEntity = {
 };
 
 export type AnalyzedNamedDefinition = {
-  kind: 'entity' | 'value';
+  kind: 'entity' | 'view' | 'value';
   name: string;
   declaration: string;
+  exportName?: string;
   sourcePath?: string;
   schemaText?: string;
 };
@@ -56,8 +57,10 @@ export type OntahiApplicationAnalysis = {
   graph: {
     sourcePath: string;
     entities: readonly Record<string, unknown>[];
+    views: readonly Record<string, unknown>[];
   };
   entities: readonly AnalyzedEntity[];
+  views: readonly AnalyzedNamedDefinition[];
   namedDefinitions: readonly AnalyzedNamedDefinition[];
   operations: readonly AnalyzedOperation[];
   clientEntities: readonly AnalyzedEntity[];

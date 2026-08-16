@@ -26,6 +26,35 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph operations', () => {
+  it('registers application Views without changing their canonical identity', () => {
+    const Trip = entity('Trip', { id: field.id(), code: field.string() });
+    const TripList = Trip.view('TripList', { id: true, code: true });
+    const graphApi = defineGraphApi({
+      entities: { Trip },
+      views: { TripList },
+    });
+
+    expect(graphApi.viewNames).toEqual(['TripList']);
+    expect(graphApi.listViews()).toEqual([TripList]);
+    expect(graphApi.getView('TripList')).toBe(TripList);
+    expectTypeOf(graphApi.getView('TripList')).toEqualTypeOf<typeof TripList | undefined>();
+    expect(graphApi.describe().views).toEqual([{ name: 'TripList', entityName: 'Trip' }]);
+  });
+
+  it('rejects duplicate names in the application Entity and View namespace', () => {
+    const Trip = entity('Trip', { id: field.id() });
+    const ConflictingTripView = Trip.view('Trip', { id: true });
+    const TripList = Trip.view('TripList', { id: true });
+    const AnotherTripList = Trip.view('TripList', { id: true });
+
+    expect(() => defineGraphApi({ entities: { Trip }, views: { ConflictingTripView } })).toThrow(
+      /Model name "Trip".*Entity.*View/,
+    );
+    expect(() =>
+      defineGraphApi({ entities: { Trip }, views: { TripList, AnotherTripList } }),
+    ).toThrow(/Model name "TripList".*View.*View/);
+  });
+
   it('does not expose projection on durable Selection operations', () => {
     const Trip = entity('Trip', { id: field.id() });
     const durable = defineClientDomainOperation({
@@ -641,6 +670,7 @@ describe('data-graph operations', () => {
           taskNames: [],
         },
       ],
+      views: [],
       graphOperations: [
         {
           id: 'Book.fetchBooks',

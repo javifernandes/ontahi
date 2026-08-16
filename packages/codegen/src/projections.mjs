@@ -256,10 +256,14 @@ export const renderGeneratedClientEntityModule = ({
   const namedValueDefinitions = namedDefinitions.filter(
     definition => definition.kind === 'value' && definition.schemaText,
   );
+  const namedViewDefinitions = namedDefinitions.filter(
+    definition => definition.kind === 'view' && definition.schemaText,
+  );
   const schemaTexts = [
     ...inputSchemaTexts,
     ...outputSchemaTexts,
     ...namedValueDefinitions.map(definition => definition.schemaText),
+    ...namedViewDefinitions.map(definition => definition.schemaText),
   ];
   const usesCacheRef =
     clientCacheTexts.some(text => /\bcacheRef\b/.test(text)) ||
@@ -333,10 +337,46 @@ export const renderGeneratedClientEntityModule = ({
       .filter(entity => entity.entityDefinitionName && entity.entityDefinitionLocalName)
       .map(entity => [entity.entityDefinitionName, entity.entityDefinitionLocalName]),
   );
+  const viewExportNamesByDeclaration = new Map(
+    namedViewDefinitions.map(definition => [
+      definition.declaration,
+      definition.exportName ?? definition.declaration,
+    ]),
+  );
+  const orderedNamedViewDefinitions = [];
+  const visitedNamedViews = new Set();
+  const visitNamedView = definition => {
+    if (visitedNamedViews.has(definition)) return;
+    visitedNamedViews.add(definition);
+    namedViewDefinitions.forEach(candidate => {
+      if (
+        candidate !== definition &&
+        new RegExp(`\\b${candidate.declaration}\\b`).test(definition.schemaText)
+      ) {
+        visitNamedView(candidate);
+      }
+    });
+    orderedNamedViewDefinitions.push(definition);
+  };
+  namedViewDefinitions.forEach(visitNamedView);
+  const replaceRegisteredViewNames = text =>
+    Array.from(viewExportNamesByDeclaration.entries()).reduce(
+      (current, [declaration, exportName]) =>
+        current.replace(new RegExp(`\\b${declaration}\\b`, 'g'), exportName),
+      text,
+    );
+  const namedViewDefinitionTexts = orderedNamedViewDefinitions.map(definition => {
+    const exportName = definition.exportName ?? definition.declaration;
+    const schemaText = replaceRegisteredViewNames(
+      replaceProjectedEntityNames(definition.schemaText, projectedNames),
+    );
+    return `export const ${exportName} = ${schemaText};`;
+  });
   const usedGeneratedNames = new Set([
     ...entities.map(entity => entity.entityName),
     ...entitySchemaProjections.map(projection => projection.localName),
     ...entityDefinitionImports.map(name => entityDefinitionAliases.get(name) ?? name),
+    ...namedViewDefinitions.map(definition => definition.exportName ?? definition.declaration),
   ]);
   const namedDefinitionLocalNames = new Map();
   const namedValueDefinitionTexts = namedValueDefinitions.map(definition => {
@@ -451,6 +491,8 @@ ${schemaImportSection}${entitySchemaProjections.map(projection => projection.tex
     entitySchemaProjections.length > 0 ? '\n\n' : ''
   }${deferredEntityRelationTexts.join('\n')}${
     deferredEntityRelationTexts.length > 0 ? '\n\n' : ''
+  }${namedViewDefinitionTexts.join('\n\n')}${
+    namedViewDefinitionTexts.length > 0 ? '\n\n' : ''
   }${namedValueDefinitionTexts.join('\n\n')}${
     namedValueDefinitionTexts.length > 0 ? '\n\n' : ''
   }${helperSection}${entityExports}

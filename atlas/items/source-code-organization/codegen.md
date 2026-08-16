@@ -44,4 +44,8 @@ other semantic entity declarations is rewritten to the corresponding generated b
 This keeps normalized client identity intact without requiring a shared runtime entity witness or
 importing server declaration modules into browser bundles.
 
+The analyzed model also normalizes graph Entities, registered Views, and Operation-reachable Values
+into one serializable nominal registry. Client generation exports each registered View against its
+browser-safe Entity projection and reuses one module-local binding for each reachable Value.
+
 `@ontahi/codegen` owns neutral source loading, configurable import resolution, diagnostics, generic client/task projections, and the reusable generation runner for cached analysis, deterministic writes, drift checks, target selection, and dependency-aware watch. `@ontahi/runtime-vercel-workflows/codegen` owns Vercel-specific static rendering. BookOps owns alias values, target/output configuration, formatting policy, and its configured workflow runtime. The generated domain-operation and HTTP ingress registries were removed because the graph API already exposes the runtime metadata needed for ordinary composition. The former Next Action client target was also removed: graph operations use the generic invocation bridge, and explicitly authored Next Actions can use `@ontahi/runtime-nextjs/actions` without codegen.

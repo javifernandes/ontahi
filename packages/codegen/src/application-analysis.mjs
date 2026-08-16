@@ -3,6 +3,7 @@ import {
   analyzeExportedTaskStep,
   analyzeGraphApiModule,
   analyzeSpecificDomainEntityExport,
+  analyzeSpecificViewExport,
 } from './operation-contracts/metadata-analyzer.mjs';
 
 const diagnostic = ({ code, message, sourcePath, declaration, importPath }) => ({
@@ -18,8 +19,10 @@ const emptyApplicationAnalysis = ({ graphApiPath, diagnostics = [] }) => ({
   graph: {
     sourcePath: graphApiPath,
     entities: [],
+    views: [],
   },
   entities: [],
+  views: [],
   namedDefinitions: [],
   operations: [],
   clientEntities: [],
@@ -36,11 +39,11 @@ const namedDefinitionOrigin = definition =>
   `${definition.kind}:${definition.sourcePath ?? ''}:${definition.declaration}`;
 
 const formatNamedDefinitionOrigin = definition =>
-  `${definition.kind === 'entity' ? 'Entity' : 'Value'} ${definition.declaration}${
+  `${definition.kind === 'entity' ? 'Entity' : definition.kind === 'view' ? 'View' : 'Value'} ${definition.declaration}${
     definition.sourcePath ? ` (${definition.sourcePath})` : ''
   }`;
 
-const collectNamedDefinitions = entities => {
+const collectNamedDefinitions = (entities, views = []) => {
   const definitions = [
     ...entities.map(entity => ({
       kind: 'entity',
@@ -51,6 +54,7 @@ const collectNamedDefinitions = entities => {
     ...entities.flatMap(entity =>
       entity.operations.flatMap(operation => operation.namedDefinitions ?? []),
     ),
+    ...views,
   ];
   const uniqueOrigins = new Set();
   const definitionsByName = new Map();
@@ -192,6 +196,8 @@ export const analyzeOntahiApplication = ({ graphApiPath, sourceLoader }) => {
   const tasks = [];
   const ingress = [];
   const graphEntityReferences = [];
+  const graphViewReferences = [];
+  const views = [];
   const resolveImportSource = (fromSourcePath, importPath) => {
     const resolved = sourceLoader.resolveImportSource(fromSourcePath, importPath);
 
@@ -316,7 +322,55 @@ export const analyzeOntahiApplication = ({ graphApiPath, sourceLoader }) => {
     }
   }
 
-  const namedModel = collectNamedDefinitions(entities);
+  for (const viewReference of graphAnalysis.definition.views ?? []) {
+    const declaration = `${graphAnalysis.definition.apiExportName}.views.${viewReference.viewExportName}`;
+    const viewSource = resolveImportSource(graphSource.sourcePath, viewReference.importPath);
+
+    graphViewReferences.push({
+      ...viewReference,
+      ...(viewSource?.sourcePath ? { sourcePath: viewSource.sourcePath } : {}),
+    });
+
+    if (!viewSource) {
+      diagnostics.push(
+        diagnostic({
+          code: 'view-source-unresolved',
+          message: `Could not resolve ${viewReference.importPath}.`,
+          sourcePath: graphSource.sourcePath,
+          declaration,
+          importPath: viewReference.importPath,
+        }),
+      );
+      continue;
+    }
+
+    const viewAnalysis = analyzeSpecificViewExport(
+      viewSource.sourceText,
+      viewReference.importedIdentifier,
+      { sourcePath: viewSource.sourcePath },
+    );
+    if (viewAnalysis.diagnostics.length > 0 || !viewAnalysis.definition) {
+      diagnostics.push(
+        ...viewAnalysis.diagnostics.map(message =>
+          diagnostic({
+            code: 'view-declaration-invalid',
+            message,
+            sourcePath: viewSource.sourcePath,
+            declaration,
+            importPath: viewReference.importPath,
+          }),
+        ),
+      );
+      continue;
+    }
+
+    views.push({
+      ...viewAnalysis.definition,
+      exportName: viewReference.viewExportName,
+    });
+  }
+
+  const namedModel = collectNamedDefinitions(entities, views);
   diagnostics.push(...namedModel.diagnostics);
 
   return toSerializableValue({
@@ -325,8 +379,10 @@ export const analyzeOntahiApplication = ({ graphApiPath, sourceLoader }) => {
       exportName: graphAnalysis.definition.apiExportName,
       sourcePath: graphSource.sourcePath,
       entities: graphEntityReferences,
+      views: graphViewReferences,
     },
     entities,
+    views,
     namedDefinitions: namedModel.namedDefinitions,
     operations,
     clientEntities,

@@ -31,6 +31,32 @@ The configured storage remains available as `application.storage`. Provider-spec
 stay typed: in-memory applications expose their dataset for test setup, while persistent providers
 do not pretend to offer an in-process dataset.
 
+## Registered Views
+
+Caller-owned recursive Views become part of an application's public graph model by registering them
+on `defineGraphApi`:
+
+```ts
+const TripList = Trip.view('TripList', {
+  id: true,
+  driver: { name: true },
+});
+
+const graph = defineGraphApi({
+  entities: { Trip, Driver },
+  views: { TripList },
+});
+```
+
+`entities` and `views` are separate typed inputs because they play different execution roles, but
+their names share one application namespace with named Operation Values. `graph.listViews()`,
+`graph.getView(name)`, and `graph.describe().views` expose the registered Views without changing
+their canonical identity. Distinct Entity or View declarations cannot claim the same name.
+
+Registering a View also makes it reachable by client codegen. The generated browser module exports
+the browser-safe View, so callers can pass it to Query, Selection, or projectable Operation
+`.as(view)` APIs without importing the server declaration.
+
 ## Authentication Principal
 
 Hosts authenticate their native request and enter Ontahi with a provider-neutral Principal. The

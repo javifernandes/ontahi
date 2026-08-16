@@ -448,9 +448,14 @@ export type GraphRelationWithOperations<
 };
 
 type AnyGraphApiEntity = object;
+type AnyGraphApiView = RecursiveEntityViewDefinition<AnyEntityDefinition, any, any>;
 
-export type GraphApiDefinition<TEntities extends Record<string, AnyGraphApiEntity>> = {
+export type GraphApiDefinition<
+  TEntities extends Record<string, AnyGraphApiEntity>,
+  TViews extends Record<string, AnyGraphApiView> = {},
+> = {
   entities: TEntities;
+  views?: TViews;
 };
 
 type GraphOperationsOf<TEntity> = TEntity extends {
@@ -544,6 +549,10 @@ type GraphApiIngressSummary = {
 
 type GraphApiSummary = {
   entities: GraphApiEntitySummary[];
+  views: Array<{
+    name: string;
+    entityName: string;
+  }>;
   graphOperations: Array<{
     id: string;
     entityName: string;
@@ -565,30 +574,33 @@ type GraphApiSummary = {
   taskDefinitions: GraphTaskDefinitionSummary[];
 };
 
-export type GraphApi<TEntities extends Record<string, AnyGraphApiEntity>> =
-  GraphApiDefinition<TEntities> & {
-    entityNames: Array<keyof TEntities & string>;
-    listEntities: () => Array<TEntities[keyof TEntities]>;
-    listDomainEntities: () => Array<TEntities[keyof TEntities]>;
-    listGraphOperationEntities: () => Array<TEntities[keyof TEntities]>;
-    getEntity: <TName extends keyof TEntities & string>(
-      name: TName,
-    ) => TEntities[TName] | undefined;
-    listGraphOperations: () => Array<GraphApiGraphOperation<TEntities>>;
-    listDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
-    listBridgeDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
-    listDurableDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
-    listIngressDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
-    listHttpIngress: () => GraphApiIngressSummary[];
-    listTaskEntities: () => Array<TEntities[keyof TEntities]>;
-    listTaskDefinitions: () => GraphTaskDefinitionSummary[];
-    getDomainOperation: (operationId: string) => GraphApiDomainOperation<TEntities> | undefined;
-    getOperation: (
-      operationId: string,
-    ) => GraphApiGraphOperation<TEntities> | GraphApiDomainOperation<TEntities> | undefined;
-    getTaskDefinition: (taskId: string) => GraphTaskDefinitionSummary | undefined;
-    describe: () => GraphApiSummary;
-  };
+export type GraphApi<
+  TEntities extends Record<string, AnyGraphApiEntity>,
+  TViews extends Record<string, AnyGraphApiView> = {},
+> = GraphApiDefinition<TEntities, TViews> & {
+  entityNames: Array<keyof TEntities & string>;
+  viewNames: Array<keyof TViews & string>;
+  listEntities: () => Array<TEntities[keyof TEntities]>;
+  listDomainEntities: () => Array<TEntities[keyof TEntities]>;
+  listGraphOperationEntities: () => Array<TEntities[keyof TEntities]>;
+  getEntity: <TName extends keyof TEntities & string>(name: TName) => TEntities[TName] | undefined;
+  listViews: () => Array<TViews[keyof TViews]>;
+  getView: <TName extends keyof TViews & string>(name: TName) => TViews[TName] | undefined;
+  listGraphOperations: () => Array<GraphApiGraphOperation<TEntities>>;
+  listDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
+  listBridgeDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
+  listDurableDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
+  listIngressDomainOperations: () => Array<GraphApiDomainOperation<TEntities>>;
+  listHttpIngress: () => GraphApiIngressSummary[];
+  listTaskEntities: () => Array<TEntities[keyof TEntities]>;
+  listTaskDefinitions: () => GraphTaskDefinitionSummary[];
+  getDomainOperation: (operationId: string) => GraphApiDomainOperation<TEntities> | undefined;
+  getOperation: (
+    operationId: string,
+  ) => GraphApiGraphOperation<TEntities> | GraphApiDomainOperation<TEntities> | undefined;
+  getTaskDefinition: (taskId: string) => GraphTaskDefinitionSummary | undefined;
+  describe: () => GraphApiSummary;
+};
 
 export const resolveOperationId = (entityName: string, operationName: string) =>
   `${entityName}.${operationName}`;
@@ -1168,14 +1180,32 @@ export const createGraphEntityFactory =
       >;
   };
 
-export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntity>>(
-  definition: GraphApiDefinition<TEntities>,
-): GraphApi<TEntities> => {
+export const defineGraphApi = <
+  TEntities extends Record<string, AnyGraphApiEntity>,
+  TViews extends Record<string, AnyGraphApiView> = {},
+>(
+  definition: GraphApiDefinition<TEntities, TViews>,
+): GraphApi<TEntities, TViews> => {
   const getEntityEntries = () =>
     Object.entries(definition.entities) as Array<
       [keyof TEntities & string, TEntities[keyof TEntities]]
     >;
   const getEntities = () => getEntityEntries().map(([, entity]) => entity);
+  const getViewEntries = () =>
+    Object.entries(definition.views ?? {}) as Array<[keyof TViews & string, TViews[keyof TViews]]>;
+  const modelKindsByName = new Map<string, 'Entity' | 'View'>();
+  const claimModelName = (name: string, kind: 'Entity' | 'View') => {
+    const existingKind = modelKindsByName.get(name);
+    if (existingKind) {
+      throw new Error(`Model name "${name}" is claimed by ${existingKind} and ${kind}.`);
+    }
+    modelKindsByName.set(name, kind);
+  };
+
+  getEntityEntries().forEach(([fallbackName, entity]) =>
+    claimModelName(getGraphApiEntityName(fallbackName, entity), 'Entity'),
+  );
+  getViewEntries().forEach(([, view]) => claimModelName(view.name, 'View'));
 
   const listGraphOperations = () =>
     getEntities().flatMap(entity =>
@@ -1259,10 +1289,12 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
   const api = {
     ...definition,
     listEntities: () => getEntities(),
+    listViews: () => getViewEntries().map(([, view]) => view),
     listDomainEntities: () => getEntities().filter(hasDomainOperations),
     listGraphOperationEntities: () => getEntities().filter(hasGraphOperations),
     listTaskEntities,
     getEntity: (name: keyof TEntities & string) => definition.entities[name],
+    getView: (name: keyof TViews & string) => definition.views?.[name],
     listGraphOperations,
     listDomainOperations,
     listBridgeDomainOperations,
@@ -1290,6 +1322,10 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         taskNames: listTaskDefinitions()
           .filter(task => task.entityName === getGraphApiEntityName(name, entity))
           .map(task => task.name),
+      })),
+      views: getViewEntries().map(([, view]) => ({
+        name: view.name,
+        entityName: view.entity.name,
       })),
       graphOperations: listGraphOperations().map(operation => ({
         id: operation.id,
@@ -1331,5 +1367,10 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
     get: () => getEntityEntries().map(([name]) => name),
   });
 
-  return api as GraphApi<TEntities>;
+  Object.defineProperty(api, 'viewNames', {
+    enumerable: true,
+    get: () => getViewEntries().map(([name]) => name),
+  });
+
+  return api as GraphApi<TEntities, TViews>;
 };

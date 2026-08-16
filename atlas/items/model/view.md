@@ -25,3 +25,7 @@ Operation.
 A View's name is application-level nominal identity in the namespace shared with Entity and Value.
 A View name cannot collide with either kind. Reusing one View declaration is distinct from declaring
 another structurally equal View with the same name.
+
+Applications register caller-owned Views explicitly through `defineGraphApi({ views })`. This keeps
+the authoring role distinct from Entity execution while feeding one normalized Entity/View/Value
+registry for collision validation, reflection, codegen, Explorer, and remote Query validation.

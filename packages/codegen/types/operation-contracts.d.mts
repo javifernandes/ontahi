@@ -36,10 +36,28 @@ export const analyzeSpecificDomainEntityExport: (
   ingress?: readonly Record<string, unknown>[];
 }> | null;
 
+export const analyzeSpecificViewExport: (
+  sourceText: string,
+  exportName: string,
+  options?: MetadataAnalyzerOptions,
+) => MetadataAnalysis<{
+  kind: 'view';
+  name: string;
+  declaration: string;
+  sourcePath?: string;
+  entityName: string;
+  schemaText: string;
+}>;
+
 export const analyzeGraphApiModule: (sourceText: string) => MetadataAnalysis<{
   apiExportName?: string;
   entities: readonly {
     entityExportName: string;
+    importedIdentifier: string;
+    importPath: string;
+  }[];
+  views: readonly {
+    viewExportName: string;
     importedIdentifier: string;
     importPath: string;
   }[];

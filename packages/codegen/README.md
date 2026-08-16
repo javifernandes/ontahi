@@ -52,7 +52,15 @@ const application = analyzeOntahiApplication({
 });
 ```
 
-The application model contains every graph entity reference, all analyzed operations, durable tasks, ingress declarations, structured diagnostics, and source dependencies. `clientEntities` is an explicit browser-safe projection containing only bridge-exposed operations; it is not the complete operation model.
+The application model contains every graph Entity and registered View reference, reachable named
+Operation Values, all analyzed Operations, durable tasks, ingress declarations, structured
+diagnostics, and source dependencies. `namedDefinitions` is the serializable nominal registry used
+to reject Entity/View/Value name collisions. `clientEntities` is an explicit browser-safe projection
+containing only bridge-exposed Operations; it is not the complete Operation model.
+
+Views registered through `defineGraphApi({ views })` are emitted once as exported browser-safe View
+definitions. Named Values reachable through Operation inputs or outputs are emitted once as
+module-private bindings and reused by every generated Operation contract.
 
 The package also owns browser-safe client entity and lightweight task-definition renderers. Its optional runner owns shared analysis, deterministic writes, drift checks, target selection, CLI argument parsing, and dependency-aware watch lifecycle while hosts inject target rendering and formatting policy.
 
