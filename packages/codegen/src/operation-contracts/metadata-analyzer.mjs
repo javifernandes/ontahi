@@ -16,6 +16,10 @@ import {
   toClientGraphOutputText,
 } from './graph-output-analysis.mjs';
 import {
+  resolveOperationCollectionInitializer,
+  resolveOperationInitializer,
+} from './operation-discovery.mjs';
+import {
   createTypeScriptSourceFile,
   parseTypeScriptSource,
 } from './source-parsing.mjs';
@@ -32,16 +36,6 @@ const getNodeText = node => node.getText();
 const isExportedConst = statement =>
   ts.isVariableStatement(statement) &&
   statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword);
-
-const isDomainOperationDefineCall = expression =>
-  (ts.isIdentifier(expression) && expression.text === 'defineDomainOperation') ||
-  (ts.isIdentifier(expression) && expression.text === 'operation') ||
-  (ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === 'define' &&
-    ts.isPropertyAccessExpression(expression.expression) &&
-    expression.expression.name.text === 'operation' &&
-    ts.isIdentifier(expression.expression.expression) &&
-    expression.expression.expression.text === 'app');
 
 const isAppIngressHttpCall = expression =>
   ts.isPropertyAccessExpression(expression) &&
@@ -628,99 +622,6 @@ const parseIngressDefinitions = (operationName, ingressNode) => {
   };
 };
 
-const resolveOperationInitializer = (initializer, declarations, visited = new Set()) => {
-  if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
-    return resolveOperationInitializer(initializer.expression, declarations, visited);
-  }
-
-  if (ts.isCallExpression(initializer) && isDomainOperationDefineCall(initializer.expression)) {
-    return initializer;
-  }
-
-  const resolveIdentifier = identifier => {
-    if (visited.has(identifier.text)) {
-      return undefined;
-    }
-    const declaration = declarations.get(identifier.text);
-    if (!declaration?.initializer) {
-      return undefined;
-    }
-    visited.add(identifier.text);
-    return resolveOperationInitializer(declaration.initializer, declarations, visited);
-  };
-
-  if (ts.isIdentifier(initializer)) {
-    return resolveIdentifier(initializer);
-  }
-
-  if (ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression)) {
-    return resolveIdentifier(initializer.expression);
-  }
-
-  if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
-    if (!ts.isBlock(initializer.body)) {
-      return resolveOperationInitializer(initializer.body, declarations, visited);
-    }
-    const returned = initializer.body.statements.find(statement => ts.isReturnStatement(statement));
-    return returned?.expression
-      ? resolveOperationInitializer(returned.expression, declarations, visited)
-      : undefined;
-  }
-
-  return undefined;
-};
-
-const resolveObjectLiteralInitializer = (initializer, declarations, visited = new Set()) => {
-  if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
-    return resolveObjectLiteralInitializer(initializer.expression, declarations, visited);
-  }
-
-  if (ts.isObjectLiteralExpression(initializer)) {
-    return initializer;
-  }
-
-  const resolveIdentifier = identifier => {
-    if (visited.has(identifier.text)) {
-      return undefined;
-    }
-    const declaration = declarations.get(identifier.text);
-    if (!declaration?.initializer) {
-      return undefined;
-    }
-    visited.add(identifier.text);
-    return resolveObjectLiteralInitializer(declaration.initializer, declarations, visited);
-  };
-
-  if (ts.isIdentifier(initializer)) {
-    return resolveIdentifier(initializer);
-  }
-
-  if (
-    ts.isCallExpression(initializer) &&
-    ts.isIdentifier(initializer.expression) &&
-    initializer.expression.text === 'operationGroup'
-  ) {
-    const factory = initializer.arguments[1];
-    return factory ? resolveObjectLiteralInitializer(factory, declarations, visited) : undefined;
-  }
-
-  if (ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression)) {
-    return resolveIdentifier(initializer.expression);
-  }
-
-  if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
-    if (!ts.isBlock(initializer.body)) {
-      return resolveObjectLiteralInitializer(initializer.body, declarations, visited);
-    }
-    const returned = initializer.body.statements.find(statement => ts.isReturnStatement(statement));
-    return returned?.expression
-      ? resolveObjectLiteralInitializer(returned.expression, declarations, visited)
-      : undefined;
-  }
-
-  return undefined;
-};
-
 const analyzeNamedValueDefinition = ({ node, declaration, context, fallbackDeclaration }) => {
   const resolved = node ? unwrapExpression(node) : undefined;
   if (
@@ -1091,7 +992,10 @@ const findDomainEntityDefinition = (sourceFile, expectedExportName, options = {}
       );
       const operationsInitializer =
         domainOperationsProperty && ts.isPropertyAssignment(domainOperationsProperty)
-          ? resolveObjectLiteralInitializer(domainOperationsProperty.initializer, graphDeclarations)
+          ? resolveOperationCollectionInitializer(
+              domainOperationsProperty.initializer,
+              graphDeclarations,
+            )
           : undefined;
 
       if (

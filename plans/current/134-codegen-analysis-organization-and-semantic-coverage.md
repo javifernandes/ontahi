@@ -307,6 +307,18 @@ Seventh analysis-pipeline cut result on 2026-08-16:
    coverage. These lower local numbers make the uncharacterized graph-output variants explicit for
    a later focused semantic-coverage cut without weakening the enforced global floors.
 
+Eighth analysis-pipeline cut result on 2026-08-16:
+
+1. Operation call and collection resolution now live in
+   `operation-contracts/operation-discovery.mjs`, covering direct declarations, aliases, factory
+   functions, `operationGroup(...)`, expression wrappers, and cycle-safe local resolution.
+2. `metadata-analyzer.mjs` remains responsible for translating resolved Operation declarations
+   into contracts and diagnostics. This keeps the discovery cut independent from the larger
+   durable, ingress, schema, bridge, and cache analysis boundary planned next.
+3. The facade decreased from 1,280 to 1,184 lines and all 51 tests pass. Global coverage is unchanged
+   at 79.15% statements, 71.62% branches, 83.71% functions, and 80.19% lines; Operation discovery
+   has 66.03% statement, 65.21% branch, 71.42% function, and 68.62% line coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
