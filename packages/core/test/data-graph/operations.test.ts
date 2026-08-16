@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   defineClientDomainOperation,
@@ -26,6 +26,20 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('data-graph operations', () => {
+  it('does not expose projection on durable Selection operations', () => {
+    const Trip = entity('Trip', { id: field.id() });
+    const durable = defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {},
+      durable: { runtime: 'workflow' },
+      output: graphSchema.selection(Trip, { cardinality: 'many' }),
+    });
+
+    expectTypeOf(durable).not.toHaveProperty('as');
+    expect('as' in durable).toBe(false);
+  });
+
   it('safe parses public drafts through the operation input contract', () => {
     const TodoList = entity('TodoList', {
       id: field.id(),

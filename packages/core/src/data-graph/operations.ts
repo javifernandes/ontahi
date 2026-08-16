@@ -815,33 +815,35 @@ type InferClientOperationInput<TOperation> = TOperation extends {
 
 type DefinedClientDomainOperation<TOperation> = TOperation & {
   kind: 'domain-operation';
-} & (TOperation extends {
-    output: GraphSelectionDefinition<infer TEntity, infer TCardinality>;
-  }
-    ? {
-        as: <
-          TView extends RecursiveEntityViewDefinition<TEntity, any, any>,
-          TResolved extends TOperation & { id: string; entityName: string; name: string },
-        >(
-          this: TResolved,
-          view: TView,
-        ) => Omit<TResolved, 'output' | '__clientTypes'> & {
-          kind: 'domain-operation';
-          view: TView['ast'];
-          output: GraphSchemaLike<
-            TCardinality extends 'one'
-              ? InferEntityViewResult<TView> | null
-              : InferEntityViewResult<TView>[]
-          >;
-          __clientTypes?: {
-            input: InferClientOperationInput<TOperation>;
-            output: TCardinality extends 'one'
-              ? InferEntityViewResult<TView> | null
-              : InferEntityViewResult<TView>[];
+} & (TOperation extends { durable: object }
+    ? {}
+    : TOperation extends {
+          output: GraphSelectionDefinition<infer TEntity, infer TCardinality>;
+        }
+      ? {
+          as: <
+            TView extends RecursiveEntityViewDefinition<TEntity, any, any>,
+            TResolved extends TOperation & { id: string; entityName: string; name: string },
+          >(
+            this: TResolved,
+            view: TView,
+          ) => Omit<TResolved, 'output' | '__clientTypes'> & {
+            kind: 'domain-operation';
+            view: TView['ast'];
+            output: GraphSchemaLike<
+              TCardinality extends 'one'
+                ? InferEntityViewResult<TView> | null
+                : InferEntityViewResult<TView>[]
+            >;
+            __clientTypes?: {
+              input: InferClientOperationInput<TOperation>;
+              output: TCardinality extends 'one'
+                ? InferEntityViewResult<TView> | null
+                : InferEntityViewResult<TView>[];
+            };
           };
-        };
-      }
-    : {}) &
+        }
+      : {}) &
   (TOperation extends { input: GraphSchemaLike }
     ? {
         input: OperationInputSchema<TOperation['input'], InferClientOperationInput<TOperation>>;

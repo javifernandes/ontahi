@@ -121,7 +121,6 @@ describe('operation invocation dispatcher', () => {
       invokeOperation,
       checkPermission: async () => ({ allowed: true }),
     });
-
     await expect(
       dispatcher({
         kind: 'invoke',
@@ -161,7 +160,6 @@ describe('operation invocation dispatcher', () => {
       invokeOperation,
       checkPermission: async () => ({ allowed: true }),
     });
-
     await expect(
       dispatcher({
         kind: 'invoke',
@@ -242,6 +240,38 @@ describe('operation invocation dispatcher', () => {
       invokeOperation,
       checkPermission: async () => ({ allowed: true }),
     });
+
+    await expect(
+      dispatcher({
+        kind: 'invoke',
+        operationId: projectedOperation.id,
+        input: { title: 'available' },
+        view,
+      }),
+    ).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: false, kind: 'rejected', reason: 'invalid_projection' },
+    });
+    expect(invokeOperation).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inherited constructor field as an invalid projection', async () => {
+    const Trip = entity('Trip', { id: field.id() });
+    const projectedOperation = {
+      ...operation,
+      output: graphSchema.selection(Trip, { cardinality: 'many' }),
+    };
+    const invokeOperation = vi.fn();
+    const { createOperationInvocationDispatcher } =
+      await import('../../src/runtime/server/operation-invocation.js');
+    const dispatcher = createOperationInvocationDispatcher({
+      resolveOperation: () => projectedOperation,
+      invokeOperation,
+      checkPermission: async () => ({ allowed: true }),
+    });
+    const view = Trip.view('TripList', { id: true }).toJSON();
+    view.fields = {};
+    view.fields['constructor'] = { kind: 'field-view', field: 'constructor' };
 
     await expect(
       dispatcher({
