@@ -30,6 +30,7 @@ export {
 } from './runner.mjs';
 export type {
   AnalyzedEntity,
+  AnalyzedNamedDefinition,
   AnalyzedOperation,
   AnalyzedTask,
   CodegenDiagnostic,

@@ -64,6 +64,7 @@ const renderClientEntityExport = (
   relationDefinitionsBySource = new Map(),
   operationContracts = 'all',
   projectedNames = new Map(),
+  namedDefinitionLocalNames = new Map(),
 ) => {
   const entityExportName = definition.entityName;
   const entityArgument = definition.entitySchemaProjection
@@ -94,14 +95,14 @@ ${relationDefinitions
         operation.graphOutputText,
         projectedNames,
       );
-      const inputSchemaText = replaceProjectedEntityNames(
-        operation.inputSchemaText,
-        projectedNames,
-      );
-      const outputSchemaText = replaceProjectedEntityNames(
-        operation.outputSchemaText,
-        projectedNames,
-      );
+      const inputSchemaText = operation.inputNamedDefinition
+        ? (namedDefinitionLocalNames.get(operation.inputNamedDefinition.name) ??
+          replaceProjectedEntityNames(operation.inputSchemaText, projectedNames))
+        : replaceProjectedEntityNames(operation.inputSchemaText, projectedNames);
+      const outputSchemaText = operation.outputNamedDefinition
+        ? (namedDefinitionLocalNames.get(operation.outputNamedDefinition.name) ??
+          replaceProjectedEntityNames(operation.outputSchemaText, projectedNames))
+        : replaceProjectedEntityNames(operation.outputSchemaText, projectedNames);
       const lines = [
         `    ${operation.name}: defineClientDomainOperation({`,
         `      authority: '${operation.authority}',`,
@@ -226,6 +227,7 @@ const orderSchemaProjections = definitions => {
 export const renderGeneratedClientEntityModule = ({
   entities,
   schemaEntities = entities,
+  namedDefinitions = [],
   schemaImportPath = './schema',
   operationContracts = 'all',
 }) => {
@@ -251,7 +253,14 @@ export const renderGeneratedClientEntityModule = ({
           entity.operations.flatMap(operation => operation.outputSchemaText ?? []),
         )
       : [];
-  const schemaTexts = [...inputSchemaTexts, ...outputSchemaTexts];
+  const namedValueDefinitions = namedDefinitions.filter(
+    definition => definition.kind === 'value' && definition.schemaText,
+  );
+  const schemaTexts = [
+    ...inputSchemaTexts,
+    ...outputSchemaTexts,
+    ...namedValueDefinitions.map(definition => definition.schemaText),
+  ];
   const usesCacheRef =
     clientCacheTexts.some(text => /\bcacheRef\b/.test(text)) ||
     helperTexts.some(helperText => /\bcacheRef\b/.test(helperText));
@@ -287,33 +296,12 @@ export const renderGeneratedClientEntityModule = ({
   const entitySchemaProjections = orderSchemaProjections(schemaEntities)
     .map(entity => renderEntitySchemaProjection(entity, projectedNames))
     .filter(Boolean);
-  const deferredEntityRelationTexts = entitySchemaProjections.flatMap(
-    projection => projection.deferredTexts,
-  );
   const projectedEntityNames = new Set(
     schemaEntities
       .filter(entity => entity.entitySchemaProjection)
       .flatMap(entity => [entity.entityDefinitionName, entity.entityName])
       .filter(Boolean),
   );
-  const relationDefinitionsBySource = new Map();
-  for (const relationDefinition of relationDefinitions) {
-    const sourceRelations =
-      relationDefinitionsBySource.get(relationDefinition.relation.sourceName) ?? [];
-    sourceRelations.push(relationDefinition);
-    relationDefinitionsBySource.set(relationDefinition.relation.sourceName, sourceRelations);
-  }
-  const orderedEntities = [...relationDefinitions, ...entities.filter(entity => !entity.relation)];
-  const entityExports = orderedEntities
-    .map(entity =>
-      renderClientEntityExport(
-        entity,
-        relationDefinitionsBySource,
-        operationContracts,
-        projectedNames,
-      ),
-    )
-    .join('\n\n');
   const entityDefinitionImports = Array.from(
     new Set(
       entities.flatMap(entity =>
@@ -345,6 +333,52 @@ export const renderGeneratedClientEntityModule = ({
       .filter(entity => entity.entityDefinitionName && entity.entityDefinitionLocalName)
       .map(entity => [entity.entityDefinitionName, entity.entityDefinitionLocalName]),
   );
+  const usedGeneratedNames = new Set([
+    ...entities.map(entity => entity.entityName),
+    ...entitySchemaProjections.map(projection => projection.localName),
+    ...entityDefinitionImports.map(name => entityDefinitionAliases.get(name) ?? name),
+  ]);
+  const namedDefinitionLocalNames = new Map();
+  const namedValueDefinitionTexts = namedValueDefinitions.map(definition => {
+    const identifierName = definition.name.replace(/[^A-Za-z0-9_$]/g, '_');
+    const safeIdentifierName = /^[A-Za-z_$]/.test(identifierName)
+      ? identifierName
+      : `_${identifierName}`;
+    let localName = `${safeIdentifierName}Value`;
+    let suffix = 2;
+    while (usedGeneratedNames.has(localName)) {
+      localName = `${safeIdentifierName}Value${suffix}`;
+      suffix += 1;
+    }
+    usedGeneratedNames.add(localName);
+    namedDefinitionLocalNames.set(definition.name, localName);
+    return `const ${localName} = ${replaceProjectedEntityNames(
+      definition.schemaText,
+      projectedNames,
+    )};`;
+  });
+  const deferredEntityRelationTexts = entitySchemaProjections.flatMap(
+    projection => projection.deferredTexts,
+  );
+  const relationDefinitionsBySource = new Map();
+  for (const relationDefinition of relationDefinitions) {
+    const sourceRelations =
+      relationDefinitionsBySource.get(relationDefinition.relation.sourceName) ?? [];
+    sourceRelations.push(relationDefinition);
+    relationDefinitionsBySource.set(relationDefinition.relation.sourceName, sourceRelations);
+  }
+  const orderedEntities = [...relationDefinitions, ...entities.filter(entity => !entity.relation)];
+  const entityExports = orderedEntities
+    .map(entity =>
+      renderClientEntityExport(
+        entity,
+        relationDefinitionsBySource,
+        operationContracts,
+        projectedNames,
+        namedDefinitionLocalNames,
+      ),
+    )
+    .join('\n\n');
   const entityDefinitionImportPaths = new Map(
     [...schemaEntities, ...entities].flatMap(entity => [
       ...(entity.entityDefinitionName && entity.entityDefinitionImportPath
@@ -417,6 +451,8 @@ ${schemaImportSection}${entitySchemaProjections.map(projection => projection.tex
     entitySchemaProjections.length > 0 ? '\n\n' : ''
   }${deferredEntityRelationTexts.join('\n')}${
     deferredEntityRelationTexts.length > 0 ? '\n\n' : ''
+  }${namedValueDefinitionTexts.join('\n\n')}${
+    namedValueDefinitionTexts.length > 0 ? '\n\n' : ''
   }${helperSection}${entityExports}
 `);
 };

@@ -12,6 +12,7 @@ relatedPlans:
   - bookops://plans/100-ontahi-framework-extraction
   - bookops://plans/100g-ontahi-codegen-and-application-tooling-boundary
   - bookops://plans/70-first-class-workflow-tier-in-architecture
+  - ontahi://plans/133-nominal-model-registry-and-codegen-reuse
 migratedFrom: bookops://atlas/source-code-organization/codegen
 sourceCommit: 67713696
 ---
