@@ -234,6 +234,17 @@ First analysis-pipeline cut result on 2026-08-16:
    78.69% statements, 71.69% branches, 83.58% functions, and 78.82% lines; the extracted resolution
    module has 92.50% statement and line coverage, 77.41% branch coverage, and 100% function coverage.
 
+Second analysis-pipeline cut result on 2026-08-16:
+
+1. Graph composition-root discovery now lives in `operation-contracts/graph-discovery.mjs` as a pure
+   translation from a validated TypeScript `SourceFile` to a definition plus diagnostics.
+2. The public `analyzeGraphApiModule` facade remains responsible for parsing and rejecting invalid
+   syntax before delegating discovery.
+3. All 51 tests pass across graph objects, arrays, application overloads, entity factories, and
+   transitional registries. Global coverage is 78.76% statements, 71.72% branches, 83.77% functions,
+   and 78.89% lines; graph discovery has 82.53% statement, 83.54% branch, 100% function, and 83.87%
+   line coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
