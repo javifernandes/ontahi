@@ -31,7 +31,9 @@ describe('graph output analysis', () => {
     `);
 
     expect(isGraphOutputSchemaCall(initializerNamed(context, 'direct').expression)).toBe(true);
-    expect(isGraphOutputSchemaCall(initializerNamed(context, 'appQualified').expression)).toBe(true);
+    expect(isGraphOutputSchemaCall(initializerNamed(context, 'appQualified').expression)).toBe(
+      true,
+    );
     expect(isGraphOutputSchemaCall(initializerNamed(context, 'other').expression)).toBe(false);
     expect(toClientGraphOutputText('app.graph.output.array(app.graph.output.entity(Note))')).toBe(
       'graphOutput.array(graphOutput.entity(Note))',
@@ -60,8 +62,7 @@ describe('graph output analysis', () => {
       fieldEntries: expect.any(Array),
       fieldsText:
         '{ comments: graphOutput.array(graphOutput.nullable(graphOutput.entity(Comment, { author: graphOutput.entity(Author) }))), owner: graphOutput.optional(graphOutput.entity(User, { manager: graphOutput.entity(Manager) })), explicit: graphOutput.array(graphOutput.entity(Tag)) }',
-      text:
-        'graphOutput.object({ comments: graphOutput.array(graphOutput.nullable(graphOutput.entity(Comment, { author: graphOutput.entity(Author) }))), owner: graphOutput.optional(graphOutput.entity(User, { manager: graphOutput.entity(Manager) })), explicit: graphOutput.array(graphOutput.entity(Tag)) })',
+      text: 'graphOutput.object({ comments: graphOutput.array(graphOutput.nullable(graphOutput.entity(Comment, { author: graphOutput.entity(Author) }))), owner: graphOutput.optional(graphOutput.entity(User, { manager: graphOutput.entity(Manager) })), explicit: graphOutput.array(graphOutput.entity(Tag)) })',
     });
   });
 
