@@ -404,6 +404,29 @@ Second semantic-emitter cut result on 2026-08-17:
    81.87% lines; the semantic task-registry module has 100% statement, function, and line coverage
    with 92.85% branch coverage.
 
+Third semantic-emitter cut result on 2026-08-17:
+
+1. `renderSemanticTaskDefinitionRegistryModule({ tasks })` now provides the internal cutover-shaped
+   pipeline from analyzed tasks through the Generated Module Model and AST emitter to `ts.Printer`.
+2. The focused suite routes imported, generated, and collision scenarios through that API, verifies
+   semantic parity with the legacy renderer, and asserts deterministic repeated serialization.
+3. The AST printer output is intentionally not byte-identical to the handwritten renderer's raw
+   whitespace and quote choices. No public artifact changes in this slice; Slice 4 must either accept
+   and document that format drift or normalize both paths at an explicit formatting boundary.
+4. All 54 tests pass. Global coverage is 80.83% statements, 73.41% branches, 87.06% functions, and
+   81.89% lines; the semantic task-registry module remains at 100% statement, function, and line
+   coverage with 92.85% branch coverage.
+
+Slice 3 closure on 2026-08-17:
+
+1. The task registry has an explicit Generated Module Model covering imports, generated task
+   declarations, registry entries, and collision-safe local names.
+2. Model translation uses TypeScript AST nodes exclusively and serializes only at the outer printer
+   boundary.
+3. A deterministic internal renderer exercises legacy/semantic parity while the public legacy path
+   remains unchanged. Slice 4 may begin with the task-registry cutover and removal of its duplicate
+   handwritten renderer after the artifact-format and semantic-typecheck gates pass.
+
 ### Slice 4. Incremental Projection Migration
 
 Migrate one projection family at a time:

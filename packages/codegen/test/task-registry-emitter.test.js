@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createTaskRegistryModuleModel,
-  printTaskRegistryModule,
+  renderSemanticTaskDefinitionRegistryModule,
 } from '../src/generated-module/task-registry.mjs';
 import { renderGeneratedTaskDefinitionRegistryModule } from '../src/projections.mjs';
 
@@ -90,10 +90,11 @@ describe('semantic task registry emitter', () => {
       },
     });
 
-    const semanticSource = printTaskRegistryModule(result.model);
+    const semanticSource = renderSemanticTaskDefinitionRegistryModule({ tasks });
     const legacySource = renderGeneratedTaskDefinitionRegistryModule({ tasks });
 
     expect(summarizeTaskRegistry(semanticSource)).toEqual(summarizeTaskRegistry(legacySource));
+    expect(renderSemanticTaskDefinitionRegistryModule({ tasks })).toBe(semanticSource);
     expect(
       ts.createSourceFile(
         'task-registry.ts',
@@ -154,7 +155,7 @@ describe('semantic task registry emitter', () => {
       },
     });
 
-    const semanticSource = printTaskRegistryModule(result.model);
+    const semanticSource = renderSemanticTaskDefinitionRegistryModule({ tasks });
     const legacySource = renderGeneratedTaskDefinitionRegistryModule({ tasks });
 
     expect(summarizeTaskRegistry(semanticSource)).toEqual(summarizeTaskRegistry(legacySource));
@@ -202,7 +203,7 @@ describe('semantic task registry emitter', () => {
       { localName: 'NoteArchiveTaskDefinition2' },
     ]);
 
-    expect(summarizeTaskRegistry(printTaskRegistryModule(result.model))).toEqual(
+    expect(summarizeTaskRegistry(renderSemanticTaskDefinitionRegistryModule({ tasks }))).toEqual(
       summarizeTaskRegistry(renderGeneratedTaskDefinitionRegistryModule({ tasks })),
     );
   });

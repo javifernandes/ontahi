@@ -307,3 +307,6 @@ export const printTaskRegistryModule = model => {
 
   return ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(sourceFile);
 };
+
+export const renderSemanticTaskDefinitionRegistryModule = ({ tasks }) =>
+  printTaskRegistryModule(createTaskRegistryModuleModel({ tasks }).model);
