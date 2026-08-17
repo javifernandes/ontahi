@@ -148,6 +148,24 @@ describe('data graph read protocol', () => {
       },
       code: 'invalid_selection',
     },
+    {
+      name: 'unknown reference locator field',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: {
+          kind: 'references',
+          refs: [
+            {
+              kind: 'entity-ref',
+              entityName: 'Trip',
+              locator: { missing: 'trip-1' },
+            },
+          ],
+        },
+      },
+      code: 'invalid_selection',
+    },
   ])('rejects an $name against the server graph', ({ selection, code }) => {
     const { Trip, Truck } = defineTripGraph();
     const parsed = parseGraphReadRequest({

@@ -31,7 +31,9 @@ export type GraphReadProtocolErrorCode =
   | 'unsupported_version'
   | 'unknown_entity'
   | 'invalid_selection'
-  | 'invalid_projection';
+  | 'invalid_projection'
+  | 'access_denied'
+  | 'execution_unavailable';
 
 export type GraphReadProtocolError = {
   readonly kind: 'protocol-error';
@@ -230,7 +232,7 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
 const selectionError = (message: string): GraphReadProtocolError =>
   graphReadProtocolError('invalid_selection', message);
 
-const validateSelection = (
+export const validateGraphReadSelection = (
   value: unknown,
   entity: AnyEntityDefinition,
   depth = 0,
@@ -246,6 +248,14 @@ const validateSelection = (
     if (value.refs.some(ref => ref.entityName !== entity.name)) {
       return selectionError(`Data graph read Selection references must target ${entity.name}.`);
     }
+    const unknownLocatorField = value.refs
+      .flatMap(ref => Object.keys(ref.locator))
+      .find(fieldName => !hasOwn(entity.fields, fieldName));
+    if (unknownLocatorField) {
+      return selectionError(
+        `Unknown Selection reference field ${entity.name}.${unknownLocatorField}.`,
+      );
+    }
     return undefined;
   }
   if (value.kind === 'and' || value.kind === 'or') {
@@ -253,12 +263,14 @@ const validateSelection = (
       return selectionError('Data graph read Selection operands are invalid or exceed 256 items.');
     }
     for (const operand of value.operands) {
-      const error = validateSelection(operand, entity, depth + 1);
+      const error = validateGraphReadSelection(operand, entity, depth + 1);
       if (error) return error;
     }
     return undefined;
   }
-  if (value.kind === 'not') return validateSelection(value.operand, entity, depth + 1);
+  if (value.kind === 'not') {
+    return validateGraphReadSelection(value.operand, entity, depth + 1);
+  }
   if (value.kind !== 'predicate') {
     return selectionError(`Unknown data graph Selection kind: ${String(value.kind)}.`);
   }
@@ -309,7 +321,7 @@ export const resolveGraphReadRequest = (
       ),
     };
   }
-  const invalidSelection = validateSelection(request.selection.expression, entity);
+  const invalidSelection = validateGraphReadSelection(request.selection.expression, entity);
   if (invalidSelection) return { success: false, error: invalidSelection };
   for (const order of request.orderBy) {
     if (!hasOwn(entity.fields, order.fieldName)) {

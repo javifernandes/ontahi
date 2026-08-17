@@ -138,7 +138,8 @@ Selection before execution. The caller cannot provide or weaken the authority sc
 necessary but insufficient by itself: policy must also constrain selected fields, filter and order
 fields, operators, relation traversal, cardinality, and limits. A remotely readable `User` Entity,
 for example, may still deny credentials entirely and constrain visible rows to the current owner or
-organization.
+organization. Every exposed policy must choose a scope explicitly: either an authority-derived
+Selection or `all` for deliberately public rows. Omitting scope never means all rows.
 
 Direct browser storage does not weaken this rule. Supabase can safely execute from the browser only
 because PostgreSQL RLS and grants enforce authority at the data boundary. Ontahi policy may describe
@@ -184,8 +185,9 @@ languages.
 - [x] Carry projectable Operation Views through generated clients, React, and the existing
       Operation bridge. Completed in plan 128b.
 - [x] Specify a versioned Query wire protocol with validation limits.
-- [ ] Define a transport-neutral remote graph executor and server dispatcher.
-- [ ] Shape a first-class, default-deny read policy declaration and enforcement seam.
+- [x] Define a transport-neutral server dispatcher and execution callback.
+- [ ] Define a remote graph executor capability and runtime routing.
+- [x] Shape a first-class, default-deny read policy declaration and enforcement seam.
 - [ ] Add an HTTP adapter without embedding HTTP concepts in the graph protocol.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
@@ -232,19 +234,19 @@ wire encoder does not reverse-engineer caller intent from compiled `select`/`inc
 Plan 134 may continue reorganizing codegen independently; codegen integration waits for its
 semantic emitter cutover.
 
-### Current TDD Slice: Default-Deny Remote Read Boundary
+### Completed TDD Slice: Default-Deny Remote Read Boundary
 
-The next proof is a transport-neutral dispatcher whose remote Entity registry is explicit and
+This proof adds a transport-neutral dispatcher whose remote Entity registry is explicit and
 default-deny. It accepts the validated read protocol, resolves only policy-registered Entities,
 checks the requested fields, operators, ordering, relations, cardinality, and limits, intersects a
 server-derived authority Selection, and only then delegates the final Query to storage execution.
 
-Tests should prove that an Entity present in the domain graph but absent from remote policy cannot
-reach the executor, that denied fields and relation paths cannot leak through a View, and that an
+Tests prove that an Entity present in the domain graph but absent from remote policy cannot reach
+the executor, that denied fields and relation paths cannot leak through a View, and that an
 owner scope narrows rather than replaces the caller Selection. HTTP, generated clients, and remote
 Commands remain outside this slice.
 
-### Following Implementation Slices: Remote Reads
+### Current Implementation Slice: Remote Read Runtime
 
 The next Ontahi version should prove remote reads before remote Commands. That keeps serialization,
 runtime routing, policy, transport, and result semantics visible without mixing in write authority
@@ -269,13 +271,13 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 
 ## Acceptance Checklist
 
-- [ ] One canonical read program validates and round-trips without executable JavaScript or
+- [x] One canonical read program validates and round-trips without executable JavaScript or
       provider-specific query state.
 - [ ] Direct and remote runtimes execute the same Todo read expression with the same semantic
       result.
 - [ ] The server dispatcher is transport-neutral and the HTTP adapter is replaceable.
-- [ ] Remote reads are denied unless an explicit graph policy permits their semantic surface.
-- [ ] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
+- [x] Remote reads are denied unless an explicit graph policy permits their semantic surface.
+- [x] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
 - [ ] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
       end-to-end Todo proof.
 - [ ] Remote Commands remain unavailable by default and are left for the next bounded slice.
