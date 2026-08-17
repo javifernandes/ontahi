@@ -34,8 +34,98 @@ const schemaExpressionEntries = schema => [
   ['identity', schema.identity],
 ];
 
-export const createClientEntitySchemaModuleModel = ({ schemaEntities }) => {
-  const entitySchemas = schemaEntities
+const replaceProjectedEntityNames = (sourceText, projectedNames) =>
+  Array.from(projectedNames.entries()).reduce(
+    (current, [sourceName, projectedName]) =>
+      current.replace(new RegExp(`\\b${sourceName}\\b`, 'g'), projectedName),
+    sourceText,
+  );
+
+const orderSchemaProjections = schemaEntities => {
+  const entitiesByName = new Map();
+  for (const entity of schemaEntities) {
+    if (entity.entityDefinitionName) entitiesByName.set(entity.entityDefinitionName, entity);
+    if (entity.entityName) entitiesByName.set(entity.entityName, entity);
+  }
+
+  const ordered = [];
+  const visited = new Set();
+  const visit = entity => {
+    if (visited.has(entity)) return;
+    visited.add(entity);
+
+    for (const referenceField of entity.entitySchemaProjection?.referenceFields ?? []) {
+      const target = entitiesByName.get(referenceField.targetName);
+      if (target) visit(target);
+    }
+    for (const relation of entity.entitySchemaProjection?.relations ?? []) {
+      if (relation.deferred) continue;
+      const target = entitiesByName.get(relation.targetName);
+      if (target) visit(target);
+    }
+    ordered.push(entity);
+  };
+
+  schemaEntities.forEach(visit);
+  return ordered;
+};
+
+const createSchemaImports = ({ schemaEntities, projectedNames, schemaImportPath }) => {
+  const importPathsByName = new Map();
+  for (const entity of schemaEntities) {
+    const projection = entity.entitySchemaProjection;
+    if (!projection) continue;
+
+    for (const dependency of [
+      ...(projection.referenceFields ?? []),
+      ...(projection.relations ?? []),
+    ]) {
+      if (!projectedNames.has(dependency.targetName)) {
+        importPathsByName.set(
+          dependency.targetName,
+          dependency.targetImportPath ?? schemaImportPath,
+        );
+      }
+    }
+  }
+
+  const importsByPath = new Map();
+  for (const importedName of Array.from(importPathsByName.keys()).sort()) {
+    const moduleSpecifier = importPathsByName.get(importedName);
+    const bindings = importsByPath.get(moduleSpecifier) ?? [];
+    bindings.push({ importedName, localName: importedName });
+    importsByPath.set(moduleSpecifier, bindings);
+  }
+
+  return Array.from(importsByPath.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([moduleSpecifier, bindings]) => ({ moduleSpecifier, bindings }));
+};
+
+const createRelationModel = (relation, projectedNames) => ({
+  kind: relation.kind,
+  name: relation.name,
+  targetLocalName: projectedNames.get(relation.targetName) ?? relation.targetName,
+  via: relation.via,
+});
+
+export const createClientEntitySchemaModuleModel = ({
+  schemaEntities,
+  schemaImportPath = './schema',
+}) => {
+  const projectedNames = new Map(
+    schemaEntities
+      .filter(entity => entity.entitySchemaProjection && entity.entityDefinitionName)
+      .flatMap(entity => {
+        const localName = entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
+        return [
+          [entity.entityDefinitionName, localName],
+          [entity.entityName, localName],
+        ];
+      }),
+  );
+  const orderedSchemaEntities = orderSchemaProjections(schemaEntities);
+  const entitySchemas = orderedSchemaEntities
     .filter(entity => entity.entitySchemaProjection)
     .map(entity => {
       const projection = entity.entitySchemaProjection;
@@ -43,7 +133,7 @@ export const createClientEntitySchemaModuleModel = ({ schemaEntities }) => {
       return {
         localName: entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`,
         entityName: projection.name,
-        fields: sourceExpression(projection.fieldsText),
+        fields: sourceExpression(replaceProjectedEntityNames(projection.fieldsText, projectedNames)),
         display: projection.displayText
           ? sourceExpression(projection.displayText)
           : undefined,
@@ -56,6 +146,9 @@ export const createClientEntitySchemaModuleModel = ({ schemaEntities }) => {
         identity: projection.identityText
           ? sourceExpression(projection.identityText)
           : undefined,
+        relations: (projection.relations ?? [])
+          .filter(relation => !relation.deferred)
+          .map(relation => createRelationModel(relation, projectedNames)),
       };
     });
   const diagnostics = entitySchemas.flatMap(schema =>
@@ -69,34 +162,20 @@ export const createClientEntitySchemaModuleModel = ({ schemaEntities }) => {
         : [],
     ),
   );
-  diagnostics.push(
-    ...schemaEntities.flatMap(entity => {
-      const projection = entity.entitySchemaProjection;
-      if (!projection) return [];
-
-      return [
-        ...((projection.referenceFields?.length ?? 0) > 0
-          ? [
-              {
-                entityName: projection.name,
-                expression: 'referenceFields',
-                message: 'Reference fields are not supported by the base schema emitter.',
-              },
-            ]
-          : []),
-        ...((projection.relations?.length ?? 0) > 0
-          ? [
-              {
-                entityName: projection.name,
-                expression: 'relations',
-                message: 'Entity relations are not supported by the base schema emitter.',
-              },
-            ]
-          : []),
-      ];
-    }),
-  );
   const usesField = entitySchemas.some(schema => /\bfield\./.test(schema.fields.sourceText));
+  const deferredRelations = orderedSchemaEntities.flatMap(entity => {
+    const projection = entity.entitySchemaProjection;
+    if (!projection) return [];
+
+    const sourceLocalName =
+      entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
+    return (projection.relations ?? [])
+      .filter(relation => relation.deferred)
+      .map(relation => ({
+        sourceLocalName,
+        ...createRelationModel(relation, projectedNames),
+      }));
+  });
 
   return {
     diagnostics,
@@ -106,12 +185,14 @@ export const createClientEntitySchemaModuleModel = ({ schemaEntities }) => {
         { importedName: 'entity', localName: 'defineEntitySchema' },
         ...(usesField ? [{ importedName: 'field', localName: 'field' }] : []),
       ],
+      schemaImports: createSchemaImports({ schemaEntities, projectedNames, schemaImportPath }),
       entitySchemas,
+      deferredRelations,
     },
   };
 };
 
-const createCoreImport = bindings =>
+const createNamedImport = ({ moduleSpecifier, bindings }) =>
   ts.factory.createImportDeclaration(
     undefined,
     ts.factory.createImportClause(
@@ -129,8 +210,11 @@ const createCoreImport = bindings =>
         ),
       ),
     ),
-    ts.factory.createStringLiteral('@ontahi/core/data-graph'),
+    ts.factory.createStringLiteral(moduleSpecifier),
   );
+
+const createCoreImport = bindings =>
+  createNamedImport({ moduleSpecifier: '@ontahi/core/data-graph', bindings });
 
 const readExpression = expression => {
   const parsed = parseSourceExpression(expression.sourceText);
@@ -141,6 +225,31 @@ const readExpression = expression => {
 
   return parsed.expression;
 };
+
+const createRelationArguments = relation => [
+  ts.factory.createStringLiteral(relation.name),
+  ts.factory.createIdentifier(relation.targetLocalName),
+  ...(relation.via
+    ? [
+        ts.factory.createObjectLiteralExpression([
+          ts.factory.createPropertyAssignment(
+            ts.factory.createIdentifier('via'),
+            ts.factory.createStringLiteral(relation.via),
+          ),
+        ]),
+      ]
+    : []),
+];
+
+const createRelationCall = (receiver, relation) =>
+  ts.factory.createCallExpression(
+    ts.factory.createPropertyAccessExpression(
+      receiver,
+      ts.factory.createIdentifier(relation.kind),
+    ),
+    undefined,
+    createRelationArguments(relation),
+  );
 
 const createEntitySchemaDeclaration = schema => {
   let initializer = ts.factory.createCallExpression(
@@ -157,6 +266,9 @@ const createEntitySchemaDeclaration = schema => {
       undefined,
       [readExpression(expression)],
     );
+  }
+  for (const relation of schema.relations) {
+    initializer = createRelationCall(initializer, relation);
   }
 
   return ts.factory.createVariableStatement(
@@ -175,6 +287,11 @@ const createEntitySchemaDeclaration = schema => {
   );
 };
 
+const createDeferredRelationStatement = relation =>
+  ts.factory.createExpressionStatement(
+    createRelationCall(ts.factory.createIdentifier(relation.sourceLocalName), relation),
+  );
+
 export const printClientEntitySchemaModule = model => {
   const coreImport = createCoreImport(model.coreImports);
   ts.addSyntheticLeadingComment(
@@ -187,7 +304,9 @@ export const printClientEntitySchemaModule = model => {
     [
       ts.factory.createExpressionStatement(ts.factory.createStringLiteral('use client')),
       coreImport,
+      ...model.schemaImports.map(createNamedImport),
       ...model.entitySchemas.map(createEntitySchemaDeclaration),
+      ...model.deferredRelations.map(createDeferredRelationStatement),
     ],
     ts.factory.createToken(ts.SyntaxKind.EndOfFileToken),
     ts.NodeFlags.None,
@@ -196,8 +315,11 @@ export const printClientEntitySchemaModule = model => {
   return ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(sourceFile);
 };
 
-export const renderSemanticClientEntitySchemaModule = ({ schemaEntities }) => {
-  const result = createClientEntitySchemaModuleModel({ schemaEntities });
+export const renderSemanticClientEntitySchemaModule = ({
+  schemaEntities,
+  schemaImportPath = './schema',
+}) => {
+  const result = createClientEntitySchemaModuleModel({ schemaEntities, schemaImportPath });
 
   if (result.diagnostics.length > 0) {
     throw new Error(

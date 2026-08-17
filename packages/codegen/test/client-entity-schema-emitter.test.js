@@ -91,6 +91,50 @@ const summarizeSchemaModule = source => {
   };
 };
 
+const summarizeSchemaFamily = ({ source, localNames }) => {
+  const sourceFile = ts.createSourceFile(
+    'client-entities.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const imports = sourceFile.statements.filter(ts.isImportDeclaration).map(statement => ({
+    moduleSpecifier: statement.moduleSpecifier.text,
+    bindings: statement.importClause.namedBindings.elements
+      .filter(
+        element =>
+          statement.moduleSpecifier.text !== '@ontahi/core/data-graph' ||
+          ['entity', 'field'].includes(element.propertyName?.text ?? element.name.text),
+      )
+      .map(element => ({
+        importedName: element.propertyName?.text ?? element.name.text,
+        localName: element.name.text,
+      })),
+  }));
+  const schemas = sourceFile.statements.filter(ts.isVariableStatement).flatMap(statement =>
+    statement.declarationList.declarations
+      .filter(declaration => localNames.includes(declaration.name.getText(sourceFile)))
+      .map(declaration => ({
+        localName: declaration.name.getText(sourceFile),
+        expression: summarizeExpression(declaration.initializer),
+      })),
+  );
+  const deferredRelations = sourceFile.statements
+    .filter(ts.isExpressionStatement)
+    .map(statement => statement.expression)
+    .filter(
+      expression =>
+        ts.isCallExpression(expression) &&
+        ts.isPropertyAccessExpression(expression.expression) &&
+        ts.isIdentifier(expression.expression.expression) &&
+        localNames.includes(expression.expression.expression.text),
+    )
+    .map(summarizeExpression);
+
+  return { imports, schemas, deferredRelations, diagnostics: sourceFile.parseDiagnostics };
+};
+
 const noteEntity = {
   entityName: 'Note',
   entityDefinitionName: 'Note',
@@ -107,6 +151,54 @@ const noteEntity = {
   operations: [],
 };
 
+const relatedSchemaEntities = [
+  {
+    entityName: 'Book',
+    entityDefinitionName: 'BookEntity',
+    entityDefinitionLocalName: 'BookSchema',
+    entitySchemaProjection: {
+      name: 'Book',
+      fieldsText: '{ id: field.id(), author: field.ref(AuthorEntity) }',
+      referenceFields: [{ name: 'author', targetName: 'AuthorEntity' }],
+      relations: [
+        {
+          kind: 'hasMany',
+          name: 'progress',
+          targetName: 'ReadingProgressEntity',
+          via: 'bookId',
+        },
+        {
+          kind: 'belongsTo',
+          name: 'publisher',
+          targetName: 'PublisherEntity',
+          deferred: true,
+        },
+      ],
+    },
+  },
+  {
+    entityName: 'ReadingProgress',
+    entityDefinitionName: 'ReadingProgressEntity',
+    entityDefinitionLocalName: 'ReadingProgressSchema',
+    entitySchemaProjection: {
+      name: 'ReadingProgress',
+      fieldsText: '{ bookId: field.id() }',
+    },
+  },
+  {
+    entityName: 'Author',
+    entityDefinitionName: 'AuthorEntity',
+    entityDefinitionLocalName: 'AuthorSchema',
+    entitySchemaProjection: { name: 'Author', fieldsText: '{ id: field.id() }' },
+  },
+  {
+    entityName: 'Publisher',
+    entityDefinitionName: 'PublisherEntity',
+    entityDefinitionLocalName: 'PublisherSchema',
+    entitySchemaProjection: { name: 'Publisher', fieldsText: '{ id: field.id() }' },
+  },
+];
+
 describe('semantic client Entity schema emitter', () => {
   it('models the core imports and a relation-free Entity schema projection', () => {
     expect(createClientEntitySchemaModuleModel({ schemaEntities: [noteEntity] })).toEqual({
@@ -117,6 +209,7 @@ describe('semantic client Entity schema emitter', () => {
           { importedName: 'entity', localName: 'defineEntitySchema' },
           { importedName: 'field', localName: 'field' },
         ],
+        schemaImports: [],
         entitySchemas: [
           {
             localName: 'NoteSchema',
@@ -139,8 +232,10 @@ describe('semantic client Entity schema emitter', () => {
               sourceText: "{ byId: 'id' }",
             },
             identity: { kind: 'source-expression', sourceText: "'byId'" },
+            relations: [],
           },
         ],
+        deferredRelations: [],
       },
     });
   });
@@ -184,45 +279,224 @@ describe('semantic client Entity schema emitter', () => {
     }
   });
 
-  it('rejects projection dependencies that are not in the base-schema model yet', () => {
-    const result = createClientEntitySchemaModuleModel({
-      schemaEntities: [
-        {
-          ...noteEntity,
-          entitySchemaProjection: {
-            ...noteEntity.entitySchemaProjection,
-            referenceFields: [{ targetName: 'AuthorEntity' }],
-            relations: [{ kind: 'belongsTo', name: 'author', targetName: 'AuthorEntity' }],
+  it('models projected dependency order plus immediate and deferred relations', () => {
+    expect(
+      createClientEntitySchemaModuleModel({ schemaEntities: relatedSchemaEntities }),
+    ).toEqual({
+      diagnostics: [],
+      model: {
+        kind: 'client-entity-schema-module',
+        coreImports: [
+          { importedName: 'entity', localName: 'defineEntitySchema' },
+          { importedName: 'field', localName: 'field' },
+        ],
+        schemaImports: [],
+        entitySchemas: [
+          expect.objectContaining({ localName: 'AuthorSchema', entityName: 'Author' }),
+          expect.objectContaining({
+            localName: 'ReadingProgressSchema',
+            entityName: 'ReadingProgress',
+          }),
+          expect.objectContaining({
+            localName: 'BookSchema',
+            entityName: 'Book',
+            fields: {
+              kind: 'source-expression',
+              sourceText: '{ id: field.id(), author: field.ref(AuthorSchema) }',
+            },
+            relations: [
+              {
+                kind: 'hasMany',
+                name: 'progress',
+                targetLocalName: 'ReadingProgressSchema',
+                via: 'bookId',
+              },
+            ],
+          }),
+          expect.objectContaining({ localName: 'PublisherSchema', entityName: 'Publisher' }),
+        ],
+        deferredRelations: [
+          {
+            sourceLocalName: 'BookSchema',
+            kind: 'belongsTo',
+            name: 'publisher',
+            targetLocalName: 'PublisherSchema',
+            via: undefined,
           },
+        ],
+      },
+    });
+  });
+
+  it('prints dependency order and relations with semantic parity to the legacy projection', () => {
+    const semanticSource = renderSemanticClientEntitySchemaModule({
+      schemaEntities: relatedSchemaEntities,
+    });
+    const legacySource = renderGeneratedClientEntityModule({
+      entities: relatedSchemaEntities.map(entity => ({
+        ...entity,
+        helperTexts: [],
+        operations: [],
+      })),
+      schemaEntities: relatedSchemaEntities,
+    });
+    const localNames = [
+      'AuthorSchema',
+      'ReadingProgressSchema',
+      'BookSchema',
+      'PublisherSchema',
+    ];
+
+    expect(summarizeSchemaFamily({ source: semanticSource, localNames })).toEqual(
+      summarizeSchemaFamily({ source: legacySource, localNames }),
+    );
+    expect(summarizeSchemaFamily({ source: semanticSource, localNames }).diagnostics).toEqual([]);
+  });
+
+  it('typechecks and evaluates projected reference and relation targets', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-client-schema-relations-'));
+
+    try {
+      const generated = await importGeneratedModule({
+        directory,
+        source: renderSemanticClientEntitySchemaModule({
+          schemaEntities: relatedSchemaEntities,
+        }),
+      });
+
+      expect(generated.BookSchema.fields.author.target).toBe(generated.AuthorSchema);
+      expect(generated.BookSchema.relations.progress).toMatchObject({
+        relationKind: 'hasMany',
+        target: generated.ReadingProgressSchema,
+        targetField: 'bookId',
+      });
+      expect(generated.BookSchema.relations.publisher).toMatchObject({
+        relationKind: 'belongsTo',
+        target: generated.PublisherSchema,
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('models deterministic imports for external schema dependencies', () => {
+    const schemaEntities = [
+      {
+        entityName: 'Note',
+        entityDefinitionName: 'NoteEntity',
+        entityDefinitionLocalName: 'NoteSchema',
+        entitySchemaProjection: {
+          name: 'Note',
+          fieldsText: '{ id: field.id(), owner: field.ref(UserEntity) }',
+          referenceFields: [
+            { name: 'owner', targetName: 'UserEntity', targetImportPath: './users.js' },
+          ],
+          relations: [
+            {
+              kind: 'belongsTo',
+              name: 'audit',
+              targetName: 'AuditEntity',
+              targetImportPath: './audit.js',
+            },
+            {
+              kind: 'hasMany',
+              name: 'tags',
+              targetName: 'TagEntity',
+              deferred: true,
+            },
+          ],
         },
-      ],
+      },
+    ];
+
+    const result = createClientEntitySchemaModuleModel({
+      schemaEntities,
+      schemaImportPath: '../schema.js',
     });
 
-    expect(result.diagnostics).toEqual([
-      {
-        entityName: 'Note',
-        expression: 'referenceFields',
-        message: 'Reference fields are not supported by the base schema emitter.',
+    expect(result).toEqual({
+      diagnostics: [],
+      model: {
+        kind: 'client-entity-schema-module',
+        coreImports: [
+          { importedName: 'entity', localName: 'defineEntitySchema' },
+          { importedName: 'field', localName: 'field' },
+        ],
+        schemaImports: [
+          {
+            moduleSpecifier: '../schema.js',
+            bindings: [{ importedName: 'TagEntity', localName: 'TagEntity' }],
+          },
+          {
+            moduleSpecifier: './audit.js',
+            bindings: [{ importedName: 'AuditEntity', localName: 'AuditEntity' }],
+          },
+          {
+            moduleSpecifier: './users.js',
+            bindings: [{ importedName: 'UserEntity', localName: 'UserEntity' }],
+          },
+        ],
+        entitySchemas: [
+          expect.objectContaining({
+            localName: 'NoteSchema',
+            relations: [
+              {
+                kind: 'belongsTo',
+                name: 'audit',
+                targetLocalName: 'AuditEntity',
+                via: undefined,
+              },
+            ],
+          }),
+        ],
+        deferredRelations: [
+          {
+            sourceLocalName: 'NoteSchema',
+            kind: 'hasMany',
+            name: 'tags',
+            targetLocalName: 'TagEntity',
+            via: undefined,
+          },
+        ],
       },
-      {
-        entityName: 'Note',
-        expression: 'relations',
-        message: 'Entity relations are not supported by the base schema emitter.',
-      },
-    ]);
-    expect(() =>
-      renderSemanticClientEntitySchemaModule({
+    });
+
+    const semanticSource = renderSemanticClientEntitySchemaModule({
+      schemaEntities,
+      schemaImportPath: '../schema.js',
+    });
+    const legacySource = renderGeneratedClientEntityModule({
+      entities: schemaEntities.map(entity => ({ ...entity, helperTexts: [], operations: [] })),
+      schemaEntities,
+      schemaImportPath: '../schema.js',
+    });
+
+    expect(summarizeSchemaFamily({ source: semanticSource, localNames: ['NoteSchema'] })).toEqual(
+      summarizeSchemaFamily({ source: legacySource, localNames: ['NoteSchema'] }),
+    );
+  });
+
+  it('keeps schema import paths configurable', () => {
+    expect(
+      createClientEntitySchemaModuleModel({
         schemaEntities: [
           {
-            ...noteEntity,
+            entityName: 'Note',
             entitySchemaProjection: {
-              ...noteEntity.entitySchemaProjection,
-              relations: [{ kind: 'belongsTo', name: 'author', targetName: 'AuthorEntity' }],
+              name: 'Note',
+              fieldsText: '{ owner: field.ref(UserEntity) }',
+              referenceFields: [{ name: 'owner', targetName: 'UserEntity' }],
             },
           },
         ],
-      }),
-    ).toThrow(/Note\.relations: Entity relations are not supported/);
+        schemaImportPath: '../schema.js',
+      }).model.schemaImports,
+    ).toEqual([
+      {
+        moduleSpecifier: '../schema.js',
+        bindings: [{ importedName: 'UserEntity', localName: 'UserEntity' }],
+      },
+    ]);
   });
 
   it('omits unused field imports and reports malformed source-expression boundaries', () => {
@@ -240,6 +514,7 @@ describe('semantic client Entity schema emitter', () => {
       model: {
         kind: 'client-entity-schema-module',
         coreImports: [{ importedName: 'entity', localName: 'defineEntitySchema' }],
+        schemaImports: [],
         entitySchemas: [
           {
             localName: 'EmptySchema',
@@ -249,8 +524,10 @@ describe('semantic client Entity schema emitter', () => {
             freshness: undefined,
             locators: undefined,
             identity: undefined,
+            relations: [],
           },
         ],
+        deferredRelations: [],
       },
     });
 

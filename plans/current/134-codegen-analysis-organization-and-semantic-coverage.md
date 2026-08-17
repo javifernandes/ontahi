@@ -474,6 +474,23 @@ Second projection-migration cut result on 2026-08-17:
    81.96% lines; the semantic client Entity schema module has 96.15% statement, 89.47% branch, and
    100% function and line coverage.
 
+Third projection-migration cut result on 2026-08-17:
+
+1. The client Entity schema model now records external schema-import bindings, projected local
+   names, immediate relation calls, and deferred relation statements explicitly. Dependency targets
+   are no longer inferred by the AST printer.
+2. Reference fields and non-deferred relations drive deterministic projection ordering. Projected
+   targets are rewritten to their browser-safe local schema names, while unresolved targets are
+   grouped by explicit or configured fallback import paths with deterministic path/name ordering.
+3. The semantic emitter prints immediate relations in each schema declaration and deferred
+   relations after all declarations. Focused parity tests cover internal and external targets,
+   `via` metadata, configured import paths, syntax validity, semantic typecheck, and runtime target
+   identity for reference fields and both relation phases. The public client renderer remains
+   unchanged.
+4. All 64 tests pass. Global coverage is 81.80% statements, 74.62% branches, 88.56% functions, and
+   82.78% lines; the semantic client Entity schema module has 98.34% statement, 91.89% branch, and
+   100% function and line coverage.
+
 ### Slice 5. Cutover And Cleanup
 
 1. Make the semantic emitter the only production path.
