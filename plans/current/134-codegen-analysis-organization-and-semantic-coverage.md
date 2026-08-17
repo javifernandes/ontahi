@@ -319,6 +319,19 @@ Eighth analysis-pipeline cut result on 2026-08-16:
    at 79.15% statements, 71.62% branches, 83.71% functions, and 80.19% lines; Operation discovery
    has 66.03% statement, 65.21% branch, 71.42% function, and 68.62% line coverage.
 
+Ninth analysis-pipeline cut result on 2026-08-17:
+
+1. Operation contract translation now lives in `operation-contracts/operation-analysis.mjs`,
+   including inherited defaults, durable task metadata, HTTP ingress, local and imported named
+   Values, input/output schema text, bridge metadata, graph-output derivation, client cache, helper
+   declaration closure, and diagnostics.
+2. `metadata-analyzer.mjs` now orchestrates Entity discovery, Entity-level task inventory, Operation
+   collection resolution, unified-Entity `self` normalization, and final definition assembly. The
+   Operation analysis module consumes discovery and graph-output analysis in one direction.
+3. The facade decreased from 1,184 to 491 lines and all 51 tests pass. Global coverage remains
+   79.15% statements, 71.62% branches, 83.71% functions, and 80.19% lines; Operation analysis has
+   78.80% statement, 74.76% branch, 100% function, and 78.71% line coverage.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
