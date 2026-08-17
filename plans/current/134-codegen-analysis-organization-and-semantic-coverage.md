@@ -390,6 +390,20 @@ First semantic-emitter cut result on 2026-08-17:
    80.26% lines; the semantic task-registry module has 82.22% statement, 66.66% branch, 92.85%
    function, and 81.39% line coverage.
 
+Second semantic-emitter cut result on 2026-08-17:
+
+1. The task-registry model now includes generated task declarations with explicit string or imported
+   task IDs, input/progress/output contracts, run functions, ordered step dependencies, and final
+   registry entries.
+2. Import allocation preserves the legacy renderer's deterministic ordering, aliases, and collision
+   suffixes across imported tasks, generated declaration names, task IDs, contracts, run functions,
+   and steps. The AST emitter adds `defineTask` only when the model contains generated tasks.
+3. Parity tests cover a complete generated task, optional progress/output contracts, imported task
+   IDs, and a generated-name collision. The public legacy renderer remains the production default.
+4. All 54 tests pass. Global coverage is 80.81% statements, 73.41% branches, 87.01% functions, and
+   81.87% lines; the semantic task-registry module has 100% statement, function, and line coverage
+   with 92.85% branch coverage.
+
 ### Slice 4. Incremental Projection Migration
 
 Migrate one projection family at a time:
