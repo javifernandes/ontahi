@@ -375,6 +375,21 @@ Slice 2 closure on 2026-08-17:
 4. Start with the smallest generated artifact, such as the task registry.
 5. Run legacy and semantic emitters in parity tests without changing the public default.
 
+First semantic-emitter cut result on 2026-08-17:
+
+1. `generated-module/task-registry.mjs` defines the first Generated Module Model for an imported-task
+   registry: explicit task-import bindings and explicit registry entries, with deterministic import
+   path ordering and local-name allocation.
+2. The semantic emitter translates that model into TypeScript Compiler API nodes for side-effect
+   and named imports, generic `Map` construction, typed registry tuples, and the exported lookup
+   function. Source text is produced only by the outer `ts.Printer` boundary.
+3. A focused TDD suite asserts the model shape, syntax validity, and semantic AST parity with the
+   legacy renderer. Generated tasks are rejected explicitly until their declarations and contract
+   imports join the model in the next cut; the public renderer remains unchanged.
+4. All 53 tests pass. Global coverage is 79.28% statements, 71.62% branches, 84.28% functions, and
+   80.26% lines; the semantic task-registry module has 82.22% statement, 66.66% branch, 92.85%
+   function, and 81.39% line coverage.
+
 ### Slice 4. Incremental Projection Migration
 
 Migrate one projection family at a time:
