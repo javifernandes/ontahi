@@ -182,7 +182,9 @@ export const createClientEntitySchemaModuleModel = ({
     model: {
       kind: 'client-entity-schema-module',
       coreImports: [
-        { importedName: 'entity', localName: 'defineEntitySchema' },
+        ...(entitySchemas.length > 0
+          ? [{ importedName: 'entity', localName: 'defineEntitySchema' }]
+          : []),
         ...(usesField ? [{ importedName: 'field', localName: 'field' }] : []),
       ],
       schemaImports: createSchemaImports({ schemaEntities, projectedNames, schemaImportPath }),
@@ -291,6 +293,26 @@ const createDeferredRelationStatement = relation =>
   ts.factory.createExpressionStatement(
     createRelationCall(ts.factory.createIdentifier(relation.sourceLocalName), relation),
   );
+
+const printStatements = statements => {
+  if (statements.length === 0) return '';
+
+  const sourceFile = ts.factory.createSourceFile(
+    statements,
+    ts.factory.createToken(ts.SyntaxKind.EndOfFileToken),
+    ts.NodeFlags.None,
+  );
+  return ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(sourceFile);
+};
+
+export const printClientEntitySchemaImports = model =>
+  printStatements(model.schemaImports.map(createNamedImport));
+
+export const printClientEntitySchemaStatements = model =>
+  printStatements([
+    ...model.entitySchemas.map(createEntitySchemaDeclaration),
+    ...model.deferredRelations.map(createDeferredRelationStatement),
+  ]);
 
 export const printClientEntitySchemaModule = model => {
   const coreImport = createCoreImport(model.coreImports);

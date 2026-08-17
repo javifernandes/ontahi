@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createClientEntitySchemaModuleModel,
+  printClientEntitySchemaImports,
+  printClientEntitySchemaStatements,
   printClientEntitySchemaModule,
   renderSemanticClientEntitySchemaModule,
 } from '../src/generated-module/client-entity-schema.mjs';
@@ -497,6 +499,32 @@ describe('semantic client Entity schema emitter', () => {
         bindings: [{ importedName: 'UserEntity', localName: 'UserEntity' }],
       },
     ]);
+  });
+
+  it('routes the public client schema family through the semantic printers', () => {
+    const schemaEntities = [
+      {
+        entityName: 'Note',
+        entityDefinitionName: 'NoteEntity',
+        entityDefinitionLocalName: 'NoteSchema',
+        entitySchemaProjection: {
+          name: 'Note',
+          fieldsText: '{ owner: field.ref(UserEntity) }',
+          referenceFields: [
+            { name: 'owner', targetName: 'UserEntity', targetImportPath: './users.js' },
+          ],
+        },
+        helperTexts: [],
+        operations: [],
+      },
+    ];
+    const result = createClientEntitySchemaModuleModel({ schemaEntities });
+    const publicSource = renderGeneratedClientEntityModule({ entities: schemaEntities });
+
+    expect(publicSource).toContain(printClientEntitySchemaImports(result.model).trim());
+    expect(publicSource).toContain(printClientEntitySchemaStatements(result.model).trim());
+    expect(publicSource).toContain('from "./users.js";');
+    expect(publicSource).toContain('defineEntitySchema("Note"');
   });
 
   it('omits unused field imports and reports malformed source-expression boundaries', () => {

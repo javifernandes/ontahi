@@ -491,6 +491,24 @@ Third projection-migration cut result on 2026-08-17:
    82.78% lines; the semantic client Entity schema module has 98.34% statement, 91.89% branch, and
    100% function and line coverage.
 
+Fourth projection-migration cut result on 2026-08-17:
+
+1. `renderGeneratedClientEntityModule` now obtains Entity schema dependency imports, declarations,
+   and immediate/deferred relation statements from the Generated Module Model and AST printers.
+   Residual imports needed by named Values and client Entity/Operation output are merged with the
+   model's bindings without re-inferring schema dependencies.
+2. The handwritten `renderEntitySchemaProjection` and `orderSchemaProjections` builders were
+   removed from `projections.mjs`. The transitional full-module assembler remains in place for the
+   unmigrated named Value, client Entity, and Operation families; `projections.mjs` is 61 lines
+   smaller after this cut.
+3. Public generated source now uses printer-controlled formatting for schema imports, Entity names,
+   relation names/options, and chained schema declarations. Double-quoted module specifiers and
+   synthesized string literals plus compact chains are intentional artifact-format drift; model
+   structure, import bindings, declaration order, and runtime relation identity are unchanged.
+4. All 65 tests pass. Global coverage is 81.47% statements, 74.36% branches, 87.66% functions, and
+   82.40% lines; the semantic client Entity schema module has 100% statement, function, and line
+   coverage with 94.87% branch coverage.
+
 ### Slice 5. Cutover And Cleanup
 
 1. Make the semantic emitter the only production path.
