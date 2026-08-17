@@ -6,6 +6,7 @@ import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication } from './graph.js';
+import { todoGraphReadPolicies } from './todo-read-policies.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
@@ -29,6 +30,9 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
       invocationContext: request => ({
         principal: authentication.principal(request),
       }),
+      graphRead: {
+        policies: todoGraphReadPolicies,
+      },
     }),
   );
 

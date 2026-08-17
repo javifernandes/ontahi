@@ -1,16 +1,20 @@
+import type { GraphReadDispatcher, GraphReadPolicy } from '@ontahi/core/data-graph';
 import {
   createOperationInvocationDispatcher,
+  type GraphReadableOntahiApplication,
+  type InvocationContext,
   type OntahiApplication,
 } from '@ontahi/core/runtime/server';
 import express, { type Request, type Router } from 'express';
 
 import {
   createExpressGraphReadHandler,
+  type ExpressGraphReadAuthorityFactory,
   type ExpressGraphReadContextFactory,
 } from './graph-read/handler.js';
 import { mountExpressHttpIngress, type OntahiExpressIngressOptions } from './http-ingress.js';
 import { createExpressOperationInvocationHandler } from './operation-invocation/handler.js';
-import type { ExpressInvocationContextFactory } from './operation-invocation/handler.js';
+import type { ExpressInvocationContextFactory } from './request-context.js';
 import { createExpressTaskSnapshotHandler } from './task-snapshot/handler.js';
 
 export type OntahiExpressExplorerOptions = {
@@ -19,13 +23,46 @@ export type OntahiExpressExplorerOptions = {
   indexFile?: string;
 };
 
-export type OntahiExpressGraphReadOptions<TAuthority> = {
-  dispatcher: import('@ontahi/core/data-graph').GraphReadDispatcher<TAuthority>;
-  context: ExpressGraphReadContextFactory<TAuthority>;
+type OntahiExpressGraphReadCommonOptions = {
   path?: string;
 };
 
-export type OntahiExpressOptions<TGraphReadAuthority = unknown> = {
+export type OntahiExpressGraphReadOptions<TAuthority = InvocationContext> =
+  OntahiExpressGraphReadCommonOptions &
+    (
+      | {
+          policies: readonly GraphReadPolicy<any, InvocationContext>[];
+          dispatcher?: never;
+          context?: never;
+          authority?: never;
+        }
+      | {
+          policies: readonly GraphReadPolicy<any, TAuthority>[];
+          dispatcher?: never;
+          context?: never;
+          authority: ExpressGraphReadAuthorityFactory<TAuthority>;
+        }
+      | {
+          dispatcher: GraphReadDispatcher<InvocationContext>;
+          context?: never;
+          policies?: never;
+          authority?: never;
+        }
+      | {
+          dispatcher: GraphReadDispatcher<TAuthority>;
+          context: ExpressGraphReadContextFactory<TAuthority>;
+          policies?: never;
+          authority?: never;
+        }
+      | {
+          dispatcher: GraphReadDispatcher<TAuthority>;
+          context?: never;
+          policies?: never;
+          authority: ExpressGraphReadAuthorityFactory<TAuthority>;
+        }
+    );
+
+export type OntahiExpressOptions<TGraphReadAuthority = InvocationContext> = {
   mountPath?: string;
   operationsPath?: string;
   graphRead?: OntahiExpressGraphReadOptions<TGraphReadAuthority>;
@@ -42,7 +79,7 @@ const mountPath = (value: string) => {
   return path === '/' ? path : path.replace(/\/+$/, '');
 };
 
-export const ontahiExpress = <TGraphReadAuthority = unknown>(
+export const ontahiExpress = <TGraphReadAuthority = InvocationContext>(
   application: OntahiApplication,
   options: OntahiExpressOptions<TGraphReadAuthority> = {},
 ): Router => {
@@ -70,12 +107,27 @@ export const ontahiExpress = <TGraphReadAuthority = unknown>(
   );
 
   if (options.graphRead) {
+    const graphReadOptions = options.graphRead;
+    const dispatcher = (graphReadOptions.dispatcher ??
+      (() => {
+        const graphApplication = application as Partial<GraphReadableOntahiApplication>;
+        if (!graphApplication.createGraphReadDispatcher) {
+          throw new Error(
+            'Ontahi Express graph-read policies require an application created with ontahi().',
+          );
+        }
+        return graphApplication.createGraphReadDispatcher(
+          graphReadOptions.policies as readonly GraphReadPolicy<any, TGraphReadAuthority>[],
+        );
+      })()) as GraphReadDispatcher<TGraphReadAuthority>;
     router.post(
-      routePath(options.graphRead.path ?? '/graph/reads'),
+      routePath(graphReadOptions.path ?? '/graph/reads'),
       express.json(),
       createExpressGraphReadHandler({
-        dispatcher: options.graphRead.dispatcher,
-        context: options.graphRead.context,
+        dispatcher,
+        invocationContext: options.invocationContext,
+        authority: graphReadOptions.authority,
+        context: 'context' in graphReadOptions ? graphReadOptions.context : undefined,
         reportError: options.reportError,
       }),
     );

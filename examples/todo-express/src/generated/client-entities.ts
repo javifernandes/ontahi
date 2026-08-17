@@ -49,15 +49,6 @@ const CompleteAllOutputValue = value('CompleteAllOutput', {
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
-    list: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        query: [() => 'all'],
-      },
-      input: graphSchema.void(),
-      output: TodoListSchema.array(),
-    }),
     create: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
@@ -94,15 +85,6 @@ export const TodoList = defineClientEntity(TodoListSchema, {
 
 export const Tag = defineClientEntity(TagSchema, {
   domainOperations: {
-    list: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        query: [() => 'all'],
-      },
-      input: graphSchema.void(),
-      output: TagSchema.array(),
-    }),
     create: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
@@ -117,15 +99,6 @@ export const Tag = defineClientEntity(TagSchema, {
 
 export const TodoTag = defineClientEntity(TodoTagSchema, {
   domainOperations: {
-    list: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        query: [() => 'all'],
-      },
-      input: graphSchema.void(),
-      output: TodoTagSchema.array(),
-    }),
     remove: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
@@ -141,26 +114,6 @@ export const TodoTag = defineClientEntity(TodoTagSchema, {
 
 export const TodoItem = defineClientEntity(TodoItemSchema, {
   domainOperations: {
-    list: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        query: [(todos: unknown) => todos],
-      },
-      input: TodoItemSchema.many(),
-      output: TodoItemSchema.array(),
-    }),
-    itemsForList: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        query: [(input: unknown) => input],
-      },
-      input: graphSchema.object({
-        list: TodoListSchema.one(),
-      }),
-      output: TodoItemSchema.array(),
-    }),
     create: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',

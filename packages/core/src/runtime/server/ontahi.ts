@@ -1,8 +1,13 @@
-import type {
-  AnyEntityDefinition,
-  DataGraphDefaultStorage,
-  DataGraphExecutionRuntime,
-  GraphApi,
+import { Effect } from 'effect';
+
+import {
+  createGraphReadDispatcher as createDataGraphReadDispatcher,
+  type AnyEntityDefinition,
+  type DataGraphDefaultStorage,
+  type DataGraphExecutionRuntime,
+  type GraphApi,
+  type GraphReadDispatcher,
+  type GraphReadPolicy,
 } from '../../data-graph/index.js';
 
 import type { ArchitectureAppFacade, RegisteredArchitecture } from './app-facade.js';
@@ -34,6 +39,15 @@ type RuntimeCommandOptions<TRuntime> =
     : never;
 type StorageRuntime<TStorage> =
   TStorage extends DataGraphDefaultStorage<infer TRuntime> ? TRuntime : never;
+
+export type ApplicationGraphReadDispatcherFactory = <TAuthority>(
+  policies: readonly GraphReadPolicy<any, TAuthority>[],
+) => GraphReadDispatcher<TAuthority>;
+
+export type GraphReadableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
+  OntahiApplication<TGraph> & {
+    createGraphReadDispatcher: ApplicationGraphReadDispatcherFactory;
+  };
 type OntahiGraphFacade<TRuntime extends AnyDataGraphRuntime> = ReturnType<
   typeof createDataGraphArchitectureAdapter<
     unknown,
@@ -114,7 +128,9 @@ export type ComposedOntahiApplication<
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
   TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
   TCapabilities extends OntahiCapabilities = {},
-> = OntahiApplication<GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>> & {
+> = GraphReadableOntahiApplication<
+  GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>
+> & {
   architecture: RegisteredArchitecture<
     OntahiCapabilityEvent<TCapabilities>,
     OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
@@ -274,12 +290,25 @@ export const ontahi = <
     >;
   };
 
+  const createGraphReadDispatcher: ApplicationGraphReadDispatcherFactory = policies => {
+    return createDataGraphReadDispatcher({
+      policies,
+      execute: (read, mode) => {
+        const runtime = options.storage.createRuntime();
+        if (mode === 'get') return Effect.runPromise(runtime.get(read, undefined));
+        if (mode === 'count') return Effect.runPromise(runtime.count(read, undefined));
+        return Effect.runPromise(runtime.run(read, undefined));
+      },
+    });
+  };
+
   return Object.assign(application, {
     app: registered.app,
     architecture: registered,
     registerBoundEntities,
     registerBoundEntity,
     registerEntity,
+    createGraphReadDispatcher,
     storage: options.storage,
   });
 };

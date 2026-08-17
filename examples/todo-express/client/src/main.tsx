@@ -3,7 +3,7 @@ import {
   createFetchOperationBridgeAdapter,
   createFetchReflectedOperationInvoker,
 } from '@ontahi/react/actions';
-import { OntahiGraphProvider } from '@ontahi/react/graph';
+import { createFetchGraphReadExecutor, OntahiGraphProvider } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -17,6 +17,7 @@ const bridge = createFetchOperationBridgeAdapter({
   endpoint: '/operations',
   taskEndpoint: '/operations/tasks',
 });
+const graphExecutor = createFetchGraphReadExecutor();
 const reflectedOperationInvoker = createFetchReflectedOperationInvoker({
   endpoint: '/operations',
 });
@@ -38,6 +39,7 @@ createRoot(document.querySelector('#root')!).render(
     <QueryClientProvider client={queryClient}>
       <OntahiGraphProvider
         runtime={{ name: 'todo-browser' }}
+        graphExecutor={graphExecutor}
         operationBridgeAdapters={[bridge]}
         reflectedOperationInvoker={reflectedOperationInvoker}
         reflectedEntityDataReader={reflectedEntityDataReader}

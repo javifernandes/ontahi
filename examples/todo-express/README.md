@@ -1,11 +1,11 @@
 # Ontahi Todo Express Example
 
 This is a small Ontahi application with interchangeable in-memory and direct PostgreSQL graph
-storage. It declares lists, todos, tags, and the associative entity between todos and tags;
-transports graph-native Selections into synchronous operations over Express; includes an in-process
-durable operation and a host-supplied notification Capability; generates browser-safe client
-declarations; and renders a React UI through the public Ontahi hooks. It depends only on public
-Ontahi package exports.
+storage. It declares lists, todos, tags, and the associative entity between todos and tags; executes
+caller-authored browser Queries through the default-deny Express graph-read bridge; transports
+Selections into write Operations; includes an in-process durable Operation and a host-supplied
+notification Capability; generates browser-safe client declarations; and renders a React UI through
+the public Ontahi hooks. It depends only on public Ontahi package exports.
 
 ## Run it against local Ontahi source
 
@@ -21,9 +21,9 @@ pnpm todo:dev:local
 dependencies, regenerates the client, builds the browser bundle, watches package output, and
 restarts Express when framework code changes.
 
-Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`, the Fetch operation
-bridge, `useOperationQuery`, `useOperation`, and `useDurableOperation` against the same Express
-process.
+Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`,
+`createFetchGraphReadExecutor`, `useGraphQuery`, the Fetch operation bridge, `useOperation`, and
+`useDurableOperation` against the same Express process.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.complete` has no authentication requirement.
@@ -43,8 +43,9 @@ session, callback, and logout routes, and adds `app.require.authenticated()` to
 `TodoItem.complete`. Passport and GitHub OAuth belong to this Express host.
 The host maps Passport's authenticated `request.user` through
 `authentication.principal(request)`. The provider-neutral `@ontahi/runtime-express` adapter invokes
-that `invocationContext` factory and carries its Principal. The same protected operation can be
-invoked from plain Node by establishing that scope explicitly:
+that single `invocationContext` factory for Operations and remote graph reads. Todo only passes its
+default-deny read policies when enabling `/graph/reads`; the application storage supplies execution.
+The same protected operation can be invoked from plain Node by establishing that scope explicitly:
 
 ```ts
 await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
@@ -128,19 +129,18 @@ The example deliberately exercises two different domain structures:
 `TodoTag.refByTodoAndTag(todoId, tagId)` can remove one assignment without inventing a synthetic
 join identity.
 
-The inverse traversal stays at the same semantic level:
+The browser expresses the inverse membership as an ordinary Query rather than a wrapper Operation:
 
 ```ts
-itemsForList: operation({
-  input: graphSchema.object({ list: TodoList.one() }),
-  output: self.array(),
-  run: ({ list }) => commands.relatedTo(list).orderBy(item => item.title),
-}),
+const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
+const todos = query(TodoItemSchema)
+  .where(visibleTodos)
+  .as(TodoItemListItem)
+  .orderBy(item => item.title);
 ```
 
-`list` already carries its source Entity and selection criterion. Because `TodoItem.list` is the
-only relation connecting both Entities, Ontahi infers the traversal. If two relations connect the
-same pair, the operation names the intended one with `{ through: 'relationName' }`.
+The generated schema authors the selection, while the caller-owned View chooses its result shape.
+The server independently validates both against `TodoItem`'s explicit remote read policy.
 
 Each entity owns its fields, identity, relations, and operations in one semantic declaration.
 `TodoItem.complete` accepts `self.many()` inside that declaration, so its target cardinality is part of
@@ -183,7 +183,10 @@ The generated client preserves operation input and output schemas, so React infe
 
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
-const todos = useOperationQuery(TodoItem.domain.list, visibleTodos);
+const todos = useGraphQuery(todoItemsQuery(visibleTodos), {
+  mode: 'run',
+  queryKey: ['TodoItem', 'selection', visibleTodos.toJSON()],
+});
 const createTodo = useOperation(TodoItem.domain.create);
 const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
@@ -211,22 +214,28 @@ composition refines that same value without creating a UI-only filter language.
    or PostgreSQL. The host owns the physical mapping, migration, database connection, process
    lifetime, and error reporting policy.
 2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `TodoItem`, `Tag`, and `TodoTag`
-   declarations, including their identities, relations, synchronous operations, and durable
-   operation.
+   declarations, including their identities, relations, write Operations, and durable Operation.
+   [`src/todo-read-policies.ts`](./src/todo-read-policies.ts) separately declares the browser-visible
+   read surface.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,
    `inProcessTasks()`, the notification Capability, and the public entities into the complete
    `TodoApplication` used by reflection, execution, tasks, ingress, and code generation. Task
    executor and storage can be configured separately when durable state must outlive the process.
-4. [`src/application.ts`](./src/application.ts) mounts that application through one
-   `ontahiExpress(...)` middleware.
+4. [`src/application.ts`](./src/application.ts) mounts the Operation and graph-read bridges through
+   one `ontahiExpress(...)` middleware.
 5. The `ontahi-codegen` command analyzes the conventional `src/graph.ts` composition root and
    reproducibly emits `src/generated/client-entities.ts`; the app carries no custom generation
    script.
-6. [`client/src/App.tsx`](./client/src/App.tsx) consumes that generated declaration exclusively through `@ontahi/react` hooks.
+6. [`client/src/App.tsx`](./client/src/App.tsx) consumes caller-authored Queries and the remaining
+   domain Operations exclusively through `@ontahi/react` hooks.
 7. [`client/src/Explorer.tsx`](./client/src/Explorer.tsx) embeds the reusable Explorer components;
    the Express adapter derives their server endpoints from `TodoApplication`.
 
-`@ontahi/core` provides declarations, validation, operation invocation, task execution, and the in-memory reference runtimes. `@ontahi/react` owns the provider, hooks, cache invalidation, and Fetch bridge. `@ontahi/runtime-express` only translates HTTP requests and responses. `@ontahi/codegen` is a build-time dependency; it projects the browser operation surface from the same semantic declaration.
+`@ontahi/core` provides declarations, validation, graph policy, operation invocation, task execution,
+and the in-memory reference runtimes. `@ontahi/react` owns the provider, hooks, cache invalidation,
+Fetch graph executor, and Operation bridge. `@ontahi/runtime-express` only translates HTTP requests
+and responses. `@ontahi/codegen` is a build-time dependency; it projects the browser-safe Entity
+schemas and Operation surface from the same semantic declaration.
 
 `@ontahi/postgres` translates the same data graph reads and commands into parameterized SQL. It
 does not infer migrations: this example deliberately keeps physical schema evolution under host
@@ -263,10 +272,10 @@ pnpm --filter @ontahi/example-todo-express typecheck
 pnpm --filter @ontahi/example-todo-express test
 ```
 
-The integration test starts a real ephemeral HTTP server, verifies reference-defined and
-predicate-defined Selections mutate only their target entities, assigns tags through the
-associative entity, exercises the durable operation, and verifies invalid input returns Ontahi's
-canonical `input_invalid` result.
+The integration test starts a real ephemeral HTTP server, compares one projected Query through
+direct and remote execution, verifies reference-defined and predicate-defined Selections mutate
+only their target entities, assigns tags through the associative entity, exercises the durable
+Operation, and verifies invalid input returns Ontahi's canonical `input_invalid` result.
 
 ## Host responsibilities exposed by the example
 
@@ -276,5 +285,7 @@ canonical `input_invalid` result.
 - Supply the application Capabilities declared by Entities.
 - Authenticate native requests and map provider users to an Ontahi Principal.
 - Choose which operations are bridge-exposed or server-only.
+- Explicitly declare every Entity, field, operator, relation, mode, cardinality, limit, and row scope
+  exposed through remote graph reads.
 - Run code generation at build time and commit or check its deterministic outputs.
 - Mount `@ontahi/explorer-react` in a React host when the full visual Explorer is useful.

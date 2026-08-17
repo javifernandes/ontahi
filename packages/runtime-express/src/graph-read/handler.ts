@@ -5,15 +5,29 @@ import {
   type GraphReadDispatcher,
   type GraphReadDispatchResponse,
 } from '@ontahi/core/data-graph';
+import {
+  getCurrentInvocationContext,
+  withInvocationContext,
+  type InvocationContext,
+} from '@ontahi/core/runtime/server';
 import type { Request, RequestHandler } from 'express';
+
+import type { ExpressInvocationContextFactory } from '../request-context.js';
 
 export type ExpressGraphReadContextFactory<TAuthority> = (
   request: Request,
 ) => GraphReadDispatchContext<TAuthority> | Promise<GraphReadDispatchContext<TAuthority>>;
 
+export type ExpressGraphReadAuthorityFactory<TAuthority> = (
+  context: InvocationContext,
+  request: Request,
+) => TAuthority | Promise<TAuthority>;
+
 export type CreateExpressGraphReadHandlerOptions<TAuthority> = {
   dispatcher: GraphReadDispatcher<TAuthority>;
-  context: ExpressGraphReadContextFactory<TAuthority>;
+  context?: ExpressGraphReadContextFactory<TAuthority>;
+  authority?: ExpressGraphReadAuthorityFactory<TAuthority>;
+  invocationContext?: ExpressInvocationContextFactory;
   reportError?: (error: unknown, request: Request) => void;
 };
 
@@ -28,6 +42,8 @@ export const createExpressGraphReadHandler =
   <TAuthority>({
     dispatcher,
     context,
+    authority,
+    invocationContext,
     reportError,
   }: CreateExpressGraphReadHandlerOptions<TAuthority>): RequestHandler =>
   async (request, response) => {
@@ -38,7 +54,23 @@ export const createExpressGraphReadHandler =
     }
 
     try {
-      const protocolResponse = await dispatcher(parsed.request, await context(request));
+      const dispatch = async () => {
+        const currentContext = getCurrentInvocationContext();
+        if (!currentContext)
+          throw new Error('Express graph read invocation context is unavailable.');
+        const graphContext = context
+          ? await context(request)
+          : {
+              authority: authority
+                ? await authority(currentContext, request)
+                : (currentContext as TAuthority),
+            };
+        return dispatcher(parsed.request, graphContext);
+      };
+      const protocolResponse = await withInvocationContext(
+        invocationContext ? await invocationContext(request) : {},
+        dispatch,
+      );
       response.status(responseStatus(protocolResponse)).json(protocolResponse);
     } catch (error) {
       reportError?.(error, request);

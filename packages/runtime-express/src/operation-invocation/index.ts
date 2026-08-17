@@ -1,8 +1,8 @@
 export {
   createExpressOperationInvocationHandler,
   type CreateExpressOperationInvocationHandlerOptions,
-  type ExpressInvocationContextFactory,
 } from './handler.js';
+export type { ExpressInvocationContextFactory } from '../request-context.js';
 export {
   createExpressTaskSnapshotHandler,
   type CreateExpressTaskSnapshotHandlerOptions,
@@ -17,6 +17,7 @@ export {
 export {
   createExpressGraphReadHandler,
   type CreateExpressGraphReadHandlerOptions,
+  type ExpressGraphReadAuthorityFactory,
   type ExpressGraphReadContextFactory,
 } from '../graph-read/index.js';
 export type { OntahiExpressIngressOptions } from '../http-ingress.js';

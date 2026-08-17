@@ -77,7 +77,7 @@ describe('graph query and command hooks', () => {
 
     const { result } = renderHook(
       () =>
-        useGraphQuery<typeof booksIndexView, 'get'>(booksIndexView, {
+        useGraphQuery(booksIndexView, {
           mode: 'get',
         }),
       { wrapper: createWrapper(graphExecutor) },

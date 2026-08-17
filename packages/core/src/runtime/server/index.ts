@@ -14,8 +14,10 @@ export {
 } from './application.js';
 export {
   ontahi,
+  type ApplicationGraphReadDispatcherFactory,
   type OntahiBinderApp,
   type ComposedOntahiApplication,
+  type GraphReadableOntahiApplication,
   type OntahiApplicationBuilder,
   type OntahiCapabilities,
   type OntahiOptions,

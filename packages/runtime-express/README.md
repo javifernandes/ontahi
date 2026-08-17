@@ -20,6 +20,8 @@ server.use(
 `/`. The mounted runtime above includes:
 
 - `POST /runtime/ontahi/operations` for invocation and permission checks.
+- `POST /runtime/ontahi/graph/reads` when graph-read policies or a lower-level dispatcher are
+  configured.
 - `GET /runtime/ontahi/operations/tasks/:taskId/:runId` for durable task snapshots.
 - `GET /runtime/ontahi/application` for reflected application metadata.
 - `/runtime/ontahi/explorer/*` when Explorer is enabled.
@@ -56,8 +58,44 @@ server.use(
 );
 ```
 
-The callback may be asynchronous. It runs once for each operation invocation or permission check;
-the returned Principal and resource map remain scoped to that request.
+The callback may be asynchronous. It runs once for each Operation invocation, permission check, or
+graph read; the returned Principal and resource map remain scoped to that request. Future remote
+Commands use the same invocation context rather than introducing another request-identity hook.
+
+Graph reads are separately opt-in and default-deny. The host installs explicit Entity policies,
+while the application supplies the graph runtime already configured by `ontahi({ storage, ... })`:
+
+```ts
+server.use(
+  ontahiExpress(TodoApplication, {
+    invocationContext: request => ({
+      principal: request.user ? toPrincipal(request.user) : null,
+    }),
+    graphRead: {
+      policies: todoGraphReadPolicies,
+    },
+  }),
+);
+```
+
+Without `graphRead`, no graph-read route exists. Its default path is `/graph/reads` relative to the
+mount root and can be replaced with `graphRead.path`. Authority in the request body is ignored. By
+default policies receive the resolved invocation context. An application with a specialized tenant
+or ownership authority can derive it explicitly without repeating authentication:
+
+```ts
+graphRead: {
+  policies: tenantGraphReadPolicies,
+  authority: (context, request) => ({
+    principal: context.principal,
+    tenantId: requireTenantId(request),
+  }),
+}
+```
+
+`graphRead.dispatcher` and `graphRead.context` remain available as a lower-level transport
+composition seam. Ordinary applications should pass policies and let Ontahi build the dispatcher
+from the application storage runtime.
 
 Operation-declared HTTP ingress can be mounted from the same middleware:
 

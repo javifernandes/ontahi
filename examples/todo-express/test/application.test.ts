@@ -1,13 +1,21 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { query } from '@ontahi/core/data-graph';
+import { createFetchGraphReadExecutor } from '@ontahi/react/graph';
 import { Effect } from 'effect';
 import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTodoExpressApp } from '../src/application.js';
 import type { TodoAuthenticationAdapter } from '../src/authentication.js';
+import {
+  TodoItem as ClientTodoItem,
+  TodoItemSchema as ClientTodoItemSchema,
+  TodoList as ClientTodoList,
+} from '../src/generated/client-entities.js';
 import { TodoItem, TodoApplication, TodoList, TodoTag, todoNotifications } from '../src/graph.js';
+import { createTodoDataGraphRuntime } from '../src/storage.js';
 
 const testPrincipal = {
   subject: 'github-user-123',
@@ -33,6 +41,7 @@ const getTodoDataset = () => {
 describe('Ontahi todo portability example', () => {
   let closeServer: (() => Promise<void>) | undefined;
   let endpoint = '';
+  let origin = '';
 
   beforeEach(async () => {
     getTodoDataset().TodoList = [{ id: 'list-1', name: 'Inbox' }];
@@ -46,7 +55,8 @@ describe('Ontahi todo portability example', () => {
         () => resolve(started),
       );
     });
-    endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}/operations`;
+    origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    endpoint = `${origin}/operations`;
     closeServer = async () => {
       server.closeAllConnections();
       server.close();
@@ -83,18 +93,53 @@ describe('Ontahi todo portability example', () => {
     locator: { id },
   });
 
-  it('uses the bound TodoList directly from Node', async () => {
-    await expect(TodoList.list()).resolves.toMatchObject({
-      ok: true,
-      value: [{ id: 'list-1', name: 'Inbox' }],
-    });
-
+  it('uses the bound TodoList command directly from Node', async () => {
     const list = TodoList.refById('list-1');
     await expect(TodoList.rename({ list, name: 'Research backlog' })).resolves.toMatchObject({
       ok: true,
       value: { id: 'list-1', name: 'Research backlog' },
     });
     expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Research backlog' }]);
+  });
+
+  it('runs one caller-authored projected Query directly and through Express HTTP', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-2', list: 'list-1', title: 'Write bridge', completed: false },
+      { id: 'todo-1', list: 'list-1', title: 'Read plan', completed: false },
+      { id: 'todo-done', list: 'list-1', title: 'Done', completed: true },
+      { id: 'todo-other', list: 'list-2', title: 'Other list', completed: false },
+    ];
+    const TodoListItem = ClientTodoItem.view('TodoListItem', { id: true, title: true });
+    const visibleTodos = query(ClientTodoItemSchema)
+      .where(todo => todo.list.eq(ClientTodoList.refById('list-1')))
+      .where(todo => todo.completed.eq(false))
+      .as(TodoListItem)
+      .orderBy(todo => todo.title);
+    const directRuntime = createTodoDataGraphRuntime();
+    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+
+    const direct = await Effect.runPromise(directRuntime.run(visibleTodos, undefined));
+    const remote = await remoteExecutor.run(visibleTodos, undefined);
+
+    expect(remote).toEqual(direct);
+    expect(remote).toEqual([
+      { id: 'todo-1', title: 'Read plan' },
+      { id: 'todo-2', title: 'Write bridge' },
+    ]);
+  });
+
+  it('denies browser relation traversal that is absent from the explicit read policy', async () => {
+    const TodoWithTags = ClientTodoItem.view('TodoWithTags', {
+      id: true,
+      tagAssignments: { tagId: true },
+    });
+    const read = query(ClientTodoItemSchema).as(TodoWithTags);
+    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+
+    await expect(remoteExecutor.run(read, undefined)).rejects.toMatchObject({
+      name: 'RemoteDataGraphError',
+      code: 'access_denied',
+    });
   });
 
   it('runs a TodoList operation with the capability supplied by its application', async () => {
@@ -109,27 +154,6 @@ describe('Ontahi todo portability example', () => {
     expect(notified).toHaveBeenCalledWith({
       listId: 'list-2',
       name: 'Reading queue',
-    });
-  });
-
-  it('lists the TodoItems related to one TodoList from Node', async () => {
-    getTodoDataset().TodoItem = [
-      { id: 'todo-2', list: 'list-2', title: 'Ignore me', completed: false },
-      { id: 'todo-1', list: 'list-1', title: 'Read Ontahi guide', completed: false },
-    ];
-
-    await expect(
-      TodoItem.itemsForList({ list: TodoList.refById('list-1') }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: [
-        {
-          id: 'todo-1',
-          list: todoListRef('list-1'),
-          title: 'Read Ontahi guide',
-          completed: false,
-        },
-      ],
     });
   });
 
@@ -265,34 +289,6 @@ describe('Ontahi todo portability example', () => {
       },
     });
     expect(getTodoDataset().TodoItem).toEqual([]);
-  });
-
-  it('uses one predicate Selection from Node and Express', async () => {
-    getTodoDataset().TodoItem = [
-      { id: 'todo-1', list: 'list-1', title: 'Open', completed: false },
-      { id: 'todo-2', list: 'list-1', title: 'Completed', completed: true },
-      { id: 'todo-3', list: 'list-2', title: 'Another list', completed: false },
-    ];
-    const openTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById('list-1'))).and(
-      todo => todo.completed.eq(false),
-    );
-
-    await expect(TodoItem.list(openTodos)).resolves.toMatchObject({
-      ok: true,
-      value: [{ id: 'todo-1', list: todoListRef('list-1'), title: 'Open', completed: false }],
-    });
-
-    const response = await invoke('TodoItem.list', openTodos);
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: {
-        ok: true,
-        kind: 'success',
-        value: [{ id: 'todo-1', list: todoListRef('list-1'), title: 'Open', completed: false }],
-      },
-    });
   });
 
   it('requires one explicit Principal for a protected operation from Node', async () => {

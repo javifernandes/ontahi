@@ -1,4 +1,4 @@
-import { Effect, FiberRef } from 'effect';
+import { Cause, Effect, Exit, FiberRef } from 'effect';
 
 const browserDataGraphRuntime = FiberRef.unsafeMake<unknown | undefined>(undefined);
 
@@ -27,15 +27,19 @@ export const withBrowserDataGraphRuntime = <TRuntime, TValue, TError>(
   effect: Effect.Effect<TValue, TError>,
 ): Effect.Effect<TValue, TError> => Effect.locally(effect, browserDataGraphRuntime, runtime);
 
-export const runBrowserEffect = <TValue, TRuntime = unknown>(
+export const runBrowserEffect = async <TValue, TRuntime = unknown>(
   effect: Effect.Effect<TValue, unknown>,
   options?: RunBrowserEffectOptions<TRuntime>,
-) =>
-  Effect.runPromise(
+) => {
+  const exit = await Effect.runPromiseExit(
     options?.dataGraphRuntime === undefined
       ? effect
       : withBrowserDataGraphRuntime(options.dataGraphRuntime, effect),
   );
+
+  if (Exit.isSuccess(exit)) return exit.value;
+  throw Cause.squash(exit.cause);
+};
 
 export const browserEffect =
   <TArgs extends unknown[], TValue, TError = unknown>(
