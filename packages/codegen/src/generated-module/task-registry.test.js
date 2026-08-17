@@ -5,13 +5,13 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
+import { assertGeneratedModuleTypechecks } from '../../test/support/generated-module.js';
+import { renderGeneratedTaskDefinitionRegistryModule } from '../projections.mjs';
+
 import {
   createTaskRegistryModuleModel,
   renderSemanticTaskDefinitionRegistryModule,
-} from '../src/generated-module/task-registry.mjs';
-import { renderGeneratedTaskDefinitionRegistryModule } from '../src/projections.mjs';
-
-import { assertGeneratedModuleTypechecks } from './support/generated-module.js';
+} from './task-registry.mjs';
 
 const summarizeTaskRegistry = source => {
   const sourceFile = ts.createSourceFile(
@@ -222,7 +222,7 @@ describe('semantic task registry emitter', () => {
       const modulePath = path.join(directory, 'task-registry.mjs');
       const coreTasksPath = path.resolve(
         import.meta.dirname,
-        '../../core/dist/runtime/server/tasks.js',
+        '../../../core/dist/runtime/server/tasks.js',
       );
       const relativeCoreTasksPath = path
         .relative(directory, coreTasksPath)

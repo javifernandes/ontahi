@@ -509,6 +509,21 @@ Fourth projection-migration cut result on 2026-08-17:
    82.40% lines; the semantic client Entity schema module has 100% statement, function, and line
    coverage with 94.87% branch coverage.
 
+Codegen test-organization cut result on 2026-08-17:
+
+1. Unit suites for `source-loader`, `runner`, the semantic task registry, and the semantic client
+   Entity schema emitter now live beside their production modules under `src/`.
+2. `test/application-model.test.js`, `test/client-entities.test.js`, and
+   `test/generated-module.test.js` remain in the package-level test tree because they exercise
+   multiple analysis/emission boundaries, end-to-end filesystem generation, or shared semantic
+   validation infrastructure.
+3. Vitest and ESLint now discover both colocated unit tests and package-level integration tests;
+   coverage excludes both locations explicitly. The package `files` manifest excludes colocated
+   `src/**/*.test.js` files, and a package dry-run confirms they are absent from the published
+   tarball.
+4. All 7 suites and 65 tests still pass. Coverage is unchanged at 81.47% statements, 74.36%
+   branches, 87.66% functions, and 82.40% lines; typecheck, lint, and build remain green.
+
 ### Slice 5. Cutover And Cleanup
 
 1. Make the semantic emitter the only production path.

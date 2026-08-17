@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, expect, it } from 'vitest';
 
-import { createFileSystemSourceLoader } from '../src/index.mjs';
+import { createFileSystemSourceLoader } from './source-loader.mjs';
 
 const tempDirectories = [];
 

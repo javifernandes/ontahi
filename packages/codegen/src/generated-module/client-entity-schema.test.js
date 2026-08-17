@@ -5,16 +5,16 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
+import { importGeneratedModule } from '../../test/support/generated-module.js';
+import { renderGeneratedClientEntityModule } from '../projections.mjs';
+
 import {
   createClientEntitySchemaModuleModel,
   printClientEntitySchemaImports,
   printClientEntitySchemaStatements,
   printClientEntitySchemaModule,
   renderSemanticClientEntitySchemaModule,
-} from '../src/generated-module/client-entity-schema.mjs';
-import { renderGeneratedClientEntityModule } from '../src/projections.mjs';
-
-import { importGeneratedModule } from './support/generated-module.js';
+} from './client-entity-schema.mjs';
 
 const summarizeExpression = expression => {
   if (ts.isIdentifier(expression)) {

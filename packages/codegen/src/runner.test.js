@@ -8,7 +8,7 @@ import {
   createOntahiCodegenRunner,
   createStdinCommandFormatter,
   parseCodegenRunnerArguments,
-} from '../src/runner.mjs';
+} from './runner.mjs';
 
 const tempDirectories = [];
 
