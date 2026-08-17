@@ -10,7 +10,13 @@ const coreDataGraphPath = path.resolve(
   '../../../core/dist/data-graph/index.js',
 );
 const coreDataGraphUrl = pathToFileURL(coreDataGraphPath).href;
-const coreImport = "'@ontahi/core/data-graph'";
+const coreImports = ["'@ontahi/core/data-graph'", '"@ontahi/core/data-graph"'];
+
+const replaceCoreImport = (source, replacement) =>
+  coreImports.reduce(
+    (current, moduleSpecifier) => current.replaceAll(moduleSpecifier, replacement),
+    source,
+  );
 
 const toModuleSpecifier = ({ from, to }) => {
   const relativePath = path.relative(path.dirname(from), to).replaceAll(path.sep, '/');
@@ -30,8 +36,8 @@ export const assertGeneratedModuleTypechecks = async ({
   compilerOptions = {},
 }) => {
   const typecheckPath = modulePath.replace(/\.mjs$/, '.mts');
-  const typecheckSource = source.replaceAll(
-    coreImport,
+  const typecheckSource = replaceCoreImport(
+    source,
     `'${toModuleSpecifier({ from: typecheckPath, to: coreDataGraphPath })}'`,
   );
 
@@ -59,12 +65,12 @@ export const assertGeneratedModuleTypechecks = async ({
 
 export const importGeneratedModule = async ({ directory, source }) => {
   const modulePath = path.join(directory, `generated-${randomUUID()}.mjs`);
-  if (!source.includes(coreImport)) {
+  if (!coreImports.some(moduleSpecifier => source.includes(moduleSpecifier))) {
     throw new Error('Generated module does not import @ontahi/core/data-graph.');
   }
 
   await assertGeneratedModuleTypechecks({ modulePath, source });
-  const browserSafeSource = source.replaceAll(coreImport, `'${coreDataGraphUrl}'`);
+  const browserSafeSource = replaceCoreImport(source, `'${coreDataGraphUrl}'`);
   const transpiled = ts.transpileModule(browserSafeSource, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,

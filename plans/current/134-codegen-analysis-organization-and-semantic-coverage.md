@@ -457,6 +457,23 @@ First projection-migration cut result on 2026-08-17:
    81.38% lines; the semantic task-registry module retains 100% statement, function, and line
    coverage with 92.85% branch coverage.
 
+Second projection-migration cut result on 2026-08-17:
+
+1. `generated-module/client-entity-schema.mjs` introduces a parallel Generated Module Model for
+   browser-safe core imports and relation-free Entity schema projections, including fields,
+   display, freshness, locators, and identity metadata. The public client-module renderer remains
+   on the legacy production path.
+2. Existing analyzer output enters the model through explicit `source-expression` slots. Each slot
+   is syntax-checked, parsed, deep-cloned into synthesized TypeScript nodes, and serialized only by
+   the outer `ts.Printer`; malformed expressions fail before emission.
+3. Reference fields and Entity relations are rejected explicitly until dependency imports,
+   projection ordering, and deferred relation statements join the model. Focused tests assert model
+   shape, legacy AST parity, deterministic output, syntax diagnostics, semantic typecheck, and
+   runtime Entity metadata against the real data-graph package.
+4. All 60 tests pass. Global coverage is 80.82% statements, 73.53% branches, 87.15% functions, and
+   81.96% lines; the semantic client Entity schema module has 96.15% statement, 89.47% branch, and
+   100% function and line coverage.
+
 ### Slice 5. Cutover And Cleanup
 
 1. Make the semantic emitter the only production path.
