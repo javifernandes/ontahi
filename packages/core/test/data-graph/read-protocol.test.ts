@@ -29,6 +29,19 @@ const defineTripGraph = () => {
   return { Trip, Truck };
 };
 
+const validReadRequest = (overrides: Record<string, unknown> = {}) => ({
+  version: 1,
+  kind: 'graph-read',
+  mode: 'run',
+  selection: {
+    kind: 'selection',
+    entityName: 'Trip',
+    expression: { kind: 'all' },
+  },
+  orderBy: [],
+  ...overrides,
+});
+
 describe('data graph read protocol', () => {
   it('round-trips one shaped Query through a versioned JSON request', () => {
     const client = defineTripGraph();
@@ -116,6 +129,93 @@ describe('data graph read protocol', () => {
 
   it.each([
     {
+      name: 'non-object request',
+      request: null,
+      code: 'invalid_request',
+    },
+    {
+      name: 'unknown request kind',
+      request: validReadRequest({ kind: 'graph-command' }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'unknown read mode',
+      request: validReadRequest({ mode: 'stream' }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'missing Selection',
+      request: validReadRequest({ selection: undefined }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'non-array ordering',
+      request: validReadRequest({ orderBy: {} }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'malformed ordering',
+      request: validReadRequest({ orderBy: [{ fieldName: 'id', direction: 'sideways' }] }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'negative limit',
+      request: validReadRequest({ limit: -1 }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'fractional limit',
+      request: validReadRequest({ limit: 1.5 }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'unknown cardinality',
+      request: validReadRequest({ cardinality: 'some' }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'non-object View',
+      request: validReadRequest({ view: 'TripList' }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'non-JSON value',
+      request: validReadRequest({ metadata: new Date(0) }),
+      code: 'invalid_request',
+    },
+  ])('rejects a $name at the protocol boundary', ({ request, code }) => {
+    expect(parseGraphReadRequest(request)).toMatchObject({
+      success: false,
+      error: { kind: 'protocol-error', error: { code } },
+    });
+  });
+
+  it('preserves optional cardinality and a recursive View while dropping unknown envelope keys', () => {
+    const { Trip } = defineTripGraph();
+    const view = Trip.view('TripList', { id: true }).toJSON();
+
+    expect(
+      parseGraphReadRequest(validReadRequest({ cardinality: 'one', view, ignored: 'value' })),
+    ).toEqual({
+      success: true,
+      request: {
+        version: 1,
+        kind: 'graph-read',
+        mode: 'run',
+        selection: {
+          kind: 'selection',
+          entityName: 'Trip',
+          expression: { kind: 'all' },
+        },
+        view,
+        orderBy: [],
+        cardinality: 'one',
+      },
+    });
+  });
+
+  it.each([
+    {
       name: 'unknown Entity',
       selection: { kind: 'selection', entityName: 'Missing', expression: { kind: 'all' } },
       code: 'unknown_entity',
@@ -184,6 +284,148 @@ describe('data graph read protocol', () => {
     });
   });
 
+  it.each([
+    {
+      name: 'malformed root Selection AST',
+      selection: { kind: 'invalid', entityName: 'Trip', expression: { kind: 'all' } },
+    },
+    {
+      name: 'malformed references',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'references', refs: [{}] },
+      },
+    },
+    {
+      name: 'references for another Entity',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: {
+          kind: 'references',
+          refs: [{ kind: 'entity-ref', entityName: 'Truck', locator: { id: 'truck-1' } }],
+        },
+      },
+    },
+    {
+      name: 'malformed boolean operands',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'and', operands: 'all' },
+      },
+    },
+    {
+      name: 'excessive boolean operands',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'or', operands: Array.from({ length: 257 }, () => ({ kind: 'all' })) },
+      },
+    },
+    {
+      name: 'invalid nested operand',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'and', operands: [{ kind: 'mystery' }] },
+      },
+    },
+    {
+      name: 'invalid negated operand',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'not', operand: { kind: 'mystery' } },
+      },
+    },
+    {
+      name: 'non-array in values',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'predicate', operator: 'in', fieldName: 'id', values: 'trip-1' },
+      },
+    },
+    {
+      name: 'missing predicate value',
+      selection: {
+        kind: 'selection',
+        entityName: 'Trip',
+        expression: { kind: 'predicate', operator: 'eq', fieldName: 'id' },
+      },
+    },
+  ])('rejects $name during semantic resolution', ({ selection }) => {
+    const { Trip, Truck } = defineTripGraph();
+    const parsed = parseGraphReadRequest(validReadRequest({ selection }));
+    expect(parsed).toMatchObject({ success: true });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(resolveGraphReadRequest(parsed.request, { entities: [Trip, Truck] })).toMatchObject({
+      success: false,
+      error: { kind: 'protocol-error', error: { code: 'invalid_selection' } },
+    });
+  });
+
+  it('resolves a valid recursive boolean Selection without a projection', () => {
+    const { Trip, Truck } = defineTripGraph();
+    const selection = {
+      kind: 'selection',
+      entityName: 'Trip',
+      expression: {
+        kind: 'and',
+        operands: [
+          { kind: 'predicate', operator: 'in', fieldName: 'id', values: ['trip-1'] },
+          {
+            kind: 'not',
+            operand: { kind: 'predicate', operator: 'isNull', fieldName: 'status' },
+          },
+        ],
+      },
+    };
+    const parsed = parseGraphReadRequest(validReadRequest({ selection }));
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    const resolved = resolveGraphReadRequest(parsed.request, { entities: [Trip, Truck] });
+    expect(resolved).toMatchObject({ success: true });
+    if (!resolved.success) throw new Error(resolved.error.error.message);
+    expect(resolved.query.root).toBe(Trip);
+    expect(resolved.query.view).toBeUndefined();
+  });
+
+  it('rejects a Selection deeper than the protocol limit', () => {
+    const { Trip } = defineTripGraph();
+    const expression = Array.from({ length: 34 }).reduce<Record<string, unknown>>(
+      operand => ({ kind: 'not', operand }),
+      { kind: 'all' },
+    );
+    const parsed = parseGraphReadRequest(
+      validReadRequest({
+        selection: { kind: 'selection', entityName: 'Trip', expression },
+      }),
+    );
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(resolveGraphReadRequest(parsed.request, { entities: [Trip] })).toMatchObject({
+      success: false,
+      error: { kind: 'protocol-error', error: { code: 'invalid_selection' } },
+    });
+  });
+
+  it('rejects ordering by an unknown server field', () => {
+    const { Trip } = defineTripGraph();
+    const parsed = parseGraphReadRequest(
+      validReadRequest({ orderBy: [{ fieldName: 'missing', direction: 'asc' }] }),
+    );
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(resolveGraphReadRequest(parsed.request, { entities: [Trip] })).toMatchObject({
+      success: false,
+      error: { kind: 'protocol-error', error: { code: 'invalid_selection' } },
+    });
+  });
+
   it('rejects a transported View that does not match the server graph', () => {
     const { Trip, Truck } = defineTripGraph();
     const view = structuredClone(Trip.view('TripList', { truck: { brand: true } }).toJSON());
@@ -215,6 +457,62 @@ describe('data graph read protocol', () => {
 
     expect(() => toGraphReadRequest(local, 'run')).toThrow(
       'Data graph read predicate value must be JSON-safe.',
+    );
+  });
+
+  it('walks boolean and negated Selections before transporting them', () => {
+    const { Trip } = defineTripGraph();
+    const invalid = query(Trip)
+      .where(trip => ({
+        kind: 'and',
+        operands: [
+          {
+            kind: 'or',
+            operands: [trip.id.eq('trip-1'), trip.id.eq('trip-2')],
+          },
+          {
+            kind: 'not',
+            operand: trip.status.eq(new Date(0) as never),
+          },
+        ],
+      }))
+      .build();
+
+    expect(() => toGraphReadRequest(invalid, 'run')).toThrow(
+      'Data graph read predicate value must be JSON-safe.',
+    );
+  });
+
+  it('refuses references that are not JSON-safe', () => {
+    const { Trip } = defineTripGraph();
+    const spec = {
+      ...query(Trip).build(),
+      selection: {
+        kind: 'references' as const,
+        refs: [
+          {
+            kind: 'entity-ref' as const,
+            entityName: 'Trip',
+            locator: { id: new Date(0) },
+          },
+        ],
+      },
+    };
+
+    expect(() => toGraphReadRequest(spec as never, 'run')).toThrow(
+      'Data graph read reference must be JSON-safe.',
+    );
+  });
+
+  it('refuses a request envelope containing a non-JSON-safe ordering value', () => {
+    const { Trip } = defineTripGraph();
+    const spec = {
+      ...query(Trip).build(),
+      orderBy: [{ kind: 'order', fieldName: undefined, direction: 'asc' }],
+    };
+
+    expect(() => toGraphReadRequest(spec as never, 'run')).toThrow(
+      'Data graph read request must be JSON-safe.',
     );
   });
 

@@ -57,6 +57,103 @@ const createTripPolicy = (
 });
 
 describe('graph read dispatcher', () => {
+  it.each([
+    {
+      name: 'non-positive maxLimit',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({ ...policy, maxLimit: 0 }),
+      message: 'Graph read policy Trip requires a positive maxLimit.',
+    },
+    {
+      name: 'empty modes',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({ ...policy, modes: [] }),
+      message: 'Graph read policy Trip requires valid read modes.',
+    },
+    {
+      name: 'unknown mode',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({
+        ...policy,
+        modes: ['stream'] as never,
+      }),
+      message: 'Graph read policy Trip requires valid read modes.',
+    },
+    {
+      name: 'empty cardinalities',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({ ...policy, cardinalities: [] }),
+      message: 'Graph read policy Trip requires valid cardinalities.',
+    },
+    {
+      name: 'unknown cardinality',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({
+        ...policy,
+        cardinalities: ['some'] as never,
+      }),
+      message: 'Graph read policy Trip requires valid cardinalities.',
+    },
+    {
+      name: 'unknown field',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({
+        ...policy,
+        fields: { ...policy.fields, missing: { select: true as const } },
+      }),
+      message: 'Unknown graph read policy field Trip.missing.',
+    },
+    {
+      name: 'unknown operator',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({
+        ...policy,
+        fields: { ...policy.fields, status: { filter: ['execute'] as never } },
+      }),
+      message: 'Unknown graph read policy operator Trip.status.execute.',
+    },
+    {
+      name: 'unknown relation',
+      alter: (policy: GraphReadPolicy<any, Authority>) => ({
+        ...policy,
+        relations: { ...policy.relations, missing: { fields: {} } },
+      }),
+      message: 'Unknown graph read policy relation Trip.missing.',
+    },
+  ])('rejects a policy with $name when installing the boundary', ({ alter, message }) => {
+    const server = defineTripGraph();
+
+    expect(() =>
+      createGraphReadDispatcher<Authority>({
+        policies: [alter(createTripPolicy(server))],
+        execute: vi.fn(),
+      }),
+    ).toThrow(message);
+  });
+
+  it('rejects duplicate Entity policies when installing the boundary', () => {
+    const server = defineTripGraph();
+    const policy = createTripPolicy(server);
+
+    expect(() =>
+      createGraphReadDispatcher({
+        policies: [policy, policy],
+        execute: vi.fn(),
+      }),
+    ).toThrow('Duplicate graph read policy for Entity Trip.');
+  });
+
+  it('ignores undefined entries produced while composing optional policy maps', () => {
+    const server = defineTripGraph();
+    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+      ...createTripPolicy(server),
+      fields: { id: undefined } as never,
+      relations: { truck: undefined } as never,
+      modes: ['count'],
+      scope: 'all',
+    };
+
+    expect(
+      createGraphReadDispatcher({
+        policies: [policy],
+        execute: vi.fn(),
+      }),
+    ).toEqual(expect.any(Function));
+  });
+
   it('denies an Entity that exists in the domain graph but has no remote policy', async () => {
     const client = defineTripGraph();
     const server = defineTripGraph();
@@ -141,6 +238,198 @@ describe('graph read dispatcher', () => {
     await expect(
       dispatch(toGraphReadRequest(query(client.Trip).as(TripWithTruck).limit(10), 'run'), {
         authority: { ownerId: 'owner-1' },
+      }),
+    ).resolves.toMatchObject({ kind: 'graph-read-result' });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    {
+      name: 'references',
+      expression: {
+        kind: 'references',
+        refs: [{ kind: 'entity-ref', entityName: 'Trip', locator: { id: 'trip-1' } }],
+      },
+    },
+    {
+      name: 'and',
+      expression: {
+        kind: 'and',
+        operands: [
+          { kind: 'predicate', operator: 'eq', fieldName: 'id', value: 'trip-1' },
+          { kind: 'predicate', operator: 'eq', fieldName: 'status', value: 'available' },
+        ],
+      },
+    },
+    {
+      name: 'or',
+      expression: {
+        kind: 'or',
+        operands: [
+          { kind: 'predicate', operator: 'eq', fieldName: 'id', value: 'trip-1' },
+          { kind: 'predicate', operator: 'eq', fieldName: 'id', value: 'trip-2' },
+        ],
+      },
+    },
+    {
+      name: 'not',
+      expression: {
+        kind: 'not',
+        operand: { kind: 'predicate', operator: 'eq', fieldName: 'status', value: 'cancelled' },
+      },
+    },
+  ])('permits an exposed $name Selection', async ({ expression }) => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn(async () => []);
+    const dispatch = createGraphReadDispatcher({
+      policies: [createTripPolicy(server)],
+      execute,
+    });
+    const base = toGraphReadRequest(
+      query(client.Trip)
+        .as(client.Trip.view('TripList', { id: true }))
+        .orderBy(trip => trip.id)
+        .limit(10),
+      'run',
+    );
+
+    await expect(
+      dispatch(
+        { ...base, selection: { ...base.selection, expression } },
+        { authority: { ownerId: 'owner-1' } },
+      ),
+    ).resolves.toMatchObject({ kind: 'graph-read-result' });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('denies a reference locator that is not filterable by policy', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn();
+    const dispatch = createGraphReadDispatcher({
+      policies: [createTripPolicy(server)],
+      execute,
+    });
+    const base = toGraphReadRequest(
+      query(client.Trip)
+        .as(client.Trip.view('TripList', { id: true }))
+        .limit(10),
+      'run',
+    );
+
+    await expect(
+      dispatch(
+        {
+          ...base,
+          selection: {
+            ...base.selection,
+            expression: {
+              kind: 'references',
+              refs: [
+                {
+                  kind: 'entity-ref',
+                  entityName: 'Trip',
+                  locator: { internalNotes: 'private' },
+                },
+              ],
+            },
+          },
+        },
+        { authority: { ownerId: 'owner-1' } },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'access_denied' },
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('denies relation traversal when the relation has no policy node', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn();
+    const policy = { ...createTripPolicy(server), relations: {} };
+    const dispatch = createGraphReadDispatcher({ policies: [policy], execute });
+
+    await expect(
+      dispatch(
+        toGraphReadRequest(
+          query(client.Trip)
+            .as(client.Trip.view('TripWithTruck', { truck: { brand: true } }))
+            .limit(10),
+          'run',
+        ),
+        { authority: { ownerId: 'owner-1' } },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'access_denied' },
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('permits an unprojected read only when every Entity field is explicitly selectable', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn(async () => []);
+    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+      ...createTripPolicy(server),
+      fields: Object.fromEntries(
+        Object.keys(server.Trip.fields).map(fieldName => [fieldName, { select: true }]),
+      ) as never,
+      scope: 'all',
+    };
+    const dispatch = createGraphReadDispatcher({ policies: [policy], execute });
+
+    await expect(
+      dispatch(toGraphReadRequest(query(client.Trip).limit(10), 'run'), {
+        authority: { ownerId: 'unused' },
+      }),
+    ).resolves.toMatchObject({ kind: 'graph-read-result' });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('permits count without requiring a projection and does not apply a row limit', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn(async () => 12);
+    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+      ...createTripPolicy(server),
+      modes: ['count'],
+      scope: 'all',
+    };
+    const dispatch = createGraphReadDispatcher({ policies: [policy], execute });
+
+    await expect(
+      dispatch(toGraphReadRequest(query(client.Trip), 'count'), {
+        authority: { ownerId: 'unused' },
+      }),
+    ).resolves.toEqual({ kind: 'graph-read-result', value: 12 });
+    expect(execute).toHaveBeenCalledWith(
+      expect.not.objectContaining({ limit: expect.anything() }),
+      'count',
+    );
+  });
+
+  it('uses one as the implicit get cardinality', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn(async () => ({ id: 'trip-1' }));
+    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+      ...createTripPolicy(server),
+      modes: ['get'],
+      cardinalities: ['one'],
+      fields: Object.fromEntries(
+        Object.keys(server.Trip.fields).map(fieldName => [fieldName, { select: true }]),
+      ) as never,
+      scope: 'all',
+    };
+    const dispatch = createGraphReadDispatcher({ policies: [policy], execute });
+
+    await expect(
+      dispatch(toGraphReadRequest(query(client.Trip).limit(1), 'get'), {
+        authority: { ownerId: 'unused' },
       }),
     ).resolves.toMatchObject({ kind: 'graph-read-result' });
     expect(execute).toHaveBeenCalledOnce();
@@ -249,6 +538,122 @@ describe('graph read dispatcher', () => {
       },
     });
     expect(reportError).toHaveBeenCalledWith(failure);
+  });
+
+  it('accepts a raw server-owned scope expression', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn(async () => []);
+    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+      ...createTripPolicy(server),
+      scope: ({ authority }) => ({
+        kind: 'predicate',
+        operator: 'eq',
+        fieldName: 'ownerId',
+        value: authority.ownerId,
+      }),
+    };
+    const dispatch = createGraphReadDispatcher({ policies: [policy], execute });
+
+    await dispatch(
+      toGraphReadRequest(
+        query(client.Trip)
+          .as(client.Trip.view('TripList', { id: true }))
+          .limit(10),
+        'run',
+      ),
+      { authority: { ownerId: 'owner-1' } },
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selection: expect.objectContaining({ fieldName: 'ownerId', value: 'owner-1' }),
+      }),
+      'run',
+    );
+  });
+
+  it.each([
+    {
+      name: 'Selection for another Entity',
+      scope: (server: ReturnType<typeof defineTripGraph>) => () =>
+        selection(server.Truck, truck => truck.id.eq('truck-1')) as never,
+    },
+    {
+      name: 'invalid raw Selection',
+      scope: () => () => ({
+        kind: 'predicate' as const,
+        operator: 'eq' as const,
+        fieldName: 'missing',
+        value: 'owner-1',
+      }),
+    },
+  ])('rejects an authority scope containing a $name', async ({ scope }) => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const execute = vi.fn();
+    const reportError = vi.fn();
+    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+      ...createTripPolicy(server),
+      scope: scope(server),
+    };
+    const dispatch = createGraphReadDispatcher({ policies: [policy], execute, reportError });
+
+    await expect(
+      dispatch(
+        toGraphReadRequest(
+          query(client.Trip)
+            .as(client.Trip.view('TripList', { id: true }))
+            .limit(10),
+          'run',
+        ),
+        { authority: { ownerId: 'owner-1' } },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledOnce();
+  });
+
+  it('returns parser and semantic-resolution errors without executing', async () => {
+    const server = defineTripGraph();
+    const execute = vi.fn();
+    const dispatch = createGraphReadDispatcher({
+      policies: [createTripPolicy(server)],
+      execute,
+    });
+
+    await expect(dispatch(null, { authority: { ownerId: 'owner-1' } })).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'invalid_request' },
+    });
+    await expect(
+      dispatch(
+        {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'Trip',
+            expression: {
+              kind: 'predicate',
+              operator: 'eq',
+              fieldName: 'missing',
+              value: 'value',
+            },
+          },
+          orderBy: [],
+        },
+        { authority: { ownerId: 'owner-1' } },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'invalid_selection' },
+    });
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('rejects a policy that accidentally omits its row scope', () => {
