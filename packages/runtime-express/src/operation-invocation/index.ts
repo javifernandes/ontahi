@@ -11,6 +11,12 @@ export {
   createOntahiExpressRouter,
   ontahiExpress,
   type OntahiExpressExplorerOptions,
+  type OntahiExpressGraphReadOptions,
   type OntahiExpressOptions,
 } from '../application.js';
+export {
+  createExpressGraphReadHandler,
+  type CreateExpressGraphReadHandlerOptions,
+  type ExpressGraphReadContextFactory,
+} from '../graph-read/index.js';
 export type { OntahiExpressIngressOptions } from '../http-ingress.js';

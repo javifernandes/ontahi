@@ -389,6 +389,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.1.10(vitest@4.1.10)
+      effect:
+        specifier: 3.21.0
+        version: 3.21.0
       express:
         specifier: ^4.22.2
         version: 4.22.2

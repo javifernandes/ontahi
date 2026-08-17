@@ -209,7 +209,8 @@ languages.
 - [x] Define a transport-neutral server dispatcher and execution callback.
 - [x] Define a remote graph executor capability and runtime routing.
 - [x] Shape a first-class, default-deny read policy declaration and enforcement seam.
-- [ ] Add an HTTP adapter without embedding HTTP concepts in the graph protocol.
+- [x] Add an Express HTTP adapter without embedding HTTP concepts in the graph protocol.
+- [ ] Add an equivalent Next.js route adapter over the same dispatcher and HTTP semantics.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
@@ -282,23 +283,35 @@ merely to stage delivery. `stream` and `runCommand` instead report an explicit
 `unsupported_capability` without invoking the read transport. A later Command protocol can fill in
 the existing runtime capability without changing caller authoring or binding.
 
-### Current Implementation Slice: HTTP Read Adapter
+### Completed TDD Slice: Express HTTP Read Adapter
+
+`@ontahi/runtime-express` now exposes an opt-in graph-read endpoint around the transport-neutral
+dispatcher. Applications provide a mandatory request-context factory, so authority is derived from
+trusted server request state and cannot be authored into the graph-read body. The default endpoint
+is `POST /graph/reads`, with a configurable path, and protocol failures retain their structured
+body while mapping invalid requests to `400`, denied reads to `403`, and unavailable execution to
+`503`.
+
+A real HTTP Todo proof sends one caller-authored projected Query through the remote runtime and the
+Express endpoint, then compares its result with direct in-memory execution. The request deliberately
+contains a conflicting body authority; the server-owned request context remains authoritative. This
+slice does not yet add a reusable browser binding, PostgreSQL integration, Next.js, or Commands.
+
+### Current Implementation Slice: Next.js HTTP Read Adapter
 
 The next Ontahi version should prove remote reads before remote Commands. That keeps serialization,
 runtime routing, policy, transport, and result semantics visible without mixing in write authority
 or cache reconciliation at the same time.
 
-1. Add a replaceable HTTP adapter around the existing transport-neutral dispatcher without moving
-   Express request or response concepts into Core.
-2. Derive graph authority from trusted server request context; never accept it from the graph read
-   request body.
-3. Add a fetch transport for the remote runtime while preserving structured protocol and transport
+1. Add a Next.js route handler around the same transport-neutral dispatcher, status mapping, and
+   trusted request-context contract proven by the Express adapter.
+2. Add a fetch transport for the remote runtime while preserving structured protocol and transport
    failures.
-4. Bind generated browser Entities to the configured remote runtime after the semantic codegen
+3. Bind generated browser Entities to the configured remote runtime after the semantic codegen
    pipeline is ready for that integration.
-5. Prove that one Todo read expression runs unchanged through both a direct runtime and an
+4. Prove that one Todo read expression runs unchanged through both a direct runtime and an
    Express/PostgreSQL remote runtime.
-6. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
+5. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
    and reflection.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
@@ -310,7 +323,7 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
       provider-specific query state.
 - [x] Direct and remote runtimes execute the same Todo read expression with the same semantic
       result.
-- [ ] The server dispatcher is transport-neutral and the HTTP adapter is replaceable.
+- [x] The server dispatcher is transport-neutral and the Express HTTP adapter is replaceable.
 - [x] Remote reads are denied unless an explicit graph policy permits their semantic surface.
 - [x] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
 - [ ] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
@@ -345,6 +358,8 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
    compile into it; application colocation does not make policy intrinsic to the Entity ontology.
 9. Runtime authoring remains unified while delivery is incremental; unavailable stream and Command
    capabilities fail explicitly rather than creating temporary read-only runtime abstractions.
+10. Express is the first HTTP reference adapter; Next.js must reuse its dispatcher, authority, and
+    protocol-status semantics rather than define a framework-specific graph bridge.
 
 ## Completion Signal
 

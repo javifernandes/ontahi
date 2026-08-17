@@ -2,10 +2,17 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import {
+  createGraphReadDispatcher,
   createInMemoryDataGraphStorage,
+  createInMemoryDataGraphRuntime,
+  createRemoteDataGraphRuntime,
+  createRuntimeBoundDataGraphApi,
   entity as defineEntitySchema,
   field,
+  query,
+  selection,
   value,
+  type GraphReadPolicy,
 } from '@ontahi/core/data-graph';
 import { entity as defineOntahiEntity } from '@ontahi/core/entity';
 import {
@@ -14,6 +21,7 @@ import {
   resetServerRuntimeForTests,
   type OntahiApplication,
 } from '@ontahi/core/runtime/server';
+import { Effect } from 'effect';
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -279,6 +287,125 @@ describe('Ontahi Express application middleware', () => {
     await expect(fetch(`${origin}/application`).then(response => response.status)).resolves.toBe(
       404,
     );
+  });
+
+  it('runs one projected Todo Query unchanged through direct and Express HTTP runtimes', async () => {
+    const defineTodoGraph = () => {
+      const Todo = defineEntitySchema('RemoteTodo', {
+        id: field.id(),
+        title: field.string(),
+        completed: field.boolean(),
+        ownerId: field.string(),
+      });
+      return { Todo };
+    };
+    const client = defineTodoGraph();
+    const serverGraph = defineTodoGraph();
+    const dataset = {
+      RemoteTodo: [
+        {
+          id: 'todo-1',
+          title: 'Define the protocol',
+          completed: false,
+          ownerId: 'owner-1',
+        },
+        {
+          id: 'todo-2',
+          title: 'Build the HTTP bridge',
+          completed: false,
+          ownerId: 'owner-1',
+        },
+        {
+          id: 'todo-private',
+          title: 'Another owner',
+          completed: false,
+          ownerId: 'owner-2',
+        },
+      ],
+    };
+    type Authority = { ownerId: string };
+    const policy: GraphReadPolicy<typeof serverGraph.Todo, Authority> = {
+      entity: serverGraph.Todo,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 50,
+      fields: {
+        id: { select: true },
+        title: { select: true, order: true },
+        completed: { filter: ['eq'] },
+        ownerId: { filter: ['eq'] },
+      },
+      scope: ({ authority, entity: ScopedTodo }) =>
+        selection(ScopedTodo, todo => todo.ownerId.eq(authority.ownerId)),
+    };
+    const directRuntime = createInMemoryDataGraphRuntime({
+      dataset: {
+        RemoteTodo: dataset.RemoteTodo.filter(todo => todo.ownerId === 'owner-1'),
+      },
+    });
+    const serverRuntime = createInMemoryDataGraphRuntime({ dataset });
+    const dispatcher = createGraphReadDispatcher({
+      policies: [policy],
+      execute: (read, mode) => {
+        if (mode !== 'run') throw new Error(`Unexpected graph read mode: ${mode}.`);
+        return Effect.runPromise(serverRuntime.run(read, undefined));
+      },
+    });
+    const expressApp = express();
+    expressApp.use(
+      ontahiExpress(createApplication(), {
+        graphRead: {
+          dispatcher,
+          context: request => {
+            const ownerId = request.header('x-owner-id');
+            if (!ownerId) throw new Error('Missing graph authority.');
+            return { authority: { ownerId } };
+          },
+        },
+      }),
+    );
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const remoteRuntime = createRemoteDataGraphRuntime({
+      transport: async (request, options?: { ownerId: string; credential: string }) => {
+        const response = await fetch(`${origin}/graph/reads`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-owner-id': options?.ownerId ?? 'missing',
+            authorization: `Bearer ${options?.credential ?? 'missing'}`,
+          },
+          body: JSON.stringify({
+            ...request,
+            authority: { ownerId: 'owner-2' },
+          }),
+        });
+        return response.json();
+      },
+    });
+    const directGraph = createRuntimeBoundDataGraphApi(() => directRuntime);
+    const remoteGraph = createRuntimeBoundDataGraphApi(() => remoteRuntime);
+    const TodoListItem = client.Todo.view('RemoteTodoListItem', { id: true, title: true });
+    const openTodos = query(client.Todo)
+      .where(todo => todo.completed.eq(false))
+      .as(TodoListItem)
+      .orderBy(todo => todo.title);
+
+    const direct = await Effect.runPromise(directGraph.bindGraphRead(openTodos).run());
+    const remote = await Effect.runPromise(
+      remoteGraph.bindGraphRead(openTodos).run(undefined, {
+        ownerId: 'owner-1',
+        credential: 'server-session',
+      }),
+    );
+
+    expect(remote).toEqual(direct);
+    expect(remote).toEqual([
+      { id: 'todo-2', title: 'Build the HTTP bridge' },
+      { id: 'todo-1', title: 'Define the protocol' },
+    ]);
   });
 
   it('mounts reflected HTTP ingress from a provider registry', async () => {
