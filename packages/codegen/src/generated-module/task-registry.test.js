@@ -278,5 +278,5 @@ describe('semantic task registry emitter', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });

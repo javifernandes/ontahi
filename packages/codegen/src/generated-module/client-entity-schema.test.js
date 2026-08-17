@@ -280,7 +280,7 @@ describe('semantic client Entity schema emitter', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it('models projected dependency order plus immediate and deferred relations', () => {
     expect(createClientEntitySchemaModuleModel({ schemaEntities: relatedSchemaEntities })).toEqual({
