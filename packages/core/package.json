@@ -145,9 +145,9 @@
     "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.{ts,tsx}\" --fix --max-warnings 0"
   },
   "dependencies": {
-    "effect": "^3.21.0",
+    "effect": "^3.22.1",
     "typia": "^12.0.1",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
