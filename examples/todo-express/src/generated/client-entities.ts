@@ -24,13 +24,11 @@ export const TodoListSchema = defineEntitySchema('TodoList', {
     },
   }),
 });
-
 export const TagSchema = defineEntitySchema('Tag', {
   id: field.id(),
   name: field.nonEmptyString({ trim: true }),
   color: field.nonEmptyString({ trim: true }),
 });
-
 export const TodoTagSchema = defineEntitySchema('TodoTag', {
   todoId: field.id(),
   tagId: field.id(),
@@ -38,7 +36,6 @@ export const TodoTagSchema = defineEntitySchema('TodoTag', {
   .locators({ refByTodoAndTag: ['todoId', 'tagId'] })
   .identity('refByTodoAndTag')
   .belongsTo('tag', TagSchema, { via: 'tagId' });
-
 export const TodoItemSchema = defineEntitySchema('TodoItem', {
   id: field.id(),
   list: field.ref(TodoListSchema),
