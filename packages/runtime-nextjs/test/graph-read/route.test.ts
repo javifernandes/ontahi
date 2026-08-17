@@ -1,5 +1,5 @@
 import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core/data-graph';
-import { getCurrentInvocationContext } from '@ontahi/core/runtime/server';
+import { getCurrentInvocationContext, type InvocationContext } from '@ontahi/core/runtime/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNextGraphReadRouteHandler } from '../../src/graph-read/index.js';
@@ -24,6 +24,13 @@ const graphReadRequest = (body: unknown, headers?: Record<string, string>) =>
   });
 
 describe('Next.js graph read route adapter', () => {
+  it('requires an authority factory for a specialized dispatcher', () => {
+    const dispatcher = vi.fn() as GraphReadDispatcher<{ ownerId: string }>;
+
+    // @ts-expect-error Specialized authority cannot fall back to InvocationContext.
+    createNextGraphReadRouteHandler({ dispatcher });
+  });
+
   it('rejects malformed requests before deriving context or dispatching', async () => {
     const dispatcher = vi.fn() as GraphReadDispatcher<unknown>;
     const invocationContext = vi.fn(() => ({}));
@@ -93,6 +100,26 @@ describe('Next.js graph read route adapter', () => {
       authority: { ownerId: 'owner-1' },
     });
     expect(getCurrentInvocationContext()).toBeUndefined();
+  });
+
+  it('uses the invocation context as the default authority', async () => {
+    const dispatcher = vi.fn(async (_request, context: { authority: InvocationContext }) => ({
+      kind: 'graph-read-result' as const,
+      value: context.authority.principal?.subject,
+    })) as GraphReadDispatcher<InvocationContext>;
+    const handler = createNextGraphReadRouteHandler({
+      dispatcher,
+      invocationContext: () => ({
+        principal: { subject: 'owner-1', kind: 'user' },
+      }),
+    });
+    const response = await handler(graphReadRequest(validRequest));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      kind: 'graph-read-result',
+      value: 'owner-1',
+    });
   });
 
   it.each([

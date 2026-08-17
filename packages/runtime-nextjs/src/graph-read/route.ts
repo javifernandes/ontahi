@@ -17,12 +17,23 @@ export type NextGraphReadAuthorityFactory<TAuthority> = (
   request: Request,
 ) => TAuthority | Promise<TAuthority>;
 
-export type CreateNextGraphReadRouteHandlerOptions<TAuthority> = {
-  dispatcher: GraphReadDispatcher<TAuthority>;
-  authority?: NextGraphReadAuthorityFactory<TAuthority>;
+type NextGraphReadRouteHandlerCommonOptions = {
   invocationContext?: NextInvocationContextFactory;
   reportError?: (error: unknown, request: Request) => void;
 };
+
+export type CreateNextGraphReadRouteHandlerOptions<TAuthority = InvocationContext> =
+  NextGraphReadRouteHandlerCommonOptions &
+    (
+      | {
+          dispatcher: GraphReadDispatcher<InvocationContext>;
+          authority?: never;
+        }
+      | {
+          dispatcher: GraphReadDispatcher<TAuthority>;
+          authority: NextGraphReadAuthorityFactory<TAuthority>;
+        }
+    );
 
 const responseStatus = (response: GraphReadDispatchResponse) => {
   if (response.kind === 'graph-read-result') return 200;
@@ -32,12 +43,7 @@ const responseStatus = (response: GraphReadDispatchResponse) => {
 };
 
 export const createNextGraphReadRouteHandler =
-  <TAuthority>({
-    dispatcher,
-    authority,
-    invocationContext,
-    reportError,
-  }: CreateNextGraphReadRouteHandlerOptions<TAuthority>) =>
+  <TAuthority>(options: CreateNextGraphReadRouteHandlerOptions<TAuthority>) =>
   async (request: Request): Promise<Response> => {
     const parsed = parseGraphReadRequest(await request.json().catch(() => null));
     if (!parsed.success) {
@@ -50,20 +56,21 @@ export const createNextGraphReadRouteHandler =
         if (!currentContext) {
           throw new Error('Next.js graph read invocation context is unavailable.');
         }
-        return dispatcher(parsed.request, {
-          authority: authority
-            ? await authority(currentContext, request)
-            : (currentContext as TAuthority),
-        });
+        if (options.authority) {
+          return options.dispatcher(parsed.request, {
+            authority: await options.authority(currentContext, request),
+          });
+        }
+        return options.dispatcher(parsed.request, { authority: currentContext });
       };
       const protocolResponse = await withInvocationContext(
-        invocationContext ? await invocationContext(request) : {},
+        options.invocationContext ? await options.invocationContext(request) : {},
         dispatch,
       );
 
       return Response.json(protocolResponse, { status: responseStatus(protocolResponse) });
     } catch (error) {
-      reportError?.(error, request);
+      options.reportError?.(error, request);
 
       return Response.json(
         graphReadProtocolError(
