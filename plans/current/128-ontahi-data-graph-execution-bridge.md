@@ -207,7 +207,7 @@ languages.
       Operation bridge. Completed in plan 128b.
 - [x] Specify a versioned Query wire protocol with validation limits.
 - [x] Define a transport-neutral server dispatcher and execution callback.
-- [ ] Define a remote graph executor capability and runtime routing.
+- [x] Define a remote graph executor capability and runtime routing.
 - [x] Shape a first-class, default-deny read policy declaration and enforcement seam.
 - [ ] Add an HTTP adapter without embedding HTTP concepts in the graph protocol.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
@@ -267,24 +267,38 @@ the executor, that denied fields and relation paths cannot leak through a View, 
 owner scope narrows rather than replaces the caller Selection. HTTP, generated clients, and remote
 Commands remain outside this slice.
 
-### Current Implementation Slice: Remote Read Runtime
+### Completed TDD Slice: Remote Read Runtime
+
+The transport-neutral remote runtime maps the existing `get`, `run`, and `count` execution methods
+to versioned read requests and accepts an injected transport callback. Runtime options such as
+credentials and authority context are passed to that callback rather than serialized into the
+caller-authored graph program. Remote protocol failures, malformed responses, local encoding
+failures, and transport failures remain distinct structured errors.
+
+A focused Todo proof executes one projected Query unchanged through a direct authority-scoped
+runtime and through the remote runtime connected in-process to the default-deny dispatcher. The
+runtime contract remains unified: Ontahi does not introduce temporary read-only runtime interfaces
+merely to stage delivery. `stream` and `runCommand` instead report an explicit
+`unsupported_capability` without invoking the read transport. A later Command protocol can fill in
+the existing runtime capability without changing caller authoring or binding.
+
+### Current Implementation Slice: HTTP Read Adapter
 
 The next Ontahi version should prove remote reads before remote Commands. That keeps serialization,
 runtime routing, policy, transport, and result semantics visible without mixing in write authority
 or cache reconciliation at the same time.
 
-1. Define a versioned, transport-safe read request containing the root Entity, Selection AST,
-   projection/includes, ordering, limits, cardinality, and read mode.
-2. Parse and rebuild that request against the server's registered graph; reject unknown Entities,
-   fields, relations, operators, versions, and requests above configured bounds.
-3. Add a transport-neutral graph-read dispatcher and remote executor capability.
-4. Enforce a default-deny read policy over Entities, fields, operators, relations, limits, and any
-   authority-derived Selection before storage execution.
-5. Project the capability through HTTP and generated browser Entities without putting HTTP details
-   in Core.
-6. Prove that one Todo read expression runs unchanged through both a direct runtime and an
+1. Add a replaceable HTTP adapter around the existing transport-neutral dispatcher without moving
+   Express request or response concepts into Core.
+2. Derive graph authority from trusted server request context; never accept it from the graph read
+   request body.
+3. Add a fetch transport for the remote runtime while preserving structured protocol and transport
+   failures.
+4. Bind generated browser Entities to the configured remote runtime after the semantic codegen
+   pipeline is ready for that integration.
+5. Prove that one Todo read expression runs unchanged through both a direct runtime and an
    Express/PostgreSQL remote runtime.
-7. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
+6. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
    and reflection.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
@@ -294,14 +308,14 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 
 - [x] One canonical read program validates and round-trips without executable JavaScript or
       provider-specific query state.
-- [ ] Direct and remote runtimes execute the same Todo read expression with the same semantic
+- [x] Direct and remote runtimes execute the same Todo read expression with the same semantic
       result.
 - [ ] The server dispatcher is transport-neutral and the HTTP adapter is replaceable.
 - [x] Remote reads are denied unless an explicit graph policy permits their semantic surface.
 - [x] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
 - [ ] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
       end-to-end Todo proof.
-- [ ] Remote Commands remain unavailable by default and are left for the next bounded slice.
+- [x] Remote Commands remain unavailable by default and are left for the next bounded slice.
 
 ## Open Questions
 
@@ -329,6 +343,8 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
    tenant scope can narrow an explicitly exposed surface but cannot create exposure by itself.
 8. Policy has one canonical semantic representation, while authoring ergonomics are layered and
    compile into it; application colocation does not make policy intrinsic to the Entity ontology.
+9. Runtime authoring remains unified while delivery is incremental; unavailable stream and Command
+   capabilities fail explicitly rather than creating temporary read-only runtime abstractions.
 
 ## Completion Signal
 

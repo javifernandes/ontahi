@@ -22,6 +22,7 @@ export * from './query.js';
 export * from './read-dispatcher.js';
 export * from './read-protocol.js';
 export * from './reference-field.js';
+export * from './remote-runtime.js';
 export * from './ref.js';
 export * from './reflection.js';
 export * from './relation-root.js';
