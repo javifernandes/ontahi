@@ -1,7 +1,7 @@
 {
   "name": "@ontahi/runtime-nextjs",
   "version": "0.1.0-alpha.4",
-  "description": "Next.js action runtime and transport helpers for Ontahi applications",
+  "description": "Next.js runtime and transport adapters for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-nextjs",
   "license": "Apache-2.0",
   "author": "Javier Fernandes",
@@ -38,6 +38,11 @@
       "types": "./dist/operation-invocation/index.d.ts",
       "import": "./dist/operation-invocation/index.js",
       "require": "./dist/operation-invocation/index.js"
+    },
+    "./graph-read": {
+      "types": "./dist/graph-read/index.d.ts",
+      "import": "./dist/graph-read/index.js",
+      "require": "./dist/graph-read/index.js"
     }
   },
   "publishConfig": {

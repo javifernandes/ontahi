@@ -4,11 +4,9 @@ import {
   type OperationInvocationDispatcher,
   type OperationInvocationProtocolResponse,
 } from '@ontahi/core/runtime/operation-invocation';
-import { withInvocationContext, type InvocationContextInput } from '@ontahi/core/runtime/server';
+import { withInvocationContext } from '@ontahi/core/runtime/server';
 
-export type NextInvocationContextFactory = (
-  request: Request,
-) => InvocationContextInput | Promise<InvocationContextInput>;
+import type { NextInvocationContextFactory } from '../request-context.js';
 
 export type CreateNextOperationInvocationRouteHandlerOptions = {
   dispatcher: OperationInvocationDispatcher;

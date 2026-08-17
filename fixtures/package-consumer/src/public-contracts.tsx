@@ -33,6 +33,7 @@ type PublicModules = [
   typeof import('@ontahi/runtime-nextjs/actions'),
   typeof import('@ontahi/runtime-nextjs/actions/server'),
   typeof import('@ontahi/runtime-nextjs/operation-invocation'),
+  typeof import('@ontahi/runtime-nextjs/graph-read'),
   typeof import('@ontahi/runtime-vercel-workflows'),
   typeof import('@ontahi/runtime-vercel-workflows/runtime'),
   typeof import('@ontahi/runtime-vercel-workflows/executor'),

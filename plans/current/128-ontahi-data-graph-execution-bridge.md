@@ -214,7 +214,7 @@ languages.
       Operations and graph reads.
 - [x] Add a Fetch-backed React graph executor and prove caller-authored browser Queries in the Todo
       application.
-- [ ] Add an equivalent Next.js route adapter over the same dispatcher and HTTP semantics.
+- [x] Add an equivalent Next.js route adapter over the same dispatcher and HTTP semantics.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
@@ -323,19 +323,24 @@ continues to use domain Operations. Existing Entity-prefixed cache keys let thos
 invalidate the new Query results without a second cache model. Todo contains no application-local
 dispatcher or duplicated graph authority factory.
 
-### Current Implementation Slice: Next.js HTTP Read Adapter
+### Completed TDD Slice: Next.js HTTP Read Adapter
 
-The next Ontahi version should prove remote reads before remote Commands. That keeps serialization,
-runtime routing, policy, transport, and result semantics visible without mixing in write authority
-or cache reconciliation at the same time.
+`@ontahi/runtime-nextjs/graph-read` now exposes an App Router `Request`/`Response` handler over the
+same transport-neutral dispatcher used by Express. It validates the canonical request before
+deriving context, runs dispatch inside the server-owned invocation context, optionally derives a
+specialized authority from that trusted context, and preserves the same `200`, `400`, `403`, and
+`503` protocol semantics. Adapter failures may be reported by the host without exposing their cause
+to the client.
 
-1. Add a Next.js route handler around the same transport-neutral dispatcher, status mapping, and
-   trusted request-context contract proven by the Express adapter.
-2. Bind generated browser Entities to the configured remote runtime when fluent client-side
+The next Ontahi read slice should finish runtime binding and topology evidence before remote
+Commands. That keeps execution and result semantics visible without mixing in write authority or
+cache reconciliation at the same time.
+
+1. Bind generated browser Entities to the configured remote runtime when fluent client-side
    `.run()` execution is needed outside the React executor.
-3. Prove the Todo browser read path against the PostgreSQL storage topology in addition to the
+2. Prove the Todo browser read path against the PostgreSQL storage topology in addition to the
    current in-memory integration proof.
-4. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
+3. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
    and reflection.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
