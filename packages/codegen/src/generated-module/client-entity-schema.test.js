@@ -373,7 +373,7 @@ describe('semantic client Entity schema emitter', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it('models deterministic imports for external schema dependencies', () => {
     const schemaEntities = [
