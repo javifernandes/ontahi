@@ -24,7 +24,11 @@ const formatDiagnostics = diagnostics =>
     getNewLine: () => '\n',
   });
 
-const assertGeneratedModuleTypechecks = async ({ modulePath, source }) => {
+export const assertGeneratedModuleTypechecks = async ({
+  modulePath,
+  source,
+  compilerOptions = {},
+}) => {
   const typecheckPath = modulePath.replace(/\.mjs$/, '.mts');
   const typecheckSource = source.replaceAll(
     coreImport,
@@ -41,6 +45,7 @@ const assertGeneratedModuleTypechecks = async ({ modulePath, source }) => {
       skipLibCheck: true,
       strict: true,
       target: ts.ScriptTarget.ES2022,
+      ...compilerOptions,
     },
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);

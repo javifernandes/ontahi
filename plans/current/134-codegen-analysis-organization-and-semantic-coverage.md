@@ -440,6 +440,23 @@ Migrate one projection family at a time:
 For each family, assert Generated Module Model structure, TypeScript diagnostics, runtime behavior,
 and deterministic output before deleting the corresponding legacy string builder.
 
+First projection-migration cut result on 2026-08-17:
+
+1. `renderGeneratedTaskDefinitionRegistryModule` now delegates to the Generated Module Model and
+   TypeScript AST pipeline. The handwritten task-registry renderer and its duplicate import/name/
+   declaration builders were removed from `projections.mjs`, reducing that file by 155 lines.
+2. The semantic gate compiles a generated-task registry against the real
+   `@ontahi/core/runtime/server/tasks` declarations with local module fixtures under bundler module
+   resolution. Model, syntax, semantic typecheck, parity, deterministic serialization, and public
+   cutover assertions all pass.
+3. Raw generated source now uses `ts.Printer` formatting, including double-quoted module specifiers,
+   compact named imports, and printer-controlled indentation/trailing commas. This is intentional
+   artifact-format drift; exported names, imports, task definitions, registry entries, and lookup
+   behavior are semantically unchanged.
+4. All 55 tests pass. Global coverage is 80.30% statements, 73.09% branches, 86.29% functions, and
+   81.38% lines; the semantic task-registry module retains 100% statement, function, and line
+   coverage with 92.85% branch coverage.
+
 ### Slice 5. Cutover And Cleanup
 
 1. Make the semantic emitter the only production path.
