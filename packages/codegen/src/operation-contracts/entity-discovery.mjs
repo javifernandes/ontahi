@@ -148,7 +148,9 @@ export const describeEntityDeclaration = (entityExportName, initializer) => {
     const [configArg] = initializer.arguments;
 
     if (!configArg || !ts.isObjectLiteralExpression(configArg)) {
-      return { diagnostics: [`${entityExportName} must call entity({ name, fields, operations }).`] };
+      return {
+        diagnostics: [`${entityExportName} must call entity({ name, fields, operations }).`],
+      };
     }
 
     const entityName = readStringLiteralObjectProperty(configArg, 'name');
@@ -170,7 +172,9 @@ export const describeEntityDeclaration = (entityExportName, initializer) => {
 
     if (!sourceArg || !relationNameArg || !configArg || !ts.isObjectLiteralExpression(configArg)) {
       return {
-        diagnostics: [`${entityExportName} must call defineRelation(source, relationName, { ... }).`],
+        diagnostics: [
+          `${entityExportName} must call defineRelation(source, relationName, { ... }).`,
+        ],
       };
     }
 

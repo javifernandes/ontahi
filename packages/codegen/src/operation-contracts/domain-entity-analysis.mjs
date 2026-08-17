@@ -1,17 +1,11 @@
 import ts from 'typescript';
 
-import {
-  describeEntityDeclaration,
-  resolveEntityDeclaration,
-} from './entity-discovery.mjs';
+import { describeEntityDeclaration, resolveEntityDeclaration } from './entity-discovery.mjs';
 import {
   projectEntitySchemaConfig,
   resolveEntitySchemaProjection,
 } from './entity-schema-projection.mjs';
-import {
-  parseDomainOperationDefaults,
-  parseOperationDefinition,
-} from './operation-analysis.mjs';
+import { parseDomainOperationDefaults, parseOperationDefinition } from './operation-analysis.mjs';
 import { resolveOperationCollectionInitializer } from './operation-discovery.mjs';
 import {
   collectConstDeclarations,
@@ -254,4 +248,3 @@ export const findDomainEntityDefinition = (sourceFile, expectedExportName, optio
         ],
       };
 };
-

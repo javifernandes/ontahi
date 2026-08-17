@@ -133,19 +133,15 @@ export const createClientEntitySchemaModuleModel = ({
       return {
         localName: entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`,
         entityName: projection.name,
-        fields: sourceExpression(replaceProjectedEntityNames(projection.fieldsText, projectedNames)),
-        display: projection.displayText
-          ? sourceExpression(projection.displayText)
-          : undefined,
+        fields: sourceExpression(
+          replaceProjectedEntityNames(projection.fieldsText, projectedNames),
+        ),
+        display: projection.displayText ? sourceExpression(projection.displayText) : undefined,
         freshness: projection.freshnessText
           ? sourceExpression(projection.freshnessText)
           : undefined,
-        locators: projection.locatorsText
-          ? sourceExpression(projection.locatorsText)
-          : undefined,
-        identity: projection.identityText
-          ? sourceExpression(projection.identityText)
-          : undefined,
+        locators: projection.locatorsText ? sourceExpression(projection.locatorsText) : undefined,
+        identity: projection.identityText ? sourceExpression(projection.identityText) : undefined,
         relations: (projection.relations ?? [])
           .filter(relation => !relation.deferred)
           .map(relation => createRelationModel(relation, projectedNames)),
@@ -167,8 +163,7 @@ export const createClientEntitySchemaModuleModel = ({
     const projection = entity.entitySchemaProjection;
     if (!projection) return [];
 
-    const sourceLocalName =
-      entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
+    const sourceLocalName = entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
     return (projection.relations ?? [])
       .filter(relation => relation.deferred)
       .map(relation => ({
@@ -245,10 +240,7 @@ const createRelationArguments = relation => [
 
 const createRelationCall = (receiver, relation) =>
   ts.factory.createCallExpression(
-    ts.factory.createPropertyAccessExpression(
-      receiver,
-      ts.factory.createIdentifier(relation.kind),
-    ),
+    ts.factory.createPropertyAccessExpression(receiver, ts.factory.createIdentifier(relation.kind)),
     undefined,
     createRelationArguments(relation),
   );
@@ -346,8 +338,8 @@ export const renderSemanticClientEntitySchemaModule = ({
   if (result.diagnostics.length > 0) {
     throw new Error(
       `Cannot emit client Entity schemas:\n${result.diagnostics
-        .map(diagnostic =>
-          `${diagnostic.entityName}.${diagnostic.expression}: ${diagnostic.message}`,
+        .map(
+          diagnostic => `${diagnostic.entityName}.${diagnostic.expression}: ${diagnostic.message}`,
         )
         .join('\n')}`,
     );

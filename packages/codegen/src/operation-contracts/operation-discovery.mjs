@@ -74,11 +74,7 @@ export const resolveOperationCollectionInitializer = (
       return undefined;
     }
     visited.add(identifier.text);
-    return resolveOperationCollectionInitializer(
-      declaration.initializer,
-      declarations,
-      visited,
-    );
+    return resolveOperationCollectionInitializer(declaration.initializer, declarations, visited);
   };
 
   if (ts.isIdentifier(initializer)) {

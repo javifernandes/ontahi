@@ -171,9 +171,7 @@ describe('conventional client entity codegen', () => {
     });
 
     expect(analysis.diagnostics).toEqual([]);
-    expect(
-      analysis.namedDefinitions.map(({ kind, name }) => ({ kind, name })),
-    ).toEqual([
+    expect(analysis.namedDefinitions.map(({ kind, name }) => ({ kind, name }))).toEqual([
       { kind: 'entity', name: 'Trip' },
       { kind: 'entity', name: 'Driver' },
       { kind: 'value', name: 'TripSearchInput' },

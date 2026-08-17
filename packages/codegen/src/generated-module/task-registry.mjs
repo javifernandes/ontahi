@@ -145,9 +145,7 @@ const createGeneratedTaskDeclaration = task => {
         : ts.factory.createStringLiteral(task.taskId.value, true),
     ),
     identifierProperty('input', task.inputLocalName),
-    ...(task.progressLocalName
-      ? [identifierProperty('progress', task.progressLocalName)]
-      : []),
+    ...(task.progressLocalName ? [identifierProperty('progress', task.progressLocalName)] : []),
     ...(task.outputLocalName ? [identifierProperty('output', task.outputLocalName)] : []),
     ts.factory.createPropertyAssignment(
       ts.factory.createIdentifier('steps'),
@@ -166,11 +164,9 @@ const createGeneratedTaskDeclaration = task => {
           ts.factory.createIdentifier(task.localName),
           undefined,
           undefined,
-          ts.factory.createCallExpression(
-            ts.factory.createIdentifier('defineTask'),
-            undefined,
-            [ts.factory.createObjectLiteralExpression(properties, true)],
-          ),
+          ts.factory.createCallExpression(ts.factory.createIdentifier('defineTask'), undefined, [
+            ts.factory.createObjectLiteralExpression(properties, true),
+          ]),
         ),
       ],
       ts.NodeFlags.Const,
@@ -189,10 +185,7 @@ const createRegistryDeclaration = model =>
           undefined,
           ts.factory.createNewExpression(
             ts.factory.createIdentifier('Map'),
-            [
-              ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
-              taskDefinitionType(),
-            ],
+            [ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword), taskDefinitionType()],
             [
               ts.factory.createArrayLiteralExpression(
                 model.registryEntries.map(entry =>

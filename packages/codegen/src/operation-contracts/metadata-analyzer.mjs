@@ -3,10 +3,7 @@ import { findDomainEntityDefinition } from './domain-entity-analysis.mjs';
 import { discoverGraphApi } from './graph-discovery.mjs';
 import { parseTypeScriptSource } from './source-parsing.mjs';
 
-export {
-  analyzeExportedStringConstant,
-  analyzeExportedTaskStep,
-} from './task-analysis.mjs';
+export { analyzeExportedStringConstant, analyzeExportedTaskStep } from './task-analysis.mjs';
 
 export const analyzeSpecificDomainEntityExport = (sourceText, exportName, options = {}) => {
   const { sourceFile, diagnostics } = parseTypeScriptSource(

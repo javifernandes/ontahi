@@ -58,7 +58,6 @@ const collectReferencedHelperDeclarations = (
   }
 };
 
-
 const parseImportedIdentifierReference = ({ node, importMap, diagnosticPrefix }) => {
   if (!node || !ts.isIdentifier(node)) {
     return {
@@ -85,7 +84,6 @@ const parseImportedIdentifierReference = ({ node, importMap, diagnosticPrefix })
     diagnostics: [],
   };
 };
-
 
 const parseDurableTaskDefinitionFromOperation = ({
   operationName,
@@ -395,7 +393,6 @@ const parseIngressDefinitions = (operationName, ingressNode) => {
   };
 };
 
-
 const analyzeNamedValueDefinition = ({ node, declaration, context, fallbackDeclaration }) => {
   const resolved = node ? unwrapExpression(node) : undefined;
   if (
@@ -699,4 +696,3 @@ export const parseOperationDefinition = (
     diagnostics: [],
   };
 };
-

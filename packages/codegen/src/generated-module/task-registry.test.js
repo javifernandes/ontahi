@@ -21,20 +21,18 @@ const summarizeTaskRegistry = source => {
     true,
     ts.ScriptKind.TS,
   );
-  const imports = sourceFile.statements
-    .filter(ts.isImportDeclaration)
-    .map(statement => ({
-      moduleSpecifier: statement.moduleSpecifier.text,
-      bindings:
-        statement.importClause?.namedBindings &&
-        ts.isNamedImports(statement.importClause.namedBindings)
-          ? statement.importClause.namedBindings.elements.map(element => ({
-              importedName: element.propertyName?.text ?? element.name.text,
-              localName: element.name.text,
-              typeOnly: element.isTypeOnly,
-            }))
-          : [],
-    }));
+  const imports = sourceFile.statements.filter(ts.isImportDeclaration).map(statement => ({
+    moduleSpecifier: statement.moduleSpecifier.text,
+    bindings:
+      statement.importClause?.namedBindings &&
+      ts.isNamedImports(statement.importClause.namedBindings)
+        ? statement.importClause.namedBindings.elements.map(element => ({
+            importedName: element.propertyName?.text ?? element.name.text,
+            localName: element.name.text,
+            typeOnly: element.isTypeOnly,
+          }))
+        : [],
+  }));
   const registryDeclaration = sourceFile.statements
     .filter(ts.isVariableStatement)
     .flatMap(statement => [...statement.declarationList.declarations])

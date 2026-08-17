@@ -220,7 +220,8 @@ export const deriveGraphOutputFromSchemaNode = (node, context, visited = new Set
       fieldsProperty && ts.isObjectLiteralExpression(fieldsProperty.initializer)
         ? deriveGraphOutputFromObjectLiteral(fieldsProperty.initializer, context, visited)
         : undefined;
-    const fieldsText = fieldsDescriptor?.kind === 'object' ? `, ${fieldsDescriptor.fieldsText}` : '';
+    const fieldsText =
+      fieldsDescriptor?.kind === 'object' ? `, ${fieldsDescriptor.fieldsText}` : '';
     return { kind: 'entity', text: `graphOutput.entity(${entityArg.getText()}${fieldsText})` };
   }
   if (isGraphOutputCall(expression, 'entity')) {

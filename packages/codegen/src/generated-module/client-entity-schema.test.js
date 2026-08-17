@@ -77,7 +77,9 @@ const summarizeSchemaModule = source => {
 
   return {
     coreImports: coreImport.importClause.namedBindings.elements
-      .filter(element => ['entity', 'field'].includes(element.propertyName?.text ?? element.name.text))
+      .filter(element =>
+        ['entity', 'field'].includes(element.propertyName?.text ?? element.name.text),
+      )
       .map(element => ({
         importedName: element.propertyName?.text ?? element.name.text,
         localName: element.name.text,
@@ -218,8 +220,7 @@ describe('semantic client Entity schema emitter', () => {
             entityName: 'Note',
             fields: {
               kind: 'source-expression',
-              sourceText:
-                '{ id: field.id(), title: field.string(), updatedAt: field.string() }',
+              sourceText: '{ id: field.id(), title: field.string(), updatedAt: field.string() }',
             },
             display: {
               kind: 'source-expression',
@@ -282,9 +283,7 @@ describe('semantic client Entity schema emitter', () => {
   });
 
   it('models projected dependency order plus immediate and deferred relations', () => {
-    expect(
-      createClientEntitySchemaModuleModel({ schemaEntities: relatedSchemaEntities }),
-    ).toEqual({
+    expect(createClientEntitySchemaModuleModel({ schemaEntities: relatedSchemaEntities })).toEqual({
       diagnostics: [],
       model: {
         kind: 'client-entity-schema-module',
@@ -342,12 +341,7 @@ describe('semantic client Entity schema emitter', () => {
       })),
       schemaEntities: relatedSchemaEntities,
     });
-    const localNames = [
-      'AuthorSchema',
-      'ReadingProgressSchema',
-      'BookSchema',
-      'PublisherSchema',
-    ];
+    const localNames = ['AuthorSchema', 'ReadingProgressSchema', 'BookSchema', 'PublisherSchema'];
 
     expect(summarizeSchemaFamily({ source: semanticSource, localNames })).toEqual(
       summarizeSchemaFamily({ source: legacySource, localNames }),

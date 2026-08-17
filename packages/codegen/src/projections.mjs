@@ -1,6 +1,4 @@
-export {
-  renderSemanticTaskDefinitionRegistryModule as renderGeneratedTaskDefinitionRegistryModule,
-} from './generated-module/task-registry.mjs';
+export { renderSemanticTaskDefinitionRegistryModule as renderGeneratedTaskDefinitionRegistryModule } from './generated-module/task-registry.mjs';
 import {
   createClientEntitySchemaModuleModel,
   printClientEntitySchemaImports,
@@ -223,8 +221,8 @@ export const renderGeneratedClientEntityModule = ({
   if (schemaResult.diagnostics.length > 0) {
     throw new Error(
       `Cannot emit client Entity schemas:\n${schemaResult.diagnostics
-        .map(diagnostic =>
-          `${diagnostic.entityName}.${diagnostic.expression}: ${diagnostic.message}`,
+        .map(
+          diagnostic => `${diagnostic.entityName}.${diagnostic.expression}: ${diagnostic.message}`,
         )
         .join('\n')}`,
     );

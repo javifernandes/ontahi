@@ -209,4 +209,3 @@ export const parseTaskDefinitions = (configArg, importMap) => {
     diagnostics,
   };
 };
-
