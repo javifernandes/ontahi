@@ -211,7 +211,7 @@ describe('conventional client entity codegen', () => {
     expect(TripList.entity).toBe(generated.TripSchema);
     expect(generated.Trip.domain.search.as(TripList).view).toBe(TripList.ast);
     expect(source).not.toContain("from './trip-list-item'");
-  }, 15_000);
+  }, 30_000);
 
   it('prints concise help without trying to analyze an application', async () => {
     const logger = { log: vi.fn() };

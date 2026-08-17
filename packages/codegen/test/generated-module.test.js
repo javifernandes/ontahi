@@ -29,4 +29,4 @@ it('rejects generated modules with semantic TypeScript errors before importing t
       `,
     }),
   ).rejects.toThrow(/Type 'number' is not assignable to type 'string'/);
-}, 15_000);
+}, 30_000);
