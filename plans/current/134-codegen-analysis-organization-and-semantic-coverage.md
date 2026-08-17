@@ -344,6 +344,29 @@ Tenth analysis-pipeline cut result on 2026-08-17:
    statement and line coverage, 63.01% branch coverage, and 90% function coverage. Invalid and
    cyclic task-constant variants remain visible targets for a focused semantic-coverage cut.
 
+Eleventh analysis-pipeline cut result on 2026-08-17:
+
+1. Domain Entity IR assembly now lives in `operation-contracts/domain-entity-analysis.mjs`, where
+   Entity discovery, schema projection, Operation analysis, task inventory, ingress enrichment,
+   unified-Entity `self` normalization, client-operation selection, helper deduplication, and
+   diagnostics are composed into the final definition.
+2. `metadata-analyzer.mjs` is now a 36-line compatibility facade responsible only for source
+   parsing, syntax rejection, delegation, and preservation of the existing public exports.
+3. All 51 tests pass. Global coverage remains 79.19% statements, 71.65% branches, 83.83% functions,
+   and 80.23% lines; Domain Entity analysis has 86.30% statement and line coverage, 74.10% branch
+   coverage, and 100% function coverage.
+
+Slice 2 closure on 2026-08-17:
+
+1. Parsing and syntax diagnostics, source/import resolution, Graph/Entity/Operation discovery,
+   Entity schema and graph-output projection, Operation/task analysis, named-definition assembly,
+   and Domain Entity IR assembly now have explicit dependency-directed modules.
+2. Discovery resolves declarations without shared mutable side channels. Analysis boundaries return
+   values plus diagnostics, and the Domain Entity boundary performs the remaining diagnostic and IR
+   aggregation explicitly.
+3. The compatibility facade no longer owns production analysis logic. Slice 3 may define the
+   smallest Generated Module Model and introduce the first semantic emitter behind parity tests.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
