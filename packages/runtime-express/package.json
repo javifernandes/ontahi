@@ -29,6 +29,11 @@
       "import": "./dist/operation-invocation/index.js",
       "require": "./dist/operation-invocation/index.js"
     },
+    "./graph-read": {
+      "types": "./dist/graph-read/index.d.ts",
+      "import": "./dist/graph-read/index.js",
+      "require": "./dist/graph-read/index.js"
+    },
     "./explorer": {
       "types": "./dist/explorer/index.d.ts",
       "import": "./dist/explorer/index.js",
@@ -57,6 +62,7 @@
     "@ontahi/explorer-react": "workspace:*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
+    "effect": "3.21.0",
     "express": "^4.22.2",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"

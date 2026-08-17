@@ -4,6 +4,10 @@ import {
 } from '@ontahi/core/runtime/server';
 import express, { type Request, type Router } from 'express';
 
+import {
+  createExpressGraphReadHandler,
+  type ExpressGraphReadContextFactory,
+} from './graph-read/handler.js';
 import { mountExpressHttpIngress, type OntahiExpressIngressOptions } from './http-ingress.js';
 import { createExpressOperationInvocationHandler } from './operation-invocation/handler.js';
 import type { ExpressInvocationContextFactory } from './operation-invocation/handler.js';
@@ -15,9 +19,16 @@ export type OntahiExpressExplorerOptions = {
   indexFile?: string;
 };
 
-export type OntahiExpressOptions = {
+export type OntahiExpressGraphReadOptions<TAuthority> = {
+  dispatcher: import('@ontahi/core/data-graph').GraphReadDispatcher<TAuthority>;
+  context: ExpressGraphReadContextFactory<TAuthority>;
+  path?: string;
+};
+
+export type OntahiExpressOptions<TGraphReadAuthority = unknown> = {
   mountPath?: string;
   operationsPath?: string;
+  graphRead?: OntahiExpressGraphReadOptions<TGraphReadAuthority>;
   applicationPath?: string | false;
   explorer?: OntahiExpressExplorerOptions;
   ingress?: OntahiExpressIngressOptions;
@@ -31,9 +42,9 @@ const mountPath = (value: string) => {
   return path === '/' ? path : path.replace(/\/+$/, '');
 };
 
-export const ontahiExpress = (
+export const ontahiExpress = <TGraphReadAuthority = unknown>(
   application: OntahiApplication,
-  options: OntahiExpressOptions = {},
+  options: OntahiExpressOptions<TGraphReadAuthority> = {},
 ): Router => {
   const router = express.Router();
   const operationsPath = routePath(options.operationsPath ?? '/operations');
@@ -57,6 +68,18 @@ export const ontahiExpress = (
       reportError: options.reportError,
     }),
   );
+
+  if (options.graphRead) {
+    router.post(
+      routePath(options.graphRead.path ?? '/graph/reads'),
+      express.json(),
+      createExpressGraphReadHandler({
+        dispatcher: options.graphRead.dispatcher,
+        context: options.graphRead.context,
+        reportError: options.reportError,
+      }),
+    );
+  }
 
   if (options.ingress) {
     mountExpressHttpIngress({
