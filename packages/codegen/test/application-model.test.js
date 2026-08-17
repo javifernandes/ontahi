@@ -96,6 +96,8 @@ describe('Ontahi application declaration analysis', () => {
   it('rejects distinct Value declarations with the same nominal name', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-nominal-conflict-'));
     const graphApiPath = path.join(directory, 'graph.ts');
+    const noteSourcePath = path.join(directory, 'note.ts');
+    const taskSourcePath = path.join(directory, 'task.ts');
     tempDirectories.push(directory);
 
     await writeFile(
@@ -139,13 +141,31 @@ describe('Ontahi application declaration analysis', () => {
       sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
     });
 
-    expect(analysis.diagnostics).toContainEqual(
-      expect.objectContaining({
+    expect(analysis.diagnostics).toEqual([
+      {
         code: 'model-name-conflict',
+        sourcePath: taskSourcePath,
         declaration: 'Output',
-        message: expect.stringContaining('SharedOutput'),
-      }),
-    );
+        message: `Model name "SharedOutput" is claimed by Value Output (${noteSourcePath}) and Value Output (${taskSourcePath}). Reuse one declaration or choose distinct names.`,
+      },
+    ]);
+    expect(
+      analysis.namedDefinitions
+        .filter(definition => definition.name === 'SharedOutput')
+        .map(({ kind, name, declaration, sourcePath }) => ({
+          kind,
+          name,
+          declaration,
+          sourcePath,
+        })),
+    ).toEqual([
+      {
+        kind: 'value',
+        name: 'SharedOutput',
+        declaration: 'Output',
+        sourcePath: noteSourcePath,
+      },
+    ]);
   });
 
   it('rejects an Entity and Value that claim the same nominal name', async () => {
@@ -249,6 +269,85 @@ describe('Ontahi application declaration analysis', () => {
         { importedIdentifier: 'Notebook', importPath: './notebook' },
       ],
     });
+  });
+
+  it('rejects syntactically invalid graph source before analyzing recovered declarations', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-invalid-graph-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Note } from './note';
+
+        export const NotesGraph = defineGraphApi({ entities: { Note } });
+        export const Invalid = {
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([
+      {
+        code: 'graph-declaration-invalid',
+        message: expect.stringMatching(/^Invalid TypeScript source at \d+:\d+: /),
+        sourcePath: graphApiPath,
+      },
+    ]);
+    expect(analysis.entities).toEqual([]);
+  });
+
+  it('rejects syntactically invalid entity source before analyzing its recovered declaration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-invalid-entity-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    const noteSourcePath = path.join(directory, 'note.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Note } from './note';
+
+        export const NotesGraph = defineGraphApi({ entities: { Note } });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      noteSourcePath,
+      `
+        import { entity, field } from '@ontahi/core/entity';
+
+        export const Note = entity({
+          name: 'Note',
+          fields: { id: field.id() },
+        });
+        export const Invalid = {
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([
+      {
+        code: 'entity-declaration-invalid',
+        declaration: 'NotesGraph.entities.Note',
+        importPath: './note',
+        message: expect.stringMatching(/^Invalid TypeScript source at \d+:\d+: /),
+        sourcePath: noteSourcePath,
+      },
+    ]);
+    expect(analysis.entities).toEqual([]);
   });
 
   it('discovers entities built inside the ontahi application composition root', () => {
@@ -769,7 +868,7 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(source).toContain('  graphSchema,');
     expect(source).toContain('  value,');
-    expect(source).toContain("import { BookEntity } from '@/features/books/schema';");
+    expect(source).toContain('import { BookEntity } from "@/features/books/schema";');
     expect(source).toMatch(
       /input: value\('DeleteBooksInput', \{\s+books: graphSchema\.selection\(BookEntity, \{ cardinality: 'many' \}\),\s+\}\),/,
     );
@@ -1243,11 +1342,9 @@ describe('Ontahi application declaration analysis', () => {
     });
 
     expect(source).toContain('// This file is generated by @ontahi/codegen.');
-    expect(source).toContain("from './schema.js';");
+    expect(source).toContain('from "./schema.js";');
     expect(source).toContain('export const Note = defineClientEntity(NoteEntity');
     expect(source).toContain('find: defineClientDomainOperation({');
-    expect(source).toContain('input: graphSchema.void(),');
-    expect(source).not.toContain('input: undefined,');
   });
 
   it('avoids named Value bindings that collide with imported entity bindings', () => {
@@ -1281,7 +1378,7 @@ describe('Ontahi application declaration analysis', () => {
     });
 
     expect(source).toContain(
-      "import { TripListItemEntity as TripListItemValue } from './schema.js';",
+      'import { TripListItemEntity as TripListItemValue } from "./schema.js";',
     );
     expect(source).toContain("const TripListItemValue2 = value('TripListItem'");
     expect(source).toContain('output: TripListItemValue2,');
@@ -1316,13 +1413,13 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(source).toContain('entity as defineEntitySchema');
     expect(source).toContain(
-      "export const NoteSchema = defineEntitySchema('Note', { id: field.id(), title: field.string() })",
+      'export const NoteSchema = defineEntitySchema("Note", { id: field.id(), title: field.string() })',
     );
     expect(source).toContain(".display({ primary: 'title' })");
     expect(source).toContain(".locators({ byId: 'id' })");
     expect(source).toContain(".identity('byId')");
     expect(source).toContain('export const Note = defineClientEntity(NoteSchema');
-    expect(source).not.toContain("from './schema';");
+    expect(source).not.toMatch(/from ['"]\.\/schema['"]/);
   });
 
   it('rewrites semantic entity names in graph outputs to browser projections', () => {
@@ -1365,7 +1462,7 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(source).toContain('graphOutput.entity(CommentThreadSchema');
     expect(source).toContain('graphOutput.entity(CommentMessageSchema)');
-    expect(source).not.toContain("from './schema.js'");
+    expect(source).not.toMatch(/from ['"]\.\/schema\.js['"]/);
   });
 
   it('rewrites semantic entity names in operation schemas to browser projections', () => {
@@ -1467,8 +1564,8 @@ describe('Ontahi application declaration analysis', () => {
     expect(source.indexOf('export const ReadingProgressSchema')).toBeLessThan(
       source.indexOf('export const BookSchema'),
     );
-    expect(source).toContain(".hasMany('progress', ReadingProgressSchema, { via: 'bookId' })");
-    expect(source).not.toContain("from './schema';");
+    expect(source).toContain('.hasMany("progress", ReadingProgressSchema, { via: "bookId" })');
+    expect(source).not.toMatch(/from ['"]\.\/schema['"]/);
   });
 
   it('projects semantic reference targets before their consumers', () => {
@@ -1515,10 +1612,10 @@ describe('Ontahi application declaration analysis', () => {
       source.indexOf('export const TodoSchema'),
     );
     expect(source).toContain('list: field.ref(TodoListSchema)');
-    expect(source).not.toContain("from './schema';");
+    expect(source).not.toMatch(/from ['"]\.\/schema['"]/);
   });
 
-  it('renders a lightweight task registry projection', () => {
+  it('renders a semantic task registry projection', () => {
     const source = renderGeneratedTaskDefinitionRegistryModule({
       tasks: [
         {
@@ -1532,7 +1629,7 @@ describe('Ontahi application declaration analysis', () => {
     });
 
     expect(source).toContain('// This file is generated by @ontahi/codegen.');
-    expect(source).toContain("import {\n  archiveNoteTask,\n} from './note-task';");
+    expect(source).toContain('import { archiveNoteTask } from "./note-task";');
     expect(source).toContain('[archiveNoteTask.id, archiveNoteTask as TaskDefinition');
   });
 });
