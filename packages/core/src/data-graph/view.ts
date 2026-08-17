@@ -1,3 +1,5 @@
+import { hasOwn, isRecord } from '../value/object.js';
+
 import type {
   AnyEntityDefinition,
   EntityViewConfig,
@@ -186,12 +188,6 @@ const isRecursiveEntityView = (value: unknown): value is AnyRecursiveEntityViewD
   typeof value === 'object' &&
   'ast' in value &&
   (value as { ast?: { kind?: string } }).ast?.kind === 'entity-view';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
-
-const hasOwn = (record: object, key: PropertyKey) =>
-  Object.prototype.hasOwnProperty.call(record, key);
 
 const validateViewNode = (entity: AnyEntityDefinition, node: ViewNode): void => {
   if (node.kind !== 'view-node' || node.entity !== entity.name || !isRecord(node.fields)) {

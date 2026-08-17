@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { hasOwn } from '../../value/object.js';
 import type { GraphCommandSpec } from '../command.js';
 import {
   liftEntityReferenceRecord,
@@ -97,9 +98,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
       payloads.length === 0 ||
       conflictFields.length === 0 ||
       (command.upsert?.strategy !== 'ignore' && command.upsert?.strategy !== 'merge') ||
-      payloads.some(payload =>
-        conflictFields.some(field => !Object.prototype.hasOwnProperty.call(payload, field)),
-      )
+      payloads.some(payload => conflictFields.some(field => !hasOwn(payload, field)))
     ) {
       throw new InMemoryDataGraphError(
         'Upsert commands require a strategy and payload values for every conflict field.',

@@ -1,4 +1,5 @@
 import type { EntityViewAst } from '../data-graph/view.js';
+import { isRecord } from '../value/object.js';
 
 import type { OperationInvocationResult, OperationValidationIssue } from './contracts.js';
 
@@ -69,9 +70,6 @@ export type OperationInvocationRequestParseResult =
       success: false;
       error: OperationInvocationProtocolError;
     };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const operationInvocationProtocolError = (
   code: OperationInvocationProtocolErrorCode,

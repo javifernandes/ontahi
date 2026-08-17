@@ -6,6 +6,7 @@ export * from './data-graph/index.js';
 export * from './model/validation.js';
 export * from './model/zod.js';
 export * from './value/array.js';
+export * from './value/json.js';
 export * from './value/object.js';
 export * from './value/error.js';
 export * from './value/date-time.js';

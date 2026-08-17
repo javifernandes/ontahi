@@ -1,3 +1,5 @@
+import { isRecord } from '../value/object.js';
+
 export type OperationValidationIssue = {
   path?: string;
   message: string;
@@ -49,9 +51,6 @@ export type OperationInvocationResult<TOutput = unknown, TFailure = unknown> =
   | OperationRejected
   | OperationFailed<TFailure>
   | OperationErrored;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const omitSuccess = (value: Record<string, unknown>) => {
   const { success: _success, ...rest } = value;

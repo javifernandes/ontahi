@@ -29,9 +29,6 @@ import { lowerEntityReferenceValue } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
 import { isSelection, Selection } from './selection-value.js';
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object';
-
 const isFieldDefinition = (schema: GraphSchemaDefinition): schema is AnyFieldDefinition =>
   schema.kind === 'field';
 

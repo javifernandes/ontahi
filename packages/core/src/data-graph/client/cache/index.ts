@@ -1,3 +1,4 @@
+import { isRecord } from '../../../value/object.js';
 import type { AnyEntityDefinition } from '../../definitions.js';
 import type { GraphOutputDescriptor } from '../../output/index.js';
 import {
@@ -127,9 +128,6 @@ type ReadEntityFn = (
 ) => Record<string, unknown> | undefined;
 
 type ReadEntityRecordFn = (ref: AnyEntityRef) => GraphClientCacheEntityRecord | undefined;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const toTimestamp = (value: unknown): number | undefined => {
   if (value instanceof Date) {

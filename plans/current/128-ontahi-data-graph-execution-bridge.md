@@ -1,6 +1,6 @@
 # 128. Ontahi Data Graph Execution Bridge
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/128-data-graph-execution-bridge`
 
@@ -45,6 +45,7 @@ Related work:
 5. [118. Ontahi Selection Language Editor](bookops://plans/118-ontahi-selection-language-editor)
 6. [128a. Recursive Views And Projectable Operation Results](../done/128a-ontahi-recursive-views-and-projectable-operation-results.md)
 7. [128b. Projectable Operation Client Bridge](../done/128b-ontahi-projectable-operation-client-bridge.md)
+8. [134. Semantic Codegen Pipeline, Organization, And Coverage](./134-codegen-analysis-organization-and-semantic-coverage.md)
 
 ## Architectural Thesis
 
@@ -113,6 +114,11 @@ not accept executable JavaScript, adapter queries, table names, or arbitrary SQL
 The concern that “a client could execute any query or update” is valid, but wrapper Operations are
 only an accidental allowlist. They duplicate graph code and couple authorization to distribution.
 
+Declaring or registering an Entity never grants remote access to it. Registration only lets the
+authoritative runtime resolve its semantic identity; a separate, explicit remote graph policy must
+opt that Entity and its permitted surface into remote execution. Missing policy is a denial, not an
+implicit full-access default.
+
 The graph boundary needs explicit policy over semantic programs. Candidate dimensions include:
 
 1. which Entities are readable or writable;
@@ -125,6 +131,36 @@ The graph boundary needs explicit policy over semantic programs. Candidate dimen
 
 The policy model should be reflectable enough for clients and Explorer to anticipate available
 behavior, while enforcement remains at the authoritative execution boundary.
+
+An owner or tenant constraint is an authority scope, not a coarse `public`/`private` Entity flag.
+The server derives that scope from trusted invocation authority and intersects it with the caller's
+Selection before execution. The caller cannot provide or weaken the authority scope. Row scope is
+necessary but insufficient by itself: policy must also constrain selected fields, filter and order
+fields, operators, relation traversal, cardinality, and limits. A remotely readable `User` Entity,
+for example, may still deny credentials entirely and constrain visible rows to the current owner or
+organization. Every exposed policy must choose a scope explicitly: either an authority-derived
+Selection or `all` for deliberately public rows. Omitting scope never means all rows.
+
+### Canonical Policy And Authoring Ergonomics
+
+The policy representation enforced by the dispatcher is the canonical semantic form. It should be
+unambiguous, reflectable, independently validatable, and expressive enough to describe every
+allowed field capability and recursive relation surface. That makes it a good execution boundary
+but not necessarily the only or best authoring API.
+
+Ergonomic declarations may compile into that canonical form. Candidate authoring layers include
+field-oriented lists, fluent builders, reusable policy fragments, and a recursive View used as the
+maximum permitted projection surface. Ontahi should not prematurely require one ergonomic style,
+and different styles must preserve the same default-deny semantics. In particular, shortcuts such
+as `selectAll` or `allExcept` must not silently expose a field added to an Entity later.
+
+Policy remains separate from the Entity's canonical ontology because it varies by application,
+execution boundary, audience, and authority model. An application may still colocate the concerns
+for discoverability. A scalable layout could keep `trip.entity.ts`, `trip.policies.ts`, and, when
+needed, split `trip.operations.ts` modules under one `entities/trip/` directory and compose them in
+the server graph. A future server-graph API may offer Entity-adjacent syntax such as
+`graph.expose(Trip, ...)` without embedding server-only scope functions in the Entity AST or its
+browser-safe generated representation.
 
 Direct browser storage does not weaken this rule. Supabase can safely execute from the browser only
 because PostgreSQL RLS and grants enforce authority at the data boundary. Ontahi policy may describe
@@ -165,13 +201,14 @@ languages.
 ## Execution Slices
 
 - [x] Bind semantic Selections to an available runtime while preserving the portable Selection AST.
-- [ ] Define recursive caller-authored Views and projectable Selection-shaped Operation results in
+- [x] Define recursive caller-authored Views and projectable Selection-shaped Operation results in
       Core before freezing the remote read protocol. Completed in plan 128a.
 - [x] Carry projectable Operation Views through generated clients, React, and the existing
       Operation bridge. Completed in plan 128b.
-- [ ] Specify a versioned Query wire protocol with validation limits.
-- [ ] Define a transport-neutral remote graph executor and server dispatcher.
-- [ ] Shape a first-class, default-deny read policy declaration and enforcement seam.
+- [x] Specify a versioned Query wire protocol with validation limits.
+- [x] Define a transport-neutral server dispatcher and execution callback.
+- [ ] Define a remote graph executor capability and runtime routing.
+- [x] Shape a first-class, default-deny read policy declaration and enforcement seam.
 - [ ] Add an HTTP adapter without embedding HTTP concepts in the graph protocol.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
@@ -190,7 +227,7 @@ server Entity's runtime, so implementations use their semantic input directly.
 This proof closes the ubiquitous _in-process_ language gap. It does not yet define the remote wire
 protocol or its default-deny graph policy; the next slice now owns that bounded remote-read proof.
 
-### Active Prerequisite Slice: Recursive Views And Projectable Results
+### Completed Prerequisite Slice: Recursive Views And Projectable Results
 
 Plan 128a now owns the active transport-free proof. It defines a recursive View AST and composes a
 caller-authored View with an Operation-produced Entity Selection into one final local Query plan.
@@ -200,7 +237,37 @@ a fixed Operation snapshot model into the wire format.
 The proof uses Trip, Truck, Driver, Owner, Company, Stop, Place, and Country definitions in focused
 Core tests. It does not add React, HTTP, authorization, remote Commands, or a BookOps migration.
 
-### Following Implementation Slice: Remote Reads
+### Completed TDD Slice: Read Program Wire Round-Trip
+
+Start with a transport-free Core proof that one resolved Query becomes a versioned JSON-safe read
+request and can be rebuilt against server-owned Entity definitions without executable JavaScript or
+provider metadata.
+
+The first request carries root Entity identity, recursive Selection, caller-authored View,
+ordering, limit, cardinality, and read mode. Tests must round-trip the request through JSON and
+compare the rebuilt semantic Query plan with the local one. Initial rejection coverage includes an
+unsupported protocol version, unknown Entity, unknown field or operator, incompatible View, and
+non-JSON-safe predicate values.
+
+This slice does not add a remote runtime, dispatcher, policy declaration, HTTP adapter, generated
+client binding, or Commands. It may preserve the applied View AST on the in-memory Query spec so the
+wire encoder does not reverse-engineer caller intent from compiled `select`/`include` builders.
+Plan 134 may continue reorganizing codegen independently; codegen integration waits for its
+semantic emitter cutover.
+
+### Completed TDD Slice: Default-Deny Remote Read Boundary
+
+This proof adds a transport-neutral dispatcher whose remote Entity registry is explicit and
+default-deny. It accepts the validated read protocol, resolves only policy-registered Entities,
+checks the requested fields, operators, ordering, relations, cardinality, and limits, intersects a
+server-derived authority Selection, and only then delegates the final Query to storage execution.
+
+Tests prove that an Entity present in the domain graph but absent from remote policy cannot reach
+the executor, that denied fields and relation paths cannot leak through a View, and that an
+owner scope narrows rather than replaces the caller Selection. HTTP, generated clients, and remote
+Commands remain outside this slice.
+
+### Current Implementation Slice: Remote Read Runtime
 
 The next Ontahi version should prove remote reads before remote Commands. That keeps serialization,
 runtime routing, policy, transport, and result semantics visible without mixing in write authority
@@ -225,13 +292,13 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 
 ## Acceptance Checklist
 
-- [ ] One canonical read program validates and round-trips without executable JavaScript or
+- [x] One canonical read program validates and round-trips without executable JavaScript or
       provider-specific query state.
 - [ ] Direct and remote runtimes execute the same Todo read expression with the same semantic
       result.
 - [ ] The server dispatcher is transport-neutral and the HTTP adapter is replaceable.
-- [ ] Remote reads are denied unless an explicit graph policy permits their semantic surface.
-- [ ] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
+- [x] Remote reads are denied unless an explicit graph policy permits their semantic surface.
+- [x] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
 - [ ] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
       end-to-end Todo proof.
 - [ ] Remote Commands remain unavailable by default and are left for the next bounded slice.
@@ -258,6 +325,10 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 5. Authority and policy are independent from transport, while enforcement occurs at the
    authoritative boundary.
 6. Direct and bridged execution must preserve one semantic result and failure model.
+7. Entity registration and remote exposure are separate concerns; authority-derived owner or
+   tenant scope can narrow an explicitly exposed surface but cannot create exposure by itself.
+8. Policy has one canonical semantic representation, while authoring ergonomics are layered and
+   compile into it; application colocation does not make policy intrinsic to the Entity ontology.
 
 ## Completion Signal
 
