@@ -9,6 +9,9 @@ import {
   field,
   graphSchema,
   mapRelation,
+  query,
+  toGraphReadRequest,
+  type GraphReadPolicy,
   type InMemoryDataset,
 } from '../../../src/data-graph/index.js';
 import {
@@ -26,6 +29,57 @@ import {
 import type { OntahiApplicationBuilder } from '../../../src/runtime/server/ontahi.js';
 
 describe('ontahi application composition root', () => {
+  it('creates policy dispatchers from the application storage runtime', async () => {
+    const Todo = defineEntitySchema('RemoteTodo', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: {
+          RemoteTodo: [
+            { id: 'todo-1', title: 'First' },
+            { id: 'todo-2', title: 'Second' },
+          ],
+        },
+      }),
+      entities: { RemoteTodo: Todo },
+    });
+    const policy = {
+      entity: Todo,
+      modes: ['get', 'run', 'count'],
+      cardinalities: ['one', 'many'],
+      maxLimit: 50,
+      fields: {
+        id: { select: true },
+        title: { select: true },
+      },
+      scope: 'all',
+    } satisfies GraphReadPolicy<typeof Todo, undefined>;
+    const dispatcher = application.createGraphReadDispatcher([policy]);
+    const TodoSummary = Todo.view('RemoteTodoSummary', { id: true, title: true });
+    const read = query(Todo).as(TodoSummary);
+
+    await expect(
+      dispatcher(toGraphReadRequest(read, 'get'), { authority: undefined }),
+    ).resolves.toEqual({
+      kind: 'graph-read-result',
+      value: { id: 'todo-1', title: 'First' },
+    });
+    await expect(
+      dispatcher(toGraphReadRequest(read, 'run'), { authority: undefined }),
+    ).resolves.toEqual({
+      kind: 'graph-read-result',
+      value: [
+        { id: 'todo-1', title: 'First' },
+        { id: 'todo-2', title: 'Second' },
+      ],
+    });
+    await expect(
+      dispatcher(toGraphReadRequest(read, 'count'), { authority: undefined }),
+    ).resolves.toEqual({ kind: 'graph-read-result', value: 2 });
+  });
+
   it('invokes bound entity operations directly and promotes refs to singleton selections', async () => {
     const TodoList = entity({
       name: 'TodoList',

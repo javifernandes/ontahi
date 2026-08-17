@@ -2,7 +2,6 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import {
-  createGraphReadDispatcher,
   createInMemoryDataGraphStorage,
   createInMemoryDataGraphRuntime,
   createRemoteDataGraphRuntime,
@@ -17,8 +16,10 @@ import {
 import { entity as defineOntahiEntity } from '@ontahi/core/entity';
 import {
   configureServerRuntime,
+  getCurrentPrincipal,
   ontahi,
   resetServerRuntimeForTests,
+  type InvocationContext,
   type OntahiApplication,
 } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
@@ -249,6 +250,87 @@ describe('Ontahi Express application middleware', () => {
     });
   });
 
+  it('uses one invocation context factory for operations and graph reads', async () => {
+    const application = createApplication();
+    application.invokeOperation = vi.fn(async () => ({
+      ok: true as const,
+      kind: 'success' as const,
+      value: getCurrentPrincipal(),
+    }));
+    const invocationContext = vi.fn(request => ({
+      principal: {
+        subject: request.header('x-subject') ?? 'anonymous',
+        kind: 'user' as const,
+      },
+    }));
+    const dispatcher = vi.fn(async (_request, context: { authority: InvocationContext }) => ({
+      kind: 'graph-read-result' as const,
+      value: [context.authority.principal],
+    }));
+    const expressApp = express();
+    expressApp.use(
+      ontahiExpress(application, {
+        invocationContext,
+        graphRead: { dispatcher },
+      }),
+    );
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const headers = { 'content-type': 'application/json', 'x-subject': 'user-1' };
+
+    const operationResponse = await fetch(`${origin}/operations`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ kind: 'invoke', operationId: 'Todo.list' }),
+    });
+    const graphResponse = await fetch(`${origin}/graph/reads`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        version: 1,
+        kind: 'graph-read',
+        mode: 'run',
+        selection: {
+          kind: 'selection',
+          entityName: 'Todo',
+          expression: { kind: 'all' },
+        },
+        orderBy: [],
+      }),
+    });
+
+    await expect(operationResponse.json()).resolves.toMatchObject({
+      result: { value: { subject: 'user-1' } },
+    });
+    await expect(graphResponse.json()).resolves.toEqual({
+      kind: 'graph-read-result',
+      value: [{ subject: 'user-1', kind: 'user' }],
+    });
+    expect(invocationContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects policy wiring for applications without a graph storage runtime', () => {
+    const policy = {
+      entity: TodoEntity,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 50,
+      fields: {
+        id: { select: true },
+        title: { select: true },
+      },
+      scope: 'all',
+    } satisfies GraphReadPolicy<typeof TodoEntity, InvocationContext>;
+
+    expect(() =>
+      ontahiExpress(createApplication(), {
+        graphRead: { policies: [policy] },
+      }),
+    ).toThrow('graph-read policies require an application created with ontahi()');
+  });
+
   it('mounts every Ontahi route below a custom root path', async () => {
     const application = createApplication();
     const expressApp = express();
@@ -343,23 +425,19 @@ describe('Ontahi Express application middleware', () => {
         RemoteTodo: dataset.RemoteTodo.filter(todo => todo.ownerId === 'owner-1'),
       },
     });
-    const serverRuntime = createInMemoryDataGraphRuntime({ dataset });
-    const dispatcher = createGraphReadDispatcher({
-      policies: [policy],
-      execute: (read, mode) => {
-        if (mode !== 'run') throw new Error(`Unexpected graph read mode: ${mode}.`);
-        return Effect.runPromise(serverRuntime.run(read, undefined));
-      },
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset }),
+      entities: { RemoteTodo: serverGraph.Todo },
     });
     const expressApp = express();
     expressApp.use(
-      ontahiExpress(createApplication(), {
+      ontahiExpress(application, {
         graphRead: {
-          dispatcher,
-          context: request => {
+          policies: [policy],
+          authority: (_context, request) => {
             const ownerId = request.header('x-owner-id');
             if (!ownerId) throw new Error('Missing graph authority.');
-            return { authority: { ownerId } };
+            return { ownerId };
           },
         },
       }),

@@ -210,6 +210,8 @@ languages.
 - [x] Define a remote graph executor capability and runtime routing.
 - [x] Shape a first-class, default-deny read policy declaration and enforcement seam.
 - [x] Add an Express HTTP adapter without embedding HTTP concepts in the graph protocol.
+- [x] Derive Express graph dispatch from application storage and reuse one invocation context for
+      Operations and graph reads.
 - [x] Add a Fetch-backed React graph executor and prove caller-authored browser Queries in the Todo
       application.
 - [ ] Add an equivalent Next.js route adapter over the same dispatcher and HTTP semantics.
@@ -288,11 +290,16 @@ the existing runtime capability without changing caller authoring or binding.
 ### Completed TDD Slice: Express HTTP Read Adapter
 
 `@ontahi/runtime-express` now exposes an opt-in graph-read endpoint around the transport-neutral
-dispatcher. Applications provide a mandatory request-context factory, so authority is derived from
-trusted server request state and cannot be authored into the graph-read body. The default endpoint
-is `POST /graph/reads`, with a configurable path, and protocol failures retain their structured
-body while mapping invalid requests to `400`, denied reads to `403`, and unavailable execution to
-`503`.
+dispatcher. One application-level invocation-context factory supplies trusted Principal and
+resources to Operations and graph reads; graph policies receive that context by default and may
+derive a specialized authority without trusting the request body. The default endpoint is
+`POST /graph/reads`, with a configurable path, and protocol failures retain their structured body
+while mapping invalid requests to `400`, denied reads to `403`, and unavailable execution to `503`.
+
+The normal Express API accepts only the explicit policies. An application composed with
+`ontahi({ storage, ... })` creates the transport-neutral dispatcher from its existing storage
+runtime, so hosts do not repeat mode routing or runtime construction. A prebuilt dispatcher and
+request-to-authority context remain available as a lower-level escape hatch.
 
 A real HTTP Todo proof sends one caller-authored projected Query through the remote runtime and the
 Express endpoint, then compares its result with direct in-memory execution. The request deliberately
@@ -308,12 +315,13 @@ protocol errors retain their `RemoteDataGraphError` identity, and typed Effect f
 browser Promise boundary without becoming opaque Fiber failures.
 
 The Todo Express application installs explicit, default-deny read policies for `TodoList`, `Tag`,
-`TodoTag`, and `TodoItem`; mounts the dispatcher through `ontahiExpress(...)`; and defines its result
-Views and Queries entirely in the browser client. Its five read-only wrapper Operations (`list` for
-the four Entities plus `TodoItem.itemsForList`) were removed. React now executes those reads with
+`TodoTag`, and `TodoItem`; passes those policies to `ontahiExpress(...)`; and defines its result Views
+and Queries entirely in the browser client. Its five read-only wrapper Operations (`list` for the
+four Entities plus `TodoItem.itemsForList`) were removed. React now executes those reads with
 `useGraphQuery`, while write, multi-Entity, Capability-bearing, authenticated, and durable behavior
 continues to use domain Operations. Existing Entity-prefixed cache keys let those Operations
-invalidate the new Query results without a second cache model.
+invalidate the new Query results without a second cache model. Todo contains no application-local
+dispatcher or duplicated graph authority factory.
 
 ### Current Implementation Slice: Next.js HTTP Read Adapter
 

@@ -4,12 +4,12 @@ import {
   type OperationInvocationDispatcher,
   type OperationInvocationProtocolResponse,
 } from '@ontahi/core/runtime/operation-invocation';
-import { withInvocationContext, type InvocationContextInput } from '@ontahi/core/runtime/server';
+import { withInvocationContext } from '@ontahi/core/runtime/server';
 import type { Request, RequestHandler } from 'express';
 
-export type ExpressInvocationContextFactory = (
-  request: Request,
-) => InvocationContextInput | Promise<InvocationContextInput>;
+import type { ExpressInvocationContextFactory } from '../request-context.js';
+
+export type { ExpressInvocationContextFactory } from '../request-context.js';
 
 export type CreateExpressOperationInvocationHandlerOptions = {
   dispatcher: OperationInvocationDispatcher;

@@ -43,8 +43,9 @@ session, callback, and logout routes, and adds `app.require.authenticated()` to
 `TodoItem.complete`. Passport and GitHub OAuth belong to this Express host.
 The host maps Passport's authenticated `request.user` through
 `authentication.principal(request)`. The provider-neutral `@ontahi/runtime-express` adapter invokes
-that `invocationContext` factory and carries its Principal. The same protected operation can be
-invoked from plain Node by establishing that scope explicitly:
+that single `invocationContext` factory for Operations and remote graph reads. Todo only passes its
+default-deny read policies when enabling `/graph/reads`; the application storage supplies execution.
+The same protected operation can be invoked from plain Node by establishing that scope explicitly:
 
 ```ts
 await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
