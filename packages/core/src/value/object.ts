@@ -1,5 +1,8 @@
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const hasOwn = (record: object, key: PropertyKey): boolean =>
+  Object.prototype.hasOwnProperty.call(record, key);
 
 export const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;

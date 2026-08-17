@@ -17,6 +17,7 @@ import type {
   TaskRunIdentity,
   TaskSnapshot,
 } from '@ontahi/core/runtime/contracts';
+import { isRecord } from '@ontahi/core/value/object';
 import type { QueryKey, UseQueryResult } from '@tanstack/react-query';
 
 import type { ActionResultLike, UseActionOptions, UseActionResult } from './use-action.js';
@@ -59,9 +60,6 @@ export class OperationInvocationResultError<TFailure = unknown> extends Error {
     };
   }
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const isOperationInvocationResult = <TData = unknown, TFailure = unknown>(
   value: unknown,

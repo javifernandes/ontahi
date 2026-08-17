@@ -109,6 +109,11 @@
       "import": "./dist/value/array.js",
       "require": "./dist/value/array.js"
     },
+    "./value/json": {
+      "types": "./dist/value/json.d.ts",
+      "import": "./dist/value/json.js",
+      "require": "./dist/value/json.js"
+    },
     "./value/object": {
       "types": "./dist/value/object.d.ts",
       "import": "./dist/value/object.js",

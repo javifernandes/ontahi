@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isPlainObject, isRecord, mapRecordAsync } from '../../src/value/object.js';
+import { hasOwn, isPlainObject, isRecord, mapRecordAsync } from '../../src/value/object.js';
 
 describe('isRecord', () => {
   it('returns true for plain objects', () => {
@@ -9,6 +9,21 @@ describe('isRecord', () => {
 
   it('returns false for null', () => {
     expect(isRecord(null)).toBe(false);
+  });
+
+  it('returns false for arrays', () => {
+    expect(isRecord(['a'])).toBe(false);
+  });
+});
+
+describe('hasOwn', () => {
+  it('distinguishes declared properties from inherited properties', () => {
+    const record = Object.create({ inherited: true }) as Record<string, unknown>;
+    record.declared = true;
+
+    expect(hasOwn(record, 'declared')).toBe(true);
+    expect(hasOwn(record, 'inherited')).toBe(false);
+    expect(hasOwn({}, 'constructor')).toBe(false);
   });
 });
 

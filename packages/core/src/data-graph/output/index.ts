@@ -1,3 +1,4 @@
+import { isRecord } from '../../value/object.js';
 import type {
   AnyEntityDefinition,
   AnyEntityViewDefinition,
@@ -57,9 +58,6 @@ export type GraphOutputOptionalDescriptor = {
   kind: 'graph-output.optional';
   item: GraphOutputDescriptor;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object';
 
 const isEntityDefinition = (value: unknown): value is AnyEntityDefinition =>
   isRecord(value) && value.kind === 'entity' && typeof value.name === 'string';

@@ -1,5 +1,6 @@
 'use client';
 
+import { isRecord } from '@ontahi/core/value/object';
 import { useReflectedEntityDataQuery } from '@ontahi/react/graph';
 import { Loader2, Search } from 'lucide-react';
 import { useDeferredValue, useRef, useState } from 'react';
@@ -16,9 +17,6 @@ type SelectionRef = {
   entityName: string;
   locator: Record<string, unknown>;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 const readSelectionExpression = (value: unknown) =>
   isRecord(value) && isRecord(value.expression) ? value.expression : undefined;

@@ -1,3 +1,6 @@
+import { cloneJson, isJsonValue } from '../value/json.js';
+import { hasOwn, isRecord } from '../value/object.js';
+
 import type { AnyEntityDefinition } from './definitions.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
 import { isEntityRef } from './ref.js';
@@ -50,22 +53,6 @@ export type GraphReadRequestResolveResult =
     }
   | { readonly success: false; readonly error: GraphReadProtocolError };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
-
-const hasOwn = (record: object, key: PropertyKey) =>
-  Object.prototype.hasOwnProperty.call(record, key);
-
-const isJsonSafe = (value: unknown): boolean => {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonSafe);
-  if (!isRecord(value) || Object.getPrototypeOf(value) !== Object.prototype) return false;
-  return Object.values(value).every(isJsonSafe);
-};
-
-const cloneJson = <TValue>(value: TValue): TValue => JSON.parse(JSON.stringify(value)) as TValue;
-
 export const graphReadProtocolError = (
   code: GraphReadProtocolErrorCode,
   message: string,
@@ -82,7 +69,7 @@ const assertJsonSafeSelection = (expression: SelectionExpression): void => {
         : expression.operator === 'isNull'
           ? []
           : [expression.value];
-    if (!values.every(isJsonSafe)) {
+    if (!values.every(isJsonValue)) {
       throw new Error('Data graph read predicate value must be JSON-safe.');
     }
     return;
@@ -95,7 +82,7 @@ const assertJsonSafeSelection = (expression: SelectionExpression): void => {
     assertJsonSafeSelection(expression.operand);
     return;
   }
-  if (expression.kind === 'references' && !isJsonSafe(expression.refs)) {
+  if (expression.kind === 'references' && !isJsonValue(expression.refs)) {
     throw new Error('Data graph read reference must be JSON-safe.');
   }
 };
@@ -123,7 +110,7 @@ export const toGraphReadRequest = (
     ...(spec.cardinality === undefined ? {} : { cardinality: spec.cardinality }),
   } satisfies GraphReadRequestV1;
 
-  if (!isJsonSafe(request)) {
+  if (!isJsonValue(request)) {
     throw new Error('Data graph read request must be JSON-safe.');
   }
   return cloneJson(request);
@@ -215,7 +202,7 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       error: graphReadProtocolError('invalid_request', 'Data graph read View must be an object.'),
     };
   }
-  if (!isJsonSafe(value)) {
+  if (!isJsonValue(value)) {
     return {
       success: false,
       error: graphReadProtocolError(
@@ -283,10 +270,13 @@ const validateSelection = (
     return selectionError(`Unknown data graph Selection operator: ${String(value.operator)}.`);
   }
   if (value.operator === 'in') {
-    if (!Array.isArray(value.values) || !value.values.every(isJsonSafe)) {
+    if (!Array.isArray(value.values) || !value.values.every(isJsonValue)) {
       return selectionError('Data graph read Selection values must be JSON-safe.');
     }
-  } else if (value.operator !== 'isNull' && (!hasOwn(value, 'value') || !isJsonSafe(value.value))) {
+  } else if (
+    value.operator !== 'isNull' &&
+    (!hasOwn(value, 'value') || !isJsonValue(value.value))
+  ) {
     return selectionError('Data graph read Selection value must be JSON-safe.');
   }
   return undefined;

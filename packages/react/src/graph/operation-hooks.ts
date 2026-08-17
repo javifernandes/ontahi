@@ -10,6 +10,7 @@ import type {
 import { normalizeGraphSchemaClientInput } from '@ontahi/core/data-graph';
 import { operationInputInvalid } from '@ontahi/core/runtime/contracts';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import { isRecord } from '@ontahi/core/value/object';
 import {
   useInfiniteQuery,
   useQuery,
@@ -73,9 +74,6 @@ const operationHookOptionKeys = new Set([
   'onSettled',
   'invalidateOnSuccess',
 ]);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const readOperationInputFields = (input: unknown): Record<string, unknown> | undefined => {
   if (!isRecord(input)) return undefined;

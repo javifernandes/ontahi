@@ -1,4 +1,5 @@
 import { toError, toSerializableErrorCause } from '@ontahi/core/value/error';
+import { isRecord } from '@ontahi/core/value/object';
 import { Cause, Effect, Exit, Option } from 'effect';
 
 import { RateLimitExceededError } from '../concerns/rate-limit.js';
@@ -15,9 +16,6 @@ import {
   type OperationResult,
   type OperationRuntimeError,
 } from './types.js';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isOperationDataEnvelope = (value: unknown): value is { data: unknown } =>
   isRecord(value) && Object.keys(value).length === 1 && 'data' in value;

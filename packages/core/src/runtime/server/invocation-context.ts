@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { hasOwn } from '../../value/object.js';
+
 import {
   createServerRuntimeResources,
   type ServerRuntimeResourceMap,
@@ -26,8 +28,7 @@ const invocationContextStorage = new AsyncLocalStorage<InvocationContext>();
 export const getCurrentInvocationContext = (): InvocationContext | undefined =>
   invocationContextStorage.getStore();
 
-const hasPrincipal = (input: InvocationContextInput) =>
-  Object.prototype.hasOwnProperty.call(input, 'principal');
+const hasPrincipal = (input: InvocationContextInput) => hasOwn(input, 'principal');
 
 const resolveInvocationContext = (input: InvocationContextInput): InvocationContext => {
   const parent = getCurrentInvocationContext();

@@ -114,6 +114,11 @@ not accept executable JavaScript, adapter queries, table names, or arbitrary SQL
 The concern that “a client could execute any query or update” is valid, but wrapper Operations are
 only an accidental allowlist. They duplicate graph code and couple authorization to distribution.
 
+Declaring or registering an Entity never grants remote access to it. Registration only lets the
+authoritative runtime resolve its semantic identity; a separate, explicit remote graph policy must
+opt that Entity and its permitted surface into remote execution. Missing policy is a denial, not an
+implicit full-access default.
+
 The graph boundary needs explicit policy over semantic programs. Candidate dimensions include:
 
 1. which Entities are readable or writable;
@@ -126,6 +131,14 @@ The graph boundary needs explicit policy over semantic programs. Candidate dimen
 
 The policy model should be reflectable enough for clients and Explorer to anticipate available
 behavior, while enforcement remains at the authoritative execution boundary.
+
+An owner or tenant constraint is an authority scope, not a coarse `public`/`private` Entity flag.
+The server derives that scope from trusted invocation authority and intersects it with the caller's
+Selection before execution. The caller cannot provide or weaken the authority scope. Row scope is
+necessary but insufficient by itself: policy must also constrain selected fields, filter and order
+fields, operators, relation traversal, cardinality, and limits. A remotely readable `User` Entity,
+for example, may still deny credentials entirely and constrain visible rows to the current owner or
+organization.
 
 Direct browser storage does not weaken this rule. Supabase can safely execute from the browser only
 because PostgreSQL RLS and grants enforce authority at the data boundary. Ontahi policy may describe
@@ -170,7 +183,7 @@ languages.
       Core before freezing the remote read protocol. Completed in plan 128a.
 - [x] Carry projectable Operation Views through generated clients, React, and the existing
       Operation bridge. Completed in plan 128b.
-- [ ] Specify a versioned Query wire protocol with validation limits.
+- [x] Specify a versioned Query wire protocol with validation limits.
 - [ ] Define a transport-neutral remote graph executor and server dispatcher.
 - [ ] Shape a first-class, default-deny read policy declaration and enforcement seam.
 - [ ] Add an HTTP adapter without embedding HTTP concepts in the graph protocol.
@@ -201,7 +214,7 @@ a fixed Operation snapshot model into the wire format.
 The proof uses Trip, Truck, Driver, Owner, Company, Stop, Place, and Country definitions in focused
 Core tests. It does not add React, HTTP, authorization, remote Commands, or a BookOps migration.
 
-### Current TDD Slice: Read Program Wire Round-Trip
+### Completed TDD Slice: Read Program Wire Round-Trip
 
 Start with a transport-free Core proof that one resolved Query becomes a versioned JSON-safe read
 request and can be rebuilt against server-owned Entity definitions without executable JavaScript or
@@ -219,7 +232,19 @@ wire encoder does not reverse-engineer caller intent from compiled `select`/`inc
 Plan 134 may continue reorganizing codegen independently; codegen integration waits for its
 semantic emitter cutover.
 
-### Following Implementation Slice: Remote Reads
+### Current TDD Slice: Default-Deny Remote Read Boundary
+
+The next proof is a transport-neutral dispatcher whose remote Entity registry is explicit and
+default-deny. It accepts the validated read protocol, resolves only policy-registered Entities,
+checks the requested fields, operators, ordering, relations, cardinality, and limits, intersects a
+server-derived authority Selection, and only then delegates the final Query to storage execution.
+
+Tests should prove that an Entity present in the domain graph but absent from remote policy cannot
+reach the executor, that denied fields and relation paths cannot leak through a View, and that an
+owner scope narrows rather than replaces the caller Selection. HTTP, generated clients, and remote
+Commands remain outside this slice.
+
+### Following Implementation Slices: Remote Reads
 
 The next Ontahi version should prove remote reads before remote Commands. That keeps serialization,
 runtime routing, policy, transport, and result semantics visible without mixing in write authority
@@ -277,6 +302,8 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 5. Authority and policy are independent from transport, while enforcement occurs at the
    authoritative boundary.
 6. Direct and bridged execution must preserve one semantic result and failure model.
+7. Entity registration and remote exposure are separate concerns; authority-derived owner or
+   tenant scope can narrow an explicitly exposed surface but cannot create exposure by itself.
 
 ## Completion Signal
 
