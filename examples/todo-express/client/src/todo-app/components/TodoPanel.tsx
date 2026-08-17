@@ -30,12 +30,15 @@ export const TodoPanel = ({
         onChange={event => changeTitle(event.target.value)}
         placeholder='What should happen next?'
       />
-      <button disabled={!hasSelectedList || isCreatingTodo}>Add todo</button>
+      <button type='submit' disabled={!hasSelectedList || isCreatingTodo}>
+        Add todo
+      </button>
     </form>
 
     <div className='status-filter' aria-label='Filter todos by status'>
       {statuses.map(status => (
         <button
+          type='button'
           key={status}
           className={status === statusFilter ? 'active' : ''}
           onClick={() => selectStatus(status)}

@@ -10,19 +10,9 @@ import {
   todoTagAssignmentsQuery,
 } from '../todo-queries.js';
 
-type AuthenticationSession = {
-  mode: 'disabled' | 'github';
-  authenticated: boolean;
-  principal?: {
-    subject: string;
-    kind: 'user' | 'service';
-    issuer?: string;
-  };
-  profile?: {
-    username?: string;
-    displayName?: string;
-  };
-};
+import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
+import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
+import { canDeleteTodoList } from './todo-list-state.js';
 
 export type TodoStatusFilter = 'all' | 'open' | 'completed';
 
@@ -36,8 +26,10 @@ export const useTodoApp = () => {
   const [selectedTagId, setSelectedTagId] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<TodoStatusFilter>('all');
-  const [storage, setStorage] = useState<'in-memory' | 'postgres'>();
-  const [authentication, setAuthentication] = useState<AuthenticationSession>();
+  const [runtime, setRuntime] = useState<BootstrapState<TodoRuntime>>({ status: 'loading' });
+  const [authentication, setAuthentication] = useState<BootstrapState<AuthenticationSession>>({
+    status: 'loading',
+  });
   const lists = useGraphQuery(todoListsQuery, {
     mode: 'run',
     queryKey: ['TodoList', 'all'],
@@ -76,15 +68,11 @@ export const useTodoApp = () => {
   const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
   useEffect(() => {
-    void fetch('/runtime')
-      .then(response => response.json() as Promise<{ storage: 'in-memory' | 'postgres' }>)
-      .then(runtime => setStorage(runtime.storage));
+    void loadTodoRuntime().then(setRuntime);
   }, []);
 
   useEffect(() => {
-    void fetch('/auth/session')
-      .then(response => response.json() as Promise<AuthenticationSession>)
-      .then(setAuthentication);
+    void loadAuthenticationSession().then(setAuthentication);
   }, []);
 
   useEffect(() => {
@@ -175,17 +163,23 @@ export const useTodoApp = () => {
     if (!response.ok) return;
 
     setAuthentication(current =>
-      current
+      current.status === 'ready'
         ? {
-            authenticated: false,
-            mode: current.mode,
+            status: 'ready',
+            value: {
+              authenticated: false,
+              mode: current.value.mode,
+            },
           }
         : current,
     );
   };
 
   const visibleTodos = todos.data ?? [];
-  const canComplete = authentication?.mode === 'disabled' || authentication?.authenticated === true;
+  const authenticationSession =
+    authentication.status === 'ready' ? authentication.value : undefined;
+  const canComplete =
+    authenticationSession?.mode === 'disabled' || authenticationSession?.authenticated === true;
   const tagById = new Map(tags.data?.map(tag => [tag.id, tag]) ?? []);
   const tagIdsByTodo = new Map<string, string[]>();
   assignments.data?.forEach(assignment => {
@@ -197,7 +191,7 @@ export const useTodoApp = () => {
 
   return {
     header: {
-      storage,
+      runtime,
       authentication,
       signOut,
     },
@@ -212,7 +206,11 @@ export const useTodoApp = () => {
       isRenamingList: renameList.isExecuting,
       isDeletingList: deleteList.isExecuting,
       isCreatingTag: createTag.isExecuting,
-      hasVisibleTodos: visibleTodos.length > 0,
+      canDeleteList: canDeleteTodoList({
+        hasSelectedList: Boolean(selectedListId),
+        isLoading: todos.isLoading,
+        visibleTodoCount: visibleTodos.length,
+      }),
       changeListName: setListName,
       changeTagName: setTagName,
       selectList: (id: string) => {

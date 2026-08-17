@@ -6,6 +6,7 @@ export const TodoActions = ({ actions, durableRun }: TodoActionsProps) => (
   <>
     <footer>
       <button
+        type='button'
         className='secondary'
         disabled={!actions.canComplete || !actions.hasSelectedTodos || actions.isCompleting}
         onClick={actions.completeSelected}
@@ -14,6 +15,7 @@ export const TodoActions = ({ actions, durableRun }: TodoActionsProps) => (
         Complete selected
       </button>
       <button
+        type='button'
         className='secondary'
         disabled={!actions.canComplete || !actions.hasVisibleTodos || actions.isCompleting}
         onClick={actions.completeVisible}
@@ -22,6 +24,7 @@ export const TodoActions = ({ actions, durableRun }: TodoActionsProps) => (
         Complete visible
       </button>
       <button
+        type='button'
         className='secondary'
         disabled={!actions.hasSelectedTag || !actions.hasSelectedTodos || actions.isAssigningTags}
         onClick={actions.assignTag}
@@ -29,16 +32,23 @@ export const TodoActions = ({ actions, durableRun }: TodoActionsProps) => (
         Assign tag
       </button>
       <button
+        type='button'
         className='ghost'
         disabled={!actions.hasSelectedTag || !actions.hasSelectedTodos || actions.isRemovingTags}
         onClick={actions.removeTag}
       >
         Remove tag
       </button>
-      <button className='ghost' disabled={durableRun.isExecuting} onClick={actions.completeAll}>
+      <button
+        type='button'
+        className='ghost'
+        disabled={durableRun.isExecuting}
+        onClick={actions.completeAll}
+      >
         Complete all durably
       </button>
       <button
+        type='button'
         className='danger'
         disabled={!actions.hasVisibleTodos || actions.isDeletingAll}
         onClick={actions.deleteAll}

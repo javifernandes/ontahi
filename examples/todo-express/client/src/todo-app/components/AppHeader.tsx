@@ -21,44 +21,64 @@ const MemoryMark = () => (
   </svg>
 );
 
-export const AppHeader = ({ storage, authentication, signOut }: TodoAppModel['header']) => (
-  <header>
-    <span className='eyebrow'>Ontahi portability example</span>
-    <h1>A tiny app, wired end to end.</h1>
-    <div className='runtime-stack' aria-label={`Express with ${storage ?? 'graph runtime'}`}>
-      <span>
-        <ExpressMark />
-        Express
-      </span>
-      <strong>+</strong>
-      <span>
-        {storage === 'in-memory' ? <MemoryMark /> : <PostgresMark />}
-        {storage === 'in-memory' ? 'In-memory' : storage === 'postgres' ? 'PostgreSQL' : '…'}
-      </span>
-    </div>
-    <a className='explorer-link' href='/explorer'>
-      Open the embedded Ontahi Explorer →
-    </a>
-    <div className='auth-session'>
-      {authentication?.authenticated ? (
-        <>
-          <span>
-            Signed in as{' '}
-            <strong>
-              {authentication.profile?.username ??
-                authentication.profile?.displayName ??
-                authentication.principal?.subject}
-            </strong>
-          </span>
-          <button className='ghost' onClick={signOut}>
-            Sign out
-          </button>
-        </>
-      ) : authentication?.mode === 'github' ? (
-        <a href='/auth/github'>Sign in with GitHub to complete todos →</a>
-      ) : (
-        <span className='muted'>Authentication is disabled for this run.</span>
-      )}
-    </div>
-  </header>
-);
+export const AppHeader = ({ runtime, authentication, signOut }: TodoAppModel['header']) => {
+  const storage = runtime.status === 'ready' ? runtime.value.storage : undefined;
+  const authenticationSession =
+    authentication.status === 'ready' ? authentication.value : undefined;
+
+  return (
+    <header>
+      <span className='eyebrow'>Ontahi portability example</span>
+      <h1>A tiny app, wired end to end.</h1>
+      <div className='runtime-stack' aria-label={`Express with ${storage ?? 'graph runtime'}`}>
+        <span>
+          <ExpressMark />
+          Express
+        </span>
+        <strong>+</strong>
+        <span>
+          {storage === 'in-memory' ? (
+            <MemoryMark />
+          ) : storage === 'postgres' ? (
+            <PostgresMark />
+          ) : null}
+          {storage === 'in-memory'
+            ? 'In-memory'
+            : storage === 'postgres'
+              ? 'PostgreSQL'
+              : runtime.status === 'error'
+                ? 'Runtime unavailable'
+                : '…'}
+        </span>
+      </div>
+      <a className='explorer-link' href='/explorer'>
+        Open the embedded Ontahi Explorer →
+      </a>
+      <div className='auth-session'>
+        {authentication.status === 'loading' ? (
+          <span className='muted'>Loading authentication…</span>
+        ) : authentication.status === 'error' ? (
+          <span className='error'>Authentication status unavailable.</span>
+        ) : authenticationSession?.authenticated ? (
+          <>
+            <span>
+              Signed in as{' '}
+              <strong>
+                {authenticationSession.profile?.username ??
+                  authenticationSession.profile?.displayName ??
+                  authenticationSession.principal?.subject}
+              </strong>
+            </span>
+            <button type='button' className='ghost' onClick={signOut}>
+              Sign out
+            </button>
+          </>
+        ) : authenticationSession?.mode === 'github' ? (
+          <a href='/auth/github'>Sign in with GitHub to complete todos →</a>
+        ) : (
+          <span className='muted'>Authentication is disabled for this run.</span>
+        )}
+      </div>
+    </header>
+  );
+};

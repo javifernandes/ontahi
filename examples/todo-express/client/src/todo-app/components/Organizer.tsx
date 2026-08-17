@@ -11,7 +11,7 @@ export const Organizer = ({
   isRenamingList,
   isDeletingList,
   isCreatingTag,
-  hasVisibleTodos,
+  canDeleteList,
   changeListName,
   changeTagName,
   selectList,
@@ -27,6 +27,7 @@ export const Organizer = ({
       <nav className='list-nav' aria-label='Todo lists'>
         {lists.map(list => (
           <button
+            type='button'
             key={list.id}
             className={list.id === selectedListId ? 'active' : ''}
             onClick={() => selectList(list.id)}
@@ -42,10 +43,13 @@ export const Organizer = ({
           onChange={event => changeListName(event.target.value)}
           placeholder='New list'
         />
-        <button disabled={isCreatingList}>+</button>
+        <button type='submit' disabled={isCreatingList}>
+          +
+        </button>
       </form>
       <div className='list-actions'>
         <button
+          type='button'
           className='ghost'
           disabled={!selectedListId || isRenamingList}
           onClick={renameSelectedList}
@@ -53,10 +57,15 @@ export const Organizer = ({
           Rename
         </button>
         <button
+          type='button'
           className='danger'
-          disabled={!selectedListId || hasVisibleTodos || isDeletingList}
+          disabled={!canDeleteList || isDeletingList}
           onClick={deleteSelectedList}
-          title={hasVisibleTodos ? 'Delete the todos in this list first.' : undefined}
+          title={
+            selectedListId && !canDeleteList
+              ? 'Wait until the list is known to be empty.'
+              : undefined
+          }
         >
           Delete
         </button>
@@ -68,6 +77,7 @@ export const Organizer = ({
       <div className='tag-picker'>
         {tags.map(tag => (
           <button
+            type='button'
             key={tag.id}
             className={tag.id === selectedTagId ? 'active' : ''}
             onClick={() => selectTag(tag.id)}
@@ -84,7 +94,9 @@ export const Organizer = ({
           onChange={event => changeTagName(event.target.value)}
           placeholder='New tag'
         />
-        <button disabled={isCreatingTag}>+</button>
+        <button type='submit' disabled={isCreatingTag}>
+          +
+        </button>
       </form>
     </div>
   </aside>
