@@ -332,6 +332,18 @@ Ninth analysis-pipeline cut result on 2026-08-17:
    79.15% statements, 71.62% branches, 83.71% functions, and 80.19% lines; Operation analysis has
    78.80% statement, 74.76% branch, 100% function, and 78.71% line coverage.
 
+Tenth analysis-pipeline cut result on 2026-08-17:
+
+1. Exported string constants, exported task-step declarations, Entity-level task inventory, import
+   reference validation, and task diagnostics now live in
+   `operation-contracts/task-analysis.mjs`.
+2. `metadata-analyzer.mjs` preserves its public task-analysis exports through the compatibility
+   facade while consuming only the task inventory needed for Domain Entity assembly.
+3. The facade decreased from 491 to 294 lines and all 51 tests pass. Global coverage is 79.19%
+   statements, 71.65% branches, 83.83% functions, and 80.23% lines; task analysis has 64.55%
+   statement and line coverage, 63.01% branch coverage, and 90% function coverage. Invalid and
+   cyclic task-constant variants remain visible targets for a focused semantic-coverage cut.
+
 ### Slice 3. Parallel Semantic Emitter
 
 1. Define the smallest useful Generated Module Model.
