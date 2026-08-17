@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -29,6 +30,12 @@ describe('browser runtime helpers', () => {
     await expect(
       runBrowserEffect(getRequiredBrowserDataGraphRuntimeEffect<{ name: string }>()),
     ).rejects.toThrow('Data graph runtime is not configured in the current browser context');
+  });
+
+  it('preserves typed Effect failures across the browser Promise boundary', async () => {
+    const failure = new Error('remote graph denied');
+
+    await expect(runBrowserEffect(Effect.fail(failure))).rejects.toBe(failure);
   });
 
   it('supports directly scoped browser runtimes and browserEffect factories', async () => {

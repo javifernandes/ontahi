@@ -1,4 +1,7 @@
-import { createInMemoryDataGraphStorage } from '@ontahi/core/data-graph';
+import {
+  createInMemoryDataGraphStorage,
+  type DataGraphExecutionRuntime,
+} from '@ontahi/core/data-graph';
 import { createPostgresDataGraphStorage } from '@ontahi/postgres/data-graph';
 import { Pool } from 'pg';
 
@@ -12,3 +15,6 @@ export const defaultStorage =
         }),
       })
     : createInMemoryDataGraphStorage();
+
+export const createTodoDataGraphRuntime = (): DataGraphExecutionRuntime<unknown> =>
+  defaultStorage.createRuntime();

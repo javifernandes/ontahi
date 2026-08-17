@@ -5,6 +5,7 @@ import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
+import { todoGraphReadDispatcher } from './graph-read.js';
 import { TodoApplication } from './graph.js';
 
 export type CreateTodoExpressAppOptions = {
@@ -29,6 +30,12 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
       invocationContext: request => ({
         principal: authentication.principal(request),
       }),
+      graphRead: {
+        dispatcher: todoGraphReadDispatcher,
+        context: request => ({
+          authority: { principal: authentication.principal(request) },
+        }),
+      },
     }),
   );
 

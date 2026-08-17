@@ -20,6 +20,7 @@ server.use(
 `/`. The mounted runtime above includes:
 
 - `POST /runtime/ontahi/operations` for invocation and permission checks.
+- `POST /runtime/ontahi/graph/reads` when an explicit graph-read dispatcher is configured.
 - `GET /runtime/ontahi/operations/tasks/:taskId/:runId` for durable task snapshots.
 - `GET /runtime/ontahi/application` for reflected application metadata.
 - `/runtime/ontahi/explorer/*` when Explorer is enabled.
@@ -58,6 +59,26 @@ server.use(
 
 The callback may be asynchronous. It runs once for each operation invocation or permission check;
 the returned Principal and resource map remain scoped to that request.
+
+Graph reads are separately opt-in and default-deny. The host installs explicit Entity policies,
+provides the transport-neutral dispatcher, and derives graph authority from trusted request state:
+
+```ts
+server.use(
+  ontahiExpress(TodoApplication, {
+    graphRead: {
+      dispatcher,
+      context: request => ({
+        authority: { principal: request.user ? toPrincipal(request.user) : null },
+      }),
+    },
+  }),
+);
+```
+
+Without `graphRead`, no graph-read route exists. Its default path is `/graph/reads` relative to the
+mount root and can be replaced with `graphRead.path`. Authority in the request body is ignored; only
+the context factory can supply it.
 
 Operation-declared HTTP ingress can be mounted from the same middleware:
 

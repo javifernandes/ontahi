@@ -68,12 +68,12 @@ const deriveGraphQueryKey = <TRead, TMode extends GraphQueryMode, TReadOptions>(
 };
 
 export function useGraphQuery<
-  TRead,
+  TRead extends GraphReadSource<any>,
   TMode extends GraphQueryMode,
   TReadOptions = unknown,
   TCommandOptions = TReadOptions,
 >(
-  read: GraphReadSource<ReadResult<TRead>>,
+  read: TRead,
   options: GraphQueryOptions<TRead, TMode, TReadOptions>,
 ): UseQueryResult<GraphQueryData<TRead, TMode>, Error> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();

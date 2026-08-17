@@ -44,11 +44,6 @@ export const TodoList = entity({
     capabilities: {} as TodoCapabilities,
   },
   operations: ({ self, commands, operation, app }) => ({
-    list: operation({
-      output: self.array(),
-      bridge: { query: [() => 'all'] },
-      run: () => commands.all().orderBy(list => list.name),
-    }),
     create: operation({
       input: graphSchema.pick(self, ['id', 'name']).named('CreateTodoListInput'),
       output: self,
@@ -100,11 +95,6 @@ export const Tag = entity({
   },
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, operation }) => ({
-    list: operation({
-      output: self.array(),
-      bridge: { query: [() => 'all'] },
-      run: () => commands.all().orderBy(tag => tag.name),
-    }),
     create: operation({
       input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTagInput'),
       output: self,
@@ -126,12 +116,7 @@ export const TodoTag = entity({
     tag: relation.belongsTo(Tag, { via: 'tagId' }),
   },
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation }) => ({
-    list: operation({
-      output: self.array(),
-      bridge: { query: [() => 'all'] },
-      run: () => commands.all().orderBy(assignment => assignment.todoId),
-    }),
+  operations: ({ self, operation }) => ({
     remove: operation({
       input: graphSchema.object({
         assignment: self.one(),
@@ -165,20 +150,6 @@ export const TodoItem = entity({
     );
 
     return {
-      list: operation({
-        input: self.many(),
-        output: self.array(),
-        bridge: { query: [(todos: unknown) => todos] },
-        run: todos => todos.orderBy(todo => todo.title),
-      }),
-      itemsForList: operation({
-        input: graphSchema.object({
-          list: TodoList.one(),
-        }),
-        output: self.array(),
-        bridge: { query: [(input: unknown) => input] },
-        run: ({ list }) => commands.relatedTo(list).orderBy(todo => todo.title),
-      }),
       create: operation({
         input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
         output: self,

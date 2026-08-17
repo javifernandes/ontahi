@@ -1,7 +1,14 @@
-import { useDurableOperation, useOperation, useOperationQuery } from '@ontahi/react/graph';
+import { useDurableOperation, useGraphQuery, useOperation } from '@ontahi/react/graph';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-import { Tag, TodoItem, TodoList, TodoTag } from '../../src/generated/client-entities.js';
+import { Tag, TodoItem, TodoList } from '../../src/generated/client-entities.js';
+
+import {
+  tagsQuery,
+  todoItemsQuery,
+  todoListsQuery,
+  todoTagAssignmentsQuery,
+} from './todo-queries.js';
 
 type AuthenticationSession = {
   mode: 'disabled' | 'github';
@@ -48,9 +55,18 @@ export const App = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [storage, setStorage] = useState<'in-memory' | 'postgres'>();
   const [authentication, setAuthentication] = useState<AuthenticationSession>();
-  const lists = useOperationQuery(TodoList.domain.list);
-  const tags = useOperationQuery(Tag.domain.list);
-  const assignments = useOperationQuery(TodoTag.domain.list);
+  const lists = useGraphQuery(todoListsQuery, {
+    mode: 'run',
+    queryKey: ['TodoList', 'all'],
+  });
+  const tags = useGraphQuery(tagsQuery, {
+    mode: 'run',
+    queryKey: ['Tag', 'all'],
+  });
+  const assignments = useGraphQuery(todoTagAssignmentsQuery, {
+    mode: 'run',
+    queryKey: ['TodoTag', 'all'],
+  });
   const todoSelection = useMemo(() => {
     const inSelectedList = TodoItem.selection(todo =>
       todo.list.eq(TodoList.refById(selectedListId)),
@@ -59,7 +75,10 @@ export const App = () => {
       ? inSelectedList
       : inSelectedList.and(todo => todo.completed.eq(statusFilter === 'completed'));
   }, [selectedListId, statusFilter]);
-  const todos = useOperationQuery(TodoItem.domain.list, todoSelection, {
+  const visibleTodosQuery = useMemo(() => todoItemsQuery(todoSelection), [todoSelection]);
+  const todos = useGraphQuery(visibleTodosQuery, {
+    mode: 'run',
+    queryKey: ['TodoItem', 'selection', todoSelection.toJSON()],
     enabled: Boolean(selectedListId),
   });
   const createList = useOperation(TodoList.domain.create);
