@@ -1,6 +1,6 @@
 # 128. Ontahi Data Graph Execution Bridge
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/128-data-graph-execution-bridge`
 
@@ -45,6 +45,7 @@ Related work:
 5. [118. Ontahi Selection Language Editor](bookops://plans/118-ontahi-selection-language-editor)
 6. [128a. Recursive Views And Projectable Operation Results](../done/128a-ontahi-recursive-views-and-projectable-operation-results.md)
 7. [128b. Projectable Operation Client Bridge](../done/128b-ontahi-projectable-operation-client-bridge.md)
+8. [134. Semantic Codegen Pipeline, Organization, And Coverage](./134-codegen-analysis-organization-and-semantic-coverage.md)
 
 ## Architectural Thesis
 
@@ -165,7 +166,7 @@ languages.
 ## Execution Slices
 
 - [x] Bind semantic Selections to an available runtime while preserving the portable Selection AST.
-- [ ] Define recursive caller-authored Views and projectable Selection-shaped Operation results in
+- [x] Define recursive caller-authored Views and projectable Selection-shaped Operation results in
       Core before freezing the remote read protocol. Completed in plan 128a.
 - [x] Carry projectable Operation Views through generated clients, React, and the existing
       Operation bridge. Completed in plan 128b.
@@ -190,7 +191,7 @@ server Entity's runtime, so implementations use their semantic input directly.
 This proof closes the ubiquitous _in-process_ language gap. It does not yet define the remote wire
 protocol or its default-deny graph policy; the next slice now owns that bounded remote-read proof.
 
-### Active Prerequisite Slice: Recursive Views And Projectable Results
+### Completed Prerequisite Slice: Recursive Views And Projectable Results
 
 Plan 128a now owns the active transport-free proof. It defines a recursive View AST and composes a
 caller-authored View with an Operation-produced Entity Selection into one final local Query plan.
@@ -199,6 +200,24 @@ a fixed Operation snapshot model into the wire format.
 
 The proof uses Trip, Truck, Driver, Owner, Company, Stop, Place, and Country definitions in focused
 Core tests. It does not add React, HTTP, authorization, remote Commands, or a BookOps migration.
+
+### Current TDD Slice: Read Program Wire Round-Trip
+
+Start with a transport-free Core proof that one resolved Query becomes a versioned JSON-safe read
+request and can be rebuilt against server-owned Entity definitions without executable JavaScript or
+provider metadata.
+
+The first request carries root Entity identity, recursive Selection, caller-authored View,
+ordering, limit, cardinality, and read mode. Tests must round-trip the request through JSON and
+compare the rebuilt semantic Query plan with the local one. Initial rejection coverage includes an
+unsupported protocol version, unknown Entity, unknown field or operator, incompatible View, and
+non-JSON-safe predicate values.
+
+This slice does not add a remote runtime, dispatcher, policy declaration, HTTP adapter, generated
+client binding, or Commands. It may preserve the applied View AST on the in-memory Query spec so the
+wire encoder does not reverse-engineer caller intent from compiled `select`/`include` builders.
+Plan 134 may continue reorganizing codegen independently; codegen integration waits for its
+semantic emitter cutover.
 
 ### Following Implementation Slice: Remote Reads
 

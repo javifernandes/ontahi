@@ -16,7 +16,11 @@ import {
   type SelectionPredicate,
 } from './selection-ast.js';
 import { applyViewToQuerySpec } from './view-query.js';
-import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
+import type {
+  EntityViewAst,
+  InferEntityViewResult,
+  RecursiveEntityViewDefinition,
+} from './view.js';
 
 type OrderDirection = 'asc' | 'desc';
 
@@ -305,6 +309,7 @@ export type QuerySpec<
   orderBy: OrderSpec[];
   limit?: number;
   cardinality?: 'one' | 'many';
+  view?: EntityViewAst;
   __result?: unknown;
 };
 
@@ -359,6 +364,7 @@ export class QueryBuilder<
     return new QueryBuilder<TEntity, InferSelectionShape<TSelection>>({
       ...this.spec,
       select: build(createEntitySelectionProxy(this.spec.root)),
+      view: undefined,
     } as QuerySpec<TEntity, InferSelectionShape<TSelection>>);
   }
 
@@ -374,6 +380,7 @@ export class QueryBuilder<
         ...(this.spec.includes ?? {}),
         ...build(createEntityIncludeProxy(this.spec.root)),
       },
+      view: undefined,
     } as unknown as QuerySpec<
       TEntity,
       Simplify<Omit<TResult, keyof TInclude> & InferIncludeShape<TInclude>>

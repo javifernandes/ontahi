@@ -80,5 +80,6 @@ export const applyViewToQuerySpec = <
     ...spec,
     select: compiled.select,
     includes: compiled.includes,
+    view: view.ast,
   } as QuerySpec<TEntity, NonNullable<TView['__viewResult']>>;
 };
