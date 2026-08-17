@@ -43,6 +43,24 @@ export type GraphReadProtocolError = {
   };
 };
 
+const graphReadProtocolErrorCodes = new Set<GraphReadProtocolErrorCode>([
+  'invalid_request',
+  'unsupported_version',
+  'unknown_entity',
+  'invalid_selection',
+  'invalid_projection',
+  'access_denied',
+  'execution_unavailable',
+]);
+
+export const isGraphReadProtocolError = (value: unknown): value is GraphReadProtocolError =>
+  isRecord(value) &&
+  value.kind === 'protocol-error' &&
+  isRecord(value.error) &&
+  typeof value.error.code === 'string' &&
+  graphReadProtocolErrorCodes.has(value.error.code as GraphReadProtocolErrorCode) &&
+  typeof value.error.message === 'string';
+
 export type GraphReadRequestParseResult =
   | { readonly success: true; readonly request: GraphReadRequestV1 }
   | { readonly success: false; readonly error: GraphReadProtocolError };

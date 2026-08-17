@@ -6,6 +6,7 @@ import { isRecord } from '../value/object.js';
 import type { GraphCommandSpec } from './command.js';
 import { resolveQuerySpec, type QueryOrView } from './query.js';
 import {
+  isGraphReadProtocolError,
   toGraphReadRequest,
   type GraphReadMode,
   type GraphReadProtocolErrorCode,
@@ -41,16 +42,6 @@ export type CreateRemoteDataGraphRuntimeOptions<TOptions = undefined> = {
   readonly transport: RemoteGraphReadTransport<TOptions>;
 };
 
-const protocolErrorCodes = new Set<GraphReadProtocolErrorCode>([
-  'invalid_request',
-  'unsupported_version',
-  'unknown_entity',
-  'invalid_selection',
-  'invalid_projection',
-  'access_denied',
-  'execution_unavailable',
-]);
-
 const invalidResponse = (mode: GraphReadMode) =>
   new RemoteDataGraphError(
     'invalid_response',
@@ -61,18 +52,8 @@ const readResponseValue = (response: unknown, mode: GraphReadMode): unknown => {
   if (!isRecord(response)) throw invalidResponse(mode);
 
   if (response.kind === 'protocol-error') {
-    if (
-      !isRecord(response.error) ||
-      typeof response.error.code !== 'string' ||
-      !protocolErrorCodes.has(response.error.code as GraphReadProtocolErrorCode) ||
-      typeof response.error.message !== 'string'
-    ) {
-      throw invalidResponse(mode);
-    }
-    throw new RemoteDataGraphError(
-      response.error.code as GraphReadProtocolErrorCode,
-      response.error.message,
-    );
+    if (!isGraphReadProtocolError(response)) throw invalidResponse(mode);
+    throw new RemoteDataGraphError(response.error.code, response.error.message);
   }
 
   if (response.kind !== 'graph-read-result' || !isJsonValue(response.value)) {

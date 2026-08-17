@@ -5,6 +5,7 @@ import {
   entity,
   field,
   getSelectColumnsForQuery,
+  isGraphReadProtocolError,
   mapEntity,
   parseGraphReadRequest,
   query,
@@ -43,6 +44,22 @@ const validReadRequest = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('data graph read protocol', () => {
+  it('recognizes only declared structured protocol errors', () => {
+    expect(
+      isGraphReadProtocolError({
+        kind: 'protocol-error',
+        error: { code: 'access_denied', message: 'Data graph read access denied.' },
+      }),
+    ).toBe(true);
+    expect(
+      isGraphReadProtocolError({
+        kind: 'protocol-error',
+        error: { code: 'unknown_code', message: 'Unknown code.' },
+      }),
+    ).toBe(false);
+    expect(isGraphReadProtocolError({ kind: 'graph-read-result', value: [] })).toBe(false);
+  });
+
   it('round-trips one shaped Query through a versioned JSON request', () => {
     const client = defineTripGraph();
     const server = defineTripGraph();

@@ -135,6 +135,26 @@ describe('Fetch graph read executor', () => {
     });
   });
 
+  it('rejects graph read results returned with a failed HTTP status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: vi.fn().mockResolvedValue({
+          kind: 'graph-read-result',
+          value: [{ id: 'todo-1', title: 'Must not reach the query cache' }],
+        }),
+      }),
+    );
+    const executor = createFetchGraphReadExecutor();
+
+    await expect(executor.run(openTodos, undefined)).rejects.toMatchObject({
+      name: 'RemoteDataGraphError',
+      code: 'transport_failure',
+    });
+  });
+
   it('keeps remote Commands explicitly unsupported without calling Fetch', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

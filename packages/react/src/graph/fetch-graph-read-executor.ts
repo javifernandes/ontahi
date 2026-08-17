@@ -2,6 +2,7 @@
 
 import {
   createRemoteDataGraphRuntime,
+  isGraphReadProtocolError,
   type RemoteGraphReadTransport,
 } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
@@ -35,7 +36,11 @@ export const createFetchGraphReadExecutor = <TOptions = undefined>({
     });
 
     try {
-      return await response.json();
+      const payload: unknown = await response.json();
+      if (!response.ok && !isGraphReadProtocolError(payload)) {
+        throw new Error(`Graph read request failed with status ${response.status}.`);
+      }
+      return payload;
     } catch {
       throw new Error(`Graph read request failed with status ${response.status}.`);
     }
