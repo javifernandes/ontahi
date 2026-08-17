@@ -1,5 +1,6 @@
 export {
   createNextOperationInvocationRouteHandler,
   type CreateNextOperationInvocationRouteHandlerOptions,
-  type NextInvocationContextFactory,
 } from './route.js';
+
+export type { NextInvocationContextFactory } from '../request-context.js';
