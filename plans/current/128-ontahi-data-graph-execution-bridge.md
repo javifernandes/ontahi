@@ -141,6 +141,27 @@ for example, may still deny credentials entirely and constrain visible rows to t
 organization. Every exposed policy must choose a scope explicitly: either an authority-derived
 Selection or `all` for deliberately public rows. Omitting scope never means all rows.
 
+### Canonical Policy And Authoring Ergonomics
+
+The policy representation enforced by the dispatcher is the canonical semantic form. It should be
+unambiguous, reflectable, independently validatable, and expressive enough to describe every
+allowed field capability and recursive relation surface. That makes it a good execution boundary
+but not necessarily the only or best authoring API.
+
+Ergonomic declarations may compile into that canonical form. Candidate authoring layers include
+field-oriented lists, fluent builders, reusable policy fragments, and a recursive View used as the
+maximum permitted projection surface. Ontahi should not prematurely require one ergonomic style,
+and different styles must preserve the same default-deny semantics. In particular, shortcuts such
+as `selectAll` or `allExcept` must not silently expose a field added to an Entity later.
+
+Policy remains separate from the Entity's canonical ontology because it varies by application,
+execution boundary, audience, and authority model. An application may still colocate the concerns
+for discoverability. A scalable layout could keep `trip.entity.ts`, `trip.policies.ts`, and, when
+needed, split `trip.operations.ts` modules under one `entities/trip/` directory and compose them in
+the server graph. A future server-graph API may offer Entity-adjacent syntax such as
+`graph.expose(Trip, ...)` without embedding server-only scope functions in the Entity AST or its
+browser-safe generated representation.
+
 Direct browser storage does not weaken this rule. Supabase can safely execute from the browser only
 because PostgreSQL RLS and grants enforce authority at the data boundary. Ontahi policy may describe
 and preview that boundary, but client checks cannot replace it. A remote PostgreSQL adapter enforces
@@ -306,6 +327,8 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 6. Direct and bridged execution must preserve one semantic result and failure model.
 7. Entity registration and remote exposure are separate concerns; authority-derived owner or
    tenant scope can narrow an explicitly exposed surface but cannot create exposure by itself.
+8. Policy has one canonical semantic representation, while authoring ergonomics are layered and
+   compile into it; application colocation does not make policy intrinsic to the Entity ontology.
 
 ## Completion Signal
 
