@@ -1,5 +1,26 @@
 # @ontahi/runtime-express
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- 692964d: Add an opt-in Express graph-read endpoint backed by the transport-neutral dispatcher and trusted
+  server request context.
+- 48278b4: Add a Fetch-backed React graph-read executor, preserve typed Effect failures across the browser
+  Promise boundary, and let Express applications expose policy-scoped reads from their configured
+  application storage and invocation context without constructing a dispatcher manually.
+
+### Patch Changes
+
+- Updated dependencies [bdde727]
+- Updated dependencies [d48cab0]
+- Updated dependencies [21a8693]
+- Updated dependencies [7b4c9dc]
+- Updated dependencies [b8765da]
+- Updated dependencies [48278b4]
+  - @ontahi/explorer-react@0.1.0-alpha.5
+  - @ontahi/core@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes

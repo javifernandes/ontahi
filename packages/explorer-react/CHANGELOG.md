@@ -1,5 +1,18 @@
 # @ontahi/explorer-react
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- bdde727: Cancel delayed Entity Ref input closing when Explorer unmounts the input.
+- Updated dependencies [d48cab0]
+- Updated dependencies [21a8693]
+- Updated dependencies [7b4c9dc]
+- Updated dependencies [b8765da]
+- Updated dependencies [48278b4]
+  - @ontahi/core@0.1.0-alpha.5
+  - @ontahi/react@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes
