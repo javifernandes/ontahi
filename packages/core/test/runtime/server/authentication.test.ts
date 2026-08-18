@@ -99,4 +99,25 @@ describe('authentication Principal and invocation context', () => {
 
     expect(factory).not.toHaveBeenCalled();
   });
+
+  it('shares portable execution identity while preserving nested scope inheritance', async () => {
+    const { app } = architecture({});
+
+    await app.runtime.withInvocationContext(
+      { principal: userPrincipal, cacheScope: { workspaceId: 'workspace-1' } },
+      async () => {
+        expect(app.runtime.getCurrentInvocationContext()).toMatchObject({
+          principal: userPrincipal,
+          cacheScope: { workspaceId: 'workspace-1' },
+        });
+
+        await app.runtime.withInvocationContext({ principal: null }, async () => {
+          expect(app.runtime.getCurrentInvocationContext()).toMatchObject({
+            principal: null,
+            cacheScope: { workspaceId: 'workspace-1' },
+          });
+        });
+      },
+    );
+  });
 });

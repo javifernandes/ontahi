@@ -1,3 +1,5 @@
+import { hasOwn, isRecord } from '../value/object.js';
+
 import {
   type AnyEntityDefinition,
   type InferEntityRecord,
@@ -313,6 +315,29 @@ export type QuerySpec<
   __result?: unknown;
 };
 
+export type GraphReadIntent = 'first' | 'one' | 'count' | 'exists';
+
+export type GraphReadExpression<TRead, TIntent extends GraphReadIntent, TResult> = {
+  readonly kind: 'graph-read-expression';
+  readonly intent: TIntent;
+  readonly read: TRead;
+  readonly __result?: TResult;
+};
+
+export const isGraphReadExpression = (
+  value: unknown,
+): value is GraphReadExpression<unknown, GraphReadIntent, unknown> =>
+  isRecord(value) && hasOwn(value, 'kind') && value.kind === 'graph-read-expression';
+
+const graphReadExpression = <TRead, TIntent extends GraphReadIntent, TResult>(
+  read: TRead,
+  intent: TIntent,
+): GraphReadExpression<TRead, TIntent, TResult> => ({
+  kind: 'graph-read-expression',
+  intent,
+  read,
+});
+
 export class QueryBuilder<
   TEntity extends AnyEntityDefinition,
   TResult = InferEntityRecord<TEntity['fields']>,
@@ -408,6 +433,27 @@ export class QueryBuilder<
       ...this.spec,
       limit: limitValue,
     });
+  }
+
+  first() {
+    return graphReadExpression<QueryBuilder<TEntity, TResult>, 'first', TResult>(this, 'first');
+  }
+
+  one() {
+    const read = new QueryBuilder<TEntity, TResult>({
+      ...this.spec,
+      cardinality: 'one',
+    });
+
+    return graphReadExpression<QueryBuilder<TEntity, TResult>, 'one', TResult>(read, 'one');
+  }
+
+  count() {
+    return graphReadExpression<QueryBuilder<TEntity, TResult>, 'count', TResult>(this, 'count');
+  }
+
+  exists() {
+    return graphReadExpression<QueryBuilder<TEntity, TResult>, 'exists', TResult>(this, 'exists');
   }
 
   build() {

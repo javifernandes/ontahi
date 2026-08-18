@@ -1,25 +1,23 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { JsonValue } from '../../value/json.js';
 import { hasOwn } from '../../value/object.js';
+import type { ExecutionIdentity } from '../identity.js';
+
+export type { ExecutionIdentity, Principal } from '../identity.js';
 
 import {
   createServerRuntimeResources,
   type ServerRuntimeResourceMap,
 } from './context-resources.js';
 
-export type Principal = {
-  subject: string;
-  kind: 'user' | 'service';
-  issuer?: string;
-};
-
-export type InvocationContext = {
-  principal: Principal | null;
+export type InvocationContext = ExecutionIdentity & {
   resources: ServerRuntimeResourceMap;
 };
 
 export type InvocationContextInput = {
-  principal?: Principal | null;
+  principal?: ExecutionIdentity['principal'];
+  cacheScope?: JsonValue;
   resources?: ServerRuntimeResourceMap;
 };
 
@@ -29,12 +27,15 @@ export const getCurrentInvocationContext = (): InvocationContext | undefined =>
   invocationContextStorage.getStore();
 
 const hasPrincipal = (input: InvocationContextInput) => hasOwn(input, 'principal');
+const hasCacheScope = (input: InvocationContextInput) => hasOwn(input, 'cacheScope');
 
 const resolveInvocationContext = (input: InvocationContextInput): InvocationContext => {
   const parent = getCurrentInvocationContext();
+  const cacheScope = hasCacheScope(input) ? input.cacheScope : parent?.cacheScope;
 
   return {
     principal: hasPrincipal(input) ? (input.principal ?? null) : (parent?.principal ?? null),
+    ...(cacheScope === undefined ? {} : { cacheScope }),
     resources: input.resources ?? parent?.resources ?? createServerRuntimeResources(),
   };
 };

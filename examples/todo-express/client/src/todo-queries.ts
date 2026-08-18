@@ -1,14 +1,11 @@
-import { query, type Selection } from '@ontahi/core/data-graph';
+import type { Selection } from '@ontahi/core/data-graph';
 
 import {
   Tag,
-  TagSchema,
   TodoItem,
   TodoItemSchema,
   TodoList,
-  TodoListSchema,
   TodoTag,
-  TodoTagSchema,
 } from '../../src/generated/client-entities.js';
 
 const TodoListItem = TodoList.view('TodoListItem', { id: true, name: true });
@@ -21,20 +18,20 @@ const TodoItemListItem = TodoItem.view('TodoItemListItem', {
   completed: true,
 });
 
-export const todoListsQuery = query(TodoListSchema)
+export const todoListsQuery = TodoList.all()
   .as(TodoListItem)
   .orderBy(list => list.name);
 
-export const tagsQuery = query(TagSchema)
+export const tagsQuery = Tag.all()
   .as(TagItem)
   .orderBy(tag => tag.name);
 
-export const todoTagAssignmentsQuery = query(TodoTagSchema)
+export const todoTagAssignmentsQuery = TodoTag.all()
   .as(TodoTagItem)
   .orderBy(assignment => assignment.todoId);
 
 export const todoItemsQuery = (todos: Selection<typeof TodoItemSchema>) =>
-  query(TodoItemSchema)
+  TodoItem.all()
     .where(todos)
     .as(TodoItemListItem)
     .orderBy(todo => todo.title);

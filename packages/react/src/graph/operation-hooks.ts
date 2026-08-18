@@ -10,7 +10,7 @@ import type {
 import { normalizeGraphSchemaClientInput } from '@ontahi/core/data-graph';
 import { operationInputInvalid } from '@ontahi/core/runtime/contracts';
 import type { TaskRunRef, TaskSnapshot } from '@ontahi/core/runtime/contracts';
-import { isRecord } from '@ontahi/core/value/object';
+import { hasOwn, isRecord } from '@ontahi/core/value/object';
 import {
   useInfiniteQuery,
   useQuery,
@@ -51,7 +51,9 @@ import {
 } from './operation-cache.js';
 import type {
   ClientOperationLike,
+  ClientOperationInvocation,
   ClientSchemaOperationLike,
+  BoundOperationHookResult,
   DurableOperationHookOptions,
   DurableOperationHookResult,
   DurableOperationLike,
@@ -75,6 +77,9 @@ const operationHookOptionKeys = new Set([
   'invalidateOnSuccess',
 ]);
 
+const isOperationInvocation = (value: unknown): value is OperationInvocation<unknown, unknown> =>
+  isRecord(value) && hasOwn(value, 'kind') && value.kind === 'domain-operation-invocation';
+
 const readOperationInputFields = (input: unknown): Record<string, unknown> | undefined => {
   if (!isRecord(input)) return undefined;
 
@@ -97,7 +102,7 @@ const looksLikeOperationOptions = (
   if (keys.length === 0) return false;
 
   const inputFields = readOperationInputFields(operation.input);
-  if (inputFields && keys.some(key => key in inputFields)) return false;
+  if (inputFields && keys.some(key => hasOwn(inputFields, key))) return false;
 
   return keys.some(key => operationHookOptionKeys.has(key));
 };
@@ -118,6 +123,10 @@ const getOperationCacheAwareQueryKey = <TInput, TData>(
   getOperationClientCacheKey(clientCache, operation, input, getOperationQueryKey(operation, input));
 
 export function useOperation<TInput, TData>(
+  invocation: ClientOperationInvocation<TInput, TData>,
+  options?: OperationHookOptions<TInput, TData>,
+): BoundOperationHookResult<TInput, TData>;
+export function useOperation<TInput, TData>(
   operation: ClientSchemaOperationLike<TInput, TData>,
   initialInput: TInput,
   options?: OperationHookOptions<TInput, TData>,
@@ -131,16 +140,31 @@ export function useOperation<TInput, TData>(
   options?: OperationHookOptions<TInput, TData>,
 ): OperationHookResult<TInput, TData>;
 export function useOperation<TInput, TData>(
-  operation: ClientOperationLike<TInput, TData> | ClientSchemaOperationLike<TInput, TData>,
+  operationOrInvocation:
+    | ClientOperationInvocation<TInput, TData>
+    | ClientOperationLike<TInput, TData>
+    | ClientSchemaOperationLike<TInput, TData>,
   initialInputOrOptions?: TInput | OperationHookOptions<TInput, TData>,
   managedOptions?: OperationHookOptions<TInput, TData>,
-): OperationHookResult<TInput, TData> | OperationInputHookResult<TInput, TData> {
+):
+  | BoundOperationHookResult<TInput, TData>
+  | OperationHookResult<TInput, TData>
+  | OperationInputHookResult<TInput, TData> {
+  const invocation = isOperationInvocation(operationOrInvocation)
+    ? (operationOrInvocation as ClientOperationInvocation<TInput, TData>)
+    : undefined;
+  const operation = (invocation?.operation ?? operationOrInvocation) as
+    | ClientOperationLike<TInput, TData>
+    | ClientSchemaOperationLike<TInput, TData>;
   const managesInput =
-    managedOptions !== undefined || !looksLikeOperationOptions(operation, initialInputOrOptions);
+    !invocation &&
+    (managedOptions !== undefined || !looksLikeOperationOptions(operation, initialInputOrOptions));
   const initialInput = managesInput ? (initialInputOrOptions as TInput) : undefined;
-  const options = managesInput
-    ? managedOptions
-    : (initialInputOrOptions as OperationHookOptions<TInput, TData> | undefined);
+  const options = invocation
+    ? (initialInputOrOptions as OperationHookOptions<TInput, TData> | undefined)
+    : managesInput
+      ? managedOptions
+      : (initialInputOrOptions as OperationHookOptions<TInput, TData> | undefined);
   const adapter = useDefaultOperationBridgeAdapter();
   const clientCache = useGraphClientCache();
   const queryClient = useQueryClient();
@@ -244,6 +268,13 @@ export function useOperation<TInput, TData>(
     },
     [executeAsync],
   );
+  const executeBoundAsync = useCallback(
+    () => executeInputAsync(invocation?.input as TInput),
+    [executeInputAsync, invocation?.input],
+  );
+  const executeBound = useCallback(() => {
+    void executeBoundAsync();
+  }, [executeBoundAsync]);
 
   const reset = useCallback(() => {
     resetTransport();
@@ -344,9 +375,13 @@ export function useOperation<TInput, TData>(
         : 'hasSucceeded';
 
   const baseResult = {
-    execute: managesInput ? executeManaged : execute,
-    executeAsync: managesInput ? executeManagedAsync : executeAsync,
-    input: managesInput ? inputController : lastInput,
+    execute: invocation ? executeBound : managesInput ? executeManaged : execute,
+    executeAsync: invocation
+      ? executeBoundAsync
+      : managesInput
+        ? executeManagedAsync
+        : executeAsync,
+    input: invocation ? invocation.input : managesInput ? inputController : lastInput,
     result,
     value: result?.ok ? result.value : undefined,
     reset,
@@ -360,10 +395,15 @@ export function useOperation<TInput, TData>(
   };
 
   return (
-    managesInput
-      ? { ...baseResult, input: inputController as OperationInputController<TInput>, lastInput }
-      : baseResult
-  ) as OperationHookResult<TInput, TData> | OperationInputHookResult<TInput, TData>;
+    invocation
+      ? baseResult
+      : managesInput
+        ? { ...baseResult, input: inputController as OperationInputController<TInput>, lastInput }
+        : baseResult
+  ) as
+    | BoundOperationHookResult<TInput, TData>
+    | OperationHookResult<TInput, TData>
+    | OperationInputHookResult<TInput, TData>;
 }
 
 export function useDurableOperation<TInput, TResult = unknown>(
