@@ -12,6 +12,7 @@ type PublicModules = [
   typeof import('@ontahi/core'),
   typeof import('@ontahi/core/data-graph'),
   typeof import('@ontahi/core/runtime/browser'),
+  typeof import('@ontahi/core/runtime/identity'),
   typeof import('@ontahi/core/runtime/server'),
   typeof import('@ontahi/core/runtime/server/ingress'),
   typeof import('@ontahi/core/runtime/server/tasks'),

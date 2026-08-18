@@ -7,6 +7,7 @@ import {
   type ReflectedOperationDescriptor,
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
+import { anonymousExecutionIdentity, type ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
   createContext,
   useCallback,
@@ -28,6 +29,7 @@ import {
 const noReflectedGraphOperations: readonly ReflectedGraphOperationLike[] = [];
 
 const GraphRuntimeContext = createContext<unknown | null>(null);
+const ExecutionIdentityContext = createContext<ExecutionIdentity>(anonymousExecutionIdentity);
 const GraphExecutorContext = createContext<ReactGraphExecutor<any, any> | null>(null);
 const GraphClientCacheContext = createContext<GraphClientCache | null>(null);
 const OperationBridgeAdaptersContext = createContext<Map<string, AnyOperationBridgeAdapter> | null>(
@@ -49,6 +51,7 @@ export type OntahiGraphProviderProps<
   reflectedOperationInvoker?: ReflectedOperationInvoker;
   reflectedGraphOperations?: readonly ReflectedGraphOperationLike[];
   clientCache?: GraphClientCache;
+  identity?: ExecutionIdentity;
 };
 
 export function OntahiGraphProvider<
@@ -64,6 +67,7 @@ export function OntahiGraphProvider<
   reflectedOperationInvoker,
   reflectedGraphOperations = noReflectedGraphOperations,
   clientCache,
+  identity = anonymousExecutionIdentity,
 }: OntahiGraphProviderProps<TGraphRuntime, TReadOptions, TCommandOptions>) {
   const [defaultClientCache] = useState(() => createGraphClientCache());
   const graphClientCache = clientCache ?? defaultClientCache;
@@ -84,21 +88,25 @@ export function OntahiGraphProvider<
   );
 
   return (
-    <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
-      <ReflectedEntityDataReaderContext.Provider value={reflectedEntityDataReader ?? null}>
-        <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
-          <GraphClientCacheContext.Provider value={graphClientCache}>
-            <GraphExecutorContext.Provider value={graphExecutor ?? null}>
-              <GraphRuntimeContext.Provider value={runtime}>
-                {children}
-              </GraphRuntimeContext.Provider>
-            </GraphExecutorContext.Provider>
-          </GraphClientCacheContext.Provider>
-        </OperationBridgeAdaptersContext.Provider>
-      </ReflectedEntityDataReaderContext.Provider>
-    </ReflectedOperationInvokerContext.Provider>
+    <ExecutionIdentityContext.Provider value={identity}>
+      <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
+        <ReflectedEntityDataReaderContext.Provider value={reflectedEntityDataReader ?? null}>
+          <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
+            <GraphClientCacheContext.Provider value={graphClientCache}>
+              <GraphExecutorContext.Provider value={graphExecutor ?? null}>
+                <GraphRuntimeContext.Provider value={runtime}>
+                  {children}
+                </GraphRuntimeContext.Provider>
+              </GraphExecutorContext.Provider>
+            </GraphClientCacheContext.Provider>
+          </OperationBridgeAdaptersContext.Provider>
+        </ReflectedEntityDataReaderContext.Provider>
+      </ReflectedOperationInvokerContext.Provider>
+    </ExecutionIdentityContext.Provider>
   );
 }
+
+export const useExecutionIdentity = () => useContext(ExecutionIdentityContext);
 
 export function useGraphRuntime<TGraphRuntime = unknown>() {
   const runtime = useContext(GraphRuntimeContext);

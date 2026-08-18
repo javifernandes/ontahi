@@ -1,6 +1,6 @@
 import { useDurableOperation, useGraphQuery, useOperation } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { Dispatch, FormEvent, SetStateAction } from 'react';
 
 import { Tag, TodoItem, TodoList } from '../../../src/generated/client-entities.js';
 import {
@@ -10,7 +10,7 @@ import {
   todoTagAssignmentsQuery,
 } from '../todo-queries.js';
 
-import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
+import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
 import { canDeleteTodoList } from './todo-list-state.js';
 
@@ -18,7 +18,12 @@ export type TodoStatusFilter = 'all' | 'open' | 'completed';
 
 const tagColors = ['#d95d4f', '#708b62', '#527d8c', '#a77b45'] as const;
 
-export const useTodoApp = () => {
+export type UseTodoAppOptions = {
+  authentication: BootstrapState<AuthenticationSession>;
+  setAuthentication: Dispatch<SetStateAction<BootstrapState<AuthenticationSession>>>;
+};
+
+export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOptions) => {
   const [title, setTitle] = useState('');
   const [listName, setListName] = useState('');
   const [tagName, setTagName] = useState('');
@@ -27,21 +32,9 @@ export const useTodoApp = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<TodoStatusFilter>('all');
   const [runtime, setRuntime] = useState<BootstrapState<TodoRuntime>>({ status: 'loading' });
-  const [authentication, setAuthentication] = useState<BootstrapState<AuthenticationSession>>({
-    status: 'loading',
-  });
-  const lists = useGraphQuery(todoListsQuery, {
-    mode: 'run',
-    queryKey: ['TodoList', 'all'],
-  });
-  const tags = useGraphQuery(tagsQuery, {
-    mode: 'run',
-    queryKey: ['Tag', 'all'],
-  });
-  const assignments = useGraphQuery(todoTagAssignmentsQuery, {
-    mode: 'run',
-    queryKey: ['TodoTag', 'all'],
-  });
+  const lists = useGraphQuery(todoListsQuery);
+  const tags = useGraphQuery(tagsQuery);
+  const assignments = useGraphQuery(todoTagAssignmentsQuery);
   const todoSelection = useMemo(() => {
     const inSelectedList = TodoItem.selection(todo =>
       todo.list.eq(TodoList.refById(selectedListId)),
@@ -52,8 +45,6 @@ export const useTodoApp = () => {
   }, [selectedListId, statusFilter]);
   const visibleTodosQuery = useMemo(() => todoItemsQuery(todoSelection), [todoSelection]);
   const todos = useGraphQuery(visibleTodosQuery, {
-    mode: 'run',
-    queryKey: ['TodoItem', 'selection', todoSelection.toJSON()],
     enabled: Boolean(selectedListId),
   });
   const createList = useOperation(TodoList.domain.create);
@@ -61,7 +52,8 @@ export const useTodoApp = () => {
   const deleteList = useOperation(TodoList.domain.delete);
   const createTag = useOperation(Tag.domain.create);
   const createTodo = useOperation(TodoItem.domain.create);
-  const completeTodos = useOperation(TodoItem.domain.complete);
+  const completeSelectedTodos = useOperation(TodoItem.domain.complete({ todos: selectedIds }));
+  const completeVisibleTodos = useOperation(TodoItem.domain.complete({ todos: todoSelection }));
   const assignTags = useOperation(TodoItem.domain.assignTags);
   const removeTags = useOperation(TodoItem.domain.removeTags);
   const deleteAll = useOperation(TodoItem.domain.deleteAll);
@@ -69,10 +61,6 @@ export const useTodoApp = () => {
 
   useEffect(() => {
     void loadTodoRuntime().then(setRuntime);
-  }, []);
-
-  useEffect(() => {
-    void loadAuthenticationSession().then(setAuthentication);
   }, []);
 
   useEffect(() => {
@@ -143,12 +131,12 @@ export const useTodoApp = () => {
   };
 
   const completeSelected = async () => {
-    await completeTodos.executeAsync({ todos: selectedIds });
+    await completeSelectedTodos.executeAsync();
     setSelectedIds([]);
   };
 
   const completeVisible = async () => {
-    await completeTodos.executeAsync({ todos: todoSelection });
+    await completeVisibleTodos.executeAsync();
     setSelectedIds([]);
   };
 
@@ -255,7 +243,7 @@ export const useTodoApp = () => {
         hasSelectedTodos: selectedIds.length > 0,
         hasVisibleTodos: visibleTodos.length > 0,
         hasSelectedTag: Boolean(selectedTagId),
-        isCompleting: completeTodos.isExecuting,
+        isCompleting: completeSelectedTodos.isExecuting || completeVisibleTodos.isExecuting,
         isAssigningTags: assignTags.isExecuting,
         isRemovingTags: removeTags.isExecuting,
         isDeletingAll: deleteAll.isExecuting,

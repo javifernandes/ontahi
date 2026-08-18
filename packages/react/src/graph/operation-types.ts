@@ -1,5 +1,6 @@
 import type {
   ClientDomainOperationDeclaration as ClientOperationDeclaration,
+  DomainOperationInvocation,
   DurableOperationMetadata,
   GraphSchemaParseResult,
   GraphSchemaLike,
@@ -139,6 +140,17 @@ export type OperationInputHookResult<TInput, TData> = Omit<
   input: OperationInputController<TInput>;
   lastInput: TInput | undefined;
 };
+
+export type BoundOperationHookResult<TInput, TData> = Omit<
+  OperationHookResult<TInput, TData>,
+  'execute' | 'executeAsync' | 'input'
+> & {
+  execute: () => void;
+  executeAsync: () => Promise<OperationInvocationResult<TData>>;
+  input: TInput;
+};
+
+export type ClientOperationInvocation<TInput, TData> = DomainOperationInvocation<TInput, TData>;
 
 export type OperationRunner<TInput, TData> = (
   input: TInput,

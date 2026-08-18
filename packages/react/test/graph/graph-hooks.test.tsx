@@ -1,4 +1,5 @@
 import {
+  defineClientEntity,
   entity,
   field,
   graphSchema,
@@ -6,6 +7,7 @@ import {
   view,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
+import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -55,11 +57,19 @@ const createExecutorMock = (): ReactGraphExecutor => ({
   runCommand: vi.fn(),
 });
 
-const createWrapper = (graphExecutor: ReactGraphExecutor, queryClient = new QueryClient()) =>
+const createWrapper = (
+  graphExecutor: ReactGraphExecutor,
+  queryClient = new QueryClient(),
+  identity?: ExecutionIdentity,
+) =>
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <OntahiGraphProvider runtime={{ name: 'test-runtime' }} graphExecutor={graphExecutor}>
+        <OntahiGraphProvider
+          runtime={{ name: 'test-runtime' }}
+          graphExecutor={graphExecutor}
+          identity={identity}
+        >
           {children}
         </OntahiGraphProvider>
       </QueryClientProvider>
@@ -67,6 +77,98 @@ const createWrapper = (graphExecutor: ReactGraphExecutor, queryClient = new Quer
   };
 
 describe('graph query and command hooks', () => {
+  it('infers a many read and a canonical identity-scoped key from a client Entity Query', async () => {
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const Book = defineClientEntity(BookEntity);
+    const BookListItem = Book.view('BookListItem', { slug: true, title: true });
+    const books = Book.all()
+      .as(BookListItem)
+      .orderBy(book => book.title);
+    const identity: ExecutionIdentity = {
+      principal: { subject: 'github:123', kind: 'user', issuer: 'https://github.com' },
+      cacheScope: { workspaceId: 'workspace-1' },
+    };
+
+    vi.mocked(graphExecutor.run).mockResolvedValue([{ slug: 'ontahi', title: 'Ontahi' }]);
+
+    const { result } = renderHook(() => useGraphQuery(books), {
+      wrapper: createWrapper(graphExecutor, queryClient, identity),
+    });
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual([{ slug: 'ontahi', title: 'Ontahi' }]);
+    });
+
+    expect(graphExecutor.run).toHaveBeenCalledWith(books.build(), undefined, undefined);
+    expect(queryClient.getQueryCache().getAll()[0]?.queryKey).toMatchObject([
+      'Book',
+      'graph-read',
+      ['principal', 'user', 'https://github.com', 'github:123', { workspaceId: 'workspace-1' }],
+      'many',
+      {
+        kind: 'graph-read',
+        mode: 'run',
+        selection: { entityName: 'Book' },
+        view: { kind: 'entity-view', name: 'BookListItem', entity: 'Book' },
+      },
+    ]);
+  });
+
+  it('infers scalar and singular execution from terminal Query intent', async () => {
+    const graphExecutor = createExecutorMock();
+    const Book = defineClientEntity(BookEntity);
+    const Wrapper = createWrapper(graphExecutor);
+
+    vi.mocked(graphExecutor.count).mockResolvedValue(2);
+    vi.mocked(graphExecutor.get).mockResolvedValueOnce({
+      id: 'book-1',
+      slug: 'ontahi',
+      title: 'Ontahi',
+    });
+
+    const count = renderHook(() => useGraphQuery(Book.all().count()), { wrapper: Wrapper });
+    const first = renderHook(() => useGraphQuery(Book.all().first()), { wrapper: Wrapper });
+
+    await waitFor(() => {
+      expect(count.result.current.data).toBe(2);
+      expect(first.result.current.data).toMatchObject({ id: 'book-1' });
+    });
+
+    expect(graphExecutor.count).toHaveBeenCalledOnce();
+    expect(graphExecutor.get).toHaveBeenCalledOnce();
+  });
+
+  it('uses strict cardinality for one and derives exists from get', async () => {
+    const graphExecutor = createExecutorMock();
+    const Book = defineClientEntity(BookEntity);
+    const Wrapper = createWrapper(graphExecutor);
+
+    vi.mocked(graphExecutor.get).mockImplementation(async read =>
+      (read as { cardinality?: string }).cardinality === 'one'
+        ? {
+            id: 'book-1',
+            slug: 'ontahi',
+            title: 'Ontahi',
+          }
+        : null,
+    );
+
+    const exists = renderHook(() => useGraphQuery(Book.all().exists()), { wrapper: Wrapper });
+    const one = renderHook(() => useGraphQuery(Book.all().one()), { wrapper: Wrapper });
+
+    await waitFor(() => {
+      expect(exists.result.current.data).toBe(false);
+      expect(one.result.current.data).toMatchObject({ id: 'book-1' });
+    });
+
+    const oneRead = vi
+      .mocked(graphExecutor.get)
+      .mock.calls.map(call => call[0] as { cardinality?: string })
+      .find(read => read.cardinality === 'one');
+    expect((oneRead as { cardinality?: string }).cardinality).toBe('one');
+  });
+
   it('runs named reads through the configured graph executor', async () => {
     const graphExecutor = createExecutorMock();
 

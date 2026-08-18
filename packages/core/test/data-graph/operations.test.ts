@@ -53,6 +53,28 @@ describe('data-graph operations', () => {
     >();
   });
 
+  it('authors portable Queries from a client Entity facade', () => {
+    const TripSchema = entity('Trip', { id: field.id(), status: field.string() });
+    const Trip = defineClientEntity(TripSchema);
+    const available = Trip.all()
+      .where(trip => trip.status.eq('available'))
+      .orderBy(trip => trip.id);
+    const selected = Trip.where(trip => trip.id.eq('trip-1'));
+
+    expect(available.build()).toMatchObject({
+      kind: 'query',
+      root: TripSchema,
+      orderBy: [{ fieldName: 'id', direction: 'asc' }],
+    });
+    expect(selected.build().selection).toMatchObject({
+      kind: 'predicate',
+      fieldName: 'id',
+      operator: 'eq',
+      value: 'trip-1',
+    });
+    expectTypeOf(available.__result).toEqualTypeOf<{ id: string; status: string } | undefined>();
+  });
+
   it('does not expose projection on durable Selection operations', () => {
     const Trip = entity('Trip', { id: field.id() });
     const durable = defineClientDomainOperation({

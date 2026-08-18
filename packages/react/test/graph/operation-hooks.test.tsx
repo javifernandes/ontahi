@@ -12,7 +12,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { createNextActionOperationBridgeAdapter } from '../../src/actions/index.js';
 import {
@@ -67,6 +67,42 @@ const defineBookEntity = () =>
     .identity('refById');
 
 describe('operation hooks', () => {
+  it('binds a first-class operation invocation to the latest render input', async () => {
+    const TodoSchema = entity('Todo', {
+      id: field.id(),
+      completed: field.boolean(),
+    });
+    const Todo = defineClientEntity(TodoSchema, {
+      domainOperations: {
+        complete: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          bridge: {},
+          input: graphSchema.object({ ids: graphSchema.array(field.id()) }),
+          output: graphSchema.object({ completed: field.nonNegativeInteger() }),
+        }),
+      },
+    });
+    const bridgeAction = vi.fn().mockResolvedValue({ data: { completed: 2 } });
+    const { Wrapper } = createWrapper(bridgeAction);
+    const { result, rerender } = renderHook(
+      ({ ids }) => useOperation(Todo.domain.complete({ ids })),
+      { wrapper: Wrapper, initialProps: { ids: ['todo-1'] } },
+    );
+
+    rerender({ ids: ['todo-1', 'todo-2'] });
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+
+    expect(bridgeAction).toHaveBeenCalledWith({
+      operationId: 'Todo.complete',
+      input: { ids: ['todo-1', 'todo-2'] },
+    });
+    expect(result.current.value).toEqual({ completed: 2 });
+    expectTypeOf(result.current.value).toEqualTypeOf<{ completed: number } | undefined>();
+  });
+
   it('manages and validates one operation input before executing it', async () => {
     const TodoList = entity('TodoList', {
       id: field.id(),

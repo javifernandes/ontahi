@@ -6,6 +6,7 @@ import {
   type ReflectedEntityDataReader,
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
+import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,6 +18,7 @@ import {
   useGraphClientCache,
   useGraphClientCacheSnapshot,
   useGraphExecutor,
+  useExecutionIdentity,
   useGraphRuntime,
   useHasReflectedEntityDataReader,
   useHasReflectedOperationInvoker,
@@ -43,6 +45,7 @@ const createWrapper = ({
   operationBridgeAdapters = [],
   reflectedEntityDataReader,
   reflectedOperationInvoker,
+  identity,
 }: {
   runtime: unknown;
   clientCache?: GraphClientCache;
@@ -50,6 +53,7 @@ const createWrapper = ({
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
+  identity?: ExecutionIdentity;
 }) =>
   function Wrapper({ children }: { children: ReactNode }) {
     return (
@@ -60,6 +64,7 @@ const createWrapper = ({
         operationBridgeAdapters={operationBridgeAdapters}
         reflectedEntityDataReader={reflectedEntityDataReader}
         reflectedOperationInvoker={reflectedOperationInvoker}
+        identity={identity}
       >
         {children}
       </OntahiGraphProvider>
@@ -67,6 +72,22 @@ const createWrapper = ({
   };
 
 describe('OntahiGraphProvider', () => {
+  it('exposes anonymous identity by default and a host identity when supplied', () => {
+    const anonymous = renderHook(() => useExecutionIdentity(), {
+      wrapper: createWrapper({ runtime: { name: 'anonymous' } }),
+    });
+    const identity: ExecutionIdentity = {
+      principal: { subject: 'service:worker', kind: 'service' },
+      cacheScope: 'tenant-1',
+    };
+    const authenticated = renderHook(() => useExecutionIdentity(), {
+      wrapper: createWrapper({ runtime: { name: 'authenticated' }, identity }),
+    });
+
+    expect(anonymous.result.current).toEqual({ principal: null });
+    expect(authenticated.result.current).toBe(identity);
+  });
+
   it('exposes the host-supplied graph runtime and client cache', () => {
     const runtime = { name: 'bookops-runtime' };
     const clientCache = createGraphClientCache();

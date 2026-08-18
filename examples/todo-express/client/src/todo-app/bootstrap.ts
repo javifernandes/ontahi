@@ -1,3 +1,5 @@
+import type { Principal } from '@ontahi/core/runtime/identity';
+
 export type BootstrapState<Value> =
   | { status: 'loading' }
   | { status: 'ready'; value: Value }
@@ -10,11 +12,7 @@ export type TodoRuntime = {
 export type AuthenticationSession = {
   mode: 'disabled' | 'github';
   authenticated: boolean;
-  principal?: {
-    subject: string;
-    kind: 'user' | 'service';
-    issuer?: string;
-  };
+  principal?: Principal;
   profile?: {
     username?: string;
     displayName?: string;

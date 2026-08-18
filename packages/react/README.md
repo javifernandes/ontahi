@@ -30,19 +30,49 @@ Caller-authored Queries can use the remote graph-read protocol directly:
 ```tsx
 const graphExecutor = createFetchGraphReadExecutor({ endpoint: '/graph/reads' });
 const TodoListItem = TodoItem.view('TodoListItem', { id: true, title: true });
-const openTodos = query(TodoItemSchema)
+const openTodos = TodoItem.all()
   .where(todo => todo.completed.eq(false))
   .as(TodoListItem);
 
-<OntahiGraphProvider runtime={{ name: 'browser' }} graphExecutor={graphExecutor}>
+<OntahiGraphProvider
+  runtime={{ name: 'browser' }}
+  graphExecutor={graphExecutor}
+  identity={{ principal: session.principal ?? null, cacheScope: session.workspaceId }}
+>
   <TodoApp />
 </OntahiGraphProvider>;
 
-const todos = useGraphQuery(openTodos, {
-  mode: 'run',
-  queryKey: ['TodoItem', 'open'],
-});
+const todos = useGraphQuery(openTodos);
+const total = useGraphQuery(openTodos.count());
+const first = useGraphQuery(openTodos.first());
 ```
+
+Generated client Entities expose portable `all()` and `where(...)` Query entry points. A Query
+returns many rows by default; terminal `first()`, `one()`, `count()`, and `exists()` expressions
+make the result contract explicit and let `useGraphQuery` select the executor method. `one()` is
+strict cardinality, while `first()` may return `null`.
+
+For transport-safe Queries, React derives a canonical key from the Entity, Selection, View,
+ordering, limit, cardinality, and read intent. The key is also partitioned by the provider's
+`ExecutionIdentity`. `principal` and optional JSON-safe `cacheScope` describe distributed client
+state; they are not credentials and are never trusted for server authorization. The authoritative
+runtime still derives its Principal from the request. Hosts should change identity when login,
+logout, service identity, tenant, or workspace changes. An explicit `queryKey` remains available
+for lower-level reads that cannot be encoded by the graph-read protocol, and the legacy explicit
+`mode` API remains compatible.
+
+First-class Operation invocations bind render-owned input without losing the declaration form:
+
+```ts
+const createTodo = useOperation(TodoItem.domain.create);
+const completeVisible = useOperation(TodoItem.domain.complete({ todos: visibleTodos }));
+
+await createTodo.executeAsync(newTodo);
+await completeVisible.executeAsync();
+```
+
+The bound invocation always uses the latest render input. Passing the Operation declaration itself
+keeps the lower-level reusable mutation form, where each execution supplies its input.
 
 The Fetch executor sends only the canonical graph-read request. Credentials and other trusted
 request state remain in Fetch initialization and are never embedded in the Query AST. Remote

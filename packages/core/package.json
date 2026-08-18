@@ -64,6 +64,11 @@
       "import": "./dist/runtime/operation-invocation.js",
       "require": "./dist/runtime/operation-invocation.js"
     },
+    "./runtime/identity": {
+      "types": "./dist/runtime/identity.d.ts",
+      "import": "./dist/runtime/identity.js",
+      "require": "./dist/runtime/identity.js"
+    },
     "./runtime/server": {
       "types": "./dist/runtime/server/index.d.ts",
       "import": "./dist/runtime/server/index.js",

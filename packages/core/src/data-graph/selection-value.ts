@@ -35,6 +35,8 @@ export type SelectionBuilder<TEntity extends AnyEntityDefinition> = (
 ) => SelectionExpression;
 
 export type EntitySelectionFactory<TEntity extends AnyEntityDefinition> = {
+  all: () => QueryBuilder<TEntity>;
+  where: (build: SelectionBuilder<TEntity>) => QueryBuilder<TEntity>;
   selection: (build: SelectionBuilder<TEntity>) => Selection<TEntity>;
 };
 

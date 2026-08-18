@@ -215,6 +215,8 @@ languages.
 - [x] Add a Fetch-backed React graph executor and prove caller-authored browser Queries in the Todo
       application.
 - [x] Add an equivalent Next.js route adapter over the same dispatcher and HTTP semantics.
+- [x] Add ergonomic generated-client Query entry points, semantic read intents, canonical
+      identity-scoped React keys, and first-class bound Operation invocations.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
@@ -331,6 +333,26 @@ deriving context, runs dispatch inside the server-owned invocation context, opti
 specialized authority from that trusted context, and preserves the same `200`, `400`, `403`, and
 `503` protocol semantics. Adapter failures may be reported by the host without exposing their cause
 to the client.
+
+### Completed TDD Slice: Client Read Ergonomics And Distributed Identity
+
+Generated client Entities now author portable reads through `Entity.all()` and `Entity.where(...)`
+without importing the lower-level `query(...)` factory. Many rows remain the default; terminal
+`first()`, strict `one()`, `count()`, and `exists()` expressions carry result intent so React no
+longer needs an explicit `mode`.
+
+`useGraphQuery` derives Entity-prefixed cache identity from the canonical transport request and
+semantic intent. `OntahiGraphProvider` adds a portable `ExecutionIdentity` consisting of a
+Principal plus an optional JSON-safe application scope. That identity partitions distributed
+client state across login, service, tenant, and workspace changes but is not authorization input:
+the server continues to authenticate and authorize from trusted invocation context. The same
+Principal type is shared by client and server invocation state.
+
+Resolved client Operations are also first-class invocation values. Passing
+`Entity.domain.operation(input)` to `useOperation` binds the latest render input and yields
+zero-argument execution, while the declaration-based hook remains available for reusable
+imperative mutations. Todo exercises both forms and no longer declares graph read modes or manual
+query keys.
 
 The next Ontahi read slice should finish runtime binding and topology evidence before remote
 Commands. That keeps execution and result semantics visible without mixing in write authority or

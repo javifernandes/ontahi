@@ -133,7 +133,7 @@ The browser expresses the inverse membership as an ordinary Query rather than a 
 
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
-const todos = query(TodoItemSchema)
+const todos = TodoItem.all()
   .where(visibleTodos)
   .as(TodoItemListItem)
   .orderBy(item => item.title);
@@ -183,15 +183,20 @@ The generated client preserves operation input and output schemas, so React infe
 
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
-const todos = useGraphQuery(todoItemsQuery(visibleTodos), {
-  mode: 'run',
-  queryKey: ['TodoItem', 'selection', visibleTodos.toJSON()],
-});
+const todos = useGraphQuery(TodoItem.all().where(visibleTodos).as(TodoItemListItem));
 const createTodo = useOperation(TodoItem.domain.create);
+const completeVisible = useOperation(TodoItem.domain.complete({ todos: visibleTodos }));
 const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
+completeVisible.execute();
 completeAll.execute();
 ```
+
+The generated client Entity owns the portable Query entry point. `useGraphQuery` infers both the
+many-row execution mode and a canonical Entity-prefixed cache key. The application supplies its
+current `ExecutionIdentity` to `OntahiGraphProvider`, so authenticated, public, and session-loading
+reads cannot reuse each other's cache entries; the server still authenticates every request from
+trusted request context.
 
 `TodoItem.deleteAll` demonstrates a void-input delete command and lets the UI clear whichever storage
 runtime is active.

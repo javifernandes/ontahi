@@ -8,6 +8,7 @@ import type {
 } from './definitions.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
+import { query } from './query.js';
 import {
   bindEntityRefOperationProxy,
   bindEntityRefRelationOperations,
@@ -337,7 +338,7 @@ export type ResolveGraphOperation<TEntityName extends string, TName extends stri
     : never;
 
 export type ResolveDomainOperation<TEntityName extends string, TName extends string, TOperation> =
-  TOperation extends DomainOperationDeclarationMetadata<infer TInput, any, any>
+  TOperation extends DomainOperationDeclarationMetadata<any, any, any>
     ? TOperation & {
         entityName: TEntityName;
         name: TName;
@@ -345,7 +346,12 @@ export type ResolveDomainOperation<TEntityName extends string, TName extends str
         authority: DomainOperationAuthority;
         exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
         layer: string;
-      } & ((input: TInput) => DomainOperationInvocation<TInput>)
+      } & ((
+          input: InferResolvedOperationInput<TOperation>,
+        ) => DomainOperationInvocation<
+          InferResolvedOperationInput<TOperation>,
+          InferClientOperationOutput<TOperation>
+        >)
     : never;
 
 export type ResolveGraphOperations<
@@ -825,6 +831,22 @@ type InferClientOperationInput<TOperation> = TOperation extends {
           : TInput
         : unknown;
 
+type InferClientOperationOutput<TOperation> = TOperation extends {
+  __clientTypes?: { output: infer TOutput };
+}
+  ? TOutput
+  : TOperation extends DomainOperationDeclarationMetadata<any, any, infer TResult>
+    ? TResult
+    : unknown;
+
+type InferResolvedOperationInput<TOperation> = TOperation extends {
+  __clientTypes?: { input: infer TInput };
+}
+  ? TInput
+  : TOperation extends DomainOperationDeclarationMetadata<infer TInput, any, any>
+    ? TInput
+    : unknown;
+
 type DefinedClientDomainOperation<TOperation> = TOperation & {
   kind: 'domain-operation';
 } & (TOperation extends { durable: object }
@@ -953,6 +975,9 @@ export const defineClientEntity = <
     domain,
     ...(typeof entityOrName === 'object' && 'fields' in entityOrName
       ? {
+          all: () => query(entityOrName as AnyEntityDefinition),
+          where: (build: SelectionBuilder<AnyEntityDefinition>) =>
+            query(entityOrName as AnyEntityDefinition).where(build),
           selection: (build: SelectionBuilder<AnyEntityDefinition>) =>
             selection(entityOrName as AnyEntityDefinition, build),
           view: (name: string, shape: EntityViewShape<AnyEntityDefinition>) =>

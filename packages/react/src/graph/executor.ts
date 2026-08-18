@@ -1,6 +1,8 @@
 import type {
   GraphCommandSpec,
   GraphOperationDeclaration,
+  GraphReadExpression,
+  GraphReadIntent,
   GraphSchemaLike,
   InferGraphSchemaClientInput,
   QueryOrView,
@@ -34,32 +36,58 @@ export type BuildableRead<TResult> = {
   build: () => QuerySpec<any, TResult>;
 };
 
-export type GraphReadSource<TResult = unknown> = QueryOrView<any, TResult> | BuildableRead<TResult>;
+type PlainGraphReadSource<TResult> = QueryOrView<any, TResult> | BuildableRead<TResult>;
 
-export type ReadParams<TRead> = TRead extends QueryOrView<infer TParams, any> ? TParams : undefined;
+export type GraphReadSource<TResult = unknown> =
+  | PlainGraphReadSource<TResult>
+  | GraphReadExpression<PlainGraphReadSource<TResult>, GraphReadIntent, TResult>;
+
+export type ReadParams<TRead> =
+  TRead extends GraphReadExpression<infer TSource, any, any>
+    ? ReadParams<TSource>
+    : TRead extends QueryOrView<infer TParams, any>
+      ? TParams
+      : undefined;
 
 export type ReadResult<TRead> =
-  TRead extends QueryOrView<any, infer TResult>
+  TRead extends GraphReadExpression<any, any, infer TResult>
     ? TResult
-    : TRead extends BuildableRead<infer TResult>
+    : TRead extends QueryOrView<any, infer TResult>
       ? TResult
-      : never;
+      : TRead extends BuildableRead<infer TResult>
+        ? TResult
+        : never;
 
 export type GraphQueryMode = 'get' | 'run' | 'count' | 'exists';
 
-export type GraphQueryData<TRead, TMode extends GraphQueryMode> = TMode extends 'get'
-  ? ReadResult<TRead> | null
-  : TMode extends 'run'
-    ? ReadResult<TRead>[]
-    : TMode extends 'count'
-      ? number
-      : boolean;
+type GraphReadIntentData<TRead, TIntent extends GraphReadIntent> = TIntent extends 'count'
+  ? number
+  : TIntent extends 'exists'
+    ? boolean
+    : TIntent extends 'one'
+      ? ReadResult<TRead>
+      : ReadResult<TRead> | null;
 
-export type GraphQueryOptions<TRead, TMode extends GraphQueryMode, TReadOptions = unknown> = Omit<
+export type GraphQueryData<TRead, TMode extends GraphQueryMode = 'run'> =
+  TRead extends GraphReadExpression<any, infer TIntent, any>
+    ? GraphReadIntentData<TRead, TIntent>
+    : TMode extends 'get'
+      ? ReadResult<TRead> | null
+      : TMode extends 'run'
+        ? ReadResult<TRead>[]
+        : TMode extends 'count'
+          ? number
+          : boolean;
+
+export type GraphQueryOptions<
+  TRead,
+  TMode extends GraphQueryMode = 'run',
+  TReadOptions = unknown,
+> = Omit<
   UseQueryOptions<GraphQueryData<TRead, TMode>, Error, GraphQueryData<TRead, TMode>, QueryKey>,
   'queryKey' | 'queryFn'
 > & {
-  mode: TMode;
+  mode?: TRead extends GraphReadExpression<any, any, any> ? never : TMode;
   params?: ReadParams<TRead>;
   queryKey?: QueryKey;
   runtimeOptions?: TReadOptions;
