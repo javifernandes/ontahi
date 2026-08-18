@@ -14,6 +14,9 @@ Application-specific graph declarations, domain entities, runtime assembly, and 
 host application. Reusable reflective UI lives in `@ontahi/explorer-react`; hosts contribute their
 own routes, access control, theme/auth composition, and application-specific UI enrichments.
 
+Start with the end-to-end [Application Data Access](../../docs/application-data-access.md) guide for
+the recommended server, codegen, and React composition. This README is the package-level reference.
+
 Projectable Operations keep population on the server and shape in the caller:
 
 ```ts

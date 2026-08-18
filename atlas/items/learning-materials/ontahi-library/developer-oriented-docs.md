@@ -43,3 +43,9 @@ The first edition is complete and publication-verified: 27 chapters in five part
 minimal application through Entity, identity, Relations, Selections, Queries, Commands, Operations,
 runtimes, reflection, browser projection, and the future map. The book evolves with real public API
 changes, but v1 documentation is no longer an open framework-extraction gate.
+
+The repository-level [`Application data access`](../../../../docs/application-data-access.md) guide
+is the concise, release-adjacent entrypoint for the current public API. It presents Queries as the
+ordinary read path, caller-owned Views as materialization, Operations as domain behavior, and
+default-deny server policy as the remote boundary. The longer book can teach the same distinctions
+in depth without becoming the only place a package consumer can discover the supported path.

@@ -11,7 +11,13 @@ world can be executed.
 
 Website: [https://ontahi.org](https://ontahi.org)
 
-Developer documentation starts in [`DEVELOPMENT.md`](./DEVELOPMENT.md) and the package READMEs.
+## Developer documentation
+
+- [`Application data access`](./docs/application-data-access.md) is the end-to-end path from server
+  Entities and default-deny policy through generated client Views, React Queries, and Operations.
+- [`DEVELOPMENT.md`](./DEVELOPMENT.md) covers repository setup, Todo development, sibling hosts, and
+  package compatibility.
+- Package READMEs document adapter-specific and lower-level APIs.
 
 ## Workspace
 
@@ -52,9 +58,11 @@ options.
 
 ## Contributing
 
-Start with [`DEVELOPMENT.md`](./DEVELOPMENT.md). Repository guidance for code style, testing,
-change scope, bug fixing, and public package changes lives under [`docs/`](./docs/). Automated
-coding agents must also follow [`AGENTS.md`](./AGENTS.md).
+Start with [`DEVELOPMENT.md`](./DEVELOPMENT.md) for framework development or
+[`Application data access`](./docs/application-data-access.md) for application authoring.
+Repository guidance for code style, testing, change scope, bug fixing, and public package changes
+lives under [`docs/`](./docs/). Automated coding agents must also follow
+[`AGENTS.md`](./AGENTS.md).
 
 ## Public alpha policy
 

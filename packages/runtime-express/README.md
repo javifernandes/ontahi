@@ -2,6 +2,9 @@
 
 Express runtime adapters for Ontahi applications.
 
+See [Application Data Access](../../docs/application-data-access.md) for the complete path from
+Entity policy through generated React Queries and Operations.
+
 Mount a complete Ontahi application with one middleware:
 
 ```ts

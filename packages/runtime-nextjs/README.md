@@ -2,6 +2,9 @@
 
 Next.js runtime adapters for Ontahi applications.
 
+See [Application Data Access](../../docs/application-data-access.md) for the shared Query, policy,
+client View, and React model before choosing the Next.js route adapter below.
+
 This package depends on `@ontahi/core` and owns the Next.js / `next-safe-action` transport layer. It currently contains:
 
 1. `@ontahi/runtime-nextjs/actions`: compatibility re-exports for generic action runtime metadata and result helpers from `@ontahi/core/runtime/actions`.

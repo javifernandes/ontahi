@@ -217,6 +217,8 @@ languages.
 - [x] Add an equivalent Next.js route adapter over the same dispatcher and HTTP semantics.
 - [x] Add ergonomic generated-client Query entry points, semantic read intents, canonical
       identity-scoped React keys, and first-class bound Operation invocations.
+- [x] Publish the end-to-end application data-access path as the recommended developer API,
+      including its default-deny policy and current alpha boundaries.
 - [ ] Bind generated client Entities to either direct or remote graph executors.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
@@ -359,6 +361,12 @@ reads, Operations, task snapshots, reflected Operation invocation, and reflected
 one replaceable client capability. Hosts may override individual pieces or disable the default
 entirely. Todo therefore demonstrates application-level setup as runtime identity rather than
 repeating transport wiring.
+
+The developer guide now presents caller-authored Queries as the ordinary application read path
+rather than as an optional remote-read feature. It keeps Operations distinct as named domain
+behavior, documents `include` as lower level than caller-owned Views, and makes the current alpha
+boundaries explicit: remote policy authoring and distributed execution identity may evolve, remote
+Commands remain unsupported, and client defaults never replace server authentication or policy.
 
 The next Ontahi read slice should finish runtime binding and topology evidence before remote
 Commands. That keeps execution and result semantics visible without mixing in write authority or
