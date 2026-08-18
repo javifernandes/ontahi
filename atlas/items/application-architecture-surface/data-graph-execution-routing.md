@@ -4,7 +4,7 @@ kind: system-primitive
 title: Data Graph Execution Routing
 parent: ontahi.application-architecture-surface
 status: shaping
-horizon: next
+horizon: now
 supports:
   - ontahi.model.selection
   - ontahi.authority-policies
@@ -44,10 +44,19 @@ that binding while its JSON form remains portable; read shaping and Command shor
 through the same bound runtime, and Operation inputs restore the binding on the authoritative
 side.
 
-The next implementation slice is deliberately remote-read-only: version the canonical Query
-program, rebuild it against the server graph, enforce a default-deny semantic read policy, project
-it through a replaceable HTTP adapter, and run identical Todo read code through direct and remote
-runtimes. Remote Commands follow only after the protocol and authority seam are credible.
+The first remote path is implemented for reads. A versioned canonical Query program is rebuilt
+against the server graph, checked by a default-deny semantic read policy, and executed through a
+transport-neutral dispatcher. Express and Next.js adapt that same boundary, while React provides a
+Fetch executor and semantic cache identity. Todo authors browser Queries through generated Entity
+facades and sends them through the Express bridge without wrapper read Operations.
+
+The React provider supplies a conventional lazy same-origin client but does not create authority.
+Server routes and policy remain explicit, and the host derives the authoritative Principal from its
+native request. Client `ExecutionIdentity` only partitions distributed cache state.
+
+Remote Commands follow after read topology evidence and the write-policy boundary are credible.
+Generated client Entities are not yet directly runtime-bound for fluent `.run()` outside the React
+executor, and telemetry plus reflected policy diagnostics remain future routing work.
 
 Recursive caller-authored Views and projectable Selection-shaped Operation results now work in Core
 and through generated React clients. The caller supplies the materialization View, the Operation

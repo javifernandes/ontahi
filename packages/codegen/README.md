@@ -2,6 +2,9 @@
 
 Build-time analysis and projection tooling for Ontahi application declarations.
 
+See [Application Data Access](../../docs/application-data-access.md) for codegen's place between the
+server application graph and caller-owned browser Views and Queries.
+
 ## Conventional browser client
 
 Apps using the conventional `src/graph.ts` composition root and

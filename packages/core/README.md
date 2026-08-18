@@ -12,6 +12,8 @@ Current docs:
 1. [Historical Core Mental Model](./docs/current-mental-model.md) - computational and layer vocabulary retained from Ontahi's early architecture
 2. [Boundary Schemas](./docs/boundary-schemas.md) - graph-native operation contracts and the narrower role of transport validation adapters
 3. [Entity Lifecycle Modules](./docs/entity-lifecycle.md) - current house style for richer domain areas that need entity folders, policy modules, lifecycle transitions, and explicit event outputs
+4. [Application Data Access](../../docs/application-data-access.md) - end-to-end Query, View,
+   policy, React, and Operation authoring across the public packages
 
 ## Application composition
 

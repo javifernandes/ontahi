@@ -20,6 +20,15 @@ pnpm typecheck
 pnpm verify:artifacts
 ```
 
+## Application authoring
+
+[`Application data access`](./docs/application-data-access.md) documents the recommended application
+path: compose the server graph, expose an explicit read policy, generate browser Entity facades,
+author caller-owned Views and Queries, configure React, and reserve Operations for domain behavior.
+
+The package READMEs remain the reference for lower-level exports and framework-specific adapters.
+The Todo application below is the executable proof of the complete path.
+
 ## Todo application development
 
 Todo Express is the executable framework application for local Ontahi development:
