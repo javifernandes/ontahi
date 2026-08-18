@@ -28,7 +28,6 @@ need a server registry entry.
 Caller-authored Queries can use the remote graph-read protocol directly:
 
 ```tsx
-const graphExecutor = createFetchGraphReadExecutor({ endpoint: '/graph/reads' });
 const TodoListItem = TodoItem.view('TodoListItem', { id: true, title: true });
 const openTodos = TodoItem.all()
   .where(todo => todo.completed.eq(false))
@@ -36,7 +35,6 @@ const openTodos = TodoItem.all()
 
 <OntahiGraphProvider
   runtime={{ name: 'browser' }}
-  graphExecutor={graphExecutor}
   identity={{ principal: session.principal ?? null, cacheScope: session.workspaceId }}
 >
   <TodoApp />
@@ -46,6 +44,16 @@ const todos = useGraphQuery(openTodos);
 const total = useGraphQuery(openTodos.count());
 const first = useGraphQuery(openTodos.first());
 ```
+
+`OntahiGraphProvider` installs a conventional same-origin Fetch client by default. It connects
+graph reads to `/graph/reads`, Operations and task snapshots to `/operations`, and reflected
+Explorer data to `/explorer/entities`. These capabilities are lazy: declaring the provider does
+not issue a request until the application uses one of them.
+
+Hosts can replace any individual capability through the existing provider props, install a
+configured client with `client={createFetchGraphClient(...)}`, or set `client={false}` for a fully
+explicit provider. Server routes, read policies, and authorization remain opt-in and authoritative;
+the default removes client wiring, not the server security boundary.
 
 Generated client Entities expose portable `all()` and `where(...)` Query entry points. A Query
 returns many rows by default; terminal `first()`, `one()`, `count()`, and `exists()` expressions

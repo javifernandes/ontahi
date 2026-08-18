@@ -354,6 +354,12 @@ zero-argument execution, while the declaration-based hook remains available for 
 imperative mutations. Todo exercises both forms and no longer declares graph read modes or manual
 query keys.
 
+The React provider now composes the conventional same-origin Fetch graph client by default: graph
+reads, Operations, task snapshots, reflected Operation invocation, and reflected Entity data share
+one replaceable client capability. Hosts may override individual pieces or disable the default
+entirely. Todo therefore demonstrates application-level setup as runtime identity rather than
+repeating transport wiring.
+
 The next Ontahi read slice should finish runtime binding and topology evidence before remote
 Commands. That keeps execution and result semantics visible without mixing in write authority or
 cache reconciliation at the same time.

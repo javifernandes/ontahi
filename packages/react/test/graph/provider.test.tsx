@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AnyOperationBridgeAdapter } from '../../src/actions/index.js';
 import {
   OntahiGraphProvider,
+  type OntahiGraphClient,
   useDefaultOperationBridgeAdapter,
   useGraphClientCache,
   useGraphClientCacheSnapshot,
@@ -42,10 +43,11 @@ const createWrapper = ({
   runtime,
   clientCache,
   graphExecutor,
-  operationBridgeAdapters = [],
+  operationBridgeAdapters,
   reflectedEntityDataReader,
   reflectedOperationInvoker,
   identity,
+  client,
 }: {
   runtime: unknown;
   clientCache?: GraphClientCache;
@@ -54,6 +56,7 @@ const createWrapper = ({
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
   identity?: ExecutionIdentity;
+  client?: OntahiGraphClient | false;
 }) =>
   function Wrapper({ children }: { children: ReactNode }) {
     return (
@@ -65,6 +68,7 @@ const createWrapper = ({
         reflectedEntityDataReader={reflectedEntityDataReader}
         reflectedOperationInvoker={reflectedOperationInvoker}
         identity={identity}
+        client={client}
       >
         {children}
       </OntahiGraphProvider>
@@ -72,6 +76,23 @@ const createWrapper = ({
   };
 
 describe('OntahiGraphProvider', () => {
+  it('installs the conventional Fetch graph client by default', () => {
+    const { result } = renderHook(
+      () => ({
+        executor: useGraphExecutor(),
+        adapter: useDefaultOperationBridgeAdapter(),
+        entityReader: useReflectedEntityDataReader(),
+        operationInvoker: useReflectedOperationInvoker(),
+      }),
+      { wrapper: createWrapper({ runtime: { name: 'browser' } }) },
+    );
+
+    expect(result.current.executor).toBeDefined();
+    expect(result.current.adapter.name).toBe('fetch');
+    expect(result.current.entityReader).toBeDefined();
+    expect(result.current.operationInvoker).toBeDefined();
+  });
+
   it('exposes anonymous identity by default and a host identity when supplied', () => {
     const anonymous = renderHook(() => useExecutionIdentity(), {
       wrapper: createWrapper({ runtime: { name: 'anonymous' } }),
@@ -182,7 +203,7 @@ describe('OntahiGraphProvider', () => {
   });
 
   it('reports when no operation bridge runtime is registered', () => {
-    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' } });
+    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' }, client: false });
 
     const { result } = renderHook(() => useHasOperationBridgeRuntime(), {
       wrapper: Wrapper,
@@ -214,7 +235,7 @@ describe('OntahiGraphProvider', () => {
   });
 
   it('reports when no reflected entity data reader is registered', () => {
-    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' } });
+    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' }, client: false });
 
     const { result } = renderHook(() => useHasReflectedEntityDataReader(), {
       wrapper: Wrapper,
@@ -246,7 +267,7 @@ describe('OntahiGraphProvider', () => {
   });
 
   it('reports when no reflected operation invoker is registered', () => {
-    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' } });
+    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' }, client: false });
 
     const { result } = renderHook(() => useHasReflectedOperationInvoker(), {
       wrapper: Wrapper,

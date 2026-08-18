@@ -21,6 +21,7 @@ import {
 import type { AnyOperationBridgeAdapter } from '../actions/index.js';
 
 import type { ReactGraphExecutor } from './executor.js';
+import { createFetchGraphClient, type OntahiGraphClient } from './fetch-graph-client.js';
 import {
   createReflectedOperationInvoker,
   type ReflectedGraphOperationLike,
@@ -46,6 +47,7 @@ export type OntahiGraphProviderProps<
   children: ReactNode;
   runtime: TGraphRuntime;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
+  client?: OntahiGraphClient<TReadOptions, TCommandOptions> | false;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
@@ -62,38 +64,50 @@ export function OntahiGraphProvider<
   children,
   runtime,
   graphExecutor,
-  operationBridgeAdapters = [],
+  client,
+  operationBridgeAdapters,
   reflectedEntityDataReader,
   reflectedOperationInvoker,
   reflectedGraphOperations = noReflectedGraphOperations,
   clientCache,
   identity = anonymousExecutionIdentity,
 }: OntahiGraphProviderProps<TGraphRuntime, TReadOptions, TCommandOptions>) {
+  const [defaultGraphClient] = useState(() => createFetchGraphClient());
   const [defaultClientCache] = useState(() => createGraphClientCache());
+  const graphClient = client === false ? undefined : (client ?? defaultGraphClient);
+  const resolvedGraphExecutor = graphExecutor ?? graphClient?.graphExecutor;
+  const resolvedOperationBridgeAdapters =
+    operationBridgeAdapters ?? graphClient?.operationBridgeAdapters ?? [];
+  const resolvedReflectedEntityDataReader =
+    reflectedEntityDataReader ?? graphClient?.reflectedEntityDataReader;
+  const configuredReflectedOperationInvoker =
+    reflectedOperationInvoker ?? graphClient?.reflectedOperationInvoker;
   const graphClientCache = clientCache ?? defaultClientCache;
   const bridgeAdapterMap = useMemo(
-    () => new Map(operationBridgeAdapters.map(adapter => [adapter.name, adapter])),
-    [operationBridgeAdapters],
+    () => new Map(resolvedOperationBridgeAdapters.map(adapter => [adapter.name, adapter])),
+    [resolvedOperationBridgeAdapters],
   );
   const resolvedReflectedOperationInvoker = useMemo(
     () =>
       reflectedGraphOperations.length > 0
         ? createReflectedOperationInvoker({
-            fallback: reflectedOperationInvoker,
-            graphExecutor,
+            fallback: configuredReflectedOperationInvoker,
+            graphExecutor: resolvedGraphExecutor,
             graphOperations: reflectedGraphOperations,
           })
-        : (reflectedOperationInvoker ?? null),
-    [graphExecutor, reflectedGraphOperations, reflectedOperationInvoker],
+        : (configuredReflectedOperationInvoker ?? null),
+    [configuredReflectedOperationInvoker, reflectedGraphOperations, resolvedGraphExecutor],
   );
 
   return (
     <ExecutionIdentityContext.Provider value={identity}>
       <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
-        <ReflectedEntityDataReaderContext.Provider value={reflectedEntityDataReader ?? null}>
+        <ReflectedEntityDataReaderContext.Provider
+          value={resolvedReflectedEntityDataReader ?? null}
+        >
           <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
             <GraphClientCacheContext.Provider value={graphClientCache}>
-              <GraphExecutorContext.Provider value={graphExecutor ?? null}>
+              <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
                 <GraphRuntimeContext.Provider value={runtime}>
                   {children}
                 </GraphRuntimeContext.Provider>

@@ -21,9 +21,10 @@ pnpm todo:dev:local
 dependencies, regenerates the client, builds the browser bundle, watches package output, and
 restarts Express when framework code changes.
 
-Open `http://localhost:3001` for the React UI. It uses `OntahiGraphProvider`,
-`createFetchGraphReadExecutor`, `useGraphQuery`, the Fetch operation bridge, `useOperation`, and
-`useDurableOperation` against the same Express process.
+Open `http://localhost:3001` for the React UI. `OntahiGraphProvider` installs the conventional Fetch
+graph client, so the application only supplies runtime identity. It uses `useGraphQuery`,
+`useOperation`, and `useDurableOperation` against the same Express process without repeating
+endpoint wiring.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.complete` has no authentication requirement.
