@@ -1,5 +1,25 @@
 # @ontahi/react
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- d48cab0: Add portable generated-client Query entry points, explicit read intents, shared execution identity,
+  canonical identity-scoped React query keys, a conventional Fetch graph client, and bound
+  first-class Operation invocation hooks.
+- 48278b4: Add a Fetch-backed React graph-read executor, preserve typed Effect failures across the browser
+  Promise boundary, and let Express applications expose policy-scoped reads from their configured
+  application storage and invocation context without constructing a dispatcher manually.
+
+### Patch Changes
+
+- Updated dependencies [d48cab0]
+- Updated dependencies [21a8693]
+- Updated dependencies [7b4c9dc]
+- Updated dependencies [b8765da]
+- Updated dependencies [48278b4]
+  - @ontahi/core@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Minor Changes

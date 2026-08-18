@@ -1,5 +1,21 @@
 # @ontahi/runtime-nextjs
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- 5273c95: Add an App Router graph-read handler that validates canonical requests, derives authority from a
+  trusted invocation context, and preserves the Express adapter's protocol status semantics.
+
+### Patch Changes
+
+- Updated dependencies [d48cab0]
+- Updated dependencies [21a8693]
+- Updated dependencies [7b4c9dc]
+- Updated dependencies [b8765da]
+- Updated dependencies [48278b4]
+  - @ontahi/core@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes
