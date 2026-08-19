@@ -3,4 +3,4 @@
 ---
 
 Add transport-neutral Applied Mutation Outcomes and bounded post-commit Relationship Reactions with
-explicit causal identity and failure evidence.
+explicit causal identity, delivery policy, durable acceptance, and failure evidence.

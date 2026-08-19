@@ -8,6 +8,7 @@ import {
   field,
   relationship,
   toGraphCommandRequest,
+  type DurableMutationReactionEnvelope,
   type RelationshipCommand,
   type RelationshipDelta,
 } from '../../src/data-graph/index.js';
@@ -48,6 +49,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       reactions: [
         {
           id: 'assign-mentor-course',
+          delivery: 'inline',
           when: {
             mutationKind: 'relationship-command',
             action: 'link',
@@ -72,6 +74,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         reactionId: 'assign-mentor-course',
         reactionKey: 'assign-mentor-course:outcome-1:0',
         sourceOutcomeId: 'outcome-1',
+        delivery: 'inline',
         intentIndex: 0,
         status: 'applied',
         outcome: expect.objectContaining({
@@ -107,6 +110,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       reactions: [
         {
           id: 'clear-after-assign',
+          delivery: 'inline',
           when: { mutationKind: 'relationship-command', action: 'link' },
           react: () => [
             {
@@ -144,6 +148,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       reactions: [
         {
           id: 'broken-reaction',
+          delivery: 'inline',
           when: { mutationKind: 'relationship-command' },
           react: () => {
             throw new Error('application secret');
@@ -160,6 +165,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         reactionId: 'broken-reaction',
         reactionKey: 'broken-reaction:outcome-1',
         sourceOutcomeId: 'outcome-1',
+        delivery: 'inline',
         status: 'failed',
         failure: {
           code: 'reaction_failed',
@@ -184,6 +190,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       reactions: [
         {
           id: 'toggle-course',
+          delivery: 'inline',
           when: { mutationKind: 'relationship-command' },
           react: outcome => [
             {
@@ -208,5 +215,90 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         message: 'Post-commit Reaction exceeded maximum depth 1.',
       },
     });
+  });
+
+  it('durably accepts a serializable follow-up without executing it inline', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const mentor = createEntityRef(graph.Mentor, { id: 'mentor-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const followUp = relationship(graph.Mentor, 'course', mentor).assign(course);
+    const execute = vi.fn(async () => emptyDelta());
+    const acceptDurableReaction = vi.fn(async (_envelope: DurableMutationReactionEnvelope) => ({
+      acceptanceId: 'accepted-1',
+    }));
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-1',
+      executeRelationshipCommand: execute,
+      acceptDurableReaction,
+      reactions: [
+        {
+          id: 'durable-mentor-assignment',
+          delivery: 'durable',
+          when: { mutationKind: 'relationship-command', relation: parent.relation },
+          react: () => [{ kind: 'execute-relationship-command', command: followUp }],
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(acceptDurableReaction).toHaveBeenCalledWith({
+      kind: 'durable-mutation-reaction',
+      reactionId: 'durable-mentor-assignment',
+      reactionKey: 'durable-mentor-assignment:outcome-1:0',
+      source: result.root,
+      intent: { kind: 'execute-relationship-command', command: followUp },
+    });
+    expect(JSON.parse(JSON.stringify(acceptDurableReaction.mock.calls[0]?.[0]))).toEqual(
+      acceptDurableReaction.mock.calls[0]?.[0],
+    );
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        delivery: 'durable',
+        status: 'accepted',
+        acceptance: { acceptanceId: 'accepted-1' },
+      }),
+    ]);
+  });
+
+  it('reports missing durable acceptance separately from the applied parent', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-1',
+      executeRelationshipCommand: async () => emptyDelta(),
+      reactions: [
+        {
+          id: 'durable-clear',
+          delivery: 'durable',
+          when: { mutationKind: 'relationship-command' },
+          react: () => [
+            {
+              kind: 'execute-relationship-command',
+              command: relationship(graph.Student, 'course', student).clear(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(result.root.command).toEqual(parent);
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        delivery: 'durable',
+        status: 'failed',
+        failure: {
+          code: 'durable_acceptance_unavailable',
+          message: 'Durable Mutation Reaction acceptance is unavailable.',
+        },
+      }),
+    ]);
   });
 });

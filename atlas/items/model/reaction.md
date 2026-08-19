@@ -24,3 +24,8 @@ authorization, causality, and execution boundaries.
 Opaque executable effects may remain as a compatibility escape hatch, but they are not portable
 Reaction semantics: they cannot be serialized, reflected, remotely interpreted, or inspected as
 intent.
+
+Delivery policy is independent from the follow-up intent. Inline and best-effort delivery may
+attempt local interpretation after application. Durable delivery submits a serializable envelope to
+a runtime capability and reports acceptance separately from execution. Acceptance means the
+runtime took responsibility for the intent; it does not mean the follow-up has completed.

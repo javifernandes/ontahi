@@ -103,6 +103,20 @@ Whether a follow-up is synchronous, attempted, durable, retried, or best-effort 
 what the intent means. The current `try` wrapper is evidence for this distinction, but the policy
 model must avoid promising exactly-once external effects.
 
+The first local contract declares delivery on each Reaction:
+
+1. `inline` interprets the intent synchronously after the parent outcome is applied and records the
+   resulting child outcome or failure;
+2. `best-effort` makes the same immediate local attempt without durable acceptance or retry
+   guarantees;
+3. `durable` does not execute the intent inline. It submits a serializable envelope carrying the
+   Reaction identity, stable reaction key, source outcome, and intent to an injected durable
+   acceptance capability.
+
+`accepted` means the durable runtime took responsibility for the intent. It does not mean the
+follow-up has run or succeeded. If that capability is missing or rejects the envelope, the parent
+remains applied and the result records `acceptance-failed` evidence.
+
 ## Causality And Safety Constraints
 
 1. Every follow-up outcome references its parent and root causal identities.
@@ -159,6 +173,8 @@ application-specific hooks.
 - [x] Parent and root causal identity survive a multi-step local chain.
 - [x] Cycles or excessive reaction depth terminate with observable evidence.
 - [x] A failed follow-up does not falsely report that its parent mutation was unapplied.
+- [x] Durable delivery returns acceptance evidence without claiming follow-up execution.
+- [x] Missing or failed durable acceptance remains distinct from parent mutation status.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
 - [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.

@@ -36,22 +36,42 @@ export type MutationReactionMatch = {
 
 export type MutationReaction = {
   id: string;
+  delivery: 'inline' | 'best-effort' | 'durable';
   when: MutationReactionMatch;
   react: (outcome: AppliedMutationOutcome) => readonly MutationReactionIntent[];
 };
 
 export type MutationReactionFailure = {
-  code: 'reaction_failed' | 'follow_up_failed' | 'max_depth_exceeded';
+  code:
+    | 'reaction_failed'
+    | 'follow_up_failed'
+    | 'max_depth_exceeded'
+    | 'durable_acceptance_unavailable'
+    | 'durable_acceptance_failed';
   message: string;
+};
+
+export type DurableMutationReactionEnvelope = {
+  kind: 'durable-mutation-reaction';
+  reactionId: string;
+  reactionKey: string;
+  source: AppliedMutationOutcome;
+  intent: MutationReactionIntent;
+};
+
+export type DurableMutationReactionAcceptance = {
+  acceptanceId: string;
 };
 
 export type MutationReactionExecution = {
   reactionId: string;
   reactionKey: string;
   sourceOutcomeId: string;
+  delivery: MutationReaction['delivery'];
   intentIndex?: number;
 } & (
   | { status: 'applied'; outcome: AppliedMutationOutcome }
+  | { status: 'accepted'; acceptance: DurableMutationReactionAcceptance }
   | { status: 'failed' | 'depth-exceeded'; failure: MutationReactionFailure }
 );
 
@@ -63,6 +83,9 @@ export type MutationReactionResult = {
 export type CreateMutationReactionRunnerOptions = {
   reactions: readonly MutationReaction[];
   executeRelationshipCommand: (command: RelationshipCommand) => Promise<RelationshipDelta>;
+  acceptDurableReaction?: (
+    envelope: DurableMutationReactionEnvelope,
+  ) => Promise<DurableMutationReactionAcceptance>;
   createOutcomeId: () => string;
   maxDepth?: number;
 };
@@ -80,6 +103,7 @@ const matches = (reaction: MutationReaction, outcome: AppliedMutationOutcome) =>
 export const createMutationReactionRunner = ({
   reactions,
   executeRelationshipCommand,
+  acceptDurableReaction,
   createOutcomeId,
   maxDepth = 8,
 }: CreateMutationReactionRunnerOptions) => {
@@ -133,6 +157,7 @@ export const createMutationReactionRunner = ({
             reactionId: reaction.id,
             reactionKey: `${reaction.id}:${source.causality.outcomeId}`,
             sourceOutcomeId: source.causality.outcomeId,
+            delivery: reaction.delivery,
             status: 'failed',
             failure: {
               code: 'reaction_failed',
@@ -146,6 +171,7 @@ export const createMutationReactionRunner = ({
             reactionId: reaction.id,
             reactionKey: `${reaction.id}:${source.causality.outcomeId}:${intentIndex}`,
             sourceOutcomeId: source.causality.outcomeId,
+            delivery: reaction.delivery,
             intentIndex,
           };
           if (source.causality.depth >= maxDepth) {
@@ -157,6 +183,43 @@ export const createMutationReactionRunner = ({
                 message: `Post-commit Reaction exceeded maximum depth ${maxDepth}.`,
               },
             });
+            continue;
+          }
+
+          if (reaction.delivery === 'durable') {
+            if (!acceptDurableReaction) {
+              executions.push({
+                ...execution,
+                status: 'failed',
+                failure: {
+                  code: 'durable_acceptance_unavailable',
+                  message: 'Durable Mutation Reaction acceptance is unavailable.',
+                },
+              });
+              continue;
+            }
+            try {
+              const acceptance = await acceptDurableReaction({
+                kind: 'durable-mutation-reaction',
+                reactionId: reaction.id,
+                reactionKey: execution.reactionKey,
+                source,
+                intent,
+              });
+              if (acceptance.acceptanceId.length === 0) {
+                throw new Error('Durable acceptance requires a non-empty id.');
+              }
+              executions.push({ ...execution, status: 'accepted', acceptance });
+            } catch {
+              executions.push({
+                ...execution,
+                status: 'failed',
+                failure: {
+                  code: 'durable_acceptance_failed',
+                  message: 'Durable Mutation Reaction acceptance failed.',
+                },
+              });
+            }
             continue;
           }
 
