@@ -1,5 +1,25 @@
 # @ontahi/core
 
+## 0.1.0-alpha.6
+
+### Minor Changes
+
+- 221c150: Add a versioned JSON protocol for Relationship Commands with server-owned topology and Ref
+  validation.
+- 221c150: Add canonical Relationship Commands and in-memory applied deltas, and validate required fields
+  during generic Entity construction.
+- 221c150: Add direct and remote runtime routing for canonical Relationship Commands.
+- 5e4217d: Bind generated client Entity facades to direct or Fetch-backed runtimes for fluent Query execution
+  outside React hooks while preserving their portable Views, Refs, and Domain Operations.
+- 221c150: Add a default-deny Relationship Command policy and transport-neutral dispatcher.
+- 221c150: Add transport-neutral Applied Mutation Outcomes and bounded post-commit Relationship Reactions with
+  explicit causal identity, delivery policy, durable acceptance, and failure evidence.
+
+  Add exact Entity create, update, and delete intents with applied deltas and in-memory execution.
+
+  Add direct many-to-many Relations with Selection-valued endpoints, exact Cartesian deltas,
+  default-deny dispatch, and direct or remote in-process execution.
+
 ## 0.1.0-alpha.5
 
 ### Minor Changes

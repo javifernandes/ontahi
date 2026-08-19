@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/explorer-react",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "description": "Reusable React Explorer contracts and UI surfaces for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/explorer-react",
   "license": "Apache-2.0",

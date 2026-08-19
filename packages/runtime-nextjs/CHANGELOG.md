@@ -1,5 +1,17 @@
 # @ontahi/runtime-nextjs
 
+## 0.1.0-alpha.6
+
+### Patch Changes
+
+- Updated dependencies [221c150]
+- Updated dependencies [221c150]
+- Updated dependencies [221c150]
+- Updated dependencies [5e4217d]
+- Updated dependencies [221c150]
+- Updated dependencies [221c150]
+  - @ontahi/core@0.1.0-alpha.6
+
 ## 0.1.0-alpha.5
 
 ### Minor Changes
