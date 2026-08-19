@@ -46,6 +46,7 @@ Related work:
 6. [128a. Recursive Views And Projectable Operation Results](../done/128a-ontahi-recursive-views-and-projectable-operation-results.md)
 7. [128b. Projectable Operation Client Bridge](../done/128b-ontahi-projectable-operation-client-bridge.md)
 8. [134. Semantic Codegen Pipeline, Organization, And Coverage](./134-codegen-analysis-organization-and-semantic-coverage.md)
+9. [128c. Relationship Command Wire Protocol](../done/128c-relationship-command-wire-protocol.md)
 
 ## Architectural Thesis
 
@@ -223,6 +224,7 @@ languages.
 - [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
 - [ ] Specify the Command protocol only after the read path and its authority seam are proven.
+  - [x] Specify and validate the Relationship Command wire variant in plan 128c.
 - [ ] Evaluate hybrid routing as an input to future graph segmentation.
 
 ### First Proof: Runtime-Bound Selections
@@ -378,6 +380,13 @@ cache reconciliation at the same time.
    current in-memory integration proof.
 3. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
    and reflection.
+
+### Active TDD Slice: Relationship Command Wire Protocol
+
+Plan 131 and its 131a Core experiment established a canonical Relationship Command/Delta IR. Plan
+128c now owns the transport-free JSON round-trip for that command variant. It validates untrusted
+requests against server-owned Relation topology before any dispatcher or policy work begins and
+does not yet enable remote writes.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
 protocol/runtime shape only after the read boundary demonstrates a credible authority model.

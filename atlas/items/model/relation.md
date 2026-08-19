@@ -12,6 +12,7 @@ relatedPlans:
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/131-ontahi-relationship-semantics
   - ontahi://plans/131a-relationship-command-delta-core-experiment
+  - ontahi://plans/128c-relationship-command-wire-protocol
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -80,3 +81,8 @@ A Relation does not own arbitrary lifecycle hooks, domain failures, effects, aut
 coordination, or durability. Those remain with Domain Operations. When the relationship has
 attributes, identity, lifecycle, history, policy, effects, more than two roles, or participation in
 further Relations, model it as an ordinary Association Entity.
+
+The canonical Relationship Command has a versioned JSON-safe graph-command envelope. A receiving
+runtime resolves its Entity names and Reference Field identity against server-owned topology,
+validates endpoint Refs and declared locators, and drops unknown envelope metadata. The wire form
+contains no executable functions, provider mappings, authority claims, or Entity patch fallback.

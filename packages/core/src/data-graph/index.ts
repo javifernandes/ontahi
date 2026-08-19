@@ -4,6 +4,7 @@ export * from './client/cache/index.js';
 export * from './client-input.js';
 export * from './client/operation-cache/index.js';
 export * from './command-binding.js';
+export * from './command-protocol.js';
 export * from './command.js';
 export * from './definitions.js';
 export * from './execution.js';
