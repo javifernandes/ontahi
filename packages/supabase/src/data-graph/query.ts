@@ -191,6 +191,104 @@ const assignRelationRows = (
   }
 };
 
+const hydrateManyToManyRelationEffect = <TClient extends SupabaseLikeClient, TError>(
+  input: HydrateSupabaseEntityRowsInput<TClient, TError>,
+  hydratedRows: EntityRow[],
+  includePlan: CompiledIncludePlan,
+  relationNode: RelationNode,
+  sourceValues: RelationSourceValue[],
+): Effect.Effect<void, TError> =>
+  Effect.gen(function* () {
+    const through = includePlan.through;
+    if (!through) {
+      return yield* Effect.fail(
+        input.createError({
+          message: `Missing edge mapping for ${includePlan.relationName}`,
+          logMessage: `Missing many-to-many edge mapping for ${includePlan.relationName}`,
+          cause: 'missing_many_to_many_edge_mapping',
+        }),
+      );
+    }
+    const edges = yield* Effect.tryPromise({
+      try: async () => {
+        const result = await input.supabase
+          .from(through.table)
+          .select(`${through.sourceColumn}, ${through.targetColumn}`)
+          .in(through.sourceColumn, sourceValues);
+        if (result.error) throw result.error.message;
+        return (result.data ?? []) as Array<Record<string, unknown>>;
+      },
+      catch: cause =>
+        input.createError({
+          message: `Failed to load ${includePlan.relationName} edges`,
+          logMessage: `Failed to load many-to-many edges for ${includePlan.relationName}`,
+          cause,
+        }),
+    });
+    const targetValues = [
+      ...new Set(edges.map(edge => edge[through.targetColumn]).filter(value => value != null)),
+    ];
+    if (targetValues.length === 0) {
+      assignEmptyRelation(hydratedRows, includePlan.relationName, relationNode.relationKind);
+      return;
+    }
+    const relatedRows = yield* input.fetchEntityRowsEffect({
+      supabase: input.supabase,
+      entityDefinition: relationNode.entity,
+      predicates: [{ operator: 'in', fieldName: includePlan.targetField, values: targetValues }],
+      orderBy: relationNode.orderBy,
+      limit: undefined,
+      selectShape: relationNode.select,
+      includeShape: relationNode.includes,
+      tableName: includePlan.targetTable,
+      message: `Failed to load ${relationNode.entity.name} records`,
+      createError: input.createError,
+      compiledWhere: [
+        {
+          operator: 'in',
+          field: includePlan.targetField,
+          column: includePlan.targetColumn,
+          values: targetValues,
+        },
+      ],
+      compiledOrderBy: includePlan.orderBy,
+    });
+    const nestedRows = yield* hydrateSupabaseEntityRowsEffect({
+      supabase: input.supabase,
+      rows: relatedRows,
+      includeShape: relationNode.includes,
+      includePlans: includePlan.includes,
+      fetchEntityRowsEffect: input.fetchEntityRowsEffect,
+      createError: input.createError,
+    });
+    const targets = new Map(
+      nestedRows.map(row => [
+        relationKey(row[includePlan.targetField]),
+        materializeSupabaseEntityRow(
+          row,
+          relationNode.entity,
+          relationNode.select,
+          relationNode.includes,
+        ),
+      ]),
+    );
+    const targetKeysBySource = new Map<unknown, Set<unknown>>();
+    for (const edge of edges) {
+      const source = edge[through.sourceColumn];
+      const keys = targetKeysBySource.get(source) ?? new Set<unknown>();
+      keys.add(edge[through.targetColumn]);
+      targetKeysBySource.set(source, keys);
+    }
+    for (const row of hydratedRows) {
+      const keys = targetKeysBySource.get(relationKey(row[includePlan.sourceField]));
+      const targetsForRow = keys
+        ? [...targets.entries()].filter(([key]) => keys.has(key)).map(([, value]) => value)
+        : [];
+      row[includePlan.relationName] =
+        relationNode.limit == null ? targetsForRow : targetsForRow.slice(0, relationNode.limit);
+    }
+  });
+
 const hydrateRelationPlanEffect = <TClient extends SupabaseLikeClient, TError>(
   input: HydrateSupabaseEntityRowsInput<TClient, TError>,
   hydratedRows: EntityRow[],
@@ -209,6 +307,16 @@ const hydrateRelationPlanEffect = <TClient extends SupabaseLikeClient, TError>(
     if (sourceValues.length === 0) {
       assignEmptyRelation(hydratedRows, includePlan.relationName, relationNode.relationKind);
       return;
+    }
+
+    if (relationNode.relationKind === 'manyToMany') {
+      return yield* hydrateManyToManyRelationEffect(
+        input,
+        hydratedRows,
+        includePlan,
+        relationNode,
+        sourceValues,
+      );
     }
 
     const relatedRows = yield* fetchRelationRowsEffect(

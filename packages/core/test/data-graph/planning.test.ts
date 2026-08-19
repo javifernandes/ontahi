@@ -6,6 +6,7 @@ import {
   field,
   getSelectColumnsForQuery,
   mapEntity,
+  mapRelation,
   query,
   resolveQuerySpec,
   view,
@@ -195,6 +196,45 @@ describe('data-graph planning', () => {
             includes: [],
           },
         ],
+      },
+    ]);
+  });
+
+  it('compiles anonymous many-to-many edge traversal metadata', () => {
+    const Tag = entity('PlanningTag', { id: field.id(), label: field.string() });
+    const Todo = entity('PlanningTodo', { id: field.id() }).manyToMany('tags', Tag);
+    mapEntity(Todo).toTable('planning_todos');
+    mapEntity(Tag).toTable('planning_tags');
+    mapRelation(Todo, 'tags', {
+      type: 'many-to-many',
+      from: 'planning_todos.id',
+      through: { table: 'planning_todo_tags', fromColumn: 'todo_id', toColumn: 'tag_id' },
+      to: 'planning_tags.id',
+    });
+
+    expect(
+      compileQueryPlan(
+        query(Todo).include(todo => ({ tags: todo.tags.orderBy(tag => tag.label) })),
+        undefined,
+      ).includes,
+    ).toEqual([
+      {
+        relationName: 'tags',
+        relationKind: 'manyToMany',
+        sourceField: 'id',
+        sourceColumn: 'id',
+        targetField: 'id',
+        targetColumn: 'id',
+        targetEntity: 'PlanningTag',
+        targetTable: 'planning_tags',
+        through: {
+          table: 'planning_todo_tags',
+          sourceColumn: 'todo_id',
+          targetColumn: 'tag_id',
+        },
+        orderBy: [{ field: 'label', column: 'label', direction: 'asc' }],
+        limit: undefined,
+        includes: [],
       },
     ]);
   });
