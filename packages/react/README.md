@@ -58,6 +58,18 @@ configured client with `client={createFetchGraphClient(...)}`, or set `client={f
 explicit provider. Server routes, read policies, and authorization remain opt-in and authoritative;
 the default removes client wiring, not the server security boundary.
 
+The same client supports fluent execution outside React hooks:
+
+```ts
+const client = createFetchGraphClient();
+const Todo = client.graph.bindClientEntity(GeneratedTodo);
+
+const rows = await runBrowserEffect(Todo.all().as(TodoListItem).run());
+```
+
+The bound facade is a new value and retains the generated Entity's Views, Refs, and Domain
+Operations. Its portable source facade and schema remain unchanged.
+
 Generated client Entities expose portable `all()` and `where(...)` Query entry points. A Query
 returns many rows by default; terminal `first()`, `one()`, `count()`, and `exists()` expressions
 make the result contract explicit and let `useGraphQuery` select the executor method. `one()` is

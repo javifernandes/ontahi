@@ -1,9 +1,11 @@
 import { Effect, Stream } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { runCollectArray } from '../../src/computation/stream.js';
 import {
   createRuntimeBoundDataGraphApi,
+  defineClientDomainOperation,
+  defineClientEntity,
   entity,
   field,
   query,
@@ -98,6 +100,55 @@ describe('runtime-bound data graph api', () => {
     const executable = selection.exec();
     expect(executable.pipe(value => value)).toBe(executable);
     expect(selection.pipe(value => value)).toBe(selection);
+  });
+
+  it('preserves the entity surface and bound facade identity on a supplied target', () => {
+    const api = createRuntimeBoundDataGraphApi(() => createRuntime());
+    const bindingTarget = {};
+    const BoundBook = api.selectionAssembly.bindSelectionEntity(Book, bindingTarget);
+
+    expect(BoundBook).toBe(bindingTarget);
+    expect(BoundBook.name).toBe(Book.name);
+    expect(BoundBook.fields).toBe(Book.fields);
+    expect(BoundBook.pipe(entity => entity)).toBe(BoundBook);
+    expect(BoundBook.pipe(entity => entity.all()).root).toBe(Book);
+  });
+
+  it('binds a portable client Entity facade without losing its client-owned surface', async () => {
+    const runtime = createRuntime();
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const ClientBookDefinition = entity('ClientBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const ClientBook = defineClientEntity(ClientBookDefinition, {
+      domainOperations: {
+        archive: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          bridge: {},
+        }),
+      },
+    });
+    const BookRow = ClientBook.view('BookRow', { id: true, title: true });
+    const BoundBook = api.bindClientEntity(ClientBook);
+
+    expect(BoundBook).not.toBe(ClientBook);
+    expect(BoundBook.definition).toBe(ClientBookDefinition);
+    expect(BoundBook.domain).toBe(ClientBook.domain);
+    expect(BoundBook.view).toBe(ClientBook.view);
+    expect('all' in ClientBookDefinition).toBe(false);
+    expect('run' in ClientBook.all()).toBe(false);
+    expectTypeOf(BoundBook.domain.archive).toEqualTypeOf(ClientBook.domain.archive);
+
+    await expect(
+      Effect.runPromise(
+        BoundBook.all()
+          .as(BookRow)
+          .orderBy(book => book.title)
+          .run({ authority: 'viewer' }),
+      ),
+    ).resolves.toEqual([{ id: 'book-1', optionAuthority: 'viewer' }]);
   });
 
   it('keeps semantic selections portable while binding their read and command branches', async () => {

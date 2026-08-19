@@ -1,16 +1,30 @@
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import {
+  createGraphReadDispatcher,
   createInMemoryDataGraphRuntime,
   createEntityRef,
   entity,
   field,
   mapRelation,
-  query,
   relationshipSet,
   selection,
+  createRemoteDataGraphRuntime,
+  createRuntimeBoundDataGraphApi,
+  defineClientEntity,
+  query,
+  type DataGraphExecutionRuntime,
+  type GraphReadMode,
+  type GraphReadPolicy,
   type InMemoryDataset,
+  type QuerySpec,
+  type RuntimeBoundClientEntity,
 } from '@ontahi/core/data-graph';
+import { createExpressGraphReadHandler } from '@ontahi/runtime-express/graph-read';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Effect } from 'effect';
+import express from 'express';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -226,6 +240,111 @@ describe('PostgreSQL data graph runtime', () => {
       title: 'Selected',
       tags: [{ id: 'tag-1', label: 'Core' }],
     });
+  });
+
+  it('runs one fluent client Entity read directly and through Express over PostgreSQL', async () => {
+    await pool.query('TRUNCATE TABLE todos');
+    await pool.query(
+      'INSERT INTO todos (todo_id, todo_title, is_completed) VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)',
+      [
+        'todo-2',
+        'Build the bridge',
+        false,
+        'todo-1',
+        'Define the protocol',
+        false,
+        'todo-done',
+        'Already done',
+        true,
+      ],
+    );
+    const serverRuntime = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [TodoMapping],
+    });
+    const policy = {
+      entity: TodoEntity,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 50,
+      fields: {
+        id: { select: true },
+        title: { select: true, order: true },
+        completed: { filter: ['eq'] },
+      },
+      scope: 'all',
+    } satisfies GraphReadPolicy<typeof TodoEntity>;
+    const execute = (
+      runtime: DataGraphExecutionRuntime<any, any, any, any>,
+      read: QuerySpec,
+      mode: GraphReadMode,
+    ) =>
+      Effect.runPromise(
+        mode === 'get'
+          ? runtime.get(read, undefined)
+          : mode === 'count'
+            ? runtime.count(read, undefined)
+            : runtime.run(read, undefined),
+      );
+    const dispatcher = createGraphReadDispatcher({
+      policies: [policy],
+      execute: (read, mode) => execute(serverRuntime, read, mode),
+    });
+    const expressApp = express();
+    expressApp.use(express.json());
+    expressApp.post('/graph/reads', createExpressGraphReadHandler({ dispatcher }));
+    const server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+
+    try {
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const remoteRuntime = createRemoteDataGraphRuntime({
+        transport: async request => {
+          const response = await fetch(`${origin}/graph/reads`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(request),
+          });
+          return response.json();
+        },
+      });
+      const ClientTodo = defineClientEntity(TodoEntity);
+      const TodoListItem = ClientTodo.view('TodoListItem', { id: true, title: true });
+      const readOpenTodos = <TError, TCommandError>(
+        Todo: RuntimeBoundClientEntity<
+          typeof ClientTodo,
+          TError,
+          undefined,
+          undefined,
+          TCommandError
+        >,
+      ) =>
+        Todo.where(todo => todo.completed.eq(false))
+          .as(TodoListItem)
+          .orderBy(todo => todo.title)
+          .run();
+      const directTodo = createRuntimeBoundDataGraphApi(() => serverRuntime).bindClientEntity(
+        ClientTodo,
+      );
+      const remoteTodo = createRuntimeBoundDataGraphApi(() => remoteRuntime).bindClientEntity(
+        ClientTodo,
+      );
+
+      const direct = await Effect.runPromise(readOpenTodos(directTodo));
+      const remote = await Effect.runPromise(readOpenTodos(remoteTodo));
+
+      expect(remote).toEqual(direct);
+      expect(remote).toEqual([
+        { id: 'todo-2', title: 'Build the bridge' },
+        { id: 'todo-1', title: 'Define the protocol' },
+      ]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close(error => (error ? reject(error) : resolve())),
+      );
+    }
   });
 
   it('reads reflected entity data with search, filters, sorting and pagination', async () => {
