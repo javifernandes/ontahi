@@ -116,6 +116,13 @@ describe('bound relationship commands', () => {
       entityName: 'Student',
       locator: { id: 'student-1' },
     });
+    const directStudent = Student.ref({ id: 'student-direct' });
+    expect(directStudent.course.clear()).toMatchObject({
+      kind: 'relationship-command',
+      action: 'unlink',
+      relation: { sourceEntityName: 'Student', fieldName: 'course' },
+      source: { entityName: 'Student', locator: { id: 'student-direct' } },
+    });
 
     const ClientCourseRelation = defineClientEntity('ClientCourseRelation', {
       domainOperations: {
@@ -145,6 +152,11 @@ describe('bound relationship commands', () => {
       kind: 'domain-operation-invocation',
       input: { student: clientStudent },
     });
+    expect(ClientStudent.ref({ id: 'student-client-direct' }).course.clear()).toMatchObject({
+      kind: 'relationship-command',
+      action: 'unlink',
+      source: { entityName: 'Student', locator: { id: 'student-client-direct' } },
+    });
 
     const app = createArchitectureAppFacade({});
     const provideStudentRef = app.graph.refProvider(Student, {}, (id: string) => ({ id }));
@@ -156,6 +168,12 @@ describe('bound relationship commands', () => {
       relation: { sourceEntityName: 'Student', fieldName: 'course' },
       source: { entityName: 'Student', locator: { id: 'student-3' } },
       target: course,
+    });
+    const provideLegacyRef = app.graph.refProvider('LegacyStudent', {}, (id: string) => ({ id }));
+    expect(provideLegacyRef('legacy-1')).toEqual({
+      kind: 'entity-ref',
+      entityName: 'LegacyStudent',
+      locator: { id: 'legacy-1' },
     });
   });
 });

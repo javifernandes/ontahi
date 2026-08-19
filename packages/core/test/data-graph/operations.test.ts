@@ -537,9 +537,13 @@ describe('data-graph operations', () => {
   });
 
   it('binds entity locators to domain operation invocations', () => {
+    const Publisher = entity('Publisher', {
+      id: field.id(),
+    });
     const Book = entity('Book', {
       id: field.id(),
       slug: field.string(),
+      publisher: field.nullable(field.ref(Publisher)),
     }).locators({
       refBySlug: 'slug',
     });
@@ -574,6 +578,18 @@ describe('data-graph operations', () => {
       input: {
         slug: 'progbook',
       },
+    });
+    const publisher = createEntityRef(Publisher, { id: 'publisher-1' });
+    expect(book.publisher.assign(publisher)).toMatchObject({
+      kind: 'relationship-command',
+      action: 'link',
+      source: book,
+      target: publisher,
+    });
+    expect(BoundBook.ref({ id: 'book-1' }).publisher.clear()).toMatchObject({
+      kind: 'relationship-command',
+      action: 'unlink',
+      source: { entityName: 'Book', locator: { id: 'book-1' } },
     });
   });
 
