@@ -417,6 +417,7 @@ export type ClientEntityWithDomainOperations<
   domain: ResolveDomainOperations<EntityName<TEntity>, TOperations>;
 } & (TEntity extends AnyEntityDefinition
   ? EntitySelectionFactory<TEntity> & {
+      definition: TEntity;
       view: <TViewName extends string, const TShape extends EntityViewShape<TEntity>>(
         viewName: TViewName,
         shape: TShape,
@@ -975,6 +976,7 @@ export const defineClientEntity = <
     domain,
     ...(typeof entityOrName === 'object' && 'fields' in entityOrName
       ? {
+          definition: entityOrName,
           all: () => query(entityOrName as AnyEntityDefinition),
           where: (build: SelectionBuilder<AnyEntityDefinition>) =>
             query(entityOrName as AnyEntityDefinition).where(build),
