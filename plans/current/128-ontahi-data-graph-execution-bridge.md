@@ -47,6 +47,7 @@ Related work:
 7. [128b. Projectable Operation Client Bridge](../done/128b-ontahi-projectable-operation-client-bridge.md)
 8. [134. Semantic Codegen Pipeline, Organization, And Coverage](./134-codegen-analysis-organization-and-semantic-coverage.md)
 9. [128c. Relationship Command Wire Protocol](../done/128c-relationship-command-wire-protocol.md)
+10. [128d. Relationship Command Policy And Dispatcher](../done/128d-relationship-command-policy-dispatcher.md)
 
 ## Architectural Thesis
 
@@ -225,6 +226,7 @@ languages.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
 - [ ] Specify the Command protocol only after the read path and its authority seam are proven.
   - [x] Specify and validate the Relationship Command wire variant in plan 128c.
+  - [x] Add its default-deny policy and transport-neutral dispatcher in plan 128d.
 - [ ] Evaluate hybrid routing as an input to future graph segmentation.
 
 ### First Proof: Runtime-Bound Selections
@@ -387,6 +389,10 @@ Plan 131 and its 131a Core experiment established a canonical Relationship Comma
 128c now owns the transport-free JSON round-trip for that command variant. It validates untrusted
 requests against server-owned Relation topology before any dispatcher or policy work begins and
 does not yet enable remote writes.
+
+Plan 128d adds the next boundary: explicit per-Relation structural actions, default denial, and an
+injected executor that cannot be reached until parsing, policy matching, and authoritative topology
+resolution succeed. Principal-based authorization evaluation remains with plan 78.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
 protocol/runtime shape only after the read boundary demonstrates a credible authority model.

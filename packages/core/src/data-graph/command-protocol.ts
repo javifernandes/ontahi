@@ -16,7 +16,9 @@ export type GraphCommandProtocolErrorCode =
   | 'unsupported_version'
   | 'unknown_entity'
   | 'invalid_relation'
-  | 'invalid_reference';
+  | 'invalid_reference'
+  | 'access_denied'
+  | 'execution_unavailable';
 
 export type GraphCommandProtocolError = {
   readonly kind: 'protocol-error';
@@ -38,7 +40,7 @@ export type GraphCommandRequestResolveResult =
     }
   | { readonly success: false; readonly error: GraphCommandProtocolError };
 
-const protocolError = (
+export const graphCommandProtocolError = (
   code: GraphCommandProtocolErrorCode,
   message: string,
 ): GraphCommandProtocolError => ({ kind: 'protocol-error', error: { code, message } });
@@ -53,13 +55,16 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
   if (!isRecord(value)) {
     return {
       success: false,
-      error: protocolError('invalid_request', 'Data graph Command request must be an object.'),
+      error: graphCommandProtocolError(
+        'invalid_request',
+        'Data graph Command request must be an object.',
+      ),
     };
   }
   if (value.version !== 1) {
     return {
       success: false,
-      error: protocolError(
+      error: graphCommandProtocolError(
         'unsupported_version',
         `Unsupported data graph Command protocol version: ${String(value.version)}.`,
       ),
@@ -68,7 +73,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
   if (value.kind !== 'graph-command' || !isRecord(value.command)) {
     return {
       success: false,
-      error: protocolError(
+      error: graphCommandProtocolError(
         'invalid_request',
         'Data graph Command request kind must be "graph-command" and include a command object.',
       ),
@@ -90,7 +95,10 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
   ) {
     return {
       success: false,
-      error: protocolError('invalid_request', 'Relationship Command request is invalid.'),
+      error: graphCommandProtocolError(
+        'invalid_request',
+        'Relationship Command request is invalid.',
+      ),
     };
   }
 
@@ -134,13 +142,13 @@ const validateRef = (
   role: string,
 ): GraphCommandProtocolError | undefined => {
   if (ref.entityName !== entity.name) {
-    return protocolError(
+    return graphCommandProtocolError(
       'invalid_reference',
       `Relationship Command ${role} Ref must target ${entity.name}.`,
     );
   }
   if (!hasDeclaredLocator(entity, ref)) {
-    return protocolError(
+    return graphCommandProtocolError(
       'invalid_reference',
       `Relationship Command ${role} Ref does not use a declared ${entity.name} locator.`,
     );
@@ -161,7 +169,7 @@ export const resolveGraphCommandRequest = (
       : command.relation.targetEntityName;
     return {
       success: false,
-      error: protocolError('unknown_entity', `Unknown data graph Entity: ${name}.`),
+      error: graphCommandProtocolError('unknown_entity', `Unknown data graph Entity: ${name}.`),
     };
   }
 
@@ -169,7 +177,7 @@ export const resolveGraphCommandRequest = (
   if (!field || !isReferenceFieldDefinition(field) || field.target.name !== targetEntity.name) {
     return {
       success: false,
-      error: protocolError(
+      error: graphCommandProtocolError(
         'invalid_relation',
         `Unknown canonical Relation ${sourceEntity.name}.${command.relation.fieldName} -> ${targetEntity.name}.`,
       ),
@@ -178,7 +186,7 @@ export const resolveGraphCommandRequest = (
   if (command.action === 'unlink' && !field.nullable && !field.optional) {
     return {
       success: false,
-      error: protocolError(
+      error: graphCommandProtocolError(
         'invalid_relation',
         `Required Relation ${sourceEntity.name}.${command.relation.fieldName} cannot be cleared.`,
       ),

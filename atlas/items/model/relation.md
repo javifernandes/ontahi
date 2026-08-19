@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/131-ontahi-relationship-semantics
   - ontahi://plans/131a-relationship-command-delta-core-experiment
   - ontahi://plans/128c-relationship-command-wire-protocol
+  - ontahi://plans/128d-relationship-command-policy-dispatcher
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -86,3 +87,9 @@ The canonical Relationship Command has a versioned JSON-safe graph-command envel
 runtime resolves its Entity names and Reference Field identity against server-owned topology,
 validates endpoint Refs and declared locators, and drops unknown envelope metadata. The wire form
 contains no executable functions, provider mappings, authority claims, or Entity patch fallback.
+
+Remote execution remains default-deny. A transport-neutral Graph Command dispatcher requires an
+explicit policy for the canonical source Entity and Reference Field plus an allowed `link/unlink`
+action before invoking storage. It accepts server-owned authority context as a future policy input,
+but Plan 128d does not evaluate Principal roles or domain invariants; those remain integration work
+for authorization and Domain Operations respectively.
