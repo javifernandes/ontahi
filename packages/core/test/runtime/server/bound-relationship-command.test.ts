@@ -8,7 +8,12 @@ import {
   type EntityRef,
   type RelationshipCommand,
 } from '../../../src/data-graph/index.js';
-import { entity, ontahi, relation } from '../../../src/runtime/server/index.js';
+import {
+  createArchitectureAppFacade,
+  entity,
+  ontahi,
+  relation,
+} from '../../../src/runtime/server/index.js';
 
 describe('bound relationship commands', () => {
   it('authors typed canonical commands directly from entity refs', () => {
@@ -88,6 +93,16 @@ describe('bound relationship commands', () => {
         cardinality: 'many-to-many',
       },
     });
+    expect(todo.tags.remove(tag)).toMatchObject({
+      kind: 'many-to-many-relationship-command',
+      action: 'unlink',
+      relation: {
+        sourceEntityName: 'Todo',
+        relationName: 'tags',
+        targetEntityName: 'Tag',
+        cardinality: 'many-to-many',
+      },
+    });
 
     expectTypeOf(student.course.assign).parameter(0).toEqualTypeOf<EntityRef<'Course'>>();
     expectTypeOf(student.course.assign(course)).toEqualTypeOf<RelationshipCommand>();
@@ -129,6 +144,18 @@ describe('bound relationship commands', () => {
     expect(clientStudent.course.inspect()).toMatchObject({
       kind: 'domain-operation-invocation',
       input: { student: clientStudent },
+    });
+
+    const app = createArchitectureAppFacade({});
+    const provideStudentRef = app.graph.refProvider(Student, {}, (id: string) => ({ id }));
+    const providedStudent = provideStudentRef('student-3');
+    expectTypeOf(providedStudent.course.assign).parameter(0).toEqualTypeOf<EntityRef<'Course'>>();
+    expect(providedStudent.course.assign(course)).toMatchObject({
+      kind: 'relationship-command',
+      action: 'link',
+      relation: { sourceEntityName: 'Student', fieldName: 'course' },
+      source: { entityName: 'Student', locator: { id: 'student-3' } },
+      target: course,
     });
   });
 });

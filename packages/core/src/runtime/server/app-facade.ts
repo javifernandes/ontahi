@@ -15,7 +15,10 @@ import {
   type EntityRefInputPublicInput,
   type EntityRefLocator,
 } from '../../data-graph/ref.js';
-import { bindEntityRefRelationshipCommands } from '../../data-graph/relationship-command.js';
+import {
+  bindEntityRefRelationshipCommands,
+  type BoundEntityRefRelationshipCommands,
+} from '../../data-graph/relationship-command.js';
 import { parseGraphSchema, safeParseGraphSchema } from '../../data-graph/schema.js';
 
 import type { ArchitectureDefinition, ArchitectureNamespace } from './architecture-types.js';
@@ -212,7 +215,8 @@ type GraphEntityRefProvider = <
   EntityRef<EntityName<TEntity>, TLocator>,
   TOperations,
   ConfiguredOperationInvoke
->;
+> &
+  (TEntity extends AnyEntityDefinition ? BoundEntityRefRelationshipCommands<TEntity> : {});
 
 const operationFacadeBase = {
   ExternalDependencyFailedError,
