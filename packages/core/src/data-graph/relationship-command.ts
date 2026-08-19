@@ -1,5 +1,11 @@
 import type { AnyEntityDefinition, RelationDefinition, RelationKind } from './definitions.js';
 import type { AnyEntityRef } from './ref.js';
+import {
+  copySelectionExpression,
+  selectionReferences,
+  type EntitySelectionSource,
+  type SelectionExpression,
+} from './selection-ast.js';
 
 export type CanonicalRelationIdentity = {
   sourceEntityName: string;
@@ -7,8 +13,20 @@ export type CanonicalRelationIdentity = {
   targetEntityName: string;
 };
 
+export type CanonicalManyToManyRelationIdentity = {
+  sourceEntityName: string;
+  relationName: string;
+  targetEntityName: string;
+  cardinality: 'many-to-many';
+};
+
+export type RelationshipEndpointSelection = {
+  entityName: string;
+  selection: SelectionExpression;
+};
+
 export type RelationshipFact = {
-  relation: CanonicalRelationIdentity;
+  relation: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity;
   source: AnyEntityRef;
   target: AnyEntityRef;
 };
@@ -19,6 +37,14 @@ export type RelationshipCommand = {
   relation: CanonicalRelationIdentity;
   source: AnyEntityRef;
   target?: AnyEntityRef;
+};
+
+export type ManyToManyRelationshipCommand = {
+  kind: 'many-to-many-relationship-command';
+  action: 'link' | 'unlink';
+  relation: CanonicalManyToManyRelationIdentity;
+  sources: RelationshipEndpointSelection;
+  targets: RelationshipEndpointSelection;
 };
 
 export type RelationshipDelta = {
@@ -32,6 +58,67 @@ export interface RelationshipCommandExecutionRuntime<TError = never, TOptions = 
     options?: TOptions,
   ): import('effect').Effect.Effect<RelationshipDelta, TError>;
 }
+
+export interface ManyToManyRelationshipCommandExecutionRuntime<
+  TError = never,
+  TOptions = undefined,
+> {
+  runManyToManyRelationshipCommand(
+    command: ManyToManyRelationshipCommand,
+    options?: TOptions,
+  ): import('effect').Effect.Effect<RelationshipDelta, TError>;
+}
+
+type RelationshipSelectionInput = AnyEntityRef | EntitySelectionSource<AnyEntityDefinition>;
+
+const endpointSelection = (
+  entity: AnyEntityDefinition,
+  input: RelationshipSelectionInput,
+): RelationshipEndpointSelection => {
+  if ('entityName' in input) {
+    assertRefEntity(input, entity, 'relationship endpoint');
+    return { entityName: entity.name, selection: selectionReferences([input]) };
+  }
+  if (input.root.name !== entity.name) {
+    throw new Error(
+      `Expected relationship endpoint Selection for ${entity.name}, got ${input.root.name}.`,
+    );
+  }
+  return { entityName: entity.name, selection: copySelectionExpression(input.expression) };
+};
+
+export const relationshipSet = (
+  entity: AnyEntityDefinition,
+  relationName: string,
+  sources: RelationshipSelectionInput,
+) => {
+  const definition = entity.relations[relationName];
+  if (!definition || definition.relationKind !== 'manyToMany') {
+    throw new Error(`Relation ${entity.name}.${relationName} is not many-to-many.`);
+  }
+  const sourceSelection = endpointSelection(entity, sources);
+  const relation: CanonicalManyToManyRelationIdentity = {
+    sourceEntityName: entity.name,
+    relationName,
+    targetEntityName: definition.target.name,
+    cardinality: 'many-to-many',
+  };
+  const command = (
+    action: ManyToManyRelationshipCommand['action'],
+    targets: RelationshipSelectionInput,
+  ): ManyToManyRelationshipCommand => ({
+    kind: 'many-to-many-relationship-command',
+    action,
+    relation,
+    sources: sourceSelection,
+    targets: endpointSelection(definition.target, targets),
+  });
+
+  return {
+    add: (targets: RelationshipSelectionInput) => command('link', targets),
+    remove: (targets: RelationshipSelectionInput) => command('unlink', targets),
+  };
+};
 
 type ResolvedRelation = {
   definition: RelationDefinition<RelationKind, AnyEntityDefinition>;

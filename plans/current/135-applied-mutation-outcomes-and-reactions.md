@@ -4,6 +4,10 @@ Status: current
 
 Canonical ID: `ontahi://plans/135-applied-mutation-outcomes-and-reactions`
 
+Implemented slices:
+
+1. [135a. Selection-Valued Many-To-Many Core](../done/135a-selection-valued-many-to-many-core.md)
+
 ## Summary
 
 Give every successfully applied mutation a generic semantic outcome and let the runtime interpret
@@ -234,7 +238,7 @@ After Core and adapter conformance are green:
 - [x] Exact Entity create, update, and delete produce Applied Mutation Outcomes and can chain.
 - [x] Association Entity creation uses the generic Entity lifecycle without application boilerplate.
 - [ ] Binary attribute-free Todo tagging is a direct many-to-many Relation, not a public Entity.
-- [ ] Relationship actions accept Selection-valued source and target endpoints.
+- [x] Relationship actions accept Selection-valued source and target endpoints in Core.
 - [ ] In-memory, PostgreSQL, and Supabase pass many-to-many Relation conformance.
 - [ ] Todo no longer wraps structural tag add/remove behavior in Domain Operations.
 - [ ] Ontahi developer docs and the BookOps developer book teach the expanded Relation concept.

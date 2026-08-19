@@ -140,6 +140,11 @@ const compileIncludes = (
 ): CompiledIncludePlan[] =>
   Object.entries(includeShape ?? {}).map(([relationName, relationBuilder]) => {
     const node = relationBuilder.toNodeSpec();
+    if (node.relationKind === 'manyToMany') {
+      throw new Error(
+        `Many-to-many Relation ${entityDefinition.name}.${relationName} requires an edge-aware provider planner.`,
+      );
+    }
     const fields = resolveRelationFields(entityDefinition, relationName, node);
     const targetMapping = getEntityMapping(node.entity);
 

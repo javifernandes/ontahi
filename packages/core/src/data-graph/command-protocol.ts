@@ -2,13 +2,20 @@ import { cloneJson, isJsonValue } from '../value/json.js';
 import { isRecord } from '../value/object.js';
 
 import { isReferenceFieldDefinition, type AnyEntityDefinition } from './definitions.js';
+import { validateGraphReadSelection } from './read-protocol.js';
 import { isEntityRef, type AnyEntityRef } from './ref.js';
-import type { RelationshipCommand } from './relationship-command.js';
+import type {
+  ManyToManyRelationshipCommand,
+  RelationshipCommand,
+  RelationshipEndpointSelection,
+} from './relationship-command.js';
+
+type AnyRelationshipCommand = RelationshipCommand | ManyToManyRelationshipCommand;
 
 export type GraphCommandRequestV1 = {
   readonly version: 1;
   readonly kind: 'graph-command';
-  readonly command: RelationshipCommand;
+  readonly command: AnyRelationshipCommand;
 };
 
 export type GraphCommandProtocolErrorCode =
@@ -17,6 +24,7 @@ export type GraphCommandProtocolErrorCode =
   | 'unknown_entity'
   | 'invalid_relation'
   | 'invalid_reference'
+  | 'invalid_selection'
   | 'access_denied'
   | 'execution_unavailable';
 
@@ -36,7 +44,7 @@ export type GraphCommandRequestResolveResult =
   | {
       readonly success: true;
       readonly request: GraphCommandRequestV1;
-      readonly command: RelationshipCommand;
+      readonly command: AnyRelationshipCommand;
     }
   | { readonly success: false; readonly error: GraphCommandProtocolError };
 
@@ -46,6 +54,7 @@ const graphCommandProtocolErrorCodes = new Set<GraphCommandProtocolErrorCode>([
   'unknown_entity',
   'invalid_relation',
   'invalid_reference',
+  'invalid_selection',
   'access_denied',
   'execution_unavailable',
 ]);
@@ -63,7 +72,7 @@ export const graphCommandProtocolError = (
   message: string,
 ): GraphCommandProtocolError => ({ kind: 'protocol-error', error: { code, message } });
 
-export const toGraphCommandRequest = (command: RelationshipCommand): GraphCommandRequestV1 => {
+export const toGraphCommandRequest = (command: AnyRelationshipCommand): GraphCommandRequestV1 => {
   const request = { version: 1, kind: 'graph-command', command } satisfies GraphCommandRequestV1;
   if (!isJsonValue(request)) throw new Error('Data graph Command request must be JSON-safe.');
   return cloneJson(request);
@@ -99,23 +108,68 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
   }
 
   const command = value.command;
+  if (command.kind === 'relationship-command') {
+    if (
+      (command.action !== 'link' && command.action !== 'unlink') ||
+      !isRecord(command.relation) ||
+      typeof command.relation.sourceEntityName !== 'string' ||
+      typeof command.relation.fieldName !== 'string' ||
+      typeof command.relation.targetEntityName !== 'string' ||
+      !isEntityRef(command.source) ||
+      (command.target !== undefined && !isEntityRef(command.target)) ||
+      (command.action === 'link' && command.target === undefined) ||
+      !isJsonValue(value)
+    ) {
+      return {
+        success: false,
+        error: graphCommandProtocolError(
+          'invalid_request',
+          'Relationship Command request is invalid.',
+        ),
+      };
+    }
+
+    return {
+      success: true,
+      request: cloneJson({
+        version: 1,
+        kind: 'graph-command',
+        command: {
+          kind: 'relationship-command',
+          action: command.action,
+          relation: {
+            sourceEntityName: command.relation.sourceEntityName,
+            fieldName: command.relation.fieldName,
+            targetEntityName: command.relation.targetEntityName,
+          },
+          source: command.source,
+          ...(command.target === undefined ? {} : { target: command.target }),
+        },
+      }) as GraphCommandRequestV1,
+    };
+  }
+
   if (
-    command.kind !== 'relationship-command' ||
+    command.kind !== 'many-to-many-relationship-command' ||
     (command.action !== 'link' && command.action !== 'unlink') ||
     !isRecord(command.relation) ||
+    command.relation.cardinality !== 'many-to-many' ||
     typeof command.relation.sourceEntityName !== 'string' ||
-    typeof command.relation.fieldName !== 'string' ||
+    typeof command.relation.relationName !== 'string' ||
     typeof command.relation.targetEntityName !== 'string' ||
-    !isEntityRef(command.source) ||
-    (command.target !== undefined && !isEntityRef(command.target)) ||
-    (command.action === 'link' && command.target === undefined) ||
+    !isRecord(command.sources) ||
+    typeof command.sources.entityName !== 'string' ||
+    !isRecord(command.sources.selection) ||
+    !isRecord(command.targets) ||
+    typeof command.targets.entityName !== 'string' ||
+    !isRecord(command.targets.selection) ||
     !isJsonValue(value)
   ) {
     return {
       success: false,
       error: graphCommandProtocolError(
         'invalid_request',
-        'Relationship Command request is invalid.',
+        'Many-to-many Relationship Command request is invalid.',
       ),
     };
   }
@@ -126,15 +180,22 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       version: 1,
       kind: 'graph-command',
       command: {
-        kind: 'relationship-command',
+        kind: 'many-to-many-relationship-command',
         action: command.action,
         relation: {
           sourceEntityName: command.relation.sourceEntityName,
-          fieldName: command.relation.fieldName,
+          relationName: command.relation.relationName,
           targetEntityName: command.relation.targetEntityName,
+          cardinality: 'many-to-many',
         },
-        source: command.source,
-        ...(command.target === undefined ? {} : { target: command.target }),
+        sources: {
+          entityName: command.sources.entityName,
+          selection: command.sources.selection,
+        },
+        targets: {
+          entityName: command.targets.entityName,
+          selection: command.targets.selection,
+        },
       },
     }) as GraphCommandRequestV1,
   };
@@ -179,6 +240,72 @@ export const resolveGraphCommandRequest = (
   options: { readonly entities: readonly AnyEntityDefinition[] },
 ): GraphCommandRequestResolveResult => {
   const { command } = request;
+  if (command.kind === 'many-to-many-relationship-command') {
+    const sourceEntity = findEntity(options.entities, command.relation.sourceEntityName);
+    const targetEntity = findEntity(options.entities, command.relation.targetEntityName);
+    if (!sourceEntity || !targetEntity) {
+      const name = !sourceEntity
+        ? command.relation.sourceEntityName
+        : command.relation.targetEntityName;
+      return {
+        success: false,
+        error: graphCommandProtocolError('unknown_entity', `Unknown data graph Entity: ${name}.`),
+      };
+    }
+    const relation = sourceEntity.relations[command.relation.relationName];
+    if (
+      !relation ||
+      relation.relationKind !== 'manyToMany' ||
+      relation.target.name !== targetEntity.name
+    ) {
+      return {
+        success: false,
+        error: graphCommandProtocolError(
+          'invalid_relation',
+          `Unknown many-to-many Relation ${sourceEntity.name}.${command.relation.relationName} -> ${targetEntity.name}.`,
+        ),
+      };
+    }
+    const endpoints: Array<
+      [RelationshipEndpointSelection, AnyEntityDefinition, 'source' | 'target']
+    > = [
+      [command.sources, sourceEntity, 'source'],
+      [command.targets, targetEntity, 'target'],
+    ];
+    for (const [endpoint, entity, role] of endpoints) {
+      if (endpoint.entityName !== entity.name) {
+        return {
+          success: false,
+          error: graphCommandProtocolError(
+            'invalid_selection',
+            `Relationship ${role} Selection must target ${entity.name}.`,
+          ),
+        };
+      }
+      const selectionError = validateGraphReadSelection(endpoint.selection, entity);
+      if (selectionError) {
+        return {
+          success: false,
+          error: graphCommandProtocolError('invalid_selection', selectionError.error.message),
+        };
+      }
+      if (endpoint.selection.kind === 'references') {
+        for (const ref of endpoint.selection.refs) {
+          if (!hasDeclaredLocator(entity, ref)) {
+            return {
+              success: false,
+              error: graphCommandProtocolError(
+                'invalid_reference',
+                `Relationship ${role} Ref does not use a declared ${entity.name} locator.`,
+              ),
+            };
+          }
+        }
+      }
+    }
+    return { success: true, request, command };
+  }
+
   const sourceEntity = findEntity(options.entities, command.relation.sourceEntityName);
   const targetEntity = findEntity(options.entities, command.relation.targetEntityName);
   if (!sourceEntity || !targetEntity) {

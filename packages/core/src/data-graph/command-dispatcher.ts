@@ -7,12 +7,24 @@ import {
   type GraphCommandProtocolError,
 } from './command-protocol.js';
 import { isReferenceFieldDefinition, type AnyEntityDefinition } from './definitions.js';
-import type { RelationshipCommand, RelationshipDelta } from './relationship-command.js';
+import type {
+  ManyToManyRelationshipCommand,
+  RelationshipCommand,
+  RelationshipDelta,
+} from './relationship-command.js';
 
 export type RelationshipCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   readonly entity: TEntity;
   readonly fieldName: keyof TEntity['fields'] & string;
   readonly actions: readonly RelationshipCommand['action'][];
+};
+
+export type ManyToManyRelationshipCommandPolicy<
+  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
+> = {
+  readonly entity: TEntity;
+  readonly relationName: keyof TEntity['relations'] & string;
+  readonly actions: readonly ManyToManyRelationshipCommand['action'][];
 };
 
 export type GraphCommandDispatchContext<TAuthority> = {
@@ -28,9 +40,15 @@ export type GraphCommandDispatchExecutor<TAuthority> = (
   context: GraphCommandDispatchContext<TAuthority>,
 ) => Promise<RelationshipDelta>;
 
+export type ManyToManyGraphCommandDispatchExecutor<TAuthority> = (
+  command: ManyToManyRelationshipCommand,
+  context: GraphCommandDispatchContext<TAuthority>,
+) => Promise<RelationshipDelta>;
+
 export type CreateGraphCommandDispatcherOptions<TAuthority> = {
-  readonly policies: readonly RelationshipCommandPolicy[];
+  readonly policies: readonly (RelationshipCommandPolicy | ManyToManyRelationshipCommandPolicy)[];
   readonly execute: GraphCommandDispatchExecutor<TAuthority>;
+  readonly executeManyToMany?: ManyToManyGraphCommandDispatchExecutor<TAuthority>;
   readonly reportError?: (error: unknown) => void;
 };
 
@@ -58,13 +76,42 @@ const validatePolicy = (policy: RelationshipCommandPolicy) => {
 export const createGraphCommandDispatcher = <TAuthority = unknown>({
   policies,
   execute,
+  executeManyToMany,
   reportError,
 }: CreateGraphCommandDispatcherOptions<TAuthority>) => {
   const policyByRelation = new Map<
     string,
     { policy: RelationshipCommandPolicy; target: AnyEntityDefinition }
   >();
+  const manyToManyPolicyByRelation = new Map<
+    string,
+    { policy: ManyToManyRelationshipCommandPolicy; target: AnyEntityDefinition }
+  >();
   for (const policy of policies) {
+    if ('relationName' in policy) {
+      const relation = policy.entity.relations[policy.relationName];
+      if (!relation || relation.relationKind !== 'manyToMany') {
+        throw new Error(
+          `Graph Command policy ${policy.entity.name}.${policy.relationName} must target a many-to-many Relation.`,
+        );
+      }
+      if (
+        policy.actions.length === 0 ||
+        policy.actions.some(action => action !== 'link' && action !== 'unlink')
+      ) {
+        throw new Error(
+          `Graph Command policy ${policy.entity.name}.${policy.relationName} requires valid actions.`,
+        );
+      }
+      const key = policyKey(policy.entity.name, policy.relationName, relation.target.name);
+      if (manyToManyPolicyByRelation.has(key)) {
+        throw new Error(
+          `Duplicate Graph Command policy for Relation ${policy.entity.name}.${policy.relationName}.`,
+        );
+      }
+      manyToManyPolicyByRelation.set(key, { policy, target: relation.target });
+      continue;
+    }
     const field = validatePolicy(policy);
     const key = policyKey(policy.entity.name, policy.fieldName, field.target.name);
     if (policyByRelation.has(key)) {
@@ -82,11 +129,52 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     const parsed = parseGraphCommandRequest(input);
     if (!parsed.success) return parsed.error;
 
-    const { relation, action } = parsed.request.command;
+    const command = parsed.request.command;
+    if (command.kind === 'many-to-many-relationship-command') {
+      const registered = manyToManyPolicyByRelation.get(
+        policyKey(
+          command.relation.sourceEntityName,
+          command.relation.relationName,
+          command.relation.targetEntityName,
+        ),
+      );
+      if (!registered || !registered.policy.actions.includes(command.action)) {
+        return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
+      }
+      const resolved = resolveGraphCommandRequest(parsed.request, {
+        entities: [registered.policy.entity, registered.target],
+      });
+      if (!resolved.success) return resolved.error;
+      if (resolved.command.kind !== 'many-to-many-relationship-command') {
+        return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
+      }
+      if (!executeManyToMany) {
+        return graphCommandProtocolError(
+          'execution_unavailable',
+          'Many-to-many Relationship Command execution is unavailable.',
+        );
+      }
+      try {
+        const value = await executeManyToMany(resolved.command, context);
+        if (!isJsonValue(value)) throw new Error('Relationship Delta must be JSON-safe.');
+        return { kind: 'graph-command-result', value: cloneJson(value) };
+      } catch (error) {
+        reportError?.(error);
+        return graphCommandProtocolError(
+          'execution_unavailable',
+          'Data graph Command execution is temporarily unavailable.',
+        );
+      }
+    }
+
     const registered = policyByRelation.get(
-      policyKey(relation.sourceEntityName, relation.fieldName, relation.targetEntityName),
+      policyKey(
+        command.relation.sourceEntityName,
+        command.relation.fieldName,
+        command.relation.targetEntityName,
+      ),
     );
-    if (!registered || !registered.policy.actions.includes(action)) {
+    if (!registered || !registered.policy.actions.includes(command.action)) {
       return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
     }
 
@@ -94,6 +182,9 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
       entities: [registered.policy.entity, registered.target],
     });
     if (!resolved.success) return resolved.error;
+    if (resolved.command.kind !== 'relationship-command') {
+      return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
+    }
 
     try {
       const value = await execute(resolved.command, context);

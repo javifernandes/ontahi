@@ -8,6 +8,7 @@ import {
   field,
   mutateEntity,
   relationship,
+  relationshipSet,
   toGraphCommandRequest,
   type DurableMutationReactionEnvelope,
   type RelationshipCommand,
@@ -327,7 +328,8 @@ describe('Applied Mutation Outcomes and Reactions', () => {
           delivery: 'inline',
           when: { mutationKind: 'relationship-command', action: 'link' },
           react: outcome =>
-            outcome.mutationKind === 'relationship-command'
+            outcome.mutationKind === 'relationship-command' &&
+            outcome.command.kind === 'relationship-command'
               ? [
                   {
                     kind: 'invoke-operation',
@@ -487,5 +489,55 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       type: 'enrollment.created',
       enrollment,
     });
+  });
+
+  it('preserves a many-to-many delta as a child Applied Mutation Outcome', async () => {
+    const graph = defineSchoolGraph();
+    const Todo = entity('Todo', { id: field.id() }).manyToMany('courses', graph.Course);
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const todo = createEntityRef(Todo, { id: 'todo-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const followUp = relationshipSet(Todo, 'courses', todo).add(course);
+    let nextId = 0;
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => `outcome-${++nextId}`,
+      executeRelationshipCommand: async () => emptyDelta(),
+      executeManyToManyRelationshipCommand: async command => ({
+        added: [
+          {
+            relation: command.relation,
+            source: todo,
+            target: course,
+          },
+        ],
+        removed: [],
+      }),
+      reactions: [
+        {
+          id: 'relate-todo-course',
+          delivery: 'inline',
+          when: { mutationKind: 'relationship-command', relation: parent.relation },
+          react: () => [{ kind: 'execute-many-to-many-relationship-command', command: followUp }],
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        status: 'applied',
+        outcome: expect.objectContaining({
+          mutationKind: 'relationship-command',
+          command: followUp,
+          delta: {
+            added: [{ relation: followUp.relation, source: todo, target: course }],
+            removed: [],
+          },
+          causality: expect.objectContaining({ depth: 1, rootOutcomeId: 'outcome-1' }),
+        }),
+      }),
+    ]);
   });
 });

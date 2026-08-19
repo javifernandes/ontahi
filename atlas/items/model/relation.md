@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/128d-relationship-command-policy-dispatcher
   - ontahi://plans/128e-relationship-command-runtime-routing
   - ontahi://plans/135-applied-mutation-outcomes-and-reactions
+  - ontahi://plans/135a-selection-valued-many-to-many-core
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -92,6 +93,10 @@ uses a join table. Both endpoints may be semantic Selections, so one Relationshi
 expresses one-or-many sources crossed with one-or-many targets. Explicit Ref selections retain the
 precondition that every named participant exists; arbitrary filtered Selections may resolve empty.
 The join table and columns are provider mapping evidence and do not require a public join Entity.
+
+Core proves this model with `manyToMany`, Selection-valued `add/remove`, Cartesian set deltas,
+strict resolution of explicit Refs, default-deny dispatch, and direct/remote in-process routing.
+Provider join-table mapping and traversal remain required before the Todo example adopts it.
 
 The canonical Relationship Command has a versioned JSON-safe graph-command envelope. A receiving
 runtime resolves its Entity names and Reference Field identity against server-owned topology,

@@ -971,6 +971,28 @@ describe('ontahi application composition root', () => {
     });
   });
 
+  it('declares an attribute-free many-to-many Relation without a join Entity', () => {
+    const Tag = entity({
+      name: 'Tag',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const Todo = entity({
+      name: 'Todo',
+      fields: { id: field.id(), title: field.string() },
+      relations: { tags: relation.manyToMany(Tag) },
+    });
+
+    ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { Todo: [], Tag: [] } }),
+      entities: [Todo, Tag],
+    });
+
+    expect(Todo.relations.tags).toMatchObject({
+      relationKind: 'manyToMany',
+      target: Tag,
+    });
+  });
+
   it('prepares immediate relations for existing physical mapping declarations', () => {
     const Book = entity({
       name: 'Book',

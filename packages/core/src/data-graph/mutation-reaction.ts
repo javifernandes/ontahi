@@ -2,7 +2,9 @@ import { isJsonValue } from '../value/json.js';
 
 import type { EntityMutationCommand, EntityMutationDelta } from './entity-mutation-command.js';
 import type {
+  CanonicalManyToManyRelationIdentity,
   CanonicalRelationIdentity,
+  ManyToManyRelationshipCommand,
   RelationshipCommand,
   RelationshipDelta,
 } from './relationship-command.js';
@@ -17,7 +19,7 @@ export type MutationCausality = {
 export type AppliedRelationshipMutationOutcome = {
   kind: 'applied-mutation-outcome';
   mutationKind: 'relationship-command';
-  command: RelationshipCommand;
+  command: RelationshipCommand | ManyToManyRelationshipCommand;
   delta: RelationshipDelta;
   causality: MutationCausality;
 };
@@ -37,6 +39,11 @@ export type AppliedMutationOutcome =
 export type ExecuteRelationshipCommandIntent = {
   kind: 'execute-relationship-command';
   command: RelationshipCommand;
+};
+
+export type ExecuteManyToManyRelationshipCommandIntent = {
+  kind: 'execute-many-to-many-relationship-command';
+  command: ManyToManyRelationshipCommand;
 };
 
 export type ExecuteEntityMutationCommandIntent = {
@@ -60,6 +67,7 @@ export type EmitEventReactionIntent = {
 
 export type MutationReactionIntent =
   | ExecuteRelationshipCommandIntent
+  | ExecuteManyToManyRelationshipCommandIntent
   | ExecuteEntityMutationCommandIntent
   | InvokeOperationReactionIntent
   | EmitEventReactionIntent;
@@ -67,8 +75,8 @@ export type MutationReactionIntent =
 export type MutationReactionMatch =
   | {
       mutationKind: 'relationship-command';
-      action?: RelationshipCommand['action'];
-      relation?: CanonicalRelationIdentity;
+      action?: RelationshipCommand['action'] | ManyToManyRelationshipCommand['action'];
+      relation?: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity;
     }
   | {
       mutationKind: 'entity-mutation-command';
@@ -129,6 +137,9 @@ export type MutationReactionResult = {
 export type CreateMutationReactionRunnerOptions = {
   reactions: readonly MutationReaction[];
   executeRelationshipCommand: (command: RelationshipCommand) => Promise<RelationshipDelta>;
+  executeManyToManyRelationshipCommand?: (
+    command: ManyToManyRelationshipCommand,
+  ) => Promise<RelationshipDelta>;
   executeEntityMutationCommand?: (command: EntityMutationCommand) => Promise<EntityMutationDelta>;
   invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
   emitEvent?: (event: unknown) => Promise<void>;
@@ -139,10 +150,15 @@ export type CreateMutationReactionRunnerOptions = {
   maxDepth?: number;
 };
 
-const sameRelation = (left: CanonicalRelationIdentity, right: CanonicalRelationIdentity) =>
+const sameRelation = (
+  left: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity,
+  right: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity,
+) =>
   left.sourceEntityName === right.sourceEntityName &&
-  left.fieldName === right.fieldName &&
-  left.targetEntityName === right.targetEntityName;
+  left.targetEntityName === right.targetEntityName &&
+  ('fieldName' in left
+    ? 'fieldName' in right && left.fieldName === right.fieldName
+    : 'relationName' in right && left.relationName === right.relationName);
 
 const reactToOutcome = (
   reaction: MutationReaction,
@@ -171,6 +187,7 @@ const reactToOutcome = (
 export const createMutationReactionRunner = ({
   reactions,
   executeRelationshipCommand,
+  executeManyToManyRelationshipCommand,
   executeEntityMutationCommand,
   invokeOperation,
   emitEvent,
@@ -207,6 +224,24 @@ export const createMutationReactionRunner = ({
   ): Promise<AppliedRelationshipMutationOutcome> => {
     const causality = causalityFor(parent);
     const delta = await executeRelationshipCommand(command);
+    return {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'relationship-command',
+      command,
+      delta,
+      causality,
+    };
+  };
+
+  const applyManyToManyRelationship = async (
+    command: ManyToManyRelationshipCommand,
+    parent: AppliedMutationOutcome,
+  ): Promise<AppliedRelationshipMutationOutcome> => {
+    if (!executeManyToManyRelationshipCommand) {
+      throw new Error('Many-to-many Relationship execution for Mutation Reactions is unavailable.');
+    }
+    const causality = causalityFor(parent);
+    const delta = await executeManyToManyRelationshipCommand(command);
     return {
       kind: 'applied-mutation-outcome',
       mutationKind: 'relationship-command',
@@ -333,6 +368,12 @@ export const createMutationReactionRunner = ({
           try {
             if (intent.kind === 'execute-relationship-command') {
               const outcome = await applyRelationship(intent.command, source);
+              pending.push(outcome);
+              executions.push({ ...execution, status: 'applied', outcome });
+              continue;
+            }
+            if (intent.kind === 'execute-many-to-many-relationship-command') {
+              const outcome = await applyManyToManyRelationship(intent.command, source);
               pending.push(outcome);
               executions.push({ ...execution, status: 'applied', outcome });
               continue;

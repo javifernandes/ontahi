@@ -19,12 +19,17 @@ import {
   type RelatedRootReadMode,
   type RelatedRootReadSpec,
 } from '../relation-root.js';
-import type { RelationshipCommandExecutionRuntime } from '../relationship-command.js';
+import type {
+  ManyToManyRelationshipCommandExecutionRuntime,
+  RelationshipCommandExecutionRuntime,
+  RelationshipFact,
+} from '../relationship-command.js';
 import type { DataGraphExecutionRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
+import { executeInMemoryManyToManyRelationshipCommandEffect } from './many-to-many-relationship-command.js';
 import { materializeRecord, type InMemoryDataset } from './materialization.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
@@ -237,6 +242,7 @@ const countRead = <TParams, TResult>(
 export const createInMemoryDataGraphRuntime = (input: {
   dataset: InMemoryDataset;
   entities?: readonly AnyEntityDefinition[];
+  relationships?: RelationshipFact[];
 }): DataGraphExecutionRuntime<
   InMemoryDataGraphError,
   undefined,
@@ -244,6 +250,7 @@ export const createInMemoryDataGraphRuntime = (input: {
   InMemoryDataGraphError
 > &
   EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
+  ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
   RelationshipCommandExecutionRuntime<InMemoryDataGraphError> =>
   ({
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
@@ -288,6 +295,13 @@ export const createInMemoryDataGraphRuntime = (input: {
       executeInMemoryGraphCommandEffect(input.dataset, command),
     runEntityMutationCommand: command =>
       executeInMemoryEntityMutationCommandEffect(input.dataset, input.entities ?? [], command),
+    runManyToManyRelationshipCommand: command =>
+      executeInMemoryManyToManyRelationshipCommandEffect(
+        input.dataset,
+        input.entities ?? [],
+        (input.relationships ??= []),
+        command,
+      ),
     runRelationshipCommand: command =>
       executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
   }) satisfies DataGraphExecutionRuntime<
@@ -297,4 +311,5 @@ export const createInMemoryDataGraphRuntime = (input: {
     InMemoryDataGraphError
   > &
     EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
+    ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
     RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;

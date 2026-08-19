@@ -337,7 +337,7 @@ export type EntityViewConfig<
   omit?: TOmit;
 };
 
-export type RelationKind = 'hasMany' | 'belongsTo';
+export type RelationKind = 'hasMany' | 'belongsTo' | 'manyToMany';
 export type RelationMappingKind = 'one-to-many' | 'many-to-one';
 
 type EntityMapping<TFields extends FieldDefinitions> = {
@@ -573,6 +573,15 @@ export type EntityDefinition<
     TName,
     TFields,
     TRelations & { [TKey in TRelationName]: RelationDefinition<'belongsTo', TTarget> },
+    TLocators
+  >;
+  manyToMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
+    relationName: TRelationName,
+    target: TTarget,
+  ) => EntityDefinition<
+    TName,
+    TFields,
+    TRelations & { [TKey in TRelationName]: RelationDefinition<'manyToMany', TTarget> },
     TLocators
   >;
 };
@@ -903,6 +912,14 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
         relationKind: 'belongsTo',
         target,
         ...(options?.via ? { sourceField: options.via } : {}),
+      };
+      return this as never;
+    },
+    manyToMany(relationName: string, target: AnyEntityDefinition) {
+      this.relations[relationName] = {
+        kind: 'relation',
+        relationKind: 'manyToMany',
+        target,
       };
       return this as never;
     },
@@ -1261,6 +1278,11 @@ export const resolveRelationFields = (
     | undefined;
   if (!relationDefinition) {
     throw new Error(`Unknown relation ${sourceEntity.name}.${relationName}.`);
+  }
+  if (relationDefinition.relationKind === 'manyToMany') {
+    throw new Error(
+      `Many-to-many Relation ${sourceEntity.name}.${relationName} does not use direct Entity fields.`,
+    );
   }
 
   const singleIdentityField = (entityDefinition: AnyEntityDefinition) => {

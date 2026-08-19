@@ -20,6 +20,8 @@ import {
 } from './read-protocol.js';
 import { isEntityRef } from './ref.js';
 import {
+  type ManyToManyRelationshipCommand,
+  type ManyToManyRelationshipCommandExecutionRuntime,
   type RelationshipCommand,
   type RelationshipCommandExecutionRuntime,
   type RelationshipDelta,
@@ -104,7 +106,9 @@ const isRelationshipFact = (value: unknown) =>
   isRecord(value) &&
   isRecord(value.relation) &&
   typeof value.relation.sourceEntityName === 'string' &&
-  typeof value.relation.fieldName === 'string' &&
+  (typeof value.relation.fieldName === 'string' ||
+    (typeof value.relation.relationName === 'string' &&
+      value.relation.cardinality === 'many-to-many')) &&
   typeof value.relation.targetEntityName === 'string' &&
   isEntityRef(value.source) &&
   isEntityRef(value.target);
@@ -138,6 +142,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
   TOptions,
   RemoteDataGraphError
 > &
+  ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   RelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> => {
   const executeRead = <TParams, TResult>(
     read: QueryOrView<TParams, TResult>,
@@ -173,6 +178,39 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
       catch: toRemoteDataGraphError,
     });
 
+  const executeRelationshipCommand = (
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    options?: TOptions,
+  ) => {
+    if (!commandTransport) return Effect.fail(unsupportedCapability('Relationship Command'));
+    return Effect.tryPromise({
+      try: async () => {
+        let request: GraphCommandRequestV1;
+        try {
+          request = toGraphCommandRequest(command);
+        } catch (cause) {
+          throw new RemoteDataGraphError(
+            'invalid_request',
+            'Failed to encode the remote Relationship Command.',
+            cause,
+          );
+        }
+        let response: unknown;
+        try {
+          response = await commandTransport(request, options);
+        } catch (cause) {
+          throw new RemoteDataGraphError(
+            'transport_failure',
+            'Remote data graph transport failed.',
+            cause,
+          );
+        }
+        return readCommandResponseValue(response);
+      },
+      catch: toRemoteDataGraphError,
+    });
+  };
+
   return {
     get: <TParams, TResult>(
       read: QueryOrView<TParams, TResult>,
@@ -197,34 +235,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
     stream: () => Stream.fail(unsupportedCapability('stream')),
     runCommand: <TResult>(_command: GraphCommandSpec<any, any, TResult>, _options?: TOptions) =>
       Effect.fail(unsupportedCapability('Command')),
-    runRelationshipCommand: (command: RelationshipCommand, options?: TOptions) => {
-      if (!commandTransport) return Effect.fail(unsupportedCapability('Relationship Command'));
-      return Effect.tryPromise({
-        try: async () => {
-          let request: GraphCommandRequestV1;
-          try {
-            request = toGraphCommandRequest(command);
-          } catch (cause) {
-            throw new RemoteDataGraphError(
-              'invalid_request',
-              'Failed to encode the remote Relationship Command.',
-              cause,
-            );
-          }
-          let response: unknown;
-          try {
-            response = await commandTransport(request, options);
-          } catch (cause) {
-            throw new RemoteDataGraphError(
-              'transport_failure',
-              'Remote data graph transport failed.',
-              cause,
-            );
-          }
-          return readCommandResponseValue(response);
-        },
-        catch: toRemoteDataGraphError,
-      });
-    },
+    runRelationshipCommand: executeRelationshipCommand,
+    runManyToManyRelationshipCommand: executeRelationshipCommand,
   };
 };
