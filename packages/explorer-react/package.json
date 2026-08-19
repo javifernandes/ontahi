@@ -58,7 +58,7 @@
     "@monaco-editor/react": "^4.6.0",
     "@ontahi/core": "workspace:*",
     "@ontahi/react": "workspace:*",
-    "monaco-editor": "^0.55.1"
+    "monaco-editor": "^0.56.0"
   },
   "devDependencies": {
     "@tanstack/react-query": "^5.51.0",
