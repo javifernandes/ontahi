@@ -1,6 +1,6 @@
 import type { AnyEntityDefinition } from '../definitions.js';
-import type { DataGraphDefaultStorage } from '../storage.js';
 import type { RelationshipFact } from '../relationship-command.js';
+import type { DataGraphDefaultStorage } from '../storage.js';
 
 import type { InMemoryDataset } from './materialization.js';
 import {
@@ -45,7 +45,7 @@ export const createInMemoryDataGraphStorage = (
       entities = declarations;
     },
     createRuntime: () =>
-      createInMemoryDataGraphRuntime({ dataset, entities: getEntities(), relationships }),
+      createInMemoryDataGraphRuntime({ dataset, entities: entities ?? [], relationships }),
     readEntityData: query =>
       createInMemoryReflectedEntityDataReader({
         dataset,

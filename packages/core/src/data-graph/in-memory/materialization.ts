@@ -1,12 +1,12 @@
 import { resolveRelationFields, type AnyEntityDefinition } from '../definitions.js';
-import { createEntityIdentityRef } from '../ref.js';
-import type { RelationshipFact } from '../relationship-command.js';
 import { RelationQueryBuilder, type SelectionValue } from '../query.js';
+import { createEntityIdentityRef } from '../ref.js';
 import {
   getEntityReferenceField,
   liftEntityReferenceRecord,
   liftEntityReferenceValue,
 } from '../reference-field.js';
+import type { RelationshipFact } from '../relationship-command.js';
 
 import { applyOrder, applyPredicates } from './query.js';
 

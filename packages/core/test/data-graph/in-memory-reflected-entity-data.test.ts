@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createInMemoryDataGraphStorage,
+  createRuntimeBoundDataGraphApi,
   entity,
   field,
   mapEntity,
@@ -12,6 +13,25 @@ import {
 } from '../../src/data-graph/index.js';
 
 describe('in-memory reflected entity data', () => {
+  it('creates a read runtime before entity metadata is bound', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const storage = createInMemoryDataGraphStorage({
+      dataset: { Book: [{ id: 'book-1', title: 'Alpha' }] },
+    });
+    const graph = createRuntimeBoundDataGraphApi(() => storage.createRuntime());
+
+    await expect(
+      Effect.runPromise(
+        graph
+          .bindGraphRead(query(Book).select(book => ({ id: book.id, title: book.title })))
+          .run(undefined),
+      ),
+    ).resolves.toEqual([{ id: 'book-1', title: 'Alpha' }]);
+  });
+
   it('searches, filters, sorts, paginates, and observes live graph mutations', async () => {
     const Book = entity('Book', {
       id: field.id(),
