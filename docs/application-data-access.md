@@ -272,6 +272,11 @@ import { TodoItem as GeneratedTodoItem } from './generated/client-entities.js';
 
 const client = createFetchGraphClient();
 const TodoItem = client.graph.bindClientEntity(GeneratedTodoItem);
+const TodoItemListItem = TodoItem.view('TodoItemListItem', {
+  id: true,
+  title: true,
+  completed: true,
+});
 
 const rows = await runBrowserEffect(
   TodoItem.where(todo => todo.completed.eq(false))

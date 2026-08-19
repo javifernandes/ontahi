@@ -102,6 +102,18 @@ describe('runtime-bound data graph api', () => {
     expect(selection.pipe(value => value)).toBe(selection);
   });
 
+  it('preserves the entity surface and bound facade identity on a supplied target', () => {
+    const api = createRuntimeBoundDataGraphApi(() => createRuntime());
+    const bindingTarget = {};
+    const BoundBook = api.selectionAssembly.bindSelectionEntity(Book, bindingTarget);
+
+    expect(BoundBook).toBe(bindingTarget);
+    expect(BoundBook.name).toBe(Book.name);
+    expect(BoundBook.fields).toBe(Book.fields);
+    expect(BoundBook.pipe(entity => entity)).toBe(BoundBook);
+    expect(BoundBook.pipe(entity => entity.all()).root).toBe(Book);
+  });
+
   it('binds a portable client Entity facade without losing its client-owned surface', async () => {
     const runtime = createRuntime();
     const api = createRuntimeBoundDataGraphApi(() => runtime);
