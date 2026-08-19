@@ -184,6 +184,7 @@ export const dataGraphRuntimeConformance = (
               slug: 'gamma',
               title: 'Gamma',
               published: false,
+              note: null,
             },
             returning: ['id', 'title'],
             cardinality: 'one',
@@ -201,12 +202,14 @@ export const dataGraphRuntimeConformance = (
                 slug: 'delta',
                 title: 'Delta',
                 published: false,
+                note: null,
               },
               {
                 id: 'book-5',
                 slug: 'epsilon',
                 title: 'Epsilon',
                 published: false,
+                note: null,
               },
             ],
             returning: ['id'],
@@ -263,13 +266,22 @@ export const dataGraphRuntimeConformance = (
 
         await expect(
           Effect.runPromise(
-            upsert({ id: 'ignored', slug: 'alpha', title: 'Ignored', published: true }, 'ignore'),
+            upsert(
+              { id: 'ignored', slug: 'alpha', title: 'Ignored', published: true, note: null },
+              'ignore',
+            ),
           ),
         ).resolves.toEqual([]);
         await expect(
           Effect.runPromise(
             upsert(
-              { id: 'book-1', slug: 'alpha', title: 'Alpha revised', published: true },
+              {
+                id: 'book-1',
+                slug: 'alpha',
+                title: 'Alpha revised',
+                published: true,
+                note: null,
+              },
               'merge',
             ),
           ),
@@ -287,12 +299,14 @@ export const dataGraphRuntimeConformance = (
                   slug: 'alpha',
                   title: 'Ignored again',
                   published: true,
+                  note: null,
                 },
                 {
                   id: 'book-3',
                   slug: 'gamma',
                   title: 'Gamma',
                   published: false,
+                  note: null,
                 },
               ],
               upsert: { conflictOn: ['slug'], strategy: 'ignore' },
@@ -319,6 +333,7 @@ export const dataGraphRuntimeConformance = (
                   slug: 'gamma',
                   title: 'Gamma',
                   published: false,
+                  note: null,
                 },
                 upsert: { conflictOn: [], strategy: 'merge' },
               })

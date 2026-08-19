@@ -209,15 +209,20 @@ describe('PostgreSQL data graph runtime', () => {
     );
     await expect(
       Effect.runPromise(
-        runtime.runManyToManyRelationshipCommand(
-          relationshipSet(
-            RelationshipTodo,
-            'tags',
-            createEntityRef(RelationshipTodo, { id: 'missing' }),
-          ).add(createEntityRef(RelationshipTag, { id: 'tag-1' })),
-        ),
+        runtime
+          .runManyToManyRelationshipCommand(
+            relationshipSet(
+              RelationshipTodo,
+              'tags',
+              createEntityRef(RelationshipTodo, { id: 'missing' }),
+            ).add(createEntityRef(RelationshipTag, { id: 'tag-1' })),
+          )
+          .pipe(Effect.either),
       ),
-    ).rejects.toMatchObject({ reason: 'cardinality_mismatch' });
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
     await expect(
       pool.query('SELECT todo_id, tag_id FROM relationship_todo_tags ORDER BY todo_id, tag_id'),
     ).resolves.toMatchObject({
@@ -226,6 +231,37 @@ describe('PostgreSQL data graph runtime', () => {
         { todo_id: 'todo-2', tag_id: 'tag-1' },
       ],
     });
+    await expect(
+      Effect.runPromise(
+        runtime.runManyToManyRelationshipCommand(
+          relationshipSet(
+            RelationshipTodo,
+            'tags',
+            selection(RelationshipTodo, todo => todo.title.eq('Missing')),
+          ).add(selection(RelationshipTag, tag => tag.label.eq('Core'))),
+        ),
+      ),
+    ).resolves.toEqual({ added: [], removed: [] });
+    const remove = relationshipSet(
+      RelationshipTodo,
+      'tags',
+      selection(RelationshipTodo, todo => todo.title.eq('Selected')),
+    ).remove(selection(RelationshipTag, tag => tag.label.eq('Core')));
+    await expect(
+      Effect.runPromise(runtime.runManyToManyRelationshipCommand(remove)),
+    ).resolves.toMatchObject({
+      added: [],
+      removed: [
+        { source: { locator: { id: 'todo-1' } }, target: { locator: { id: 'tag-1' } } },
+        { source: { locator: { id: 'todo-2' } }, target: { locator: { id: 'tag-1' } } },
+      ],
+    });
+    await expect(
+      Effect.runPromise(runtime.runManyToManyRelationshipCommand(remove)),
+    ).resolves.toEqual({ added: [], removed: [] });
+    await expect(
+      pool.query('SELECT todo_id, tag_id FROM relationship_todo_tags ORDER BY todo_id, tag_id'),
+    ).resolves.toMatchObject({ rows: [] });
     await expect(
       Effect.runPromise(
         runtime.get(
@@ -238,7 +274,7 @@ describe('PostgreSQL data graph runtime', () => {
     ).resolves.toEqual({
       id: 'todo-1',
       title: 'Selected',
-      tags: [{ id: 'tag-1', label: 'Core' }],
+      tags: [],
     });
   });
 
