@@ -7,6 +7,9 @@ import type {
   InferGraphSchemaClientInput,
   QueryOrView,
   QuerySpec,
+  ManyToManyRelationshipCommand,
+  RelationshipCommand,
+  RelationshipDelta,
 } from '@ontahi/core/data-graph';
 import type { QueryKey, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 
@@ -30,6 +33,14 @@ export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TR
     command: GraphCommandSpec<any, any, TResult>,
     options?: TCommandOptions,
   ): Promise<TResult>;
+  runRelationshipCommand?(
+    command: RelationshipCommand,
+    options?: TCommandOptions,
+  ): Promise<RelationshipDelta>;
+  runManyToManyRelationshipCommand?(
+    command: ManyToManyRelationshipCommand,
+    options?: TCommandOptions,
+  ): Promise<RelationshipDelta>;
 }
 
 export type BuildableRead<TResult> = {

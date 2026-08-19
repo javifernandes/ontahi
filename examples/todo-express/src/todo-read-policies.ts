@@ -1,7 +1,7 @@
 import type { GraphReadPolicy } from '@ontahi/core/data-graph';
 import type { Principal } from '@ontahi/core/runtime/server';
 
-import { Tag, TodoItem, TodoList, TodoTag } from './todo.js';
+import { Tag, TodoItem, TodoList } from './todo.js';
 
 export type TodoGraphReadAuthority = {
   principal: Principal | null;
@@ -35,18 +35,6 @@ const TagReadPolicy = {
   scope: 'all',
 } satisfies GraphReadPolicy<typeof Tag, TodoGraphReadAuthority>;
 
-const TodoTagReadPolicy = {
-  entity: TodoTag,
-  modes: ['get', 'run', 'count'],
-  cardinalities: ['one', 'many'],
-  maxLimit: 500,
-  fields: {
-    todoId: { select: true, filter: ['eq', 'in'], order: true },
-    tagId: { select: true, filter: ['eq', 'in'] },
-  },
-  scope: 'all',
-} satisfies GraphReadPolicy<typeof TodoTag, TodoGraphReadAuthority>;
-
 const TodoItemReadPolicy = {
   entity: TodoItem,
   modes: ['get', 'run', 'count'],
@@ -58,12 +46,14 @@ const TodoItemReadPolicy = {
     title: { select: true, filter: ['eq'], order: true },
     completed: { select: true, filter: ['eq'] },
   },
+  relations: {
+    tags: TagReadPolicy,
+  },
   scope: 'all',
 } satisfies GraphReadPolicy<typeof TodoItem, TodoGraphReadAuthority>;
 
 export const todoGraphReadPolicies = [
   TodoListReadPolicy,
   TagReadPolicy,
-  TodoTagReadPolicy,
   TodoItemReadPolicy,
 ] as const;

@@ -1,4 +1,11 @@
-import { entity, field, query, type GraphCommandSpec } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  entity,
+  field,
+  query,
+  relationshipSet,
+  type GraphCommandSpec,
+} from '@ontahi/core/data-graph';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFetchGraphReadExecutor } from '../../src/graph/index.js';
@@ -171,5 +178,45 @@ describe('Fetch graph read executor', () => {
       code: 'unsupported_capability',
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('executes many-to-many Relationship Commands through the graph Command endpoint', async () => {
+    const Tag = entity('Tag', { id: field.id() });
+    const TaggedTodo = entity('TaggedTodo', { id: field.id() }).manyToMany('tags', Tag);
+    const command = relationshipSet(
+      TaggedTodo,
+      'tags',
+      createEntityRef(TaggedTodo, { id: 'todo-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    const delta = {
+      added: [
+        {
+          relation: command.relation,
+          source: createEntityRef(TaggedTodo, { id: 'todo-1' }),
+          target: createEntityRef(Tag, { id: 'tag-1' }),
+        },
+      ],
+      removed: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ kind: 'graph-command-result', value: delta }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const executor = createFetchGraphReadExecutor({ commandEndpoint: '/graph/commands' });
+
+    await expect(executor.runManyToManyRelationshipCommand!(command)).resolves.toEqual(delta);
+    expect(fetchMock).toHaveBeenCalledWith('/graph/commands', {
+      method: 'POST',
+      headers: expect.any(Headers),
+      credentials: 'same-origin',
+      body: expect.any(String),
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({
+      version: 1,
+      kind: 'graph-command',
+      command: { kind: 'many-to-many-relationship-command', action: 'link' },
+    });
   });
 });

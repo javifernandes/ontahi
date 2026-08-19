@@ -1,7 +1,7 @@
 # Ontahi Todo Express Example
 
 This is a small Ontahi application with interchangeable in-memory and direct PostgreSQL graph
-storage. It declares lists, todos, tags, and the associative entity between todos and tags; executes
+storage. It declares lists, todos, tags, and a direct many-to-many Relation between todos and tags; executes
 caller-authored browser Queries through the default-deny Express graph-read bridge; transports
 Selections into write Operations; includes an in-process durable Operation and a host-supplied
 notification Capability; generates browser-safe client declarations; and renders a React UI through
@@ -123,12 +123,9 @@ The example deliberately exercises two different domain structures:
 - `TodoItem.list: field.ref(TodoList)` expresses composition: every todo item lives in one list. The same
   declaration is a Ref-valued field and the `belongsTo` relation; PostgreSQL lowers it to
   `list_id` only at the storage boundary.
-- `TodoItem hasMany TodoTag` and `TodoTag belongsTo Tag` express association through an explicit
-  semantic join entity. Ontahi does not hide the association behind a storage-only join table.
-
-`TodoTag.remove` accepts that association as a semantic target, so
-`TodoTag.refByTodoAndTag(todoId, tagId)` can remove one assignment without inventing a synthetic
-join identity.
+- `TodoItem.tags` expresses an attribute-free many-to-many association directly. `todo_tags` remains
+  physical edge storage; it is not reflected, generated, authorized, or manipulated as a semantic
+  Entity.
 
 The browser expresses the inverse membership as an ordinary Query rather than a wrapper Operation:
 
@@ -148,10 +145,11 @@ Each entity owns its fields, identity, relations, and operations in one semantic
 the validated operation contract instead of an example-local list of IDs. Ontahi keeps the
 selection representation behind the entity-facing API.
 
-`TodoItem.assignTags` combines that semantic target with explicit tag identities. It validates those
-identities, resolves the `TodoItem` Selection at execution time, and creates all idempotent `TodoTag`
-associations with one bulk upsert. The UI can therefore assign one tag to any explicit set of todos
-without multiplying the operation API by list or filter.
+`relationshipSet(TodoItem, 'tags', todos).add(tags)` combines Selection-valued source and target
+endpoints in one structural Relationship Command. Ontahi validates explicit identities, resolves
+both Selections at execution time, applies the Cartesian edge delta atomically, and returns only the
+links actually added. `remove` uses the same canonical Relation identity. No application Operation
+or join-Entity repository is needed for this structural behavior.
 
 A caller can define membership by reference:
 
@@ -219,10 +217,10 @@ composition refines that same value without creating a UI-only filter language.
 1. [`src/storage.ts`](./src/storage.ts) selects one default graph storage—either in-memory
    or PostgreSQL. The host owns the physical mapping, migration, database connection, process
    lifetime, and error reporting policy.
-2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `TodoItem`, `Tag`, and `TodoTag`
+2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `TodoItem`, and `Tag`
    declarations, including their identities, relations, write Operations, and durable Operation.
    [`src/todo-read-policies.ts`](./src/todo-read-policies.ts) separately declares the browser-visible
-   read surface.
+   read surface and the Relationship Command policy exposes only `TodoItem.tags` link/unlink.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,
    `inProcessTasks()`, the notification Capability, and the public entities into the complete
    `TodoApplication` used by reflection, execution, tasks, ingress, and code generation. Task
@@ -280,7 +278,7 @@ pnpm --filter @ontahi/example-todo-express test
 
 The integration test starts a real ephemeral HTTP server, compares one projected Query through
 direct and remote execution, verifies reference-defined and predicate-defined Selections mutate
-only their target entities, assigns tags through the associative entity, exercises the durable
+only their target entities, assigns tags through a direct Relationship Command, exercises the durable
 Operation, and verifies invalid input returns Ontahi's canonical `input_invalid` result.
 
 ## Host responsibilities exposed by the example

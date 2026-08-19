@@ -15,6 +15,13 @@ export type EntityRow = Record<string, unknown>;
 
 export interface SupabaseLikeClient {
   from(table: string): any;
+  rpc?: (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{
+    data?: unknown;
+    error?: { message: string } | null;
+  }>;
 }
 
 export type SupabaseGraphRuntimeOptions<TClientKind extends string = string> =

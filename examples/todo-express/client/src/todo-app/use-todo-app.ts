@@ -1,14 +1,21 @@
-import { useDurableOperation, useGraphQuery, useOperation } from '@ontahi/react/graph';
+import { createEntityRef, relationshipSet, Selection } from '@ontahi/core/data-graph';
+import {
+  useDurableOperation,
+  useGraphQuery,
+  useManyToManyRelationshipCommand,
+  useOperation,
+} from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 
-import { Tag, TodoItem, TodoList } from '../../../src/generated/client-entities.js';
 import {
-  tagsQuery,
-  todoItemsQuery,
-  todoListsQuery,
-  todoTagAssignmentsQuery,
-} from '../todo-queries.js';
+  Tag,
+  TagSchema,
+  TodoItem,
+  TodoItemSchema,
+  TodoList,
+} from '../../../src/generated/client-entities.js';
+import { tagsQuery, todoItemsQuery, todoListsQuery } from '../todo-queries.js';
 
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
@@ -34,7 +41,6 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [runtime, setRuntime] = useState<BootstrapState<TodoRuntime>>({ status: 'loading' });
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
-  const assignments = useGraphQuery(todoTagAssignmentsQuery);
   const todoSelection = useMemo(() => {
     const inSelectedList = TodoItem.selection(todo =>
       todo.list.eq(TodoList.refById(selectedListId)),
@@ -54,8 +60,21 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const createTodo = useOperation(TodoItem.domain.create);
   const completeSelectedTodos = useOperation(TodoItem.domain.complete({ todos: selectedIds }));
   const completeVisibleTodos = useOperation(TodoItem.domain.complete({ todos: todoSelection }));
-  const assignTags = useOperation(TodoItem.domain.assignTags);
-  const removeTags = useOperation(TodoItem.domain.removeTags);
+  const relationshipCommand = (action: 'add' | 'remove') =>
+    useManyToManyRelationshipCommand(
+      ({ todoIds, tagId }: { todoIds: string[]; tagId: string }) => {
+        const todos = Selection.references(
+          TodoItemSchema,
+          todoIds.map(id => createEntityRef(TodoItemSchema, { id })),
+        );
+        const tag = createEntityRef(TagSchema, { id: tagId });
+        const relation = relationshipSet(TodoItemSchema, 'tags', todos);
+        return action === 'add' ? relation.add(tag) : relation.remove(tag);
+      },
+      { onSuccess: () => todos.refetch() },
+    );
+  const linkTags = relationshipCommand('add');
+  const unlinkTags = relationshipCommand('remove');
   const deleteAll = useOperation(TodoItem.domain.deleteAll);
   const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
@@ -142,8 +161,8 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
 
   const changeSelectedTags = async (mode: 'assign' | 'remove') => {
     if (!selectedTagId || selectedIds.length === 0) return;
-    const operation = mode === 'assign' ? assignTags : removeTags;
-    await operation.executeAsync({ todos: selectedIds, tagIds: [selectedTagId] });
+    const command = mode === 'assign' ? linkTags : unlinkTags;
+    await command.mutateAsync({ todoIds: selectedIds, tagId: selectedTagId });
   };
 
   const signOut = async () => {
@@ -168,15 +187,6 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     authentication.status === 'ready' ? authentication.value : undefined;
   const canComplete =
     authenticationSession?.mode === 'disabled' || authenticationSession?.authenticated === true;
-  const tagById = new Map(tags.data?.map(tag => [tag.id, tag]) ?? []);
-  const tagIdsByTodo = new Map<string, string[]>();
-  assignments.data?.forEach(assignment => {
-    tagIdsByTodo.set(assignment.todoId, [
-      ...(tagIdsByTodo.get(assignment.todoId) ?? []),
-      assignment.tagId,
-    ]);
-  });
-
   return {
     header: {
       runtime,
@@ -225,13 +235,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
         setStatusFilter(status);
         setSelectedIds([]);
       },
-      items: visibleTodos.map(todo => ({
-        ...todo,
-        tags: (tagIdsByTodo.get(todo.id) ?? []).flatMap(tagId => {
-          const tag = tagById.get(tagId);
-          return tag ? [tag] : [];
-        }),
-      })),
+      items: visibleTodos,
       selectedIds,
       selectTodo: (id: string, selected: boolean) => {
         setSelectedIds(current =>
@@ -244,8 +248,8 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
         hasVisibleTodos: visibleTodos.length > 0,
         hasSelectedTag: Boolean(selectedTagId),
         isCompleting: completeSelectedTodos.isExecuting || completeVisibleTodos.isExecuting,
-        isAssigningTags: assignTags.isExecuting,
-        isRemovingTags: removeTags.isExecuting,
+        isAssigningTags: linkTags.isPending,
+        isRemovingTags: unlinkTags.isPending,
         isDeletingAll: deleteAll.isExecuting,
         completeSelected,
         completeVisible,

@@ -7,6 +7,7 @@ import express, { type Express } from 'express';
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication } from './graph.js';
 import { todoGraphReadPolicies } from './todo-read-policies.js';
+import { TodoItem } from './todo.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
@@ -32,6 +33,9 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
       }),
       graphRead: {
         policies: todoGraphReadPolicies,
+      },
+      graphCommand: {
+        policies: [{ entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] }],
       },
     }),
   );

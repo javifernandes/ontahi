@@ -19,6 +19,8 @@ relatedPlans:
   - ontahi://plans/116-ontahi-selection-model
   - bookops://plans/122-ontahi-developer-book
   - ontahi://plans/125-ontahi-reference-fields
+  - ontahi://plans/131-ontahi-relationship-semantics
+  - ontahi://plans/131a-relationship-command-delta-core-experiment
 exemplars:
   - bookops.model.book
   - bookops.model.paragraph
@@ -73,3 +75,20 @@ Reference Fields are the intended semantic evolution of that bridge. A declarati
 Entity value, and lets storage providers lower it to their physical foreign-key representation.
 An included Query may materialize the target at the same result path. Existing scalar `listId`
 fields and explicit relations remain the incremental migration surface.
+
+An Association Entity is an ordinary Entity whose required construction input and identity include
+the participants it associates. Creating an `Enrollment(student, course, startedAt, status)` creates
+that association instance; deleting it extinguishes the association; updating it evolves the
+association's own lifecycle. This is a semantic classification, not an `AssociationEntity`
+superclass or a Relation with Entity hooks.
+
+That structural lifecycle is provided by Ontahi. The framework derives and validates required
+participant Refs during generic Entity construction and provides generic deletion of the
+association instance; each application must not recreate those mechanics as custom Operations. A
+Domain Operation is added only for domain-specific invariants, authorization, effects, failures, or
+coordination beyond the structural lifecycle.
+
+Direct Relations and Association Entities are observationally polymorphic: both can project
+relationship facts for traversal, policy input, and telemetry. Their mutation semantics remain
+distinct. Direct edges use structural Relationship Commands; a reified association uses ordinary
+Entity creation, update, deletion, and any Domain Operations required by its invariants or effects.

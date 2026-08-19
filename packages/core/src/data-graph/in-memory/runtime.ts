@@ -2,6 +2,7 @@ import { Effect, Stream } from 'effect';
 
 import type { GraphCommandSpec } from '../command.js';
 import type { AnyEntityDefinition } from '../definitions.js';
+import type { EntityMutationCommandExecutionRuntime } from '../entity-mutation-command.js';
 import {
   resolveQuerySpec,
   type PlainGraphRead,
@@ -18,12 +19,20 @@ import {
   type RelatedRootReadMode,
   type RelatedRootReadSpec,
 } from '../relation-root.js';
+import type {
+  ManyToManyRelationshipCommandExecutionRuntime,
+  RelationshipCommandExecutionRuntime,
+  RelationshipFact,
+} from '../relationship-command.js';
 import type { DataGraphExecutionRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
+import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
+import { executeInMemoryManyToManyRelationshipCommandEffect } from './many-to-many-relationship-command.js';
 import { materializeRecord, type InMemoryDataset } from './materialization.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
+import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
 
 const selectRows = (
   spec: QuerySpec<any, any>,
@@ -44,6 +53,7 @@ const materializeRows = <TResult>(
   spec: QuerySpec<any, TResult>,
   rows: ReadonlyArray<Record<string, unknown>>,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
   options?: { entityRows?: boolean },
 ) =>
   rows.map(row =>
@@ -53,6 +63,7 @@ const materializeRows = <TResult>(
       options?.entityRows ? undefined : spec.select,
       options?.entityRows ? undefined : spec.includes,
       dataset,
+      relationships,
     ),
   ) as TResult[];
 
@@ -60,11 +71,12 @@ const executePlainRead = <TParams, TResult>(
   queryOrView: PlainGraphRead<TParams, TResult>,
   params: TParams,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
   options?: { entityRows?: boolean },
 ) => {
   const spec = resolveQuerySpec(queryOrView, params);
 
-  const rows = materializeRows(spec, selectRows(spec, dataset), dataset, options);
+  const rows = materializeRows(spec, selectRows(spec, dataset), dataset, relationships, options);
   if (spec.cardinality === 'one' && rows.length !== 1) {
     throw new InMemoryDataGraphError(
       `Expected exactly one ${spec.root.name}, received ${rows.length}.`,
@@ -140,7 +152,7 @@ const executeEntityRows = (
         },
         dataset,
       ) as Array<Record<string, unknown>>)
-    : executePlainRead(read as PlainGraphRead<any, any>, undefined, dataset, {
+    : executePlainRead(read as PlainGraphRead<any, any>, undefined, dataset, [], {
         entityRows: true,
       });
 
@@ -167,7 +179,7 @@ const executeRelatedRootRead = <TResult>(
 
   const targetSpec = withRelatedTargetPredicate(spec, targetField, sourceValues);
   const targetRows = selectRows(targetSpec, dataset);
-  const entityRows = materializeRows<Record<string, unknown>>(targetSpec, targetRows, dataset, {
+  const entityRows = materializeRows<Record<string, unknown>>(targetSpec, targetRows, dataset, [], {
     entityRows: true,
   });
 
@@ -189,10 +201,16 @@ const executeRead = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
   params: TParams,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ): TResult[] =>
   isRelatedRootReadSpec(queryOrView)
     ? (executeRelatedRootRead(queryOrView, dataset) as TResult[])
-    : executePlainRead(queryOrView as PlainGraphRead<TParams, TResult>, params, dataset);
+    : executePlainRead(
+        queryOrView as PlainGraphRead<TParams, TResult>,
+        params,
+        dataset,
+        relationships,
+      );
 
 const countRead = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
@@ -232,16 +250,23 @@ const countRead = <TParams, TResult>(
 
 export const createInMemoryDataGraphRuntime = (input: {
   dataset: InMemoryDataset;
+  entities?: readonly AnyEntityDefinition[];
+  relationships?: RelationshipFact[];
 }): DataGraphExecutionRuntime<
   InMemoryDataGraphError,
   undefined,
   undefined,
   InMemoryDataGraphError
-> =>
-  ({
+> &
+  EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
+  ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
+  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> => {
+  const relationships = input.relationships ?? [];
+  input.relationships = relationships;
+  return {
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset)[0] ?? null,
+        try: () => executeRead(queryOrView, params, input.dataset, relationships)[0] ?? null,
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -249,7 +274,7 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     run: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset),
+        try: () => executeRead(queryOrView, params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -258,7 +283,7 @@ export const createInMemoryDataGraphRuntime = (input: {
     stream: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Stream.fromEffect(
         Effect.try({
-          try: () => executeRead(queryOrView, params, input.dataset),
+          try: () => executeRead(queryOrView, params, input.dataset, relationships),
           catch: cause =>
             cause instanceof InMemoryDataGraphError
               ? cause
@@ -279,9 +304,24 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     runCommand: <TResult>(command: GraphCommandSpec<any, any, TResult>) =>
       executeInMemoryGraphCommandEffect(input.dataset, command),
-  }) satisfies DataGraphExecutionRuntime<
+    runEntityMutationCommand: command =>
+      executeInMemoryEntityMutationCommandEffect(input.dataset, input.entities ?? [], command),
+    runManyToManyRelationshipCommand: command =>
+      executeInMemoryManyToManyRelationshipCommandEffect(
+        input.dataset,
+        input.entities ?? [],
+        relationships,
+        command,
+      ),
+    runRelationshipCommand: command =>
+      executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
+  } satisfies DataGraphExecutionRuntime<
     InMemoryDataGraphError,
     undefined,
     undefined,
     InMemoryDataGraphError
-  >;
+  > &
+    EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
+    ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
+    RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;
+};

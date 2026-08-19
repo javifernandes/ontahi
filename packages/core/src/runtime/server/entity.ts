@@ -51,7 +51,7 @@ declare const ONTAHI_UNIFIED_ENTITY_TYPE: unique symbol;
 type FieldDefinitions = Record<string, AnyFieldDefinition>;
 
 export type OntahiRelationDeclaration<
-  TKind extends 'belongsTo' | 'hasMany',
+  TKind extends RelationKind,
   TTarget extends AnyEntityDefinition,
   TTyped extends boolean = boolean,
 > = {
@@ -94,7 +94,7 @@ type ResolvedSemanticEntityTarget<TTarget> =
 
 type OntahiRelationDeclarations = Record<
   string,
-  OntahiRelationDeclaration<'belongsTo' | 'hasMany', AnyEntityDefinition, boolean>
+  OntahiRelationDeclaration<RelationKind, AnyEntityDefinition, boolean>
 >;
 
 type EntityRelationsFrom<TDeclarations extends OntahiRelationDeclarations> = {
@@ -211,6 +211,20 @@ function hasMany(
   };
 }
 
+function manyToMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
+  target: OntahiSemanticEntityRef<TTarget, TTyped>,
+): OntahiRelationDeclaration<'manyToMany', TTarget, TTyped>;
+function manyToMany<TTarget extends AnyEntityDefinition>(
+  target: TTarget,
+): OntahiRelationDeclaration<'manyToMany', TTarget, true>;
+function manyToMany(target: OntahiSemanticEntityTarget<AnyEntityDefinition>) {
+  return {
+    relationKind: 'manyToMany' as const,
+    target,
+    typed: !isSemanticEntityRef(target) || target.typed,
+  };
+}
+
 type EntityFromReferenceFieldSource<TSource extends EntityReferenceFieldSource> =
   TSource extends EntityReferenceFieldSource<
     infer TName,
@@ -239,6 +253,7 @@ const inverse = <TSource extends EntityReferenceFieldSource>(
 export const relation = {
   belongsTo,
   hasMany,
+  manyToMany,
   inverse,
 };
 
@@ -900,7 +915,7 @@ const defineOntahiEntity = <
   ) => {
     const relations = schema.relations as Record<
       string,
-      RelationDefinition<'belongsTo' | 'hasMany', AnyEntityDefinition>
+      RelationDefinition<RelationKind, AnyEntityDefinition>
     >;
     Object.entries(declarations).forEach(([name, declaration]) => {
       if (skipSemanticRefs && isSemanticEntityRef(declaration.target)) return;

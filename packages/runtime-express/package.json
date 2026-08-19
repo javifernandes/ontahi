@@ -34,6 +34,11 @@
       "import": "./dist/graph-read/index.js",
       "require": "./dist/graph-read/index.js"
     },
+    "./graph-command": {
+      "types": "./dist/graph-command/index.d.ts",
+      "import": "./dist/graph-command/index.js",
+      "require": "./dist/graph-command/index.js"
+    },
     "./explorer": {
       "types": "./dist/explorer/index.d.ts",
       "import": "./dist/explorer/index.js",

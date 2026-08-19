@@ -1,13 +1,16 @@
 import {
   compileQueryPlan,
+  createEntityRef,
   createRelatedRootReadSpec,
   entity,
   field,
   mapEntity,
   mapRelation,
   query,
+  relationshipSet,
   resolveQuerySpec,
   Selection,
+  selection,
   selectionNot,
   selectionOr,
 } from '@ontahi/core/data-graph';
@@ -16,12 +19,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createSupabaseDataGraphRuntime,
+  compileSupabaseManyToManyRpcPayload,
   executeSupabaseGraphCountEffect,
   executeSupabaseGraphCommandEffect,
   executeSupabaseGraphQueryEffect,
+  executeSupabaseManyToManyRelationshipCommandEffect,
   fetchSupabaseEntityRowsEffect,
   hydrateSupabaseEntityRowsEffect,
   materializeSupabaseEntityRow,
+  supabaseManyToManyRpcSql,
   toSupabaseEntityRow,
 } from '../../src/data-graph/index.js';
 
@@ -275,6 +281,143 @@ describe('data-graph supabase runtime helpers', () => {
       createError,
     });
     expect(rows).toEqual([expectedAudienceResult]);
+  });
+
+  it('hydrates many-to-many includes through anonymous edge storage', async () => {
+    const Tag = entity('Tag', { id: field.id(), label: field.string() });
+    const Todo = entity('Todo', { id: field.id(), title: field.string() }).manyToMany('tags', Tag);
+    mapEntity(Todo).toTable('todos');
+    mapEntity(Tag).toTable('tags');
+    mapRelation(Todo, 'tags', {
+      type: 'many-to-many',
+      from: 'todos.id',
+      through: { table: 'todo_tags', fromColumn: 'todo_id', toColumn: 'tag_id' },
+      to: 'tags.id',
+    });
+    const supabase = new TestSupabaseDouble();
+    supabase.queueQuery('todos', {
+      data: [{ id: 'todo-1', title: 'Write semantics' }],
+      error: null,
+    });
+    supabase.queueQuery('todo_tags', {
+      data: [
+        { todo_id: 'todo-1', tag_id: 'tag-2' },
+        { todo_id: 'todo-1', tag_id: 'tag-1' },
+      ],
+      error: null,
+    });
+    supabase.queueQuery('tags', {
+      data: [
+        { id: 'tag-1', label: 'Core' },
+        { id: 'tag-2', label: 'Relations' },
+      ],
+      error: null,
+    });
+
+    await expect(
+      Effect.runPromise(
+        executeSupabaseGraphQueryEffect(
+          { getClient: () => Effect.succeed(supabase), createError },
+          query(Todo).include(todo => ({ tags: todo.tags.orderBy(tag => tag.label) })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual([
+      {
+        id: 'todo-1',
+        title: 'Write semantics',
+        tags: [
+          { id: 'tag-1', label: 'Core' },
+          { id: 'tag-2', label: 'Relations' },
+        ],
+      },
+    ]);
+    expect(supabase.queries.map(value => value.table)).toEqual(['todos', 'todo_tags', 'tags']);
+    expect(supabase.queries[1]?.operations).toEqual([
+      { method: 'select', args: ['todo_id, tag_id'] },
+      { method: 'in', args: ['todo_id', ['todo-1']] },
+    ]);
+  });
+
+  it('lowers a many-to-many Command to one atomic Ontahi RPC and materializes its delta', async () => {
+    const Tag = entity('RpcTag', { id: field.id(), label: field.string() });
+    const Todo = entity('RpcTodo', { id: field.id(), title: field.string() }).manyToMany(
+      'tags',
+      Tag,
+    );
+    mapEntity(Todo).toTable('rpc_todos');
+    mapEntity(Tag).toTable('rpc_tags');
+    mapRelation(Todo, 'tags', {
+      type: 'many-to-many',
+      from: 'rpc_todos.id',
+      through: { table: 'rpc_todo_tags', fromColumn: 'todo_id', toColumn: 'tag_id' },
+      to: 'rpc_tags.id',
+    });
+    const command = relationshipSet(
+      Todo,
+      'tags',
+      selection(Todo, todo => todo.title.eq('Selected')),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    const rpc = vi.fn().mockResolvedValue({
+      data: { sourceCount: 2, targetCount: 1, changed: [{ source: 'todo-1', target: 'tag-1' }] },
+      error: null,
+    });
+    const client = { from: vi.fn(), rpc };
+
+    await expect(
+      Effect.runPromise(
+        executeSupabaseManyToManyRelationshipCommandEffect(
+          {
+            getClient: () => Effect.succeed(client),
+            createError,
+            entities: [Todo, Tag],
+          },
+          command,
+        ),
+      ),
+    ).resolves.toEqual({
+      added: [
+        {
+          relation: command.relation,
+          source: createEntityRef(Todo, { id: 'todo-1' }),
+          target: createEntityRef(Tag, { id: 'tag-1' }),
+        },
+      ],
+      removed: [],
+    });
+    expect(rpc).toHaveBeenCalledOnce();
+    expect(rpc).toHaveBeenCalledWith('ontahi_apply_many_to_many_relationship', {
+      command: compileSupabaseManyToManyRpcPayload(command, [Todo, Tag]),
+    });
+  });
+
+  it('fails structurally when the Supabase atomic relationship capability is absent', async () => {
+    const Tag = entity('MissingRpcTag', { id: field.id() });
+    const Todo = entity('MissingRpcTodo', { id: field.id() }).manyToMany('tags', Tag);
+    const command = relationshipSet(Todo, 'tags', createEntityRef(Todo, { id: 'todo-1' })).add(
+      createEntityRef(Tag, { id: 'tag-1' }),
+    );
+
+    await expect(
+      Effect.runPromise(
+        executeSupabaseManyToManyRelationshipCommandEffect(
+          {
+            getClient: () => Effect.succeed({ from: vi.fn() }),
+            createError,
+            entities: [Todo, Tag],
+          },
+          command,
+        ),
+      ),
+    ).rejects.toThrow('does not expose the Ontahi many-to-many RPC capability');
+  });
+
+  it('ships the reusable invoker-rights RPC migration', () => {
+    expect(supabaseManyToManyRpcSql).toContain(
+      'create or replace function public.ontahi_apply_many_to_many_relationship',
+    );
+    expect(supabaseManyToManyRpcSql).toContain('language plpgsql');
+    expect(supabaseManyToManyRpcSql).not.toContain('security definer');
   });
 
   it('returns no rows without touching supabase when an in predicate has no values', async () => {

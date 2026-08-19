@@ -1,6 +1,7 @@
 import {
   getEntityMapping,
   resolveColumnNameForEntity,
+  resolveFieldNameForEntity,
   resolveRelationFields,
   type AnyEntityDefinition,
 } from './definitions.js';
@@ -70,7 +71,11 @@ export const getSelectColumnsForQuery = ({
 
   for (const [relationName, relationBuilder] of Object.entries(includeShape ?? {})) {
     const relationNode = relationBuilder.toNodeSpec();
-    const { sourceField } = resolveRelationFields(entityDefinition, relationName, relationNode);
+    const definition = entityDefinition.relations[relationName];
+    const sourceField =
+      definition?.mapping?.type === 'many-to-many'
+        ? resolveFieldNameForEntity(entityDefinition, definition.mapping.fromColumn)
+        : resolveRelationFields(entityDefinition, relationName, relationNode).sourceField;
     columns.add(resolveColumnNameForEntity(entityDefinition, sourceField));
   }
 
@@ -102,13 +107,18 @@ export type CompiledOrderBy = {
 
 export type CompiledIncludePlan = {
   relationName: string;
-  relationKind: 'hasMany' | 'belongsTo';
+  relationKind: 'hasMany' | 'belongsTo' | 'manyToMany';
   sourceField: string;
   sourceColumn: string;
   targetField: string;
   targetColumn: string;
   targetEntity: string;
   targetTable: string;
+  through?: {
+    table: string;
+    sourceColumn: string;
+    targetColumn: string;
+  };
   orderBy: CompiledOrderBy[];
   limit?: number;
   includes: CompiledIncludePlan[];
@@ -140,6 +150,33 @@ const compileIncludes = (
 ): CompiledIncludePlan[] =>
   Object.entries(includeShape ?? {}).map(([relationName, relationBuilder]) => {
     const node = relationBuilder.toNodeSpec();
+    if (node.relationKind === 'manyToMany') {
+      const mapping = entityDefinition.relations[relationName]?.mapping;
+      if (mapping?.type !== 'many-to-many') {
+        throw new Error(
+          `Many-to-many Relation ${entityDefinition.name}.${relationName} requires edge storage mapping.`,
+        );
+      }
+      const targetMapping = getEntityMapping(node.entity);
+      return {
+        relationName,
+        relationKind: node.relationKind,
+        sourceField: resolveFieldNameForEntity(entityDefinition, mapping.fromColumn),
+        sourceColumn: mapping.fromColumn,
+        targetField: resolveFieldNameForEntity(node.entity, mapping.toColumn),
+        targetColumn: mapping.toColumn,
+        targetEntity: node.entity.name,
+        targetTable: targetMapping.tableName,
+        through: {
+          table: mapping.throughTable,
+          sourceColumn: mapping.throughFromColumn,
+          targetColumn: mapping.throughToColumn,
+        },
+        orderBy: compileOrderBy(node.entity, node.orderBy),
+        limit: node.limit,
+        includes: compileIncludes(node.entity, node.includes),
+      };
+    }
     const fields = resolveRelationFields(entityDefinition, relationName, node);
     const targetMapping = getEntityMapping(node.entity);
 

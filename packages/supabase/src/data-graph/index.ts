@@ -18,6 +18,8 @@ export {
   type SupabaseDataGraphMappingOverrides,
   type SupabaseDataGraphNaming,
 } from './mapping.js';
+export * from './many-to-many.js';
+export * from './many-to-many-rpc-sql.js';
 
 export type SupabaseFieldPredicate =
   | { operator: 'eq'; fieldName: string; value: unknown }

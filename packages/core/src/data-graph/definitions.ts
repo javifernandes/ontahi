@@ -337,8 +337,8 @@ export type EntityViewConfig<
   omit?: TOmit;
 };
 
-export type RelationKind = 'hasMany' | 'belongsTo';
-export type RelationMappingKind = 'one-to-many' | 'many-to-one';
+export type RelationKind = 'hasMany' | 'belongsTo' | 'manyToMany';
+export type RelationMappingKind = 'one-to-many' | 'many-to-one' | 'many-to-many';
 
 type EntityMapping<TFields extends FieldDefinitions> = {
   tableName: string;
@@ -425,13 +425,26 @@ export type EntityRefLocatorFactories<
         : EntityRefLocatorFactory;
 };
 
-type ParsedRelationMapping = {
-  type: RelationMappingKind;
+export type DirectRelationMapping = {
+  type: 'one-to-many' | 'many-to-one';
   fromTable: string;
   fromColumn: string;
   toTable: string;
   toColumn: string;
 };
+
+export type ManyToManyRelationMapping = {
+  type: 'many-to-many';
+  fromTable: string;
+  fromColumn: string;
+  throughTable: string;
+  throughFromColumn: string;
+  throughToColumn: string;
+  toTable: string;
+  toColumn: string;
+};
+
+export type ParsedRelationMapping = DirectRelationMapping | ManyToManyRelationMapping;
 
 export type RelationDefinition<
   TKind extends RelationKind = RelationKind,
@@ -573,6 +586,15 @@ export type EntityDefinition<
     TName,
     TFields,
     TRelations & { [TKey in TRelationName]: RelationDefinition<'belongsTo', TTarget> },
+    TLocators
+  >;
+  manyToMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
+    relationName: TRelationName,
+    target: TTarget,
+  ) => EntityDefinition<
+    TName,
+    TFields,
+    TRelations & { [TKey in TRelationName]: RelationDefinition<'manyToMany', TTarget> },
     TLocators
   >;
 };
@@ -906,6 +928,14 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       };
       return this as never;
     },
+    manyToMany(relationName: string, target: AnyEntityDefinition) {
+      this.relations[relationName] = {
+        kind: 'relation',
+        relationKind: 'manyToMany',
+        target,
+      };
+      return this as never;
+    },
   };
 
   Object.entries(entityFields).forEach(([fieldName, definition]) => {
@@ -1197,30 +1227,59 @@ const parseTableColumnPath = (path: string) => {
 export const mapRelation = <TEntity extends AnyEntityDefinition>(
   entityDefinition: TEntity,
   relationName: keyof TEntity['relations'] & string,
-  input: {
-    type: RelationMappingKind;
-    from: string;
-    to: string;
-  },
+  input:
+    | {
+        type: 'one-to-many' | 'many-to-one';
+        from: string;
+        to: string;
+      }
+    | {
+        type: 'many-to-many';
+        from: string;
+        through: { table: string; fromColumn: string; toColumn: string };
+        to: string;
+      },
 ) => {
   const relation = entityDefinition.relations[relationName];
   if (!relation) {
     throw new Error(`Unknown relation ${relationName} on entity ${entityDefinition.name}`);
   }
 
-  relation.mapping = {
-    type: input.type,
-    ...(() => {
-      const from = parseTableColumnPath(input.from);
-      const to = parseTableColumnPath(input.to);
-      return {
-        fromTable: from.tableName,
-        fromColumn: from.columnName,
-        toTable: to.tableName,
-        toColumn: to.columnName,
-      };
-    })(),
-  };
+  const from = parseTableColumnPath(input.from);
+  const to = parseTableColumnPath(input.to);
+  if (input.type === 'many-to-many') {
+    if (relation.relationKind !== 'manyToMany') {
+      throw new Error(
+        `Relation ${entityDefinition.name}.${relationName} is not declared many-to-many.`,
+      );
+    }
+    if (!input.through.table || !input.through.fromColumn || !input.through.toColumn) {
+      throw new Error(`Many-to-many relation ${relationName} requires complete through mapping.`);
+    }
+    relation.mapping = {
+      type: input.type,
+      fromTable: from.tableName,
+      fromColumn: from.columnName,
+      throughTable: input.through.table,
+      throughFromColumn: input.through.fromColumn,
+      throughToColumn: input.through.toColumn,
+      toTable: to.tableName,
+      toColumn: to.columnName,
+    };
+  } else {
+    if (relation.relationKind === 'manyToMany') {
+      throw new Error(
+        `Relation ${entityDefinition.name}.${relationName} requires a many-to-many mapping.`,
+      );
+    }
+    relation.mapping = {
+      type: input.type,
+      fromTable: from.tableName,
+      fromColumn: from.columnName,
+      toTable: to.tableName,
+      toColumn: to.columnName,
+    };
+  }
 
   return relation;
 };
@@ -1261,6 +1320,11 @@ export const resolveRelationFields = (
     | undefined;
   if (!relationDefinition) {
     throw new Error(`Unknown relation ${sourceEntity.name}.${relationName}.`);
+  }
+  if (relationDefinition.relationKind === 'manyToMany') {
+    throw new Error(
+      `Many-to-many Relation ${sourceEntity.name}.${relationName} does not use direct Entity fields.`,
+    );
   }
 
   const singleIdentityField = (entityDefinition: AnyEntityDefinition) => {

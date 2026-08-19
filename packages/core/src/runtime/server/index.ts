@@ -15,9 +15,11 @@ export {
 export {
   ontahi,
   type ApplicationGraphReadDispatcherFactory,
+  type ApplicationGraphCommandDispatcherFactory,
   type OntahiBinderApp,
   type ComposedOntahiApplication,
   type GraphReadableOntahiApplication,
+  type GraphCommandableOntahiApplication,
   type OntahiApplicationBuilder,
   type OntahiCapabilities,
   type OntahiOptions,

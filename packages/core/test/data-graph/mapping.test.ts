@@ -5,6 +5,7 @@ import {
   field,
   getEntityMapping,
   mapEntity,
+  mapRelation,
   resolveColumnNameForEntity,
   resolveFieldNameForEntity,
 } from '../../src/data-graph/index.js';
@@ -47,6 +48,28 @@ describe('data-graph mapping', () => {
       relationKind: 'belongsTo',
       target: TodoList,
       sourceField: 'listId',
+    });
+  });
+
+  it('maps direct many-to-many topology through storage-only edge metadata', () => {
+    const Tag = entity('Tag', { id: field.id() });
+    const Todo = entity('Todo', { id: field.id() }).manyToMany('tags', Tag);
+    mapRelation(Todo, 'tags', {
+      type: 'many-to-many',
+      from: 'todos.id',
+      through: { table: 'todo_tags', fromColumn: 'todo_id', toColumn: 'tag_id' },
+      to: 'tags.id',
+    });
+
+    expect(Todo.relations.tags.mapping).toEqual({
+      type: 'many-to-many',
+      fromTable: 'todos',
+      fromColumn: 'id',
+      throughTable: 'todo_tags',
+      throughFromColumn: 'todo_id',
+      throughToColumn: 'tag_id',
+      toTable: 'tags',
+      toColumn: 'id',
     });
   });
 });
