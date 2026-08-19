@@ -1,3 +1,5 @@
+import { defineClientEntity, entity, field } from '@ontahi/core/data-graph';
+import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFetchGraphClient } from '../../src/graph/index.js';
@@ -10,11 +12,51 @@ describe('Fetch graph client', () => {
   it('assembles the conventional same-origin graph capabilities', () => {
     const client = createFetchGraphClient();
 
+    expect(client.graph).toBeDefined();
     expect(client.graphExecutor).toBeDefined();
     expect(client.operationBridgeAdapters).toHaveLength(1);
     expect(client.operationBridgeAdapters?.[0]?.name).toBe('fetch');
     expect(client.reflectedOperationInvoker).toBeDefined();
     expect(client.reflectedEntityDataReader).toBeDefined();
+  });
+
+  it('binds a generated client Entity facade for fluent execution outside React', async () => {
+    const TodoSchema = entity('Todo', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const Todo = defineClientEntity(TodoSchema);
+    const TodoRow = Todo.view('TodoRow', { id: true, title: true });
+    const fetchRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        kind: 'graph-read-result',
+        value: [{ id: 'todo-1', title: 'Use the fluent client' }],
+      }),
+    });
+    const client = createFetchGraphClient({
+      graphRead: { fetch: fetchRequest as typeof fetch },
+    });
+    const BoundTodo = client.graph.bindClientEntity(Todo);
+
+    await expect(
+      runBrowserEffect(
+        BoundTodo.all()
+          .as(TodoRow)
+          .orderBy(todo => todo.title)
+          .run(),
+      ),
+    ).resolves.toEqual([{ id: 'todo-1', title: 'Use the fluent client' }]);
+    expect(BoundTodo).not.toBe(Todo);
+    expect(fetchRequest).toHaveBeenCalledOnce();
+    expect(JSON.parse(fetchRequest.mock.calls[0]![1].body)).toMatchObject({
+      kind: 'graph-read',
+      mode: 'run',
+      selection: { entityName: 'Todo' },
+      view: { name: 'TodoRow' },
+      orderBy: [{ fieldName: 'title', direction: 'asc' }],
+    });
   });
 
   it('uses the conventional Operation and task endpoints', async () => {

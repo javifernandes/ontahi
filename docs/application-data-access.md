@@ -260,6 +260,32 @@ const graphClient = createFetchGraphClient({
 Individual provider props can replace one capability. `client={false}` disables all conventional
 defaults for a fully explicit host.
 
+## Execute the same fluent Query outside React
+
+The Fetch client also exposes its Effect-based graph runtime. Bind a generated client Entity when
+application code needs fluent execution without a React hook:
+
+```ts
+import { runBrowserEffect } from '@ontahi/core/runtime/browser';
+import { createFetchGraphClient } from '@ontahi/react/graph';
+import { TodoItem as GeneratedTodoItem } from './generated/client-entities.js';
+
+const client = createFetchGraphClient();
+const TodoItem = client.graph.bindClientEntity(GeneratedTodoItem);
+
+const rows = await runBrowserEffect(
+  TodoItem.where(todo => todo.completed.eq(false))
+    .as(TodoItemListItem)
+    .orderBy(todo => todo.title)
+    .run(),
+);
+```
+
+Binding returns a new facade: it preserves the generated Entity's Views, Refs, and Domain
+Operations without mutating its portable schema. `createRuntimeBoundDataGraphApi(...)` provides the
+same `bindClientEntity(...)` API for direct runtimes. The authored Query therefore stays unchanged
+between direct storage and the remote Fetch topology.
+
 ## Invoke Operations
 
 Use Operations when the application is asking the domain to do something rather than merely

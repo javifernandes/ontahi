@@ -219,8 +219,8 @@ languages.
       identity-scoped React keys, and first-class bound Operation invocations.
 - [x] Publish the end-to-end application data-access path as the recommended developer API,
       including its default-deny policy and current alpha boundaries.
-- [ ] Bind generated client Entities to either direct or remote graph executors.
-- [ ] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
+- [x] Bind generated client Entities to either direct or remote graph executors.
+- [x] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
 - [ ] Specify the Command protocol only after the read path and its authority seam are proven.
 - [ ] Evaluate hybrid routing as an input to future graph segmentation.
@@ -368,19 +368,29 @@ behavior, documents `include` as lower level than caller-owned Views, and makes 
 boundaries explicit: remote policy authoring and distributed execution identity may evolve, remote
 Commands remain unsupported, and client defaults never replace server authentication or policy.
 
-The next Ontahi read slice should finish runtime binding and topology evidence before remote
-Commands. That keeps execution and result semantics visible without mixing in write authority or
-cache reconciliation at the same time.
+The runtime-binding and topology evidence are now complete. Telemetry and reflection remain a
+separate read-path slice before remote Commands, keeping diagnostics independent from write
+authority and cache reconciliation.
 
-1. Bind generated browser Entities to the configured remote runtime when fluent client-side
-   `.run()` execution is needed outside the React executor.
-2. Prove the Todo browser read path against the PostgreSQL storage topology in addition to the
-   current in-memory integration proof.
-3. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
+1. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
    and reflection.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
 protocol/runtime shape only after the read boundary demonstrates a credible authority model.
+
+### Completed TDD Slice: Fluent Client Binding And PostgreSQL Topology
+
+`createRuntimeBoundDataGraphApi(...)` now binds a generated client Entity facade without mutating
+its portable schema. The returned facade preserves client-owned Views, Refs, and Domain Operations,
+while its Selection and Query entry points execute against the configured runtime. The conventional
+Fetch client exposes that same graph API outside React hooks and shares one remote runtime with the
+Promise executor used by React.
+
+A PostgreSQL integration proof passes one fluent client read function unchanged to direct and
+remote bindings. The direct path lowers to PostgreSQL; the remote path crosses a real Express HTTP
+endpoint, the default-deny policy dispatcher, and then lowers to the same PostgreSQL runtime. Both
+produce the same projected and ordered result. Telemetry and Explorer reflection are deliberately
+left to the next slice.
 
 ## Acceptance Checklist
 
@@ -428,6 +438,8 @@ protocol/runtime shape only after the read boundary demonstrates a credible auth
 11. Read-only wrapper Operations are removed once the caller can execute the same Query through its
     configured runtime; Operations remain for domain intent, invariants, capabilities, writes, and
     durable behavior.
+12. Runtime binding decorates a generated client facade as a new value; it preserves its portable
+    schema and client-owned surface rather than mutating the generated declaration.
 
 ## Completion Signal
 

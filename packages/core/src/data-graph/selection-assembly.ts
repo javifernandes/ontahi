@@ -697,6 +697,7 @@ export type GraphSelectionAssembly<
   >;
   bindSelectionEntity: <TEntity extends AnyEntityDefinition>(
     entityDefinition: TEntity,
+    bindingTarget?: object,
   ) => BoundSelectionEntityBase<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions>;
   createGraphSelection: <
     TEntity extends AnyEntityDefinition,
@@ -919,8 +920,9 @@ export const createGraphSelectionAssembly = <
 
   const bindSelectionEntity = <TEntity extends AnyEntityDefinition>(
     entityDefinition: TEntity,
+    bindingTarget?: object,
   ): BoundSelectionEntityBase<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions> =>
-    Object.assign(entityDefinition, {
+    Object.assign(bindingTarget ?? entityDefinition, {
       selection: (build: SelectionBuilder<TEntity>) =>
         createBoundSelection(selection(entityDefinition, build)),
       all: () => createGraphSelection(query(entityDefinition)),

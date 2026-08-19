@@ -1,56 +1,13 @@
 'use client';
 
-import {
-  createRemoteDataGraphRuntime,
-  isGraphReadProtocolError,
-  type RemoteGraphReadTransport,
-} from '@ontahi/core/data-graph';
-import { runBrowserEffect } from '@ontahi/core/runtime/browser';
-
 import type { ReactGraphExecutor } from './executor.js';
+import {
+  createFetchGraphReadCapability,
+  type FetchGraphReadExecutorOptions,
+} from './fetch-graph-runtime.js';
 
-export type FetchGraphReadExecutorOptions<TOptions = undefined> = {
-  endpoint?: string;
-  fetch?: typeof globalThis.fetch;
-  requestInit?: (options?: TOptions) => Omit<RequestInit, 'body' | 'method'>;
-};
+export type { FetchGraphReadExecutorOptions } from './fetch-graph-runtime.js';
 
-const DEFAULT_GRAPH_READ_ENDPOINT = '/graph/reads';
-
-export const createFetchGraphReadExecutor = <TOptions = undefined>({
-  endpoint = DEFAULT_GRAPH_READ_ENDPOINT,
-  fetch: fetchRequest = globalThis.fetch,
-  requestInit,
-}: FetchGraphReadExecutorOptions<TOptions> = {}): ReactGraphExecutor<TOptions, TOptions> => {
-  const transport: RemoteGraphReadTransport<TOptions> = async (request, options) => {
-    const init = requestInit?.(options) ?? {};
-    const headers = new Headers(init.headers);
-    if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-
-    const response = await fetchRequest(endpoint, {
-      ...init,
-      method: 'POST',
-      headers,
-      credentials: init.credentials ?? 'same-origin',
-      body: JSON.stringify(request),
-    });
-
-    try {
-      const payload: unknown = await response.json();
-      if (!response.ok && !isGraphReadProtocolError(payload)) {
-        throw new Error(`Graph read request failed with status ${response.status}.`);
-      }
-      return payload;
-    } catch {
-      throw new Error(`Graph read request failed with status ${response.status}.`);
-    }
-  };
-  const runtime = createRemoteDataGraphRuntime({ transport });
-
-  return {
-    get: (read, params, options) => runBrowserEffect(runtime.get(read, params, options)),
-    run: (read, params, options) => runBrowserEffect(runtime.run(read, params, options)),
-    count: (read, params, options) => runBrowserEffect(runtime.count(read, params, options)),
-    runCommand: (command, options) => runBrowserEffect(runtime.runCommand(command, options)),
-  };
-};
+export const createFetchGraphReadExecutor = <TOptions = undefined>(
+  options: FetchGraphReadExecutorOptions<TOptions> = {},
+): ReactGraphExecutor<TOptions, TOptions> => createFetchGraphReadCapability(options).graphExecutor;

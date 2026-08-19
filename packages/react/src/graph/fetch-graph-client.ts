@@ -4,7 +4,10 @@ import type {
   ReflectedEntityDataReader,
   ReflectedEntityDataResult,
   ReflectedOperationInvoker,
+  RemoteDataGraphError,
+  RuntimeBoundDataGraphApi,
 } from '@ontahi/core/data-graph';
+import { createRuntimeBoundDataGraphApi } from '@ontahi/core/data-graph';
 
 import {
   createFetchOperationBridgeAdapter,
@@ -14,10 +17,8 @@ import {
 } from '../actions/index.js';
 
 import type { ReactGraphExecutor } from './executor.js';
-import {
-  createFetchGraphReadExecutor,
-  type FetchGraphReadExecutorOptions,
-} from './fetch-graph-read-executor.js';
+import type { FetchGraphReadExecutorOptions } from './fetch-graph-read-executor.js';
+import { createFetchGraphReadCapability } from './fetch-graph-runtime.js';
 
 export type FetchReflectedEntityDataReaderOptions = {
   endpoint?: string;
@@ -25,10 +26,21 @@ export type FetchReflectedEntityDataReaderOptions = {
 };
 
 export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOptions> = {
+  graph?: RuntimeBoundDataGraphApi<
+    RemoteDataGraphError,
+    TReadOptions,
+    TCommandOptions,
+    RemoteDataGraphError
+  >;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
+};
+
+export type FetchGraphClient<TOptions = undefined> = OntahiGraphClient<TOptions, TOptions> & {
+  graph: RuntimeBoundDataGraphApi<RemoteDataGraphError, TOptions, TOptions, RemoteDataGraphError>;
+  graphExecutor: ReactGraphExecutor<TOptions, TOptions>;
 };
 
 export type FetchGraphClientOptions<TOptions = undefined> = {
@@ -72,16 +84,32 @@ export const createFetchReflectedEntityDataReader = ({
   },
 });
 
-export const createFetchGraphClient = <TOptions = undefined>({
+export function createFetchGraphClient<TOptions = undefined>(): FetchGraphClient<TOptions>;
+export function createFetchGraphClient<TOptions = undefined>(
+  options: FetchGraphClientOptions<TOptions> & { graphRead: false },
+): OntahiGraphClient<TOptions, TOptions>;
+export function createFetchGraphClient<TOptions = undefined>(
+  options: FetchGraphClientOptions<TOptions> & {
+    graphRead?: FetchGraphReadExecutorOptions<TOptions>;
+  },
+): FetchGraphClient<TOptions>;
+export function createFetchGraphClient<TOptions = undefined>({
   graphRead = {},
   operations = {},
   reflectedEntityData = {},
-}: FetchGraphClientOptions<TOptions> = {}): OntahiGraphClient<TOptions, TOptions> => {
+}: FetchGraphClientOptions<TOptions> = {}): OntahiGraphClient<TOptions, TOptions> {
   const operationOptions =
     operations === false ? undefined : conventionalOperationOptions(operations);
+  const graphReadCapability =
+    graphRead === false ? undefined : createFetchGraphReadCapability(graphRead);
 
   return {
-    ...(graphRead === false ? {} : { graphExecutor: createFetchGraphReadExecutor(graphRead) }),
+    ...(graphReadCapability
+      ? {
+          graph: createRuntimeBoundDataGraphApi(() => graphReadCapability.runtime),
+          graphExecutor: graphReadCapability.graphExecutor,
+        }
+      : {}),
     ...(operationOptions
       ? {
           operationBridgeAdapters: [createFetchOperationBridgeAdapter(operationOptions)],
@@ -92,4 +120,4 @@ export const createFetchGraphClient = <TOptions = undefined>({
       ? {}
       : { reflectedEntityDataReader: createFetchReflectedEntityDataReader(reflectedEntityData) }),
   };
-};
+}

@@ -53,6 +53,48 @@ export type RuntimeBoundSelectionEntity<
   TCommandError = TError,
 > = BoundSelectionEntityBase<TEntity, TError, TReadOptions, TCommandError, TCommandOptions>;
 
+type ClientEntityWithDefinition = {
+  definition: AnyEntityDefinition;
+};
+
+type ClientEntityDefinitionOf<TClientEntity extends ClientEntityWithDefinition> =
+  TClientEntity['definition'];
+
+type RuntimeBoundSelectionEntityApi<
+  TEntity extends AnyEntityDefinition,
+  TError,
+  TReadOptions,
+  TCommandOptions,
+  TCommandError,
+> = Omit<
+  RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions, TCommandError>,
+  keyof TEntity
+>;
+
+export type RuntimeBoundClientEntity<
+  TClientEntity extends ClientEntityWithDefinition,
+  TError = never,
+  TReadOptions = undefined,
+  TCommandOptions = TReadOptions,
+  TCommandError = TError,
+> = Omit<
+  TClientEntity,
+  keyof RuntimeBoundSelectionEntityApi<
+    ClientEntityDefinitionOf<TClientEntity>,
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  >
+> &
+  RuntimeBoundSelectionEntityApi<
+    ClientEntityDefinitionOf<TClientEntity>,
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  >;
+
 export type RuntimeBoundDataGraphApi<
   TError = never,
   TReadOptions = undefined,
@@ -62,6 +104,15 @@ export type RuntimeBoundDataGraphApi<
   bindGraphRead: <TRead extends QueryOrView<any, any>>(
     read: TRead,
   ) => BoundGraphRead<TRead, TError, TReadOptions>;
+  bindClientEntity: <TClientEntity extends ClientEntityWithDefinition>(
+    clientEntity: TClientEntity,
+  ) => RuntimeBoundClientEntity<
+    TClientEntity,
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  >;
   bindSelectionEntity: <TEntity extends AnyEntityDefinition>(
     entityDefinition: TEntity,
   ) => RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions, TCommandError>;
@@ -158,11 +209,58 @@ export const createRuntimeBoundDataGraphApi = <
     bindGraphRead: read => bindGraphRead(read, graphReadExecutor),
   });
 
+  const bindClientEntity = <TClientEntity extends ClientEntityWithDefinition>(
+    clientEntity: TClientEntity,
+  ): RuntimeBoundClientEntity<
+    TClientEntity,
+    TError,
+    TReadOptions,
+    TCommandOptions,
+    TCommandError
+  > => {
+    const {
+      selection,
+      all,
+      where,
+      insert,
+      insertReturning,
+      insertMany,
+      insertManyReturning,
+      upsert,
+      upsertMany,
+      relatedTo,
+    } = selectionAssembly.bindSelectionEntity(clientEntity.definition, {});
+    let boundClientEntity!: RuntimeBoundClientEntity<
+      TClientEntity,
+      TError,
+      TReadOptions,
+      TCommandOptions,
+      TCommandError
+    >;
+
+    boundClientEntity = Object.assign({}, clientEntity, {
+      selection,
+      all,
+      where,
+      insert,
+      insertReturning,
+      insertMany,
+      insertManyReturning,
+      upsert,
+      upsertMany,
+      relatedTo,
+      pipe: <TValue>(fn: (entity: typeof boundClientEntity) => TValue) => fn(boundClientEntity),
+    }) as unknown as typeof boundClientEntity;
+
+    return boundClientEntity;
+  };
+
   return {
     ...executor,
     bindGraphRead: <TRead extends QueryOrView<any, any>>(
       read: TRead,
     ): BoundGraphRead<TRead, TError, TReadOptions> => bindGraphRead(read, graphReadExecutor),
+    bindClientEntity,
     bindSelectionEntity: <TEntity extends AnyEntityDefinition>(
       entityDefinition: TEntity,
     ): RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions, TCommandError> =>
