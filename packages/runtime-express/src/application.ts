@@ -1,12 +1,24 @@
-import type { GraphReadDispatcher, GraphReadPolicy } from '@ontahi/core/data-graph';
+import type {
+  GraphCommandDispatcher,
+  GraphReadDispatcher,
+  GraphReadPolicy,
+  ManyToManyRelationshipCommandPolicy,
+  RelationshipCommandPolicy,
+} from '@ontahi/core/data-graph';
 import {
   createOperationInvocationDispatcher,
+  type GraphCommandableOntahiApplication,
   type GraphReadableOntahiApplication,
   type InvocationContext,
   type OntahiApplication,
 } from '@ontahi/core/runtime/server';
 import express, { type Request, type Router } from 'express';
 
+import {
+  createExpressGraphCommandHandler,
+  type ExpressGraphCommandAuthorityFactory,
+  type ExpressGraphCommandContextFactory,
+} from './graph-command/handler.js';
 import {
   createExpressGraphReadHandler,
   type ExpressGraphReadAuthorityFactory,
@@ -62,10 +74,22 @@ export type OntahiExpressGraphReadOptions<TAuthority = InvocationContext> =
         }
     );
 
-export type OntahiExpressOptions<TGraphReadAuthority = InvocationContext> = {
+export type OntahiExpressGraphCommandOptions<TAuthority = InvocationContext> = {
+  path?: string;
+  policies: readonly (RelationshipCommandPolicy | ManyToManyRelationshipCommandPolicy)[];
+  dispatcher?: GraphCommandDispatcher<TAuthority>;
+  context?: ExpressGraphCommandContextFactory<TAuthority>;
+  authority?: ExpressGraphCommandAuthorityFactory<TAuthority>;
+};
+
+export type OntahiExpressOptions<
+  TGraphReadAuthority = InvocationContext,
+  TGraphCommandAuthority = InvocationContext,
+> = {
   mountPath?: string;
   operationsPath?: string;
   graphRead?: OntahiExpressGraphReadOptions<TGraphReadAuthority>;
+  graphCommand?: OntahiExpressGraphCommandOptions<TGraphCommandAuthority>;
   applicationPath?: string | false;
   explorer?: OntahiExpressExplorerOptions;
   ingress?: OntahiExpressIngressOptions;
@@ -79,9 +103,12 @@ const mountPath = (value: string) => {
   return path === '/' ? path : path.replace(/\/+$/, '');
 };
 
-export const ontahiExpress = <TGraphReadAuthority = InvocationContext>(
+export const ontahiExpress = <
+  TGraphReadAuthority = InvocationContext,
+  TGraphCommandAuthority = InvocationContext,
+>(
   application: OntahiApplication,
-  options: OntahiExpressOptions<TGraphReadAuthority> = {},
+  options: OntahiExpressOptions<TGraphReadAuthority, TGraphCommandAuthority> = {},
 ): Router => {
   const router = express.Router();
   const operationsPath = routePath(options.operationsPath ?? '/operations');
@@ -128,6 +155,30 @@ export const ontahiExpress = <TGraphReadAuthority = InvocationContext>(
         invocationContext: options.invocationContext,
         authority: graphReadOptions.authority,
         context: 'context' in graphReadOptions ? graphReadOptions.context : undefined,
+        reportError: options.reportError,
+      }),
+    );
+  }
+
+  if (options.graphCommand) {
+    const graphCommandOptions = options.graphCommand;
+    const graphApplication = application as Partial<GraphCommandableOntahiApplication>;
+    const commandDispatcher =
+      graphCommandOptions.dispatcher ??
+      graphApplication.createGraphCommandDispatcher?.(graphCommandOptions.policies);
+    if (!commandDispatcher) {
+      throw new Error(
+        'Ontahi Express graph-Command policies require an application created with ontahi().',
+      );
+    }
+    router.post(
+      routePath(graphCommandOptions.path ?? '/graph/commands'),
+      express.json(),
+      createExpressGraphCommandHandler({
+        dispatcher: commandDispatcher as GraphCommandDispatcher<TGraphCommandAuthority>,
+        invocationContext: options.invocationContext,
+        authority: graphCommandOptions.authority,
+        context: graphCommandOptions.context,
         reportError: options.reportError,
       }),
     );

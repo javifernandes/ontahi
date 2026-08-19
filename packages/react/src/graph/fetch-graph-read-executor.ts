@@ -2,7 +2,9 @@
 
 import {
   createRemoteDataGraphRuntime,
+  isGraphCommandProtocolError,
   isGraphReadProtocolError,
+  type RemoteGraphCommandTransport,
   type RemoteGraphReadTransport,
 } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
@@ -11,14 +13,17 @@ import type { ReactGraphExecutor } from './executor.js';
 
 export type FetchGraphReadExecutorOptions<TOptions = undefined> = {
   endpoint?: string;
+  commandEndpoint?: string;
   fetch?: typeof globalThis.fetch;
   requestInit?: (options?: TOptions) => Omit<RequestInit, 'body' | 'method'>;
 };
 
 const DEFAULT_GRAPH_READ_ENDPOINT = '/graph/reads';
+const DEFAULT_GRAPH_COMMAND_ENDPOINT = '/graph/commands';
 
 export const createFetchGraphReadExecutor = <TOptions = undefined>({
   endpoint = DEFAULT_GRAPH_READ_ENDPOINT,
+  commandEndpoint = DEFAULT_GRAPH_COMMAND_ENDPOINT,
   fetch: fetchRequest = globalThis.fetch,
   requestInit,
 }: FetchGraphReadExecutorOptions<TOptions> = {}): ReactGraphExecutor<TOptions, TOptions> => {
@@ -46,11 +51,33 @@ export const createFetchGraphReadExecutor = <TOptions = undefined>({
     }
   };
   const runtime = createRemoteDataGraphRuntime({ transport });
+  const commandTransport: RemoteGraphCommandTransport<TOptions> = async (request, options) => {
+    const init = requestInit?.(options) ?? {};
+    const headers = new Headers(init.headers);
+    if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+    const response = await fetchRequest(commandEndpoint, {
+      ...init,
+      method: 'POST',
+      headers,
+      credentials: init.credentials ?? 'same-origin',
+      body: JSON.stringify(request),
+    });
+    const payload: unknown = await response.json();
+    if (!response.ok && !isGraphCommandProtocolError(payload)) {
+      throw new Error(`Graph Command request failed with status ${response.status}.`);
+    }
+    return payload;
+  };
+  const runtimeWithCommands = createRemoteDataGraphRuntime({ transport, commandTransport });
 
   return {
     get: (read, params, options) => runBrowserEffect(runtime.get(read, params, options)),
     run: (read, params, options) => runBrowserEffect(runtime.run(read, params, options)),
     count: (read, params, options) => runBrowserEffect(runtime.count(read, params, options)),
     runCommand: (command, options) => runBrowserEffect(runtime.runCommand(command, options)),
+    runRelationshipCommand: (command, options) =>
+      runBrowserEffect(runtimeWithCommands.runRelationshipCommand(command, options)),
+    runManyToManyRelationshipCommand: (command, options) =>
+      runBrowserEffect(runtimeWithCommands.runManyToManyRelationshipCommand(command, options)),
   };
 };

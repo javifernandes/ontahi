@@ -199,3 +199,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     }
   };
 };
+
+export type GraphCommandDispatcher<TAuthority = unknown> = ReturnType<
+  typeof createGraphCommandDispatcher<TAuthority>
+>;

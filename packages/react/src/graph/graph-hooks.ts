@@ -7,6 +7,8 @@ import {
   toGraphReadRequest,
   type GraphCommandSpec,
   type GraphReadIntent,
+  type ManyToManyRelationshipCommand,
+  type RelationshipDelta,
   type QueryOrView,
   type ViewDefinition,
 } from '@ontahi/core/data-graph';
@@ -164,6 +166,39 @@ export function useGraphCommand<
         await queryClient.invalidateQueries({ queryKey });
       }
 
+      await options?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useManyToManyRelationshipCommand<
+  TVariables,
+  TContext = unknown,
+  TReadOptions = unknown,
+  TCommandOptions = TReadOptions,
+>(
+  buildCommand: (variables: TVariables) => ManyToManyRelationshipCommand,
+  options?: GraphCommandHookOptions<RelationshipDelta, TVariables, TContext, TCommandOptions>,
+): UseMutationResult<RelationshipDelta, Error, TVariables, TContext> {
+  const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    ...options,
+    mutationKey: options?.mutationKey,
+    mutationFn: variables => {
+      if (!graphExecutor.runManyToManyRelationshipCommand) {
+        throw new Error('Graph executor does not support many-to-many Relationship Commands.');
+      }
+      return graphExecutor.runManyToManyRelationshipCommand(
+        buildCommand(variables),
+        options?.runtimeOptions,
+      );
+    },
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      for (const queryKey of options?.invalidateQueryKeys ?? []) {
+        await queryClient.invalidateQueries({ queryKey });
+      }
       await options?.onSuccess?.(data, variables, onMutateResult, context);
     },
   });

@@ -2,12 +2,18 @@ import { Effect } from 'effect';
 
 import {
   createGraphReadDispatcher as createDataGraphReadDispatcher,
+  createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
   type DataGraphExecutionRuntime,
   type GraphApi,
   type GraphReadDispatcher,
   type GraphReadPolicy,
+  type GraphCommandDispatcher,
+  type RelationshipCommandPolicy,
+  type ManyToManyRelationshipCommandPolicy,
+  type ManyToManyRelationshipCommandExecutionRuntime,
+  type RelationshipCommandExecutionRuntime,
 } from '../../data-graph/index.js';
 
 import type { ArchitectureAppFacade, RegisteredArchitecture } from './app-facade.js';
@@ -44,9 +50,18 @@ export type ApplicationGraphReadDispatcherFactory = <TAuthority>(
   policies: readonly GraphReadPolicy<any, TAuthority>[],
 ) => GraphReadDispatcher<TAuthority>;
 
+export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
+  policies: readonly (RelationshipCommandPolicy | ManyToManyRelationshipCommandPolicy)[],
+) => GraphCommandDispatcher<TAuthority>;
+
 export type GraphReadableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
   OntahiApplication<TGraph> & {
     createGraphReadDispatcher: ApplicationGraphReadDispatcherFactory;
+  };
+
+export type GraphCommandableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
+  OntahiApplication<TGraph> & {
+    createGraphCommandDispatcher: ApplicationGraphCommandDispatcherFactory;
   };
 type OntahiGraphFacade<TRuntime extends AnyDataGraphRuntime> = ReturnType<
   typeof createDataGraphArchitectureAdapter<
@@ -302,6 +317,33 @@ export const ontahi = <
     });
   };
 
+  const createGraphCommandDispatcher: ApplicationGraphCommandDispatcherFactory = policies =>
+    createDataGraphCommandDispatcher({
+      policies,
+      execute: command => {
+        const runtime = options.storage.createRuntime();
+        if (!('runRelationshipCommand' in runtime)) {
+          throw new Error('Storage runtime does not support Relationship Commands.');
+        }
+        return Effect.runPromise(
+          (
+            runtime as unknown as RelationshipCommandExecutionRuntime<unknown>
+          ).runRelationshipCommand(command),
+        );
+      },
+      executeManyToMany: command => {
+        const runtime = options.storage.createRuntime();
+        if (!('runManyToManyRelationshipCommand' in runtime)) {
+          throw new Error('Storage runtime does not support many-to-many Relationship Commands.');
+        }
+        return Effect.runPromise(
+          (
+            runtime as unknown as ManyToManyRelationshipCommandExecutionRuntime<unknown>
+          ).runManyToManyRelationshipCommand(command),
+        );
+      },
+    });
+
   return Object.assign(application, {
     app: registered.app,
     architecture: registered,
@@ -309,6 +351,7 @@ export const ontahi = <
     registerBoundEntity,
     registerEntity,
     createGraphReadDispatcher,
+    createGraphCommandDispatcher,
     storage: options.storage,
   });
 };
