@@ -41,7 +41,8 @@ export const executePostgresCommand = <TResult>(input: {
   mapping: PostgresEntityMapping;
 }) =>
   Effect.tryPromise({
-    try: () => input.executeQuery<QueryResultRow>(compilePostgresCommand(input.command, input.mapping)),
+    try: () =>
+      input.executeQuery<QueryResultRow>(compilePostgresCommand(input.command, input.mapping)),
     catch: cause =>
       new PostgresDataGraphError(
         'PostgreSQL data graph command failed.',
@@ -88,11 +89,7 @@ export const executePostgresManyToManyCommand = (input: {
           target_count: number | null;
         } & QueryResultRow
       >(compiled.sql);
-      const materialized = materializePostgresManyToManyDelta(
-        input.command,
-        compiled,
-        result.rows,
-      );
+      const materialized = materializePostgresManyToManyDelta(input.command, compiled, result.rows);
       if (materialized.cardinalityMismatch || !materialized.delta) {
         throw new PostgresDataGraphError(
           'PostgreSQL many-to-many endpoint Ref did not resolve exactly once.',

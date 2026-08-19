@@ -369,11 +369,7 @@ export const createMutationReactionRunner = ({
       await emitEvent(intent.event);
       return { ...execution, status: 'emitted' };
     } catch {
-      return failedExecution(
-        execution,
-        'follow_up_failed',
-        'Post-commit follow-up intent failed.',
-      );
+      return failedExecution(execution, 'follow_up_failed', 'Post-commit follow-up intent failed.');
     }
   };
 

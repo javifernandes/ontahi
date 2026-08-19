@@ -329,9 +329,7 @@ const resolveDirectRelationshipCommand = (
   const targetError = command.target
     ? validateRef(command.target, targetEntity, 'target')
     : undefined;
-  return targetError
-    ? { success: false, error: targetError }
-    : { success: true, request, command };
+  return targetError ? { success: false, error: targetError } : { success: true, request, command };
 };
 
 const validateRef = (

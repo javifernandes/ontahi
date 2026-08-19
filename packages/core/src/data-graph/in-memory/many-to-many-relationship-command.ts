@@ -98,10 +98,7 @@ const execute = (
   const sourceEntity = findEntity(entities, command.relation.sourceEntityName);
   const targetEntity = findEntity(entities, command.relation.targetEntityName);
   const relation = sourceEntity.relations[command.relation.relationName];
-  if (
-    relation?.relationKind !== 'manyToMany' ||
-    relation.target.name !== targetEntity.name
-  ) {
+  if (relation?.relationKind !== 'manyToMany' || relation.target.name !== targetEntity.name) {
     throw new InMemoryDataGraphError(
       `Unknown many-to-many Relation ${sourceEntity.name}.${command.relation.relationName}.`,
       'invalid_command',

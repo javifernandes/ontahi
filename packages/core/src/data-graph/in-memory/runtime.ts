@@ -263,11 +263,10 @@ export const createInMemoryDataGraphRuntime = (input: {
   RelationshipCommandExecutionRuntime<InMemoryDataGraphError> => {
   const relationships = input.relationships ?? [];
   input.relationships = relationships;
-  return ({
+  return {
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () =>
-          executeRead(queryOrView, params, input.dataset, relationships)[0] ?? null,
+        try: () => executeRead(queryOrView, params, input.dataset, relationships)[0] ?? null,
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -316,7 +315,7 @@ export const createInMemoryDataGraphRuntime = (input: {
       ),
     runRelationshipCommand: command =>
       executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
-  }) satisfies DataGraphExecutionRuntime<
+  } satisfies DataGraphExecutionRuntime<
     InMemoryDataGraphError,
     undefined,
     undefined,

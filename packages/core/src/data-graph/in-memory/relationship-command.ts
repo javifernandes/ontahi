@@ -59,7 +59,8 @@ type RelationshipMutationContext = {
 };
 
 const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
-  const { command, dataset, targetEntity, sourceField, rows, rowIndex, row, currentValue } = context;
+  const { command, dataset, targetEntity, sourceField, rows, rowIndex, row, currentValue } =
+    context;
   if (!command.target) {
     throw new InMemoryDataGraphError('Link commands require a target Ref.', 'invalid_command');
   }
@@ -83,7 +84,8 @@ const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
 };
 
 const applyUnlink = (context: RelationshipMutationContext): RelationshipDelta => {
-  const { command, dataset, sourceEntity, sourceField, rows, rowIndex, row, currentValue } = context;
+  const { command, dataset, sourceEntity, sourceField, rows, rowIndex, row, currentValue } =
+    context;
   if (!sourceField.nullable && !sourceField.optional) {
     throw new InMemoryDataGraphError(
       `Required Relation ${sourceEntity.name}.${command.relation.fieldName} cannot be cleared.`,

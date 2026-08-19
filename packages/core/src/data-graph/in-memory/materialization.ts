@@ -84,13 +84,13 @@ export const materializeRelation = (
           if (!sourceRef) return [];
           const targetLocators = new Set(
             relationships
-            .filter(
-              fact =>
-                'relationName' in fact.relation &&
-                fact.relation.sourceEntityName === sourceEntity.name &&
-                fact.relation.relationName === relationNode.relationName &&
-                JSON.stringify(fact.source.locator) === JSON.stringify(sourceRef.locator),
-            )
+              .filter(
+                fact =>
+                  'relationName' in fact.relation &&
+                  fact.relation.sourceEntityName === sourceEntity.name &&
+                  fact.relation.relationName === relationNode.relationName &&
+                  JSON.stringify(fact.source.locator) === JSON.stringify(sourceRef.locator),
+              )
               .map(fact => JSON.stringify(fact.target.locator)),
           );
           return targetRows.filter(targetRow => {
