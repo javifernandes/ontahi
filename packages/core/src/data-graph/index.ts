@@ -17,6 +17,7 @@ export * from './in-memory/reflected-entity-data.js';
 export * from './in-memory/runtime.js';
 export * from './in-memory/storage.js';
 export * from './mapping-conventions.js';
+export * from './mutation-reaction.js';
 export * from './operations.js';
 export * from './operation-input.js';
 export * from './output/index.js';

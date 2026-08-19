@@ -153,12 +153,12 @@ application-specific hooks.
 
 ## Acceptance Checklist
 
-- [ ] Relationship execution returns a serializable Applied Mutation Outcome.
-- [ ] Reactions consume outcomes rather than raw hooks or opaque callbacks.
-- [ ] Follow-up Commands pass through the same policy and validation boundary as direct Commands.
-- [ ] Parent and root causal identity survive a multi-step local chain.
-- [ ] Cycles or excessive reaction depth terminate with observable evidence.
-- [ ] A failed follow-up does not falsely report that its parent mutation was unapplied.
+- [x] Relationship execution returns a serializable Applied Mutation Outcome.
+- [x] Reactions consume outcomes rather than raw hooks or opaque callbacks.
+- [x] Follow-up Commands pass through the same policy and validation boundary as direct Commands.
+- [x] Parent and root causal identity survive a multi-step local chain.
+- [x] Cycles or excessive reaction depth terminate with observable evidence.
+- [x] A failed follow-up does not falsely report that its parent mutation was unapplied.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
 - [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.
