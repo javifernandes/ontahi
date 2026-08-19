@@ -163,9 +163,12 @@ Entity at a time.
 - [x] Add `relation.inverse(referenceField)` with ambiguity-free mapping.
 - [x] Let relation-root navigation consume a semantic Selection directly and infer its unique
       connecting relation; require `through` only for ambiguous topology.
-- [x] Migrate the Todo portability example to Reference Fields and unique relation traversal.
+- [x] Migrate `TodoItem.list` in the Todo portability example to a Reference Field and unique
+      relation traversal.
+- [ ] Replace the legacy scalar-FK `TodoTag` declaration when Plan 135 proves anonymous
+      many-to-many Relation storage.
 - [ ] Migrate one representative BookOps relation.
-- [x] Update the developer book after the public surface passes adapter conformance tests.
+- [x] Update the developer book for direct Reference Fields after adapter conformance tests.
 
 ## Verification
 

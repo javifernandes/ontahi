@@ -15,6 +15,7 @@ relatedPlans:
   - ontahi://plans/128c-relationship-command-wire-protocol
   - ontahi://plans/128d-relationship-command-policy-dispatcher
   - ontahi://plans/128e-relationship-command-runtime-routing
+  - ontahi://plans/135-applied-mutation-outcomes-and-reactions
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -80,9 +81,17 @@ a concurrent reassignment. They share canonical Relation identity and `unlink` a
 Relationship Delta records the exact fact actually removed.
 
 A Relation does not own arbitrary lifecycle hooks, domain failures, effects, authorization
-coordination, or durability. Those remain with Domain Operations. When the relationship has
-attributes, identity, lifecycle, history, policy, effects, more than two roles, or participation in
-further Relations, model it as an ordinary Association Entity.
+coordination, or durability. Structural referential consistency, Selection resolution, cardinality,
+and atomic edge application are generic graph/runtime responsibilities. Domain invariants and
+coordinated behavior that cannot be expressed structurally remain with Domain Operations. When the
+relationship has attributes, identity, lifecycle, history, independent policy or effects, more than
+two roles, or participation in further Relations, model it as an ordinary Association Entity.
+
+An attribute-free binary many-to-many link is still a direct Relation even when relational storage
+uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally
+expresses one-or-many sources crossed with one-or-many targets. Explicit Ref selections retain the
+precondition that every named participant exists; arbitrary filtered Selections may resolve empty.
+The join table and columns are provider mapping evidence and do not require a public join Entity.
 
 The canonical Relationship Command has a versioned JSON-safe graph-command envelope. A receiving
 runtime resolves its Entity names and Reference Field identity against server-owned topology,

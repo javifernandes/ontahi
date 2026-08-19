@@ -412,6 +412,11 @@ A binary, attribute-free many-to-many edge remains a deliberate gray area. The f
 may model it as an explicit Entity, as `TodoTag` already does; anonymous edge storage can be added
 later without changing Relationship Command semantics.
 
+Plan 135 resolves the follow-up direction: Todo's attribute-free tagging edge becomes a direct
+many-to-many Relation whose join table is storage mapping, while associations with attributes or
+lifecycle remain ordinary Entities. Selection-valued endpoints and adapter conformance are required
+before that decision is considered implemented.
+
 ### Structural Action Matrix
 
 | Topology           | Authoring action     | Canonical meaning                               | Owner                                        |

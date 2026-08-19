@@ -166,6 +166,50 @@ application-specific hooks.
 6. Explore transactional outbox delivery with Plan 132's identity and retry contracts.
 7. Project outcome chains into Explorer and agent-readable evidence.
 
+## Todo Many-To-Many Proof
+
+Todo tagging resolves Plan 131's binary, attribute-free many-to-many gray area. `TodoTag` currently
+exists only to expose the physical join table and has no independent attributes, lifecycle, policy,
+or behavior. It should therefore disappear from the semantic Entity model and remain storage
+evidence for a direct `TodoItem.tags <-> Tag.todos` Relation.
+
+The proof must establish:
+
+1. both Relation endpoints accept semantic Selections, including explicit Ref selections;
+2. `add` and `remove` apply the Cartesian edge delta for one-or-many sources and targets;
+3. explicit Ref selections fail structurally when any referenced participant does not exist;
+4. filtered Selections may resolve empty without being confused with a missing explicit Ref;
+5. batch execution is one Relationship Command and one atomic storage boundary when the adapter
+   advertises that capability;
+6. the join table and its columns live in storage mapping, not as duplicated semantic fields;
+7. a join with attributes or lifecycle still promotes to an ordinary Association Entity;
+8. Todo `assignTags` and `removeTags` Operations disappear when they add no domain semantics beyond
+   the structural Relation action;
+9. client-authored Todo and Tag Selections survive the existing graph protocol and policy boundary;
+10. Relationship Deltas and Applied Mutation Outcomes preserve the exact links added and removed.
+
+### Adapter Work
+
+The proof is incomplete until the same Relation works through:
+
+1. the in-memory runtime;
+2. PostgreSQL join-table mapping, traversal, add, and remove;
+3. Supabase join-table mapping, traversal, add, and remove;
+4. adapter conformance tests using the same semantic command and expected delta.
+
+PostgreSQL and Supabase already lower direct Reference Fields. They do not yet model anonymous
+many-to-many edge storage, so this is real adapter work rather than documentation-only migration.
+
+### Documentation Work
+
+After Core and adapter conformance are green:
+
+1. update Ontahi development documentation and the Relation Atlas concept;
+2. update the Todo example README and remove language presenting `TodoTag` as a semantic Entity;
+3. update the Ontahi developer book in BookOps with Relation topology, Selection-valued structural
+   actions, Applied Outcomes, Reactions, and the Association Entity boundary;
+4. add a migration note for legacy scalar FK plus `relation.belongsTo(..., { via })` declarations.
+
 ## Non-Goals
 
 1. Do not make arbitrary Entity or Relation lifecycle callbacks part of the model.
@@ -189,6 +233,11 @@ application-specific hooks.
 - [x] Durable envelopes reject non-JSON-safe intent instead of silently losing values.
 - [x] Exact Entity create, update, and delete produce Applied Mutation Outcomes and can chain.
 - [x] Association Entity creation uses the generic Entity lifecycle without application boilerplate.
+- [ ] Binary attribute-free Todo tagging is a direct many-to-many Relation, not a public Entity.
+- [ ] Relationship actions accept Selection-valued source and target endpoints.
+- [ ] In-memory, PostgreSQL, and Supabase pass many-to-many Relation conformance.
+- [ ] Todo no longer wraps structural tag add/remove behavior in Domain Operations.
+- [ ] Ontahi developer docs and the BookOps developer book teach the expanded Relation concept.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
 - [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.
