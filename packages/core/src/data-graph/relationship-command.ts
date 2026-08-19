@@ -26,6 +26,13 @@ export type RelationshipDelta = {
   removed: RelationshipFact[];
 };
 
+export interface RelationshipCommandExecutionRuntime<TError = never, TOptions = undefined> {
+  runRelationshipCommand(
+    command: RelationshipCommand,
+    options?: TOptions,
+  ): import('effect').Effect.Effect<RelationshipDelta, TError>;
+}
+
 type ResolvedRelation = {
   definition: RelationDefinition<RelationKind, AnyEntityDefinition>;
   identity: CanonicalRelationIdentity;

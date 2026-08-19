@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/131a-relationship-command-delta-core-experiment
   - ontahi://plans/128c-relationship-command-wire-protocol
   - ontahi://plans/128d-relationship-command-policy-dispatcher
+  - ontahi://plans/128e-relationship-command-runtime-routing
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -93,3 +94,9 @@ explicit policy for the canonical source Entity and Reference Field plus an allo
 action before invoking storage. It accepts server-owned authority context as a future policy input,
 but Plan 128d does not evaluate Principal roles or domain invariants; those remain integration work
 for authorization and Domain Operations respectively.
+
+Relationship Command execution is an optional runtime capability parallel to generic Entity Graph
+Commands. The in-memory runtime implements it when given authoritative Entity definitions; the
+remote runtime can encode the same canonical command through an injected transport and validate the
+returned delta. Runtimes without the focused capability fail explicitly instead of lowering the
+intent to an Entity patch.

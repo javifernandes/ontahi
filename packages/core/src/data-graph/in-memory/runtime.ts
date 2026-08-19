@@ -18,12 +18,14 @@ import {
   type RelatedRootReadMode,
   type RelatedRootReadSpec,
 } from '../relation-root.js';
+import type { RelationshipCommandExecutionRuntime } from '../relationship-command.js';
 import type { DataGraphExecutionRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { materializeRecord, type InMemoryDataset } from './materialization.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
+import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
 
 const selectRows = (
   spec: QuerySpec<any, any>,
@@ -232,12 +234,14 @@ const countRead = <TParams, TResult>(
 
 export const createInMemoryDataGraphRuntime = (input: {
   dataset: InMemoryDataset;
+  entities?: readonly AnyEntityDefinition[];
 }): DataGraphExecutionRuntime<
   InMemoryDataGraphError,
   undefined,
   undefined,
   InMemoryDataGraphError
-> =>
+> &
+  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> =>
   ({
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
@@ -279,9 +283,12 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     runCommand: <TResult>(command: GraphCommandSpec<any, any, TResult>) =>
       executeInMemoryGraphCommandEffect(input.dataset, command),
+    runRelationshipCommand: command =>
+      executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
   }) satisfies DataGraphExecutionRuntime<
     InMemoryDataGraphError,
     undefined,
     undefined,
     InMemoryDataGraphError
-  >;
+  > &
+    RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;

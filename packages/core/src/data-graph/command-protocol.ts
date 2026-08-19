@@ -40,6 +40,24 @@ export type GraphCommandRequestResolveResult =
     }
   | { readonly success: false; readonly error: GraphCommandProtocolError };
 
+const graphCommandProtocolErrorCodes = new Set<GraphCommandProtocolErrorCode>([
+  'invalid_request',
+  'unsupported_version',
+  'unknown_entity',
+  'invalid_relation',
+  'invalid_reference',
+  'access_denied',
+  'execution_unavailable',
+]);
+
+export const isGraphCommandProtocolError = (value: unknown): value is GraphCommandProtocolError =>
+  isRecord(value) &&
+  value.kind === 'protocol-error' &&
+  isRecord(value.error) &&
+  typeof value.error.code === 'string' &&
+  graphCommandProtocolErrorCodes.has(value.error.code as GraphCommandProtocolErrorCode) &&
+  typeof value.error.message === 'string';
+
 export const graphCommandProtocolError = (
   code: GraphCommandProtocolErrorCode,
   message: string,
