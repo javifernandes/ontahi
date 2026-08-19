@@ -22,8 +22,13 @@ Repository-wide expectations:
 5. Keep public APIs smaller than their anticipated future shape and avoid duplicate concepts.
 6. Public package changes require a Changeset. Package-only test or tooling changes that do not
    warrant a release require an empty Changeset so CI records that decision.
-7. Pull requests must be ready for review, scoped coherently, and include the checks actually run.
+7. Pull requests must be created ready for review, never as drafts, scoped coherently, and include
+   the checks actually run.
 8. Keep Ontahi-owned plans and durable framework knowledge in this repository. Use canonical source
    URIs for relationships to work owned by another repository.
+9. On macOS, authenticated `gh` commands must run outside the sandbox because GitHub CLI credentials
+   are stored in Keychain. A sandboxed `gh auth status` can falsely report an invalid token even when
+   the host session is valid; verify and execute credentialed `gh` operations with escalated host
+   access instead of asking the user to authenticate again.
 
 More specific `AGENTS.md` files may refine these instructions for a subtree.
