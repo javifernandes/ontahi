@@ -11,6 +11,7 @@ relatedPlans:
   - bookops://plans/71a-ontahi-relations-model-research
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/131-ontahi-relationship-semantics
+  - ontahi://plans/131a-relationship-command-delta-core-experiment
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -64,8 +65,18 @@ that Entity to the command Entity, Ontahí infers the edge in either direction. 
 connect the same pair, `{ through: 'relationName' }` makes that genuine topology choice explicit;
 if none connect them, construction fails before the read reaches storage.
 
-Plan 131 is researching a further distinction between Relation Definitions, concrete relationship
-facts, structural Relationship Commands, resolved deltas, and Association Entities. That research
-does not yet add mutation behavior or policy to Relation declarations. Its immediate compatibility
-requirement is narrower: recursive View traversal should preserve canonical Relation identity so
-future command and policy models do not need to reinterpret field patches or break the read AST.
+Plan 131 recommends a narrow B-lite distinction between Relation Definitions, concrete relationship
+facts, structural Relationship Commands, resolved deltas, and Association Entities. A direct
+Relation owns topology, cardinality, nullability, target compatibility, and the structural
+`link/unlink` action pair. Authoring may present those actions as to-one `assign/clear` and inverse
+to-many `add/remove`, but both directions preserve one canonical Relation identity.
+
+Authoring forms need not erase meaningful preconditions. `student.course.clear()` means unlink any
+current target, while `course.students.remove(student)` names the expected target and must not erase
+a concurrent reassignment. They share canonical Relation identity and `unlink` action; the applied
+Relationship Delta records the exact fact actually removed.
+
+A Relation does not own arbitrary lifecycle hooks, domain failures, effects, authorization
+coordination, or durability. Those remain with Domain Operations. When the relationship has
+attributes, identity, lifecycle, history, policy, effects, more than two roles, or participation in
+further Relations, model it as an ordinary Association Entity.

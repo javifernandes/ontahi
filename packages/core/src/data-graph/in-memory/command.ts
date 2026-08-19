@@ -69,6 +69,23 @@ const projectReturningRows = (
     liftEntityReferenceRecord(entity, Object.fromEntries(fields.map(field => [field, row[field]]))),
   );
 
+const assertRequiredConstructionFields = (
+  entity: GraphCommandSpec['root'],
+  row: Record<string, unknown>,
+) => {
+  const missing = Object.entries(entity.fields)
+    .filter(([, field]) => !field.optional)
+    .map(([fieldName]) => fieldName)
+    .filter(fieldName => !hasOwn(row, fieldName));
+
+  if (missing.length > 0) {
+    throw new InMemoryDataGraphError(
+      `Cannot construct ${entity.name}; missing required fields: ${missing.join(', ')}.`,
+      'invalid_command',
+    );
+  }
+};
+
 const assertOneAffectedRow = (
   command: GraphCommandSpec<any, any, any>,
   rows: ReadonlyArray<Record<string, unknown>>,
@@ -89,6 +106,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
 
   if (command.operation === 'insert' || command.operation === 'insert_many') {
     affectedRows = payloadRows(command);
+    affectedRows.forEach(row => assertRequiredConstructionFields(command.root, row));
     nextRows = [...currentRows, ...affectedRows];
   } else if (command.operation === 'upsert') {
     const payloads = payloadRows(command);
@@ -112,6 +130,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
       );
 
       if (existingIndex < 0) {
+        assertRequiredConstructionFields(command.root, payload);
         affectedRows.push(payload);
         nextRows = [...nextRows, payload];
       } else if (command.upsert?.strategy === 'merge') {
