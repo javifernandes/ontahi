@@ -99,8 +99,7 @@ const execute = (
   const targetEntity = findEntity(entities, command.relation.targetEntityName);
   const relation = sourceEntity.relations[command.relation.relationName];
   if (
-    !relation ||
-    relation.relationKind !== 'manyToMany' ||
+    relation?.relationKind !== 'manyToMany' ||
     relation.target.name !== targetEntity.name
   ) {
     throw new InMemoryDataGraphError(

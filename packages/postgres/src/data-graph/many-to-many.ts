@@ -42,8 +42,7 @@ const resolveRelationMapping = (
 ) => {
   const relation = source.entity.relations[command.relation.relationName];
   if (
-    !relation ||
-    relation.relationKind !== 'manyToMany' ||
+    relation?.relationKind !== 'manyToMany' ||
     relation.target !== target.entity ||
     relation.mapping?.type !== 'many-to-many'
   ) {

@@ -22,6 +22,12 @@ const findEntity = (entities: readonly AnyEntityDefinition[], entityName: string
 
 const emptyDelta = (): EntityMutationDelta => ({ created: [], updated: [], deleted: [] });
 
+const graphOperationFor = (action: EntityMutationCommand['action']) => {
+  if (action === 'create') return 'insert';
+  if (action === 'update') return 'update';
+  return 'delete';
+};
+
 export const executeInMemoryEntityMutationCommandEffect = (
   dataset: InMemoryDataset,
   entities: readonly AnyEntityDefinition[],
@@ -41,8 +47,7 @@ export const executeInMemoryEntityMutationCommandEffect = (
     const fields = Object.keys(entity.fields);
     return executeInMemoryGraphCommandEffect<Record<string, unknown>>(dataset, {
       kind: 'command',
-      operation:
-        command.action === 'create' ? 'insert' : command.action === 'update' ? 'update' : 'delete',
+      operation: graphOperationFor(command.action),
       root: entity,
       selection: 'target' in command ? selectionReferences([command.target]) : selectionNone(),
       ...('values' in command ? { payload: command.values } : {}),

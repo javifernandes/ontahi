@@ -2,7 +2,7 @@
  * Install once in a Supabase project migration. The functions use invoker rights, so normal table
  * grants and RLS remain authoritative for endpoint selection and edge mutation.
  */
-export const supabaseManyToManyRpcSql = String.raw`
+export const supabaseManyToManyRpcSql = `
 create or replace function public.ontahi_selection_sql(selection jsonb)
 returns text
 language plpgsql

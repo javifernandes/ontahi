@@ -90,7 +90,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
   for (const policy of policies) {
     if ('relationName' in policy) {
       const relation = policy.entity.relations[policy.relationName];
-      if (!relation || relation.relationKind !== 'manyToMany') {
+      if (relation?.relationKind !== 'manyToMany') {
         throw new Error(
           `Graph Command policy ${policy.entity.name}.${policy.relationName} must target a many-to-many Relation.`,
         );
@@ -122,72 +122,11 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     policyByRelation.set(key, { policy, target: field.target });
   }
 
-  return async (
-    input: unknown,
-    context: GraphCommandDispatchContext<TAuthority>,
+  const executeSafely = async (
+    run: () => Promise<RelationshipDelta>,
   ): Promise<GraphCommandDispatchResponse> => {
-    const parsed = parseGraphCommandRequest(input);
-    if (!parsed.success) return parsed.error;
-
-    const command = parsed.request.command;
-    if (command.kind === 'many-to-many-relationship-command') {
-      const registered = manyToManyPolicyByRelation.get(
-        policyKey(
-          command.relation.sourceEntityName,
-          command.relation.relationName,
-          command.relation.targetEntityName,
-        ),
-      );
-      if (!registered || !registered.policy.actions.includes(command.action)) {
-        return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
-      }
-      const resolved = resolveGraphCommandRequest(parsed.request, {
-        entities: [registered.policy.entity, registered.target],
-      });
-      if (!resolved.success) return resolved.error;
-      if (resolved.command.kind !== 'many-to-many-relationship-command') {
-        return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
-      }
-      if (!executeManyToMany) {
-        return graphCommandProtocolError(
-          'execution_unavailable',
-          'Many-to-many Relationship Command execution is unavailable.',
-        );
-      }
-      try {
-        const value = await executeManyToMany(resolved.command, context);
-        if (!isJsonValue(value)) throw new Error('Relationship Delta must be JSON-safe.');
-        return { kind: 'graph-command-result', value: cloneJson(value) };
-      } catch (error) {
-        reportError?.(error);
-        return graphCommandProtocolError(
-          'execution_unavailable',
-          'Data graph Command execution is temporarily unavailable.',
-        );
-      }
-    }
-
-    const registered = policyByRelation.get(
-      policyKey(
-        command.relation.sourceEntityName,
-        command.relation.fieldName,
-        command.relation.targetEntityName,
-      ),
-    );
-    if (!registered || !registered.policy.actions.includes(command.action)) {
-      return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
-    }
-
-    const resolved = resolveGraphCommandRequest(parsed.request, {
-      entities: [registered.policy.entity, registered.target],
-    });
-    if (!resolved.success) return resolved.error;
-    if (resolved.command.kind !== 'relationship-command') {
-      return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
-    }
-
     try {
-      const value = await execute(resolved.command, context);
+      const value = await run();
       if (!isJsonValue(value)) throw new Error('Relationship Delta must be JSON-safe.');
       return { kind: 'graph-command-result', value: cloneJson(value) };
     } catch (error) {
@@ -197,6 +136,77 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         'Data graph Command execution is temporarily unavailable.',
       );
     }
+  };
+
+  const dispatchManyToMany = async (
+    request: Parameters<typeof resolveGraphCommandRequest>[0],
+    command: ManyToManyRelationshipCommand,
+    context: GraphCommandDispatchContext<TAuthority>,
+  ): Promise<GraphCommandDispatchResponse> => {
+    const registered = manyToManyPolicyByRelation.get(
+      policyKey(
+        command.relation.sourceEntityName,
+        command.relation.relationName,
+        command.relation.targetEntityName,
+      ),
+    );
+    if (!registered?.policy.actions.includes(command.action)) {
+      return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
+    }
+    const resolved = resolveGraphCommandRequest(request, {
+      entities: [registered.policy.entity, registered.target],
+    });
+    if (!resolved.success) return resolved.error;
+    const resolvedCommand = resolved.command;
+    if (resolvedCommand.kind !== 'many-to-many-relationship-command') {
+      return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
+    }
+    if (!executeManyToMany) {
+      return graphCommandProtocolError(
+        'execution_unavailable',
+        'Many-to-many Relationship Command execution is unavailable.',
+      );
+    }
+    return executeSafely(() => executeManyToMany(resolvedCommand, context));
+  };
+
+  const dispatchDirect = async (
+    request: Parameters<typeof resolveGraphCommandRequest>[0],
+    command: RelationshipCommand,
+    context: GraphCommandDispatchContext<TAuthority>,
+  ): Promise<GraphCommandDispatchResponse> => {
+    const registered = policyByRelation.get(
+      policyKey(
+        command.relation.sourceEntityName,
+        command.relation.fieldName,
+        command.relation.targetEntityName,
+      ),
+    );
+    if (!registered?.policy.actions.includes(command.action)) {
+      return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
+    }
+    const resolved = resolveGraphCommandRequest(request, {
+      entities: [registered.policy.entity, registered.target],
+    });
+    if (!resolved.success) return resolved.error;
+    const resolvedCommand = resolved.command;
+    if (resolvedCommand.kind !== 'relationship-command') {
+      return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
+    }
+    return executeSafely(() => execute(resolvedCommand, context));
+  };
+
+  return async (
+    input: unknown,
+    context: GraphCommandDispatchContext<TAuthority>,
+  ): Promise<GraphCommandDispatchResponse> => {
+    const parsed = parseGraphCommandRequest(input);
+    if (!parsed.success) return parsed.error;
+
+    const command = parsed.request.command;
+    return command.kind === 'many-to-many-relationship-command'
+      ? dispatchManyToMany(parsed.request, command, context)
+      : dispatchDirect(parsed.request, command, context);
   };
 };
 

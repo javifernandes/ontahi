@@ -24,29 +24,12 @@ import {
 import { Effect, Stream } from 'effect';
 import type { Pool, QueryResultRow } from 'pg';
 
-import {
-  compilePostgresManyToManyCommand,
-  materializePostgresManyToManyDelta,
-} from './many-to-many.js';
+import { executePostgresCommand, executePostgresManyToManyCommand } from './command-runtime.js';
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
-import { compilePostgresCommand, compilePostgresQuery, quotePostgresIdentifier } from './sql.js';
+import { PostgresDataGraphError } from './runtime-error.js';
+import { compilePostgresQuery, quotePostgresIdentifier } from './sql.js';
 
-export type PostgresDataGraphErrorReason =
-  | 'execution_failed'
-  | 'invalid_command'
-  | 'cardinality_mismatch';
-
-export class PostgresDataGraphError extends Error {
-  readonly _tag = 'PostgresDataGraphError';
-
-  constructor(
-    message: string,
-    readonly reason: PostgresDataGraphErrorReason = 'execution_failed',
-    readonly cause?: unknown,
-  ) {
-    super(message);
-  }
-}
+export { PostgresDataGraphError, type PostgresDataGraphErrorReason } from './runtime-error.js';
 
 const mappingFor = (
   registry: Map<AnyEntityDefinition, PostgresEntityMapping>,
@@ -56,10 +39,6 @@ const mappingFor = (
   if (!mapping) throw new Error(`Missing PostgreSQL mapping for ${entity.name}.`);
   return mapping;
 };
-
-const invalidCommandCause = (cause: unknown) =>
-  cause instanceof Error &&
-  (cause.message.startsWith('PostgreSQL upsert') || cause.message.startsWith('PostgreSQL insert'));
 
 export const createPostgresDataGraphRuntime = (input: {
   pool: Pick<Pool, 'query'>;
@@ -372,78 +351,12 @@ export const createPostgresDataGraphRuntime = (input: {
       }).pipe(Effect.map(result => result.rows[0]?.count ?? 0));
     },
     runCommand: <TResult>(command: GraphCommandSpec<any, any, TResult>) =>
-      Effect.tryPromise({
-        try: () =>
-          executeQuery<QueryResultRow>(
-            compilePostgresCommand(command, mappingFor(registry, command.root)),
-          ),
-        catch: cause =>
-          new PostgresDataGraphError(
-            'PostgreSQL data graph command failed.',
-            invalidCommandCause(cause) ? 'invalid_command' : 'execution_failed',
-            cause,
-          ),
-      }).pipe(
-        Effect.flatMap(result =>
-          command.cardinality === 'one' && result.rowCount !== 1
-            ? Effect.fail(
-                new PostgresDataGraphError(
-                  `Expected exactly one affected row, got ${result.rowCount ?? 0}.`,
-                  'cardinality_mismatch',
-                ),
-              )
-            : Effect.succeed(
-                (command.returning
-                  ? command.cardinality === 'one'
-                    ? result.rows[0]
-                      ? liftEntityReferenceRecord(command.root, result.rows[0])
-                      : result.rows[0]
-                    : result.rows.map(row => liftEntityReferenceRecord(command.root, row))
-                  : undefined) as TResult,
-              ),
-        ),
-      ),
-    runManyToManyRelationshipCommand: command =>
-      Effect.tryPromise({
-        try: async () => {
-          const source = input.mappings.find(
-            mapping => mapping.entity.name === command.relation.sourceEntityName,
-          );
-          const target = input.mappings.find(
-            mapping => mapping.entity.name === command.relation.targetEntityName,
-          );
-          if (!source || !target) {
-            throw new Error('PostgreSQL many-to-many Command references an unmapped Entity.');
-          }
-          const compiled = compilePostgresManyToManyCommand(command, source, target);
-          const result = await executeQuery<
-            {
-              row_kind: 'meta' | 'fact';
-              source_value: unknown;
-              target_value: unknown;
-              source_count: number | null;
-              target_count: number | null;
-            } & QueryResultRow
-          >(compiled.sql);
-          const materialized = materializePostgresManyToManyDelta(command, compiled, result.rows);
-          if (materialized.cardinalityMismatch || !materialized.delta) {
-            throw new PostgresDataGraphError(
-              'PostgreSQL many-to-many endpoint Ref did not resolve exactly once.',
-              'cardinality_mismatch',
-            );
-          }
-          return materialized.delta;
-        },
-        catch: cause =>
-          cause instanceof PostgresDataGraphError
-            ? cause
-            : new PostgresDataGraphError(
-                'PostgreSQL many-to-many Command failed.',
-                cause instanceof Error && cause.message.startsWith('PostgreSQL many-to-many')
-                  ? 'invalid_command'
-                  : 'execution_failed',
-                cause,
-              ),
+      executePostgresCommand({
+        command,
+        executeQuery,
+        mapping: mappingFor(registry, command.root),
       }),
+    runManyToManyRelationshipCommand: command =>
+      executePostgresManyToManyCommand({ command, executeQuery, mappings: input.mappings }),
   };
 };

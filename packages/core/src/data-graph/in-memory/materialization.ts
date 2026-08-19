@@ -82,7 +82,8 @@ export const materializeRelation = (
       ? (() => {
           const sourceRef = createEntityIdentityRef(sourceEntity, sourceRow);
           if (!sourceRef) return [];
-          const targetLocators = relationships
+          const targetLocators = new Set(
+            relationships
             .filter(
               fact =>
                 'relationName' in fact.relation &&
@@ -90,10 +91,11 @@ export const materializeRelation = (
                 fact.relation.relationName === relationNode.relationName &&
                 JSON.stringify(fact.source.locator) === JSON.stringify(sourceRef.locator),
             )
-            .map(fact => JSON.stringify(fact.target.locator));
+              .map(fact => JSON.stringify(fact.target.locator)),
+          );
           return targetRows.filter(targetRow => {
             const targetRef = createEntityIdentityRef(relationNode.entity, targetRow);
-            return targetRef ? targetLocators.includes(JSON.stringify(targetRef.locator)) : false;
+            return targetRef ? targetLocators.has(JSON.stringify(targetRef.locator)) : false;
           });
         })()
       : (() => {

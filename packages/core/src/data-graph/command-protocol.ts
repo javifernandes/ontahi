@@ -205,14 +205,133 @@ const findEntity = (entities: readonly AnyEntityDefinition[], name: string) =>
   entities.find(entity => entity.name === name);
 
 const hasDeclaredLocator = (entity: AnyEntityDefinition, ref: AnyEntityRef) => {
-  const fields = Object.keys(ref.locator).sort();
+  const fields = Object.keys(ref.locator).sort((left, right) => left.localeCompare(right));
   return Object.values(entity.refLocators).some(locator => {
-    const locatorFields = 'fields' in locator && locator.fields ? [...locator.fields].sort() : [];
+    const locatorFields =
+      'fields' in locator && locator.fields
+        ? [...locator.fields].sort((left, right) => left.localeCompare(right))
+        : [];
     return (
       locatorFields.length === fields.length &&
       locatorFields.every((fieldName, index) => fieldName === fields[index])
     );
   });
+};
+
+const resolutionFailure = (
+  code: GraphCommandProtocolErrorCode,
+  message: string,
+): GraphCommandRequestResolveResult => ({
+  success: false,
+  error: graphCommandProtocolError(code, message),
+});
+
+const resolveEntities = (
+  entities: readonly AnyEntityDefinition[],
+  sourceName: string,
+  targetName: string,
+):
+  | { sourceEntity: AnyEntityDefinition; targetEntity: AnyEntityDefinition }
+  | GraphCommandRequestResolveResult => {
+  const sourceEntity = findEntity(entities, sourceName);
+  const targetEntity = findEntity(entities, targetName);
+  if (!sourceEntity || !targetEntity) {
+    return resolutionFailure(
+      'unknown_entity',
+      `Unknown data graph Entity: ${sourceEntity ? targetName : sourceName}.`,
+    );
+  }
+  return { sourceEntity, targetEntity };
+};
+
+const validateEndpointSelection = (
+  endpoint: RelationshipEndpointSelection,
+  entity: AnyEntityDefinition,
+  role: 'source' | 'target',
+): GraphCommandProtocolError | undefined => {
+  if (endpoint.entityName !== entity.name) {
+    return graphCommandProtocolError(
+      'invalid_selection',
+      `Relationship ${role} Selection must target ${entity.name}.`,
+    );
+  }
+  const selectionError = validateGraphReadSelection(endpoint.selection, entity);
+  if (selectionError) {
+    return graphCommandProtocolError('invalid_selection', selectionError.error.message);
+  }
+  if (endpoint.selection.kind !== 'references') return undefined;
+  const invalidRef = endpoint.selection.refs.find(ref => !hasDeclaredLocator(entity, ref));
+  return invalidRef
+    ? graphCommandProtocolError(
+        'invalid_reference',
+        `Relationship ${role} Ref does not use a declared ${entity.name} locator.`,
+      )
+    : undefined;
+};
+
+const resolveManyToManyCommand = (
+  request: GraphCommandRequestV1,
+  command: ManyToManyRelationshipCommand,
+  entities: readonly AnyEntityDefinition[],
+): GraphCommandRequestResolveResult => {
+  const resolvedEntities = resolveEntities(
+    entities,
+    command.relation.sourceEntityName,
+    command.relation.targetEntityName,
+  );
+  if ('success' in resolvedEntities) return resolvedEntities;
+  const { sourceEntity, targetEntity } = resolvedEntities;
+  const relation = sourceEntity.relations[command.relation.relationName];
+  if (
+    !relation ||
+    relation.relationKind !== 'manyToMany' ||
+    relation.target.name !== targetEntity.name
+  ) {
+    return resolutionFailure(
+      'invalid_relation',
+      `Unknown many-to-many Relation ${sourceEntity.name}.${command.relation.relationName} -> ${targetEntity.name}.`,
+    );
+  }
+  const sourceError = validateEndpointSelection(command.sources, sourceEntity, 'source');
+  if (sourceError) return { success: false, error: sourceError };
+  const targetError = validateEndpointSelection(command.targets, targetEntity, 'target');
+  if (targetError) return { success: false, error: targetError };
+  return { success: true, request, command };
+};
+
+const resolveDirectRelationshipCommand = (
+  request: GraphCommandRequestV1,
+  command: RelationshipCommand,
+  entities: readonly AnyEntityDefinition[],
+): GraphCommandRequestResolveResult => {
+  const resolvedEntities = resolveEntities(
+    entities,
+    command.relation.sourceEntityName,
+    command.relation.targetEntityName,
+  );
+  if ('success' in resolvedEntities) return resolvedEntities;
+  const { sourceEntity, targetEntity } = resolvedEntities;
+  const field = sourceEntity.fields[command.relation.fieldName];
+  if (!field || !isReferenceFieldDefinition(field) || field.target.name !== targetEntity.name) {
+    return resolutionFailure(
+      'invalid_relation',
+      `Unknown canonical Relation ${sourceEntity.name}.${command.relation.fieldName} -> ${targetEntity.name}.`,
+    );
+  }
+  if (command.action === 'unlink' && !field.nullable && !field.optional) {
+    return resolutionFailure(
+      'invalid_relation',
+      `Required Relation ${sourceEntity.name}.${command.relation.fieldName} cannot be cleared.`,
+    );
+  }
+  const sourceError = validateRef(command.source, sourceEntity, 'source');
+  if (sourceError) return { success: false, error: sourceError };
+  const targetError = command.target
+    ? validateRef(command.target, targetEntity, 'target')
+    : undefined;
+  return targetError
+    ? { success: false, error: targetError }
+    : { success: true, request, command };
 };
 
 const validateRef = (
@@ -240,110 +359,7 @@ export const resolveGraphCommandRequest = (
   options: { readonly entities: readonly AnyEntityDefinition[] },
 ): GraphCommandRequestResolveResult => {
   const { command } = request;
-  if (command.kind === 'many-to-many-relationship-command') {
-    const sourceEntity = findEntity(options.entities, command.relation.sourceEntityName);
-    const targetEntity = findEntity(options.entities, command.relation.targetEntityName);
-    if (!sourceEntity || !targetEntity) {
-      const name = !sourceEntity
-        ? command.relation.sourceEntityName
-        : command.relation.targetEntityName;
-      return {
-        success: false,
-        error: graphCommandProtocolError('unknown_entity', `Unknown data graph Entity: ${name}.`),
-      };
-    }
-    const relation = sourceEntity.relations[command.relation.relationName];
-    if (
-      !relation ||
-      relation.relationKind !== 'manyToMany' ||
-      relation.target.name !== targetEntity.name
-    ) {
-      return {
-        success: false,
-        error: graphCommandProtocolError(
-          'invalid_relation',
-          `Unknown many-to-many Relation ${sourceEntity.name}.${command.relation.relationName} -> ${targetEntity.name}.`,
-        ),
-      };
-    }
-    const endpoints: Array<
-      [RelationshipEndpointSelection, AnyEntityDefinition, 'source' | 'target']
-    > = [
-      [command.sources, sourceEntity, 'source'],
-      [command.targets, targetEntity, 'target'],
-    ];
-    for (const [endpoint, entity, role] of endpoints) {
-      if (endpoint.entityName !== entity.name) {
-        return {
-          success: false,
-          error: graphCommandProtocolError(
-            'invalid_selection',
-            `Relationship ${role} Selection must target ${entity.name}.`,
-          ),
-        };
-      }
-      const selectionError = validateGraphReadSelection(endpoint.selection, entity);
-      if (selectionError) {
-        return {
-          success: false,
-          error: graphCommandProtocolError('invalid_selection', selectionError.error.message),
-        };
-      }
-      if (endpoint.selection.kind === 'references') {
-        for (const ref of endpoint.selection.refs) {
-          if (!hasDeclaredLocator(entity, ref)) {
-            return {
-              success: false,
-              error: graphCommandProtocolError(
-                'invalid_reference',
-                `Relationship ${role} Ref does not use a declared ${entity.name} locator.`,
-              ),
-            };
-          }
-        }
-      }
-    }
-    return { success: true, request, command };
-  }
-
-  const sourceEntity = findEntity(options.entities, command.relation.sourceEntityName);
-  const targetEntity = findEntity(options.entities, command.relation.targetEntityName);
-  if (!sourceEntity || !targetEntity) {
-    const name = !sourceEntity
-      ? command.relation.sourceEntityName
-      : command.relation.targetEntityName;
-    return {
-      success: false,
-      error: graphCommandProtocolError('unknown_entity', `Unknown data graph Entity: ${name}.`),
-    };
-  }
-
-  const field = sourceEntity.fields[command.relation.fieldName];
-  if (!field || !isReferenceFieldDefinition(field) || field.target.name !== targetEntity.name) {
-    return {
-      success: false,
-      error: graphCommandProtocolError(
-        'invalid_relation',
-        `Unknown canonical Relation ${sourceEntity.name}.${command.relation.fieldName} -> ${targetEntity.name}.`,
-      ),
-    };
-  }
-  if (command.action === 'unlink' && !field.nullable && !field.optional) {
-    return {
-      success: false,
-      error: graphCommandProtocolError(
-        'invalid_relation',
-        `Required Relation ${sourceEntity.name}.${command.relation.fieldName} cannot be cleared.`,
-      ),
-    };
-  }
-
-  const sourceError = validateRef(command.source, sourceEntity, 'source');
-  if (sourceError) return { success: false, error: sourceError };
-  if (command.target) {
-    const targetError = validateRef(command.target, targetEntity, 'target');
-    if (targetError) return { success: false, error: targetError };
-  }
-
-  return { success: true, request, command };
+  return command.kind === 'many-to-many-relationship-command'
+    ? resolveManyToManyCommand(request, command, options.entities)
+    : resolveDirectRelationshipCommand(request, command, options.entities);
 };

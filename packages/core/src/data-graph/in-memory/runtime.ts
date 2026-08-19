@@ -260,12 +260,14 @@ export const createInMemoryDataGraphRuntime = (input: {
 > &
   EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
   ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
-  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> =>
-  ({
+  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> => {
+  const relationships = input.relationships ?? [];
+  input.relationships = relationships;
+  return ({
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
         try: () =>
-          executeRead(queryOrView, params, input.dataset, input.relationships ?? [])[0] ?? null,
+          executeRead(queryOrView, params, input.dataset, relationships)[0] ?? null,
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -273,7 +275,7 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     run: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset, input.relationships ?? []),
+        try: () => executeRead(queryOrView, params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -282,7 +284,7 @@ export const createInMemoryDataGraphRuntime = (input: {
     stream: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Stream.fromEffect(
         Effect.try({
-          try: () => executeRead(queryOrView, params, input.dataset, input.relationships ?? []),
+          try: () => executeRead(queryOrView, params, input.dataset, relationships),
           catch: cause =>
             cause instanceof InMemoryDataGraphError
               ? cause
@@ -309,7 +311,7 @@ export const createInMemoryDataGraphRuntime = (input: {
       executeInMemoryManyToManyRelationshipCommandEffect(
         input.dataset,
         input.entities ?? [],
-        (input.relationships ??= []),
+        relationships,
         command,
       ),
     runRelationshipCommand: command =>
@@ -323,3 +325,4 @@ export const createInMemoryDataGraphRuntime = (input: {
     EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
     ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
     RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;
+};

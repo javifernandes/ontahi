@@ -93,7 +93,7 @@ export const relationshipSet = (
   sources: RelationshipSelectionInput,
 ) => {
   const definition = entity.relations[relationName];
-  if (!definition || definition.relationKind !== 'manyToMany') {
+  if (definition?.relationKind !== 'manyToMany') {
     throw new Error(`Relation ${entity.name}.${relationName} is not many-to-many.`);
   }
   const sourceSelection = endpointSelection(entity, sources);
