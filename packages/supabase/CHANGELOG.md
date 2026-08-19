@@ -1,5 +1,12 @@
 # @ontahi/supabase
 
+## 0.1.0-alpha.7
+
+### Patch Changes
+
+- Updated dependencies [9f5aff6]
+  - @ontahi/core@0.1.0-alpha.7
+
 ## 0.1.0-alpha.6
 
 ### Patch Changes
