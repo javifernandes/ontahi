@@ -76,6 +76,20 @@ Relation owns topology, cardinality, nullability, target compatibility, and the 
 `link/unlink` action pair. Authoring may present those actions as to-one `assign/clear` and inverse
 to-many `add/remove`, but both directions preserve one canonical Relation identity.
 
+Entity-bound Ref facades are the primary authoring surface:
+
+```ts
+student.course.assign(course);
+course.students.add(student);
+todo.tags.remove(tag);
+```
+
+The facade derives the available relation names, cardinality-specific verbs, and participant Ref
+types from the Entity definition. These methods are local, non-enumerable bindings: serialized Refs
+remain portable identity values with no methods or embedded Entity definition. The lower-level
+`relationship(Entity, relationName, subject)` factory remains the primitive beneath the facade,
+not the preferred application spelling.
+
 Authoring forms need not erase meaningful preconditions. `student.course.clear()` means unlink any
 current target, while `course.students.remove(student)` names the expected target and must not erase
 a concurrent reassignment. They share canonical Relation identity and `unlink` action; the applied
@@ -87,6 +101,45 @@ and atomic edge application are generic graph/runtime responsibilities. Domain i
 coordinated behavior that cannot be expressed structurally remain with Domain Operations. When the
 relationship has attributes, identity, lifecycle, history, independent policy or effects, more than
 two roles, or participation in further Relations, model it as an ordinary Association Entity.
+
+For example, an association with its own state remains ordinary Entity lifecycle. The current
+low-level command authoring primitive makes that lifecycle explicit; its spelling is not a settled
+high-level Entity facade:
+
+```ts
+const Enrollment = entity({
+  name: 'Enrollment',
+  fields: {
+    student: field.ref(Student),
+    course: field.ref(Course),
+    startedAt: field.date(),
+    status: field.enum(['pending', 'active', 'completed'] as const),
+  },
+}).locators({
+  refByStudentAndCourse: ['student', 'course'],
+});
+
+const createEnrollment = mutateEntity(Enrollment).create({
+  student,
+  course,
+  startedAt: new Date(),
+  status: 'active',
+});
+
+const enrollment = Enrollment.refByStudentAndCourse(student, course);
+const deleteEnrollment = mutateEntity(Enrollment).delete(enrollment);
+
+await Effect.runPromise(runtime.runEntityMutationCommand(createEnrollment));
+await Effect.runPromise(runtime.runEntityMutationCommand(deleteEnrollment));
+```
+
+The participant Refs are required and type-checked by generic Entity construction. Creating the
+instance establishes the reified association; deleting it extinguishes that association. No
+application-authored lifecycle Operation is required for either structural action. Traversal may
+observe the same relationship fact as a direct Relation, while Applied Outcomes preserve the
+important distinction between changing a primitive edge and creating or deleting an Entity with its
+own identity and lifecycle. This local Node example intentionally does not imply that Entity Mutation
+Commands or Relationship Commands already have a public remote bridge.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally

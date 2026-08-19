@@ -128,8 +128,9 @@ applied command produces an empty delta.
    vocabulary.
 2. `clear` has no target precondition, while inverse `remove` preserves its expected target. Applied
    deltas converge only when the fact actually matches.
-3. The first authoring API is a low-level `relationship(Entity, relationName, subjectRef)` factory;
-   a fluent Entity-bound facade remains deferred until remote transport needs a stable public form.
+3. **Superseded on 2026-08-19.** The first authoring API was a low-level
+   `relationship(Entity, relationName, subjectRef)` factory, with a fluent Entity-bound facade
+   deferred. The Evolution below now promotes that facade to the public authoring surface.
 4. Applied delta is the direct local executor result for this experiment. An outcome wrapper belongs
    with plan 128 transport/execution composition.
 5. Generic in-memory Entity construction now validates every non-optional Field, which makes required
@@ -149,3 +150,10 @@ applied command produces an empty delta.
   - all package builds passed.
 - Next integration: Plan 128 may carry this IR across runtime boundaries without converting it into
   an Entity patch or a generated Domain Operation.
+
+## Evolution
+
+- 2026-08-19: Superseding Decision 3, Entity-bound Ref facades promoted fluent structural authoring
+  as the public ergonomic surface (`student.course.assign(course)`,
+  `course.students.add(student)`). The original `relationship(Entity, relationName, subject)`
+  factory remains the lower-level primitive and canonical normalization implementation.

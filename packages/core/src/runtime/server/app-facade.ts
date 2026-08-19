@@ -15,6 +15,10 @@ import {
   type EntityRefInputPublicInput,
   type EntityRefLocator,
 } from '../../data-graph/ref.js';
+import {
+  bindEntityRefRelationshipCommands,
+  type BoundEntityRefRelationshipCommands,
+} from '../../data-graph/relationship-command.js';
 import { parseGraphSchema, safeParseGraphSchema } from '../../data-graph/schema.js';
 
 import type { ArchitectureDefinition, ArchitectureNamespace } from './architecture-types.js';
@@ -211,7 +215,8 @@ type GraphEntityRefProvider = <
   EntityRef<EntityName<TEntity>, TLocator>,
   TOperations,
   ConfiguredOperationInvoke
->;
+> &
+  (TEntity extends AnyEntityDefinition ? BoundEntityRefRelationshipCommands<TEntity> : {});
 
 const operationFacadeBase = {
   ExternalDependencyFailedError,
@@ -419,6 +424,11 @@ const attachConfiguredEntityRefLocators = (
     return graphEntity;
   }
 
+  const bindRelationships = <TRef extends EntityRef>(ref: TRef) =>
+    typeof entityOrName === 'object' && entityOrName !== null && 'relations' in entityOrName
+      ? bindEntityRefRelationshipCommands(ref, entityOrName as AnyEntityDefinition)
+      : ref;
+
   const locators = <TLocators extends EntityRefLocatorDeclarations>(
     locatorDeclarations: TLocators,
   ) =>
@@ -429,7 +439,7 @@ const attachConfiguredEntityRefLocators = (
           name,
           (...args: readonly unknown[]) =>
             bindEntityRefOperationProxy(
-              createEntityRef(entityRefTarget, toLocator(...args)),
+              bindRelationships(createEntityRef(entityRefTarget, toLocator(...args))),
               domainOperations,
               {
                 run: ({ operation, input }) =>
@@ -445,13 +455,17 @@ const attachConfiguredEntityRefLocators = (
 
   return Object.assign(graphEntity, {
     ref: (locator: EntityRefLocator) =>
-      bindEntityRefOperationProxy(createEntityRef(entityRefTarget, locator), domainOperations, {
-        run: ({ operation, input }) =>
-          invokeConfigured(
-            operation as Parameters<typeof invokeConfiguredServerDomainOperation>[0],
-            input as never,
-          ),
-      }),
+      bindEntityRefOperationProxy(
+        bindRelationships(createEntityRef(entityRefTarget, locator)),
+        domainOperations,
+        {
+          run: ({ operation, input }) =>
+            invokeConfigured(
+              operation as Parameters<typeof invokeConfiguredServerDomainOperation>[0],
+              input as never,
+            ),
+        },
+      ),
     locators,
   });
 };
@@ -536,13 +550,22 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
     toLocator: (...args: readonly unknown[]) => EntityRefLocator,
   ) =>
     (...args: readonly unknown[]) =>
-      bindEntityRefOperationProxy(createEntityRef(entityOrName, toLocator(...args)), operations, {
-        run: ({ operation, input }) =>
-          invokeConfigured(
-            operation as Parameters<typeof invokeConfiguredServerDomainOperation>[0],
-            input as never,
-          ),
-      })) as unknown as GraphEntityRefProvider;
+      bindEntityRefOperationProxy(
+        typeof entityOrName === 'object' && 'relations' in entityOrName
+          ? bindEntityRefRelationshipCommands(
+              createEntityRef(entityOrName, toLocator(...args)),
+              entityOrName as AnyEntityDefinition,
+            )
+          : createEntityRef(entityOrName, toLocator(...args)),
+        operations,
+        {
+          run: ({ operation, input }) =>
+            invokeConfigured(
+              operation as Parameters<typeof invokeConfiguredServerDomainOperation>[0],
+              input as never,
+            ),
+        },
+      )) as unknown as GraphEntityRefProvider;
   const graphFacade = mergeNamespace(
     {
       ...graphFacadeBase,
