@@ -269,7 +269,10 @@ export type BoundEntityRefLocators<
     TOperations,
     TResult
   > &
-    BoundEntityRefRelations<TRelations, TResult>;
+    BoundEntityRefRelations<TRelations, TResult> &
+    (TEntity extends AnyEntityDefinition
+      ? import('./relationship-command.js').BoundEntityRefRelationshipCommands<TEntity>
+      : {});
 } & {
   [TName in keyof TLocators]: (
     ...args: Parameters<TLocators[TName]>
@@ -278,7 +281,10 @@ export type BoundEntityRefLocators<
     TOperations,
     TResult
   > &
-    BoundEntityRefRelations<TRelations, TResult>;
+    BoundEntityRefRelations<TRelations, TResult> &
+    (TEntity extends AnyEntityDefinition
+      ? import('./relationship-command.js').BoundEntityRefRelationshipCommands<TEntity>
+      : {});
 };
 
 const resolveEntityName = <TEntity extends Pick<AnyEntityDefinition, 'name'> | string>(
@@ -1095,22 +1101,25 @@ export const bindEntityRefRelationOperations = <
   },
 ): BoundEntityRefRelation<TRef, TRelationName, TOperations, TResult> =>
   Object.assign(ref, {
-    [relationName]: Object.fromEntries(
-      Object.entries(operations).map(([operationName, operation]) => [
-        operationName,
-        (input: Record<string, unknown> = {}) =>
-          options.run({
-            ref,
-            relationName,
-            operationName: operationName as keyof TOperations & string,
-            operation: operation as TOperations[keyof TOperations],
-            input: {
-              [options.receiver]: ref,
-              ...input,
-            },
-          }),
-      ]),
-    ),
+    [relationName]: {
+      ...((ref as Record<string, unknown>)[relationName] as Record<string, unknown> | undefined),
+      ...Object.fromEntries(
+        Object.entries(operations).map(([operationName, operation]) => [
+          operationName,
+          (input: Record<string, unknown> = {}) =>
+            options.run({
+              ref,
+              relationName,
+              operationName: operationName as keyof TOperations & string,
+              operation: operation as TOperations[keyof TOperations],
+              input: {
+                [options.receiver]: ref,
+                ...input,
+              },
+            }),
+        ]),
+      ),
+    },
   }) as BoundEntityRefRelation<TRef, TRelationName, TOperations, TResult>;
 
 export const isEntityRef = (value: unknown): value is AnyEntityRef =>

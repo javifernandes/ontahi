@@ -1,5 +1,5 @@
 import type { AnyEntityDefinition, RelationDefinition, RelationKind } from './definitions.js';
-import type { AnyEntityRef } from './ref.js';
+import type { AnyEntityRef, EntityRef } from './ref.js';
 import {
   copySelectionExpression,
   selectionReferences,
@@ -50,6 +50,34 @@ export type ManyToManyRelationshipCommand = {
 export type RelationshipDelta = {
   added: RelationshipFact[];
   removed: RelationshipFact[];
+};
+
+type RelationTargetRef<TRelation extends RelationDefinition> = EntityRef<
+  TRelation['target']['name']
+>;
+
+export type BoundRelationshipCommandOperations<TRelation extends RelationDefinition> =
+  TRelation extends RelationDefinition<'belongsTo'>
+    ? {
+        assign: (target: RelationTargetRef<TRelation>) => RelationshipCommand;
+        clear: () => RelationshipCommand;
+      }
+    : TRelation extends RelationDefinition<'hasMany'>
+      ? {
+          add: (source: RelationTargetRef<TRelation>) => RelationshipCommand;
+          remove: (source: RelationTargetRef<TRelation>) => RelationshipCommand;
+        }
+      : TRelation extends RelationDefinition<'manyToMany'>
+        ? {
+            add: (target: RelationTargetRef<TRelation>) => ManyToManyRelationshipCommand;
+            remove: (target: RelationTargetRef<TRelation>) => ManyToManyRelationshipCommand;
+          }
+        : never;
+
+export type BoundEntityRefRelationshipCommands<TEntity extends AnyEntityDefinition> = {
+  [TRelationName in keyof TEntity['relations']]: BoundRelationshipCommandOperations<
+    TEntity['relations'][TRelationName]
+  >;
 };
 
 export interface RelationshipCommandExecutionRuntime<TError = never, TOptions = undefined> {
@@ -232,4 +260,32 @@ export const relationship = (
       return command('unlink', source);
     },
   };
+};
+
+export const bindEntityRefRelationshipCommands = <
+  TEntity extends AnyEntityDefinition,
+  TRef extends AnyEntityRef,
+>(
+  ref: TRef,
+  entity: TEntity,
+): TRef & BoundEntityRefRelationshipCommands<TEntity> => {
+  for (const [relationName, definition] of Object.entries(entity.relations)) {
+    const operations =
+      definition.relationKind === 'manyToMany'
+        ? {
+            add: (target: AnyEntityRef) => relationshipSet(entity, relationName, ref).add(target),
+            remove: (target: AnyEntityRef) =>
+              relationshipSet(entity, relationName, ref).remove(target),
+          }
+        : relationship(entity, relationName, ref);
+
+    Object.defineProperty(ref, relationName, {
+      configurable: true,
+      enumerable: false,
+      value: operations,
+      writable: true,
+    });
+  }
+
+  return ref as TRef & BoundEntityRefRelationshipCommands<TEntity>;
 };

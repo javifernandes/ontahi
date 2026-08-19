@@ -22,6 +22,7 @@ import {
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
 } from './ref.js';
+import { bindEntityRefRelationshipCommands } from './relationship-command.js';
 import { isGraphSchemaDefinition } from './schema-descriptor.js';
 import type { SemanticSelection } from './selection-ast.js';
 import {
@@ -989,6 +990,10 @@ export const defineClientEntity = <
   };
   const entityLocators = hasEntityRefLocators(entityOrName) ? entityOrName.refLocators : {};
   const relations = (config?.relations ?? {}) as TRelations;
+  const bindRelationshipCommands = <TRef extends AnyEntityRef>(ref: TRef) =>
+    typeof entityOrName === 'object' && 'relations' in entityOrName
+      ? bindEntityRefRelationshipCommands(ref, entityOrName as AnyEntityDefinition)
+      : ref;
   const bindRefRelations = <TRef extends AnyEntityRef>(ref: TRef) =>
     Object.entries(relations).reduce(
       (boundRef, [relationName, relation]) =>
@@ -996,7 +1001,7 @@ export const defineClientEntity = <
           receiver: relation.receiver ?? toReceiverName(relation.sourceName ?? entityName),
           run: ({ operation, input }) => createDomainOperationInvocationFromRef(operation, input),
         }),
-      bindEntityRefOperationProxy(ref, domain, {
+      bindEntityRefOperationProxy(bindRelationshipCommands(ref), domain, {
         run: ({ operation, input }) => createDomainOperationInvocationFromRef(operation, input),
       }),
     );
@@ -1162,7 +1167,10 @@ export const createGraphEntityFactory =
             name,
             (...args: readonly unknown[]) =>
               bindEntityRefOperationProxy(
-                createEntityRef(entityDefinition, toLocator(...args)),
+                bindEntityRefRelationshipCommands(
+                  createEntityRef(entityDefinition, toLocator(...args)),
+                  entityDefinition,
+                ),
                 graphEntity.domain,
                 {
                   run: ({ operation, input: operationInput }) =>
@@ -1176,7 +1184,10 @@ export const createGraphEntityFactory =
     const graphEntityWithLocatorApi = Object.assign(graphEntity, {
       ref: <TLocator extends EntityRefLocator>(locator: TLocator) =>
         bindEntityRefOperationProxy(
-          createEntityRef(entityDefinition, locator),
+          bindEntityRefRelationshipCommands(
+            createEntityRef(entityDefinition, locator),
+            entityDefinition,
+          ),
           graphEntity.domain,
           {
             run: ({ operation, input: operationInput }) =>

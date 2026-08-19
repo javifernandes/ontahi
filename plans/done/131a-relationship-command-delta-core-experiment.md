@@ -149,3 +149,10 @@ applied command produces an empty delta.
   - all package builds passed.
 - Next integration: Plan 128 may carry this IR across runtime boundaries without converting it into
   an Entity patch or a generated Domain Operation.
+
+## Evolution
+
+- 2026-08-19: Entity-bound Ref facades promoted fluent structural authoring as the public ergonomic
+  surface (`student.course.assign(course)`, `course.students.add(student)`). The original
+  `relationship(Entity, relationName, subject)` factory remains the lower-level primitive and
+  canonical normalization implementation.
