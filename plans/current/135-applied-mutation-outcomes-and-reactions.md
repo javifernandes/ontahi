@@ -97,6 +97,11 @@ The first semantic set to evaluate is:
 `run-effect` remains a compatibility escape hatch. It is not part of the portable semantic core
 because it contains executable code rather than data.
 
+The local experiment now interprets Relationship Commands, canonical Operation Invocation
+requests, and Events through separate injected capabilities. An Operation result is recorded as
+`completed` even when the result itself represents domain rejection or failure; the invocation
+completed and its canonical result retains that distinction. Events are recorded as `emitted`.
+
 ### Delivery Policy
 
 Whether a follow-up is synchronous, attempted, durable, retried, or best-effort is orthogonal to
@@ -175,6 +180,8 @@ application-specific hooks.
 - [x] A failed follow-up does not falsely report that its parent mutation was unapplied.
 - [x] Durable delivery returns acceptance evidence without claiming follow-up execution.
 - [x] Missing or failed durable acceptance remains distinct from parent mutation status.
+- [x] Reactions can invoke Operations and emit Events without opaque executable effects.
+- [x] Durable envelopes reject non-JSON-safe intent instead of silently losing values.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
 - [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.

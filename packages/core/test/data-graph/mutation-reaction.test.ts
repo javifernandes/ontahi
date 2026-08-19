@@ -130,7 +130,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         status: 'failed',
         failure: {
           code: 'follow_up_failed',
-          message: 'Post-commit Relationship Command failed.',
+          message: 'Post-commit follow-up intent failed.',
         },
       }),
     ]);
@@ -297,6 +297,93 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         failure: {
           code: 'durable_acceptance_unavailable',
           message: 'Durable Mutation Reaction acceptance is unavailable.',
+        },
+      }),
+    ]);
+  });
+
+  it('interprets Operation invocations and Events as explicit follow-up intents', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const invokeOperation = vi.fn(async () => ({ ok: true, value: { notified: true } }));
+    const emitEvent = vi.fn(async () => undefined);
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-1',
+      executeRelationshipCommand: async () => emptyDelta(),
+      invokeOperation,
+      emitEvent,
+      reactions: [
+        {
+          id: 'announce-course-assignment',
+          delivery: 'inline',
+          when: { mutationKind: 'relationship-command', action: 'link' },
+          react: outcome => [
+            {
+              kind: 'invoke-operation',
+              request: {
+                kind: 'invoke',
+                operationId: 'School.notifyCourseAssignment',
+                input: { student: outcome.command.source, course: outcome.command.target },
+              },
+            },
+            {
+              kind: 'emit-event',
+              event: { type: 'student.course-assigned', student: outcome.command.source },
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(invokeOperation).toHaveBeenCalledWith({
+      kind: 'invoke',
+      operationId: 'School.notifyCourseAssignment',
+      input: { student, course },
+    });
+    expect(emitEvent).toHaveBeenCalledWith({ type: 'student.course-assigned', student });
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        intentIndex: 0,
+        status: 'completed',
+        result: { ok: true, value: { notified: true } },
+      }),
+      expect.objectContaining({ intentIndex: 1, status: 'emitted' }),
+    ]);
+  });
+
+  it('rejects non-serializable durable intents before acceptance', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const acceptDurableReaction = vi.fn();
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-1',
+      executeRelationshipCommand: async () => emptyDelta(),
+      acceptDurableReaction,
+      reactions: [
+        {
+          id: 'invalid-durable-event',
+          delivery: 'durable',
+          when: { mutationKind: 'relationship-command' },
+          react: () => [{ kind: 'emit-event', event: { callback: () => undefined } }],
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(acceptDurableReaction).not.toHaveBeenCalled();
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        status: 'failed',
+        failure: {
+          code: 'durable_intent_not_serializable',
+          message: 'Durable Mutation Reaction intent must be serializable.',
         },
       }),
     ]);

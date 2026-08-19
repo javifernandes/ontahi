@@ -1,3 +1,5 @@
+import { isJsonValue } from '../value/json.js';
+
 import type {
   CanonicalRelationIdentity,
   RelationshipCommand,
@@ -26,7 +28,24 @@ export type ExecuteRelationshipCommandIntent = {
   command: RelationshipCommand;
 };
 
-export type MutationReactionIntent = ExecuteRelationshipCommandIntent;
+export type InvokeOperationReactionIntent = {
+  kind: 'invoke-operation';
+  request: {
+    kind: 'invoke';
+    operationId: string;
+    input?: unknown;
+  };
+};
+
+export type EmitEventReactionIntent = {
+  kind: 'emit-event';
+  event: unknown;
+};
+
+export type MutationReactionIntent =
+  | ExecuteRelationshipCommandIntent
+  | InvokeOperationReactionIntent
+  | EmitEventReactionIntent;
 
 export type MutationReactionMatch = {
   mutationKind: AppliedMutationOutcome['mutationKind'];
@@ -46,7 +65,9 @@ export type MutationReactionFailure = {
     | 'reaction_failed'
     | 'follow_up_failed'
     | 'max_depth_exceeded'
+    | 'follow_up_unavailable'
     | 'durable_acceptance_unavailable'
+    | 'durable_intent_not_serializable'
     | 'durable_acceptance_failed';
   message: string;
 };
@@ -71,6 +92,8 @@ export type MutationReactionExecution = {
   intentIndex?: number;
 } & (
   | { status: 'applied'; outcome: AppliedMutationOutcome }
+  | { status: 'completed'; result: unknown }
+  | { status: 'emitted' }
   | { status: 'accepted'; acceptance: DurableMutationReactionAcceptance }
   | { status: 'failed' | 'depth-exceeded'; failure: MutationReactionFailure }
 );
@@ -83,6 +106,8 @@ export type MutationReactionResult = {
 export type CreateMutationReactionRunnerOptions = {
   reactions: readonly MutationReaction[];
   executeRelationshipCommand: (command: RelationshipCommand) => Promise<RelationshipDelta>;
+  invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
+  emitEvent?: (event: unknown) => Promise<void>;
   acceptDurableReaction?: (
     envelope: DurableMutationReactionEnvelope,
   ) => Promise<DurableMutationReactionAcceptance>;
@@ -103,6 +128,8 @@ const matches = (reaction: MutationReaction, outcome: AppliedMutationOutcome) =>
 export const createMutationReactionRunner = ({
   reactions,
   executeRelationshipCommand,
+  invokeOperation,
+  emitEvent,
   acceptDurableReaction,
   createOutcomeId,
   maxDepth = 8,
@@ -198,14 +225,26 @@ export const createMutationReactionRunner = ({
               });
               continue;
             }
-            try {
-              const acceptance = await acceptDurableReaction({
-                kind: 'durable-mutation-reaction',
-                reactionId: reaction.id,
-                reactionKey: execution.reactionKey,
-                source,
-                intent,
+            const envelope: DurableMutationReactionEnvelope = {
+              kind: 'durable-mutation-reaction',
+              reactionId: reaction.id,
+              reactionKey: execution.reactionKey,
+              source,
+              intent,
+            };
+            if (!isJsonValue(envelope)) {
+              executions.push({
+                ...execution,
+                status: 'failed',
+                failure: {
+                  code: 'durable_intent_not_serializable',
+                  message: 'Durable Mutation Reaction intent must be serializable.',
+                },
               });
+              continue;
+            }
+            try {
+              const acceptance = await acceptDurableReaction(envelope);
               if (acceptance.acceptanceId.length === 0) {
                 throw new Error('Durable acceptance requires a non-empty id.');
               }
@@ -224,16 +263,48 @@ export const createMutationReactionRunner = ({
           }
 
           try {
-            const outcome = await apply(intent.command, source);
-            pending.push(outcome);
-            executions.push({ ...execution, status: 'applied', outcome });
+            if (intent.kind === 'execute-relationship-command') {
+              const outcome = await apply(intent.command, source);
+              pending.push(outcome);
+              executions.push({ ...execution, status: 'applied', outcome });
+              continue;
+            }
+            if (intent.kind === 'invoke-operation') {
+              if (!invokeOperation) {
+                executions.push({
+                  ...execution,
+                  status: 'failed',
+                  failure: {
+                    code: 'follow_up_unavailable',
+                    message: 'Operation invocation for Mutation Reactions is unavailable.',
+                  },
+                });
+                continue;
+              }
+              const result = await invokeOperation(intent.request);
+              executions.push({ ...execution, status: 'completed', result });
+              continue;
+            }
+            if (!emitEvent) {
+              executions.push({
+                ...execution,
+                status: 'failed',
+                failure: {
+                  code: 'follow_up_unavailable',
+                  message: 'Event emission for Mutation Reactions is unavailable.',
+                },
+              });
+              continue;
+            }
+            await emitEvent(intent.event);
+            executions.push({ ...execution, status: 'emitted' });
           } catch {
             executions.push({
               ...execution,
               status: 'failed',
               failure: {
                 code: 'follow_up_failed',
-                message: 'Post-commit Relationship Command failed.',
+                message: 'Post-commit follow-up intent failed.',
               },
             });
           }

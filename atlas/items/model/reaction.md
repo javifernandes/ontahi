@@ -29,3 +29,8 @@ Delivery policy is independent from the follow-up intent. Inline and best-effort
 attempt local interpretation after application. Durable delivery submits a serializable envelope to
 a runtime capability and reports acceptance separately from execution. Acceptance means the
 runtime took responsibility for the intent; it does not mean the follow-up has completed.
+
+The first portable intent vocabulary includes Relationship Commands, Operation Invocations, and
+Domain Events. Each is interpreted through its normal runtime capability so a Reaction does not
+bypass validation or authorization. Durable envelopes accept only JSON-safe intent and never carry
+opaque executable functions.
