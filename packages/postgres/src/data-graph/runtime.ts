@@ -14,6 +14,7 @@ import {
   type AnyRelationQueryBuilder,
   type DataGraphExecutionRuntime,
   type GraphCommandSpec,
+  type ManyToManyRelationshipCommandExecutionRuntime,
   type PlainGraphRead,
   type QueryOrView,
   type QuerySpec,
@@ -23,8 +24,12 @@ import {
 import { Effect, Stream } from 'effect';
 import type { Pool, QueryResultRow } from 'pg';
 
+import {
+  compilePostgresManyToManyCommand,
+  materializePostgresManyToManyDelta,
+} from './many-to-many.js';
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
-import { compilePostgresCommand, compilePostgresQuery } from './sql.js';
+import { compilePostgresCommand, compilePostgresQuery, quotePostgresIdentifier } from './sql.js';
 
 export type PostgresDataGraphErrorReason =
   | 'execution_failed'
@@ -64,7 +69,8 @@ export const createPostgresDataGraphRuntime = (input: {
   undefined,
   undefined,
   PostgresDataGraphError
-> => {
+> &
+  ManyToManyRelationshipCommandExecutionRuntime<PostgresDataGraphError> => {
   const registry = createPostgresMappingRegistry(input.mappings);
   const executeQuery = <TRow extends QueryResultRow>(sql: { text: string; values: unknown[] }) =>
     input.pool.query<TRow>(sql.text, sql.values);
@@ -75,6 +81,49 @@ export const createPostgresDataGraphRuntime = (input: {
     relation: AnyRelationQueryBuilder,
   ) => {
     const node = relation.toNodeSpec();
+    const definition = sourceEntity.relations[node.relationName];
+    if (definition?.relationKind === 'manyToMany') {
+      if (definition.mapping?.type !== 'many-to-many') {
+        throw new Error(
+          `PostgreSQL many-to-many Relation ${sourceEntity.name}.${node.relationName} is not mapped.`,
+        );
+      }
+      const sourceMapping = mappingFor(registry, sourceEntity);
+      const targetMapping = mappingFor(registry, node.entity);
+      const sourceField = Object.entries(sourceMapping.columns).find(
+        ([, column]) => column === definition.mapping!.fromColumn,
+      )?.[0];
+      const targetField = Object.entries(targetMapping.columns).find(
+        ([, column]) => column === definition.mapping!.toColumn,
+      )?.[0];
+      if (!sourceField || !targetField) {
+        throw new Error(
+          `PostgreSQL many-to-many Relation ${sourceEntity.name}.${node.relationName} does not match Entity mappings.`,
+        );
+      }
+      const edgeResult = await executeQuery<{ target_value: unknown } & QueryResultRow>({
+        text:
+          `SELECT ${quotePostgresIdentifier(definition.mapping.throughToColumn)} AS target_value ` +
+          `FROM ${quotePostgresIdentifier(definition.mapping.throughTable)} ` +
+          `WHERE ${quotePostgresIdentifier(definition.mapping.throughFromColumn)} = $1`,
+        values: [row[sourceField]],
+      });
+      if (edgeResult.rows.length === 0) return [];
+      return readSpec({
+        kind: 'query',
+        root: node.entity,
+        selection: {
+          kind: 'predicate',
+          operator: 'in',
+          fieldName: targetField,
+          values: edgeResult.rows.map(edge => edge.target_value),
+        },
+        select: node.select,
+        includes: node.includes,
+        orderBy: [...node.orderBy],
+        limit: node.limit,
+      });
+    }
     const fields = resolveRelationFields(sourceEntity, node.relationName, node);
     const related = await readSpec({
       kind: 'query',
@@ -354,5 +403,47 @@ export const createPostgresDataGraphRuntime = (input: {
               ),
         ),
       ),
+    runManyToManyRelationshipCommand: command =>
+      Effect.tryPromise({
+        try: async () => {
+          const source = input.mappings.find(
+            mapping => mapping.entity.name === command.relation.sourceEntityName,
+          );
+          const target = input.mappings.find(
+            mapping => mapping.entity.name === command.relation.targetEntityName,
+          );
+          if (!source || !target) {
+            throw new Error('PostgreSQL many-to-many Command references an unmapped Entity.');
+          }
+          const compiled = compilePostgresManyToManyCommand(command, source, target);
+          const result = await executeQuery<
+            {
+              row_kind: 'meta' | 'fact';
+              source_value: unknown;
+              target_value: unknown;
+              source_count: number | null;
+              target_count: number | null;
+            } & QueryResultRow
+          >(compiled.sql);
+          const materialized = materializePostgresManyToManyDelta(command, compiled, result.rows);
+          if (materialized.cardinalityMismatch || !materialized.delta) {
+            throw new PostgresDataGraphError(
+              'PostgreSQL many-to-many endpoint Ref did not resolve exactly once.',
+              'cardinality_mismatch',
+            );
+          }
+          return materialized.delta;
+        },
+        catch: cause =>
+          cause instanceof PostgresDataGraphError
+            ? cause
+            : new PostgresDataGraphError(
+                'PostgreSQL many-to-many Command failed.',
+                cause instanceof Error && cause.message.startsWith('PostgreSQL many-to-many')
+                  ? 'invalid_command'
+                  : 'execution_failed',
+                cause,
+              ),
+      }),
   };
 };

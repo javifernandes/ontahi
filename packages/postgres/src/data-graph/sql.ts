@@ -16,9 +16,12 @@ export type ParameterizedSql = {
   values: unknown[];
 };
 
-const quoteIdentifier = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
+export const quotePostgresIdentifier = (identifier: string) =>
+  `"${identifier.replaceAll('"', '""')}"`;
 
-const compileSelection = (
+const quoteIdentifier = quotePostgresIdentifier;
+
+export const compilePostgresSelection = (
   expression: SelectionExpression,
   mapping: PostgresEntityMapping,
   values: unknown[],
@@ -29,11 +32,11 @@ const compileSelection = (
   if (lowered.kind === 'none') return 'FALSE';
   if (lowered.kind === 'and' || lowered.kind === 'or') {
     return `(${lowered.operands
-      .map(operand => compileSelection(operand, mapping, values))
+      .map(operand => compilePostgresSelection(operand, mapping, values))
       .join(lowered.kind === 'and' ? ' AND ' : ' OR ')})`;
   }
   if (lowered.kind === 'not') {
-    return `(NOT ${compileSelection(lowered.operand, mapping, values)})`;
+    return `(NOT ${compilePostgresSelection(lowered.operand, mapping, values)})`;
   }
   if (lowered.kind === 'references') {
     throw new Error('PostgreSQL selection references could not be lowered.');
@@ -88,7 +91,7 @@ export const compilePostgresQuery = <TParams, TResult>(
   }
 
   const values: unknown[] = [];
-  const selection = compileSelection(spec.selection, mapping, values);
+  const selection = compilePostgresSelection(spec.selection, mapping, values);
   const order = options.count
     ? ''
     : spec.orderBy
@@ -198,7 +201,7 @@ export const compilePostgresCommand = (
     };
   }
 
-  const selection = compileSelection(command.selection, mapping, values);
+  const selection = compilePostgresSelection(command.selection, mapping, values);
   const cardinalityGuard =
     command.cardinality === 'one'
       ? ` AND (SELECT COUNT(*) FROM ${quoteIdentifier(mapping.table)} WHERE ${selection}) = 1`

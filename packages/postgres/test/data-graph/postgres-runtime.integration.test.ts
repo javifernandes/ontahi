@@ -1,6 +1,12 @@
 import {
   createInMemoryDataGraphRuntime,
+  createEntityRef,
+  entity,
+  field,
+  mapRelation,
   query,
+  relationshipSet,
+  selection,
   type InMemoryDataset,
 } from '@ontahi/core/data-graph';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
@@ -11,10 +17,37 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createPostgresDataGraphRuntime,
   createPostgresDataGraphStorage,
+  postgresMapping,
 } from '../../src/data-graph/index.js';
 
 import { conformanceDataset, conformanceGraph, TodoEntity, TodoMapping } from './fixtures.js';
 import { dataGraphRuntimeConformance } from './runtime-conformance.js';
+
+const RelationshipTag = entity('RelationshipTag', { id: field.id(), label: field.string() });
+const RelationshipTodo = entity('RelationshipTodo', {
+  id: field.id(),
+  title: field.string(),
+}).manyToMany('tags', RelationshipTag);
+mapRelation(RelationshipTodo, 'tags', {
+  type: 'many-to-many',
+  from: 'relationship_todos.id',
+  through: {
+    table: 'relationship_todo_tags',
+    fromColumn: 'todo_id',
+    toColumn: 'tag_id',
+  },
+  to: 'relationship_tags.id',
+});
+const RelationshipTodoMapping = postgresMapping({
+  entity: RelationshipTodo,
+  table: 'relationship_todos',
+  columns: { id: 'id', title: 'title' },
+});
+const RelationshipTagMapping = postgresMapping({
+  entity: RelationshipTag,
+  table: 'relationship_tags',
+  columns: { id: 'id', label: 'label' },
+});
 
 describe('PostgreSQL data graph runtime', () => {
   let container: StartedPostgreSqlContainer | undefined;
@@ -52,6 +85,19 @@ describe('PostgreSQL data graph runtime', () => {
         chapter_id text NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
         content text NOT NULL,
         position integer NOT NULL
+      );
+      CREATE TABLE relationship_todos (
+        id text PRIMARY KEY,
+        title text NOT NULL
+      );
+      CREATE TABLE relationship_tags (
+        id text PRIMARY KEY,
+        label text NOT NULL
+      );
+      CREATE TABLE relationship_todo_tags (
+        todo_id text NOT NULL REFERENCES relationship_todos(id) ON DELETE CASCADE,
+        tag_id text NOT NULL REFERENCES relationship_tags(id) ON DELETE CASCADE,
+        PRIMARY KEY (todo_id, tag_id)
       )
     `);
   }, 180_000);
@@ -115,6 +161,71 @@ describe('PostgreSQL data graph runtime', () => {
     await expect(Effect.runPromise(runtime().run(query(TodoEntity), undefined))).resolves.toEqual([
       { id: 'todo-1', title: 'Persistent', completed: false },
     ]);
+  });
+
+  it('applies Selection-valued many-to-many commands atomically with exact deltas', async () => {
+    await pool.query(
+      'TRUNCATE TABLE relationship_todo_tags, relationship_todos, relationship_tags CASCADE',
+    );
+    await pool.query(
+      `INSERT INTO relationship_todos (id, title) VALUES ('todo-1', 'Selected'), ('todo-2', 'Selected');
+       INSERT INTO relationship_tags (id, label) VALUES ('tag-1', 'Core'), ('tag-2', 'Other')`,
+    );
+    const runtime = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [RelationshipTodoMapping, RelationshipTagMapping],
+    });
+    const add = relationshipSet(
+      RelationshipTodo,
+      'tags',
+      selection(RelationshipTodo, todo => todo.title.eq('Selected')),
+    ).add(selection(RelationshipTag, tag => tag.label.eq('Core')));
+
+    await expect(
+      Effect.runPromise(runtime.runManyToManyRelationshipCommand(add)),
+    ).resolves.toMatchObject({
+      added: [{ target: { locator: { id: 'tag-1' } } }, { target: { locator: { id: 'tag-1' } } }],
+      removed: [],
+    });
+    await expect(Effect.runPromise(runtime.runManyToManyRelationshipCommand(add))).resolves.toEqual(
+      {
+        added: [],
+        removed: [],
+      },
+    );
+    await expect(
+      Effect.runPromise(
+        runtime.runManyToManyRelationshipCommand(
+          relationshipSet(
+            RelationshipTodo,
+            'tags',
+            createEntityRef(RelationshipTodo, { id: 'missing' }),
+          ).add(createEntityRef(RelationshipTag, { id: 'tag-1' })),
+        ),
+      ),
+    ).rejects.toMatchObject({ reason: 'cardinality_mismatch' });
+    await expect(
+      pool.query('SELECT todo_id, tag_id FROM relationship_todo_tags ORDER BY todo_id, tag_id'),
+    ).resolves.toMatchObject({
+      rows: [
+        { todo_id: 'todo-1', tag_id: 'tag-1' },
+        { todo_id: 'todo-2', tag_id: 'tag-1' },
+      ],
+    });
+    await expect(
+      Effect.runPromise(
+        runtime.get(
+          query(RelationshipTodo)
+            .where(todo => todo.id.eq('todo-1'))
+            .include(todo => ({ tags: todo.tags.orderBy(tag => tag.label) })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual({
+      id: 'todo-1',
+      title: 'Selected',
+      tags: [{ id: 'tag-1', label: 'Core' }],
+    });
   });
 
   it('reads reflected entity data with search, filters, sorting and pagination', async () => {
