@@ -10,6 +10,7 @@ import {
   executeInMemoryManyToManyRelationshipCommandEffect,
   field,
   parseGraphCommandRequest,
+  query,
   relationshipSet,
   resolveGraphCommandRequest,
   Selection,
@@ -111,6 +112,23 @@ describe('many-to-many Relationship Commands', () => {
     expect(added.removed).toEqual([]);
     expect(facts).toEqual(added.added);
     await expect(execute(add)).resolves.toEqual({ added: [], removed: [] });
+    await expect(
+      Effect.runPromise(
+        runtime.get(
+          query(Todo)
+            .where(todo => todo.id.eq('todo-1'))
+            .include(todo => ({ tags: todo.tags.orderBy(tag => tag.name) })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual({
+      id: 'todo-1',
+      title: 'One',
+      tags: [
+        { id: 'tag-2', name: 'Research' },
+        { id: 'tag-1', name: 'Urgent' },
+      ],
+    });
 
     const removeTag = relationshipSet(Todo, 'tags', createEntityRef(Todo, { id: 'todo-1' })).remove(
       createEntityRef(Tag, { id: 'tag-1' }),

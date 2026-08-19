@@ -53,6 +53,7 @@ const materializeRows = <TResult>(
   spec: QuerySpec<any, TResult>,
   rows: ReadonlyArray<Record<string, unknown>>,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
   options?: { entityRows?: boolean },
 ) =>
   rows.map(row =>
@@ -62,6 +63,7 @@ const materializeRows = <TResult>(
       options?.entityRows ? undefined : spec.select,
       options?.entityRows ? undefined : spec.includes,
       dataset,
+      relationships,
     ),
   ) as TResult[];
 
@@ -69,11 +71,12 @@ const executePlainRead = <TParams, TResult>(
   queryOrView: PlainGraphRead<TParams, TResult>,
   params: TParams,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
   options?: { entityRows?: boolean },
 ) => {
   const spec = resolveQuerySpec(queryOrView, params);
 
-  const rows = materializeRows(spec, selectRows(spec, dataset), dataset, options);
+  const rows = materializeRows(spec, selectRows(spec, dataset), dataset, relationships, options);
   if (spec.cardinality === 'one' && rows.length !== 1) {
     throw new InMemoryDataGraphError(
       `Expected exactly one ${spec.root.name}, received ${rows.length}.`,
@@ -149,7 +152,7 @@ const executeEntityRows = (
         },
         dataset,
       ) as Array<Record<string, unknown>>)
-    : executePlainRead(read as PlainGraphRead<any, any>, undefined, dataset, {
+    : executePlainRead(read as PlainGraphRead<any, any>, undefined, dataset, [], {
         entityRows: true,
       });
 
@@ -176,7 +179,7 @@ const executeRelatedRootRead = <TResult>(
 
   const targetSpec = withRelatedTargetPredicate(spec, targetField, sourceValues);
   const targetRows = selectRows(targetSpec, dataset);
-  const entityRows = materializeRows<Record<string, unknown>>(targetSpec, targetRows, dataset, {
+  const entityRows = materializeRows<Record<string, unknown>>(targetSpec, targetRows, dataset, [], {
     entityRows: true,
   });
 
@@ -198,10 +201,16 @@ const executeRead = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
   params: TParams,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ): TResult[] =>
   isRelatedRootReadSpec(queryOrView)
     ? (executeRelatedRootRead(queryOrView, dataset) as TResult[])
-    : executePlainRead(queryOrView as PlainGraphRead<TParams, TResult>, params, dataset);
+    : executePlainRead(
+        queryOrView as PlainGraphRead<TParams, TResult>,
+        params,
+        dataset,
+        relationships,
+      );
 
 const countRead = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
@@ -255,7 +264,8 @@ export const createInMemoryDataGraphRuntime = (input: {
   ({
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset)[0] ?? null,
+        try: () =>
+          executeRead(queryOrView, params, input.dataset, input.relationships ?? [])[0] ?? null,
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -263,7 +273,7 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     run: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset),
+        try: () => executeRead(queryOrView, params, input.dataset, input.relationships ?? []),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -272,7 +282,7 @@ export const createInMemoryDataGraphRuntime = (input: {
     stream: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Stream.fromEffect(
         Effect.try({
-          try: () => executeRead(queryOrView, params, input.dataset),
+          try: () => executeRead(queryOrView, params, input.dataset, input.relationships ?? []),
           catch: cause =>
             cause instanceof InMemoryDataGraphError
               ? cause

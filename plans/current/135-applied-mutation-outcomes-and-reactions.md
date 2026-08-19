@@ -237,10 +237,10 @@ After Core and adapter conformance are green:
 - [x] Durable envelopes reject non-JSON-safe intent instead of silently losing values.
 - [x] Exact Entity create, update, and delete produce Applied Mutation Outcomes and can chain.
 - [x] Association Entity creation uses the generic Entity lifecycle without application boilerplate.
-- [ ] Binary attribute-free Todo tagging is a direct many-to-many Relation, not a public Entity.
+- [x] Binary attribute-free Todo tagging is a direct many-to-many Relation, not a public Entity.
 - [x] Relationship actions accept Selection-valued source and target endpoints in Core.
 - [ ] In-memory, PostgreSQL, and Supabase pass many-to-many Relation conformance.
-- [ ] Todo no longer wraps structural tag add/remove behavior in Domain Operations.
+- [x] Todo no longer wraps structural tag add/remove behavior in Domain Operations.
 - [ ] Ontahi developer docs and the BookOps developer book teach the expanded Relation concept.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.

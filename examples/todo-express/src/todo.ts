@@ -1,4 +1,4 @@
-import { field, graphSchema } from '@ontahi/core/data-graph';
+import { field, graphSchema, mapRelation } from '@ontahi/core/data-graph';
 import { entity, relation } from '@ontahi/core/entity';
 import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
@@ -104,37 +104,14 @@ export const Tag = entity({
   }),
 });
 
-export const TodoTag = entity({
-  name: 'TodoTag',
-  fields: {
-    todoId: field.id(),
-    tagId: field.id(),
-  },
-  locators: { refByTodoAndTag: ['todoId', 'tagId'] },
-  identity: 'refByTodoAndTag',
-  relations: {
-    tag: relation.belongsTo(Tag, { via: 'tagId' }),
-  },
-  domainOperationDefaults: entityDefaults,
-  operations: ({ self, operation }) => ({
-    remove: operation({
-      input: graphSchema.object({
-        assignment: self.one(),
-      }),
-      bridge: { invalidate: [['TodoTag']] },
-      run: ({ assignment }) => assignment.delete(),
-    }),
-  }),
-});
-
 export const TodoItem = entity({
   name: 'TodoItem',
   fields: todoItemFields,
   relations: {
-    tagAssignments: relation.hasMany(TodoTag, { via: 'todoId' }),
+    tags: relation.manyToMany(Tag),
   },
   uses: {
-    entities: () => ({ TodoList, Tag, TodoTag }),
+    entities: () => ({ TodoList }),
   },
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, operation, ingress, entities, app }) => {
@@ -185,69 +162,8 @@ export const TodoItem = entity({
         run: ({ todos }) => todos.update({ completed: true }),
       }),
       deleteAll: operation({
-        bridge: { invalidate: [['TodoItem'], ['TodoTag']] },
-        run: () =>
-          Effect.gen(function* () {
-            yield* entities.TodoTag.all().delete().run();
-            yield* commands.all().delete().run();
-          }),
-      }),
-      assignTags: operation({
-        input: graphSchema.object({
-          todos: self.many(),
-          tagIds: graphSchema.array(field.id()),
-        }),
-        bridge: { invalidate: [['TodoTag']] },
-        run: ({ todos, tagIds }) =>
-          Effect.gen(function* () {
-            const uniqueTagIds = [...new Set(tagIds)];
-            if (uniqueTagIds.length === 0) return;
-
-            const existingTags = yield* entities.Tag.where(tag => tag.id.in(uniqueTagIds))
-              .select(tag => ({ id: tag.id }))
-              .run();
-            const existingTagIds = new Set(existingTags.map(tag => tag.id));
-            const missingTagIds = uniqueTagIds.filter(tagId => !existingTagIds.has(tagId));
-
-            if (missingTagIds.length > 0) {
-              return yield* failOperation('tags_not_found', 'One or more tags do not exist.', {
-                tagIds: missingTagIds,
-              });
-            }
-
-            const selectedTodos = yield* todos.select(todo => ({ id: todo.id })).run();
-            const assignments = selectedTodos.flatMap(todo =>
-              uniqueTagIds.map(tagId => ({ todoId: todo.id, tagId })),
-            );
-
-            if (assignments.length === 0) return;
-
-            yield* entities.TodoTag.upsertMany(assignments, {
-              conflictOn: ['todoId', 'tagId'],
-              strategy: 'ignore',
-            }).run();
-          }),
-      }),
-      removeTags: operation({
-        input: graphSchema.object({
-          todos: self.many(),
-          tagIds: graphSchema.array(field.id()),
-        }),
-        bridge: { invalidate: [['TodoTag']] },
-        run: ({ todos, tagIds }) =>
-          Effect.gen(function* () {
-            const selectedTodos = yield* commands
-              .where(todos)
-              .select(todo => ({ id: todo.id }))
-              .run();
-
-            yield* entities.TodoTag.where(assignment =>
-              assignment.todoId.in(selectedTodos.map(todo => todo.id)),
-            )
-              .where(assignment => assignment.tagId.in(tagIds))
-              .delete()
-              .run();
-          }),
+        bridge: { invalidate: [['TodoItem']] },
+        run: () => commands.all().delete(),
       }),
       completeAll: operation({
         output: CompleteAllOutput,
@@ -268,4 +184,11 @@ export const TodoItem = entity({
       }),
     };
   },
+});
+
+mapRelation(TodoItem, 'tags', {
+  type: 'many-to-many',
+  from: 'todo_items.id',
+  through: { table: 'todo_tags', fromColumn: 'todo_id', toColumn: 'tag_id' },
+  to: 'tags.id',
 });

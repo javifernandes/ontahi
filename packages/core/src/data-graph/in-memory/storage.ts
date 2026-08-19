@@ -1,5 +1,6 @@
 import type { AnyEntityDefinition } from '../definitions.js';
 import type { DataGraphDefaultStorage } from '../storage.js';
+import type { RelationshipFact } from '../relationship-command.js';
 
 import type { InMemoryDataset } from './materialization.js';
 import {
@@ -13,6 +14,7 @@ export type InMemoryDataGraphStorage = DataGraphDefaultStorage<
 > & {
   kind: 'in-memory';
   dataset: InMemoryDataset;
+  relationships: RelationshipFact[];
 };
 
 export const createInMemoryDataGraphStorage = (
@@ -20,9 +22,11 @@ export const createInMemoryDataGraphStorage = (
     dataset?: InMemoryDataset;
     entities?: readonly AnyEntityDefinition[];
     pageSizeOptions?: InMemoryReflectedEntityDataReaderOptions['pageSizeOptions'];
+    relationships?: RelationshipFact[];
   } = {},
 ): InMemoryDataGraphStorage => {
   const dataset = options.dataset ?? {};
+  const relationships = options.relationships ?? [];
   let entities = options.entities;
   const getEntities = () => {
     if (!entities) {
@@ -36,10 +40,12 @@ export const createInMemoryDataGraphStorage = (
   return {
     kind: 'in-memory',
     dataset,
+    relationships,
     bindEntities: declarations => {
       entities = declarations;
     },
-    createRuntime: () => createInMemoryDataGraphRuntime({ dataset }),
+    createRuntime: () =>
+      createInMemoryDataGraphRuntime({ dataset, entities: getEntities(), relationships }),
     readEntityData: query =>
       createInMemoryReflectedEntityDataReader({
         dataset,

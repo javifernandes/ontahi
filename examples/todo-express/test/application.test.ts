@@ -1,7 +1,13 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { query } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  query,
+  relationshipSet,
+  Selection,
+  toGraphCommandRequest,
+} from '@ontahi/core/data-graph';
 import { createFetchGraphReadExecutor } from '@ontahi/react/graph';
 import { Effect } from 'effect';
 import type { Request } from 'express';
@@ -14,7 +20,7 @@ import {
   TodoItemSchema as ClientTodoItemSchema,
   TodoList as ClientTodoList,
 } from '../src/generated/client-entities.js';
-import { TodoItem, TodoApplication, TodoList, TodoTag, todoNotifications } from '../src/graph.js';
+import { Tag, TodoItem, TodoApplication, TodoList, todoNotifications } from '../src/graph.js';
 import { createTodoDataGraphRuntime } from '../src/storage.js';
 
 const testPrincipal = {
@@ -38,6 +44,13 @@ const getTodoDataset = () => {
   return TodoApplication.storage.dataset;
 };
 
+const getTodoRelationships = () => {
+  if (TodoApplication.storage.kind !== 'in-memory') {
+    throw new Error('Todo application tests require in-memory storage.');
+  }
+  return TodoApplication.storage.relationships;
+};
+
 describe('Ontahi todo portability example', () => {
   let closeServer: (() => Promise<void>) | undefined;
   let endpoint = '';
@@ -46,7 +59,7 @@ describe('Ontahi todo portability example', () => {
   beforeEach(async () => {
     getTodoDataset().TodoList = [{ id: 'list-1', name: 'Inbox' }];
     getTodoDataset().Tag = [];
-    getTodoDataset().TodoTag = [];
+    getTodoRelationships().length = 0;
     getTodoDataset().TodoItem = [];
     const server = await new Promise<Server>(resolve => {
       const started = createTodoExpressApp({ authentication: testAuthentication }).listen(
@@ -128,18 +141,31 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
-  it('denies browser relation traversal that is absent from the explicit read policy', async () => {
+  it('reads direct tags without exposing the physical join row', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Read relation', completed: false },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Core', color: '#527d8c' }];
+    const relation = relationshipSet(
+      TodoItem,
+      'tags',
+      createEntityRef(TodoItem, { id: 'todo-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' })).relation;
+    getTodoRelationships().push({
+      relation,
+      source: createEntityRef(TodoItem, { id: 'todo-1' }),
+      target: createEntityRef(Tag, { id: 'tag-1' }),
+    });
     const TodoWithTags = ClientTodoItem.view('TodoWithTags', {
       id: true,
-      tagAssignments: { tagId: true },
+      tags: { id: true, name: true, color: true },
     });
     const read = query(ClientTodoItemSchema).as(TodoWithTags);
     const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
 
-    await expect(remoteExecutor.run(read, undefined)).rejects.toMatchObject({
-      name: 'RemoteDataGraphError',
-      code: 'access_denied',
-    });
+    await expect(remoteExecutor.run(read, undefined)).resolves.toEqual([
+      { id: 'todo-1', tags: [{ id: 'tag-1', name: 'Core', color: '#527d8c' }] },
+    ]);
   });
 
   it('runs a TodoList operation with the capability supplied by its application', async () => {
@@ -155,23 +181,6 @@ describe('Ontahi todo portability example', () => {
       listId: 'list-2',
       name: 'Reading queue',
     });
-  });
-
-  it('acts on an association through its composite identity from Node', async () => {
-    getTodoDataset().TodoTag = [
-      { todoId: 'todo-write-guide', tagId: 'tag-urgent' },
-      { todoId: 'todo-review-guide', tagId: 'tag-urgent' },
-    ];
-
-    const assignment = TodoTag.refByTodoAndTag('todo-write-guide', 'tag-urgent');
-
-    await expect(TodoTag.remove({ assignment })).resolves.toMatchObject({
-      ok: true,
-      kind: 'success',
-    });
-    expect(getTodoDataset().TodoTag).toEqual([
-      { todoId: 'todo-review-guide', tagId: 'tag-urgent' },
-    ]);
   });
 
   it('invokes a successful operation over Express end to end', async () => {
@@ -374,7 +383,6 @@ describe('Ontahi todo portability example', () => {
           expect.objectContaining({ name: 'TodoList' }),
           expect.objectContaining({ name: 'TodoItem' }),
           expect.objectContaining({ name: 'Tag' }),
-          expect.objectContaining({ name: 'TodoTag' }),
         ]),
         operations: expect.arrayContaining([expect.objectContaining({ id: 'TodoItem.deleteAll' })]),
       },
@@ -438,71 +446,63 @@ describe('Ontahi todo portability example', () => {
     ).toEqual(completedIds);
   });
 
-  it('assigns tags to an explicit TodoItem selection through the associative entity', async () => {
+  it('assigns tags through one Selection-valued Relationship Command', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
     ];
     getTodoDataset().Tag = [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }];
 
-    const response = await invoke('TodoItem.assignTags', {
-      todos: {
-        kind: 'selection',
-        entityName: 'TodoItem',
-        expression: {
-          kind: 'references',
-          refs: [
-            { kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } },
-            { kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-2' } },
-          ],
-        },
-      },
-      tagIds: ['tag-1'],
+    const command = relationshipSet(
+      TodoItem,
+      'tags',
+      Selection.references(TodoItem, [
+        createEntityRef(TodoItem, { id: 'todo-1' }),
+        createEntityRef(TodoItem, { id: 'todo-2' }),
+      ]),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    const response = await fetch(`${origin}/graph/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(toGraphCommandRequest(command)),
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: { ok: true, kind: 'success' },
+      kind: 'graph-command-result',
+      value: { added: expect.any(Array), removed: [] },
     });
-    expect(getTodoDataset().TodoTag).toEqual([
-      { todoId: 'todo-1', tagId: 'tag-1' },
-      { todoId: 'todo-2', tagId: 'tag-1' },
-    ]);
+    expect(getTodoRelationships()).toHaveLength(2);
   });
 
-  it('rejects assigning unknown tags without creating partial associations', async () => {
+  it('rejects unknown explicit tag Refs without creating partial associations', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
     ];
     getTodoDataset().Tag = [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }];
 
-    const response = await invoke('TodoItem.assignTags', {
-      todos: {
-        kind: 'selection',
-        entityName: 'TodoItem',
-        expression: {
-          kind: 'references',
-          refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
-        },
-      },
-      tagIds: ['tag-1', 'missing-tag'],
+    const command = relationshipSet(
+      TodoItem,
+      'tags',
+      createEntityRef(TodoItem, { id: 'todo-1' }),
+    ).add(
+      Selection.references(Tag, [
+        createEntityRef(Tag, { id: 'tag-1' }),
+        createEntityRef(Tag, { id: 'missing-tag' }),
+      ]),
+    );
+    const response = await fetch(`${origin}/graph/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(toGraphCommandRequest(command)),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: {
-        ok: false,
-        kind: 'failed',
-        executed: true,
-        failure: {
-          reason: 'tags_not_found',
-          tagIds: ['missing-tag'],
-        },
-      },
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
     });
-    expect(getTodoDataset().TodoTag).toEqual([]);
+    expect(getTodoRelationships()).toEqual([]);
   });
 
   it('starts and completes the durable operation through the same transport', async () => {

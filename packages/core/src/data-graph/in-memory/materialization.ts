@@ -1,4 +1,6 @@
 import { resolveRelationFields, type AnyEntityDefinition } from '../definitions.js';
+import { createEntityIdentityRef } from '../ref.js';
+import type { RelationshipFact } from '../relationship-command.js';
 import { RelationQueryBuilder, type SelectionValue } from '../query.js';
 import {
   getEntityReferenceField,
@@ -16,6 +18,7 @@ const materializeSelection = (
   context: {
     entity: AnyEntityDefinition;
     dataset: InMemoryDataset;
+    relationships: readonly RelationshipFact[];
   },
 ) => {
   const result: Record<string, unknown> = {};
@@ -35,7 +38,13 @@ const materializeSelection = (
     }
 
     if (value instanceof RelationQueryBuilder) {
-      result[key] = materializeRelation(row, context.entity, value.toNodeSpec(), context.dataset);
+      result[key] = materializeRelation(
+        row,
+        context.entity,
+        value.toNodeSpec(),
+        context.dataset,
+        context.relationships,
+      );
       continue;
     }
 
@@ -63,19 +72,45 @@ export const materializeRelation = (
   sourceEntity: AnyEntityDefinition,
   relationNode: ReturnType<RelationQueryBuilder<any, any, any>['toNodeSpec']>,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ) => {
-  const fields = resolveRelationFields(sourceEntity, relationNode.relationName, relationNode);
   const targetRows = dataset[relationNode.entity.name] ?? [];
+  const relation = sourceEntity.relations[relationNode.relationName];
 
-  const relatedRows = applyOrder(
-    applyPredicates(
-      targetRows.filter(
-        targetRow => targetRow[fields.targetField] === sourceRow[fields.sourceField],
-      ),
-      [],
-    ),
-    relationNode.orderBy,
-  ).slice(0, relationNode.limit ?? Number.POSITIVE_INFINITY);
+  const candidateRows =
+    relation?.relationKind === 'manyToMany'
+      ? (() => {
+          const sourceRef = createEntityIdentityRef(sourceEntity, sourceRow);
+          if (!sourceRef) return [];
+          const targetLocators = relationships
+            .filter(
+              fact =>
+                'relationName' in fact.relation &&
+                fact.relation.sourceEntityName === sourceEntity.name &&
+                fact.relation.relationName === relationNode.relationName &&
+                JSON.stringify(fact.source.locator) === JSON.stringify(sourceRef.locator),
+            )
+            .map(fact => JSON.stringify(fact.target.locator));
+          return targetRows.filter(targetRow => {
+            const targetRef = createEntityIdentityRef(relationNode.entity, targetRow);
+            return targetRef ? targetLocators.includes(JSON.stringify(targetRef.locator)) : false;
+          });
+        })()
+      : (() => {
+          const fields = resolveRelationFields(
+            sourceEntity,
+            relationNode.relationName,
+            relationNode,
+          );
+          return targetRows.filter(
+            targetRow => targetRow[fields.targetField] === sourceRow[fields.sourceField],
+          );
+        })();
+
+  const relatedRows = applyOrder(applyPredicates(candidateRows, []), relationNode.orderBy).slice(
+    0,
+    relationNode.limit ?? Number.POSITIVE_INFINITY,
+  );
 
   const mappedRows = relatedRows.map(targetRow =>
     materializeRecord(
@@ -84,6 +119,7 @@ export const materializeRelation = (
       relationNode.select,
       relationNode.includes,
       dataset,
+      relationships,
     ),
   );
 
@@ -96,9 +132,10 @@ export const materializeRecord = (
   selectShape: Record<string, SelectionValue> | undefined,
   includeShape: Record<string, RelationQueryBuilder<any, any, any>> | undefined,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ) => {
   const base = selectShape
-    ? materializeSelection(row, selectShape, { entity: entityDefinition, dataset })
+    ? materializeSelection(row, selectShape, { entity: entityDefinition, dataset, relationships })
     : materializeDefaultEntity(row, entityDefinition);
 
   if (!includeShape) {
@@ -111,6 +148,7 @@ export const materializeRecord = (
       entityDefinition,
       relationBuilder.toNodeSpec(),
       dataset,
+      relationships,
     );
   }
 

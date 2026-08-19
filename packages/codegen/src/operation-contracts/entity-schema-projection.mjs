@@ -136,7 +136,9 @@ export const projectEntitySchemaConfig = (configArg, context) => {
               ? targetArg.arguments[0].text
               : undefined;
           if (
-            (relationKind !== 'hasMany' && relationKind !== 'belongsTo') ||
+            (relationKind !== 'hasMany' &&
+              relationKind !== 'belongsTo' &&
+              relationKind !== 'manyToMany') ||
             !targetArg ||
             (!ts.isIdentifier(targetArg) && !nominalTarget)
           ) {
