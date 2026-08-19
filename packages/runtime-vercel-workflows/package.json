@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/runtime-vercel-workflows",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "description": "Vercel Workflow runtime integration for Ontahi durable tasks",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-vercel-workflows",
   "license": "Apache-2.0",
