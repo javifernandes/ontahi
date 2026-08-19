@@ -102,6 +102,11 @@ requests, and Events through separate injected capabilities. An Operation result
 `completed` even when the result itself represents domain rejection or failure; the invocation
 completed and its canonical result retains that distinction. Events are recorded as `emitted`.
 
+The next local slice adds exact Entity Mutation Commands for `create`, `update(ref)`, and
+`delete(ref)`. They carry Entity identity as data rather than an `EntityDefinition` and return exact
+created, updated, or deleted facts. Mass mutation by arbitrary Selection remains outside this
+contract until its remote policy surface is designed.
+
 ### Delivery Policy
 
 Whether a follow-up is synchronous, attempted, durable, retried, or best-effort is orthogonal to
@@ -182,6 +187,8 @@ application-specific hooks.
 - [x] Missing or failed durable acceptance remains distinct from parent mutation status.
 - [x] Reactions can invoke Operations and emit Events without opaque executable effects.
 - [x] Durable envelopes reject non-JSON-safe intent instead of silently losing values.
+- [x] Exact Entity create, update, and delete produce Applied Mutation Outcomes and can chain.
+- [x] Association Entity creation uses the generic Entity lifecycle without application boilerplate.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
 - [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.

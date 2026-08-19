@@ -2,6 +2,7 @@ import { Effect, Stream } from 'effect';
 
 import type { GraphCommandSpec } from '../command.js';
 import type { AnyEntityDefinition } from '../definitions.js';
+import type { EntityMutationCommandExecutionRuntime } from '../entity-mutation-command.js';
 import {
   resolveQuerySpec,
   type PlainGraphRead,
@@ -23,6 +24,7 @@ import type { DataGraphExecutionRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
+import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
 import { materializeRecord, type InMemoryDataset } from './materialization.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
@@ -241,6 +243,7 @@ export const createInMemoryDataGraphRuntime = (input: {
   undefined,
   InMemoryDataGraphError
 > &
+  EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
   RelationshipCommandExecutionRuntime<InMemoryDataGraphError> =>
   ({
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
@@ -283,6 +286,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     runCommand: <TResult>(command: GraphCommandSpec<any, any, TResult>) =>
       executeInMemoryGraphCommandEffect(input.dataset, command),
+    runEntityMutationCommand: command =>
+      executeInMemoryEntityMutationCommandEffect(input.dataset, input.entities ?? [], command),
     runRelationshipCommand: command =>
       executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
   }) satisfies DataGraphExecutionRuntime<
@@ -291,4 +296,5 @@ export const createInMemoryDataGraphRuntime = (input: {
     undefined,
     InMemoryDataGraphError
   > &
+    EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
     RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;

@@ -6,6 +6,7 @@ import {
   createMutationReactionRunner,
   entity,
   field,
+  mutateEntity,
   relationship,
   toGraphCommandRequest,
   type DurableMutationReactionEnvelope,
@@ -23,7 +24,13 @@ const defineSchoolGraph = () => {
     id: field.id(),
     course: field.nullable(field.ref(Course)),
   });
-  return { Course, Mentor, Student };
+  const Enrollment = entity('Enrollment', {
+    id: field.id(),
+    student: field.ref(Student),
+    course: field.ref(Course),
+    status: field.string(),
+  });
+  return { Course, Enrollment, Mentor, Student };
 };
 
 const emptyDelta = (): RelationshipDelta => ({ added: [], removed: [] });
@@ -319,20 +326,29 @@ describe('Applied Mutation Outcomes and Reactions', () => {
           id: 'announce-course-assignment',
           delivery: 'inline',
           when: { mutationKind: 'relationship-command', action: 'link' },
-          react: outcome => [
-            {
-              kind: 'invoke-operation',
-              request: {
-                kind: 'invoke',
-                operationId: 'School.notifyCourseAssignment',
-                input: { student: outcome.command.source, course: outcome.command.target },
-              },
-            },
-            {
-              kind: 'emit-event',
-              event: { type: 'student.course-assigned', student: outcome.command.source },
-            },
-          ],
+          react: outcome =>
+            outcome.mutationKind === 'relationship-command'
+              ? [
+                  {
+                    kind: 'invoke-operation',
+                    request: {
+                      kind: 'invoke',
+                      operationId: 'School.notifyCourseAssignment',
+                      input: {
+                        student: outcome.command.source,
+                        course: outcome.command.target,
+                      },
+                    },
+                  },
+                  {
+                    kind: 'emit-event',
+                    event: {
+                      type: 'student.course-assigned',
+                      student: outcome.command.source,
+                    },
+                  },
+                ]
+              : [],
         },
       ],
     });
@@ -387,5 +403,89 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         },
       }),
     ]);
+  });
+
+  it('creates an Association Entity and reacts to its own applied outcome', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const enrollment = createEntityRef(graph.Enrollment, { id: 'enrollment-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const createEnrollment = mutateEntity(graph.Enrollment).create({
+      id: 'enrollment-1',
+      student,
+      course,
+      status: 'active',
+    });
+    const emitEvent = vi.fn(async () => undefined);
+    let nextId = 0;
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => `outcome-${++nextId}`,
+      executeRelationshipCommand: async () => emptyDelta(),
+      executeEntityMutationCommand: async command => ({
+        created: [
+          {
+            entityName: command.entityName,
+            ref: enrollment,
+            values: command.action === 'delete' ? {} : command.values,
+          },
+        ],
+        updated: [],
+        deleted: [],
+      }),
+      emitEvent,
+      reactions: [
+        {
+          id: 'create-enrollment',
+          delivery: 'inline',
+          when: { mutationKind: 'relationship-command', action: 'link' },
+          react: () => [{ kind: 'execute-entity-mutation-command', command: createEnrollment }],
+        },
+        {
+          id: 'announce-enrollment',
+          delivery: 'inline',
+          when: {
+            mutationKind: 'entity-mutation-command',
+            action: 'create',
+            entityName: 'Enrollment',
+          },
+          react: outcome => [
+            {
+              kind: 'emit-event',
+              event: {
+                type: 'enrollment.created',
+                enrollment:
+                  outcome.mutationKind === 'entity-mutation-command'
+                    ? outcome.delta.created[0]?.ref
+                    : undefined,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        reactionId: 'create-enrollment',
+        status: 'applied',
+        outcome: expect.objectContaining({
+          mutationKind: 'entity-mutation-command',
+          command: createEnrollment,
+          causality: expect.objectContaining({
+            rootOutcomeId: 'outcome-1',
+            parentOutcomeId: 'outcome-1',
+            depth: 1,
+          }),
+        }),
+      }),
+      expect.objectContaining({ reactionId: 'announce-enrollment', status: 'emitted' }),
+    ]);
+    expect(emitEvent).toHaveBeenCalledWith({
+      type: 'enrollment.created',
+      enrollment,
+    });
   });
 });

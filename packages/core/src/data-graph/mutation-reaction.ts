@@ -1,5 +1,6 @@
 import { isJsonValue } from '../value/json.js';
 
+import type { EntityMutationCommand, EntityMutationDelta } from './entity-mutation-command.js';
 import type {
   CanonicalRelationIdentity,
   RelationshipCommand,
@@ -21,11 +22,26 @@ export type AppliedRelationshipMutationOutcome = {
   causality: MutationCausality;
 };
 
-export type AppliedMutationOutcome = AppliedRelationshipMutationOutcome;
+export type AppliedEntityMutationOutcome = {
+  kind: 'applied-mutation-outcome';
+  mutationKind: 'entity-mutation-command';
+  command: EntityMutationCommand;
+  delta: EntityMutationDelta;
+  causality: MutationCausality;
+};
+
+export type AppliedMutationOutcome =
+  | AppliedRelationshipMutationOutcome
+  | AppliedEntityMutationOutcome;
 
 export type ExecuteRelationshipCommandIntent = {
   kind: 'execute-relationship-command';
   command: RelationshipCommand;
+};
+
+export type ExecuteEntityMutationCommandIntent = {
+  kind: 'execute-entity-mutation-command';
+  command: EntityMutationCommand;
 };
 
 export type InvokeOperationReactionIntent = {
@@ -44,14 +60,21 @@ export type EmitEventReactionIntent = {
 
 export type MutationReactionIntent =
   | ExecuteRelationshipCommandIntent
+  | ExecuteEntityMutationCommandIntent
   | InvokeOperationReactionIntent
   | EmitEventReactionIntent;
 
-export type MutationReactionMatch = {
-  mutationKind: AppliedMutationOutcome['mutationKind'];
-  action?: RelationshipCommand['action'];
-  relation?: CanonicalRelationIdentity;
-};
+export type MutationReactionMatch =
+  | {
+      mutationKind: 'relationship-command';
+      action?: RelationshipCommand['action'];
+      relation?: CanonicalRelationIdentity;
+    }
+  | {
+      mutationKind: 'entity-mutation-command';
+      action?: EntityMutationCommand['action'];
+      entityName?: string;
+    };
 
 export type MutationReaction = {
   id: string;
@@ -106,6 +129,7 @@ export type MutationReactionResult = {
 export type CreateMutationReactionRunnerOptions = {
   reactions: readonly MutationReaction[];
   executeRelationshipCommand: (command: RelationshipCommand) => Promise<RelationshipDelta>;
+  executeEntityMutationCommand?: (command: EntityMutationCommand) => Promise<EntityMutationDelta>;
   invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
   emitEvent?: (event: unknown) => Promise<void>;
   acceptDurableReaction?: (
@@ -120,14 +144,34 @@ const sameRelation = (left: CanonicalRelationIdentity, right: CanonicalRelationI
   left.fieldName === right.fieldName &&
   left.targetEntityName === right.targetEntityName;
 
-const matches = (reaction: MutationReaction, outcome: AppliedMutationOutcome) =>
-  reaction.when.mutationKind === outcome.mutationKind &&
-  (!reaction.when.action || reaction.when.action === outcome.command.action) &&
-  (!reaction.when.relation || sameRelation(reaction.when.relation, outcome.command.relation));
+const reactToOutcome = (
+  reaction: MutationReaction,
+  outcome: AppliedMutationOutcome,
+): readonly MutationReactionIntent[] | undefined => {
+  if (reaction.when.mutationKind === 'relationship-command') {
+    if (
+      outcome.mutationKind !== 'relationship-command' ||
+      (reaction.when.action && reaction.when.action !== outcome.command.action) ||
+      (reaction.when.relation && !sameRelation(reaction.when.relation, outcome.command.relation))
+    ) {
+      return undefined;
+    }
+    return reaction.react(outcome);
+  }
+  if (
+    outcome.mutationKind !== 'entity-mutation-command' ||
+    (reaction.when.action && reaction.when.action !== outcome.command.action) ||
+    (reaction.when.entityName && reaction.when.entityName !== outcome.command.entityName)
+  ) {
+    return undefined;
+  }
+  return reaction.react(outcome);
+};
 
 export const createMutationReactionRunner = ({
   reactions,
   executeRelationshipCommand,
+  executeEntityMutationCommand,
   invokeOperation,
   emitEvent,
   acceptDurableReaction,
@@ -144,41 +188,65 @@ export const createMutationReactionRunner = ({
     throw new Error('Mutation Reaction ids must be unique.');
   }
 
-  const apply = async (
-    command: RelationshipCommand,
-    parent?: AppliedMutationOutcome,
-  ): Promise<AppliedMutationOutcome> => {
+  const causalityFor = (parent?: AppliedMutationOutcome): MutationCausality => {
     const outcomeId = createOutcomeId();
     if (outcomeId.length === 0) {
       throw new Error('Applied Mutation Outcomes require a non-empty id.');
     }
+    return {
+      outcomeId,
+      rootOutcomeId: parent?.causality.rootOutcomeId ?? outcomeId,
+      ...(parent ? { parentOutcomeId: parent.causality.outcomeId } : {}),
+      depth: parent ? parent.causality.depth + 1 : 0,
+    };
+  };
+
+  const applyRelationship = async (
+    command: RelationshipCommand,
+    parent?: AppliedMutationOutcome,
+  ): Promise<AppliedRelationshipMutationOutcome> => {
+    const causality = causalityFor(parent);
     const delta = await executeRelationshipCommand(command);
     return {
       kind: 'applied-mutation-outcome',
       mutationKind: 'relationship-command',
       command,
       delta,
-      causality: {
-        outcomeId,
-        rootOutcomeId: parent?.causality.rootOutcomeId ?? outcomeId,
-        ...(parent ? { parentOutcomeId: parent.causality.outcomeId } : {}),
-        depth: parent ? parent.causality.depth + 1 : 0,
-      },
+      causality,
+    };
+  };
+
+  const applyEntityMutation = async (
+    command: EntityMutationCommand,
+    parent: AppliedMutationOutcome,
+  ): Promise<AppliedEntityMutationOutcome> => {
+    if (!executeEntityMutationCommand) {
+      throw new Error('Entity mutation execution for Mutation Reactions is unavailable.');
+    }
+    const causality = causalityFor(parent);
+    const delta = await executeEntityMutationCommand(command);
+    return {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'entity-mutation-command',
+      command,
+      delta,
+      causality,
     };
   };
 
   return async (command: RelationshipCommand): Promise<MutationReactionResult> => {
-    const root = await apply(command);
-    const pending = [root];
+    const root = await applyRelationship(command);
+    const pending: AppliedMutationOutcome[] = [root];
     const executions: MutationReactionExecution[] = [];
 
     for (let cursor = 0; cursor < pending.length; cursor += 1) {
       const source = pending[cursor]!;
       for (const reaction of reactions) {
-        if (!matches(reaction, source)) continue;
         let intents: readonly MutationReactionIntent[];
         try {
-          intents = reaction.react(source);
+          const matchedIntents = reactToOutcome(reaction, source);
+          if (!matchedIntents) continue;
+          intents = matchedIntents;
         } catch {
           executions.push({
             reactionId: reaction.id,
@@ -264,7 +332,13 @@ export const createMutationReactionRunner = ({
 
           try {
             if (intent.kind === 'execute-relationship-command') {
-              const outcome = await apply(intent.command, source);
+              const outcome = await applyRelationship(intent.command, source);
+              pending.push(outcome);
+              executions.push({ ...execution, status: 'applied', outcome });
+              continue;
+            }
+            if (intent.kind === 'execute-entity-mutation-command') {
+              const outcome = await applyEntityMutation(intent.command, source);
               pending.push(outcome);
               executions.push({ ...execution, status: 'applied', outcome });
               continue;

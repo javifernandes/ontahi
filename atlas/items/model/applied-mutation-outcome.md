@@ -20,8 +20,13 @@ recording what a runtime actually applied for a semantic mutation. It is distinc
 intent, an Operation result, and a public Domain Event.
 
 For a Relationship Command, the outcome preserves the canonical command and exact Relationship
-Delta. Future variants may represent ordinary insert, update, delete, and Operation-level
-transitions without reducing them all to storage row changes.
+Delta. Entity variants represent exact create, update, and delete transitions without reducing them
+all to storage row changes; Operation-level outcomes remain future work.
+
+Exact Entity Mutation Commands now contribute created, updated, and deleted Entity facts. This
+includes Association Entities: creating an association produces an ordinary Entity outcome that may
+feed further Reactions without requiring a special public Entity subtype or per-application
+lifecycle plumbing.
 
 An outcome can be consumed by a Reaction that yields declarative follow-up intents such as another
 Command, an Operation Invocation, or a Domain Event. This keeps follow-up behavior generic while
