@@ -549,3 +549,16 @@ experiment. Likely follow-ups are:
   ordinary Entity with required participant Refs and ordinary lifecycle.
 - Follow-up:
   - [`131a-relationship-command-delta-core-experiment.md`](131a-relationship-command-delta-core-experiment.md)
+
+## Evolution
+
+- 2026-08-19: 131a, Plans 128c-e, Plan 135 slices, PostgreSQL/Supabase conformance, Todo migration,
+  fluent Entity-bound Ref authoring, and the developer guide completed the B-lite proof. The open
+  questions about canonical identity, Reference Field evidence, structural verbs, Selection-valued
+  bulk transitions, and the direct-many-to-many/Association Entity boundary are resolved.
+- Remaining work is extracted rather than added to this closed research plan:
+  - [136. Relation Constraints And Eligibility Semantics](../next/136-relation-constraints-and-eligibility.md)
+  - [137. Reflected Relation Affordances](../next/137-reflected-relation-affordances.md)
+  - [138. Entity Mutation Command Authoring](../next/138-entity-mutation-command-authoring.md)
+  - [128. Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md) owns
+    remaining client execution ergonomics and generic Entity Command transport.

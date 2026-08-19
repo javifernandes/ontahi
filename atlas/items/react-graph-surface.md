@@ -43,8 +43,10 @@ preserve explicit composition for non-conventional hosts.
 The package-side materialization lives under [`@ontahi/react`](./source-code-organization/react.md), which supports this framework-facing React graph surface.
 
 Graph Query and Command hooks live in `@ontahi/react/graph` behind one executor contract. The
-current Fetch capability implements remote Queries; remote Commands remain unsupported until their
-protocol and write-policy boundary are defined.
+current Fetch client implements remote Queries and the graph transport implements explicitly
+permitted Relationship Commands. A first-class React execution facade for Entity-bound
+Relationship Commands remains pending; generic Entity Commands still require their own protocol
+and write-policy boundary.
 
 Dynamic reflected operation execution now goes through a host-supplied invoker instead of directly reaching for the operation bridge adapter. That is a deliberate intermediate step toward modeling framework metadata as graph entities and operations.
 

@@ -10,10 +10,10 @@ Source commit: `67713696`
 
 ## Summary
 
-Let the same Ontahi Selection, Query, or Command execute through the runtime available at the call
-site. A browser runtime with safe storage access may lower the graph program directly. A browser
-whose storage is server-only may transport that graph program to a server runtime and receive the
-same result without requiring a wrapper Domain Operation.
+Let the same Ontahi Selection, Query, Entity Command, or Relationship Command execute through the
+runtime available at the call site. A browser runtime with safe storage access may lower the graph
+program directly. A browser whose storage is server-only may transport that graph program to a
+server runtime and receive the same result without requiring a wrapper Domain Operation.
 
 A Domain Operation remains the language for named domain behavior, invariants, side effects,
 contracts, durable execution, and intent. It should not be a mandatory transport envelope around
@@ -54,7 +54,7 @@ Related work:
 
 ```mermaid
 flowchart LR
-  Code["Ubiquitous graph code\nSelection / Query / Command"] --> Runtime{"Bound graph runtime"}
+  Code["Ubiquitous graph code\nSelection / Query / Entity Command / Relationship Command"] --> Runtime{"Bound graph runtime"}
   Runtime -->|direct capability| Direct["Storage adapter\nSupabase / local / embedded"]
   Runtime -->|remote capability| Bridge["Data Graph bridge"]
   Bridge --> Boundary["Server graph boundary\nvalidation + policy + authority"]
@@ -74,8 +74,9 @@ merely because it crosses a process boundary.
 
 ## Scope
 
-1. Define canonical transport-safe Query and Command request forms.
-2. Bind `Selection.run()`, shaped reads, and Commands to either direct or remote runtimes.
+1. Define canonical transport-safe Query, Entity Command, and Relationship Command request forms.
+2. Bind `Selection.run()`, shaped reads, Entity Commands, and Relationship Commands to either direct
+   or remote runtimes.
 3. Define a server graph dispatcher independently from HTTP framework adapters.
 4. Model graph access policy independently from transport choice.
 5. Preserve authority, validation, cardinality, result, failure, cache, and observability semantics
@@ -225,10 +226,18 @@ languages.
 - [x] Bind generated client Entities to either direct or remote graph executors.
 - [x] Prove identical Todo read code against direct and Express/PostgreSQL topologies.
 - [ ] Integrate read cache identity, telemetry, and Explorer reflection.
-- [ ] Specify the Command protocol only after the read path and its authority seam are proven.
+- [ ] Complete the Command bridge after the read path and its authority seam are proven.
   - [x] Specify and validate the Relationship Command wire variant in plan 128c.
   - [x] Add its default-deny policy and transport-neutral dispatcher in plan 128d.
   - [x] Route the same command through direct and remote in-process runtimes in plan 128e.
+  - [x] Carry Relationship Commands through the Express HTTP adapter and prove Todo/PostgreSQL
+        execution with exact deltas.
+  - [x] Bind cardinality-specific structural authoring to Entity Refs while preserving portable Ref
+        serialization.
+  - [ ] Add first-class generated-client and React execution ergonomics for bound Relationship
+        Commands without inventing Relation-specific domain hooks.
+  - [ ] Specify generic remote Entity insert, update, upsert, and delete Commands with their own
+        authority, affected-set, and outcome semantics.
 - [ ] Evaluate hybrid routing as an input to future graph segmentation.
 
 ### First Proof: Runtime-Bound Selections
@@ -371,8 +380,9 @@ repeating transport wiring.
 The developer guide now presents caller-authored Queries as the ordinary application read path
 rather than as an optional remote-read feature. It keeps Operations distinct as named domain
 behavior, documents `include` as lower level than caller-owned Views, and makes the current alpha
-boundaries explicit: remote policy authoring and distributed execution identity may evolve, remote
-Commands remain unsupported, and client defaults never replace server authentication or policy.
+boundaries explicit: remote policy authoring and distributed execution identity may evolve,
+Relationship Commands have a focused default-deny remote bridge, generic Entity Commands remain
+unsupported remotely, and client defaults never replace server authentication or policy.
 
 The runtime-binding and topology evidence are now complete. Telemetry and reflection remain a
 separate read-path slice before remote Commands, keeping diagnostics independent from write
@@ -381,21 +391,22 @@ authority and cache reconciliation.
 1. Expose execution topology, policy decision, cache identity, and failure diagnostics to telemetry
    and reflection.
 
-### Active TDD Slice: Relationship Command Wire Protocol
+### Completed Relationship Command Bridge Slices
 
 Plan 131 and its 131a Core experiment established a canonical Relationship Command/Delta IR. Plan
-128c now owns the transport-free JSON round-trip for that command variant. It validates untrusted
+128c owns the transport-free JSON round-trip for that command variant. It validates untrusted
 requests against server-owned Relation topology before any dispatcher or policy work begins and
-does not yet enable remote writes.
+does not grant remote writes by itself.
 
 Plan 128d adds the next boundary: explicit per-Relation structural actions, default denial, and an
 injected executor that cannot be reached until parsing, policy matching, and authoritative topology
 resolution succeed. Principal-based authorization evaluation remains with plan 78.
 
 Plan 128e adds an optional Relationship Command runtime capability implemented by in-memory and the
-remote runtime. An in-process transport proof produces identical deltas and state through both
-routes while keeping credentials and authority options outside the serialized command. HTTP and
-provider adapters remain deliberately absent.
+remote runtime. Subsequent integration carries that capability through Express HTTP and PostgreSQL,
+producing identical exact deltas while keeping credentials and authority options outside the
+serialized command. Generated Entity Refs now author the same command fluently; a dedicated
+client/React execution facade remains a follow-up rather than a new protocol.
 
 Plan 135 now owns Applied Mutation Outcomes and generic post-application Reactions. Future remote
 Command transport must preserve that semantic envelope; an HTTP adapter must not invent
@@ -429,7 +440,12 @@ left to the next slice.
 - [x] Invalid, oversized, unsupported, and unauthorized programs return structured failures.
 - [x] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
       end-to-end Todo proof.
-- [x] Remote Commands remain unavailable by default and are left for the next bounded slice.
+- [x] Remote graph mutation remains unavailable by default; explicitly permitted Relationship
+      Commands are the first bounded write variant.
+- [x] Forward and inverse Relationship authoring preserve one canonical command through direct and
+      remote execution.
+- [ ] Generic Entity Commands have a versioned, default-deny remote contract distinct from the
+      completed Relationship Command variant.
 
 ## Open Questions
 
@@ -466,6 +482,9 @@ left to the next slice.
     durable behavior.
 12. Runtime binding decorates a generated client facade as a new value; it preserves its portable
     schema and client-owned surface rather than mutating the generated declaration.
+13. Relationship Commands are a semantic Graph Command specialization, not Entity patches or
+    generated Domain Operations; they share the bridge architecture while retaining Relation
+    topology, structural policy, and exact-delta semantics.
 
 ## Completion Signal
 

@@ -138,8 +138,8 @@ instance establishes the reified association; deleting it extinguishes that asso
 application-authored lifecycle Operation is required for either structural action. Traversal may
 observe the same relationship fact as a direct Relation, while Applied Outcomes preserve the
 important distinction between changing a primitive edge and creating or deleting an Entity with its
-own identity and lifecycle. This local Node example intentionally does not imply that Entity Mutation
-Commands or Relationship Commands already have a public remote bridge.
+own identity and lifecycle. Generic Entity Mutation Commands still lack a public remote bridge;
+Relationship Commands already have a versioned, default-deny remote path.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally
@@ -148,8 +148,9 @@ precondition that every named participant exists; arbitrary filtered Selections 
 The join table and columns are provider mapping evidence and do not require a public join Entity.
 
 Core proves this model with `manyToMany`, Selection-valued `add/remove`, Cartesian set deltas,
-strict resolution of explicit Refs, default-deny dispatch, and direct/remote in-process routing.
-Provider join-table mapping and traversal remain required before the Todo example adopts it.
+strict resolution of explicit Refs, and default-deny dispatch. PostgreSQL and Supabase provide
+join-table mapping, traversal, and atomic mutation conformance; Todo uses the direct Relation rather
+than exposing its physical join table as an Entity.
 
 The canonical Relationship Command has a versioned JSON-safe graph-command envelope. A receiving
 runtime resolves its Entity names and Reference Field identity against server-owned topology,
