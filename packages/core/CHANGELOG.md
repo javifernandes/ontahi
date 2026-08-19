@@ -1,5 +1,12 @@
 # @ontahi/core
 
+## 0.1.0-alpha.7
+
+### Minor Changes
+
+- 9f5aff6: Author structural Relationship Commands directly from typed Entity Refs with cardinality-specific
+  relation methods such as `student.course.assign(course)` and `course.students.add(student)`.
+
 ## 0.1.0-alpha.6
 
 ### Minor Changes
