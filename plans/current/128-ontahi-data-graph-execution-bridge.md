@@ -401,6 +401,10 @@ remote runtime. An in-process transport proof produces identical deltas and stat
 routes while keeping credentials and authority options outside the serialized command. HTTP and
 provider adapters remain deliberately absent.
 
+Plan 135 now owns Applied Mutation Outcomes and generic post-application Reactions. Future remote
+Command transport must preserve that semantic envelope; an HTTP adapter must not invent
+Relation-specific hooks or flatten a failed Reaction into fictional Command rollback.
+
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
 protocol/runtime shape only after the read boundary demonstrates a credible authority model.
 
