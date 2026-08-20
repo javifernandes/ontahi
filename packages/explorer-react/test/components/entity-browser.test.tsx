@@ -339,10 +339,19 @@ describe('ExplorerEntityBrowser', () => {
           readEntityData: vi.fn().mockResolvedValue({
             entityName: 'Book',
             columns: [{ field: 'owner', type: 'reference', nullable: false }],
-            rows: [{ owner: 'profile-1' }],
+            rows: [
+              {
+                owner: {
+                  kind: 'entity-ref',
+                  entityName: 'Profile',
+                  locator: { id: 'profile-1' },
+                },
+              },
+              { owner: 'profile-2' },
+            ],
             page: 1,
             pageSize: 25,
-            totalCount: 1,
+            totalCount: 2,
             hasPreviousPage: false,
             hasNextPage: false,
           }),
@@ -364,7 +373,76 @@ describe('ExplorerEntityBrowser', () => {
     expect(owner.getAttribute('href')).toBe(
       '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D',
     );
+    expect(screen.getByRole('link', { name: 'Profile · profile-2' }).getAttribute('href')).toBe(
+      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
+    );
     expect(screen.queryByText('profile-1')).toBeNull();
+  });
+
+  it('applies a portable locator from the URL and safely ignores malformed locator input', async () => {
+    const linkedEntities: ExplorerEntityDetail[] = [
+      { ...entities[0]!, identity: { name: 'refById', fields: ['id'] } },
+      entities[1]!,
+    ];
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Book',
+      columns: [{ field: 'id', type: 'id', nullable: false }],
+      rows: [{ id: 'book-1' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    globalThis.history.replaceState(null, '', '/?tab=data&ref=%7B%22id%22%3A%22book-1%22%7D');
+
+    const rendered = render(
+      <ExplorerProvider>
+        {withReflectedEntityDataReader({
+          readEntityData,
+          children: (
+            <ExplorerEntityBrowser
+              entities={linkedEntities}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+              selectedTab='data'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await vi.waitFor(() =>
+      expect(readEntityData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [{ field: 'id', operator: 'equals', value: 'book-1' }],
+        }),
+      ),
+    );
+
+    rendered.unmount();
+    readEntityData.mockClear();
+    globalThis.history.replaceState(null, '', '/?tab=data&ref=%7Bmalformed');
+    render(
+      <ExplorerProvider>
+        {withReflectedEntityDataReader({
+          readEntityData,
+          children: (
+            <ExplorerEntityBrowser
+              entities={linkedEntities}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+              selectedTab='data'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+    await vi.waitFor(() =>
+      expect(readEntityData).toHaveBeenCalledWith(expect.objectContaining({ filters: [] })),
+    );
   });
 
   it('lists has-many and many-to-many instances through the injected related Query reader', async () => {
@@ -376,7 +454,10 @@ describe('ExplorerEntityBrowser', () => {
         { field: 'name', type: 'string', nullable: false },
       ],
       display: { primary: 'name' },
-      rows: [{ id: 'profile-1', name: 'Ada' }],
+      rows: [
+        { id: 'profile-1', name: 'Ada' },
+        { id: 'profile-2', name: null },
+      ],
       page: 1,
       pageSize: 25,
       totalCount: 1,
@@ -445,6 +526,9 @@ describe('ExplorerEntityBrowser', () => {
 
     expect((await screen.findByRole('link', { name: 'Ada' })).getAttribute('href')).toBe(
       '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D',
+    );
+    expect(screen.getByRole('link', { name: 'profile-2' }).getAttribute('href')).toBe(
+      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
     );
     expect(readRelatedEntityData).toHaveBeenLastCalledWith({
       source: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },

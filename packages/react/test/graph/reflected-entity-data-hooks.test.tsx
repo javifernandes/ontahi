@@ -11,7 +11,9 @@ import {
   getReflectedEntityDataQueryKey,
   getReflectedRelatedEntityDataQueryKey,
   OntahiGraphProvider,
+  useHasReflectedRelatedEntityDataReader,
   useReflectedEntityDataQuery,
+  useReflectedRelatedEntityDataReader,
   useReflectedRelatedEntityDataQuery,
 } from '../../src/graph/index.js';
 
@@ -124,5 +126,23 @@ describe('reflected entity data hooks', () => {
       'reflected-related-entity-data',
       query,
     ]);
+  });
+
+  it('reports and enforces the related-data capability boundary', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <OntahiGraphProvider runtime={{ name: 'test-runtime' }}>{children}</OntahiGraphProvider>
+      </QueryClientProvider>
+    );
+
+    expect(
+      renderHook(() => useHasReflectedRelatedEntityDataReader(), { wrapper }).result.current,
+    ).toBe(false);
+    expect(() => renderHook(() => useReflectedRelatedEntityDataReader(), { wrapper })).toThrow(
+      /reflectedRelatedEntityDataReader/,
+    );
+    consoleError.mockRestore();
   });
 });

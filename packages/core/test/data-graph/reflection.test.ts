@@ -46,4 +46,32 @@ describe('schema relation reflection', () => {
       ]),
     );
   });
+
+  it('does not duplicate explicit inverse endpoints and derives an undeclared has-many inverse', () => {
+    const Course = entity('Course', { id: field.id() });
+    const Student = entity('Student', {
+      id: field.id(),
+      course: field.ref(Course),
+    });
+    Course.hasMany('students', Student, { via: 'course' });
+
+    const Note = entity('Note', { id: field.id() });
+    Course.hasMany('notes', Note);
+
+    const reflected = reflectSchemaRelations([Course, Student, Note]);
+
+    expect(reflected.filter(relation => relation.relationId === 'Student.course')).toHaveLength(1);
+    expect(reflected.filter(relation => relation.relationId === 'Course.students')).toHaveLength(1);
+    expect(reflected).toContainEqual(
+      expect.objectContaining({
+        relationId: 'Course.notes',
+        subjectEntityName: 'Note',
+        targetEntityName: 'Course',
+        kind: 'belongsTo',
+        provenance: 'derived-inverse',
+        direction: 'forward',
+        cardinality: 'one',
+      }),
+    );
+  });
 });
