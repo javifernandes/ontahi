@@ -192,21 +192,22 @@ The proof must establish:
 9. client-authored Todo and Tag Selections survive the existing graph protocol and policy boundary;
 10. Relationship Deltas and Applied Mutation Outcomes preserve the exact links added and removed.
 
-### Adapter Work
+### Completed Adapter Work
 
-The proof is incomplete until the same Relation works through:
+The same Relation now works through:
 
 1. the in-memory runtime;
 2. PostgreSQL join-table mapping, traversal, add, and remove;
 3. Supabase join-table mapping, traversal, add, and remove;
 4. adapter conformance tests using the same semantic command and expected delta.
 
-PostgreSQL and Supabase already lower direct Reference Fields. They do not yet model anonymous
-many-to-many edge storage, so this is real adapter work rather than documentation-only migration.
+PostgreSQL and Supabase now model anonymous many-to-many edge storage, traversal, and atomic
+`add/remove` execution. Their conformance tests use the same semantic command and exact expected
+delta as Core.
 
-### Documentation Work
+### Completed Documentation Work
 
-After Core and adapter conformance are green:
+After Core and adapter conformance became green, the implementation:
 
 1. update Ontahi development documentation and the Relation Atlas concept;
 2. update the Todo example README and remove language presenting `TodoTag` as a semantic Entity;
@@ -239,9 +240,9 @@ After Core and adapter conformance are green:
 - [x] Association Entity creation uses the generic Entity lifecycle without application boilerplate.
 - [x] Binary attribute-free Todo tagging is a direct many-to-many Relation, not a public Entity.
 - [x] Relationship actions accept Selection-valued source and target endpoints in Core.
-- [ ] In-memory, PostgreSQL, and Supabase pass many-to-many Relation conformance.
+- [x] In-memory, PostgreSQL, and Supabase pass many-to-many Relation conformance.
 - [x] Todo no longer wraps structural tag add/remove behavior in Domain Operations.
-- [ ] Ontahi developer docs and the BookOps developer book teach the expanded Relation concept.
+- [x] Ontahi developer docs and the BookOps developer book teach the expanded Relation concept.
 - [ ] Required coordination and post-application reaction are documented and tested separately.
 - [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
 - [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.

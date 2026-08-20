@@ -50,14 +50,15 @@ Possible runtime, source-organization, developer-experience, and open-source-rea
 
 ## Current Sequence
 
-1. Treat the public repository, clean package boundary, provenance-backed `0.1.0-alpha.3` release,
+1. Treat the public repository, clean package boundary, provenance-backed `0.1.0-alpha.7` release,
    and exact-registry Todo proof as the framework baseline.
 2. Treat BookOps' exact npm pins, registry-resolution guard, compatibility CI, and opt-in sibling
    loop as the production-consumer baseline.
 3. Treat provider-neutral Principal propagation as established: Express/Passport and
    Next.js/Supabase are host mappings onto one Ontahi invocation context.
-4. Pull plan 128 next, beginning with a versioned remote-read protocol and a default-deny graph
-   policy; defer remote Commands until that boundary is proven.
+4. Continue plan 128 from its versioned remote-read and default-deny policy baseline. Relationship
+   Commands are its first bounded remote write; generic Entity Commands remain deferred until their
+   authority and outcome contracts are proven.
 5. Keep stable promotion and deeper storage-schema checks as explicit lifecycle follow-ups rather
    than reopening the extraction program.
 
