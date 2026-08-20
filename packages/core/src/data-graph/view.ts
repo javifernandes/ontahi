@@ -88,13 +88,13 @@ type InferNestedViewResult<
       ast: EntityViewAst;
       __viewResult?: infer TResult;
     }
-    ? TKind extends 'hasMany'
+    ? TKind extends 'hasMany' | 'manyToMany'
       ? TResult[]
       : TNullable extends true
         ? TResult | null
         : TResult
     : TValue extends object
-      ? TKind extends 'hasMany'
+      ? TKind extends 'hasMany' | 'manyToMany'
         ? InferEntityViewShape<TTarget, TValue>[]
         : TNullable extends true
           ? InferEntityViewShape<TTarget, TValue> | null

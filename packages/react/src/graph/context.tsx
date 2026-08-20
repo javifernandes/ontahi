@@ -4,6 +4,7 @@ import {
   createGraphClientCache,
   type GraphClientCache,
   type ReflectedEntityDataReader,
+  type ReflectedRelatedEntityDataReader,
   type ReflectedOperationDescriptor,
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
@@ -37,6 +38,8 @@ const OperationBridgeAdaptersContext = createContext<Map<string, AnyOperationBri
   null,
 );
 const ReflectedEntityDataReaderContext = createContext<ReflectedEntityDataReader | null>(null);
+const ReflectedRelatedEntityDataReaderContext =
+  createContext<ReflectedRelatedEntityDataReader | null>(null);
 const ReflectedOperationInvokerContext = createContext<ReflectedOperationInvoker | null>(null);
 
 export type OntahiGraphProviderProps<
@@ -50,6 +53,8 @@ export type OntahiGraphProviderProps<
   client?: OntahiGraphClient<TReadOptions, TCommandOptions> | false;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
+  /** Explicit host capability; unlike entity reads, this has no OntahiGraphClient fallback. */
+  reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
   reflectedGraphOperations?: readonly ReflectedGraphOperationLike[];
   clientCache?: GraphClientCache;
@@ -67,6 +72,7 @@ export function OntahiGraphProvider<
   client,
   operationBridgeAdapters,
   reflectedEntityDataReader,
+  reflectedRelatedEntityDataReader,
   reflectedOperationInvoker,
   reflectedGraphOperations = noReflectedGraphOperations,
   clientCache,
@@ -102,19 +108,23 @@ export function OntahiGraphProvider<
   return (
     <ExecutionIdentityContext.Provider value={identity}>
       <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
-        <ReflectedEntityDataReaderContext.Provider
-          value={resolvedReflectedEntityDataReader ?? null}
+        <ReflectedRelatedEntityDataReaderContext.Provider
+          value={reflectedRelatedEntityDataReader ?? null}
         >
-          <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
-            <GraphClientCacheContext.Provider value={graphClientCache}>
-              <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
-                <GraphRuntimeContext.Provider value={runtime}>
-                  {children}
-                </GraphRuntimeContext.Provider>
-              </GraphExecutorContext.Provider>
-            </GraphClientCacheContext.Provider>
-          </OperationBridgeAdaptersContext.Provider>
-        </ReflectedEntityDataReaderContext.Provider>
+          <ReflectedEntityDataReaderContext.Provider
+            value={resolvedReflectedEntityDataReader ?? null}
+          >
+            <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
+              <GraphClientCacheContext.Provider value={graphClientCache}>
+                <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
+                  <GraphRuntimeContext.Provider value={runtime}>
+                    {children}
+                  </GraphRuntimeContext.Provider>
+                </GraphExecutorContext.Provider>
+              </GraphClientCacheContext.Provider>
+            </OperationBridgeAdaptersContext.Provider>
+          </ReflectedEntityDataReaderContext.Provider>
+        </ReflectedRelatedEntityDataReaderContext.Provider>
       </ReflectedOperationInvokerContext.Provider>
     </ExecutionIdentityContext.Provider>
   );
@@ -221,6 +231,21 @@ export function useReflectedEntityDataReader() {
 export function useHasReflectedEntityDataReader() {
   return useContext(ReflectedEntityDataReaderContext) !== null;
 }
+
+export function useReflectedRelatedEntityDataReader() {
+  const reader = useContext(ReflectedRelatedEntityDataReaderContext);
+
+  if (reader === null) {
+    throw new Error(
+      'useReflectedRelatedEntityDataReader must be used within an OntahiGraphProvider with reflectedRelatedEntityDataReader',
+    );
+  }
+
+  return reader;
+}
+
+export const useHasReflectedRelatedEntityDataReader = () =>
+  useContext(ReflectedRelatedEntityDataReaderContext) !== null;
 
 export function useReflectedOperationInvoker() {
   const invoker = useContext(ReflectedOperationInvokerContext);

@@ -9,6 +9,7 @@ const TodoItemListItem = TodoItem.view('TodoItemListItem', {
   list: true,
   title: true,
   completed: true,
+  tags: { id: true, name: true, color: true },
 });
 
 export const todoListsQuery = TodoList.all()
@@ -23,5 +24,4 @@ export const todoItemsQuery = (todos: Selection<typeof TodoItemSchema>) =>
   TodoItem.all()
     .where(todos)
     .as(TodoItemListItem)
-    .include(todo => ({ tags: todo.tags.orderBy(tag => tag.name) }))
     .orderBy(todo => todo.title);

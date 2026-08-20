@@ -1,4 +1,7 @@
-import type { ReflectedEntityDataReader } from '@ontahi/core/data-graph';
+import type {
+  ReflectedEntityDataReader,
+  ReflectedRelatedEntityDataReader,
+} from '@ontahi/core/data-graph';
 import { OntahiGraphProvider } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
@@ -148,9 +151,11 @@ const withReflectedEntityDataReader = ({
     hasPreviousPage: false,
     hasNextPage: false,
   }),
+  readRelatedEntityData,
 }: {
   children: ReactNode;
   readEntityData?: ReflectedEntityDataReader['readEntityData'];
+  readRelatedEntityData?: ReflectedRelatedEntityDataReader['readRelatedEntityData'];
 }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -165,6 +170,9 @@ const withReflectedEntityDataReader = ({
       <OntahiGraphProvider
         runtime={{ name: 'test-runtime' }}
         reflectedEntityDataReader={{ readEntityData }}
+        reflectedRelatedEntityDataReader={
+          readRelatedEntityData ? { readRelatedEntityData } : undefined
+        }
       >
         {children}
       </OntahiGraphProvider>
@@ -304,6 +312,283 @@ describe('ExplorerEntityBrowser', () => {
         pageSize: 25,
       }),
     );
+  });
+
+  it('spans loading rows across the conditional Related column', () => {
+    const pendingRead: ReflectedEntityDataReader['readEntityData'] = () =>
+      new Promise(() => undefined);
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      relations: [
+        {
+          name: 'collaborators',
+          kind: 'hasMany',
+          target: 'Profile',
+          cardinality: 'many',
+        },
+      ],
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData: vi.fn(pendingRead),
+        readRelatedEntityData: vi.fn(),
+        children: (
+          <ExplorerEntityBrowser
+            entities={[relatedBook, entities[1]!]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+            selectedTab='data'
+          />
+        ),
+      }),
+    );
+
+    expect(
+      (screen.getByText('Loading rows...').closest('td') as HTMLTableCellElement | null)?.colSpan,
+    ).toBe(relatedBook.fields.length + 1);
+  });
+
+  it('renders a Reference Field as a semantic Entity link instead of a raw id cell', async () => {
+    const user = userEvent.setup();
+    const bookWithOwner: ExplorerEntityDetail = {
+      ...entities[0]!,
+      fields: [
+        ...entities[0]!.fields,
+        {
+          name: 'owner',
+          type: 'reference',
+          nullable: false,
+          reference: {
+            entityName: 'Profile',
+            identity: { name: 'refById', fields: ['id'] },
+            display: { primary: 'name' },
+          },
+        },
+      ],
+    };
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          readEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Book',
+            columns: [{ field: 'owner', type: 'reference', nullable: false }],
+            rows: [
+              {
+                owner: {
+                  kind: 'entity-ref',
+                  entityName: 'Profile',
+                  locator: { id: 'profile-1' },
+                },
+              },
+              { owner: 'profile-2' },
+            ],
+            page: 1,
+            pageSize: 25,
+            totalCount: 2,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          children: (
+            <ExplorerEntityBrowser
+              entities={[bookWithOwner, entities[1]!]}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Data' }));
+
+    const owner = await screen.findByRole('link', { name: 'Profile · profile-1' });
+    expect(owner.getAttribute('href')).toBe(
+      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D',
+    );
+    expect(screen.getByRole('link', { name: 'Profile · profile-2' }).getAttribute('href')).toBe(
+      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
+    );
+    expect(screen.queryByText('profile-1')).toBeNull();
+  });
+
+  it('applies a portable locator from the URL and safely ignores malformed locator input', async () => {
+    const linkedEntities: ExplorerEntityDetail[] = [
+      { ...entities[0]!, identity: { name: 'refById', fields: ['id'] } },
+      entities[1]!,
+    ];
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Book',
+      columns: [{ field: 'id', type: 'id', nullable: false }],
+      rows: [{ id: 'book-1' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    globalThis.history.replaceState(null, '', '/?tab=data&ref=%7B%22id%22%3A%22book-1%22%7D');
+
+    const rendered = render(
+      <ExplorerProvider>
+        {withReflectedEntityDataReader({
+          readEntityData,
+          children: (
+            <ExplorerEntityBrowser
+              entities={linkedEntities}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+              selectedTab='data'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await vi.waitFor(() =>
+      expect(readEntityData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [{ field: 'id', operator: 'equals', value: 'book-1' }],
+        }),
+      ),
+    );
+
+    rendered.unmount();
+    readEntityData.mockClear();
+    globalThis.history.replaceState(null, '', '/?tab=data&ref=%7Bmalformed');
+    render(
+      <ExplorerProvider>
+        {withReflectedEntityDataReader({
+          readEntityData,
+          children: (
+            <ExplorerEntityBrowser
+              entities={linkedEntities}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+              selectedTab='data'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+    await vi.waitFor(() =>
+      expect(readEntityData).toHaveBeenCalledWith(expect.objectContaining({ filters: [] })),
+    );
+  });
+
+  it('lists has-many and many-to-many instances through the injected related Query reader', async () => {
+    const user = userEvent.setup();
+    const readRelatedEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Profile',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'name', type: 'string', nullable: false },
+      ],
+      display: { primary: 'name' },
+      rows: [
+        { id: 'profile-1', name: 'Ada' },
+        { id: 'profile-2', name: null },
+      ],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      relations: [
+        {
+          name: 'collaborators',
+          kind: 'hasMany',
+          target: 'Profile',
+          targetIdentity: { name: 'refById', fields: ['id'] },
+          targetDisplay: { primary: 'name' },
+          direction: 'inverse',
+          cardinality: 'many',
+          nullable: false,
+          required: false,
+          structuralVerbs: ['add', 'remove'],
+        },
+        {
+          name: 'reviewers',
+          kind: 'manyToMany',
+          target: 'Profile',
+          targetIdentity: { name: 'refById', fields: ['id'] },
+          targetDisplay: { primary: 'name' },
+          direction: 'forward',
+          cardinality: 'many',
+          nullable: false,
+          required: false,
+          structuralVerbs: ['add', 'remove'],
+        },
+      ],
+    };
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          readEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Book',
+            columns: [{ field: 'id', type: 'id', nullable: false }],
+            rows: [{ id: 'book-1' }],
+            page: 1,
+            pageSize: 25,
+            totalCount: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          readRelatedEntityData,
+          children: (
+            <ExplorerEntityBrowser
+              entities={[relatedBook, entities[1]!]}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Data' }));
+    await user.click(await screen.findByRole('button', { name: 'collaborators' }));
+
+    expect((await screen.findByRole('link', { name: 'Ada' })).getAttribute('href')).toBe(
+      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D',
+    );
+    expect(screen.getByRole('link', { name: 'profile-2' }).getAttribute('href')).toBe(
+      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
+    );
+    expect(readRelatedEntityData).toHaveBeenLastCalledWith({
+      source: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+      relationName: 'collaborators',
+      sourceEntityName: 'Book',
+      targetEntityName: 'Profile',
+      page: 1,
+      pageSize: 25,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'reviewers' }));
+    await vi.waitFor(() =>
+      expect(readRelatedEntityData).toHaveBeenLastCalledWith(
+        expect.objectContaining({ relationName: 'reviewers' }),
+      ),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Close related instances' }));
+    expect(screen.queryByRole('region', { name: 'Related instances' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'collaborators' }));
+    expect(await screen.findByRole('region', { name: 'Related instances' })).toBeTruthy();
+    await user.type(screen.getByPlaceholderText('Search scalar fields'), 'changed');
+    expect(screen.queryByRole('region', { name: 'Related instances' })).toBeNull();
   });
 
   it('filters entities by search text', async () => {

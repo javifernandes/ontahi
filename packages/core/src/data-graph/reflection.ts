@@ -7,7 +7,112 @@ import {
   type RelationDefinition,
   type RelationKind,
 } from './definitions.js';
+import type { AnyEntityRef } from './ref.js';
 import type { EntityViewAst } from './view.js';
+
+export type ReflectedSchemaRelation = {
+  relationId: string;
+  subjectEntityName: string;
+  targetEntityName: string;
+  name: string;
+  declaredRelationName: string;
+  declaredOnEntityName: string;
+  kind: RelationKind;
+  provenance: 'declared' | 'derived-inverse';
+  direction: 'forward' | 'inverse';
+  cardinality: 'one' | 'many';
+  nullable?: boolean;
+  required?: boolean;
+  structuralVerbs: Array<'assign' | 'clear' | 'add' | 'remove'>;
+  sourceField?: string;
+  targetField?: string;
+};
+
+const hasDeclaredInverse = (
+  source: AnyEntityDefinition,
+  relation: RelationDefinition<RelationKind, AnyEntityDefinition>,
+) =>
+  Object.values(relation.target.relations ?? {}).some(candidate => {
+    if (candidate.target !== source) return false;
+
+    return (
+      (relation.relationKind === 'belongsTo' &&
+        candidate.relationKind === 'hasMany' &&
+        candidate.targetField === relation.sourceField) ||
+      (relation.relationKind === 'hasMany' &&
+        candidate.relationKind === 'belongsTo' &&
+        candidate.sourceField === relation.targetField) ||
+      (relation.relationKind === 'manyToMany' && candidate.relationKind === 'manyToMany')
+    );
+  });
+
+const reflectedDeclaredRelation = (
+  source: AnyEntityDefinition,
+  name: string,
+  relation: RelationDefinition<RelationKind, AnyEntityDefinition>,
+): ReflectedSchemaRelation => {
+  const nullable = relation.relationKind === 'belongsTo' && Boolean(relation.nullable);
+
+  return {
+    relationId: `${source.name}.${name}`,
+    subjectEntityName: source.name,
+    targetEntityName: relation.target.name,
+    name,
+    declaredRelationName: name,
+    declaredOnEntityName: source.name,
+    kind: relation.relationKind,
+    provenance: 'declared',
+    direction: relation.relationKind === 'hasMany' ? 'inverse' : 'forward',
+    cardinality: relation.relationKind === 'belongsTo' ? 'one' : 'many',
+    ...(relation.relationKind === 'belongsTo' ? { nullable, required: !nullable } : {}),
+    structuralVerbs:
+      relation.relationKind === 'belongsTo'
+        ? nullable
+          ? ['assign', 'clear']
+          : ['assign']
+        : ['add', 'remove'],
+    ...(relation.sourceField ? { sourceField: relation.sourceField } : {}),
+    ...(relation.targetField ? { targetField: relation.targetField } : {}),
+  };
+};
+
+const reflectedInverseRelation = (
+  source: AnyEntityDefinition,
+  name: string,
+  relation: RelationDefinition<RelationKind, AnyEntityDefinition>,
+): ReflectedSchemaRelation => ({
+  relationId: `${source.name}.${name}`,
+  subjectEntityName: relation.target.name,
+  targetEntityName: source.name,
+  name: `${source.name}.${name}`,
+  declaredRelationName: name,
+  declaredOnEntityName: source.name,
+  kind:
+    relation.relationKind === 'belongsTo'
+      ? 'hasMany'
+      : relation.relationKind === 'hasMany'
+        ? 'belongsTo'
+        : 'manyToMany',
+  provenance: 'derived-inverse',
+  direction: relation.relationKind === 'hasMany' ? 'forward' : 'inverse',
+  cardinality: relation.relationKind === 'hasMany' ? 'one' : 'many',
+  structuralVerbs: [],
+  ...(relation.sourceField ? { targetField: relation.sourceField } : {}),
+  ...(relation.targetField ? { sourceField: relation.targetField } : {}),
+});
+
+/** Reflects both declared Relation endpoints and read-only structural inverse endpoints. */
+export const reflectSchemaRelations = (
+  entities: readonly AnyEntityDefinition[],
+): ReflectedSchemaRelation[] =>
+  entities.flatMap(source =>
+    Object.entries(source.relations ?? {}).flatMap(([name, relation]) => {
+      const declared = reflectedDeclaredRelation(source, name, relation);
+      return hasDeclaredInverse(source, relation)
+        ? [declared]
+        : [declared, reflectedInverseRelation(source, name, relation)];
+    }),
+  );
 
 export type ReflectedOperationDescriptor<TInput = unknown, TData = unknown> = {
   id: string;
@@ -90,6 +195,25 @@ export type ReflectedEntityDataResult = {
 
 export type ReflectedEntityDataReader = {
   readEntityData: (query: ReflectedEntityDataQuery) => Promise<ReflectedEntityDataResult>;
+};
+
+export type ReflectedRelatedEntityDataQuery = {
+  source: AnyEntityRef;
+  relationName: string;
+  sourceEntityName: string;
+  targetEntityName: string;
+  page?: number;
+  pageSize?: number;
+};
+
+/**
+ * Host capability for Relation-root Queries. Implementations must execute through the configured
+ * graph runtime and graph-read policy; Explorer never falls back to provider or table access.
+ */
+export type ReflectedRelatedEntityDataReader = {
+  readRelatedEntityData: (
+    query: ReflectedRelatedEntityDataQuery,
+  ) => Promise<ReflectedEntityDataResult>;
 };
 
 type EntityDisplayLike = {

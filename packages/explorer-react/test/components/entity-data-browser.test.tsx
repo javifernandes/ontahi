@@ -86,6 +86,41 @@ describe('useExplorerEntityDataBrowser', () => {
     });
   });
 
+  it('loads a linked Entity instance through its portable locator', async () => {
+    const reader = {
+      readEntityData: vi.fn().mockResolvedValue(buildResult()),
+    };
+    renderHook(() => useExplorerEntityDataBrowser({ entity, initialRef: { id: 'book-1' } }), {
+      wrapper: createWrapper(reader),
+    });
+
+    await waitFor(() =>
+      expect(reader.readEntityData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [{ field: 'id', operator: 'equals', value: 'book-1' }],
+        }),
+      ),
+    );
+  });
+
+  it('does not partially apply a composite locator to the single-filter browser', async () => {
+    const reader = {
+      readEntityData: vi.fn().mockResolvedValue(buildResult()),
+    };
+    renderHook(
+      () =>
+        useExplorerEntityDataBrowser({
+          entity,
+          initialRef: { id: 'book-1', version: 1 },
+        }),
+      { wrapper: createWrapper(reader) },
+    );
+
+    await waitFor(() =>
+      expect(reader.readEntityData).toHaveBeenCalledWith(expect.objectContaining({ filters: [] })),
+    );
+  });
+
   it('normalizes unsupported contains filters and resets pagination when filters change', async () => {
     const reader = {
       readEntityData: vi.fn().mockResolvedValue(buildResult({ hasNextPage: true })),

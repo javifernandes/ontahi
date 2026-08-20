@@ -1,4 +1,4 @@
-import { field, value } from '@ontahi/core/data-graph';
+import { entity, field, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from '../../src/server/index.js';
@@ -16,7 +16,7 @@ describe('explorer descriptor builder', () => {
           },
           relations: {
             chapters: {
-              relationKind: 'many',
+              relationKind: 'hasMany',
               target: { name: 'Chapter' },
             },
           },
@@ -220,7 +220,7 @@ describe('explorer descriptor builder', () => {
             },
             relations: {
               chapters: {
-                relationKind: 'many',
+                relationKind: 'hasMany',
                 target: { name: 'Chapter' },
               },
             },
@@ -241,10 +241,169 @@ describe('explorer descriptor builder', () => {
             enumValues: ['draft', 'published'],
           },
         ]),
-        relations: [{ name: 'chapters', kind: 'many', target: 'Chapter' }],
+        relations: [
+          expect.objectContaining({
+            name: 'chapters',
+            kind: 'hasMany',
+            target: 'Chapter',
+            cardinality: 'many',
+          }),
+        ],
       }),
     );
     expect(detail?.diagram).toContain('Book');
-    expect(detail?.diagram).toContain('chapters (many)');
+    expect(detail?.diagram).toContain('chapters (hasMany)');
+  });
+
+  it('reflects semantic relation affordances and portable entity identity', () => {
+    const Course = entity('Course', { id: field.id(), title: field.string() })
+      .display({ primary: 'title' })
+      .manyToMany('topics', entity('Topic', { id: field.id(), label: field.string() }));
+    const Student = entity('Student', {
+      id: field.id(),
+      course: field.nullable(field.ref(Course)),
+    });
+    Course.hasMany('students', Student, { via: 'course' });
+
+    const student = getExplorerEntityDetail({ entities: [Student, Course] }, 'Student');
+    const course = getExplorerEntityDetail({ entities: [Student, Course] }, 'Course');
+
+    expect(student).toMatchObject({
+      identity: { name: 'refById', fields: ['id'] },
+      entityRole: { kind: 'unknown' },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        {
+          name: 'course',
+          type: 'reference',
+          nullable: true,
+          reference: {
+            entityName: 'Course',
+            identity: { name: 'refById', fields: ['id'] },
+            display: { primary: 'title' },
+          },
+        },
+      ],
+      relations: [
+        {
+          name: 'course',
+          kind: 'belongsTo',
+          target: 'Course',
+          direction: 'forward',
+          cardinality: 'one',
+          nullable: true,
+          required: false,
+          structuralVerbs: ['assign', 'clear'],
+          canonicalIdentity: {
+            sourceEntityName: 'Student',
+            fieldName: 'course',
+            targetEntityName: 'Course',
+          },
+        },
+      ],
+    });
+    expect(course?.relations).toEqual([
+      expect.objectContaining({
+        name: 'topics',
+        kind: 'manyToMany',
+        direction: 'forward',
+        cardinality: 'many',
+        structuralVerbs: ['add', 'remove'],
+      }),
+      expect.objectContaining({
+        name: 'students',
+        kind: 'hasMany',
+        direction: 'inverse',
+        cardinality: 'many',
+        structuralVerbs: ['add', 'remove'],
+        canonicalIdentity: {
+          sourceEntityName: 'Student',
+          fieldName: 'course',
+          targetEntityName: 'Course',
+        },
+      }),
+    ]);
+  });
+
+  it('presents inverse endpoints derived by schema reflection', () => {
+    const TodoList = entity('TodoList', { id: field.id(), name: field.string() });
+    const Tag = entity('Tag', { id: field.id(), name: field.string() });
+    const TodoItem = entity('TodoItem', {
+      id: field.id(),
+      list: field.ref(TodoList),
+    }).manyToMany('tags', Tag);
+    const entities = [TodoList, Tag, TodoItem];
+
+    expect(getExplorerEntityDetail({ entities }, 'TodoList')?.relations).toContainEqual(
+      expect.objectContaining({
+        name: 'TodoItem.list',
+        target: 'TodoItem',
+        kind: 'hasMany',
+        provenance: 'derived-inverse',
+        direction: 'inverse',
+        cardinality: 'many',
+        structuralVerbs: [],
+      }),
+    );
+    expect(getExplorerEntityDetail({ entities }, 'Tag')?.relations).toContainEqual(
+      expect.objectContaining({
+        name: 'TodoItem.tags',
+        target: 'TodoItem',
+        kind: 'manyToMany',
+        provenance: 'derived-inverse',
+        direction: 'inverse',
+        cardinality: 'many',
+        structuralVerbs: [],
+      }),
+    );
+    expect(
+      buildExplorerSnapshot({ entities }).entities.map(({ name, relationCount }) => ({
+        name,
+        relationCount,
+      })),
+    ).toEqual([
+      { name: 'TodoList', relationCount: 1 },
+      { name: 'Tag', relationCount: 1 },
+      { name: 'TodoItem', relationCount: 2 },
+    ]);
+  });
+
+  it('classifies only explicitly reflected relation owners as association entities', () => {
+    const ordinary = getExplorerEntityDetail(
+      {
+        entities: [
+          {
+            kind: 'entity',
+            name: 'MembershipRequest',
+            fields: { team: { fieldType: 'reference' }, user: { fieldType: 'reference' } },
+          },
+        ],
+      },
+      'MembershipRequest',
+    );
+    const association = getExplorerEntityDetail(
+      {
+        entities: [
+          {
+            kind: 'graph-relation',
+            name: 'Enrollment',
+            fields: { status: { fieldType: 'string' } },
+            relation: {
+              source: 'Student',
+              name: 'enrollments',
+              cardinality: 'many',
+              target: 'Course',
+            },
+          },
+        ],
+      },
+      'Enrollment',
+    );
+
+    expect(ordinary?.entityRole).toEqual({ kind: 'unknown' });
+    expect(association?.entityRole).toEqual({
+      kind: 'association',
+      participants: ['Student', 'Course'],
+    });
   });
 });
