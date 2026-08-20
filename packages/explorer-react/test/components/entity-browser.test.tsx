@@ -314,6 +314,42 @@ describe('ExplorerEntityBrowser', () => {
     );
   });
 
+  it('spans loading rows across the conditional Related column', () => {
+    const pendingRead: ReflectedEntityDataReader['readEntityData'] = () =>
+      new Promise(() => undefined);
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      relations: [
+        {
+          name: 'collaborators',
+          kind: 'hasMany',
+          target: 'Profile',
+          cardinality: 'many',
+        },
+      ],
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData: vi.fn(pendingRead),
+        readRelatedEntityData: vi.fn(),
+        children: (
+          <ExplorerEntityBrowser
+            entities={[relatedBook, entities[1]!]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+            selectedTab='data'
+          />
+        ),
+      }),
+    );
+
+    expect(
+      (screen.getByText('Loading rows...').closest('td') as HTMLTableCellElement | null)?.colSpan,
+    ).toBe(relatedBook.fields.length + 1);
+  });
+
   it('renders a Reference Field as a semantic Entity link instead of a raw id cell', async () => {
     const user = userEvent.setup();
     const bookWithOwner: ExplorerEntityDetail = {
@@ -540,9 +576,19 @@ describe('ExplorerEntityBrowser', () => {
     });
 
     await user.click(screen.getByRole('button', { name: 'reviewers' }));
-    expect(readRelatedEntityData).toHaveBeenLastCalledWith(
-      expect.objectContaining({ relationName: 'reviewers' }),
+    await vi.waitFor(() =>
+      expect(readRelatedEntityData).toHaveBeenLastCalledWith(
+        expect.objectContaining({ relationName: 'reviewers' }),
+      ),
     );
+
+    await user.click(screen.getByRole('button', { name: 'Close related instances' }));
+    expect(screen.queryByRole('region', { name: 'Related instances' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'collaborators' }));
+    expect(await screen.findByRole('region', { name: 'Related instances' })).toBeTruthy();
+    await user.type(screen.getByPlaceholderText('Search scalar fields'), 'changed');
+    expect(screen.queryByRole('region', { name: 'Related instances' })).toBeNull();
   });
 
   it('filters entities by search text', async () => {

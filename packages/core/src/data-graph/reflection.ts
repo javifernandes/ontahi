@@ -41,7 +41,8 @@ const hasDeclaredInverse = (
         candidate.targetField === relation.sourceField) ||
       (relation.relationKind === 'hasMany' &&
         candidate.relationKind === 'belongsTo' &&
-        candidate.sourceField === relation.targetField)
+        candidate.sourceField === relation.targetField) ||
+      (relation.relationKind === 'manyToMany' && candidate.relationKind === 'manyToMany')
     );
   });
 

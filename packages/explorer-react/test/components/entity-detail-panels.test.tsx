@@ -144,6 +144,14 @@ describe('Explorer entity detail panels', () => {
     expect(createExplorerRoutes('/internal/graph').entity('Book', { tab: 'operations' })).toBe(
       '/internal/graph/entities/Book?tab=operations',
     );
+    expect(
+      createExplorerRoutes('/internal/graph').entity('Book', {
+        tab: 'data',
+        ref: { tenant: 'north', id: 'book-1' },
+      }),
+    ).toBe(
+      '/internal/graph/entities/Book?tab=data&ref=%7B%22tenant%22%3A%22north%22%2C%22id%22%3A%22book-1%22%7D',
+    );
     expect(createExplorerRoutes('/internal/graph').operation('Book.share', { tab: 'schema' })).toBe(
       '/internal/graph/operations/Book.share?tab=schema',
     );

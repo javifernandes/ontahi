@@ -74,4 +74,26 @@ describe('schema relation reflection', () => {
       }),
     );
   });
+
+  it('treats reciprocal many-to-many declarations as explicit endpoints', () => {
+    const Left = entity('Left', { id: field.id() });
+    const Right = entity('Right', { id: field.id() });
+    Left.manyToMany('rights', Right);
+    Right.manyToMany('lefts', Left);
+
+    const reflected = reflectSchemaRelations([Left, Right]);
+
+    expect(reflected).toEqual([
+      expect.objectContaining({
+        relationId: 'Left.rights',
+        subjectEntityName: 'Left',
+        provenance: 'declared',
+      }),
+      expect.objectContaining({
+        relationId: 'Right.lefts',
+        subjectEntityName: 'Right',
+        provenance: 'declared',
+      }),
+    ]);
+  });
 });

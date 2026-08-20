@@ -53,6 +53,7 @@ export type OntahiGraphProviderProps<
   client?: OntahiGraphClient<TReadOptions, TCommandOptions> | false;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
+  /** Explicit host capability; unlike entity reads, this has no OntahiGraphClient fallback. */
   reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
   reflectedGraphOperations?: readonly ReflectedGraphOperationLike[];

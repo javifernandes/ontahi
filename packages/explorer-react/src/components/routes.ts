@@ -12,16 +12,17 @@ export type ExplorerTabHrefOptions<TTab extends string> = {
   tab?: TTab;
 };
 
+export type ExplorerEntityHrefOptions = ExplorerTabHrefOptions<ExplorerEntityBrowserTab> & {
+  ref?: Record<string, unknown>;
+};
+
 export type ExplorerRoutes = {
   overview: string;
   entities: string;
   operations: string;
   tasks: string;
   events: string;
-  entity: (
-    entityName: string,
-    options?: ExplorerTabHrefOptions<ExplorerEntityBrowserTab>,
-  ) => string;
+  entity: (entityName: string, options?: ExplorerEntityHrefOptions) => string;
   operation: (
     operationId: string,
     options?: ExplorerTabHrefOptions<ExplorerOperationBrowserTab>,
@@ -51,6 +52,15 @@ const withExplorerTab = <TTab extends string>(
   options?: ExplorerTabHrefOptions<TTab>,
 ) => (options?.tab ? `${href}?tab=${encodeURIComponent(options.tab)}` : href);
 
+const withExplorerEntityOptions = (href: string, options?: ExplorerEntityHrefOptions) => {
+  const search = new URLSearchParams();
+  if (options?.tab) search.set('tab', options.tab);
+  if (options?.ref) search.set('ref', JSON.stringify(options.ref));
+  const query = search.toString();
+
+  return query ? `${href}?${query}` : href;
+};
+
 export const createExplorerRoutes = (basePath = ''): ExplorerRoutes => {
   const normalizedBasePath = normalizeExplorerBasePath(basePath);
 
@@ -61,7 +71,10 @@ export const createExplorerRoutes = (basePath = ''): ExplorerRoutes => {
     tasks: getExplorerCollectionPath(normalizedBasePath, 'tasks'),
     events: getExplorerCollectionPath(normalizedBasePath, 'events'),
     entity: (entityName, options) =>
-      withExplorerTab(joinExplorerPath(normalizedBasePath, 'entities', entityName), options),
+      withExplorerEntityOptions(
+        joinExplorerPath(normalizedBasePath, 'entities', entityName),
+        options,
+      ),
     operation: (operationId, options) =>
       withExplorerTab(joinExplorerPath(normalizedBasePath, 'operations', operationId), options),
     task: (taskId, options) =>

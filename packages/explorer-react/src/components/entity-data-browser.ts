@@ -45,9 +45,12 @@ export function useExplorerEntityDataBrowser({
   entity,
   initialRef,
 }: UseExplorerEntityDataBrowserOptions) {
-  const initialRefEntry = Object.entries(initialRef ?? {}).find(([field]) =>
-    entity.fields.some(candidate => candidate.name === field),
-  );
+  const initialRefEntries = Object.entries(initialRef ?? {});
+  const initialRefEntry =
+    initialRefEntries.length === 1 &&
+    entity.fields.some(candidate => candidate.name === initialRefEntries[0]![0])
+      ? initialRefEntries[0]
+      : undefined;
   const defaultFilterField = initialRefEntry?.[0] ?? getDefaultFilterField(entity);
   const defaultFilterOperator = initialRefEntry ? 'equals' : 'contains';
   const defaultFilterValue = initialRefEntry ? String(initialRefEntry[1]) : '';
