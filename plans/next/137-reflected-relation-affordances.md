@@ -22,10 +22,14 @@ eligibility constraints, and the distinction between direct Relations and Associ
 4. Let Explorer render valid connections and disable invalid graph gestures with an explanation.
 5. Give agents the same action vocabulary and evidence rather than bespoke tool descriptions.
 6. Define the minimum headless UI contract for relation pickers, connect/disconnect actions, and
-   optimistic reconciliation from Relationship Deltas.
-7. Explore whether required participant Refs and identity provide enough evidence to reflect an
-   ordinary Entity as an Association Entity; add no marker or subtype until inference proves
-   insufficient.
+   optimistic reconciliation from Relationship Deltas plus Applied Outcome identity. Define
+   command/outcome correlation, duplicate suppression, and out-of-order handling through Plans 135
+   and 132. Revision metadata is used only when the runtime guarantees it; the Delta remains the
+   canonical relation, source, target, added, and removed facts.
+7. Represent Association Entity classification unambiguously through explicit role metadata or
+   `unknown`. Required participant Refs, identity, and locators are useful evidence but never enough
+   to classify an ordinary Entity automatically. This role is metadata, not a subtype or shared
+   mutation lifecycle.
 
 ## Non-Goals
 
@@ -40,8 +44,12 @@ eligibility constraints, and the distinction between direct Relations and Associ
 - [ ] Available verbs follow cardinality and canonical forward/inverse identity.
 - [ ] Eligibility explanations are stable and safe to expose.
 - [ ] Authority-dependent actions remain visibly undecided until evaluated by the server.
-- [ ] Relationship Deltas provide deterministic reconciliation evidence.
-- [ ] Association Entity reflection preserves Entity identity, attributes, and lifecycle.
+- [ ] Optimistic consumers correlate commands and outcomes, suppress duplicates, and handle
+      out-of-order delivery using Plans 135/132 without requiring unavailable revision metadata.
+- [ ] Relationship Deltas preserve canonical relation/source/target and exact added/removed facts.
+- [ ] Association Entity reflection uses explicit role metadata or remains `unknown`, preserves
+      Entity identity, attributes, and lifecycle, and does not misclassify ordinary Ref-bearing
+      Entities.
 - [ ] A small Explorer proof and a framework-agnostic headless proof consume the same metadata.
 
 ## Open Questions
@@ -49,4 +57,5 @@ eligibility constraints, and the distinction between direct Relations and Associ
 1. Are affordances static model metadata, runtime capability projections, or a composition of both?
 2. Which policy facts can be reflected without creating an authorization oracle?
 3. How should generated clients expose affordance metadata without increasing their runtime weight?
-4. Is Association Entity classification inferable, declared as a role, or purely caller-owned?
+4. What is the smallest explicit Association Entity role metadata that improves tooling without
+   creating a public subtype?

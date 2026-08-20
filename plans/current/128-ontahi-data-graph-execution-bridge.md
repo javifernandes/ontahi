@@ -10,10 +10,12 @@ Source commit: `67713696`
 
 ## Summary
 
-Let the same Ontahi Selection, Query, Entity Command, or Relationship Command execute through the
-runtime available at the call site. A browser runtime with safe storage access may lower the graph
-program directly. A browser whose storage is server-only may transport that graph program to a
-server runtime and receive the same result without requiring a wrapper Domain Operation.
+Let the same Ontahi Selection, Query, Entity Command, or Relationship Command execute when the
+runtime at the call site advertises the required capability. A browser runtime with safe storage
+access may lower the graph program directly. A browser whose storage is server-only may transport
+supported graph programs to a server runtime without requiring a wrapper Domain Operation.
+Relationship Commands are the first supported remote write; generic Entity Commands remain
+local/direct until their authority, affected-set, and outcome contracts are defined.
 
 A Domain Operation remains the language for named domain behavior, invariants, side effects,
 contracts, durable execution, and intent. It should not be a mandatory transport envelope around
@@ -34,7 +36,9 @@ await visibleTodos.update({ completed: true }).run();
 
 Those statements already describe complete data-graph programs. Whether they lower to Supabase in
 the browser or cross a server boundary before lowering to PostgreSQL is an execution-topology
-decision, not additional domain meaning.
+decision, not additional domain meaning. The Query may currently take either path. The Entity update
+requires a direct mutation capability; it must fail explicitly rather than imply an unsupported
+remote fallback.
 
 Related work:
 
@@ -56,7 +60,7 @@ Related work:
 flowchart LR
   Code["Ubiquitous graph code\nSelection / Query / Entity Command / Relationship Command"] --> Runtime{"Bound graph runtime"}
   Runtime -->|direct capability| Direct["Storage adapter\nSupabase / local / embedded"]
-  Runtime -->|remote capability| Bridge["Data Graph bridge"]
+  Runtime -->|supported remote capability| Bridge["Data Graph bridge\nQueries + Relationship Commands"]
   Bridge --> Boundary["Server graph boundary\nvalidation + policy + authority"]
   Boundary --> ServerAdapter["Server storage adapter\nPostgreSQL / MySQL / other"]
 ```
@@ -74,9 +78,11 @@ merely because it crosses a process boundary.
 
 ## Scope
 
-1. Define canonical transport-safe Query, Entity Command, and Relationship Command request forms.
-2. Bind `Selection.run()`, shaped reads, Entity Commands, and Relationship Commands to either direct
-   or remote runtimes.
+1. Define canonical transport-safe request forms incrementally: Queries and Relationship Commands
+   first, then generic Entity Commands after their authority and outcome contracts exist.
+2. Bind `Selection.run()`, shaped reads, Entity Commands, and Relationship Commands to runtimes that
+   advertise the matching direct or remote capability. Generic Entity Commands currently require a
+   direct capability.
 3. Define a server graph dispatcher independently from HTTP framework adapters.
 4. Model graph access policy independently from transport choice.
 5. Preserve authority, validation, cardinality, result, failure, cache, and observability semantics
@@ -185,7 +191,7 @@ await staleTodos.update({ archived: true }).run();
 The configured runtime chooses among capabilities:
 
 1. lower directly through a local/browser storage adapter;
-2. serialize and invoke a remote graph executor;
+2. serialize and invoke a remote graph executor when that program variant is supported;
 3. reject execution because no compatible or authorized capability exists;
 4. later route different Entity segments through different executors.
 
@@ -463,7 +469,8 @@ left to the next slice.
 
 1. A Domain Operation is domain behavior, not a required transport wrapper.
 2. Selection, Query, and Command are provider-neutral programs before they are execution requests.
-3. Runtime binding chooses direct versus remote execution without changing call-site semantics.
+3. Runtime binding chooses among advertised direct and remote capabilities without changing
+   call-site semantics; unsupported generic remote Entity Commands fail explicitly.
 4. Remote graph access is policy-controlled and default-deny; it is not an arbitrary RPC or SQL
    endpoint.
 5. Authority and policy are independent from transport, while enforcement occurs at the

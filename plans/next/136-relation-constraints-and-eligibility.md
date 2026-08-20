@@ -29,9 +29,13 @@ identity, not an executable closure transported to the server.
 2. Server evaluation is authoritative. Client evaluation is advisory UX and never authorization.
 3. Principal-, secret-, external-service-, time-, or coordination-dependent rules belong to Policy
    or Domain Operations unless their inputs become explicit portable semantic facts.
-4. A constraint rejection is explainable evidence, not an arbitrary thrown exception.
+4. A constraint rejection is a versioned, canonical JSON-safe descriptor with a stable code, safe
+   parameters, and explicit redaction rules, not an arbitrary thrown exception.
 5. Constraints apply equally to forward and inverse authoring because both normalize to one
    canonical Relation identity.
+6. Client or preflight evaluation is only guidance. Every state-dependent constraint is enforced or
+   re-checked inside the same transaction or serialization boundary that applies the Relationship
+   Command.
 
 ## First Slice
 
@@ -39,8 +43,13 @@ identity, not an executable closure transported to the server.
 2. Define a minimal AST by reusing Selection predicate vocabulary where its semantics truly match.
 3. Define evaluation inputs, missing-data behavior, and stable rejection reasons.
 4. Evaluate the same constraint before in-memory Relationship Command application.
-5. Reflect the constraint without leaking confidential values or authority-only facts.
-6. Prove forward/inverse normalization and Selection-valued batch behavior.
+5. Re-check state-dependent constraints atomically with adapter-backed mutation rather than relying
+   on a time-of-check/time-of-use preflight.
+6. Define concurrent conflict detection and whether each conflict fails, retries under a bounded
+   policy, or returns a structured stale/conflict outcome.
+7. Reflect constraints and rejection descriptors without leaking confidential values or
+   authority-only facts.
+8. Prove forward/inverse normalization and Selection-valued batch behavior.
 
 ## Non-Goals
 
@@ -55,10 +64,14 @@ identity, not an executable closure transported to the server.
 - [ ] Constraints have a canonical JSON-safe representation.
 - [ ] The model distinguishes eligibility, authorization, and coordinated domain invariants.
 - [ ] Server execution remains authoritative and default-deny policy still applies independently.
-- [ ] Rejections carry stable, reflectable reasons suitable for UI and agents.
+- [ ] Rejections use a versioned, canonical JSON-safe descriptor with a stable code, safe
+      parameters, and explicit redaction rules shared by Explorer, agents, and headless UI.
 - [ ] Forward and inverse commands enforce the same canonical constraints.
 - [ ] Batch commands define all-or-nothing, empty-selection, and affected-set semantics explicitly.
-- [ ] At least one adapter-backed proof evaluates eligibility without provider-specific model syntax.
+- [ ] State-dependent constraints are enforced atomically with mutation; concurrent conflicts have
+      explicit detection, retry, and failure semantics.
+- [ ] At least one adapter-backed proof evaluates and enforces eligibility without provider-specific
+      model syntax.
 
 ## Open Questions
 
@@ -68,3 +81,4 @@ identity, not an executable closure transported to the server.
 3. How does a UI distinguish definitely allowed, definitely denied, and server-decision-required?
 4. Can constraints expose parameterized reasons without leaking inaccessible graph facts?
 5. Which constraints compile into guarded storage statements and which require coordinated reads?
+6. Which conflicts are safe to retry automatically, and which require a caller-visible decision?
