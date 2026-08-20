@@ -1,10 +1,12 @@
 # 137. Reflected Relation Affordances For Explorer, Agents, And Headless UI
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/137-reflected-relation-affordances`
 
-Depends on: [136. Relation Constraints And Eligibility Semantics](136-relation-constraints-and-eligibility.md)
+Depends on: [136. Relation Constraints And Eligibility Semantics](../next/136-relation-constraints-and-eligibility.md)
+
+Completed child: [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md)
 
 ## Summary
 
@@ -37,6 +39,15 @@ eligibility constraints, and the distinction between direct Relations and Associ
 2. Do not expose inaccessible Entity fields or population facts through reflection.
 3. Do not let reflected affordances bypass runtime policy.
 4. Do not collapse Association Entity lifecycle into primitive Relation mutation.
+
+## Execution Slices
+
+1. [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md) reflects and
+   presents static Relation semantics, portable Ref identity, and authorized Query-backed related
+   data without depending on Plan 136 or exposing mutation affordances.
+2. Plan 136 later contributes portable eligibility and rejection metadata.
+3. Plan 78 contributes authority decisions; Plan 128 contributes remote execution; Plan 135 and
+   Plan 132 contribute optimistic outcome reconciliation.
 
 ## Acceptance Checklist
 

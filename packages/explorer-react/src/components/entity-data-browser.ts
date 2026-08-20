@@ -38,16 +38,25 @@ const getFallbackColumns = (entity: ExplorerEntityDetail): ReflectedEntityDataCo
 
 type UseExplorerEntityDataBrowserOptions = {
   entity: ExplorerEntityDetail;
+  initialRef?: Record<string, unknown>;
 };
 
-export function useExplorerEntityDataBrowser({ entity }: UseExplorerEntityDataBrowserOptions) {
-  const defaultFilterField = getDefaultFilterField(entity);
+export function useExplorerEntityDataBrowser({
+  entity,
+  initialRef,
+}: UseExplorerEntityDataBrowserOptions) {
+  const initialRefEntry = Object.entries(initialRef ?? {}).find(([field]) =>
+    entity.fields.some(candidate => candidate.name === field),
+  );
+  const defaultFilterField = initialRefEntry?.[0] ?? getDefaultFilterField(entity);
+  const defaultFilterOperator = initialRefEntry ? 'equals' : 'contains';
+  const defaultFilterValue = initialRefEntry ? String(initialRefEntry[1]) : '';
   const defaultSortField = getDefaultSortField(entity);
   const [search, setSearchState] = useState('');
   const [filterField, setFilterFieldState] = useState(defaultFilterField);
   const [filterOperator, setFilterOperatorState] =
-    useState<ReflectedEntityDataFilterOperator>('contains');
-  const [filterValue, setFilterValueState] = useState('');
+    useState<ReflectedEntityDataFilterOperator>(defaultFilterOperator);
+  const [filterValue, setFilterValueState] = useState(defaultFilterValue);
   const [sortField, setSortFieldState] = useState(defaultSortField);
   const [sortDirection, setSortDirectionState] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -56,12 +65,18 @@ export function useExplorerEntityDataBrowser({ entity }: UseExplorerEntityDataBr
   useEffect(() => {
     setSearchState('');
     setFilterFieldState(defaultFilterField);
-    setFilterOperatorState('contains');
-    setFilterValueState('');
+    setFilterOperatorState(defaultFilterOperator);
+    setFilterValueState(defaultFilterValue);
     setSortFieldState(defaultSortField);
     setSortDirectionState('desc');
     setPage(1);
-  }, [defaultFilterField, defaultSortField, entity.name]);
+  }, [
+    defaultFilterField,
+    defaultFilterOperator,
+    defaultFilterValue,
+    defaultSortField,
+    entity.name,
+  ]);
 
   const selectedFilterField = useMemo(
     () => entity.fields.find(field => field.name === filterField),

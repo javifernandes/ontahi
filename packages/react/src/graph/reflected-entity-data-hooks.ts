@@ -1,6 +1,10 @@
 'use client';
 
-import type { ReflectedEntityDataQuery, ReflectedEntityDataResult } from '@ontahi/core/data-graph';
+import type {
+  ReflectedEntityDataQuery,
+  ReflectedEntityDataResult,
+  ReflectedRelatedEntityDataQuery,
+} from '@ontahi/core/data-graph';
 import {
   useQuery,
   type QueryKey,
@@ -8,7 +12,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { useReflectedEntityDataReader } from './context.js';
+import { useReflectedEntityDataReader, useReflectedRelatedEntityDataReader } from './context.js';
 
 export const getReflectedEntityDataQueryKey = (query: ReflectedEntityDataQuery): QueryKey => [
   'graph',
@@ -33,5 +37,22 @@ export function useReflectedEntityDataQuery(
     ...options,
     queryKey: options?.queryKey ?? getReflectedEntityDataQueryKey(query),
     queryFn: () => reader.readEntityData(query),
+  });
+}
+
+export const getReflectedRelatedEntityDataQueryKey = (
+  query: ReflectedRelatedEntityDataQuery,
+): QueryKey => ['graph', 'reflected-related-entity-data', query];
+
+export function useReflectedRelatedEntityDataQuery(
+  query: ReflectedRelatedEntityDataQuery,
+  options?: ReflectedEntityDataQueryOptions,
+): UseQueryResult<ReflectedEntityDataResult, Error> {
+  const reader = useReflectedRelatedEntityDataReader();
+
+  return useQuery({
+    ...options,
+    queryKey: options?.queryKey ?? getReflectedRelatedEntityDataQueryKey(query),
+    queryFn: () => reader.readRelatedEntityData(query),
   });
 }

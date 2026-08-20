@@ -96,6 +96,20 @@ export const ExplorerEntityStructurePanel = ({
                   entityName={relation.target}
                   className='font-mono text-xs text-foreground hover:text-primary hover:underline'
                 />
+                {relation.direction ? <Badge>{relation.direction}</Badge> : null}
+                {relation.provenance === 'derived-inverse' ? <Badge>derived inverse</Badge> : null}
+                {relation.cardinality ? <Badge>{relation.cardinality}</Badge> : null}
+                {relation.cardinality === 'one' ? (
+                  <Badge>{relation.required ? 'required' : 'nullable'}</Badge>
+                ) : null}
+                {relation.structuralVerbs?.length ? (
+                  <span
+                    className='font-mono text-xs text-muted-foreground'
+                    aria-label={`Structural verbs: ${relation.structuralVerbs.join(', ')}`}
+                  >
+                    {relation.structuralVerbs.join(' · ')}
+                  </span>
+                ) : null}
               </div>
             </div>
           ))}

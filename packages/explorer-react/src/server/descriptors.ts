@@ -2,7 +2,10 @@ import {
   field,
   graphSchema,
   inferEntityRefInputLocatorFieldGroups,
+  reflectSchemaRelations,
   value,
+  type AnyEntityDefinition,
+  type ReflectedSchemaRelation,
 } from '@ontahi/core/data-graph';
 
 import type {
@@ -40,12 +43,25 @@ export type ExplorerEntityLike = {
   name?: string;
   entityName?: string;
   fields?: Record<string, unknown>;
+  refLocators?: Record<string, { fields?: readonly string[] }>;
+  identityLocatorName?: string;
+  displayMetadata?: {
+    primary?: unknown;
+    secondary?: unknown;
+    search?: unknown;
+  };
   relations?: Record<
     string,
     {
       relationKind?: string;
+      sourceField?: string;
+      targetField?: string;
+      nullable?: boolean;
       target?: {
         name?: string;
+        refLocators?: Record<string, { fields?: readonly string[] }>;
+        identityLocatorName?: string;
+        displayMetadata?: ExplorerEntityLike['displayMetadata'];
       };
     }
   >;
@@ -64,6 +80,7 @@ export type ExplorerEntityFieldLike = {
   fieldType?: string;
   nullable?: boolean;
   enumValues?: readonly string[];
+  target?: ExplorerEntityLike;
 };
 
 export type ExplorerGraphEntitySummaryLike = {
@@ -191,6 +208,116 @@ export type BuildExplorerSnapshotInput = {
 };
 
 const getEntityShape = (entity: unknown): ExplorerEntityLike => entity as ExplorerEntityLike;
+
+const getEntityIdentity = (entity: ExplorerEntityLike | undefined) => {
+  const name = entity?.identityLocatorName;
+  const fields = name ? entity?.refLocators?.[name]?.fields : undefined;
+
+  return name && fields ? { name, fields: [...fields] } : undefined;
+};
+
+const getEntityRole = (shape: ExplorerEntityLike): ExplorerEntityDetail['entityRole'] =>
+  shape.kind === 'graph-relation' && shape.relation?.source && shape.relation.target
+    ? {
+        kind: 'association',
+        participants: [shape.relation.source, shape.relation.target],
+      }
+    : { kind: 'unknown' };
+
+const describeRelation = (
+  source: ExplorerEntityLike,
+  name: string,
+  relation: NonNullable<ExplorerEntityLike['relations']>[string],
+): ExplorerEntityDetail['relations'][number] => {
+  const kind =
+    relation.relationKind === 'belongsTo' ||
+    relation.relationKind === 'hasMany' ||
+    relation.relationKind === 'manyToMany'
+      ? relation.relationKind
+      : 'relation';
+  const direction = kind === 'hasMany' ? 'inverse' : 'forward';
+  const cardinality = kind === 'belongsTo' ? 'one' : 'many';
+  const nullable = kind === 'belongsTo' ? Boolean(relation.nullable) : false;
+  const structuralVerbs =
+    kind === 'belongsTo'
+      ? nullable
+        ? ['assign', 'clear']
+        : ['assign']
+      : kind === 'hasMany' || kind === 'manyToMany'
+        ? ['add', 'remove']
+        : [];
+  const canonicalIdentity =
+    kind === 'belongsTo' && relation.sourceField
+      ? {
+          sourceEntityName: source.name ?? 'Unknown',
+          fieldName: relation.sourceField,
+          targetEntityName: relation.target?.name ?? 'Unknown',
+        }
+      : kind === 'hasMany' && relation.targetField
+        ? {
+            sourceEntityName: relation.target?.name ?? 'Unknown',
+            fieldName: relation.targetField,
+            targetEntityName: source.name ?? 'Unknown',
+          }
+        : kind === 'manyToMany'
+          ? {
+              sourceEntityName: source.name ?? 'Unknown',
+              relationName: name,
+              targetEntityName: relation.target?.name ?? 'Unknown',
+              cardinality: 'many-to-many' as const,
+            }
+          : undefined;
+
+  return {
+    name,
+    kind,
+    target: relation.target?.name ?? 'Unknown',
+    targetIdentity: getEntityIdentity(relation.target),
+    targetDisplay: describeExplorerEntityDisplay(relation.target),
+    direction,
+    cardinality,
+    nullable,
+    required: kind === 'belongsTo' && !nullable,
+    structuralVerbs:
+      structuralVerbs as ExplorerEntityDetail['relations'][number]['structuralVerbs'],
+    ...(canonicalIdentity ? { canonicalIdentity } : {}),
+  };
+};
+
+const describeReflectedRelation = (
+  entities: readonly unknown[],
+  relation: ReflectedSchemaRelation,
+): ExplorerEntityDetail['relations'][number] => {
+  const target = entities
+    .map(getEntityShape)
+    .find(candidate => candidate.name === relation.targetEntityName);
+  const declaredSource = entities
+    .map(getEntityShape)
+    .find(candidate => candidate.name === relation.declaredOnEntityName);
+  const declaredRelation = declaredSource?.relations?.[relation.declaredRelationName];
+  const canonicalIdentity =
+    declaredSource && declaredRelation
+      ? describeRelation(declaredSource, relation.declaredRelationName, declaredRelation)
+          .canonicalIdentity
+      : undefined;
+
+  return {
+    name: relation.name,
+    provenance: relation.provenance,
+    declaredOnEntityName: relation.declaredOnEntityName,
+    declaredRelationName: relation.declaredRelationName,
+    kind: relation.kind,
+    target: relation.targetEntityName,
+    targetIdentity: getEntityIdentity(target),
+    targetDisplay: describeExplorerEntityDisplay(target),
+    direction: relation.direction,
+    cardinality: relation.cardinality,
+    nullable: relation.nullable,
+    required: relation.required,
+    structuralVerbs: relation.structuralVerbs,
+    ...(canonicalIdentity ? { canonicalIdentity } : {}),
+  };
+};
 
 const getEntityRelationOwner = (
   shape: ExplorerEntityLike,
@@ -404,13 +531,14 @@ export const listUniqueExplorerEntities = (entities: readonly unknown[]) =>
 export const describeExplorerEntity = (
   entity: unknown,
   summary?: ExplorerGraphEntitySummaryLike,
+  reflectedRelationCount?: number,
 ): ExplorerEntityDescriptor => {
   const shape = getEntityShape(entity);
 
   return {
     name: shape.name ?? 'Unknown',
     fieldCount: Object.keys(shape.fields ?? {}).length,
-    relationCount: Object.keys(shape.relations ?? {}).length,
+    relationCount: reflectedRelationCount ?? Object.keys(shape.relations ?? {}).length,
     graphOperationCount: summary?.graphOperationNames?.length ?? 0,
     domainOperationCount: summary?.domainOperationNames?.length ?? 0,
     durableOperationCount: summary?.durableOperationNames?.length ?? 0,
@@ -426,9 +554,15 @@ export const describeExplorerEntities = (input: {
   graphSummary?: ExplorerGraphSummaryLike;
 }): ExplorerEntityDescriptor[] => {
   const summaries = summaryByEntityName(input.graphSummary);
+  const relations = reflectSchemaRelations(input.entities as readonly AnyEntityDefinition[]);
 
   return listUniqueExplorerEntities(input.entities).map(entity =>
-    describeExplorerEntity(entity, summaries.get(getEntityShape(entity).name ?? '')),
+    describeExplorerEntity(
+      entity,
+      summaries.get(getEntityShape(entity).name ?? ''),
+      relations.filter(relation => relation.subjectEntityName === getEntityShape(entity).name)
+        .length,
+    ),
   );
 };
 
@@ -449,23 +583,36 @@ export const getExplorerEntityDetail = (
   }
 
   const shape = getEntityShape(entity);
+  const reflectedRelations = reflectSchemaRelations(
+    input.entities as readonly AnyEntityDefinition[],
+  ).filter(relation => relation.subjectEntityName === shape.name);
   const entityDetail = {
-    ...describeExplorerEntity(entity, summaries.get(shape.name ?? '')),
+    ...describeExplorerEntity(entity, summaries.get(shape.name ?? ''), reflectedRelations.length),
+    identity: getEntityIdentity(shape),
+    entityRole: getEntityRole(shape),
     fields: Object.entries(shape.fields ?? {}).map(([name, field]) => {
       const fieldShape = field as ExplorerEntityFieldLike;
+      const referenceTarget = fieldShape.fieldType === 'reference' ? fieldShape.target : undefined;
 
       return {
         name,
         type: fieldShape.fieldType ?? 'unknown',
         nullable: Boolean(fieldShape.nullable),
         enumValues: fieldShape.enumValues ? [...fieldShape.enumValues] : undefined,
+        ...(referenceTarget?.name
+          ? {
+              reference: {
+                entityName: referenceTarget.name,
+                identity: getEntityIdentity(referenceTarget),
+                display: describeExplorerEntityDisplay(referenceTarget),
+              },
+            }
+          : {}),
       };
     }),
-    relations: Object.entries(shape.relations ?? {}).map(([name, relation]) => ({
-      name,
-      kind: relation.relationKind ?? 'relation',
-      target: relation.target?.name ?? 'Unknown',
-    })),
+    relations: reflectedRelations.map(relation =>
+      describeReflectedRelation(input.entities, relation),
+    ),
     diagram: '',
   };
 

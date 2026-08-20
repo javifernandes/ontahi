@@ -37,6 +37,11 @@ const entity: ExplorerEntityDetail = {
       name: 'collaborators',
       kind: 'hasMany',
       target: 'Profile',
+      direction: 'inverse',
+      cardinality: 'many',
+      nullable: false,
+      required: false,
+      structuralVerbs: ['add', 'remove'],
     },
   ],
   relationOwner: {
@@ -77,6 +82,9 @@ describe('Explorer entity detail panels', () => {
     expect(screen.getByRole('link', { name: 'Profile' }).getAttribute('href')).toBe(
       '/entities/Profile',
     );
+    expect(screen.getByText('inverse')).toBeTruthy();
+    expect(screen.getByText('many')).toBeTruthy();
+    expect(screen.getByText('add · remove')).toBeTruthy();
   });
 
   it('supports a configured Explorer mount path for entity relations', () => {
@@ -89,6 +97,28 @@ describe('Explorer entity detail panels', () => {
     expect(screen.getByRole('link', { name: 'Profile' }).getAttribute('href')).toBe(
       '/internal/graph/entities/Profile',
     );
+  });
+
+  it('labels structural inverse endpoints as derived metadata', () => {
+    render(
+      <ExplorerEntityStructurePanel
+        entity={{
+          ...entity,
+          relations: [
+            {
+              ...entity.relations[0],
+              name: 'TodoItem.tags',
+              provenance: 'derived-inverse',
+              structuralVerbs: [],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('TodoItem.tags')).toBeTruthy();
+    expect(screen.getByText('derived inverse')).toBeTruthy();
+    expect(screen.queryByText('add · remove')).toBeNull();
   });
 
   it('renders event detail with package-owned related entity links', () => {

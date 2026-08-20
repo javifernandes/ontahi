@@ -86,6 +86,23 @@ describe('useExplorerEntityDataBrowser', () => {
     });
   });
 
+  it('loads a linked Entity instance through its portable locator', async () => {
+    const reader = {
+      readEntityData: vi.fn().mockResolvedValue(buildResult()),
+    };
+    renderHook(() => useExplorerEntityDataBrowser({ entity, initialRef: { id: 'book-1' } }), {
+      wrapper: createWrapper(reader),
+    });
+
+    await waitFor(() =>
+      expect(reader.readEntityData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: [{ field: 'id', operator: 'equals', value: 'book-1' }],
+        }),
+      ),
+    );
+  });
+
   it('normalizes unsupported contains filters and resets pagination when filters change', async () => {
     const reader = {
       readEntityData: vi.fn().mockResolvedValue(buildResult({ hasNextPage: true })),

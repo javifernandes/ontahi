@@ -1,4 +1,7 @@
-import type { ReflectedEntityDataReader } from '@ontahi/core/data-graph';
+import type {
+  ReflectedEntityDataReader,
+  ReflectedRelatedEntityDataReader,
+} from '@ontahi/core/data-graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -6,8 +9,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   getReflectedEntityDataQueryKey,
+  getReflectedRelatedEntityDataQueryKey,
   OntahiGraphProvider,
   useReflectedEntityDataQuery,
+  useReflectedRelatedEntityDataQuery,
 } from '../../src/graph/index.js';
 
 const createWrapper = (reader: ReflectedEntityDataReader) => {
@@ -73,6 +78,50 @@ describe('reflected entity data hooks', () => {
     expect(getReflectedEntityDataQueryKey(query)).toEqual([
       'graph',
       'reflected-entity-data',
+      query,
+    ]);
+  });
+
+  it('reads related data only through the registered Query-backed capability', async () => {
+    const query = {
+      source: { kind: 'entity-ref' as const, entityName: 'Book', locator: { id: 'book-1' } },
+      relationName: 'collaborators',
+      sourceEntityName: 'Book',
+      targetEntityName: 'Profile',
+    };
+    const result = {
+      entityName: 'Profile',
+      columns: [{ field: 'id', type: 'id', nullable: false }],
+      rows: [{ id: 'profile-1' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    };
+    const relatedReader: ReflectedRelatedEntityDataReader = {
+      readRelatedEntityData: vi.fn().mockResolvedValue(result),
+    };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <OntahiGraphProvider
+          runtime={{ name: 'test-runtime' }}
+          reflectedRelatedEntityDataReader={relatedReader}
+        >
+          {children}
+        </OntahiGraphProvider>
+      </QueryClientProvider>
+    );
+    const { result: hook } = renderHook(() => useReflectedRelatedEntityDataQuery(query), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(hook.current.data).toEqual(result));
+    expect(relatedReader.readRelatedEntityData).toHaveBeenCalledWith(query);
+    expect(getReflectedRelatedEntityDataQueryKey(query)).toEqual([
+      'graph',
+      'reflected-related-entity-data',
       query,
     ]);
   });

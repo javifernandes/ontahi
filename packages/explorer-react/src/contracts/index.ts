@@ -37,16 +37,44 @@ export type ExplorerEntityDisplayDescriptor = ReflectedEntityDisplayDescriptor;
 
 export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
   diagram: string;
+  identity?: {
+    name: string;
+    fields: string[];
+  };
+  entityRole?: { kind: 'association'; participants: string[] } | { kind: 'unknown' };
   fields: Array<{
     name: string;
     type: string;
     nullable: boolean;
     enumValues?: string[];
+    reference?: {
+      entityName: string;
+      identity?: { name: string; fields: string[] };
+      display?: ExplorerEntityDisplayDescriptor;
+    };
   }>;
   relations: Array<{
     name: string;
-    kind: string;
+    provenance?: 'declared' | 'derived-inverse';
+    declaredOnEntityName?: string;
+    declaredRelationName?: string;
+    kind: 'belongsTo' | 'hasMany' | 'manyToMany' | 'relation';
     target: string;
+    targetIdentity?: { name: string; fields: string[] };
+    targetDisplay?: ExplorerEntityDisplayDescriptor;
+    direction?: 'forward' | 'inverse';
+    cardinality?: 'one' | 'many';
+    nullable?: boolean;
+    required?: boolean;
+    structuralVerbs?: Array<'assign' | 'clear' | 'add' | 'remove'>;
+    canonicalIdentity?:
+      | { sourceEntityName: string; fieldName: string; targetEntityName: string }
+      | {
+          sourceEntityName: string;
+          relationName: string;
+          targetEntityName: string;
+          cardinality: 'many-to-many';
+        };
   }>;
 };
 

@@ -205,6 +205,16 @@ describe('recursive entity views', () => {
     }>();
   });
 
+  it('infers many-to-many relation views as collections', () => {
+    const Tag = entity('Tag', { id: field.id(), name: field.string() });
+    const Todo = entity('Todo', { id: field.id() }).manyToMany('tags', Tag);
+    const TodoWithTags = Todo.view('TodoWithTags', { tags: { id: true, name: true } });
+
+    expectTypeOf<InferEntityViewResult<typeof TodoWithTags>>().toEqualTypeOf<{
+      tags: { id: string; name: string }[];
+    }>();
+  });
+
   it('does not hydrate a cyclic graph beyond the explicitly authored finite shape', () => {
     const { Trip } = defineTripGraph();
     const Stops = Trip.view('Stops', {

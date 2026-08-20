@@ -17,6 +17,9 @@ relatedPlans:
   - ontahi://plans/128e-relationship-command-runtime-routing
   - ontahi://plans/135-applied-mutation-outcomes-and-reactions
   - ontahi://plans/135a-selection-valued-many-to-many-core
+  - ontahi://plans/136-relation-constraints-and-eligibility
+  - ontahi://plans/137-reflected-relation-affordances
+  - ontahi://plans/137a-read-only-relation-explorer
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -168,3 +171,21 @@ Commands. The in-memory runtime implements it when given authoritative Entity de
 remote runtime can encode the same canonical command through an injected transport and validate the
 returned delta. Runtimes without the focused capability fail explicitly instead of lowering the
 intent to an Entity patch.
+
+Static Relation reflection is distinct from authority-dependent runtime affordances. A reflected
+descriptor can expose canonical identity, direction, target Entity, cardinality, nullability, and
+structural verbs without claiming that the current Principal may execute them. Explorer consumes
+that contract read-only.
+
+Reflection covers the whole structural edge, not only the Entity member on which it was declared.
+When no equivalent explicit counterpart exists, Core derives an inverse endpoint identified by the
+canonical declaring Entity and Relation name. That endpoint is navigable read-only topology, but it
+does not invent a domain member name, structural verbs, or an executable Relation root. An explicit
+counterpart remains the way to give the inverse endpoint a stable programmatic name and behavior.
+
+A received Ref is portable Entity identity and can be rendered as a locator-aware link without
+loading the related Entity. Materializing related attributes or to-many instances is a graph read:
+Explorer delegates it to a host-provided Relation-root Query capability that must execute through
+the configured runtime and graph-read policy. Explorer does not lower provider queries or duplicate
+authorization. Association Entities remain ordinary Entities; tooling reports an explicit
+association role only when metadata says so and otherwise classifies the role as `unknown`.
