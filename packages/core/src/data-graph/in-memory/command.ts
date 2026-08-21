@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { hasOwn } from '../../value/object.js';
 import type { GraphCommandSpec } from '../command.js';
+import type { RelationConstraintRejection } from '../definitions.js';
 import {
   liftEntityReferenceRecord,
   lowerEntityReferenceRecord,
@@ -14,6 +15,7 @@ import { applySelectionExpression } from './query.js';
 export type InMemoryDataGraphFailureReason =
   | 'cardinality_mismatch'
   | 'invalid_command'
+  | 'relation_constraint_rejected'
   | 'read_failed'
   | 'mutation_failed';
 
@@ -24,6 +26,7 @@ export class InMemoryDataGraphError extends Error {
     message: string,
     readonly reason: InMemoryDataGraphFailureReason,
     readonly cause?: unknown,
+    readonly rejection?: RelationConstraintRejection,
   ) {
     super(message);
     this.name = 'InMemoryDataGraphError';

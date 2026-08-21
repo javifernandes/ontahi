@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/135-applied-mutation-outcomes-and-reactions
   - ontahi://plans/135a-selection-valued-many-to-many-core
   - ontahi://plans/136-relation-constraints-and-eligibility
+  - ontahi://plans/136a-portable-participant-eligibility-core
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
 migratedFrom: bookops://atlas/model/relation
@@ -104,6 +105,15 @@ and atomic edge application are generic graph/runtime responsibilities. Domain i
 coordinated behavior that cannot be expressed structurally remain with Domain Operations. When the
 relationship has attributes, identity, lifecycle, history, independent policy or effects, more than
 two roles, or participation in further Relations, model it as an ordinary Association Entity.
+
+A Relation may own portable structural eligibility without owning an arbitrary callback. The first
+constraint form applies the existing Selection predicate AST to the target participant of the
+declared Relation and pairs it with a versioned rejection descriptor containing a stable code, safe
+message, and JSON-safe scalar parameters. Static reflection preserves that contract. Authoritative
+in-memory Relationship Command execution evaluates it before `link`; forward and inverse authoring
+therefore enforce the same rule after normalization. Policy remains an independent authorization
+boundary. Aggregate limits, many-to-many batches, provider transactions, and advisory preflight
+remain later Plan 136 work.
 
 For example, an association with its own state remains ordinary Entity lifecycle. The current
 low-level command authoring primitive makes that lifecycle explicit; its spelling is not a settled

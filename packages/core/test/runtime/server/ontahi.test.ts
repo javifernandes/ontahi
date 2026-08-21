@@ -918,7 +918,22 @@ describe('ontahi application composition root', () => {
         id: field.id(),
       },
       relations: {
-        labels: relation.hasMany(BookLabel, { via: 'bookId' }),
+        labels: relation.hasMany(BookLabel, {
+          via: 'bookId',
+          constraints: [
+            {
+              kind: 'participant-selection',
+              participant: 'target',
+              selection: {
+                kind: 'predicate',
+                operator: 'eq',
+                fieldName: 'id',
+                value: 'visible',
+              },
+              rejection: { version: 1, code: 'label_hidden', message: 'Label is hidden.' },
+            },
+          ],
+        }),
       },
     });
 
@@ -926,6 +941,12 @@ describe('ontahi application composition root', () => {
       relationKind: 'hasMany',
       target: BookLabel,
       targetField: 'bookId',
+      constraints: [
+        expect.objectContaining({
+          kind: 'participant-selection',
+          rejection: expect.objectContaining({ code: 'label_hidden' }),
+        }),
+      ],
     });
   });
 

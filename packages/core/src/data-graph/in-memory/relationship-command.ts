@@ -1,6 +1,10 @@
 import { Effect } from 'effect';
 
-import type { AnyEntityDefinition, AnyReferenceFieldDefinition } from '../definitions.js';
+import type {
+  AnyEntityDefinition,
+  AnyReferenceFieldDefinition,
+  RelationDefinition,
+} from '../definitions.js';
 import { isReferenceFieldDefinition } from '../definitions.js';
 import { liftEntityReferenceValue, lowerEntityReferenceValue } from '../reference-field.js';
 import type {
@@ -11,6 +15,7 @@ import type {
 
 import { InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';
+import { applyEntitySelectionExpression } from './query.js';
 
 const findEntity = (entities: readonly AnyEntityDefinition[], name: string) => {
   const entity = entities.find(candidate => candidate.name === name);
@@ -45,8 +50,58 @@ const fact = (
   target,
 });
 
+const canonicalRelationMatches = (
+  declaringEntity: AnyEntityDefinition,
+  relationName: string,
+  relation: RelationDefinition,
+  command: RelationshipCommand,
+) =>
+  (relation.relationKind === 'belongsTo' &&
+    declaringEntity.name === command.relation.sourceEntityName &&
+    relation.target.name === command.relation.targetEntityName &&
+    (relation.sourceField ?? relationName) === command.relation.fieldName) ||
+  (relation.relationKind === 'hasMany' &&
+    declaringEntity.name === command.relation.targetEntityName &&
+    relation.target.name === command.relation.sourceEntityName &&
+    relation.targetField === command.relation.fieldName);
+
+const assertRelationConstraints = (
+  dataset: InMemoryDataset,
+  entities: readonly AnyEntityDefinition[],
+  command: RelationshipCommand,
+) => {
+  if (command.action !== 'link') return;
+
+  for (const declaringEntity of entities) {
+    for (const [relationName, relation] of Object.entries(declaringEntity.relations)) {
+      if (!canonicalRelationMatches(declaringEntity, relationName, relation, command)) continue;
+
+      const participantRef = relation.relationKind === 'hasMany' ? command.source : command.target;
+      if (!participantRef) continue;
+      const participantRows = (dataset[relation.target.name] ?? []).filter(row =>
+        matchesRef(row, participantRef),
+      );
+      for (const constraint of relation.constraints ?? []) {
+        const eligible =
+          participantRows.length === 1 &&
+          applyEntitySelectionExpression(relation.target, participantRows, constraint.selection)
+            .length === 1;
+        if (!eligible) {
+          throw new InMemoryDataGraphError(
+            constraint.rejection.message,
+            'relation_constraint_rejected',
+            undefined,
+            constraint.rejection,
+          );
+        }
+      }
+    }
+  }
+};
+
 type RelationshipMutationContext = {
   dataset: InMemoryDataset;
+  entities: readonly AnyEntityDefinition[];
   command: RelationshipCommand;
   sourceEntity: AnyEntityDefinition;
   targetEntity: AnyEntityDefinition;
@@ -73,6 +128,7 @@ const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
       'cardinality_mismatch',
     );
   }
+  assertRelationConstraints(dataset, context.entities, command);
   const nextValue = lowerEntityReferenceValue(sourceField, command.target);
   if (context.currentTarget && currentValue === nextValue) return { added: [], removed: [] };
   rows[rowIndex] = { ...row, [command.relation.fieldName]: nextValue };
@@ -142,6 +198,7 @@ const execute = (
     : undefined;
   const context: RelationshipMutationContext = {
     dataset,
+    entities,
     command,
     sourceEntity,
     targetEntity,

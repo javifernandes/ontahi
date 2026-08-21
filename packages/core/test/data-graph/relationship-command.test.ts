@@ -133,6 +133,76 @@ describe('relationship commands', () => {
     expect(dataset.Student).toEqual([{ id: 'student-1', course: null }]);
   });
 
+  it('enforces portable target-participant constraints for forward and inverse authoring', async () => {
+    const ConstrainedCourse = entity('ConstrainedCourse', {
+      id: field.id(),
+      name: field.string(),
+    });
+    const ConstrainedStudent = entity('ConstrainedStudent', {
+      id: field.id(),
+      status: field.string(),
+      course: field.nullable(field.ref(ConstrainedCourse)),
+    });
+    ConstrainedCourse.hasMany('students', ConstrainedStudent, {
+      via: 'course',
+      constraints: [
+        {
+          kind: 'participant-selection',
+          participant: 'target',
+          selection: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'status',
+            value: 'active',
+          },
+          rejection: {
+            version: 1,
+            code: 'student_inactive',
+            message: 'Only active students may join a course.',
+          },
+        },
+      ],
+    });
+    const active = createEntityRef(ConstrainedStudent, { id: 'active' });
+    const inactive = createEntityRef(ConstrainedStudent, { id: 'inactive' });
+    const constrainedCourse = createEntityRef(ConstrainedCourse, { id: 'course-1' });
+    const dataset: InMemoryDataset = {
+      ConstrainedCourse: [{ id: 'course-1', name: 'Semantics' }],
+      ConstrainedStudent: [
+        { id: 'active', status: 'active', course: null },
+        { id: 'inactive', status: 'inactive', course: null },
+      ],
+    };
+    const execute = (command: ReturnType<ReturnType<typeof relationship>['assign']>) =>
+      Effect.runPromise(
+        executeInMemoryRelationshipCommandEffect(
+          dataset,
+          [ConstrainedCourse, ConstrainedStudent],
+          command,
+        ).pipe(Effect.either),
+      );
+
+    await expect(
+      execute(relationship(ConstrainedStudent, 'course', inactive).assign(constrainedCourse)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: {
+          version: 1,
+          code: 'student_inactive',
+          message: 'Only active students may join a course.',
+        },
+      },
+    });
+    expect(dataset.ConstrainedStudent?.[1]?.course).toBeNull();
+
+    await expect(
+      execute(relationship(ConstrainedCourse, 'students', constrainedCourse).add(active)),
+    ).resolves.toMatchObject({ _tag: 'Right' });
+    expect(dataset.ConstrainedStudent?.[0]?.course).toBe('course-1');
+  });
+
   it('rejects clearing a required Relation before mutation', async () => {
     const RequiredStudent = entity('RequiredStudent', {
       id: field.id(),

@@ -1,8 +1,10 @@
 # 136. Relation Constraints And Eligibility Semantics
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/136-relation-constraints-and-eligibility`
+
+Completed child: [136a. Portable Participant Eligibility Core](../done/136a-portable-participant-eligibility-core.md)
 
 ## Summary
 
@@ -82,3 +84,10 @@ identity, not an executable closure transported to the server.
 4. Can constraints expose parameterized reasons without leaking inaccessible graph facts?
 5. Which constraints compile into guarded storage statements and which require coordinated reads?
 6. Which conflicts are safe to retry automatically, and which require a caller-visible decision?
+
+## Progress
+
+Plan 136a landed the first portable target-participant Selection constraint, stable versioned
+rejections, static reflection, and authoritative in-memory enforcement shared by forward and
+inverse authoring. Aggregate/cardinality constraints, Selection-valued many-to-many affected-set
+semantics, adapter-backed atomic enforcement, conflicts, and advisory preflight remain open here.
