@@ -46,6 +46,8 @@ import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './opera
 import type { OperationInvocationResult } from './operation-result.js';
 import type { TaskFailure, TaskRunRef } from './tasks.js';
 
+export { relationConstraint } from '../../data-graph/relation-constraint.js';
+
 const ONTAHI_ENTITY_DECLARATION = Symbol('ontahi.entity.declaration');
 const ONTAHI_DIRECT_OPERATION_NAMES = Symbol('ontahi.entity.direct-operation-names');
 declare const ONTAHI_CUSTOM_ENTITY_TYPE: unique symbol;

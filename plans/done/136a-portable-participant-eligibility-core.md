@@ -24,7 +24,7 @@ before applying a link, independently of policy and authoring direction.
 
 ## Scope
 
-1. Add a versioned, portable target-participant Selection constraint to Relation definitions.
+1. Add versioned, portable source/target participant Selection constraints to Relation definitions.
 2. Require a stable code, safe message, and JSON-safe scalar parameters for rejection.
 3. Expose constraints through static Relation reflection.
 4. Enforce constraints on `link` before in-memory mutation.
@@ -60,8 +60,10 @@ Plan 136.
 - Status: done
 - Closed on: 2026-08-21
 - Landed shape:
-  - Core Relation definitions and the server Entity DSL accept a JSON-safe target-participant
-    Selection constraint with a versioned stable rejection;
+  - Core Relation definitions and the server Entity DSL accept JSON-safe source/target participant
+    Selection constraints with versioned stable rejections;
+  - typed `relationConstraint.source(...)` and `.target(...)` factories reduce field-aware builders
+    to the portable contract at schema construction time;
   - static Relation reflection carries the portable constraint unchanged;
   - authoritative in-memory `link` execution evaluates declared forward or inverse constraints
     after participant resolution and before mutation;

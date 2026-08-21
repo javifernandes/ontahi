@@ -65,21 +65,34 @@ const canonicalRelationMatches = (
     relation.target.name === command.relation.sourceEntityName &&
     relation.targetField === command.relation.fieldName);
 
+const constraintParticipantRef = (
+  relation: RelationDefinition,
+  command: RelationshipCommand,
+  participant: 'source' | 'target',
+) => {
+  if (relation.relationKind === 'hasMany') {
+    return participant === 'source' ? command.target : command.source;
+  }
+  return participant === 'source' ? command.source : command.target;
+};
+
 const assertConstraintsForRelation = (
   dataset: InMemoryDataset,
+  declaringEntity: AnyEntityDefinition,
   relation: RelationDefinition,
   command: RelationshipCommand,
 ) => {
-  const participantRef = relation.relationKind === 'hasMany' ? command.source : command.target;
-  if (!participantRef) return;
-  const participantRows = (dataset[relation.target.name] ?? []).filter(row =>
-    matchesRef(row, participantRef),
-  );
-
   for (const constraint of relation.constraints ?? []) {
+    const participantRef = constraintParticipantRef(relation, command, constraint.participant);
+    if (!participantRef) return;
+    const participantEntity =
+      constraint.participant === 'source' ? declaringEntity : relation.target;
+    const participantRows = (dataset[participantEntity.name] ?? []).filter(row =>
+      matchesRef(row, participantRef),
+    );
     const eligible =
       participantRows.length === 1 &&
-      applyEntitySelectionExpression(relation.target, participantRows, constraint.selection)
+      applyEntitySelectionExpression(participantEntity, participantRows, constraint.selection)
         .length === 1;
     if (eligible) continue;
 
@@ -103,7 +116,7 @@ const assertRelationConstraints = (
   for (const declaringEntity of [sourceEntity, targetEntity]) {
     for (const [relationName, relation] of Object.entries(declaringEntity.relations)) {
       if (!canonicalRelationMatches(declaringEntity, relationName, relation, command)) continue;
-      assertConstraintsForRelation(dataset, relation, command);
+      assertConstraintsForRelation(dataset, declaringEntity, relation, command);
     }
   }
 };

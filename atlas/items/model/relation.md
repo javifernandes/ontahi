@@ -107,13 +107,19 @@ relationship has attributes, identity, lifecycle, history, independent policy or
 two roles, or participation in further Relations, model it as an ordinary Association Entity.
 
 A Relation may own portable structural eligibility without owning an arbitrary callback. The first
-constraint form applies the existing Selection predicate AST to the target participant of the
+constraint form applies the existing Selection predicate AST to a source or target participant of the
 declared Relation and pairs it with a versioned rejection descriptor containing a stable code, safe
 message, and JSON-safe scalar parameters. Static reflection preserves that contract. Authoritative
 in-memory Relationship Command execution evaluates it before `link`; forward and inverse authoring
 therefore enforce the same rule after normalization. Policy remains an independent authorization
 boundary. Aggregate limits, many-to-many batches, provider transactions, and advisory preflight
 remain later Plan 136 work.
+
+Application code authors that contract through the typed `relationConstraint.source(...)` and
+`relationConstraint.target(...)` factories. The callback runs only while constructing the schema
+and is immediately reduced to a portable Selection AST; no executable callback becomes Relation
+metadata. Participant names remain relative to the declared Relation, independent of canonical
+command or storage orientation.
 
 For example, an association with its own state remains ordinary Entity lifecycle. The current
 low-level command authoring primitive makes that lifecycle explicit; its spelling is not a settled

@@ -148,6 +148,21 @@ describe('relationship commands', () => {
       constraints: [
         {
           kind: 'participant-selection',
+          participant: 'source',
+          selection: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'name',
+            value: 'Semantics',
+          },
+          rejection: {
+            version: 1,
+            code: 'course_closed',
+            message: 'This course is closed.',
+          },
+        },
+        {
+          kind: 'participant-selection',
           participant: 'target',
           selection: {
             kind: 'predicate',

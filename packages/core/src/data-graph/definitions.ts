@@ -486,7 +486,7 @@ export type PortableSelectionExpression =
 export type RelationParticipantSelectionConstraint = {
   readonly kind: 'participant-selection';
   /** Participant is relative to the Relation declaration, not storage orientation. */
-  readonly participant: 'target';
+  readonly participant: 'source' | 'target';
   readonly selection: PortableSelectionExpression;
   readonly rejection: RelationConstraintRejection;
 };
