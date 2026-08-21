@@ -17,7 +17,7 @@ describe('schema relation reflection', () => {
               kind: 'predicate',
               operator: 'eq',
               fieldName: 'id',
-              value: () => 'not portable',
+              value: (() => 'not portable') as never,
             },
             rejection: { version: 1, code: 'unsafe', message: 'Unsafe.' },
           },

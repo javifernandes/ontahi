@@ -16,6 +16,7 @@ import {
   type RelationDefinition,
   type RelationConstraint,
   type RelationKind,
+  type RelationOptions,
   type EntityRefLocatorFactories,
   type EntityRefLocators,
   type EntityRefInputPublicInput,
@@ -66,10 +67,7 @@ export type OntahiRelationDeclaration<
   constraints?: readonly RelationConstraint[];
 };
 
-type OntahiRelationOptions = {
-  via?: string;
-  constraints?: readonly RelationConstraint[];
-};
+type OntahiRelationOptions = RelationOptions;
 
 export type OntahiSemanticEntityRef<
   TEntity extends AnyEntityDefinition,

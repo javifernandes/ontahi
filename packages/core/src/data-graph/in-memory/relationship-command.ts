@@ -65,43 +65,51 @@ const canonicalRelationMatches = (
     relation.target.name === command.relation.sourceEntityName &&
     relation.targetField === command.relation.fieldName);
 
+const assertConstraintsForRelation = (
+  dataset: InMemoryDataset,
+  relation: RelationDefinition,
+  command: RelationshipCommand,
+) => {
+  const participantRef = relation.relationKind === 'hasMany' ? command.source : command.target;
+  if (!participantRef) return;
+  const participantRows = (dataset[relation.target.name] ?? []).filter(row =>
+    matchesRef(row, participantRef),
+  );
+
+  for (const constraint of relation.constraints ?? []) {
+    const eligible =
+      participantRows.length === 1 &&
+      applyEntitySelectionExpression(relation.target, participantRows, constraint.selection)
+        .length === 1;
+    if (eligible) continue;
+
+    throw new InMemoryDataGraphError(
+      constraint.rejection.message,
+      'relation_constraint_rejected',
+      undefined,
+      constraint.rejection,
+    );
+  }
+};
+
 const assertRelationConstraints = (
   dataset: InMemoryDataset,
-  entities: readonly AnyEntityDefinition[],
+  sourceEntity: AnyEntityDefinition,
+  targetEntity: AnyEntityDefinition,
   command: RelationshipCommand,
 ) => {
   if (command.action !== 'link') return;
 
-  for (const declaringEntity of entities) {
+  for (const declaringEntity of [sourceEntity, targetEntity]) {
     for (const [relationName, relation] of Object.entries(declaringEntity.relations)) {
       if (!canonicalRelationMatches(declaringEntity, relationName, relation, command)) continue;
-
-      const participantRef = relation.relationKind === 'hasMany' ? command.source : command.target;
-      if (!participantRef) continue;
-      const participantRows = (dataset[relation.target.name] ?? []).filter(row =>
-        matchesRef(row, participantRef),
-      );
-      for (const constraint of relation.constraints ?? []) {
-        const eligible =
-          participantRows.length === 1 &&
-          applyEntitySelectionExpression(relation.target, participantRows, constraint.selection)
-            .length === 1;
-        if (!eligible) {
-          throw new InMemoryDataGraphError(
-            constraint.rejection.message,
-            'relation_constraint_rejected',
-            undefined,
-            constraint.rejection,
-          );
-        }
-      }
+      assertConstraintsForRelation(dataset, relation, command);
     }
   }
 };
 
 type RelationshipMutationContext = {
   dataset: InMemoryDataset;
-  entities: readonly AnyEntityDefinition[];
   command: RelationshipCommand;
   sourceEntity: AnyEntityDefinition;
   targetEntity: AnyEntityDefinition;
@@ -128,7 +136,7 @@ const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
       'cardinality_mismatch',
     );
   }
-  assertRelationConstraints(dataset, context.entities, command);
+  assertRelationConstraints(dataset, context.sourceEntity, context.targetEntity, command);
   const nextValue = lowerEntityReferenceValue(sourceField, command.target);
   if (context.currentTarget && currentValue === nextValue) return { added: [], removed: [] };
   rows[rowIndex] = { ...row, [command.relation.fieldName]: nextValue };
@@ -198,7 +206,6 @@ const execute = (
     : undefined;
   const context: RelationshipMutationContext = {
     dataset,
-    entities,
     command,
     sourceEntity,
     targetEntity,
