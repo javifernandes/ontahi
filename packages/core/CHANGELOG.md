@@ -1,5 +1,17 @@
 # @ontahi/core
 
+## 0.1.0-alpha.8
+
+### Minor Changes
+
+- 2d526f3: Reflect semantic Relation descriptors, render portable Entity references as navigable identity, and
+  support read-only related-instance panels through a host-provided Query-backed reader. Schema
+  reflection also exposes undeclared inverse endpoints as non-executable, read-only topology.
+- 0ad7a06: Enforce portable source and target participant constraints atomically across Selection-valued
+  many-to-many Relationship Commands.
+- f3f292c: Add typed factories for portable Relation source/target participant constraints, stable rejection
+  descriptors, static reflection, and authoritative in-memory Relationship Command enforcement.
+
 ## 0.1.0-alpha.7
 
 ### Minor Changes
