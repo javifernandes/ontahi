@@ -505,6 +505,35 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoRelationships()).toEqual([]);
   });
 
+  it('rejects tagging a mixed batch containing a completed todo without partial associations', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Open', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Completed', completed: true },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }];
+    const command = relationshipSet(
+      TodoItem,
+      'tags',
+      Selection.references(TodoItem, [
+        createEntityRef(TodoItem, { id: 'todo-1' }),
+        createEntityRef(TodoItem, { id: 'todo-2' }),
+      ]),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+
+    const response = await fetch(`${origin}/graph/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(toGraphCommandRequest(command)),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
+    });
+    expect(getTodoRelationships()).toEqual([]);
+  });
+
   it('starts and completes the durable operation through the same transport', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },

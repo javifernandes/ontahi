@@ -11,6 +11,7 @@ import {
   field,
   parseGraphCommandRequest,
   query,
+  relationConstraint,
   relationshipSet,
   resolveGraphCommandRequest,
   Selection,
@@ -27,6 +28,114 @@ const defineTodoGraph = () => {
 };
 
 describe('many-to-many Relationship Commands', () => {
+  it('enforces source and target constraints atomically across Selection-valued links', async () => {
+    const Tag = entity('ConstrainedTag', { id: field.id(), assignable: field.boolean() });
+    const Todo = entity('ConstrainedTodo', {
+      id: field.id(),
+      completed: field.boolean(),
+    });
+    Todo.manyToMany('tags', Tag, {
+      constraints: [
+        relationConstraint.source(Todo, todo => todo.completed.eq(false), {
+          code: 'completed_todo_cannot_be_tagged',
+          message: 'Completed todos cannot be tagged.',
+        }),
+        relationConstraint.target(Tag, tag => tag.assignable.eq(true), {
+          code: 'tag_not_assignable',
+          message: 'This tag cannot be assigned.',
+        }),
+      ],
+    });
+    const dataset: InMemoryDataset = {
+      ConstrainedTodo: [
+        { id: 'open', completed: false },
+        { id: 'completed', completed: true },
+      ],
+      ConstrainedTag: [
+        { id: 'assignable', assignable: true },
+        { id: 'blocked', assignable: false },
+      ],
+    };
+    const facts: RelationshipFact[] = [];
+    const execute = (command: ReturnType<ReturnType<typeof relationshipSet>['add']>) =>
+      Effect.runPromise(
+        executeInMemoryManyToManyRelationshipCommandEffect(
+          dataset,
+          [Todo, Tag],
+          facts,
+          command,
+        ).pipe(Effect.either),
+      );
+    const mixedTodos = Selection.references(Todo, [
+      createEntityRef(Todo, { id: 'open' }),
+      createEntityRef(Todo, { id: 'completed' }),
+    ]);
+
+    await expect(
+      execute(
+        relationshipSet(Todo, 'tags', mixedTodos).add(createEntityRef(Tag, { id: 'assignable' })),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'completed_todo_cannot_be_tagged' },
+      },
+    });
+    expect(facts).toEqual([]);
+
+    await expect(
+      execute(
+        relationshipSet(Todo, 'tags', createEntityRef(Todo, { id: 'open' })).add(
+          createEntityRef(Tag, { id: 'blocked' }),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'tag_not_assignable' },
+      },
+    });
+    expect(facts).toEqual([]);
+
+    await expect(
+      execute(
+        relationshipSet(Todo, 'tags', createEntityRef(Todo, { id: 'open' })).add(
+          createEntityRef(Tag, { id: 'assignable' }),
+        ),
+      ),
+    ).resolves.toMatchObject({ _tag: 'Right' });
+    expect(facts).toHaveLength(1);
+
+    const beforeEmpty = [...facts];
+    await expect(
+      execute(
+        relationshipSet(
+          Todo,
+          'tags',
+          selection(Todo, todo => todo.id.eq('missing')),
+        ).add(createEntityRef(Tag, { id: 'assignable' })),
+      ),
+    ).resolves.toMatchObject({ _tag: 'Right', right: { added: [], removed: [] } });
+    expect(facts).toEqual(beforeEmpty);
+
+    facts.push({
+      relation: relationshipSet(Todo, 'tags', createEntityRef(Todo, { id: 'completed' })).add(
+        createEntityRef(Tag, { id: 'blocked' }),
+      ).relation,
+      source: createEntityRef(Todo, { id: 'completed' }),
+      target: createEntityRef(Tag, { id: 'blocked' }),
+    });
+    await expect(
+      execute(
+        relationshipSet(Todo, 'tags', createEntityRef(Todo, { id: 'completed' })).remove(
+          createEntityRef(Tag, { id: 'blocked' }),
+        ),
+      ),
+    ).resolves.toMatchObject({ _tag: 'Right', right: { removed: expect.any(Array) } });
+    expect(facts.some(fact => fact.source.locator.id === 'completed')).toBe(false);
+  });
   it('declares direct topology and preserves Selection-valued endpoints', () => {
     const { Tag, Todo } = defineTodoGraph();
     const todos = selection(Todo, todo => todo.id.in(['todo-1', 'todo-2']));

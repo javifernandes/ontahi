@@ -1008,6 +1008,50 @@ describe('ontahi application composition root', () => {
     });
   });
 
+  it('materializes lazy many-to-many constraint authoring as portable Relation metadata', () => {
+    const Tag = entity({
+      name: 'ConstrainedTag',
+      fields: { id: field.id() },
+    });
+    let constraintsEvaluated = false;
+    const Todo = entity({
+      name: 'ConstrainedTodo',
+      fields: { id: field.id(), completed: field.boolean() },
+      relations: {
+        tags: relation.manyToMany(Tag, {
+          constraints: () => {
+            constraintsEvaluated = true;
+            return [
+              relationConstraint.target(Tag, tag => tag.id.eq('assignable'), {
+                code: 'tag_not_assignable',
+                message: 'This tag cannot be assigned.',
+              }),
+            ];
+          },
+        }),
+      },
+      uses: { entities: () => ({ Tag }) },
+    });
+
+    expect(constraintsEvaluated).toBe(false);
+    ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: { ConstrainedTodo: [], ConstrainedTag: [] },
+      }),
+      entities: [Todo, Tag],
+    });
+
+    expect(constraintsEvaluated).toBe(true);
+    expect(Todo.relations.tags?.constraints).toEqual([
+      expect.objectContaining({
+        kind: 'participant-selection',
+        participant: 'target',
+        rejection: expect.objectContaining({ code: 'tag_not_assignable' }),
+      }),
+    ]);
+    expect(typeof Todo.relations.tags?.constraints).not.toBe('function');
+  });
+
   it('prepares immediate relations for existing physical mapping declarations', () => {
     const Book = entity({
       name: 'Book',

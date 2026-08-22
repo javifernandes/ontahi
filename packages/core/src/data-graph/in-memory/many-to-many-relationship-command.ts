@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import type { AnyEntityDefinition } from '../definitions.js';
+import type { AnyEntityDefinition, RelationDefinition } from '../definitions.js';
 import { createEntityIdentityRef } from '../ref.js';
 import type {
   ManyToManyRelationshipCommand,
@@ -86,7 +86,30 @@ const resolveEndpointRefs = (
   const unique = refs.filter(
     (ref, index, all) => all.findIndex(candidate => sameRef(candidate!, ref!)) === index,
   );
-  return unique as RelationshipFact['source'][];
+  return {
+    refs: unique as RelationshipFact['source'][],
+    rows: selectedRows,
+  };
+};
+
+const assertParticipantConstraints = (
+  entity: AnyEntityDefinition,
+  rows: readonly Record<string, unknown>[],
+  relation: RelationDefinition,
+  participant: 'source' | 'target',
+) => {
+  for (const constraint of relation.constraints ?? []) {
+    if (constraint.participant !== participant) continue;
+    const eligibleCount = applyEntitySelectionExpression(entity, rows, constraint.selection).length;
+    if (eligibleCount === rows.length) continue;
+
+    throw new InMemoryDataGraphError(
+      constraint.rejection.message,
+      'relation_constraint_rejected',
+      undefined,
+      constraint.rejection,
+    );
+  }
 };
 
 const execute = (
@@ -107,8 +130,12 @@ const execute = (
 
   const sources = resolveEndpointRefs(dataset, sourceEntity, command.sources);
   const targets = resolveEndpointRefs(dataset, targetEntity, command.targets);
-  const requested = sources.flatMap(source =>
-    targets.map(
+  if (command.action === 'link') {
+    assertParticipantConstraints(sourceEntity, sources.rows, relation, 'source');
+    assertParticipantConstraints(targetEntity, targets.rows, relation, 'target');
+  }
+  const requested = sources.refs.flatMap(source =>
+    targets.refs.map(
       target => ({ relation: command.relation, source, target }) satisfies RelationshipFact,
     ),
   );

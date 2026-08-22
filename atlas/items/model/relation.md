@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/135a-selection-valued-many-to-many-core
   - ontahi://plans/136-relation-constraints-and-eligibility
   - ontahi://plans/136a-portable-participant-eligibility-core
+  - ontahi://plans/136b-many-to-many-participant-eligibility
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
 migratedFrom: bookops://atlas/model/relation
@@ -120,6 +121,15 @@ Application code authors that contract through the typed `relationConstraint.sou
 and is immediately reduced to a portable Selection AST; no executable callback becomes Relation
 metadata. Participant names remain relative to the declared Relation, independent of canonical
 command or storage orientation.
+
+Selection-valued many-to-many `link` evaluates every resolved source and target participant against
+the applicable constraints before changing relationship facts. A mixed eligible/ineligible batch
+is rejected as a whole; an empty filtered Selection remains a successful no-op. Eligibility guards
+new links only, so `unlink` remains available even when a participant no longer satisfies the
+current rule. Server Entity declarations may defer only constraint construction to resolve a source
+Entity self-reference; materialized Relation metadata contains the portable AST, never that
+authoring thunk. Provider-backed atomic enforcement and structured rejection transport remain Plan
+136 work.
 
 For example, an association with its own state remains ordinary Entity lifecycle. The current
 low-level command authoring primitive makes that lifecycle explicit; its spelling is not a settled

@@ -1,5 +1,5 @@
-import { field, graphSchema, mapRelation } from '@ontahi/core/data-graph';
-import { entity, relation } from '@ontahi/core/entity';
+import { field, graphSchema, mapRelation, type RelationConstraint } from '@ontahi/core/data-graph';
+import { entity, relation, relationConstraint } from '@ontahi/core/entity';
 import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 
@@ -108,7 +108,14 @@ export const TodoItem = entity({
   name: 'TodoItem',
   fields: todoItemFields,
   relations: {
-    tags: relation.manyToMany(Tag),
+    tags: relation.manyToMany(Tag, {
+      constraints: (): readonly RelationConstraint[] => [
+        relationConstraint.source(TodoItem, todo => todo.completed.eq(false), {
+          code: 'completed_todo_cannot_be_tagged',
+          message: 'Completed todos cannot be tagged.',
+        }),
+      ],
+    }),
   },
   uses: {
     entities: () => ({ TodoList }),
