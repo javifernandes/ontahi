@@ -1,5 +1,20 @@
 # @ontahi/react
 
+## 0.1.0-alpha.8
+
+### Minor Changes
+
+- 2d526f3: Reflect semantic Relation descriptors, render portable Entity references as navigable identity, and
+  support read-only related-instance panels through a host-provided Query-backed reader. Schema
+  reflection also exposes undeclared inverse endpoints as non-executable, read-only topology.
+
+### Patch Changes
+
+- Updated dependencies [2d526f3]
+- Updated dependencies [0ad7a06]
+- Updated dependencies [f3f292c]
+  - @ontahi/core@0.1.0-alpha.8
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes
