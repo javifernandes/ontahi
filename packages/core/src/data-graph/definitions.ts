@@ -652,6 +652,7 @@ export type EntityDefinition<
   manyToMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
+    options?: Omit<RelationOptions, 'via'>,
   ) => EntityDefinition<
     TName,
     TFields,
@@ -993,11 +994,17 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       };
       return this as never;
     },
-    manyToMany(relationName: string, target: AnyEntityDefinition) {
+    manyToMany(
+      relationName: string,
+      target: AnyEntityDefinition,
+      options?: Omit<RelationOptions, 'via'>,
+    ) {
+      assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'manyToMany',
         target,
+        ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
     },

@@ -6,6 +6,8 @@ Canonical ID: `ontahi://plans/136-relation-constraints-and-eligibility`
 
 Completed child: [136a. Portable Participant Eligibility Core](../done/136a-portable-participant-eligibility-core.md)
 
+Completed child: [136b. Many-To-Many Participant Eligibility](../done/136b-many-to-many-participant-eligibility.md)
+
 ## Summary
 
 Let a Relation declare portable structural eligibility beyond topology and cardinality. The same
@@ -87,7 +89,9 @@ identity, not an executable closure transported to the server.
 
 ## Progress
 
-Plan 136a landed the first portable target-participant Selection constraint, stable versioned
+Plan 136a landed portable source/target participant Selection constraints, stable versioned
 rejections, static reflection, and authoritative in-memory enforcement shared by forward and
-inverse authoring. Aggregate/cardinality constraints, Selection-valued many-to-many affected-set
-semantics, adapter-backed atomic enforcement, conflicts, and advisory preflight remain open here.
+inverse authoring. Plan 136b extended the same contract to Selection-valued many-to-many links with
+all-or-nothing in-memory evaluation and a Todo proof. Aggregate/cardinality constraints,
+adapter-backed atomic enforcement, structured rejection transport, conflicts, and advisory
+preflight remain open here.

@@ -66,10 +66,30 @@ export type OntahiRelationDeclaration<
   sourceField?: string;
   targetField?: string;
   inverseTarget?: OntahiSemanticEntityTarget<AnyEntityDefinition>;
-  constraints?: readonly RelationConstraint[];
+  constraints?: OntahiRelationConstraints;
 };
 
-type OntahiRelationOptions = RelationOptions;
+type OntahiRelationConstraints =
+  | readonly RelationConstraint[]
+  | (() => readonly RelationConstraint[]);
+
+type OntahiRelationOptions = Omit<RelationOptions, 'constraints'> & {
+  constraints?: OntahiRelationConstraints;
+};
+
+const assertDeclaredRelationConstraints = (constraints: OntahiRelationConstraints | undefined) => {
+  if (typeof constraints !== 'function') assertPortableRelationConstraints(constraints);
+};
+
+const materializeDeclaredRelationConstraints = (
+  constraints: OntahiRelationConstraints | undefined,
+  deferFactories: boolean,
+) => {
+  if (deferFactories && typeof constraints === 'function') return undefined;
+  const materialized = typeof constraints === 'function' ? constraints() : constraints;
+  assertPortableRelationConstraints(materialized);
+  return materialized;
+};
 
 export type OntahiSemanticEntityRef<
   TEntity extends AnyEntityDefinition,
@@ -192,7 +212,7 @@ function belongsTo(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
   options?: OntahiRelationOptions,
 ) {
-  assertPortableRelationConstraints(options?.constraints);
+  assertDeclaredRelationConstraints(options?.constraints);
   return {
     relationKind: 'belongsTo',
     target,
@@ -213,7 +233,7 @@ function hasMany(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
   options?: OntahiRelationOptions,
 ) {
-  assertPortableRelationConstraints(options?.constraints);
+  assertDeclaredRelationConstraints(options?.constraints);
   return {
     relationKind: 'hasMany',
     target,
@@ -225,15 +245,22 @@ function hasMany(
 
 function manyToMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
+  options?: Omit<OntahiRelationOptions, 'via'>,
 ): OntahiRelationDeclaration<'manyToMany', TTarget, TTyped>;
 function manyToMany<TTarget extends AnyEntityDefinition>(
   target: TTarget,
+  options?: Omit<OntahiRelationOptions, 'via'>,
 ): OntahiRelationDeclaration<'manyToMany', TTarget, true>;
-function manyToMany(target: OntahiSemanticEntityTarget<AnyEntityDefinition>) {
+function manyToMany(
+  target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
+  options?: Omit<OntahiRelationOptions, 'via'>,
+) {
+  assertDeclaredRelationConstraints(options?.constraints);
   return {
     relationKind: 'manyToMany' as const,
     target,
     typed: !isSemanticEntityRef(target) || target.typed,
+    ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
 
@@ -961,13 +988,17 @@ const defineOntahiEntity = <
           `Unknown relation target field ${declaration.targetField} on entity ${target.name}`,
         );
       }
+      const constraints = materializeDeclaredRelationConstraints(
+        declaration.constraints,
+        skipSemanticRefs,
+      );
       relations[name] = {
         kind: 'relation',
         relationKind: declaration.relationKind,
         target,
         ...(declaration.sourceField ? { sourceField: declaration.sourceField } : {}),
         ...(declaration.targetField ? { targetField: declaration.targetField } : {}),
-        ...(declaration.constraints ? { constraints: declaration.constraints } : {}),
+        ...(constraints ? { constraints } : {}),
       };
     });
   };
