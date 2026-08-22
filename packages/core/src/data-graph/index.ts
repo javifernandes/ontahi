@@ -33,6 +33,7 @@ export * from './reference-field.js';
 export * from './remote-runtime.js';
 export * from './ref.js';
 export * from './reflection.js';
+export * from './relation-constraint.js';
 export * from './relation-root.js';
 export * from './runtime.js';
 export * from './runtime-bound-api.js';

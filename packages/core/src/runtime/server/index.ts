@@ -33,6 +33,7 @@ export {
   isOntahiEntityDeclaration,
   operationGroup,
   relation,
+  relationConstraint,
   relationModule,
   relationModuleWithCapabilities,
   resolveOntahiEntityReferences,

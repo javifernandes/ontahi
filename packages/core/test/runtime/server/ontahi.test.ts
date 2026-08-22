@@ -22,6 +22,7 @@ import {
   ontahi,
   operationGroup,
   relation,
+  relationConstraint,
   relationModule,
   type OntahiOperationGroupContext,
   valueRef,
@@ -918,7 +919,15 @@ describe('ontahi application composition root', () => {
         id: field.id(),
       },
       relations: {
-        labels: relation.hasMany(BookLabel, { via: 'bookId' }),
+        labels: relation.hasMany(BookLabel, {
+          via: 'bookId',
+          constraints: [
+            relationConstraint.target(BookLabel, label => label.id.eq('visible'), {
+              code: 'label_hidden',
+              message: 'Label is hidden.',
+            }),
+          ],
+        }),
       },
     });
 
@@ -926,6 +935,12 @@ describe('ontahi application composition root', () => {
       relationKind: 'hasMany',
       target: BookLabel,
       targetField: 'bookId',
+      constraints: [
+        expect.objectContaining({
+          kind: 'participant-selection',
+          rejection: expect.objectContaining({ code: 'label_hidden' }),
+        }),
+      ],
     });
   });
 

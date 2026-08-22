@@ -5,6 +5,7 @@ import {
   resolveFieldNameForEntity,
   type AnyEntityDefinition,
   type RelationDefinition,
+  type RelationConstraint,
   type RelationKind,
 } from './definitions.js';
 import type { AnyEntityRef } from './ref.js';
@@ -26,6 +27,7 @@ export type ReflectedSchemaRelation = {
   structuralVerbs: Array<'assign' | 'clear' | 'add' | 'remove'>;
   sourceField?: string;
   targetField?: string;
+  constraints?: readonly RelationConstraint[];
 };
 
 const hasDeclaredInverse = (
@@ -73,6 +75,7 @@ const reflectedDeclaredRelation = (
         : ['add', 'remove'],
     ...(relation.sourceField ? { sourceField: relation.sourceField } : {}),
     ...(relation.targetField ? { targetField: relation.targetField } : {}),
+    ...(relation.constraints ? { constraints: relation.constraints } : {}),
   };
 };
 

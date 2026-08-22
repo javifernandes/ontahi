@@ -14,11 +14,14 @@ import {
   type EntityReferenceFieldSource,
   type EntityLocatorDeclarations,
   type RelationDefinition,
+  type RelationConstraint,
   type RelationKind,
+  type RelationOptions,
   type EntityRefLocatorFactories,
   type EntityRefLocators,
   type EntityRefInputPublicInput,
   isReferenceFieldDefinition,
+  assertPortableRelationConstraints,
   type EntitySelectionFactory,
   type GraphEntityWithOperations,
   type GraphEntityExposure,
@@ -43,6 +46,8 @@ import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './opera
 import type { OperationInvocationResult } from './operation-result.js';
 import type { TaskFailure, TaskRunRef } from './tasks.js';
 
+export { relationConstraint } from '../../data-graph/relation-constraint.js';
+
 const ONTAHI_ENTITY_DECLARATION = Symbol('ontahi.entity.declaration');
 const ONTAHI_DIRECT_OPERATION_NAMES = Symbol('ontahi.entity.direct-operation-names');
 declare const ONTAHI_CUSTOM_ENTITY_TYPE: unique symbol;
@@ -61,7 +66,10 @@ export type OntahiRelationDeclaration<
   sourceField?: string;
   targetField?: string;
   inverseTarget?: OntahiSemanticEntityTarget<AnyEntityDefinition>;
+  constraints?: readonly RelationConstraint[];
 };
+
+type OntahiRelationOptions = RelationOptions;
 
 export type OntahiSemanticEntityRef<
   TEntity extends AnyEntityDefinition,
@@ -174,40 +182,44 @@ const resolveSemanticEntityTarget = <TEntity extends AnyEntityDefinition>(
 
 function belongsTo<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options?: { via?: string },
+  options?: OntahiRelationOptions,
 ): OntahiRelationDeclaration<'belongsTo', TTarget, TTyped>;
 function belongsTo<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: { via?: string },
+  options?: OntahiRelationOptions,
 ): OntahiRelationDeclaration<'belongsTo', TTarget, true>;
 function belongsTo(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
-  options?: { via?: string },
+  options?: OntahiRelationOptions,
 ) {
+  assertPortableRelationConstraints(options?.constraints);
   return {
     relationKind: 'belongsTo',
     target,
     typed: !isSemanticEntityRef(target) || target.typed,
     ...(options?.via ? { sourceField: options.via } : {}),
+    ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
 function hasMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options?: { via?: string },
+  options?: OntahiRelationOptions,
 ): OntahiRelationDeclaration<'hasMany', TTarget, TTyped>;
 function hasMany<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: { via?: string },
+  options?: OntahiRelationOptions,
 ): OntahiRelationDeclaration<'hasMany', TTarget, true>;
 function hasMany(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
-  options?: { via?: string },
+  options?: OntahiRelationOptions,
 ) {
+  assertPortableRelationConstraints(options?.constraints);
   return {
     relationKind: 'hasMany',
     target,
     typed: !isSemanticEntityRef(target) || target.typed,
     ...(options?.via ? { targetField: options.via } : {}),
+    ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
 
@@ -955,6 +967,7 @@ const defineOntahiEntity = <
         target,
         ...(declaration.sourceField ? { sourceField: declaration.sourceField } : {}),
         ...(declaration.targetField ? { targetField: declaration.targetField } : {}),
+        ...(declaration.constraints ? { constraints: declaration.constraints } : {}),
       };
     });
   };

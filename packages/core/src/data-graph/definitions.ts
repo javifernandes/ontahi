@@ -1,6 +1,9 @@
+import { isJsonValue, type JsonValue } from '../value/json.js';
+
 import type { RelationNodeSpec } from './query.js';
 import {
   getEntityIdentityLocator,
+  type AnyEntityRef,
   type EntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
@@ -446,6 +449,63 @@ export type ManyToManyRelationMapping = {
 
 export type ParsedRelationMapping = DirectRelationMapping | ManyToManyRelationMapping;
 
+export type RelationConstraintRejection = {
+  readonly version: 1;
+  readonly code: string;
+  readonly message: string;
+  readonly parameters?: Readonly<Record<string, string | number | boolean | null>>;
+};
+
+export type PortableSelectionPredicate =
+  | {
+      readonly kind: 'predicate';
+      readonly operator: 'eq' | 'lte' | 'lt' | 'gte' | 'gt';
+      readonly fieldName: string;
+      readonly value: JsonValue;
+    }
+  | {
+      readonly kind: 'predicate';
+      readonly operator: 'in';
+      readonly fieldName: string;
+      readonly values: readonly JsonValue[];
+    }
+  | {
+      readonly kind: 'predicate';
+      readonly operator: 'isNull';
+      readonly fieldName: string;
+    };
+
+export type PortableSelectionExpression =
+  | PortableSelectionPredicate
+  | { readonly kind: 'all' }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'references'; readonly refs: readonly AnyEntityRef[] }
+  | { readonly kind: 'and' | 'or'; readonly operands: readonly PortableSelectionExpression[] }
+  | { readonly kind: 'not'; readonly operand: PortableSelectionExpression };
+
+export type RelationParticipantSelectionConstraint = {
+  readonly kind: 'participant-selection';
+  /** Participant is relative to the Relation declaration, not storage orientation. */
+  readonly participant: 'source' | 'target';
+  readonly selection: PortableSelectionExpression;
+  readonly rejection: RelationConstraintRejection;
+};
+
+export type RelationConstraint = RelationParticipantSelectionConstraint;
+
+export const assertPortableRelationConstraints = (
+  constraints: readonly RelationConstraint[] | undefined,
+) => {
+  if (constraints && !constraints.every(isJsonValue)) {
+    throw new Error('Relation constraints must be JSON-safe.');
+  }
+};
+
+export type RelationOptions = {
+  via?: string;
+  constraints?: readonly RelationConstraint[];
+};
+
 export type RelationDefinition<
   TKind extends RelationKind = RelationKind,
   TTarget extends AnyEntityDefinition = AnyEntityDefinition,
@@ -458,6 +518,7 @@ export type RelationDefinition<
   targetField?: string;
   nullable?: TNullable;
   mapping?: ParsedRelationMapping;
+  constraints?: readonly RelationConstraint[];
 };
 
 type RelationDefinitions = Record<string, RelationDefinition<RelationKind, any>>;
@@ -571,7 +632,7 @@ export type EntityDefinition<
   hasMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: { via?: keyof TTarget['fields'] & string },
+    options?: Omit<RelationOptions, 'via'> & { via?: keyof TTarget['fields'] & string },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -581,7 +642,7 @@ export type EntityDefinition<
   belongsTo: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: { via?: keyof TFields & string },
+    options?: Omit<RelationOptions, 'via'> & { via?: keyof TFields & string },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -910,21 +971,25 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
 
       return viewDefinition;
     },
-    hasMany(relationName: string, target: AnyEntityDefinition, options?: { via?: string }) {
+    hasMany(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
+      assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'hasMany',
         target,
         ...(options?.via ? { targetField: options.via } : {}),
+        ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
     },
-    belongsTo(relationName: string, target: AnyEntityDefinition, options?: { via?: string }) {
+    belongsTo(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
+      assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'belongsTo',
         target,
         ...(options?.via ? { sourceField: options.via } : {}),
+        ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
     },

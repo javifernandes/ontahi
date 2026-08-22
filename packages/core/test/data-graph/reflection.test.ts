@@ -3,6 +3,79 @@ import { describe, expect, it } from 'vitest';
 import { entity, field, reflectSchemaRelations } from '../../src/data-graph/index.js';
 
 describe('schema relation reflection', () => {
+  it('rejects non-portable constraint metadata at declaration time', () => {
+    const Team = entity('UnsafeTeam', { id: field.id() });
+    const Member = entity('UnsafeMember', { id: field.id() });
+
+    expect(() =>
+      Team.hasMany('members', Member, {
+        constraints: [
+          {
+            kind: 'participant-selection',
+            participant: 'target',
+            selection: {
+              kind: 'predicate',
+              operator: 'eq',
+              fieldName: 'id',
+              value: (() => 'not portable') as never,
+            },
+            rejection: { version: 1, code: 'unsafe', message: 'Unsafe.' },
+          },
+        ],
+      }),
+    ).toThrow('Relation constraints must be JSON-safe.');
+  });
+
+  it('reflects portable constraints and stable rejection descriptors', () => {
+    const Team = entity('Team', { id: field.id() });
+    const Member = entity('Member', {
+      id: field.id(),
+      status: field.string(),
+      team: field.nullable(field.ref(Team)),
+    });
+    Team.hasMany('members', Member, {
+      via: 'team',
+      constraints: [
+        {
+          kind: 'participant-selection',
+          participant: 'target',
+          selection: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'status',
+            value: 'active',
+          },
+          rejection: {
+            version: 1,
+            code: 'member_inactive',
+            message: 'Member must be active.',
+          },
+        },
+      ],
+    });
+
+    expect(
+      reflectSchemaRelations([Team, Member]).find(
+        candidate => candidate.relationId === 'Team.members',
+      )?.constraints,
+    ).toEqual([
+      {
+        kind: 'participant-selection',
+        participant: 'target',
+        selection: {
+          kind: 'predicate',
+          operator: 'eq',
+          fieldName: 'status',
+          value: 'active',
+        },
+        rejection: {
+          version: 1,
+          code: 'member_inactive',
+          message: 'Member must be active.',
+        },
+      },
+    ]);
+  });
   it('reflects declared relations and their structural inverse endpoints', () => {
     const TodoList = entity('TodoList', { id: field.id(), name: field.string() });
     const Tag = entity('Tag', { id: field.id(), name: field.string() });

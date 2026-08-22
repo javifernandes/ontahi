@@ -4,7 +4,7 @@ Status: current
 
 Canonical ID: `ontahi://plans/137-reflected-relation-affordances`
 
-Depends on: [136. Relation Constraints And Eligibility Semantics](../next/136-relation-constraints-and-eligibility.md)
+Depends on: [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
 
 Completed child: [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md)
 
