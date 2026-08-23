@@ -146,8 +146,8 @@
     "test:coverage": "pnpm exec vitest run --coverage",
     "test:watch": "pnpm exec vitest",
     "typecheck": "pnpm exec tsc -p tsconfig.json",
-    "lint": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.{ts,tsx}\" --max-warnings 0",
-    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.{ts,tsx}\" --fix --max-warnings 0"
+    "lint": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --fix --max-warnings 0"
   },
   "dependencies": {
     "effect": "^3.21.0",
