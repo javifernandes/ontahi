@@ -16,6 +16,7 @@ import {
   type DataGraphExecutionRuntime,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type RelationshipCommandExecutionRuntime,
   type PlainGraphRead,
   type QueryOrView,
   type QuerySpec,
@@ -28,6 +29,7 @@ import { executeSupabaseGraphCommandEffect } from './command.js';
 import { executeSupabaseManyToManyRelationshipCommandEffect } from './many-to-many.js';
 import { materializeSupabaseEntityRow } from './materialization.js';
 import { fetchSupabaseEntityRowsEffect, hydrateSupabaseEntityRowsEffect } from './query.js';
+import { executeSupabaseRelationshipCommandEffect } from './relationship-command.js';
 import type {
   FetchEntityRowsInput,
   SupabaseErrorFactory,
@@ -546,8 +548,10 @@ export const createSupabaseDataGraphRuntime = <
   createError: SupabaseErrorFactory<TError>;
   entities?: readonly AnyEntityDefinition[];
   manyToManyRpcName?: string;
+  relationshipRpcName?: string;
 }): DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions> &
-  ManyToManyRelationshipCommandExecutionRuntime<TError, TCommandOptions> => ({
+  ManyToManyRelationshipCommandExecutionRuntime<TError, TCommandOptions> &
+  RelationshipCommandExecutionRuntime<TError, TCommandOptions> => ({
   get: <TParams, TResult>(
     queryOrView: QueryOrView<TParams, TResult>,
     params: TParams,
@@ -636,6 +640,17 @@ export const createSupabaseDataGraphRuntime = <
         createError: deps.createError,
         entities: deps.entities ?? [],
         ...(deps.manyToManyRpcName ? { rpcName: deps.manyToManyRpcName } : {}),
+      },
+      command,
+      options,
+    ),
+  runRelationshipCommand: (command, options) =>
+    executeSupabaseRelationshipCommandEffect(
+      {
+        getClient: deps.getCommandClient,
+        createError: deps.createError,
+        entities: deps.entities ?? [],
+        ...(deps.relationshipRpcName ? { rpcName: deps.relationshipRpcName } : {}),
       },
       command,
       options,

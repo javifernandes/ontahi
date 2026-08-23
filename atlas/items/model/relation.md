@@ -22,6 +22,7 @@ relatedPlans:
   - ontahi://plans/136a-portable-participant-eligibility-core
   - ontahi://plans/136b-many-to-many-participant-eligibility
   - ontahi://plans/136c-postgres-direct-relation-compare-and-set
+  - ontahi://plans/136d-supabase-direct-relation-compare-and-set
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
 migratedFrom: bookops://atlas/model/relation
@@ -116,7 +117,10 @@ must preserve that atomic boundary before advertising support. PostgreSQL now lo
 Relationship Commands to one guarded statement that locks and resolves the source, verifies the
 target and expected current edge, applies the change, and returns enough state to materialize the
 exact delta. The adapter fails closed for constrained Relations until eligibility can be compiled
-into that same statement. Supabase parity remains a separate RPC-backed slice.
+into that same statement. Supabase preserves the same boundary through a reusable invoker-rights
+RPC: it resolves endpoints, locks the source, compares expected current identity, changes the edge,
+and returns prior-state evidence in one database transaction. The adapter never degrades this into
+a PostgREST read followed by update. Grants and RLS remain independent authorization boundaries.
 
 A Relation does not own arbitrary lifecycle hooks, domain failures, effects, authorization
 coordination, or durability. Structural referential consistency, Selection resolution, cardinality,

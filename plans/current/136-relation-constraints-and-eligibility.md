@@ -10,6 +10,8 @@ Completed child: [136b. Many-To-Many Participant Eligibility](../done/136b-many-
 
 Completed child: [136c. PostgreSQL Direct Relation Compare-And-Set](../done/136c-postgres-direct-relation-compare-and-set.md)
 
+Completed child: [136d. Supabase Direct Relation Compare-And-Set](../done/136d-supabase-direct-relation-compare-and-set.md)
+
 ## Summary
 
 Let a Relation declare portable structural eligibility beyond topology and cardinality. The same
@@ -98,4 +100,6 @@ all-or-nothing in-memory evaluation and a Todo proof. Aggregate/cardinality cons
 adapter-backed atomic enforcement, structured rejection transport, conflicts, and advisory
 preflight remain open here. Plan 136c adds the first provider-backed direct Relation mutation and
 atomic expected-current conflict proof in PostgreSQL while failing closed for eligibility that has
-not yet been compiled.
+not yet been compiled. Plan 136d preserves the same direct transition contract through one Supabase
+invoker-rights RPC without a PostgREST read/write race. Atomic provider compilation of the portable
+eligibility predicates themselves remains open.
