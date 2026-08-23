@@ -9,7 +9,7 @@ import {
   prefixTelemetryAttributes,
   sanitizeTelemetryAttributes,
   withOpenTelemetryServerSpan,
-} from '../src/index.js';
+} from './index.js';
 
 describe('OpenTelemetry adapter', () => {
   it('drops sensitive values and normalizes safe attributes', () => {
