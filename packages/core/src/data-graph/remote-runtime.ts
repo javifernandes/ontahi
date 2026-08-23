@@ -18,7 +18,7 @@ import {
   type GraphReadProtocolErrorCode,
   type GraphReadRequestV1,
 } from './read-protocol.js';
-import { isEntityRef } from './ref.js';
+import { isEntityRef } from './ref/index.js';
 import {
   type ManyToManyRelationshipCommand,
   type ManyToManyRelationshipCommandExecutionRuntime,

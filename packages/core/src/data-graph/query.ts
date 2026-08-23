@@ -6,7 +6,7 @@ import {
   type RelationDefinition,
   type RelationKind,
 } from './definitions.js';
-import { isEntityRef, type EntityRef } from './ref.js';
+import { isEntityRef, type EntityRef } from './ref/index.js';
 import type { RelatedRootReadSpec } from './relation-root.js';
 import {
   selectionAll,

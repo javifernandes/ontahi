@@ -8,7 +8,7 @@ import {
   type RelationConstraint,
   type RelationKind,
 } from './definitions.js';
-import type { AnyEntityRef } from './ref.js';
+import type { AnyEntityRef } from './ref/index.js';
 import type { EntityViewAst } from './view.js';
 
 export type ReflectedSchemaRelation = {

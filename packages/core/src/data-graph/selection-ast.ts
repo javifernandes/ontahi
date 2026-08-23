@@ -1,4 +1,4 @@
-import type { AnyEntityRef, EntityRefLocatorValue } from './ref.js';
+import type { AnyEntityRef, EntityRefLocatorValue } from './ref/index.js';
 
 export type SelectionPredicate =
   | {

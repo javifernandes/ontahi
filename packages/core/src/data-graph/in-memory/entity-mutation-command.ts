@@ -6,7 +6,7 @@ import type {
   EntityMutationDelta,
   EntityMutationFact,
 } from '../entity-mutation-command.js';
-import { createEntityIdentityRef } from '../ref.js';
+import { createEntityIdentityRef } from '../ref/index.js';
 import { selectionNone, selectionReferences } from '../selection-ast.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';

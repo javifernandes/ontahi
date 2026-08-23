@@ -1,5 +1,5 @@
 import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
-import type { AnyEntityRef } from './ref.js';
+import type { AnyEntityRef } from './ref/index.js';
 
 export type EntityMutationFact = {
   entityName: string;

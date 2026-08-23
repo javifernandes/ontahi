@@ -1,7 +1,7 @@
 import { GraphCommand } from './command.js';
 import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
 import { query, type EntityFieldProxy, type QueryBuilder } from './query.js';
-import type { AnyEntityRef, EntityRef } from './ref.js';
+import type { AnyEntityRef, EntityRef } from './ref/index.js';
 import {
   copySelectionExpression,
   selectionAll,

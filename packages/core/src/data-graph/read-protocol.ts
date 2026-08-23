@@ -3,7 +3,7 @@ import { hasOwn, isRecord } from '../value/object.js';
 
 import type { AnyEntityDefinition } from './definitions.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
-import { isEntityRef } from './ref.js';
+import { isEntityRef } from './ref/index.js';
 import { toSelectionAst, type SelectionAst, type SelectionExpression } from './selection-ast.js';
 import { applyViewToQuerySpec } from './view-query.js';
 import { createRecursiveEntityViewFromAst, type EntityViewAst } from './view.js';

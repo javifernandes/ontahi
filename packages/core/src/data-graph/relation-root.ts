@@ -20,7 +20,7 @@ import {
   type SelectionObject,
   type ViewDefinition,
 } from './query.js';
-import { getEntityIdentityLocator } from './ref.js';
+import { getEntityIdentityLocator } from './ref/index.js';
 import type { BoundGraphSelection } from './selection-assembly.js';
 import type { EntitySelectionSource } from './selection-ast.js';
 import type { QueryOrderByArg, QuerySelectArg, QueryWhereArg } from './selection.js';

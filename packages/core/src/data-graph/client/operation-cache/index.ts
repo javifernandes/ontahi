@@ -9,7 +9,7 @@ import {
   normalizeEntityRef,
   type AnyEntityRef,
   type EntityRefInputDeclarations,
-} from '../../ref.js';
+} from '../../ref/index.js';
 import type { GraphClientCache } from '../cache/index.js';
 
 export type GraphClientCacheOperationLike<TInput = unknown, TData = unknown> = {

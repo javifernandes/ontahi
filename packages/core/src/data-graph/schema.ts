@@ -24,7 +24,7 @@ import type {
 } from './definitions.js';
 import { isReferenceFieldDefinition } from './definitions.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
-import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref.js';
+import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref/index.js';
 import { lowerEntityReferenceValue } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
 import { isSelection, Selection } from './selection-value.js';

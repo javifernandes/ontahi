@@ -4,7 +4,7 @@ import {
   type RelationDefinition,
   type RelationKind,
 } from './definitions.js';
-import type { AnyEntityRef, EntityRef } from './ref.js';
+import type { AnyEntityRef, EntityRef } from './ref/index.js';
 import {
   copySelectionExpression,
   selectionReferences,

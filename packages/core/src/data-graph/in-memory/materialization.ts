@@ -1,6 +1,6 @@
 import { resolveRelationFields, type AnyEntityDefinition } from '../definitions.js';
 import { RelationQueryBuilder, type SelectionValue } from '../query.js';
-import { createEntityIdentityRef } from '../ref.js';
+import { createEntityIdentityRef } from '../ref/index.js';
 import {
   getEntityReferenceField,
   liftEntityReferenceRecord,

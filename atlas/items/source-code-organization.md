@@ -17,6 +17,7 @@ relatedPlans:
   - bookops://plans/129-ontahi-independent-repository-and-release-readiness
   - ontahi://plans/134-codegen-analysis-organization-and-semantic-coverage
   - ontahi://plans/140-colocated-test-topology
+  - ontahi://plans/141-data-graph-progressive-module-boundaries
 migratedFrom: bookops://atlas/source-code-organization
 sourceCommit: 67713696
 ---
@@ -79,6 +80,24 @@ publish manifests exclude test and test-support suffixes explicitly, so discover
 blur the runtime or distribution boundary. When colocation makes a source area visibly crowded,
 that is evidence for a separately reviewable module or folder boundary rather than a reason to move
 its tests away again.
+
+## Core Data Graph Module Direction
+
+Core Data Graph source uses progressive module boundaries: organize first by architectural role
+and then by graph concept within that role. Portable model values must not depend on authoring or
+runtime binding; authoring and query/command APIs build on the portable model; runtime contracts
+build on the model and semantic ASTs; in-memory execution and external adapter packages implement
+those contracts.
+
+The supported `@ontahi/core/data-graph` entrypoint remains the consumer facade. Internal folders
+may provide small cohesive entrypoints for source navigation without becoming additional package
+entrypoints. Conceptual recursion between Entity, Relation, Ref, and Operation does not by itself
+justify runtime module cycles or mixed-responsibility files.
+
+Entity Ref is the first proven boundary: its portable value model, Entity identity
+materialization, input authoring, input normalization, and runtime-bound affordances live in
+separate colocated modules behind the existing Ref facade. Later Data Graph reorganizations should
+preserve behavior and public exports, and should be delivered separately from feature changes.
 
 ## Open Source Horizon
 

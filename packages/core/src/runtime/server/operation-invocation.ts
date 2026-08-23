@@ -1,5 +1,5 @@
 import type { GraphSelectionDefinition } from '../../data-graph/definitions.js';
-import { normalizeEntityRefInput } from '../../data-graph/ref.js';
+import { normalizeEntityRefInput } from '../../data-graph/ref/index.js';
 import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
 import { createRecursiveEntityViewFromAst } from '../../data-graph/view.js';
 import {
