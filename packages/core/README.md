@@ -89,5 +89,7 @@ Queries, relation-root reads, streams, counts, inserts, bulk inserts, upserts, u
 Explorer reads all observe that same state. `createInMemoryDataGraphRuntime` and
 `createInMemoryReflectedEntityDataReader` remain available as lower-level building blocks.
 
-The implementation is intentionally process-local. It provides no restart durability, transactions,
-indexes, migrations, or database constraints; production adapters own those guarantees.
+The implementation is intentionally process-local. It provides no restart durability, indexes,
+migrations, or database constraints; production adapters own those guarantees. Core defines an
+optional `DataGraphTransactionCapability`, but the in-memory reference runtime does not advertise
+it. Sequencing its Effects therefore does not imply shared rollback.

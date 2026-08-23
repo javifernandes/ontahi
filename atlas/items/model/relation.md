@@ -27,6 +27,8 @@ relatedPlans:
   - ontahi://plans/136f-supabase-relation-participant-eligibility
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
+  - ontahi://plans/139-relations-lifecycle-release-proof
+  - ontahi://plans/139a-composable-data-graph-transactions
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -154,9 +156,18 @@ The mutation lifecycle keeps those responsibilities explicit:
 6. application-registered Reactions may match that outcome and request semantic follow-up intents.
 
 Only steps required for the primary invariant belong before edge application. Reactions occur after
-an applied outcome and cannot imply rollback. A future compositional transaction capability may
-coordinate several required mutations, but sequencing Effects in an Operation does not currently
-promise one shared transaction.
+an applied outcome and cannot imply rollback. A Data Graph transaction capability may coordinate
+several required reads and mutations before that outcome. Its callback receives a transaction-
+scoped runtime; using another runtime is outside the boundary. Success commits the whole callback,
+while failure or defect rolls it back. Sequencing Effects without this capability still does not
+promise one shared transaction, and adapters must not publish committed outcomes or run
+post-application Reactions before the outer transaction commits.
+
+Transaction is an optional execution capability, not Relation metadata or a portable Command.
+PostgreSQL proves it with one checked-out connection and a transaction-scoped runtime that omits
+the transaction method, making nested behavior unavailable in the first version. Remote runtimes,
+Supabase/PostgREST, savepoints, retry policy, and distributed transactions do not inherit this
+guarantee.
 
 A Relation may own portable structural eligibility without owning an arbitrary callback. The first
 constraint form applies the existing Selection predicate AST to a source or target participant of the

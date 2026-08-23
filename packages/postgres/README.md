@@ -25,6 +25,25 @@ The runtime supports semantic selections, ordering, limits, counts, streams, pro
 relation includes, relation-root reads, inserts, bulk inserts, upserts, updates, deletes, returning
 rows and cardinality enforcement.
 
+When constructed with a PostgreSQL `Pool`, the runtime also exposes an optional compositional
+transaction capability. The callback receives a runtime bound to one checked-out connection, so
+required graph and Relationship Commands share commit or rollback:
+
+```ts
+const transition = runtime.transaction(tx =>
+  Effect.gen(function* () {
+    yield* tx.runRelationshipCommand(
+      student.course.assign(nextCourse, { ifCurrent: previousCourse }),
+    );
+    yield* tx.runCommand(updateCourseCapacity);
+  }),
+);
+```
+
+A callback success commits and returns its value. A typed failure or defect rolls back before the
+connection is released. The transaction-scoped runtime deliberately omits `transaction`, so this
+first contract does not imply nested transactions or savepoints.
+
 Direct `belongsTo/hasMany` Relationship Commands are lowered to one guarded PostgreSQL statement.
 Conditional to-one assignment preserves its expected current target atomically:
 
@@ -52,7 +71,8 @@ second reader or repeat the PostgreSQL/in-memory choice. `createPostgresDataGrap
 
 The package's conformance suite executes the same behavioral contract against the in-memory
 reference runtime and a real ephemeral PostgreSQL instance. A host may pass either a `Pool` or a
-transaction-scoped `PoolClient`, since the adapter only requires the PostgreSQL `query` surface.
+query-only, transaction-scoped `PoolClient` to the lower-level runtime. Only a `Pool` advertises the
+compositional transaction capability because it can check out and own a connection lifetime.
 
 Migration generation and schema evolution remain host responsibilities.
 
