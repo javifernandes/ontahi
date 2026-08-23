@@ -9,6 +9,7 @@ import {
   mapRelation,
   resolveColumnNameForEntity,
   resolveFieldNameForEntity,
+  resolveHasManyTargetField,
 } from '../../src/data-graph/index.js';
 
 describe('data-graph mapping', () => {
@@ -75,6 +76,34 @@ describe('data-graph mapping', () => {
       toTable: 'student',
       toColumn: 'courseid',
     });
+  });
+
+  it('resolves effective has-many target fields from unique belongs-to and reverse mapping', () => {
+    const Course = entity('MappedCourse', { id: field.id() });
+    const Advisor = entity('Advisor', { id: field.id() });
+    const Student = entity('MappedStudent', {
+      id: field.id(),
+      course: field.ref(Course),
+      advisor: field.ref(Advisor),
+    });
+    Student.belongsTo('unmappedCourse', Course);
+    const CourseWithStudents = Course.hasMany('students', Student);
+    mapEntity(CourseWithStudents).toTable('courses');
+    mapEntity(Student).toTable('students', { course: 'course_id' });
+
+    expect(
+      resolveHasManyTargetField(CourseWithStudents, CourseWithStudents.relations.students),
+    ).toBe('course');
+
+    mapRelation(CourseWithStudents, 'students', {
+      type: 'many-to-one',
+      from: 'students.course_id',
+      to: 'courses.id',
+    });
+    expect(
+      resolveHasManyTargetField(CourseWithStudents, CourseWithStudents.relations.students),
+    ).toBe('course');
+    expect(resolveHasManyTargetField(Student, Student.relations.course)).toBeUndefined();
   });
 
   it('maps direct many-to-many topology through storage-only edge metadata', () => {
