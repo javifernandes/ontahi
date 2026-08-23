@@ -1,6 +1,8 @@
 import { createEntityRef, entity, field, relationship } from '@ontahi/core/data-graph';
-import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
+import { describe, expect, it, vi } from 'vitest';
 
+import { executePostgresRelationshipCommand } from '../../src/data-graph/command-runtime.js';
 import {
   compilePostgresRelationshipCommand,
   materializePostgresRelationshipDelta,
@@ -113,5 +115,58 @@ describe('PostgreSQL direct Relationship Commands', () => {
         guardedCourseMapping,
       ),
     ).toThrow('do not yet compile Relation constraints');
+  });
+
+  it.each([
+    {
+      name: 'unmapped endpoint',
+      mappings: [studentMapping],
+      rows: [],
+      reason: 'invalid_command',
+    },
+    {
+      name: 'missing state result',
+      mappings: [studentMapping, courseMapping],
+      rows: [],
+      reason: 'invalid_command',
+    },
+    {
+      name: 'unresolved source Ref',
+      mappings: [studentMapping, courseMapping],
+      rows: [{ source_count: 0, target_count: 1, updated_count: 0, old_target: null }],
+      reason: 'cardinality_mismatch',
+    },
+  ])('reports $name through a stable adapter reason', async ({ mappings, rows, reason }) => {
+    const command = relationship(
+      Student,
+      'course',
+      createEntityRef(Student, { id: 'student-1' }),
+    ).assign(createEntityRef(Course, { id: 'course-1' }));
+    const result = await Effect.runPromise(
+      executePostgresRelationshipCommand({
+        command,
+        mappings,
+        executeQuery: vi.fn().mockResolvedValue({ rows, rowCount: rows.length }),
+      }).pipe(Effect.either),
+    );
+
+    expect(result).toMatchObject({ _tag: 'Left', left: { reason } });
+  });
+
+  it('preserves query failures as execution failures', async () => {
+    const command = relationship(
+      Student,
+      'course',
+      createEntityRef(Student, { id: 'student-1' }),
+    ).assign(createEntityRef(Course, { id: 'course-1' }));
+    const result = await Effect.runPromise(
+      executePostgresRelationshipCommand({
+        command,
+        mappings: [studentMapping, courseMapping],
+        executeQuery: vi.fn().mockRejectedValue(new Error('connection lost')),
+      }).pipe(Effect.either),
+    );
+
+    expect(result).toMatchObject({ _tag: 'Left', left: { reason: 'execution_failed' } });
   });
 });

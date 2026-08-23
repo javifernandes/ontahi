@@ -58,9 +58,7 @@ const assertMapping = (
     }),
   );
   if (constrained) {
-    throw new Error(
-      'PostgreSQL direct Relationship Commands do not yet compile Relation constraints.',
-    );
+    throw new Error('PostgreSQL Relationship Commands do not yet compile Relation constraints.');
   }
   return field;
 };
