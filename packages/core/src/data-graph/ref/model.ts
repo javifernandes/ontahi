@@ -40,6 +40,9 @@ export const resolveEntityRefName = <TEntity extends NamedEntity | string>(
 ): EntityName<TEntity> =>
   (typeof entityOrName === 'string' ? entityOrName : entityOrName.name) as EntityName<TEntity>;
 
+const compareCanonicalLocatorKeys = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
 const normalizeEntityRefLocatorValue = (value: EntityRefLocatorValue): string => {
   if (Array.isArray(value)) {
     return `[${value.map(normalizeEntityRefLocatorValue).join(',')}]`;
@@ -47,7 +50,7 @@ const normalizeEntityRefLocatorValue = (value: EntityRefLocatorValue): string =>
 
   if (isPlainObject(value)) {
     return `{${Object.keys(value)
-      .sort()
+      .sort(compareCanonicalLocatorKeys)
       .map(key => `${JSON.stringify(key)}:${normalizeEntityRefLocatorValue(value[key])}`)
       .join(',')}}`;
   }
