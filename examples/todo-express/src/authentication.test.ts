@@ -8,7 +8,7 @@ import {
   createDisabledTodoAuthentication,
   createTodoPassportAuthentication,
   type TodoAuthenticatedUser,
-} from '../src/authentication.js';
+} from './authentication.js';
 
 type ListeningApplication = {
   baseUrl: string;

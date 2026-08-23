@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 process.env.TODO_AUTH_MODE = 'disabled';
 
-const { TodoApplication, TodoItem } = await import('../src/graph.js');
+const { TodoApplication, TodoItem } = await import('./graph.js');
 
 const getTodoDataset = () => {
   if (TodoApplication.storage.kind !== 'in-memory') {

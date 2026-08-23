@@ -13,15 +13,15 @@ import { Effect } from 'effect';
 import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createTodoExpressApp } from '../src/application.js';
-import type { TodoAuthenticationAdapter } from '../src/authentication.js';
+import { createTodoExpressApp } from './application.js';
+import type { TodoAuthenticationAdapter } from './authentication.js';
 import {
   TodoItem as ClientTodoItem,
   TodoItemSchema as ClientTodoItemSchema,
   TodoList as ClientTodoList,
-} from '../src/generated/client-entities.js';
-import { Tag, TodoItem, TodoApplication, TodoList, todoNotifications } from '../src/graph.js';
-import { createTodoDataGraphRuntime } from '../src/storage.js';
+} from './generated/client-entities.js';
+import { Tag, TodoItem, TodoApplication, TodoList, todoNotifications } from './graph.js';
+import { createTodoDataGraphRuntime } from './storage.js';
 
 const testPrincipal = {
   subject: 'github-user-123',

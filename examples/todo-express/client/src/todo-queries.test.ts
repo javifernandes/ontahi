@@ -1,8 +1,9 @@
 import { toGraphReadRequest } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { todoItemsQuery } from '../client/src/todo-queries.js';
-import { TodoItem, TodoList } from '../src/generated/client-entities.js';
+import { TodoItem, TodoList } from '../../src/generated/client-entities.js';
+
+import { todoItemsQuery } from './todo-queries.js';
 
 describe('Todo client Queries', () => {
   it('keeps the Todo item list Query transport-safe when it projects tags', () => {

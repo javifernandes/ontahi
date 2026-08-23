@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadAuthenticationSession, loadTodoRuntime } from '../client/src/todo-app/bootstrap.js';
-import { canDeleteTodoList } from '../client/src/todo-app/todo-list-state.js';
+import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
+import { canDeleteTodoList } from './todo-list-state.js';
 
 describe('Todo client bootstrap state', () => {
   it('keeps list deletion disabled until todos are known to be empty', () => {
