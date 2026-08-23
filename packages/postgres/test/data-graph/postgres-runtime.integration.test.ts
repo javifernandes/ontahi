@@ -8,6 +8,7 @@ import {
   entity,
   field,
   mapRelation,
+  relationship,
   relationshipSet,
   selection,
   createRemoteDataGraphRuntime,
@@ -38,6 +39,22 @@ import { conformanceDataset, conformanceGraph, TodoEntity, TodoMapping } from '.
 import { dataGraphRuntimeConformance } from './runtime-conformance.js';
 
 const RelationshipTag = entity('RelationshipTag', { id: field.id(), label: field.string() });
+const RelationshipCourse = entity('RelationshipCourse', { id: field.id(), name: field.string() });
+const RelationshipStudent = entity('RelationshipStudent', {
+  id: field.id(),
+  course: field.nullable(field.ref(RelationshipCourse)),
+});
+RelationshipCourse.hasMany('students', RelationshipStudent, { via: 'course' });
+const RelationshipCourseMapping = postgresMapping({
+  entity: RelationshipCourse,
+  table: 'relationship_courses',
+  columns: { id: 'id', name: 'name' },
+});
+const RelationshipStudentMapping = postgresMapping({
+  entity: RelationshipStudent,
+  table: 'relationship_students',
+  columns: { id: 'id', course: 'course_id' },
+});
 const RelationshipTodo = entity('RelationshipTodo', {
   id: field.id(),
   title: field.string(),
@@ -112,6 +129,14 @@ describe('PostgreSQL data graph runtime', () => {
         todo_id text NOT NULL REFERENCES relationship_todos(id) ON DELETE CASCADE,
         tag_id text NOT NULL REFERENCES relationship_tags(id) ON DELETE CASCADE,
         PRIMARY KEY (todo_id, tag_id)
+      );
+      CREATE TABLE relationship_courses (
+        id text PRIMARY KEY,
+        name text NOT NULL
+      );
+      CREATE TABLE relationship_students (
+        id text PRIMARY KEY,
+        course_id text REFERENCES relationship_courses(id)
       )
     `);
   }, 180_000);
@@ -276,6 +301,118 @@ describe('PostgreSQL data graph runtime', () => {
       title: 'Selected',
       tags: [],
     });
+  });
+
+  it('applies direct conditional reassignment atomically and rejects stale callers', async () => {
+    await pool.query('TRUNCATE TABLE relationship_students, relationship_courses CASCADE');
+    await pool.query(
+      `INSERT INTO relationship_courses (id, name)
+       VALUES ('course-1', 'Previous'), ('course-2', 'Next'), ('course-3', 'Concurrent');
+       INSERT INTO relationship_students (id, course_id) VALUES ('student-1', 'course-1')`,
+    );
+    const runtime = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [RelationshipStudentMapping, RelationshipCourseMapping],
+    });
+    const student = createEntityRef(RelationshipStudent, { id: 'student-1' });
+    const previous = createEntityRef(RelationshipCourse, { id: 'course-1' });
+    const next = createEntityRef(RelationshipCourse, { id: 'course-2' });
+
+    await expect(
+      Effect.runPromise(
+        runtime.runRelationshipCommand(
+          relationship(RelationshipStudent, 'course', student).assign(next, {
+            ifCurrent: previous,
+          }),
+        ),
+      ),
+    ).resolves.toEqual({
+      added: [
+        {
+          relation: {
+            sourceEntityName: 'RelationshipStudent',
+            fieldName: 'course',
+            targetEntityName: 'RelationshipCourse',
+          },
+          source: student,
+          target: next,
+        },
+      ],
+      removed: [
+        {
+          relation: {
+            sourceEntityName: 'RelationshipStudent',
+            fieldName: 'course',
+            targetEntityName: 'RelationshipCourse',
+          },
+          source: student,
+          target: previous,
+        },
+      ],
+    });
+    await pool.query(
+      `UPDATE relationship_students SET course_id = 'course-3' WHERE id = 'student-1'`,
+    );
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runRelationshipCommand(
+            relationship(RelationshipStudent, 'course', student).assign(next, {
+              ifCurrent: previous,
+            }),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'relationship_precondition_failed' },
+    });
+    await expect(
+      pool.query(`SELECT course_id FROM relationship_students WHERE id = 'student-1'`),
+    ).resolves.toMatchObject({ rows: [{ course_id: 'course-3' }] });
+
+    await expect(
+      Effect.runPromise(
+        runtime.runRelationshipCommand(
+          relationship(RelationshipCourse, 'students', previous).remove(student),
+        ),
+      ),
+    ).resolves.toEqual({ added: [], removed: [] });
+    const concurrent = createEntityRef(RelationshipCourse, { id: 'course-3' });
+    await expect(
+      Effect.runPromise(
+        runtime.runRelationshipCommand(
+          relationship(RelationshipCourse, 'students', concurrent).remove(student),
+        ),
+      ),
+    ).resolves.toEqual({
+      added: [],
+      removed: [
+        {
+          relation: {
+            sourceEntityName: 'RelationshipStudent',
+            fieldName: 'course',
+            targetEntityName: 'RelationshipCourse',
+          },
+          source: student,
+          target: concurrent,
+        },
+      ],
+    });
+    await expect(
+      Effect.runPromise(
+        runtime.runRelationshipCommand(
+          relationship(RelationshipStudent, 'course', student).assign(next),
+        ),
+      ),
+    ).resolves.toMatchObject({ added: [{ target: next }], removed: [] });
+    await expect(
+      Effect.runPromise(
+        runtime.runRelationshipCommand(
+          relationship(RelationshipStudent, 'course', student).clear(),
+        ),
+      ),
+    ).resolves.toMatchObject({ added: [], removed: [{ target: next }] });
   });
 
   it('runs one fluent client Entity read directly and through Express over PostgreSQL', async () => {

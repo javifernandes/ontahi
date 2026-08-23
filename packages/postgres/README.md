@@ -25,6 +25,17 @@ The runtime supports semantic selections, ordering, limits, counts, streams, pro
 relation includes, relation-root reads, inserts, bulk inserts, upserts, updates, deletes, returning
 rows and cardinality enforcement.
 
+Direct `belongsTo/hasMany` Relationship Commands are lowered to one guarded PostgreSQL statement.
+Conditional to-one assignment preserves its expected current target atomically:
+
+```ts
+student.course.assign(nextCourse, { ifCurrent: previousCourse });
+```
+
+A stale target fails without changing the edge. Inverse `remove` likewise retains its named target
+as a guard. Relations with portable eligibility constraints currently fail closed in this direct
+adapter path until their predicates are compiled into the same mutation boundary.
+
 The same binding provides Explorer-facing free-text search, typed filters, sorting, pagination, and
 reporting for mapped columns that are absent from the live table. Applications do not configure a
 second reader or repeat the PostgreSQL/in-memory choice. `createPostgresDataGraphRuntime` and

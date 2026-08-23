@@ -15,6 +15,7 @@ import {
   type DataGraphExecutionRuntime,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type RelationshipCommandExecutionRuntime,
   type PlainGraphRead,
   type QueryOrView,
   type QuerySpec,
@@ -24,7 +25,11 @@ import {
 import { Effect, Stream } from 'effect';
 import type { Pool, QueryResultRow } from 'pg';
 
-import { executePostgresCommand, executePostgresManyToManyCommand } from './command-runtime.js';
+import {
+  executePostgresCommand,
+  executePostgresManyToManyCommand,
+  executePostgresRelationshipCommand,
+} from './command-runtime.js';
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
 import { PostgresDataGraphError } from './runtime-error.js';
 import { compilePostgresQuery, quotePostgresIdentifier } from './sql.js';
@@ -49,7 +54,8 @@ export const createPostgresDataGraphRuntime = (input: {
   undefined,
   PostgresDataGraphError
 > &
-  ManyToManyRelationshipCommandExecutionRuntime<PostgresDataGraphError> => {
+  ManyToManyRelationshipCommandExecutionRuntime<PostgresDataGraphError> &
+  RelationshipCommandExecutionRuntime<PostgresDataGraphError> => {
   const registry = createPostgresMappingRegistry(input.mappings);
   const executeQuery = <TRow extends QueryResultRow>(sql: { text: string; values: unknown[] }) =>
     input.pool.query<TRow>(sql.text, sql.values);
@@ -358,5 +364,7 @@ export const createPostgresDataGraphRuntime = (input: {
       }),
     runManyToManyRelationshipCommand: command =>
       executePostgresManyToManyCommand({ command, executeQuery, mappings: input.mappings }),
+    runRelationshipCommand: command =>
+      executePostgresRelationshipCommand({ command, executeQuery, mappings: input.mappings }),
   };
 };

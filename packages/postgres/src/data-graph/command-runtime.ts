@@ -2,6 +2,7 @@ import {
   liftEntityReferenceRecord,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommand,
+  type RelationshipCommand,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 import type { QueryResult, QueryResultRow } from 'pg';
@@ -11,6 +12,11 @@ import {
   materializePostgresManyToManyDelta,
 } from './many-to-many.js';
 import type { PostgresEntityMapping } from './mapping.js';
+import {
+  compilePostgresRelationshipCommand,
+  materializePostgresRelationshipDelta,
+  type PostgresRelationshipCommandRow,
+} from './relationship-command.js';
 import { PostgresDataGraphError } from './runtime-error.js';
 import { compilePostgresCommand } from './sql.js';
 
@@ -106,4 +112,53 @@ export const executePostgresManyToManyCommand = (input: {
           : 'execution_failed';
       return new PostgresDataGraphError('PostgreSQL many-to-many Command failed.', reason, cause);
     },
+  });
+
+export const executePostgresRelationshipCommand = (input: {
+  command: RelationshipCommand;
+  executeQuery: ExecuteQuery;
+  mappings: readonly PostgresEntityMapping[];
+}) =>
+  Effect.tryPromise({
+    try: async () => {
+      const source = input.mappings.find(
+        mapping => mapping.entity.name === input.command.relation.sourceEntityName,
+      );
+      const target = input.mappings.find(
+        mapping => mapping.entity.name === input.command.relation.targetEntityName,
+      );
+      if (!source || !target) {
+        throw new Error('PostgreSQL Relationship Command references an unmapped Entity.');
+      }
+      const compiled = compilePostgresRelationshipCommand(input.command, source, target);
+      const result = await input.executeQuery<PostgresRelationshipCommandRow & QueryResultRow>(
+        compiled.sql,
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error('PostgreSQL Relationship Command returned no state row.');
+      const materialized = materializePostgresRelationshipDelta(input.command, compiled, row);
+      if ('cardinalityMismatch' in materialized) {
+        throw new PostgresDataGraphError(
+          'PostgreSQL Relationship Command endpoint Ref did not resolve exactly once.',
+          'cardinality_mismatch',
+        );
+      }
+      if ('preconditionFailed' in materialized) {
+        throw new PostgresDataGraphError(
+          'PostgreSQL Relationship Command current target did not match its precondition.',
+          'relationship_precondition_failed',
+        );
+      }
+      return materialized.delta;
+    },
+    catch: cause =>
+      cause instanceof PostgresDataGraphError
+        ? cause
+        : new PostgresDataGraphError(
+            'PostgreSQL Relationship Command failed.',
+            cause instanceof Error && cause.message.startsWith('PostgreSQL Relationship Command')
+              ? 'invalid_command'
+              : 'execution_failed',
+            cause,
+          ),
   });
