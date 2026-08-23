@@ -46,8 +46,8 @@
     "test:coverage": "pnpm exec vitest run --coverage",
     "test:watch": "pnpm exec vitest",
     "typecheck": "pnpm exec tsc -p tsconfig.json",
-    "lint": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0",
-    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix --max-warnings 0"
+    "lint": "pnpm exec eslint \"src/**/*.ts\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" --fix --max-warnings 0"
   },
   "dependencies": {
     "@ontahi/core": "workspace:*",

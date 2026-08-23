@@ -524,6 +524,15 @@ Codegen test-organization cut result on 2026-08-17:
 4. All 7 suites and 65 tests still pass. Coverage is unchanged at 81.47% statements, 74.36%
    branches, 87.66% functions, and 82.40% lines; typecheck, lint, and build remain green.
 
+Plan 140 follow-up on 2026-08-23:
+
+1. The temporary package-level integration-test exception above is retired. Cross-boundary suites
+   now use `.integration.test.js` under the narrowest owning `src/` boundary.
+2. The generated-module semantic helper now lives beside the generated-module suites as
+   `generated-module.test-support.js` and is explicitly excluded from the published package.
+3. Codegen keeps 8 suites and 73 tests after the move. This placement change does not alter the
+   semantic test strategy or the production pipeline described by this plan.
+
 ### Slice 5. Cutover And Cleanup
 
 1. Make the semantic emitter the only production path.

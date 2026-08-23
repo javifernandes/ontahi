@@ -18,7 +18,7 @@
     "start": "pnpm exec tsx src/server.ts",
     "test": "TODO_AUTH_MODE=github pnpm exec vitest run",
     "typecheck": "pnpm run codegen:check && pnpm exec tsc -p tsconfig.json && pnpm exec tsc -p client/tsconfig.json",
-    "lint": "pnpm exec eslint \"src/**/*.ts\" \"client/**/*.{ts,tsx}\" \"test/**/*.ts\" --max-warnings 0"
+    "lint": "pnpm exec eslint \"src/**/*.ts\" \"client/**/*.{ts,tsx}\" --max-warnings 0"
   },
   "dependencies": {
     "@ontahi/core": "workspace:*",

@@ -10,7 +10,12 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/*.spec.ts', 'test/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+        'src/**/*.spec.ts',
+        'src/**/*.test-support.ts',
+      ],
       thresholds: {
         lines: 1,
         branches: 0.9,
@@ -24,14 +29,14 @@ export default defineConfig({
         test: {
           name: 'node',
           environment: 'node',
-          include: ['test/**/*.test.ts'],
+          include: ['src/**/*.test.ts'],
         },
       },
       {
         test: {
           name: 'jsdom',
           environment: 'jsdom',
-          include: ['test/**/*.test.tsx'],
+          include: ['src/**/*.test.tsx'],
         },
       },
     ],

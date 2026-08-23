@@ -5,7 +5,6 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { importGeneratedModule } from '../../test/support/generated-module.js';
 import { renderGeneratedClientEntityModule } from '../projections.mjs';
 
 import {
@@ -15,6 +14,7 @@ import {
   printClientEntitySchemaModule,
   renderSemanticClientEntitySchemaModule,
 } from './client-entity-schema.mjs';
+import { importGeneratedModule } from './generated-module.test-support.js';
 
 const summarizeExpression = expression => {
   if (ts.isIdentifier(expression)) {

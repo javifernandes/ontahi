@@ -2,6 +2,21 @@
 
 Tests should describe observable contracts rather than implementation ceremony.
 
+## Placement
+
+1. Keep a focused test beside the production module it owns, using `.test.ts`, `.test.tsx`, or
+   `.test.js`.
+2. Keep an integration suite at the narrowest source boundary that owns the interaction, using
+   `.integration.test.ts` or `.integration.test.js`. Integration is a test kind, not a separate
+   package-level directory.
+3. Name shared test-only modules `.test-support.ts` or `.test-support.js` and keep them beside the
+   smallest group of tests that shares them.
+4. Include colocated tests and support in package typechecking. Exclude them explicitly from build
+   emission, coverage inputs, and published artifacts.
+5. Treat a crowded production directory plus its colocated tests as evidence that the logical unit
+   may need a folder or a narrower boundary. Reorganize that unit in a separate, behavior-preserving
+   change rather than hiding its tests elsewhere.
+
 ## Priorities
 
 1. Start bug fixes with the smallest realistic failing regression.
