@@ -2,7 +2,7 @@ import { graphCommandProtocolError, type GraphCommandDispatcher } from '@ontahi/
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createExpressGraphCommandHandler } from '../../src/graph-command/index.js';
+import { createExpressGraphCommandHandler } from './index.js';
 
 const requestBody = { version: 1, kind: 'graph-command', command: {} };
 

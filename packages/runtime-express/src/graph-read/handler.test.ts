@@ -2,7 +2,7 @@ import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core/d
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createExpressGraphReadHandler } from '../../src/graph-read/index.js';
+import { createExpressGraphReadHandler } from './index.js';
 
 const validRequest = {
   version: 1,

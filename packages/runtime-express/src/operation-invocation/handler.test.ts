@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createExpressOperationInvocationHandler,
   createExpressTaskSnapshotHandler,
-} from '../../src/operation-invocation/index.js';
+} from './index.js';
 
 const invokeHandler = async (
   handler: RequestHandler,

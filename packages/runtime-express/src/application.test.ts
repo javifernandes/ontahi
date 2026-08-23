@@ -26,8 +26,8 @@ import { Effect } from 'effect';
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ontahiExpress } from '../src/application.js';
-import { createOntahiExpressExplorer } from '../src/explorer/index.js';
+import { ontahiExpress } from './application.js';
+import { createOntahiExpressExplorer } from './explorer/index.js';
 
 const TodoEntity = defineEntitySchema('Todo', {
   id: field.id(),
