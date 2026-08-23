@@ -170,6 +170,26 @@ application-specific hooks.
 6. Explore transactional outbox delivery with Plan 132's identity and retry contracts.
 7. Project outcome chains into Explorer and agent-readable evidence.
 
+### Declarative authoring and registration direction
+
+The current `MutationReaction` object is execution IR, not the desired application authoring
+surface. Reactions should be registered at the application/runtime boundary rather than attached
+to either endpoint or stored inside portable Relation metadata. A Relation-aware factory may derive
+its canonical matcher without making the Relation own behavior:
+
+```ts
+ontahi({
+  // Directional sketch; not an implemented API.
+  reactions: [reaction.relationship(Course, 'students').removed().emit(StudentRemovedFromCourse)],
+});
+```
+
+Factories should hide low-level `mutationKind` and `action` tags, preserve a serializable matcher
+and semantic intent, and leave authority and delivery policy visible. Payload projection and
+runtime registration remain design work; executable callbacks must not leak into reflected
+Relation metadata. Required coordinated changes still belong before the Applied Outcome, inside a
+Domain Operation and a real adapter transaction capability when one exists.
+
 ## Todo Many-To-Many Proof
 
 Todo tagging resolves Plan 131's binary, attribute-free many-to-many gray area. `TodoTag` currently

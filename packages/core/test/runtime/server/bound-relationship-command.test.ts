@@ -105,6 +105,9 @@ describe('bound relationship commands', () => {
     });
 
     expectTypeOf(student.course.assign).parameter(0).toEqualTypeOf<EntityRef<'Course'>>();
+    expect(student.course.assign(Course.refById('course-2'), { ifCurrent: course })).toMatchObject({
+      precondition: { currentTarget: course },
+    });
     expectTypeOf(student.course.assign(course)).toEqualTypeOf<RelationshipCommand>();
     expectTypeOf(student.course).not.toHaveProperty('add');
     expectTypeOf(team.members.add).parameter(0).toEqualTypeOf<EntityRef<'Member'>>();

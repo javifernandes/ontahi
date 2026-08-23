@@ -53,6 +53,53 @@ describe('relationship commands', () => {
     });
   });
 
+  it('reassigns a to-one Relation only when its current target matches', async () => {
+    const previous = createEntityRef(Course, { id: 'course-1' });
+    const next = createEntityRef(Course, { id: 'course-2' });
+    const student = createEntityRef(Student, { id: 'student-1' });
+    const dataset = {
+      Course: [{ id: 'course-1' }, { id: 'course-2' }, { id: 'course-3' }],
+      Student: [{ id: 'student-1', course: 'course-1' }],
+    };
+    const command = relationship(Student, 'course', student).assign(next, {
+      ifCurrent: previous,
+    });
+
+    expect(command).toMatchObject({ precondition: { currentTarget: previous } });
+    await expect(
+      Effect.runPromise(
+        executeInMemoryRelationshipCommandEffect(dataset, [Course, Student], command),
+      ),
+    ).resolves.toEqual({
+      added: [{ relation: command.relation, source: student, target: next }],
+      removed: [{ relation: command.relation, source: student, target: previous }],
+    });
+    expect(dataset.Student).toEqual([{ id: 'student-1', course: 'course-2' }]);
+  });
+
+  it('rejects a stale conditional reassignment without changing data', async () => {
+    const student = createEntityRef(Student, { id: 'student-1' });
+    const dataset = {
+      Course: [{ id: 'course-1' }, { id: 'course-2' }, { id: 'course-3' }],
+      Student: [{ id: 'student-1', course: 'course-3' }],
+    };
+    const command = relationship(Student, 'course', student).assign(
+      createEntityRef(Course, { id: 'course-2' }),
+      { ifCurrent: createEntityRef(Course, { id: 'course-1' }) },
+    );
+
+    const result = await Effect.runPromise(
+      executeInMemoryRelationshipCommandEffect(dataset, [Course, Student], command).pipe(
+        Effect.either,
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'relationship_precondition_failed' },
+    });
+    expect(dataset.Student).toEqual([{ id: 'student-1', course: 'course-3' }]);
+  });
+
   it('rejects endpoint refs that do not belong to the Relation', () => {
     expect(() => relationship(Student, 'course', course)).toThrow(
       'Expected relationship subject Ref for Student, got Course.',

@@ -49,6 +49,27 @@ describe('data graph Relationship Command protocol', () => {
     expect(resolved).toEqual({ success: true, request: parsed.request, command: forward });
   });
 
+  it('round-trips and validates a conditional to-one transition', () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const previous = createEntityRef(graph.Course, { id: 'course-1' });
+    const next = createEntityRef(graph.Course, { id: 'course-2' });
+    const command = relationship(graph.Student, 'course', student).assign(next, {
+      ifCurrent: previous,
+    });
+    const parsed = parseGraphCommandRequest(
+      JSON.parse(JSON.stringify(toGraphCommandRequest(command))),
+    );
+    expect(parsed).toEqual({
+      success: true,
+      request: { version: 1, kind: 'graph-command', command },
+    });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+    expect(
+      resolveGraphCommandRequest(parsed.request, { entities: [graph.Student, graph.Course] }),
+    ).toMatchObject({ success: true, command });
+  });
+
   it('drops unknown envelope and command keys', () => {
     const graph = defineSchoolGraph();
     const command = relationship(
