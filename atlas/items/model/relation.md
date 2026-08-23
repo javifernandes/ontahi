@@ -21,6 +21,7 @@ relatedPlans:
   - ontahi://plans/136-relation-constraints-and-eligibility
   - ontahi://plans/136a-portable-participant-eligibility-core
   - ontahi://plans/136b-many-to-many-participant-eligibility
+  - ontahi://plans/136c-postgres-direct-relation-compare-and-set
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
 migratedFrom: bookops://atlas/model/relation
@@ -111,7 +112,11 @@ This is one conditional structural transition. The canonical command carries por
 current-target identity, and execution compares it inside the same mutation boundary that replaces
 the edge. A mismatch is an observable conflict, not a successful no-op; unconditional `assign`
 remains available when last-write-wins is intentional. Provider-backed compare-and-set compilation
-must preserve that atomic boundary before advertising support.
+must preserve that atomic boundary before advertising support. PostgreSQL now lowers direct
+Relationship Commands to one guarded statement that locks and resolves the source, verifies the
+target and expected current edge, applies the change, and returns enough state to materialize the
+exact delta. The adapter fails closed for constrained Relations until eligibility can be compiled
+into that same statement. Supabase parity remains a separate RPC-backed slice.
 
 A Relation does not own arbitrary lifecycle hooks, domain failures, effects, authorization
 coordination, or durability. Structural referential consistency, Selection resolution, cardinality,

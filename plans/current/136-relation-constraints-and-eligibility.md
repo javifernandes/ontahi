@@ -8,6 +8,8 @@ Completed child: [136a. Portable Participant Eligibility Core](../done/136a-port
 
 Completed child: [136b. Many-To-Many Participant Eligibility](../done/136b-many-to-many-participant-eligibility.md)
 
+Completed child: [136c. PostgreSQL Direct Relation Compare-And-Set](../done/136c-postgres-direct-relation-compare-and-set.md)
+
 ## Summary
 
 Let a Relation declare portable structural eligibility beyond topology and cardinality. The same
@@ -94,4 +96,6 @@ rejections, static reflection, and authoritative in-memory enforcement shared by
 inverse authoring. Plan 136b extended the same contract to Selection-valued many-to-many links with
 all-or-nothing in-memory evaluation and a Todo proof. Aggregate/cardinality constraints,
 adapter-backed atomic enforcement, structured rejection transport, conflicts, and advisory
-preflight remain open here.
+preflight remain open here. Plan 136c adds the first provider-backed direct Relation mutation and
+atomic expected-current conflict proof in PostgreSQL while failing closed for eligibility that has
+not yet been compiled.
