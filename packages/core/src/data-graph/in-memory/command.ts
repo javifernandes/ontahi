@@ -16,6 +16,7 @@ export type InMemoryDataGraphFailureReason =
   | 'cardinality_mismatch'
   | 'invalid_command'
   | 'relation_constraint_rejected'
+  | 'relationship_precondition_failed'
   | 'read_failed'
   | 'mutation_failed';
 

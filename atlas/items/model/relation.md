@@ -12,6 +12,7 @@ relatedPlans:
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/131-ontahi-relationship-semantics
   - ontahi://plans/131a-relationship-command-delta-core-experiment
+  - ontahi://plans/131b-conditional-to-one-transition
   - ontahi://plans/128c-relationship-command-wire-protocol
   - ontahi://plans/128d-relationship-command-policy-dispatcher
   - ontahi://plans/128e-relationship-command-runtime-routing
@@ -100,12 +101,38 @@ current target, while `course.students.remove(student)` names the expected targe
 a concurrent reassignment. They share canonical Relation identity and `unlink` action; the applied
 Relationship Delta records the exact fact actually removed.
 
+A forward to-one assignment can likewise preserve the target observed by its caller:
+
+```ts
+student.course.assign(nextCourse, { ifCurrent: previousCourse });
+```
+
+This is one conditional structural transition. The canonical command carries portable expected
+current-target identity, and execution compares it inside the same mutation boundary that replaces
+the edge. A mismatch is an observable conflict, not a successful no-op; unconditional `assign`
+remains available when last-write-wins is intentional. Provider-backed compare-and-set compilation
+must preserve that atomic boundary before advertising support.
+
 A Relation does not own arbitrary lifecycle hooks, domain failures, effects, authorization
 coordination, or durability. Structural referential consistency, Selection resolution, cardinality,
 and atomic edge application are generic graph/runtime responsibilities. Domain invariants and
 coordinated behavior that cannot be expressed structurally remain with Domain Operations. When the
 relationship has attributes, identity, lifecycle, history, independent policy or effects, more than
 two roles, or participation in further Relations, model it as an ordinary Association Entity.
+
+The mutation lifecycle keeps those responsibilities explicit:
+
+1. cardinality-specific authoring produces a canonical Relationship Command;
+2. policy establishes whether the caller may attempt it;
+3. execution resolves participants and verifies structural preconditions and eligibility;
+4. storage applies the edge change atomically and returns the exact Relationship Delta;
+5. the runtime records an Applied Mutation Outcome;
+6. application-registered Reactions may match that outcome and request semantic follow-up intents.
+
+Only steps required for the primary invariant belong before edge application. Reactions occur after
+an applied outcome and cannot imply rollback. A future compositional transaction capability may
+coordinate several required mutations, but sequencing Effects in an Operation does not currently
+promise one shared transaction.
 
 A Relation may own portable structural eligibility without owning an arbitrary callback. The first
 constraint form applies the existing Selection predicate AST to a source or target participant of the

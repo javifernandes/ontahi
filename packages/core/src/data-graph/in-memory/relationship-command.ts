@@ -140,6 +140,16 @@ const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
   if (!command.target) {
     throw new InMemoryDataGraphError('Link commands require a target Ref.', 'invalid_command');
   }
+  if (
+    command.precondition &&
+    (!context.currentTarget ||
+      currentValue !== lowerEntityReferenceValue(sourceField, command.precondition.currentTarget))
+  ) {
+    throw new InMemoryDataGraphError(
+      `Current target for ${command.relation.sourceEntityName}.${command.relation.fieldName} does not match the conditional assignment precondition.`,
+      'relationship_precondition_failed',
+    );
+  }
   const targetMatches = (dataset[targetEntity.name] ?? []).filter(candidate =>
     matchesRef(candidate, command.target!),
   );
@@ -200,6 +210,9 @@ const execute = (
   }
   assertRefEntity(command.source, sourceEntity, 'source');
   if (command.target) assertRefEntity(command.target, targetEntity, 'target');
+  if (command.precondition) {
+    assertRefEntity(command.precondition.currentTarget, targetEntity, 'current target');
+  }
 
   const rows = [...(dataset[sourceEntity.name] ?? [])];
   const matches = rows.flatMap((row, index) => (matchesRef(row, command.source) ? [index] : []));

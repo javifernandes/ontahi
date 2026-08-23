@@ -117,6 +117,8 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       typeof command.relation.targetEntityName !== 'string' ||
       !isEntityRef(command.source) ||
       (command.target !== undefined && !isEntityRef(command.target)) ||
+      (command.precondition !== undefined &&
+        (!isRecord(command.precondition) || !isEntityRef(command.precondition.currentTarget))) ||
       (command.action === 'link' && command.target === undefined) ||
       !isJsonValue(value)
     ) {
@@ -144,6 +146,9 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
           },
           source: command.source,
           ...(command.target === undefined ? {} : { target: command.target }),
+          ...(command.precondition === undefined
+            ? {}
+            : { precondition: { currentTarget: command.precondition.currentTarget } }),
         },
       }) as GraphCommandRequestV1,
     };
@@ -329,7 +334,12 @@ const resolveDirectRelationshipCommand = (
   const targetError = command.target
     ? validateRef(command.target, targetEntity, 'target')
     : undefined;
-  return targetError ? { success: false, error: targetError } : { success: true, request, command };
+  const preconditionError = command.precondition
+    ? validateRef(command.precondition.currentTarget, targetEntity, 'current target')
+    : undefined;
+  return targetError || preconditionError
+    ? { success: false, error: targetError ?? preconditionError! }
+    : { success: true, request, command };
 };
 
 const validateRef = (

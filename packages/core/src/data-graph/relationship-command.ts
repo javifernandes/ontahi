@@ -37,6 +37,11 @@ export type RelationshipCommand = {
   relation: CanonicalRelationIdentity;
   source: AnyEntityRef;
   target?: AnyEntityRef;
+  precondition?: { currentTarget: AnyEntityRef };
+};
+
+export type RelationshipAssignOptions<TRelation extends RelationDefinition> = {
+  ifCurrent: RelationTargetRef<TRelation>;
 };
 
 export type ManyToManyRelationshipCommand = {
@@ -59,7 +64,10 @@ type RelationTargetRef<TRelation extends RelationDefinition> = EntityRef<
 export type BoundRelationshipCommandOperations<TRelation extends RelationDefinition> =
   TRelation extends RelationDefinition<'belongsTo'>
     ? {
-        assign: (target: RelationTargetRef<TRelation>) => RelationshipCommand;
+        assign: (
+          target: RelationTargetRef<TRelation>,
+          options?: RelationshipAssignOptions<TRelation>,
+        ) => RelationshipCommand;
         clear: () => RelationshipCommand;
       }
     : TRelation extends RelationDefinition<'hasMany'>
@@ -243,9 +251,13 @@ export const relationship = (
   };
 
   return {
-    assign: (target: AnyEntityRef) => {
+    assign: (target: AnyEntityRef, options?: { ifCurrent: AnyEntityRef }) => {
       assertDirection('forward', 'assign');
-      return command('link', target);
+      if (options) assertRefEntity(options.ifCurrent, resolved.targetEntity, 'current target');
+      return {
+        ...command('link', target),
+        ...(options ? { precondition: { currentTarget: options.ifCurrent } } : {}),
+      };
     },
     clear: () => {
       assertDirection('forward', 'clear');
