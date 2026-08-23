@@ -2,7 +2,7 @@ import { field, resolveRelatedRootFields } from '@ontahi/core/data-graph';
 import { entity, relation } from '@ontahi/core/entity';
 import { describe, expect, it } from 'vitest';
 
-import { inferPostgresMappings } from '../../src/data-graph/mapping.js';
+import { inferPostgresMappings } from './mapping.js';
 
 describe('PostgreSQL mapping inference', () => {
   it('derives conventional table and column names from semantic entities', () => {

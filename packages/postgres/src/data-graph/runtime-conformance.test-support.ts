@@ -13,7 +13,7 @@ import {
 import { Chunk, Effect, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { conformanceGraph } from './fixtures.js';
+import { conformanceGraph } from './fixtures.test-support.js';
 
 type ConformanceHarness = {
   runtime: DataGraphExecutionRuntime<any, any, any, any>;

@@ -30,14 +30,15 @@ import express from 'express';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+
+import { conformanceDataset, conformanceGraph, TodoEntity, TodoMapping } from './fixtures.test-support.js';
+import { dataGraphRuntimeConformance } from './runtime-conformance.test-support.js';
+
 import {
   createPostgresDataGraphRuntime,
   createPostgresDataGraphStorage,
   postgresMapping,
-} from '../../src/data-graph/index.js';
-
-import { conformanceDataset, conformanceGraph, TodoEntity, TodoMapping } from './fixtures.js';
-import { dataGraphRuntimeConformance } from './runtime-conformance.js';
+} from './index.js';
 
 const RelationshipTag = entity('RelationshipTag', {
   id: field.id(),

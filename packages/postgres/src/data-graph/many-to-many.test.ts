@@ -13,7 +13,7 @@ import {
   compilePostgresManyToManyCommand,
   materializePostgresManyToManyDelta,
   postgresMapping,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
 const Tag = entity('Tag', { id: field.id(), label: field.string() });
 const Todo = entity('Todo', { id: field.id(), title: field.string() }).manyToMany('tags', Tag);

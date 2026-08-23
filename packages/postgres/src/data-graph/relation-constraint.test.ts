@@ -11,9 +11,9 @@ import {
 } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import type { PostgresEntityMapping } from '../../src/data-graph/mapping.js';
-import { postgresMapping } from '../../src/data-graph/mapping.js';
-import { compilePostgresRelationConstraints } from '../../src/data-graph/relation-constraint.js';
+import type { PostgresEntityMapping } from './mapping.js';
+import { postgresMapping } from './mapping.js';
+import { compilePostgresRelationConstraints } from './relation-constraint.js';
 
 const Candidate = entity('ConstraintCandidate', {
   id: field.id(),

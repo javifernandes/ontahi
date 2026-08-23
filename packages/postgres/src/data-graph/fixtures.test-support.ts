@@ -1,6 +1,6 @@
 import { entity, field, mapEntity, mapRelation } from '@ontahi/core/data-graph';
 
-import { postgresMapping } from '../../src/data-graph/index.js';
+import { postgresMapping } from './index.js';
 
 export const TodoEntity = entity('Todo', {
   id: field.id(),

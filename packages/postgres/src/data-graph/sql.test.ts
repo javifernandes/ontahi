@@ -7,15 +7,16 @@ import {
 } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
+import { TodoEntity, TodoMapping } from './fixtures.test-support.js';
+
 import {
   compilePostgresCommand,
   compilePostgresQuery,
   createPostgresMappingRegistry,
   inferPostgresMappings,
   postgresMapping,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
-import { TodoEntity, TodoMapping } from './fixtures.js';
 
 describe('PostgreSQL SQL compiler', () => {
   it('compiles selections, ordering and limits with parameters', () => {

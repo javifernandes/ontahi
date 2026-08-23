@@ -3,7 +3,7 @@ import { entity } from '@ontahi/core/entity';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 
-import { inspectPostgresDataGraphSchema } from '../../src/data-graph/schema-contract.js';
+import { inspectPostgresDataGraphSchema } from './schema-contract.js';
 
 describe('PostgreSQL data graph schema contract', () => {
   it('reports mapped tables and columns missing from the physical schema', async () => {

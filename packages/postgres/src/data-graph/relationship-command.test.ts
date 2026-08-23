@@ -8,12 +8,13 @@ import {
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import { executePostgresRelationshipCommand } from '../../src/data-graph/command-runtime.js';
+import { executePostgresRelationshipCommand } from './command-runtime.js';
+
 import {
   compilePostgresRelationshipCommand,
   materializePostgresRelationshipDelta,
   postgresMapping,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
 const Course = entity('Course', { id: field.id(), name: field.string() });
 const Student = entity('Student', {
