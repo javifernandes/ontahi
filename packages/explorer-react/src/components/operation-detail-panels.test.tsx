@@ -1,15 +1,16 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  ExplorerOperationDescriptor,
+  ExplorerTaskDescriptor,
+} from '../contracts/index.js';
+
 import {
   ExplorerOperationIngress,
   ExplorerOperationMetadata,
   ExplorerTaskDetail,
-} from '../../src/components/index.js';
-import type {
-  ExplorerOperationDescriptor,
-  ExplorerTaskDescriptor,
-} from '../../src/contracts/index.js';
+} from './index.js';
 
 type MockEditorProps = {
   value: string;

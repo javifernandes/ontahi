@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import type { ExplorerSnapshot, ExplorerTaskRunListItem } from '../src/contracts/index.js';
+import type { ExplorerSnapshot, ExplorerTaskRunListItem } from './contracts/index.js';
 
 describe('Explorer contracts', () => {
   it('accept neutral task run list items from the Ontahi task runtime', () => {

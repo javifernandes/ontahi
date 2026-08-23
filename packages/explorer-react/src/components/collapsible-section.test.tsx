@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ExplorerCollapsibleSection, ExplorerSubsectionTitle } from '../../src/components/index.js';
+import { ExplorerCollapsibleSection, ExplorerSubsectionTitle } from './index.js';
 
 afterEach(cleanup);
 

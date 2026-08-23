@@ -6,8 +6,9 @@ import { userEvent } from '@testing-library/user-event';
 import { useState, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplorerEntityRefInput } from '../../src/components/index.js';
-import type { ExplorerOperationInputRefDescriptor } from '../../src/contracts/index.js';
+import type { ExplorerOperationInputRefDescriptor } from '../contracts/index.js';
+
+import { ExplorerEntityRefInput } from './index.js';
 
 const inputRef: ExplorerOperationInputRefDescriptor = {
   path: 'book',

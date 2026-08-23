@@ -7,7 +7,7 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['test/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/**/*.test-support.ts'],
       thresholds: {
         lines: 1,
         branches: 0.9,
@@ -17,6 +17,6 @@ export default defineConfig({
     },
     reporters: ['default', ['junit', { outputFile: './coverage/junit.xml' }]],
     environment: 'jsdom',
-    include: ['test/**/*.{test.ts,test.tsx}'],
+    include: ['src/**/*.{test.ts,test.tsx}'],
   },
 });

@@ -6,13 +6,15 @@ import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ExplorerOperationDescriptor } from '../contracts/index.js';
+
+import { updateExplorerEntityRefInputDraft } from './operation-executor.js';
+
 import {
   ExplorerOperationExecutePanel,
   ExplorerProvider,
   type ExplorerOperationRefInputRenderer,
-} from '../../src/components/index.js';
-import { updateExplorerEntityRefInputDraft } from '../../src/components/operation-executor.js';
-import type { ExplorerOperationDescriptor } from '../../src/contracts/index.js';
+} from './index.js';
 
 type MockEditorProps = {
   value: string;

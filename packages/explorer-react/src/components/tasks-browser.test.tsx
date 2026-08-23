@@ -2,13 +2,14 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplorerProvider, ExplorerTasksBrowser } from '../../src/components/index.js';
 import type {
   ExplorerSchemaDescriptor,
   ExplorerTaskDescriptor,
   ExplorerTaskRunListItem,
   ExplorerTaskRunSource,
-} from '../../src/contracts/index.js';
+} from '../contracts/index.js';
+
+import { ExplorerProvider, ExplorerTasksBrowser } from './index.js';
 
 type MockEditorProps = {
   value: string;

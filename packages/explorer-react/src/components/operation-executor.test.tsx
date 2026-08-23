@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ExplorerOperationDescriptor } from '../contracts/index.js';
+
 import {
   buildExplorerOperationInputDraft,
   formatExplorerOperationInputDraft,
@@ -13,8 +15,7 @@ import {
   updateExplorerEntityRefInputDraft,
   updateExplorerInputFieldDraft,
   validateExplorerOperationInput,
-} from '../../src/components/operation-executor.js';
-import type { ExplorerOperationDescriptor } from '../../src/contracts/index.js';
+} from './operation-executor.js';
 
 const buildOperation = (
   overrides: Partial<ExplorerOperationDescriptor> = {},

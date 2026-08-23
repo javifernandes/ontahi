@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplorerSelect } from '../../src/components/select.js';
+import { ExplorerSelect } from './select.js';
 
 afterEach(cleanup);
 

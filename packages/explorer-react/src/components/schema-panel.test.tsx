@@ -2,8 +2,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplorerSchemaPanel } from '../../src/components/index.js';
-import type { ExplorerSchemaDescriptor } from '../../src/contracts/index.js';
+import type { ExplorerSchemaDescriptor } from '../contracts/index.js';
+
+import { ExplorerSchemaPanel } from './index.js';
 
 type MockEditorProps = {
   value: string;

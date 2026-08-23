@@ -2,8 +2,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ExplorerEventBrowser, ExplorerProvider } from '../../src/components/index.js';
-import type { ExplorerEventDescriptor } from '../../src/contracts/index.js';
+import type { ExplorerEventDescriptor } from '../contracts/index.js';
+
+import { ExplorerEventBrowser, ExplorerProvider } from './index.js';
 
 const events: ExplorerEventDescriptor[] = [
   {

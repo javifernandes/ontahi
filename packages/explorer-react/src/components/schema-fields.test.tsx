@@ -2,12 +2,13 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { ExplorerSchemaDescriptor } from '../contracts/index.js';
+
 import {
   ExplorerFieldRow,
   ExplorerSchemaFields,
   ExplorerSchemaStatusBadge,
-} from '../../src/components/index.js';
-import type { ExplorerSchemaDescriptor } from '../../src/contracts/index.js';
+} from './index.js';
 
 afterEach(cleanup);
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { humanizeExplorerName } from '../../src/components/index.js';
+import { humanizeExplorerName } from './index.js';
 
 describe('humanizeExplorerName', () => {
   it('formats camelCase task names into readable titles', () => {

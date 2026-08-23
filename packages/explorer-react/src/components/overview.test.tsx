@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ExplorerOverview, ExplorerProvider } from '../../src/components/index.js';
-import type { ExplorerSchemaDescriptor, ExplorerSnapshot } from '../../src/contracts/index.js';
+import type { ExplorerSchemaDescriptor, ExplorerSnapshot } from '../contracts/index.js';
+
+import { ExplorerOverview, ExplorerProvider } from './index.js';
 
 const emptySchema: ExplorerSchemaDescriptor = {
   source: 'unknown',

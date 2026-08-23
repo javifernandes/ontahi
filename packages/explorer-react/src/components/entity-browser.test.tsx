@@ -9,13 +9,14 @@ import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplorerEntityBrowser, ExplorerProvider } from '../../src/components/index.js';
 import type {
   ExplorerEntityDetail,
   ExplorerOperationDescriptor,
   ExplorerSchemaDescriptor,
   ExplorerTaskDescriptor,
-} from '../../src/contracts/index.js';
+} from '../contracts/index.js';
+
+import { ExplorerEntityBrowser, ExplorerProvider } from './index.js';
 
 const emptySchema: ExplorerSchemaDescriptor = {
   source: 'unknown',

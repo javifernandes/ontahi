@@ -1,7 +1,7 @@
 import { entity, field, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { buildExplorerSnapshot, getExplorerEntityDetail } from '../../src/server/index.js';
+import { buildExplorerSnapshot, getExplorerEntityDetail } from './index.js';
 
 describe('explorer descriptor builder', () => {
   it('builds reflected entity, operation, task, ingress, and event descriptors', () => {

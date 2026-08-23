@@ -4,11 +4,12 @@ import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExplorerOperationsBrowser, ExplorerProvider } from '../../src/components/index.js';
 import type {
   ExplorerOperationDescriptor,
   ExplorerSchemaDescriptor,
-} from '../../src/contracts/index.js';
+} from '../contracts/index.js';
+
+import { ExplorerOperationsBrowser, ExplorerProvider } from './index.js';
 
 type MockEditorProps = {
   value: string;

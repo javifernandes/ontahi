@@ -1,7 +1,7 @@
 import { entity, field, graphSchema, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { describeRuntimeSchema, undeclaredResultSchema } from '../../src/server/index.js';
+import { describeRuntimeSchema, undeclaredResultSchema } from './index.js';
 
 const expectPlainObjects = (value: unknown) => {
   if (!value || typeof value !== 'object') {

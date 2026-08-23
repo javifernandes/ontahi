@@ -5,8 +5,9 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useExplorerEntityDataBrowser } from '../../src/components/index.js';
-import type { ExplorerEntityDetail } from '../../src/contracts/index.js';
+import type { ExplorerEntityDetail } from '../contracts/index.js';
+
+import { useExplorerEntityDataBrowser } from './index.js';
 
 const entity: ExplorerEntityDetail = {
   name: 'Book',

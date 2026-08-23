@@ -1,8 +1,9 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ExplorerOperationSignature } from '../../src/components/index.js';
-import type { ExplorerOperationDescriptor } from '../../src/contracts/index.js';
+import type { ExplorerOperationDescriptor } from '../contracts/index.js';
+
+import { ExplorerOperationSignature } from './index.js';
 
 afterEach(cleanup);
 
