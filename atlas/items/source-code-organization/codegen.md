@@ -13,6 +13,8 @@ relatedPlans:
   - bookops://plans/100g-ontahi-codegen-and-application-tooling-boundary
   - bookops://plans/70-first-class-workflow-tier-in-architecture
   - ontahi://plans/133-nominal-model-registry-and-codegen-reuse
+  - ontahi://plans/134-codegen-analysis-organization-and-semantic-coverage
+  - ontahi://plans/140-colocated-test-topology
 migratedFrom: bookops://atlas/source-code-organization/codegen
 sourceCommit: 67713696
 ---
@@ -50,3 +52,8 @@ register them as server application definitions. Entity and Operation-reachable 
 form the nominal server-model inventory.
 
 `@ontahi/codegen` owns neutral source loading, configurable import resolution, diagnostics, generic client/task projections, and the reusable generation runner for cached analysis, deterministic writes, drift checks, target selection, and dependency-aware watch. `@ontahi/runtime-vercel-workflows/codegen` owns Vercel-specific static rendering. BookOps owns alias values, target/output configuration, formatting policy, and its configured workflow runtime. The generated domain-operation and HTTP ingress registries were removed because the graph API already exposes the runtime metadata needed for ordinary composition. The former Next Action client target was also removed: graph operations use the generic invocation bridge, and explicitly authored Next Actions can use `@ontahi/runtime-nextjs/actions` without codegen.
+
+Codegen tests follow the repository's colocated topology. Focused suites sit beside the analysis or
+emission module they specify; cross-pipeline suites at `src/` use `.integration.test.js`; the shared
+semantic generated-module harness sits with those emitters as `.test-support.js`. Both suffixes are
+excluded from the source files shipped by `@ontahi/codegen`.

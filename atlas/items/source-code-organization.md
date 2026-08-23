@@ -15,6 +15,8 @@ relatedPlans:
   - bookops://plans/100h-ontahi-portability-example-and-developer-guide
   - bookops://plans/100i-ontahi-observability-adapter-boundary
   - bookops://plans/129-ontahi-independent-repository-and-release-readiness
+  - ontahi://plans/134-codegen-analysis-organization-and-semantic-coverage
+  - ontahi://plans/140-colocated-test-topology
 migratedFrom: bookops://atlas/source-code-organization
 sourceCommit: 67713696
 ---
@@ -64,6 +66,19 @@ bookops/                   # private host application repository
 BookOps does not carry a framework-source mirror. Ordinary development and CI use published npm
 packages; coordinated work may explicitly activate a sibling Ontahi checkout without changing
 committed manifests or the lockfile.
+
+## Test Topology
+
+Tests are part of the logical source unit they specify. Focused suites live beside their production
+modules; integration suites live at the narrowest source boundary that owns the interaction; shared
+test-only modules use a `test-support` suffix beside the group that owns them. Package-level `test/`
+trees are not a second architecture.
+
+Package typechecks include this colocated test code. Build configurations, coverage inputs, and
+publish manifests exclude test and test-support suffixes explicitly, so discoverability does not
+blur the runtime or distribution boundary. When colocation makes a source area visibly crowded,
+that is evidence for a separately reviewable module or folder boundary rather than a reason to move
+its tests away again.
 
 ## Open Source Horizon
 
