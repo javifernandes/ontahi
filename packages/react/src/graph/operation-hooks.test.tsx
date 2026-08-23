@@ -14,14 +14,15 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
-import { createNextActionOperationBridgeAdapter } from '../../src/actions/index.js';
+import { createNextActionOperationBridgeAdapter } from '../actions/index.js';
+
 import {
   OntahiGraphProvider,
   useDurableOperation,
   useOperation,
   useOperationQuery,
   useReflectedOperationRunner,
-} from '../../src/graph/index.js';
+} from './index.js';
 
 const createWrapper = (
   bridgeAction = vi.fn(),

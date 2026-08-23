@@ -2,7 +2,7 @@ import { defineClientEntity, entity, field } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createFetchGraphClient } from '../../src/graph/index.js';
+import { createFetchGraphClient } from './index.js';
 
 describe('Fetch graph client', () => {
   afterEach(() => {

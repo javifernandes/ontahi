@@ -1,7 +1,7 @@
 import { entity, field, graphSchema } from '@ontahi/core/data-graph';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createReflectedOperationInvoker, type ReactGraphExecutor } from '../../src/graph/index.js';
+import { createReflectedOperationInvoker, type ReactGraphExecutor } from './index.js';
 
 const ReadingProgress = entity('ReadingProgress', {
   userId: field.id(),

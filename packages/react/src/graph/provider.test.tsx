@@ -11,7 +11,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AnyOperationBridgeAdapter } from '../../src/actions/index.js';
+import type { AnyOperationBridgeAdapter } from '../actions/index.js';
+
 import {
   OntahiGraphProvider,
   type OntahiGraphClient,
@@ -28,7 +29,7 @@ import {
   useReflectedEntityDataReader,
   useReflectedOperationInvoker,
   type ReactGraphExecutor,
-} from '../../src/graph/index.js';
+} from './index.js';
 
 const createAdapter = (name: string): AnyOperationBridgeAdapter =>
   ({

@@ -14,7 +14,7 @@ import {
   attachOperationBridgeActionRuntime,
   OperationInvocationResultError,
   unwrapOperationInvocationValue,
-} from '../../src/actions/index.js';
+} from './index.js';
 
 describe('operation bridge query keys', () => {
   const successResult = {

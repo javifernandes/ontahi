@@ -8,7 +8,7 @@ import {
 } from '@ontahi/core/data-graph';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createFetchGraphReadExecutor } from '../../src/graph/index.js';
+import { createFetchGraphReadExecutor } from './index.js';
 
 const Todo = entity('Todo', {
   id: field.id(),

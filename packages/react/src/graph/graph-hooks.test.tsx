@@ -19,7 +19,7 @@ import {
   useGraphCommand,
   useGraphOperation,
   useGraphQuery,
-} from '../../src/graph/index.js';
+} from './index.js';
 
 const BookEntity = entity('Book', {
   id: field.id(),

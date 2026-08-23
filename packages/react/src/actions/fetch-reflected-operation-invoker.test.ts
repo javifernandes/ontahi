@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createFetchOperationBridgeAdapter,
   createFetchReflectedOperationInvoker,
-} from '../../src/actions/index.js';
+} from './index.js';
 
 describe('createFetchReflectedOperationInvoker', () => {
   afterEach(() => {

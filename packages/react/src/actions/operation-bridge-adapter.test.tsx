@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createNextActionOperationBridgeAdapter,
   type BridgedOperationLike,
-} from '../../src/actions/index.js';
+} from './index.js';
 
 const operation: BridgedOperationLike<{ token: string }, { bookSlug: string }> = {
   kind: 'domain-operation',

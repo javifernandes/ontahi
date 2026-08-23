@@ -15,7 +15,7 @@ import {
   useReflectedEntityDataQuery,
   useReflectedRelatedEntityDataReader,
   useReflectedRelatedEntityDataQuery,
-} from '../../src/graph/index.js';
+} from './index.js';
 
 const createWrapper = (reader: ReflectedEntityDataReader) => {
   const queryClient = new QueryClient({

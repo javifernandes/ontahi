@@ -6,7 +6,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { useAction, useServerMutation, useServerQuery } from '../../src/actions/index.js';
+import { useAction, useServerMutation, useServerQuery } from './index.js';
 
 const createQueryWrapper = () => {
   const queryClient = new QueryClient({
