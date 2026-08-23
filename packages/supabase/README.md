@@ -23,6 +23,12 @@ The RPC uses invoker rights. Existing table grants and row-level-security polici
 authoritative. If the client does not expose `rpc`, the runtime fails explicitly instead of silently
 degrading an atomic Relationship Command into several PostgREST mutations.
 
+Portable participant eligibility is included in a version 2 payload. The RPC locks the complete
+source and target sets, checks every selected row, and rejects a mixed set without inserting partial
+edges. `unlink` omits link eligibility and remains available for repair. Upgrade the installed SQL
+when adopting this package version: an older version 1 RPC rejects constrained payloads instead of
+silently ignoring their constraints.
+
 ## Atomic direct relationships
 
 Direct `belongsTo/hasMany` Relationship Commands use the companion
@@ -33,12 +39,13 @@ the participating server Entities to `createSupabaseDataGraphRuntime({ entities:
 student.course.assign(nextCourse, { ifCurrent: previousCourse });
 ```
 
-The RPC resolves both endpoint Refs, locks the source row, checks expected-current identity, applies
-the FK transition, and reports the previous value in one database transaction. A stale conditional
-assignment fails without changing the edge; inverse `remove` preserves its expected target as a
-no-op guard. The function uses invoker rights, so normal grants and RLS remain authoritative.
-Relations carrying portable eligibility constraints fail closed until those predicates can be
-compiled into the same mutation boundary.
+The RPC resolves both endpoint Refs, locks the source and target rows, checks expected-current
+identity and every portable source/target participant constraint, applies the FK transition, and
+reports the previous value in one database transaction. A stale conditional assignment fails
+without changing the edge; inverse `remove` preserves its expected target as a no-op guard. A
+constraint rejection preserves the declared version, code, safe message, and parameters as
+structured adapter evidence. The function uses invoker rights, so normal grants and RLS remain
+authoritative.
 
 Use `relationshipRpcName` or `manyToManyRpcName` only when a project installs the corresponding
 function under a non-default name. If `rpc` is unavailable, neither path degrades to a racy

@@ -4,10 +4,15 @@ import {
   type AnyEntityDefinition,
   type ManyToManyRelationMapping,
   type ManyToManyRelationshipCommand,
+  type RelationConstraintRejection,
   type RelationshipDelta,
 } from '@ontahi/core/data-graph';
 
 import type { PostgresEntityMapping } from './mapping.js';
+import {
+  compilePostgresRelationConstraints,
+  postgresConstraintProjection,
+} from './relation-constraint.js';
 import { compilePostgresSelection, quotePostgresIdentifier, type ParameterizedSql } from './sql.js';
 
 export type CompiledPostgresManyToManyCommand = {
@@ -90,11 +95,24 @@ export const compilePostgresManyToManyCommand = (
   const sourceIdentityField = identityField(source.entity);
   const targetIdentityField = identityField(target.entity);
   const relationMapping = resolveRelationMapping(command, source, target);
+  const relation = source.entity.relations[command.relation.relationName]!;
   assertMapping(relationMapping, source, sourceIdentityField, target, targetIdentityField);
 
   const values: unknown[] = [];
   const sourceSelection = compilePostgresSelection(command.sources.selection, source, values);
   const targetSelection = compilePostgresSelection(command.targets.selection, target, values);
+  const constraints = compilePostgresRelationConstraints(
+    command.action === 'link'
+      ? (relation.constraints ?? []).map(constraint => ({
+          participant: constraint.participant,
+          selection: constraint.selection,
+          rejection: constraint.rejection,
+        }))
+      : [],
+    source,
+    target,
+    values,
+  );
   const expectedSourceCount = explicitReferenceCount(command.sources.selection);
   const expectedTargetCount = explicitReferenceCount(command.targets.selection);
   const sourceTable = quotePostgresIdentifier(source.table);
@@ -108,29 +126,36 @@ export const compilePostgresManyToManyCommand = (
   const mutation =
     command.action === 'link'
       ? `INSERT INTO ${throughTable} (${throughFrom}, ${throughTo}) ` +
-        `SELECT source_value, target_value FROM selected_sources CROSS JOIN selected_targets, counts ` +
-        `WHERE ${countCondition} ON CONFLICT DO NOTHING ` +
+        `SELECT source_value, target_value FROM selected_sources CROSS JOIN selected_targets, guarded_counts ` +
+        `WHERE ${countCondition} AND constraint_rejection IS NULL ON CONFLICT DO NOTHING ` +
         `RETURNING ${throughFrom} AS source_value, ${throughTo} AS target_value`
-      : `DELETE FROM ${throughTable} edge USING selected_sources, selected_targets, counts ` +
+      : `DELETE FROM ${throughTable} edge USING selected_sources, selected_targets, guarded_counts ` +
         `WHERE edge.${throughFrom} = source_value AND edge.${throughTo} = target_value ` +
-        `AND ${countCondition} ` +
+        `AND ${countCondition} AND constraint_rejection IS NULL ` +
         `RETURNING edge.${throughFrom} AS source_value, edge.${throughTo} AS target_value`;
 
   return {
     sql: {
       text:
-        `WITH selected_sources AS (` +
-        `SELECT DISTINCT ${sourceColumn} AS source_value FROM ${sourceTable} WHERE ${sourceSelection}` +
+        `WITH source_rows AS MATERIALIZED (` +
+        `SELECT ${sourceColumn} AS source_value${postgresConstraintProjection(constraints.sourceProjection)} FROM ${sourceTable} WHERE ${sourceSelection}${command.action === 'link' ? ' FOR SHARE' : ''}` +
+        `), target_rows AS MATERIALIZED (` +
+        `SELECT ${targetColumn} AS target_value${postgresConstraintProjection(constraints.targetProjection)} FROM ${targetTable} WHERE ${targetSelection}${command.action === 'link' ? ' FOR SHARE' : ''}` +
+        `), selected_sources AS (` +
+        `SELECT DISTINCT source_value FROM source_rows` +
         `), selected_targets AS (` +
-        `SELECT DISTINCT ${targetColumn} AS target_value FROM ${targetTable} WHERE ${targetSelection}` +
+        `SELECT DISTINCT target_value FROM target_rows` +
         `), counts AS (` +
         `SELECT (SELECT COUNT(*)::int FROM selected_sources) AS source_count, ` +
         `(SELECT COUNT(*)::int FROM selected_targets) AS target_count` +
+        `${postgresConstraintProjection(constraints.stateProjection)}` +
+        `), guarded_counts AS (` +
+        `SELECT *, ${constraints.rejectionExpression} AS constraint_rejection FROM counts` +
         `), mutation AS (${mutation}) ` +
         `SELECT 'meta' AS row_kind, NULL AS source_value, NULL AS target_value, ` +
-        `source_count, target_count FROM counts UNION ALL ` +
+        `source_count, target_count, constraint_rejection FROM guarded_counts UNION ALL ` +
         `SELECT 'fact' AS row_kind, source_value, target_value, ` +
-        `NULL AS source_count, NULL AS target_count FROM mutation`,
+        `NULL AS source_count, NULL AS target_count, NULL AS constraint_rejection FROM mutation`,
       values,
     },
     sourceEntity: source.entity,
@@ -151,8 +176,13 @@ export const materializePostgresManyToManyDelta = (
     target_value: unknown;
     source_count: number | null;
     target_count: number | null;
+    constraint_rejection?: RelationConstraintRejection | null;
   }>,
-): { delta?: RelationshipDelta; cardinalityMismatch?: true } => {
+): {
+  delta?: RelationshipDelta;
+  cardinalityMismatch?: true;
+  constraintRejected?: RelationConstraintRejection;
+} => {
   const meta = rows.find(row => row.row_kind === 'meta');
   if (
     !meta ||
@@ -162,6 +192,9 @@ export const materializePostgresManyToManyDelta = (
       meta.target_count !== compiled.expectedTargetCount)
   ) {
     return { cardinalityMismatch: true };
+  }
+  if (meta.constraint_rejection) {
+    return { constraintRejected: meta.constraint_rejection };
   }
   const facts = rows
     .filter(row => row.row_kind === 'fact')

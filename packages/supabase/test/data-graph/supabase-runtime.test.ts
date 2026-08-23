@@ -6,6 +6,7 @@ import {
   field,
   mapEntity,
   mapRelation,
+  relationConstraint,
   query,
   relationshipSet,
   resolveQuerySpec,
@@ -388,6 +389,111 @@ describe('data-graph supabase runtime helpers', () => {
     expect(rpc).toHaveBeenCalledOnce();
     expect(rpc).toHaveBeenCalledWith('ontahi_apply_many_to_many_relationship', {
       command: compileSupabaseManyToManyRpcPayload(command, [Todo, Tag]),
+    });
+  });
+
+  it('compiles many-to-many eligibility and surfaces all-or-nothing rejection', async () => {
+    const Tag = entity('GuardedRpcTag', { id: field.id(), assignable: field.boolean() });
+    const TodoDefinition = entity('GuardedRpcTodo', {
+      id: field.id(),
+      completed: field.boolean(),
+    });
+    const Todo = TodoDefinition.manyToMany('tags', Tag, {
+      constraints: [
+        relationConstraint.source(TodoDefinition, todo => todo.completed.eq(false), {
+          code: 'todo_completed',
+          message: 'Completed todos cannot be tagged.',
+        }),
+        relationConstraint.target(Tag, tag => tag.assignable.eq(true), {
+          code: 'tag_unassignable',
+          message: 'Tag is not assignable.',
+        }),
+      ],
+    });
+    mapEntity(Todo).toTable('guarded_rpc_todos', { completed: 'is_completed' });
+    mapEntity(Tag).toTable('guarded_rpc_tags', { assignable: 'is_assignable' });
+    mapRelation(Todo, 'tags', {
+      type: 'many-to-many',
+      from: 'guarded_rpc_todos.id',
+      through: {
+        table: 'guarded_rpc_todo_tags',
+        fromColumn: 'todo_id',
+        toColumn: 'tag_id',
+      },
+      to: 'guarded_rpc_tags.id',
+    });
+    const command = relationshipSet(
+      Todo,
+      'tags',
+      selection(Todo, todo => todo.id.in(['todo-1', 'todo-2'])),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    const payload = compileSupabaseManyToManyRpcPayload(command, [Todo, Tag]);
+    const rejection = {
+      version: 1 as const,
+      code: 'todo_completed',
+      message: 'Completed todos cannot be tagged.',
+    };
+
+    expect(payload).toMatchObject({
+      version: 2,
+      constraints: [
+        {
+          participant: 'source',
+          selection: {
+            operator: 'eq',
+            field: 'completed',
+            column: 'is_completed',
+            value: false,
+          },
+          rejection: { code: 'todo_completed' },
+        },
+        {
+          participant: 'target',
+          selection: {
+            operator: 'eq',
+            field: 'assignable',
+            column: 'is_assignable',
+            value: true,
+          },
+          rejection: { code: 'tag_unassignable' },
+        },
+      ],
+    });
+
+    const createStructuredError = (input: {
+      message: string;
+      logMessage: string;
+      cause: unknown;
+    }) => input;
+    const result = await Effect.runPromise(
+      executeSupabaseManyToManyRelationshipCommandEffect(
+        {
+          getClient: () =>
+            Effect.succeed({
+              from: vi.fn(),
+              rpc: vi.fn().mockResolvedValue({
+                data: {
+                  sourceCount: 2,
+                  targetCount: 1,
+                  constraintRejection: rejection,
+                  changed: [],
+                },
+                error: null,
+              }),
+            }),
+          createError: createStructuredError,
+          entities: [Todo, Tag],
+        },
+        command,
+      ).pipe(Effect.either),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: {
+        message: 'Completed todos cannot be tagged.',
+        logMessage: 'Supabase many-to-many Relation constraint rejected',
+        cause: { reason: 'relation_constraint_rejected', rejection },
+      },
     });
   });
 

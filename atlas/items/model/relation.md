@@ -23,6 +23,8 @@ relatedPlans:
   - ontahi://plans/136b-many-to-many-participant-eligibility
   - ontahi://plans/136c-postgres-direct-relation-compare-and-set
   - ontahi://plans/136d-supabase-direct-relation-compare-and-set
+  - ontahi://plans/136e-postgres-relation-participant-eligibility
+  - ontahi://plans/136f-supabase-relation-participant-eligibility
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
 migratedFrom: bookops://atlas/model/relation
@@ -124,11 +126,16 @@ remains available when last-write-wins is intentional. Provider-backed compare-a
 must preserve that atomic boundary before advertising support. PostgreSQL now lowers direct
 Relationship Commands to one guarded statement that locks and resolves the source, verifies the
 target and expected current edge, applies the change, and returns enough state to materialize the
-exact delta. The adapter fails closed for constrained Relations until eligibility can be compiled
-into that same statement. Supabase preserves the same boundary through a reusable invoker-rights
-RPC: it resolves endpoints, locks the source, compares expected current identity, changes the edge,
-and returns prior-state evidence in one database transaction. The adapter never degrades this into
-a PostgREST read followed by update. Grants and RLS remain independent authorization boundaries.
+exact delta. Portable participant eligibility is compiled into that same statement: PostgreSQL
+locks the affected source and target rows, evaluates every constraint, and returns the first stable
+rejection without applying the edge. Supabase preserves the same boundary through reusable
+invoker-rights RPCs. A constrained link uses a version 2 payload so an older version 1 function
+rejects it instead of ignoring unknown eligibility metadata. The adapter never degrades this into a
+PostgREST read followed by update. Eligibility predicates use two-valued semantics at the mutation
+boundary: a nullable value that does not positively satisfy a predicate is rejected rather than
+passing through SQL `NULL`. Endpoint cardinality and a genuinely stale conditional transition are
+reported before eligibility; a matching precondition does not mask the declared rejection. Grants
+and RLS remain independent authorization boundaries.
 
 A Relation does not own arbitrary lifecycle hooks, domain failures, effects, authorization
 coordination, or durability. Structural referential consistency, Selection resolution, cardinality,
@@ -157,8 +164,8 @@ declared Relation and pairs it with a versioned rejection descriptor containing 
 message, and JSON-safe scalar parameters. Static reflection preserves that contract. Authoritative
 in-memory Relationship Command execution evaluates it before `link`; forward and inverse authoring
 therefore enforce the same rule after normalization. Policy remains an independent authorization
-boundary. Aggregate limits, many-to-many batches, provider transactions, and advisory preflight
-remain later Plan 136 work.
+boundary. Aggregate limits, current-population constraints, conflict retry policy, and advisory
+preflight remain later Plan 136 work.
 
 Application code authors that contract through the typed `relationConstraint.source(...)` and
 `relationConstraint.target(...)` factories. The callback runs only while constructing the schema
@@ -172,8 +179,11 @@ is rejected as a whole; an empty filtered Selection remains a successful no-op. 
 new links only, so `unlink` remains available even when a participant no longer satisfies the
 current rule. Server Entity declarations may defer only constraint construction to resolve a source
 Entity self-reference; materialized Relation metadata contains the portable AST, never that
-authoring thunk. Provider-backed atomic enforcement and structured rejection transport remain Plan
-136 work.
+authoring thunk. PostgreSQL and Supabase now preserve the same all-or-nothing rule: they lock the
+complete selected participant sets, evaluate constraints without filtering those sets, and guard
+the Cartesian edge mutation with the resulting rejection evidence. The declared descriptor remains
+structured adapter evidence. `unlink` bypasses link eligibility so an application can repair a fact
+whose participants no longer satisfy the current rule.
 
 For example, an association with its own state remains ordinary Entity lifecycle. The current
 low-level command authoring primitive makes that lifecycle explicit; its spelling is not a settled

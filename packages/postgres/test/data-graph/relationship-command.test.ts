@@ -1,4 +1,10 @@
-import { createEntityRef, entity, field, relationship } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  entity,
+  field,
+  relationConstraint,
+  relationship,
+} from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -59,6 +65,7 @@ describe('PostgreSQL direct Relationship Commands', () => {
         target_count: 1,
         updated_count: 1,
         old_target: 'course-1',
+        precondition_matched: true,
       }),
     ).toEqual({
       delta: {
@@ -72,48 +79,77 @@ describe('PostgreSQL direct Relationship Commands', () => {
         target_count: 1,
         updated_count: 0,
         old_target: 'course-3',
+        precondition_matched: false,
       }),
     ).toEqual({ preconditionFailed: true });
   });
 
-  it('fails closed instead of bypassing inverse-declared Relation constraints', () => {
-    const GuardedCourse = entity('GuardedCourse', { id: field.id() });
+  it('compiles inverse-declared participant constraints and materializes their rejection', () => {
+    const GuardedCourse = entity('GuardedCourse', { id: field.id(), open: field.boolean() });
     const GuardedStudent = entity('GuardedStudent', {
       id: field.id(),
+      active: field.boolean(),
       course: field.nullable(field.ref(GuardedCourse)),
     });
     GuardedCourse.hasMany('students', GuardedStudent, {
       constraints: [
-        {
-          kind: 'participant-selection',
-          participant: 'target',
-          selection: { kind: 'all' },
-          rejection: { version: 1, code: 'guarded', message: 'Guarded.' },
-        },
+        relationConstraint.source(GuardedCourse, course => course.open.eq(true), {
+          code: 'course_closed',
+          message: 'Course is closed.',
+        }),
+        relationConstraint.target(GuardedStudent, student => student.active.eq(true), {
+          code: 'student_inactive',
+          message: 'Student is inactive.',
+          parameters: { requiredStatus: 'active' },
+        }),
       ],
     });
     const guardedStudentMapping = postgresMapping({
       entity: GuardedStudent,
       table: 'guarded_students',
-      columns: { id: 'id', course: 'course_id' },
+      columns: { id: 'id', active: 'is_active', course: 'course_id' },
     });
     const guardedCourseMapping = postgresMapping({
       entity: GuardedCourse,
       table: 'guarded_courses',
-      columns: { id: 'id' },
+      columns: { id: 'id', open: 'is_open' },
     });
+    const command = relationship(
+      GuardedStudent,
+      'course',
+      createEntityRef(GuardedStudent, { id: 'student-1' }),
+    ).assign(createEntityRef(GuardedCourse, { id: 'course-1' }));
+    const compiled = compilePostgresRelationshipCommand(
+      command,
+      guardedStudentMapping,
+      guardedCourseMapping,
+    );
 
-    expect(() =>
-      compilePostgresRelationshipCommand(
-        relationship(
-          GuardedStudent,
-          'course',
-          createEntityRef(GuardedStudent, { id: 'student-1' }),
-        ).assign(createEntityRef(GuardedCourse, { id: 'course-1' })),
-        guardedStudentMapping,
-        guardedCourseMapping,
-      ),
-    ).toThrow('do not yet compile Relation constraints');
+    expect(compiled.sql.text).toContain('constraint_rejection');
+    expect(compiled.sql.text).toContain('FOR SHARE');
+    expect(compiled.sql.values).toContain(true);
+    expect(
+      materializePostgresRelationshipDelta(command, compiled, {
+        source_count: 1,
+        target_count: 1,
+        updated_count: 0,
+        old_target: null,
+        precondition_matched: true,
+        constraint_rejection: {
+          version: 1,
+          code: 'student_inactive',
+          message: 'Student is inactive.',
+          parameters: { requiredStatus: 'active' },
+        },
+      }),
+    ).toEqual({
+      constraintRejected: {
+        version: 1,
+        code: 'student_inactive',
+        message: 'Student is inactive.',
+        parameters: { requiredStatus: 'active' },
+      },
+    });
   });
 
   it('fails closed when a constrained inverse Relation has ambiguous target fields', () => {
@@ -177,7 +213,15 @@ describe('PostgreSQL direct Relationship Commands', () => {
     {
       name: 'unresolved source Ref',
       mappings: [studentMapping, courseMapping],
-      rows: [{ source_count: 0, target_count: 1, updated_count: 0, old_target: null }],
+      rows: [
+        {
+          source_count: 0,
+          target_count: 1,
+          updated_count: 0,
+          old_target: null,
+          precondition_matched: true,
+        },
+      ],
       reason: 'cardinality_mismatch',
     },
   ])('reports $name through a stable adapter reason', async ({ mappings, rows, reason }) => {

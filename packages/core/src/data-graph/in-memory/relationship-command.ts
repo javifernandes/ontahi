@@ -1,12 +1,9 @@
 import { Effect } from 'effect';
 
-import type {
-  AnyEntityDefinition,
-  AnyReferenceFieldDefinition,
-  RelationDefinition,
-} from '../definitions.js';
-import { isReferenceFieldDefinition, resolveHasManyTargetField } from '../definitions.js';
+import type { AnyEntityDefinition, AnyReferenceFieldDefinition } from '../definitions.js';
+import { isReferenceFieldDefinition } from '../definitions.js';
 import { liftEntityReferenceValue, lowerEntityReferenceValue } from '../reference-field.js';
+import { resolveDirectRelationConstraints } from '../relation-constraint.js';
 import type {
   RelationshipCommand,
   RelationshipDelta,
@@ -50,65 +47,32 @@ const fact = (
   target,
 });
 
-const canonicalRelationMatches = (
-  declaringEntity: AnyEntityDefinition,
-  relationName: string,
-  relation: RelationDefinition,
-  command: RelationshipCommand,
-) => {
-  if (
-    relation.relationKind === 'belongsTo' &&
-    declaringEntity.name === command.relation.sourceEntityName &&
-    relation.target.name === command.relation.targetEntityName &&
-    (relation.sourceField ?? relationName) === command.relation.fieldName
-  ) {
-    return true;
-  }
-  if (
-    relation.relationKind === 'hasMany' &&
-    declaringEntity.name === command.relation.targetEntityName &&
-    relation.target.name === command.relation.sourceEntityName
-  ) {
-    const targetField = resolveHasManyTargetField(declaringEntity, relation);
-    if (!targetField && (relation.constraints?.length ?? 0) > 0) {
-      throw new InMemoryDataGraphError(
-        `Cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
-        'invalid_command',
-      );
-    }
-    return targetField === command.relation.fieldName;
-  }
-  return false;
-};
-
-const constraintParticipantRef = (
-  relation: RelationDefinition,
-  command: RelationshipCommand,
-  participant: 'source' | 'target',
-) => {
-  if (relation.relationKind === 'hasMany') {
-    return participant === 'source' ? command.target : command.source;
-  }
-  return participant === 'source' ? command.source : command.target;
-};
-
-const assertConstraintsForRelation = (
+const assertRelationConstraints = (
   dataset: InMemoryDataset,
-  declaringEntity: AnyEntityDefinition,
-  relation: RelationDefinition,
+  sourceEntity: AnyEntityDefinition,
+  targetEntity: AnyEntityDefinition,
   command: RelationshipCommand,
 ) => {
-  for (const constraint of relation.constraints ?? []) {
-    const participantRef = constraintParticipantRef(relation, command, constraint.participant);
+  let constraints: ReturnType<typeof resolveDirectRelationConstraints>;
+  try {
+    constraints = resolveDirectRelationConstraints(command.relation, sourceEntity, targetEntity);
+  } catch (cause) {
+    throw new InMemoryDataGraphError(
+      cause instanceof Error ? cause.message : 'Cannot resolve direct Relation constraints.',
+      'invalid_command',
+      cause,
+    );
+  }
+
+  for (const constraint of constraints) {
+    const participantRef = constraint.participant === 'source' ? command.source : command.target;
     if (!participantRef) return;
-    const participantEntity =
-      constraint.participant === 'source' ? declaringEntity : relation.target;
-    const participantRows = (dataset[participantEntity.name] ?? []).filter(row =>
+    const participantRows = (dataset[constraint.entity.name] ?? []).filter(row =>
       matchesRef(row, participantRef),
     );
     const eligible =
       participantRows.length === 1 &&
-      applyEntitySelectionExpression(participantEntity, participantRows, constraint.selection)
+      applyEntitySelectionExpression(constraint.entity, participantRows, constraint.selection)
         .length === 1;
     if (eligible) continue;
 
@@ -118,22 +82,6 @@ const assertConstraintsForRelation = (
       undefined,
       constraint.rejection,
     );
-  }
-};
-
-const assertRelationConstraints = (
-  dataset: InMemoryDataset,
-  sourceEntity: AnyEntityDefinition,
-  targetEntity: AnyEntityDefinition,
-  command: RelationshipCommand,
-) => {
-  if (command.action !== 'link') return;
-
-  for (const declaringEntity of [sourceEntity, targetEntity]) {
-    for (const [relationName, relation] of Object.entries(declaringEntity.relations)) {
-      if (!canonicalRelationMatches(declaringEntity, relationName, relation, command)) continue;
-      assertConstraintsForRelation(dataset, declaringEntity, relation, command);
-    }
   }
 };
 

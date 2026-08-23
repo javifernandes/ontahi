@@ -8,6 +8,7 @@ import {
   entity,
   field,
   mapRelation,
+  relationConstraint,
   relationship,
   relationshipSet,
   selection,
@@ -38,27 +39,61 @@ import {
 import { conformanceDataset, conformanceGraph, TodoEntity, TodoMapping } from './fixtures.js';
 import { dataGraphRuntimeConformance } from './runtime-conformance.js';
 
-const RelationshipTag = entity('RelationshipTag', { id: field.id(), label: field.string() });
-const RelationshipCourse = entity('RelationshipCourse', { id: field.id(), name: field.string() });
+const RelationshipTag = entity('RelationshipTag', {
+  id: field.id(),
+  label: field.string(),
+  assignable: field.boolean(),
+});
+const RelationshipCourse = entity('RelationshipCourse', {
+  id: field.id(),
+  name: field.string(),
+  open: field.boolean(),
+});
 const RelationshipStudent = entity('RelationshipStudent', {
   id: field.id(),
+  active: field.nullable(field.boolean()),
   course: field.nullable(field.ref(RelationshipCourse)),
 });
-RelationshipCourse.hasMany('students', RelationshipStudent, { via: 'course' });
+RelationshipCourse.hasMany('students', RelationshipStudent, {
+  via: 'course',
+  constraints: [
+    relationConstraint.source(RelationshipCourse, course => course.open.eq(true), {
+      code: 'course_closed',
+      message: 'Course is closed.',
+    }),
+    relationConstraint.target(RelationshipStudent, student => student.active.eq(true), {
+      code: 'student_inactive',
+      message: 'Student is inactive.',
+    }),
+  ],
+});
 const RelationshipCourseMapping = postgresMapping({
   entity: RelationshipCourse,
   table: 'relationship_courses',
-  columns: { id: 'id', name: 'name' },
+  columns: { id: 'id', name: 'name', open: 'is_open' },
 });
 const RelationshipStudentMapping = postgresMapping({
   entity: RelationshipStudent,
   table: 'relationship_students',
-  columns: { id: 'id', course: 'course_id' },
+  columns: { id: 'id', active: 'is_active', course: 'course_id' },
 });
-const RelationshipTodo = entity('RelationshipTodo', {
+const RelationshipTodoDefinition = entity('RelationshipTodo', {
   id: field.id(),
   title: field.string(),
-}).manyToMany('tags', RelationshipTag);
+  completed: field.boolean(),
+});
+const RelationshipTodo = RelationshipTodoDefinition.manyToMany('tags', RelationshipTag, {
+  constraints: [
+    relationConstraint.source(RelationshipTodoDefinition, todo => todo.completed.eq(false), {
+      code: 'todo_completed',
+      message: 'Completed todos cannot be tagged.',
+    }),
+    relationConstraint.target(RelationshipTag, tag => tag.assignable.eq(true), {
+      code: 'tag_unassignable',
+      message: 'Tag is not assignable.',
+    }),
+  ],
+});
 mapRelation(RelationshipTodo, 'tags', {
   type: 'many-to-many',
   from: 'relationship_todos.id',
@@ -72,12 +107,12 @@ mapRelation(RelationshipTodo, 'tags', {
 const RelationshipTodoMapping = postgresMapping({
   entity: RelationshipTodo,
   table: 'relationship_todos',
-  columns: { id: 'id', title: 'title' },
+  columns: { id: 'id', title: 'title', completed: 'is_completed' },
 });
 const RelationshipTagMapping = postgresMapping({
   entity: RelationshipTag,
   table: 'relationship_tags',
-  columns: { id: 'id', label: 'label' },
+  columns: { id: 'id', label: 'label', assignable: 'is_assignable' },
 });
 
 describe('PostgreSQL data graph runtime', () => {
@@ -119,11 +154,13 @@ describe('PostgreSQL data graph runtime', () => {
       );
       CREATE TABLE relationship_todos (
         id text PRIMARY KEY,
-        title text NOT NULL
+        title text NOT NULL,
+        is_completed boolean NOT NULL
       );
       CREATE TABLE relationship_tags (
         id text PRIMARY KEY,
-        label text NOT NULL
+        label text NOT NULL,
+        is_assignable boolean NOT NULL
       );
       CREATE TABLE relationship_todo_tags (
         todo_id text NOT NULL REFERENCES relationship_todos(id) ON DELETE CASCADE,
@@ -132,10 +169,12 @@ describe('PostgreSQL data graph runtime', () => {
       );
       CREATE TABLE relationship_courses (
         id text PRIMARY KEY,
-        name text NOT NULL
+        name text NOT NULL,
+        is_open boolean NOT NULL
       );
       CREATE TABLE relationship_students (
         id text PRIMARY KEY,
+        is_active boolean,
         course_id text REFERENCES relationship_courses(id)
       )
     `);
@@ -207,8 +246,10 @@ describe('PostgreSQL data graph runtime', () => {
       'TRUNCATE TABLE relationship_todo_tags, relationship_todos, relationship_tags CASCADE',
     );
     await pool.query(
-      `INSERT INTO relationship_todos (id, title) VALUES ('todo-1', 'Selected'), ('todo-2', 'Selected');
-       INSERT INTO relationship_tags (id, label) VALUES ('tag-1', 'Core'), ('tag-2', 'Other')`,
+      `INSERT INTO relationship_todos (id, title, is_completed)
+       VALUES ('todo-1', 'Selected', false), ('todo-2', 'Selected', false);
+       INSERT INTO relationship_tags (id, label, is_assignable)
+       VALUES ('tag-1', 'Core', true), ('tag-2', 'Other', true)`,
     );
     const runtime = createPostgresDataGraphRuntime({
       pool,
@@ -232,6 +273,30 @@ describe('PostgreSQL data graph runtime', () => {
         removed: [],
       },
     );
+    await pool.query(`UPDATE relationship_todos SET is_completed = true WHERE id = 'todo-2'`);
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runManyToManyRelationshipCommand(
+            relationshipSet(
+              RelationshipTodo,
+              'tags',
+              selection(RelationshipTodo, todo => todo.title.eq('Selected')),
+            ).add(selection(RelationshipTag, tag => tag.label.eq('Other'))),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'todo_completed' },
+      },
+    });
+    await expect(
+      pool.query(`SELECT todo_id FROM relationship_todo_tags WHERE tag_id = 'tag-2'`),
+    ).resolves.toMatchObject({ rows: [] });
+    await pool.query(`UPDATE relationship_todos SET is_completed = false WHERE id = 'todo-2'`);
     await expect(
       Effect.runPromise(
         runtime
@@ -299,6 +364,7 @@ describe('PostgreSQL data graph runtime', () => {
     ).resolves.toEqual({
       id: 'todo-1',
       title: 'Selected',
+      completed: false,
       tags: [],
     });
   });
@@ -306,9 +372,11 @@ describe('PostgreSQL data graph runtime', () => {
   it('applies direct conditional reassignment atomically and rejects stale callers', async () => {
     await pool.query('TRUNCATE TABLE relationship_students, relationship_courses CASCADE');
     await pool.query(
-      `INSERT INTO relationship_courses (id, name)
-       VALUES ('course-1', 'Previous'), ('course-2', 'Next'), ('course-3', 'Concurrent');
-       INSERT INTO relationship_students (id, course_id) VALUES ('student-1', 'course-1')`,
+      `INSERT INTO relationship_courses (id, name, is_open)
+       VALUES ('course-1', 'Previous', true), ('course-2', 'Next', false),
+              ('course-3', 'Concurrent', true);
+       INSERT INTO relationship_students (id, is_active, course_id)
+       VALUES ('student-1', null, 'course-1')`,
     );
     const runtime = createPostgresDataGraphRuntime({
       pool,
@@ -317,6 +385,46 @@ describe('PostgreSQL data graph runtime', () => {
     const student = createEntityRef(RelationshipStudent, { id: 'student-1' });
     const previous = createEntityRef(RelationshipCourse, { id: 'course-1' });
     const next = createEntityRef(RelationshipCourse, { id: 'course-2' });
+
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runRelationshipCommand(
+            relationship(RelationshipStudent, 'course', student).assign(next, {
+              ifCurrent: previous,
+            }),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'course_closed' },
+      },
+    });
+    await expect(
+      pool.query(`SELECT course_id FROM relationship_students WHERE id = 'student-1'`),
+    ).resolves.toMatchObject({ rows: [{ course_id: 'course-1' }] });
+    await pool.query(`UPDATE relationship_courses SET is_open = true WHERE id = 'course-2'`);
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runRelationshipCommand(
+            relationship(RelationshipStudent, 'course', student).assign(next, {
+              ifCurrent: previous,
+            }),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'student_inactive' },
+      },
+    });
+    await pool.query(`UPDATE relationship_students SET is_active = true WHERE id = 'student-1'`);
 
     await expect(
       Effect.runPromise(

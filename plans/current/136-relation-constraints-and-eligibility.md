@@ -12,6 +12,10 @@ Completed child: [136c. PostgreSQL Direct Relation Compare-And-Set](../done/136c
 
 Completed child: [136d. Supabase Direct Relation Compare-And-Set](../done/136d-supabase-direct-relation-compare-and-set.md)
 
+Completed child: [136e. PostgreSQL Relation Participant Eligibility](../done/136e-postgres-relation-participant-eligibility.md)
+
+Completed child: [136f. Supabase Relation Participant Eligibility](../done/136f-supabase-relation-participant-eligibility.md)
+
 ## Summary
 
 Let a Relation declare portable structural eligibility beyond topology and cardinality. The same
@@ -69,16 +73,16 @@ identity, not an executable closure transported to the server.
 
 ## Acceptance Checklist
 
-- [ ] Constraints have a canonical JSON-safe representation.
-- [ ] The model distinguishes eligibility, authorization, and coordinated domain invariants.
-- [ ] Server execution remains authoritative and default-deny policy still applies independently.
+- [x] Constraints have a canonical JSON-safe representation.
+- [x] The model distinguishes eligibility, authorization, and coordinated domain invariants.
+- [x] Server execution remains authoritative and default-deny policy still applies independently.
 - [ ] Rejections use a versioned, canonical JSON-safe descriptor with a stable code, safe
       parameters, and explicit redaction rules shared by Explorer, agents, and headless UI.
-- [ ] Forward and inverse commands enforce the same canonical constraints.
-- [ ] Batch commands define all-or-nothing, empty-selection, and affected-set semantics explicitly.
+- [x] Forward and inverse commands enforce the same canonical constraints.
+- [x] Batch commands define all-or-nothing, empty-selection, and affected-set semantics explicitly.
 - [ ] State-dependent constraints are enforced atomically with mutation; concurrent conflicts have
       explicit detection, retry, and failure semantics.
-- [ ] At least one adapter-backed proof evaluates and enforces eligibility without provider-specific
+- [x] At least one adapter-backed proof evaluates and enforces eligibility without provider-specific
       model syntax.
 
 ## Open Questions
@@ -96,13 +100,15 @@ identity, not an executable closure transported to the server.
 Plan 136a landed portable source/target participant Selection constraints, stable versioned
 rejections, static reflection, and authoritative in-memory enforcement shared by forward and
 inverse authoring. Plan 136b extended the same contract to Selection-valued many-to-many links with
-all-or-nothing in-memory evaluation and a Todo proof. Aggregate/cardinality constraints,
-adapter-backed atomic enforcement, structured rejection transport, conflicts, and advisory
-preflight remain open here. Plan 136c adds the first provider-backed direct Relation mutation and
-atomic expected-current conflict proof in PostgreSQL while failing closed for eligibility that has
-not yet been compiled. Plan 136d preserves the same direct transition contract through one Supabase
-invoker-rights RPC without a PostgREST read/write race. Atomic provider compilation of the portable
-eligibility predicates themselves remains open. Direct inverse constraint matching now shares
-Core's effective target-field resolution: explicit field evidence, direct mapping, or one unique
-target `belongsTo` source field; unresolved ambiguity fails closed across Core, PostgreSQL, and
-Supabase.
+all-or-nothing in-memory evaluation and a Todo proof. Plan 136c added the first provider-backed
+direct Relation mutation and atomic expected-current conflict proof in PostgreSQL; Plan 136d
+preserved it through one Supabase invoker-rights RPC without a PostgREST read/write race.
+
+Plans 136e and 136f compile the existing participant Selection vocabulary into PostgreSQL and
+Supabase direct and many-to-many mutation boundaries. One Core resolver maps declaration-relative
+forward/inverse participants to the canonical command. Providers lock the complete selected
+participant rows, evaluate every constraint without narrowing the affected set, preserve the first
+stable rejection descriptor, and guard the edge mutation. Supabase uses payload version 2 only for
+constrained links, so an older RPC fails closed; unconstrained and unlink commands retain version 1
+compatibility. Aggregate/cardinality and current-population constraints, structured remote Graph
+Command rejection transport, conflict retry policy, and advisory preflight remain open here.

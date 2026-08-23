@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { entity, field, relationConstraint } from '../../src/data-graph/index.js';
+import {
+  entity,
+  field,
+  relationConstraint,
+  resolveDirectRelationConstraints,
+} from '../../src/data-graph/index.js';
 
 describe('Relation constraint authoring', () => {
   const Todo = entity('ConstraintTodo', {
@@ -40,5 +45,70 @@ describe('Relation constraint authoring', () => {
         message: 'Date is not portable.',
       }),
     ).toThrow('Relation constraints must be JSON-safe.');
+  });
+
+  it('resolves declaration-relative participants into canonical direct endpoints', () => {
+    const Course = entity('ConstraintCourse', {
+      id: field.id(),
+      open: field.boolean(),
+    });
+    const Student = entity('ConstraintStudent', {
+      id: field.id(),
+      active: field.boolean(),
+      course: field.nullable(field.ref(Course)),
+    });
+    Student.belongsTo('course', Course, {
+      via: 'course',
+      constraints: [
+        relationConstraint.source(Student, student => student.active.eq(true), {
+          code: 'inactive_student',
+          message: 'Only active students may join.',
+        }),
+      ],
+    });
+    Course.hasMany('students', Student, {
+      constraints: [
+        relationConstraint.source(Course, course => course.open.eq(true), {
+          code: 'closed_course',
+          message: 'Only open courses accept students.',
+        }),
+        relationConstraint.target(Student, student => student.active.eq(true), {
+          code: 'inactive_inverse_student',
+          message: 'Only active students may join through the inverse.',
+        }),
+      ],
+    });
+
+    expect(
+      resolveDirectRelationConstraints(
+        {
+          sourceEntityName: Student.name,
+          fieldName: 'course',
+          targetEntityName: Course.name,
+        },
+        Student,
+        Course,
+      ).map(resolved => ({
+        participant: resolved.participant,
+        entityName: resolved.entity.name,
+        code: resolved.rejection.code,
+      })),
+    ).toEqual([
+      {
+        participant: 'source',
+        entityName: 'ConstraintStudent',
+        code: 'inactive_student',
+      },
+      {
+        participant: 'target',
+        entityName: 'ConstraintCourse',
+        code: 'closed_course',
+      },
+      {
+        participant: 'source',
+        entityName: 'ConstraintStudent',
+        code: 'inactive_inverse_student',
+      },
+    ]);
   });
 });

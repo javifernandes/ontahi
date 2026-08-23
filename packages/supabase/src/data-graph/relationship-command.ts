@@ -4,32 +4,41 @@ import {
   isReferenceFieldDefinition,
   liftEntityReferenceValue,
   lowerEntityReferenceValue,
-  resolveHasManyTargetField,
+  resolveDirectRelationConstraints,
   selectionReferences,
   type AnyEntityDefinition,
+  type RelationConstraintRejection,
   type RelationshipCommand,
   type RelationshipDelta,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 
+import {
+  compileSupabaseRelationConstraints,
+  isRelationConstraintRejection,
+  relationConstraintRejectionCause,
+  type SupabaseRelationParticipantConstraint,
+} from './relation-constraint.js';
 import type { SupabaseErrorFactory, SupabaseLikeClient } from './types.js';
 
 export const DEFAULT_SUPABASE_RELATIONSHIP_RPC = 'ontahi_apply_relationship';
 
 export type SupabaseRelationshipRpcPayload = {
-  version: 1;
+  version: 1 | 2;
   action: 'link' | 'unlink';
   source: { table: string; selection: unknown };
   target: { table: string; selection: unknown };
   relationColumn: string;
   nextTarget: unknown;
   expectedCurrent?: unknown;
+  constraints?: readonly SupabaseRelationParticipantConstraint[];
 };
 
 type ResolvedDirectRelation = {
   source: AnyEntityDefinition;
   target: AnyEntityDefinition;
   field: ReturnType<typeof resolveReferenceField>;
+  constraints: readonly SupabaseRelationParticipantConstraint[];
 };
 
 const resolveReferenceField = (source: AnyEntityDefinition, command: RelationshipCommand) => {
@@ -56,49 +65,33 @@ const resolveDirectRelation = (
   if (command.action === 'unlink' && !command.target && !field.nullable && !field.optional) {
     throw new Error('Supabase Relationship Command cannot clear a required Relation.');
   }
-  const constrained = [source, target].some(declaringEntity =>
-    Object.entries(declaringEntity.relations).some(([relationName, relation]) => {
-      if ((relation.constraints?.length ?? 0) === 0) return false;
-      if (
-        relation.relationKind === 'belongsTo' &&
-        declaringEntity.name === source.name &&
-        relation.target.name === target.name &&
-        (relation.sourceField ?? relationName) === command.relation.fieldName
-      ) {
-        return true;
-      }
-      if (
-        relation.relationKind === 'hasMany' &&
-        declaringEntity.name === target.name &&
-        relation.target.name === source.name
-      ) {
-        const targetField = resolveHasManyTargetField(declaringEntity, relation);
-        if (!targetField) {
-          throw new Error(
-            `Supabase Relationship Command cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
-          );
-        }
-        return targetField === command.relation.fieldName;
-      }
-      return false;
-    }),
-  );
-  if (constrained) {
-    throw new Error('Supabase Relationship Commands do not yet compile Relation constraints.');
+  let constraints: readonly SupabaseRelationParticipantConstraint[];
+  try {
+    constraints =
+      command.action === 'link'
+        ? compileSupabaseRelationConstraints(
+            resolveDirectRelationConstraints(command.relation, source, target),
+          )
+        : [];
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Cannot resolve Relation constraints.';
+    throw new Error(
+      `Supabase Relationship Command ${message.charAt(0).toLowerCase()}${message.slice(1)}`,
+    );
   }
-  return { source, target, field };
+  return { source, target, field, constraints };
 };
 
 export const compileSupabaseRelationshipRpcPayload = (
   command: RelationshipCommand,
   entities: readonly AnyEntityDefinition[],
 ): SupabaseRelationshipRpcPayload => {
-  const { source, target, field } = resolveDirectRelation(command, entities);
+  const { source, target, field, constraints } = resolveDirectRelation(command, entities);
   const expected =
     command.precondition?.currentTarget ??
     (command.action === 'unlink' ? command.target : undefined);
   return {
-    version: 1,
+    version: constraints.length === 0 ? 1 : 2,
     action: command.action,
     source: {
       table: getEntityMapping(source).tableName,
@@ -115,6 +108,7 @@ export const compileSupabaseRelationshipRpcPayload = (
     ...(expected === undefined
       ? {}
       : { expectedCurrent: lowerEntityReferenceValue(field, expected) }),
+    ...(constraints.length === 0 ? {} : { constraints }),
   };
 };
 
@@ -124,6 +118,7 @@ type SupabaseRelationshipRpcResult = {
   oldTarget: unknown;
   preconditionMatched: boolean;
   changed: boolean;
+  constraintRejection?: RelationConstraintRejection | null;
 };
 
 const isRpcResult = (value: unknown): value is SupabaseRelationshipRpcResult => {
@@ -134,6 +129,9 @@ const isRpcResult = (value: unknown): value is SupabaseRelationshipRpcResult => 
     Number.isInteger(result.targetCount) &&
     typeof result.preconditionMatched === 'boolean' &&
     typeof result.changed === 'boolean' &&
+    (!('constraintRejection' in result) ||
+      result.constraintRejection == null ||
+      isRelationConstraintRejection(result.constraintRejection)) &&
     'oldTarget' in result
   );
 };
@@ -215,7 +213,11 @@ export const executeSupabaseRelationshipCommandEffect = <
           cause,
         }),
     });
-    if (response.error || !isRpcResult(response.data)) {
+    if (
+      response.error ||
+      !isRpcResult(response.data) ||
+      (payload.version === 2 && !('constraintRejection' in response.data))
+    ) {
       return yield* Effect.fail(
         deps.createError({
           message: 'Supabase Relationship Command failed',
@@ -242,6 +244,15 @@ export const executeSupabaseRelationshipCommandEffect = <
           message: 'Supabase Relationship current target did not match its precondition',
           logMessage: 'Supabase Relationship precondition failed',
           cause: 'relationship_precondition_failed',
+        }),
+      );
+    }
+    if (response.data.constraintRejection) {
+      return yield* Effect.fail(
+        deps.createError({
+          message: response.data.constraintRejection.message,
+          logMessage: 'Supabase Relationship constraint rejected',
+          cause: relationConstraintRejectionCause(response.data.constraintRejection),
         }),
       );
     }

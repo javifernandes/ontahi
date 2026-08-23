@@ -4,20 +4,28 @@ import {
   getEntityIdentityLocator,
   getEntityMapping,
   type ManyToManyRelationshipCommand,
+  type RelationConstraintRejection,
   type RelationshipDelta,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 
+import {
+  compileSupabaseRelationConstraints,
+  isRelationConstraintRejection,
+  relationConstraintRejectionCause,
+  type SupabaseRelationParticipantConstraint,
+} from './relation-constraint.js';
 import type { SupabaseErrorFactory, SupabaseLikeClient } from './types.js';
 
 export const DEFAULT_SUPABASE_MANY_TO_MANY_RPC = 'ontahi_apply_many_to_many_relationship';
 
 export type SupabaseManyToManyRpcPayload = {
-  version: 1;
+  version: 1 | 2;
   action: 'link' | 'unlink';
   source: { table: string; column: string; selection: unknown; expectedCount?: number };
   target: { table: string; column: string; selection: unknown; expectedCount?: number };
   edge: { table: string; sourceColumn: string; targetColumn: string };
+  constraints?: readonly SupabaseRelationParticipantConstraint[];
 };
 
 const explicitReferenceCount = (selection: ManyToManyRelationshipCommand['sources']['selection']) =>
@@ -68,8 +76,19 @@ export const compileSupabaseManyToManyRpcPayload = (
   }
   const sourceExpected = explicitReferenceCount(command.sources.selection);
   const targetExpected = explicitReferenceCount(command.targets.selection);
+  const constraints =
+    command.action === 'link'
+      ? compileSupabaseRelationConstraints(
+          (relation.constraints ?? []).map(constraint => ({
+            participant: constraint.participant,
+            entity: constraint.participant === 'source' ? source : target,
+            selection: constraint.selection,
+            rejection: constraint.rejection,
+          })),
+        )
+      : [];
   return {
-    version: 1,
+    version: constraints.length === 0 ? 1 : 2,
     action: command.action,
     source: {
       table: relation.mapping.fromTable,
@@ -88,6 +107,7 @@ export const compileSupabaseManyToManyRpcPayload = (
       sourceColumn: relation.mapping.throughFromColumn,
       targetColumn: relation.mapping.throughToColumn,
     },
+    ...(constraints.length === 0 ? {} : { constraints }),
   };
 };
 
@@ -95,6 +115,7 @@ type SupabaseManyToManyRpcResult = {
   sourceCount: number;
   targetCount: number;
   changed: Array<{ source: unknown; target: unknown }>;
+  constraintRejection?: RelationConstraintRejection | null;
 };
 
 const isRpcResult = (value: unknown): value is SupabaseManyToManyRpcResult => {
@@ -103,6 +124,9 @@ const isRpcResult = (value: unknown): value is SupabaseManyToManyRpcResult => {
     result != null &&
     Number.isInteger(result.sourceCount) &&
     Number.isInteger(result.targetCount) &&
+    (!('constraintRejection' in result) ||
+      result.constraintRejection == null ||
+      isRelationConstraintRejection(result.constraintRejection)) &&
     Array.isArray(result.changed)
   );
 };
@@ -153,7 +177,11 @@ export const executeSupabaseManyToManyRelationshipCommandEffect = <
           cause,
         }),
     });
-    if (response.error || !isRpcResult(response.data)) {
+    if (
+      response.error ||
+      !isRpcResult(response.data) ||
+      (payload.version === 2 && !('constraintRejection' in response.data))
+    ) {
       return yield* Effect.fail(
         deps.createError({
           message: 'Supabase many-to-many Command failed',
@@ -173,6 +201,15 @@ export const executeSupabaseManyToManyRelationshipCommandEffect = <
           message: 'Supabase many-to-many endpoint Ref did not resolve exactly once',
           logMessage: 'Supabase many-to-many endpoint cardinality mismatch',
           cause: 'cardinality_mismatch',
+        }),
+      );
+    }
+    if (response.data.constraintRejection) {
+      return yield* Effect.fail(
+        deps.createError({
+          message: response.data.constraintRejection.message,
+          logMessage: 'Supabase many-to-many Relation constraint rejected',
+          cause: relationConstraintRejectionCause(response.data.constraintRejection),
         }),
       );
     }

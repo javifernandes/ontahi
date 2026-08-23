@@ -1,4 +1,11 @@
-import { createEntityRef, entity, field, mapEntity, relationship } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  entity,
+  field,
+  mapEntity,
+  relationConstraint,
+  relationship,
+} from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -216,35 +223,96 @@ describe('Supabase direct Relationship Commands', () => {
     ).rejects.toThrow(message);
   });
 
-  it('fails closed for Relations whose constraints are not compiled by the RPC', () => {
-    const GuardedCourse = entity('GuardedCourse', { id: field.id() });
+  it('compiles mapped inverse constraints and surfaces a structured RPC rejection', async () => {
+    const GuardedCourse = entity('GuardedCourse', { id: field.id(), open: field.boolean() });
     const GuardedStudent = entity('GuardedStudent', {
       id: field.id(),
+      active: field.boolean(),
       course: field.nullable(field.ref(GuardedCourse)),
     });
     GuardedCourse.hasMany('students', GuardedStudent, {
       constraints: [
+        relationConstraint.source(GuardedCourse, course => course.open.eq(true), {
+          code: 'course_closed',
+          message: 'Course is closed.',
+        }),
+        relationConstraint.target(GuardedStudent, student => student.active.eq(true), {
+          code: 'student_inactive',
+          message: 'Student is inactive.',
+        }),
+      ],
+    });
+    mapEntity(GuardedCourse).toTable('guarded_courses', { open: 'is_open' });
+    mapEntity(GuardedStudent).toTable('guarded_students', {
+      active: 'is_active',
+      course: 'course_id',
+    });
+    const command = relationship(
+      GuardedStudent,
+      'course',
+      createEntityRef(GuardedStudent, { id: 'student-1' }),
+    ).assign(createEntityRef(GuardedCourse, { id: 'course-1' }));
+    const rejection = {
+      version: 1 as const,
+      code: 'student_inactive',
+      message: 'Student is inactive.',
+    };
+
+    expect(
+      compileSupabaseRelationshipRpcPayload(command, [GuardedStudent, GuardedCourse]),
+    ).toMatchObject({
+      version: 2,
+      constraints: [
         {
-          kind: 'participant-selection',
           participant: 'target',
-          selection: { kind: 'all' },
-          rejection: { version: 1, code: 'guarded', message: 'Guarded.' },
+          selection: { operator: 'eq', field: 'open', column: 'is_open', value: true },
+          rejection: { code: 'course_closed' },
+        },
+        {
+          participant: 'source',
+          selection: { operator: 'eq', field: 'active', column: 'is_active', value: true },
+          rejection: { code: 'student_inactive' },
         },
       ],
     });
-    mapEntity(GuardedCourse).toTable('guarded_courses');
-    mapEntity(GuardedStudent).toTable('guarded_students');
 
-    expect(() =>
-      compileSupabaseRelationshipRpcPayload(
-        relationship(
-          GuardedStudent,
-          'course',
-          createEntityRef(GuardedStudent, { id: 'student-1' }),
-        ).assign(createEntityRef(GuardedCourse, { id: 'course-1' })),
-        [GuardedStudent, GuardedCourse],
-      ),
-    ).toThrow('do not yet compile Relation constraints');
+    const createStructuredError = (input: {
+      message: string;
+      logMessage: string;
+      cause: unknown;
+    }) => input;
+    const result = await Effect.runPromise(
+      executeSupabaseRelationshipCommandEffect(
+        {
+          getClient: () =>
+            Effect.succeed({
+              from: vi.fn(),
+              rpc: vi.fn().mockResolvedValue({
+                data: {
+                  sourceCount: 1,
+                  targetCount: 1,
+                  oldTarget: null,
+                  preconditionMatched: true,
+                  constraintRejection: rejection,
+                  changed: false,
+                },
+                error: null,
+              }),
+            }),
+          createError: createStructuredError,
+          entities: [GuardedStudent, GuardedCourse],
+        },
+        command,
+      ).pipe(Effect.either),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: {
+        message: 'Student is inactive.',
+        logMessage: 'Supabase Relationship constraint rejected',
+        cause: { reason: 'relation_constraint_rejected', rejection },
+      },
+    });
   });
 
   it('fails closed when a constrained inverse Relation has ambiguous target fields', () => {

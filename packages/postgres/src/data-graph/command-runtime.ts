@@ -97,6 +97,14 @@ export const executePostgresManyToManyCommand = (input: {
       >(compiled.sql);
       const materialized = materializePostgresManyToManyDelta(input.command, compiled, result.rows);
       if (materialized.cardinalityMismatch || !materialized.delta) {
+        if (materialized.constraintRejected) {
+          throw new PostgresDataGraphError(
+            materialized.constraintRejected.message,
+            'relation_constraint_rejected',
+            undefined,
+            materialized.constraintRejected,
+          );
+        }
         throw new PostgresDataGraphError(
           'PostgreSQL many-to-many endpoint Ref did not resolve exactly once.',
           'cardinality_mismatch',
@@ -147,6 +155,14 @@ export const executePostgresRelationshipCommand = (input: {
         throw new PostgresDataGraphError(
           'PostgreSQL Relationship Command current target did not match its precondition.',
           'relationship_precondition_failed',
+        );
+      }
+      if ('constraintRejected' in materialized) {
+        throw new PostgresDataGraphError(
+          materialized.constraintRejected.message,
+          'relation_constraint_rejected',
+          undefined,
+          materialized.constraintRejected,
         );
       }
       return materialized.delta;
