@@ -58,17 +58,17 @@ describe('data-graph mapping', () => {
       id: field.id(),
       course: field.ref(Course),
     });
-    Course.hasMany('students', Student);
+    const CourseWithStudents = Course.hasMany('students', Student);
 
     applyConventionalDataGraphMappings({
-      entities: [Course, Student],
+      entities: [CourseWithStudents, Student],
       naming: {
         table: name => name.toLowerCase(),
         column: name => name.toLowerCase(),
       },
     });
 
-    expect(Course.relations.students?.mapping).toEqual({
+    expect(CourseWithStudents.relations.students?.mapping).toEqual({
       type: 'one-to-many',
       fromTable: 'course',
       fromColumn: 'id',

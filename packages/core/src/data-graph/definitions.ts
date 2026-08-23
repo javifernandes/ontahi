@@ -1410,15 +1410,12 @@ export const resolveHasManyTargetField = (
 
   const candidates = [
     ...new Set(
-      Object.entries(relation.target.relations).flatMap(([relationName, candidate]) => {
+      Object.values(relation.target.relations).flatMap(candidate => {
         if (candidate.relationKind !== 'belongsTo' || candidate.target.name !== sourceEntity.name) {
           return [];
         }
-        const candidateFieldName = candidate.sourceField ?? relationName;
-        const candidateField = relation.target.fields[candidateFieldName];
-        return candidateField &&
-          isReferenceFieldDefinition(candidateField) &&
-          candidateField.target.name === sourceEntity.name
+        const candidateFieldName = candidate.sourceField;
+        return candidateFieldName && candidateFieldName in relation.target.fields
           ? [candidateFieldName]
           : [];
       }),

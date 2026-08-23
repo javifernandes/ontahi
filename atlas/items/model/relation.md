@@ -63,11 +63,12 @@ name and `hasMany` cardinality. Deferred `entity.ref(...)` targets keep cyclic g
 declaration order.
 
 Structural command resolution may also recover omitted inverse field evidence from the schema. It
-prefers an explicit `via`/target field, then an explicit direct storage mapping, then one unique
-target Reference Field whose `belongsTo` edge points back to the source Entity. This is schema
-reflection, not adapter inference. Multiple candidate Reference Fields remain ambiguous and require
-an explicit declaration; constrained command execution fails closed when that ambiguity prevents
-canonical matching.
+prefers an explicit `via`/target field, then an explicit direct storage mapping, then the source
+field of one unique target `belongsTo` edge pointing back to the source Entity. A Reference Field
+declares that `belongsTo` endpoint implicitly, while the compatibility DSL may declare it explicitly
+over a scalar foreign-key field. This is schema reflection, not adapter inference. Multiple
+candidate fields remain ambiguous and require an explicit declaration; constrained command
+execution fails closed when that ambiguity prevents canonical matching.
 
 Providers lower Reference Fields to their physical representation. A conventional relational
 mapping may store `TodoItem.list` in `todo_items.list_id`; another provider can choose a different
