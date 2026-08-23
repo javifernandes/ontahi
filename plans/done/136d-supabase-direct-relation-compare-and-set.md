@@ -30,4 +30,7 @@ applies the transition. Runtime tests prove exact replacement, stale conflict, g
 no-op, capability absence and structural failure behavior. Eligibility SQL compilation remains in
 the parent Plan 136. A Testcontainers integration installs the exported migration in PostgreSQL 17,
 applies a conditional transition, simulates a concurrent reassignment, and proves a stale caller
-cannot overwrite it.
+cannot overwrite it. Direct inverse matching uses the shared Core field resolver: explicit `via`
+evidence wins, physical mapping is next, and an otherwise undeclared endpoint may be inferred only
+from one unique target Reference Field back to the source Entity. Ambiguous constrained inverse
+Relations fail closed rather than bypassing eligibility checks in Core, PostgreSQL, or Supabase.

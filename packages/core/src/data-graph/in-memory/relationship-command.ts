@@ -5,7 +5,7 @@ import type {
   AnyReferenceFieldDefinition,
   RelationDefinition,
 } from '../definitions.js';
-import { isReferenceFieldDefinition } from '../definitions.js';
+import { isReferenceFieldDefinition, resolveHasManyTargetField } from '../definitions.js';
 import { liftEntityReferenceValue, lowerEntityReferenceValue } from '../reference-field.js';
 import type {
   RelationshipCommand,
@@ -55,15 +55,31 @@ const canonicalRelationMatches = (
   relationName: string,
   relation: RelationDefinition,
   command: RelationshipCommand,
-) =>
-  (relation.relationKind === 'belongsTo' &&
+) => {
+  if (
+    relation.relationKind === 'belongsTo' &&
     declaringEntity.name === command.relation.sourceEntityName &&
     relation.target.name === command.relation.targetEntityName &&
-    (relation.sourceField ?? relationName) === command.relation.fieldName) ||
-  (relation.relationKind === 'hasMany' &&
+    (relation.sourceField ?? relationName) === command.relation.fieldName
+  ) {
+    return true;
+  }
+  if (
+    relation.relationKind === 'hasMany' &&
     declaringEntity.name === command.relation.targetEntityName &&
-    relation.target.name === command.relation.sourceEntityName &&
-    relation.targetField === command.relation.fieldName);
+    relation.target.name === command.relation.sourceEntityName
+  ) {
+    const targetField = resolveHasManyTargetField(declaringEntity, relation);
+    if (!targetField && (relation.constraints?.length ?? 0) > 0) {
+      throw new InMemoryDataGraphError(
+        `Cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
+        'invalid_command',
+      );
+    }
+    return targetField === command.relation.fieldName;
+  }
+  return false;
+};
 
 const constraintParticipantRef = (
   relation: RelationDefinition,

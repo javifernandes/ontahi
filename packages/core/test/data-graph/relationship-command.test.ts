@@ -265,6 +265,102 @@ describe('relationship commands', () => {
     expect(dataset.ConstrainedStudent?.[0]?.course).toBe('course-1');
   });
 
+  it('enforces constraints from an inferred inverse Relation without explicit via', async () => {
+    const GuardedCourse = entity('InferredGuardedCourse', { id: field.id() });
+    const GuardedStudent = entity('InferredGuardedStudent', {
+      id: field.id(),
+      active: field.boolean(),
+      course: field.nullable(field.ref(GuardedCourse)),
+    });
+    GuardedCourse.hasMany('students', GuardedStudent, {
+      constraints: [
+        {
+          kind: 'participant-selection',
+          participant: 'target',
+          selection: {
+            kind: 'predicate',
+            operator: 'eq',
+            fieldName: 'active',
+            value: true,
+          },
+          rejection: {
+            version: 1,
+            code: 'inactive_student',
+            message: 'Inactive students cannot join.',
+          },
+        },
+      ],
+    });
+    const guardedStudent = createEntityRef(GuardedStudent, { id: 'student-1' });
+    const guardedCourse = createEntityRef(GuardedCourse, { id: 'course-1' });
+    const dataset = {
+      InferredGuardedCourse: [{ id: 'course-1' }],
+      InferredGuardedStudent: [{ id: 'student-1', active: false, course: null }],
+    };
+
+    expect(relationship(GuardedCourse, 'students', guardedCourse).add(guardedStudent)).toEqual(
+      relationship(GuardedStudent, 'course', guardedStudent).assign(guardedCourse),
+    );
+
+    const result = await Effect.runPromise(
+      executeInMemoryRelationshipCommandEffect(
+        dataset,
+        [GuardedCourse, GuardedStudent],
+        relationship(GuardedStudent, 'course', guardedStudent).assign(guardedCourse),
+      ).pipe(Effect.either),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'relation_constraint_rejected' },
+    });
+    expect(dataset.InferredGuardedStudent).toEqual([
+      { id: 'student-1', active: false, course: null },
+    ]);
+  });
+
+  it('fails closed when a constrained inverse Relation has no unique target field', async () => {
+    const AmbiguousCourse = entity('AmbiguousGuardedCourse', { id: field.id() });
+    const AmbiguousStudent = entity('AmbiguousGuardedStudent', {
+      id: field.id(),
+      primaryCourse: field.nullable(field.ref(AmbiguousCourse)),
+      secondaryCourse: field.nullable(field.ref(AmbiguousCourse)),
+    });
+    AmbiguousCourse.hasMany('students', AmbiguousStudent, {
+      constraints: [
+        {
+          kind: 'participant-selection',
+          participant: 'target',
+          selection: { kind: 'all' },
+          rejection: { version: 1, code: 'guarded', message: 'Guarded.' },
+        },
+      ],
+    });
+    const student = createEntityRef(AmbiguousStudent, { id: 'student-1' });
+    const course = createEntityRef(AmbiguousCourse, { id: 'course-1' });
+    const dataset = {
+      AmbiguousGuardedCourse: [{ id: 'course-1' }],
+      AmbiguousGuardedStudent: [{ id: 'student-1', primaryCourse: null, secondaryCourse: null }],
+    };
+
+    expect(() => relationship(AmbiguousCourse, 'students', course)).toThrow(
+      'needs Reference Field evidence',
+    );
+    const result = await Effect.runPromise(
+      executeInMemoryRelationshipCommandEffect(
+        dataset,
+        [AmbiguousCourse, AmbiguousStudent],
+        relationship(AmbiguousStudent, 'primaryCourse', student).assign(course),
+      ).pipe(Effect.either),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'invalid_command' },
+    });
+    expect(dataset.AmbiguousGuardedStudent).toEqual([
+      { id: 'student-1', primaryCourse: null, secondaryCourse: null },
+    ]);
+  });
+
   it('rejects clearing a required Relation before mutation', async () => {
     const RequiredStudent = entity('RequiredStudent', {
       id: field.id(),

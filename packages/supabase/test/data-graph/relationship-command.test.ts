@@ -223,7 +223,6 @@ describe('Supabase direct Relationship Commands', () => {
       course: field.nullable(field.ref(GuardedCourse)),
     });
     GuardedCourse.hasMany('students', GuardedStudent, {
-      via: 'course',
       constraints: [
         {
           kind: 'participant-selection',
@@ -246,6 +245,41 @@ describe('Supabase direct Relationship Commands', () => {
         [GuardedStudent, GuardedCourse],
       ),
     ).toThrow('do not yet compile Relation constraints');
+  });
+
+  it('fails closed when a constrained inverse Relation has ambiguous target fields', () => {
+    const AmbiguousCourse = entity('AmbiguousCourse', { id: field.id() });
+    const AmbiguousStudent = entity('AmbiguousStudent', {
+      id: field.id(),
+      primaryCourse: field.nullable(field.ref(AmbiguousCourse)),
+      secondaryCourse: field.nullable(field.ref(AmbiguousCourse)),
+    });
+    AmbiguousCourse.hasMany('students', AmbiguousStudent, {
+      constraints: [
+        {
+          kind: 'participant-selection',
+          participant: 'target',
+          selection: { kind: 'all' },
+          rejection: { version: 1, code: 'guarded', message: 'Guarded.' },
+        },
+      ],
+    });
+    mapEntity(AmbiguousCourse).toTable('ambiguous_courses');
+    mapEntity(AmbiguousStudent).toTable('ambiguous_students', {
+      primaryCourse: 'primary_course_id',
+      secondaryCourse: 'secondary_course_id',
+    });
+
+    expect(() =>
+      compileSupabaseRelationshipRpcPayload(
+        relationship(
+          AmbiguousStudent,
+          'primaryCourse',
+          createEntityRef(AmbiguousStudent, { id: 'student-1' }),
+        ).assign(createEntityRef(AmbiguousCourse, { id: 'course-1' })),
+        [AmbiguousStudent, AmbiguousCourse],
+      ),
+    ).toThrow('cannot resolve constrained inverse Relation AmbiguousCourse.students');
   });
 
   it('ships an invoker-rights transactional RPC migration', () => {

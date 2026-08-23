@@ -102,4 +102,6 @@ preflight remain open here. Plan 136c adds the first provider-backed direct Rela
 atomic expected-current conflict proof in PostgreSQL while failing closed for eligibility that has
 not yet been compiled. Plan 136d preserves the same direct transition contract through one Supabase
 invoker-rights RPC without a PostgREST read/write race. Atomic provider compilation of the portable
-eligibility predicates themselves remains open.
+eligibility predicates themselves remains open. Direct inverse constraint matching now shares
+Core's effective target-field resolution: explicit field evidence, direct mapping, or one unique
+target Reference Field; unresolved ambiguity fails closed across Core, PostgreSQL, and Supabase.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyConventionalDataGraphMappings,
   entity,
   field,
   getEntityMapping,
@@ -48,6 +49,31 @@ describe('data-graph mapping', () => {
       relationKind: 'belongsTo',
       target: TodoList,
       sourceField: 'listId',
+    });
+  });
+
+  it('maps has-many through a unique target Reference Field without explicit via', () => {
+    const Course = entity('Course', { id: field.id() });
+    const Student = entity('Student', {
+      id: field.id(),
+      course: field.ref(Course),
+    });
+    Course.hasMany('students', Student);
+
+    applyConventionalDataGraphMappings({
+      entities: [Course, Student],
+      naming: {
+        table: name => name.toLowerCase(),
+        column: name => name.toLowerCase(),
+      },
+    });
+
+    expect(Course.relations.students?.mapping).toEqual({
+      type: 'one-to-many',
+      fromTable: 'course',
+      fromColumn: 'id',
+      toTable: 'student',
+      toColumn: 'courseid',
     });
   });
 

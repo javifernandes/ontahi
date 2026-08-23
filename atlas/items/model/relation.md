@@ -62,6 +62,13 @@ The target field supplies the related Entity and join evidence. The inverse cont
 name and `hasMany` cardinality. Deferred `entity.ref(...)` targets keep cyclic graphs independent of
 declaration order.
 
+Structural command resolution may also recover omitted inverse field evidence from the schema. It
+prefers an explicit `via`/target field, then an explicit direct storage mapping, then one unique
+target Reference Field whose `belongsTo` edge points back to the source Entity. This is schema
+reflection, not adapter inference. Multiple candidate Reference Fields remain ambiguous and require
+an explicit declaration; constrained command execution fails closed when that ambiguity prevents
+canonical matching.
+
 Providers lower Reference Fields to their physical representation. A conventional relational
 mapping may store `TodoItem.list` in `todo_items.list_id`; another provider can choose a different
 shape. Explicit `belongsTo`, `hasMany`, and physical mappings remain compatibility and

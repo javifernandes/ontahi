@@ -4,6 +4,7 @@ import {
   isReferenceFieldDefinition,
   liftEntityReferenceValue,
   lowerEntityReferenceValue,
+  resolveHasManyTargetField,
   selectionReferences,
   type AnyEntityDefinition,
   type RelationshipCommand,
@@ -57,16 +58,29 @@ const resolveDirectRelation = (
   }
   const constrained = [source, target].some(declaringEntity =>
     Object.entries(declaringEntity.relations).some(([relationName, relation]) => {
-      const canonicalMatch =
-        (relation.relationKind === 'belongsTo' &&
-          declaringEntity.name === source.name &&
-          relation.target.name === target.name &&
-          (relation.sourceField ?? relationName) === command.relation.fieldName) ||
-        (relation.relationKind === 'hasMany' &&
-          declaringEntity.name === target.name &&
-          relation.target.name === source.name &&
-          relation.targetField === command.relation.fieldName);
-      return canonicalMatch && (relation.constraints?.length ?? 0) > 0;
+      if ((relation.constraints?.length ?? 0) === 0) return false;
+      if (
+        relation.relationKind === 'belongsTo' &&
+        declaringEntity.name === source.name &&
+        relation.target.name === target.name &&
+        (relation.sourceField ?? relationName) === command.relation.fieldName
+      ) {
+        return true;
+      }
+      if (
+        relation.relationKind === 'hasMany' &&
+        declaringEntity.name === target.name &&
+        relation.target.name === source.name
+      ) {
+        const targetField = resolveHasManyTargetField(declaringEntity, relation);
+        if (!targetField) {
+          throw new Error(
+            `Supabase Relationship Command cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
+          );
+        }
+        return targetField === command.relation.fieldName;
+      }
+      return false;
     }),
   );
   if (constrained) {
