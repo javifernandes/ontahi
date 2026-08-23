@@ -1,13 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import {
-  createInMemoryDataGraphRuntime,
-  entity,
-  field,
-  mapEntity,
-  query,
-} from './index.js';
+import { createInMemoryDataGraphRuntime, entity, field, mapEntity, query } from './index.js';
 
 describe('data-graph runtime contract', () => {
   it('allows the in-memory runtime to satisfy the shared runtime interface', async () => {

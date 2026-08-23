@@ -3,11 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { entity, field, type DataGraphExecutionRuntime } from '../../data-graph/index.js';
 
-import {
-  createDataGraphArchitectureAdapter,
-  defineDomainOperation,
-  layer,
-} from './index.js';
+import { createDataGraphArchitectureAdapter, defineDomainOperation, layer } from './index.js';
 
 describe('data graph architecture adapter', () => {
   const BookDefinition = entity('Book', {

@@ -4,11 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ExplorerSchemaDescriptor } from '../contracts/index.js';
 
-import {
-  ExplorerFieldRow,
-  ExplorerSchemaFields,
-  ExplorerSchemaStatusBadge,
-} from './index.js';
+import { ExplorerFieldRow, ExplorerSchemaFields, ExplorerSchemaStatusBadge } from './index.js';
 
 afterEach(cleanup);
 

@@ -4,10 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type {
-  ExplorerOperationDescriptor,
-  ExplorerSchemaDescriptor,
-} from '../contracts/index.js';
+import type { ExplorerOperationDescriptor, ExplorerSchemaDescriptor } from '../contracts/index.js';
 
 import { ExplorerOperationsBrowser, ExplorerProvider } from './index.js';
 

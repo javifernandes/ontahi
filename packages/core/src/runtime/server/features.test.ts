@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  collectFeaturesFromGraphOperations,
-  deriveFeatureProviderKey,
-} from './features.js';
+import { collectFeaturesFromGraphOperations, deriveFeatureProviderKey } from './features.js';
 
 describe('server runtime features', () => {
   it('derives provider keys from graph operation paths', () => {

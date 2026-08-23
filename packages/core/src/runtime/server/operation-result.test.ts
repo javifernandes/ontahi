@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  readOperationSuccessValue,
-  toOperationInvocationResult,
-} from './index.js';
+import { readOperationSuccessValue, toOperationInvocationResult } from './index.js';
 
 describe('operation result adapter', () => {
   it('unwraps operation data payloads as semantic operation values', () => {

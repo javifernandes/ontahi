@@ -9,12 +9,7 @@ import {
   type RelationshipCommand,
 } from '../../data-graph/index.js';
 
-import {
-  createArchitectureAppFacade,
-  entity,
-  ontahi,
-  relation,
-} from './index.js';
+import { createArchitectureAppFacade, entity, ontahi, relation } from './index.js';
 
 describe('bound relationship commands', () => {
   it('authors typed canonical commands directly from entity refs', () => {

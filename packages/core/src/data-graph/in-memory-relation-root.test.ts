@@ -11,7 +11,6 @@ import {
   field,
 } from './index.js';
 
-
 describe('in-memory relation-root reads', () => {
   it('uses semantic belongs-to fields without physical mapping metadata', async () => {
     const TodoList = entity('TodoList', {

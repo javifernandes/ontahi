@@ -13,7 +13,6 @@ import {
   runClientEntityCodegenCli,
 } from './index.mjs';
 
-
 const tempDirectories = [];
 
 afterEach(async () => {

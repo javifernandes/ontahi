@@ -17,7 +17,6 @@ import {
   postgresMapping,
 } from './index.js';
 
-
 describe('PostgreSQL SQL compiler', () => {
   it('compiles selections, ordering and limits with parameters', () => {
     expect(

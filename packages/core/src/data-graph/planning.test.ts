@@ -14,7 +14,6 @@ import {
   view,
 } from './index.js';
 
-
 describe('data-graph planning', () => {
   it('collects selected columns plus relation join keys', () => {
     const { BookWithCollaborators } = defineAudienceGraph();

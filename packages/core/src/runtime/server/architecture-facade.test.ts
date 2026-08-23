@@ -3,11 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { field, value } from '../../data-graph/index.js';
 
-import {
-  architecture,
-  getArchitecture,
-  type ArchitectureDefinition,
-} from './index.js';
+import { architecture, getArchitecture, type ArchitectureDefinition } from './index.js';
 
 describe('architecture app facade', () => {
   afterEach(() => {

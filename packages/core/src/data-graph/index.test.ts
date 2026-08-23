@@ -26,7 +26,6 @@ import {
   type AnyEntityDefinition,
 } from './index.js';
 
-
 describe('data-graph', () => {
   it('executes a nested effect-backed reader view in memory', async () => {
     const { BookWithChapters } = defineReaderGraph();

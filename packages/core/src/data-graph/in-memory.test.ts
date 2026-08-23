@@ -13,7 +13,6 @@ import {
   view,
 } from './index.js';
 
-
 describe('data-graph in-memory runtime', () => {
   it('enforces exact-one selection cardinality after materialization', async () => {
     const Book = entity('CardinalityBook', {

@@ -1,10 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  createNextActionOperationBridgeAdapter,
-  type BridgedOperationLike,
-} from './index.js';
+import { createNextActionOperationBridgeAdapter, type BridgedOperationLike } from './index.js';
 
 const operation: BridgedOperationLike<{ token: string }, { bookSlug: string }> = {
   kind: 'domain-operation',

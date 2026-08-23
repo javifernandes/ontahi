@@ -34,7 +34,6 @@ import {
   toSupabaseEntityRow,
 } from './index.js';
 
-
 type QueryResult = {
   count?: number | null;
   data?: unknown;

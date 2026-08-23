@@ -14,7 +14,6 @@ import {
 
 import { entity, field, mapEntity, mapRelation, query } from './index.js';
 
-
 describe('data-graph in-memory materialization', () => {
   it('hydrates nested hasMany relations with ordering and nested includes', () => {
     const { BookWithChapters } = defineReaderGraph();

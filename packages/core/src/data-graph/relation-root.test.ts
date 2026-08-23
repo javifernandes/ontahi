@@ -18,7 +18,6 @@ import {
   type DataGraphExecutionRuntime,
 } from './index.js';
 
-
 describe('relation-root graph reads', () => {
   it('builds a first-class read spec from a source query and target selection', () => {
     const { BookCollaboratorWithProfile, BookWithCollaborators } = defineAudienceGraph();

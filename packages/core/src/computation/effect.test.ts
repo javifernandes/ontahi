@@ -1,12 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  adaptEffectMethods,
-  isEffectLike,
-  recoverEffect,
-  toEffect,
-} from './effect.js';
+import { adaptEffectMethods, isEffectLike, recoverEffect, toEffect } from './effect.js';
 
 describe('isEffectLike', () => {
   it('returns true for Effect values', () => {

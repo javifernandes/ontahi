@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  isError,
-  toError,
-  toErrorMessage,
-  toSerializableErrorCause,
-} from './error.js';
+import { isError, toError, toErrorMessage, toSerializableErrorCause } from './error.js';
 
 describe('isError', () => {
   it('returns true for Error instances', () => {
