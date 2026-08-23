@@ -1,7 +1,7 @@
 import { getCurrentPrincipal } from '@ontahi/core/runtime/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createNextOperationInvocationRouteHandler } from '../../src/operation-invocation/index.js';
+import { createNextOperationInvocationRouteHandler } from './index.js';
 
 describe('Next.js operation invocation route adapter', () => {
   it('rejects malformed protocol requests before dispatch', async () => {

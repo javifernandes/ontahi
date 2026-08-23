@@ -2,7 +2,7 @@ import { graphReadProtocolError, type GraphReadDispatcher } from '@ontahi/core/d
 import { getCurrentInvocationContext, type InvocationContext } from '@ontahi/core/runtime/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createNextGraphReadRouteHandler } from '../../src/graph-read/index.js';
+import { createNextGraphReadRouteHandler } from './index.js';
 
 const validRequest = {
   version: 1,

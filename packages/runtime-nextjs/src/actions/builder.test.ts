@@ -13,7 +13,7 @@ import {
   createFeatureActionsFactory,
   createNextActionTransport,
   UserFacingActionError,
-} from '../../src/actions/server.js';
+} from './server.js';
 
 const getAuthContextMock = vi.fn();
 const handleServerErrorMock = vi.fn();
