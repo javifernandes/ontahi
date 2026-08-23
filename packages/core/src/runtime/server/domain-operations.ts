@@ -31,7 +31,7 @@ import {
   type EntityRefInputDeclarations,
   type EntityRefInputPublicInput,
   type EntityRefInputRunInput,
-} from '../../data-graph/ref.js';
+} from '../../data-graph/ref/index.js';
 import { RelationRootSelection } from '../../data-graph/relation-root.js';
 import {
   createRuntimeBoundDataGraphApi,

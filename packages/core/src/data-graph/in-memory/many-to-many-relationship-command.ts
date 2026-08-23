@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import type { AnyEntityDefinition, RelationDefinition } from '../definitions.js';
-import { createEntityIdentityRef } from '../ref.js';
+import { createEntityIdentityRef } from '../ref/index.js';
 import type {
   ManyToManyRelationshipCommand,
   RelationshipEndpointSelection,

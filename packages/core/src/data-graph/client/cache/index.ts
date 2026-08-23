@@ -11,7 +11,7 @@ import {
   type EntityRef,
   type EntityRefLocator,
   type EntityRefLocatorValue,
-} from '../../ref.js';
+} from '../../ref/index.js';
 
 export type EntityLocatorRef<TEntityName extends string = string> = {
   name: string;

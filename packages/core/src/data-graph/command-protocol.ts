@@ -3,7 +3,7 @@ import { isRecord } from '../value/object.js';
 
 import { isReferenceFieldDefinition, type AnyEntityDefinition } from './definitions.js';
 import { validateGraphReadSelection } from './read-protocol.js';
-import { isEntityRef, type AnyEntityRef } from './ref.js';
+import { isEntityRef, type AnyEntityRef } from './ref/index.js';
 import type {
   ManyToManyRelationshipCommand,
   RelationshipCommand,

@@ -8,7 +8,7 @@ import {
   isEntityRef,
   isEntityRefLocatorValue,
   type EntityRefLocatorValue,
-} from './ref.js';
+} from './ref/index.js';
 import type { SelectionExpression } from './selection-ast.js';
 
 export type EntityReferenceIdentity = {

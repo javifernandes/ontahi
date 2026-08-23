@@ -14,7 +14,7 @@ import {
   type EntityRef,
   type EntityRefInputPublicInput,
   type EntityRefLocator,
-} from '../../data-graph/ref.js';
+} from '../../data-graph/ref/index.js';
 import {
   bindEntityRefRelationshipCommands,
   type BoundEntityRefRelationshipCommands,

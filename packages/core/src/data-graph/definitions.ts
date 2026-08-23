@@ -9,7 +9,7 @@ import {
   type EntityRefLocatorDeclarations,
   type EntityRefLocatorFactory,
   type EntityRefLocatorValue,
-} from './ref.js';
+} from './ref/index.js';
 import type { SemanticSelection } from './selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape, type EntityViewFactory } from './view.js';
 

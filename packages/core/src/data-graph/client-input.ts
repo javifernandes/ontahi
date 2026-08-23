@@ -13,7 +13,7 @@ import {
   type EntityRef,
   type EntityRefLocatorValue,
   type EntitySelectionInputItem,
-} from './ref.js';
+} from './ref/index.js';
 import { isSelection, Selection } from './selection-value.js';
 
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};

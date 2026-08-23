@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { entity, field } from '../definitions.js';
+
 import {
   bindEntityRefOperationProxy,
   bindEntityRefRelationOperations,
@@ -9,9 +11,7 @@ import {
   createEntityIdentityRef,
   createEntityRefFactory,
   defineEntityRefInput,
-  entity,
   entityRefsEqual,
-  field,
   getEntityIdentityLocator,
   getDefaultEntityRefOperationInput,
   isEntityRef,
@@ -19,7 +19,7 @@ import {
   normalizeEntityRefQueryInput,
   normalizeEntityRef,
   readEntityRefQueryInputValue,
-} from '../index.js';
+} from './index.js';
 
 describe('data-graph entity refs', () => {
   it('creates normalized refs from entity definitions or names', () => {

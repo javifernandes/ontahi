@@ -21,7 +21,8 @@ import {
   readEntityRefQueryInputValue,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
-} from './ref.js';
+} from './ref/index.js';
+import type { EntityName } from './ref/model.js';
 import { bindEntityRefRelationshipCommands } from './relationship-command.js';
 import { isGraphSchemaDefinition } from './schema-descriptor.js';
 import type { SemanticSelection } from './selection-ast.js';
@@ -322,12 +323,7 @@ export type ClientDomainOperationDeclarations = Record<
   ClientDomainOperationDeclaration<any, any>
 >;
 
-export type EntityName<TEntity extends Pick<AnyEntityDefinition, 'name'> | string> =
-  TEntity extends string
-    ? TEntity
-    : TEntity extends { name: infer TName extends string }
-      ? TName
-      : never;
+export type { EntityName } from './ref/model.js';
 
 export type ResolveGraphOperation<TEntityName extends string, TName extends string, TOperation> =
   TOperation extends GraphOperationDeclaration<infer TInput, infer TResult>
