@@ -7,6 +7,7 @@ import {
   type QueryOrView,
   type QuerySpec,
   type SelectionExpression,
+  type SelectionPredicate,
 } from '@ontahi/core/data-graph';
 
 import type { PostgresEntityMapping } from './mapping.js';
@@ -21,38 +22,74 @@ export const quotePostgresIdentifier = (identifier: string) =>
 
 const quoteIdentifier = quotePostgresIdentifier;
 
-export const compilePostgresSelection = (
+export type PostgresSelectionLeafCompiler = (
+  predicate: SelectionPredicate,
+  quotedColumn: string,
+  values: unknown[],
+) => string;
+
+const compilePostgresSelectionTree = (
   expression: SelectionExpression,
   mapping: PostgresEntityMapping,
   values: unknown[],
+  compileLeaf: PostgresSelectionLeafCompiler,
+  description: string,
 ): string => {
-  const lowered = lowerSelectionReferences(expression);
+  switch (expression.kind) {
+    case 'all':
+      return 'TRUE';
+    case 'none':
+      return 'FALSE';
+    case 'and':
+    case 'or':
+      return `(${expression.operands
+        .map(operand =>
+          compilePostgresSelectionTree(operand, mapping, values, compileLeaf, description),
+        )
+        .join(expression.kind === 'and' ? ' AND ' : ' OR ')})`;
+    case 'not':
+      return `(NOT ${compilePostgresSelectionTree(
+        expression.operand,
+        mapping,
+        values,
+        compileLeaf,
+        description,
+      )})`;
+    case 'references':
+      throw new Error(`PostgreSQL ${description} references could not be lowered.`);
+  }
 
-  if (lowered.kind === 'all') return 'TRUE';
-  if (lowered.kind === 'none') return 'FALSE';
-  if (lowered.kind === 'and' || lowered.kind === 'or') {
-    return `(${lowered.operands
-      .map(operand => compilePostgresSelection(operand, mapping, values))
-      .join(lowered.kind === 'and' ? ' AND ' : ' OR ')})`;
-  }
-  if (lowered.kind === 'not') {
-    return `(NOT ${compilePostgresSelection(lowered.operand, mapping, values)})`;
-  }
-  if (lowered.kind === 'references') {
-    throw new Error('PostgreSQL selection references could not be lowered.');
-  }
-
-  const predicate = lowerEntityReferenceSelection(mapping.entity, lowered);
+  const predicate = lowerEntityReferenceSelection(mapping.entity, expression);
   if (predicate.kind !== 'predicate') {
-    throw new Error('PostgreSQL selection predicate could not be lowered.');
+    throw new Error(`PostgreSQL ${description} predicate could not be lowered.`);
   }
-
   const column = mapping.columns[predicate.fieldName];
   if (!column) {
     throw new Error(`Field ${mapping.entity.name}.${predicate.fieldName} is not mapped.`);
   }
-  const quotedColumn = quoteIdentifier(column);
+  return compileLeaf(predicate, quoteIdentifier(column), values);
+};
 
+export const compilePostgresSelectionWith = (
+  expression: SelectionExpression,
+  mapping: PostgresEntityMapping,
+  values: unknown[],
+  compileLeaf: PostgresSelectionLeafCompiler,
+  description = 'selection',
+): string =>
+  compilePostgresSelectionTree(
+    lowerSelectionReferences(expression),
+    mapping,
+    values,
+    compileLeaf,
+    description,
+  );
+
+const compilePostgresSelectionLeaf: PostgresSelectionLeafCompiler = (
+  predicate,
+  quotedColumn,
+  values,
+) => {
   if (predicate.operator === 'isNull') return `${quotedColumn} IS NULL`;
   if (predicate.operator === 'in') {
     if (predicate.values.length === 0) return 'FALSE';
@@ -73,6 +110,13 @@ export const compilePostgresSelection = (
   }[predicate.operator];
   return `${quotedColumn} ${operator} $${values.length}`;
 };
+
+export const compilePostgresSelection = (
+  expression: SelectionExpression,
+  mapping: PostgresEntityMapping,
+  values: unknown[],
+): string =>
+  compilePostgresSelectionWith(expression, mapping, values, compilePostgresSelectionLeaf);
 
 const columnsFor = (mapping: PostgresEntityMapping) =>
   Object.entries(mapping.columns).map(

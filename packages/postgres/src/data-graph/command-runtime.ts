@@ -2,6 +2,7 @@ import {
   liftEntityReferenceRecord,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommand,
+  type RelationConstraintRejection,
   type RelationshipCommand,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
@@ -93,10 +94,19 @@ export const executePostgresManyToManyCommand = (input: {
           target_value: unknown;
           source_count: number | null;
           target_count: number | null;
+          constraint_rejection: RelationConstraintRejection | null;
         } & QueryResultRow
       >(compiled.sql);
       const materialized = materializePostgresManyToManyDelta(input.command, compiled, result.rows);
       if (materialized.cardinalityMismatch || !materialized.delta) {
+        if (materialized.constraintRejected) {
+          throw new PostgresDataGraphError(
+            materialized.constraintRejected.message,
+            'relation_constraint_rejected',
+            undefined,
+            materialized.constraintRejected,
+          );
+        }
         throw new PostgresDataGraphError(
           'PostgreSQL many-to-many endpoint Ref did not resolve exactly once.',
           'cardinality_mismatch',
@@ -147,6 +157,14 @@ export const executePostgresRelationshipCommand = (input: {
         throw new PostgresDataGraphError(
           'PostgreSQL Relationship Command current target did not match its precondition.',
           'relationship_precondition_failed',
+        );
+      }
+      if ('constraintRejected' in materialized) {
+        throw new PostgresDataGraphError(
+          materialized.constraintRejected.message,
+          'relation_constraint_rejected',
+          undefined,
+          materialized.constraintRejected,
         );
       }
       return materialized.delta;

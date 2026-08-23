@@ -33,8 +33,17 @@ student.course.assign(nextCourse, { ifCurrent: previousCourse });
 ```
 
 A stale target fails without changing the edge. Inverse `remove` likewise retains its named target
-as a guard. Relations with portable eligibility constraints currently fail closed in this direct
-adapter path until their predicates are compiled into the same mutation boundary.
+as a guard. Portable source/target participant constraints are compiled against the participant's
+mapped columns and evaluated while the source and target rows are locked in that same statement.
+The first failed constraint is exposed as `relation_constraint_rejected` with its declared stable
+rejection descriptor; `unlink` continues to bypass link eligibility so invalid current state can be
+repaired.
+
+Selection-valued many-to-many `link` uses the same contract. PostgreSQL locks the complete selected
+participant sets, verifies every row without filtering the affected set, and only then inserts the
+Cartesian edge delta. One ineligible participant rejects the whole command without partial edges.
+The currently supported provider constraint surface is the portable participant Selection
+vocabulary; aggregate and current-population constraints are not yet part of the model.
 
 The same binding provides Explorer-facing free-text search, typed filters, sorting, pagination, and
 reporting for mapped columns that are absent from the live table. Applications do not configure a

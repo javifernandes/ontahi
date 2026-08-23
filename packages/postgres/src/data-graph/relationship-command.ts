@@ -2,13 +2,18 @@ import {
   isReferenceFieldDefinition,
   liftEntityReferenceValue,
   lowerEntityReferenceValue,
-  resolveHasManyTargetField,
+  resolveDirectRelationConstraints,
   selectionReferences,
+  type RelationConstraintRejection,
   type RelationshipCommand,
   type RelationshipDelta,
 } from '@ontahi/core/data-graph';
 
 import type { PostgresEntityMapping } from './mapping.js';
+import {
+  compilePostgresRelationConstraints,
+  postgresConstraintProjection,
+} from './relation-constraint.js';
 import { compilePostgresSelection, quotePostgresIdentifier } from './sql.js';
 
 export type PostgresRelationshipCommandRow = {
@@ -16,6 +21,8 @@ export type PostgresRelationshipCommandRow = {
   target_count: number;
   updated_count: number;
   old_target: unknown;
+  precondition_matched: boolean;
+  constraint_rejection?: RelationConstraintRejection | null;
 };
 
 export type CompiledPostgresRelationshipCommand = {
@@ -44,37 +51,27 @@ const assertMapping = (
   if (command.action === 'unlink' && !command.target && !field.nullable && !field.optional) {
     throw new Error('PostgreSQL Relationship Command cannot clear a required Relation.');
   }
-  const constrained = [source.entity, target.entity].some(declaringEntity =>
-    Object.entries(declaringEntity.relations).some(([relationName, relation]) => {
-      if ((relation.constraints?.length ?? 0) === 0) return false;
-      if (
-        relation.relationKind === 'belongsTo' &&
-        declaringEntity.name === command.relation.sourceEntityName &&
-        relation.target.name === command.relation.targetEntityName &&
-        (relation.sourceField ?? relationName) === command.relation.fieldName
-      ) {
-        return true;
-      }
-      if (
-        relation.relationKind === 'hasMany' &&
-        declaringEntity.name === command.relation.targetEntityName &&
-        relation.target.name === command.relation.sourceEntityName
-      ) {
-        const targetField = resolveHasManyTargetField(declaringEntity, relation);
-        if (!targetField) {
-          throw new Error(
-            `PostgreSQL Relationship Command cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
-          );
-        }
-        return targetField === command.relation.fieldName;
-      }
-      return false;
-    }),
-  );
-  if (constrained) {
-    throw new Error('PostgreSQL Relationship Commands do not yet compile Relation constraints.');
-  }
   return field;
+};
+
+const resolveConstraints = (
+  command: RelationshipCommand,
+  sourceMapping: PostgresEntityMapping,
+  targetMapping: PostgresEntityMapping,
+) => {
+  if (command.action !== 'link') return [];
+  try {
+    return resolveDirectRelationConstraints(
+      command.relation,
+      sourceMapping.entity,
+      targetMapping.entity,
+    );
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Cannot resolve Relation constraints.';
+    throw new Error(
+      `PostgreSQL Relationship Command ${message.charAt(0).toLowerCase()}${message.slice(1)}`,
+    );
+  }
 };
 
 export const compilePostgresRelationshipCommand = (
@@ -92,6 +89,12 @@ export const compilePostgresRelationshipCommand = (
   const targetWhere = command.target
     ? compilePostgresSelection(selectionReferences([command.target]), targetMapping, values)
     : 'FALSE';
+  const constraints = compilePostgresRelationConstraints(
+    resolveConstraints(command, sourceMapping, targetMapping),
+    sourceMapping,
+    targetMapping,
+    values,
+  );
   const expected =
     command.precondition?.currentTarget ??
     (command.action === 'unlink' ? command.target : undefined);
@@ -115,22 +118,27 @@ export const compilePostgresRelationshipCommand = (
     sql: {
       values,
       text: `WITH source_rows AS MATERIALIZED (
-  SELECT ${relationColumn} AS old_target FROM ${sourceTable} WHERE ${sourceWhere} FOR UPDATE
+  SELECT ${relationColumn} AS old_target${postgresConstraintProjection(constraints.sourceProjection)} FROM ${sourceTable} WHERE ${sourceWhere} FOR UPDATE
 ), target_rows AS MATERIALIZED (
-  SELECT 1 FROM ${targetTable} WHERE ${targetWhere}
+  SELECT 1 AS endpoint${postgresConstraintProjection(constraints.targetProjection)} FROM ${targetTable} WHERE ${targetWhere} FOR SHARE
 ), state AS (
   SELECT (SELECT COUNT(*)::int FROM source_rows) AS source_count,
          (SELECT COUNT(*)::int FROM target_rows) AS target_count,
-         (SELECT old_target FROM source_rows LIMIT 1) AS old_target
+         (SELECT old_target FROM source_rows LIMIT 1) AS old_target${postgresConstraintProjection(constraints.stateProjection)}
+), guarded_state AS (
+  SELECT *, ${expectedCondition} AS precondition_matched,
+         ${constraints.rejectionExpression} AS constraint_rejection
+  FROM state
 ), updated AS (
   UPDATE ${sourceTable} SET ${relationColumn} = ${nextPlaceholder}
   WHERE ${sourceWhere}
-    AND (SELECT source_count = 1 AND ${requiredTargetCount} AND ${expectedCondition} FROM state)
+    AND (SELECT source_count = 1 AND ${requiredTargetCount} AND precondition_matched
+                AND constraint_rejection IS NULL FROM guarded_state)
   RETURNING 1
 )
-SELECT source_count, target_count, old_target,
+SELECT source_count, target_count, old_target, precondition_matched, constraint_rejection,
        (SELECT COUNT(*)::int FROM updated) AS updated_count
-FROM state`,
+FROM guarded_state`,
     },
   };
 };
@@ -139,11 +147,18 @@ export const materializePostgresRelationshipDelta = (
   command: RelationshipCommand,
   compiled: CompiledPostgresRelationshipCommand,
   row: PostgresRelationshipCommandRow,
-): { delta: RelationshipDelta } | { cardinalityMismatch: true } | { preconditionFailed: true } => {
+):
+  | { delta: RelationshipDelta }
+  | { cardinalityMismatch: true }
+  | { preconditionFailed: true }
+  | { constraintRejected: RelationConstraintRejection } => {
   if (row.source_count !== 1 || (command.action === 'link' && row.target_count !== 1)) {
     return { cardinalityMismatch: true };
   }
-  if (command.precondition && row.updated_count !== 1) return { preconditionFailed: true };
+  if (command.precondition && !row.precondition_matched) return { preconditionFailed: true };
+  if (row.constraint_rejection) {
+    return { constraintRejected: row.constraint_rejection };
+  }
   if (row.updated_count !== 1) return { delta: { added: [], removed: [] } };
   const field = compiled.sourceMapping.entity.fields[command.relation.fieldName];
   if (!field || !isReferenceFieldDefinition(field)) {

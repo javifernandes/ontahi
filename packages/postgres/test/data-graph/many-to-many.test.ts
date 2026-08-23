@@ -3,6 +3,7 @@ import {
   entity,
   field,
   mapRelation,
+  relationConstraint,
   relationshipSet,
   selection,
 } from '@ontahi/core/data-graph';
@@ -46,10 +47,10 @@ describe('PostgreSQL many-to-many commands', () => {
 
     expect(compiled.sql.values).toEqual(['Selected', 'Core']);
     expect(compiled.sql.text).toContain(
-      'SELECT DISTINCT "todo_id" AS source_value FROM "todos" WHERE "todo_title" = $1',
+      'SELECT "todo_id" AS source_value FROM "todos" WHERE "todo_title" = $1 FOR SHARE',
     );
     expect(compiled.sql.text).toContain(
-      'SELECT DISTINCT "tag_id" AS target_value FROM "tags" WHERE "tag_label" = $2',
+      'SELECT "tag_id" AS target_value FROM "tags" WHERE "tag_label" = $2 FOR SHARE',
     );
     expect(compiled.sql.text).toContain('INSERT INTO "todo_tags" ("todo_id", "tag_id")');
     expect(compiled.sql.text).toContain(
@@ -118,5 +119,86 @@ describe('PostgreSQL many-to-many commands', () => {
         },
       ]),
     ).toEqual({ cardinalityMismatch: true });
+  });
+
+  it('guards the complete selected participant set with portable eligibility', () => {
+    const GuardedTag = entity('GuardedTag', {
+      id: field.id(),
+      assignable: field.boolean(),
+    });
+    const GuardedTodoDefinition = entity('GuardedTodo', {
+      id: field.id(),
+      completed: field.boolean(),
+    });
+    const GuardedTodo = GuardedTodoDefinition.manyToMany('tags', GuardedTag, {
+      constraints: [
+        relationConstraint.source(GuardedTodoDefinition, todo => todo.completed.eq(false), {
+          code: 'todo_completed',
+          message: 'Completed todos cannot be tagged.',
+        }),
+        relationConstraint.target(GuardedTag, tag => tag.assignable.eq(true), {
+          code: 'tag_unassignable',
+          message: 'Tag is not assignable.',
+        }),
+      ],
+    });
+    mapRelation(GuardedTodo, 'tags', {
+      type: 'many-to-many',
+      from: 'guarded_todos.id',
+      through: {
+        table: 'guarded_todo_tags',
+        fromColumn: 'todo_id',
+        toColumn: 'tag_id',
+      },
+      to: 'guarded_tags.id',
+    });
+    const guardedTodoMapping = postgresMapping({
+      entity: GuardedTodo,
+      table: 'guarded_todos',
+      columns: { id: 'id', completed: 'is_completed' },
+    });
+    const guardedTagMapping = postgresMapping({
+      entity: GuardedTag,
+      table: 'guarded_tags',
+      columns: { id: 'id', assignable: 'is_assignable' },
+    });
+    const command = relationshipSet(
+      GuardedTodo,
+      'tags',
+      selection(GuardedTodo, todo => todo.id.in(['todo-1', 'todo-2'])),
+    ).add(selection(GuardedTag, tag => tag.assignable.eq(true)));
+    const compiled = compilePostgresManyToManyCommand(
+      command,
+      guardedTodoMapping,
+      guardedTagMapping,
+    );
+
+    expect(compiled.sql.text).toContain('constraint_rejection');
+    expect(compiled.sql.text).toContain('FOR SHARE');
+    expect(compiled.sql.text).toContain('"is_completed" IS NOT DISTINCT FROM');
+    expect(compiled.sql.text).toContain('"is_assignable" IS NOT DISTINCT FROM');
+    expect(compiled.sql.text).toContain('AND constraint_rejection IS NULL ON CONFLICT DO NOTHING');
+    expect(
+      materializePostgresManyToManyDelta(command, compiled, [
+        {
+          row_kind: 'meta',
+          source_value: null,
+          target_value: null,
+          source_count: 2,
+          target_count: 1,
+          constraint_rejection: {
+            version: 1,
+            code: 'todo_completed',
+            message: 'Completed todos cannot be tagged.',
+          },
+        },
+      ]),
+    ).toEqual({
+      constraintRejected: {
+        version: 1,
+        code: 'todo_completed',
+        message: 'Completed todos cannot be tagged.',
+      },
+    });
   });
 });
