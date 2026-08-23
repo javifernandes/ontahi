@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderVercelWorkflowModules } from '../src/codegen.js';
+import { renderVercelWorkflowModules } from './codegen.js';
 
 describe('Vercel Workflow codegen', () => {
   it('derives static workflow and step entrypoints from the Ontahi application model', () => {

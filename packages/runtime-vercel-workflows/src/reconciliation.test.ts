@@ -48,7 +48,7 @@ describe('task run reconciliation', () => {
       }),
     );
 
-    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const { reconcileTaskRunSource } = await import('./reconciliation.js');
     const reconciled = await Effect.runPromise(reconcileTaskRunSource(source, store));
 
     expect(reconciled).toEqual(source);
@@ -77,7 +77,7 @@ describe('task run reconciliation', () => {
       completedAt: Promise.resolve(new Date('2026-06-04T00:00:00.000Z')),
     });
 
-    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const { reconcileTaskRunSource } = await import('./reconciliation.js');
     const reconciled = await Effect.runPromise(reconcileTaskRunSource(staleSource, store));
 
     expect(reconciled).toMatchObject({
@@ -129,7 +129,7 @@ describe('task run reconciliation', () => {
       ],
     });
 
-    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const { reconcileTaskRunSource } = await import('./reconciliation.js');
     const reconciled = await Effect.runPromise(reconcileTaskRunSource(staleSource, store));
 
     expect(stepsList).toHaveBeenCalledWith({
@@ -194,7 +194,7 @@ describe('task run reconciliation', () => {
       ],
     });
 
-    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const { reconcileTaskRunSource } = await import('./reconciliation.js');
     const reconciled = await Effect.runPromise(reconcileTaskRunSource(failedSource, store));
 
     expect(reconciled).toMatchObject({
@@ -249,7 +249,7 @@ describe('task run reconciliation', () => {
       ],
     });
 
-    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const { reconcileTaskRunSource } = await import('./reconciliation.js');
     const reconciled = await Effect.runPromise(reconcileTaskRunSource(failedSource, store));
 
     expect(reconciled).toMatchObject({
@@ -272,7 +272,7 @@ describe('task run reconciliation', () => {
       }),
     );
 
-    const { reconcileTaskRunSource } = await import('../src/reconciliation.js');
+    const { reconcileTaskRunSource } = await import('./reconciliation.js');
     const reconciled = await Effect.runPromise(reconcileTaskRunSource(source, store));
 
     expect(reconciled).toEqual(source);

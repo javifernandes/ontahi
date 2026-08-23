@@ -17,7 +17,7 @@ const writeProgressEvent = vi.fn(() => Promise.resolve());
 const writeResultEvent = vi.fn(() => Promise.resolve());
 
 const createExecutor = async () => {
-  const { createVercelWorkflowTaskExecutor } = await import('../src/executor.js');
+  const { createVercelWorkflowTaskExecutor } = await import('./executor.js');
 
   return createVercelWorkflowTaskExecutor({
     taskRunStore: {
