@@ -1382,6 +1382,48 @@ export const getEntityMapping = (entityDefinition: AnyEntityDefinition) => ({
   ),
 });
 
+export const resolveHasManyTargetField = (
+  sourceEntity: AnyEntityDefinition,
+  relation: RelationDefinition,
+): string | undefined => {
+  if (relation.relationKind !== 'hasMany') return undefined;
+  if (relation.targetField) return relation.targetField;
+
+  const sourceMapping = getEntityMapping(sourceEntity);
+  const targetMapping = getEntityMapping(relation.target);
+  if (relation.mapping) {
+    if (
+      relation.mapping.fromTable === sourceMapping.tableName &&
+      relation.mapping.toTable === targetMapping.tableName
+    ) {
+      const targetField = resolveFieldNameForEntity(relation.target, relation.mapping.toColumn);
+      if (targetField in relation.target.fields) return targetField;
+    }
+    if (
+      relation.mapping.toTable === sourceMapping.tableName &&
+      relation.mapping.fromTable === targetMapping.tableName
+    ) {
+      const targetField = resolveFieldNameForEntity(relation.target, relation.mapping.fromColumn);
+      if (targetField in relation.target.fields) return targetField;
+    }
+  }
+
+  const candidates = [
+    ...new Set(
+      Object.values(relation.target.relations).flatMap(candidate => {
+        if (candidate.relationKind !== 'belongsTo' || candidate.target.name !== sourceEntity.name) {
+          return [];
+        }
+        const candidateFieldName = candidate.sourceField;
+        return candidateFieldName && candidateFieldName in relation.target.fields
+          ? [candidateFieldName]
+          : [];
+      }),
+    ),
+  ];
+  return candidates.length === 1 ? candidates[0] : undefined;
+};
+
 export const resolveRelationFields = (
   sourceEntity: AnyEntityDefinition,
   relationName: string,
@@ -1411,7 +1453,7 @@ export const resolveRelationFields = (
         }
       : {
           sourceField: singleIdentityField(sourceEntity),
-          targetField: relationDefinition.targetField,
+          targetField: resolveHasManyTargetField(sourceEntity, relationDefinition),
         };
 
   if (semanticFields.sourceField && semanticFields.targetField) {

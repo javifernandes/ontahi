@@ -22,3 +22,24 @@ mutation behavior.
 The RPC uses invoker rights. Existing table grants and row-level-security policies therefore remain
 authoritative. If the client does not expose `rpc`, the runtime fails explicitly instead of silently
 degrading an atomic Relationship Command into several PostgREST mutations.
+
+## Atomic direct relationships
+
+Direct `belongsTo/hasMany` Relationship Commands use the companion
+`ontahi_apply_relationship` RPC. Install the SQL exported as `supabaseRelationshipRpcSql` and pass
+the participating server Entities to `createSupabaseDataGraphRuntime({ entities: [...] })`.
+
+```ts
+student.course.assign(nextCourse, { ifCurrent: previousCourse });
+```
+
+The RPC resolves both endpoint Refs, locks the source row, checks expected-current identity, applies
+the FK transition, and reports the previous value in one database transaction. A stale conditional
+assignment fails without changing the edge; inverse `remove` preserves its expected target as a
+no-op guard. The function uses invoker rights, so normal grants and RLS remain authoritative.
+Relations carrying portable eligibility constraints fail closed until those predicates can be
+compiled into the same mutation boundary.
+
+Use `relationshipRpcName` or `manyToManyRpcName` only when a project installs the corresponding
+function under a non-default name. If `rpc` is unavailable, neither path degrades to a racy
+PostgREST read followed by update.

@@ -4,7 +4,7 @@ import {
   isReferenceFieldDefinition,
   mapEntity,
   mapRelation,
-  type RelationDefinition,
+  resolveHasManyTargetField,
 } from './definitions.js';
 import { getEntityReferenceIdentity } from './reference-field.js';
 
@@ -68,35 +68,14 @@ export const applyConventionalDataGraphMappings = ({
       if (relation.relationKind === 'hasMany') {
         const sourceIdentityField = resolveTargetIdentityField(entity);
         if (!sourceIdentityField) return;
-
-        if (relation.targetField) {
-          const sourceMapping = getEntityMapping(entity);
-          const targetMapping = getEntityMapping(relation.target);
-          mapRelation(entity, relationName, {
-            type: 'one-to-many',
-            from: `${sourceMapping.tableName}.${sourceMapping.columns[sourceIdentityField]}`,
-            to: `${targetMapping.tableName}.${targetMapping.columns[relation.targetField]}`,
-          });
-          return;
-        }
-
-        const inverseCandidates = (
-          Object.values(relation.target.relations) as RelationDefinition[]
-        ).filter(
-          candidate =>
-            candidate.relationKind === 'belongsTo' &&
-            candidate.target === entity &&
-            candidate.sourceField,
-        );
-        if (inverseCandidates.length !== 1) return;
-
-        const inverse = inverseCandidates[0]!;
+        const targetField = resolveHasManyTargetField(entity, relation);
+        if (!targetField) return;
         const sourceMapping = getEntityMapping(entity);
         const targetMapping = getEntityMapping(relation.target);
         mapRelation(entity, relationName, {
           type: 'one-to-many',
           from: `${sourceMapping.tableName}.${sourceMapping.columns[sourceIdentityField]}`,
-          to: `${targetMapping.tableName}.${targetMapping.columns[inverse.sourceField!]}`,
+          to: `${targetMapping.tableName}.${targetMapping.columns[targetField]}`,
         });
         return;
       }

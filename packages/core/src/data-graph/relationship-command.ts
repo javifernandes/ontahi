@@ -1,4 +1,9 @@
-import type { AnyEntityDefinition, RelationDefinition, RelationKind } from './definitions.js';
+import {
+  resolveHasManyTargetField,
+  type AnyEntityDefinition,
+  type RelationDefinition,
+  type RelationKind,
+} from './definitions.js';
 import type { AnyEntityRef, EntityRef } from './ref.js';
 import {
   copySelectionExpression,
@@ -184,12 +189,16 @@ const resolveRelation = (entity: AnyEntityDefinition, relationName: string): Res
     };
   }
 
-  if (definition.relationKind === 'hasMany' && definition.targetField) {
+  const targetField =
+    definition.relationKind === 'hasMany'
+      ? resolveHasManyTargetField(entity, definition)
+      : undefined;
+  if (definition.relationKind === 'hasMany' && targetField) {
     return {
       definition,
       identity: {
         sourceEntityName: definition.target.name,
-        fieldName: definition.targetField,
+        fieldName: targetField,
         targetEntityName: entity.name,
       },
       sourceEntity: definition.target,
