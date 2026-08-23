@@ -2,6 +2,7 @@ import {
   liftEntityReferenceRecord,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommand,
+  type RelationConstraintRejection,
   type RelationshipCommand,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
@@ -93,6 +94,7 @@ export const executePostgresManyToManyCommand = (input: {
           target_value: unknown;
           source_count: number | null;
           target_count: number | null;
+          constraint_rejection: RelationConstraintRejection | null;
         } & QueryResultRow
       >(compiled.sql);
       const materialized = materializePostgresManyToManyDelta(input.command, compiled, result.rows);

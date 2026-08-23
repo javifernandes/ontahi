@@ -2,6 +2,8 @@ import {
   Selection,
   entity,
   field,
+  relationConstraint,
+  resolveDirectRelationConstraints,
   selection,
   type PortableSelectionExpression,
   type RelationConstraintRejection,
@@ -114,5 +116,99 @@ describe('PostgreSQL Relation constraint compiler', () => {
         [],
       ),
     ).toThrow('ConstraintCandidate.score is not mapped');
+  });
+
+  it('uses each participant mapping and preserves declared rejection precedence', () => {
+    const Target = entity('ConstraintTarget', {
+      id: field.id(),
+      enabled: field.boolean(),
+    });
+    const targetMapping = postgresMapping({
+      entity: Target,
+      table: 'constraint_targets',
+      columns: { id: 'target_id', enabled: 'target_enabled' },
+    });
+    const values: unknown[] = [];
+    const targetRejected = {
+      version: 1,
+      code: 'target_rejected',
+      message: 'Target rejected.',
+    } as const;
+    const compiled = compilePostgresRelationConstraints(
+      [
+        {
+          participant: 'source',
+          selection: portable(selection(Candidate, candidate => candidate.score.eq(2)).build()),
+          rejection: rejected,
+        },
+        {
+          participant: 'target',
+          selection: portable(selection(Target, target => target.enabled.eq(true)).build()),
+          rejection: targetRejected,
+        },
+      ],
+      candidateMapping,
+      targetMapping,
+      values,
+    );
+
+    expect(compiled.sourceProjection).toEqual([
+      '"candidate_score" IS NOT DISTINCT FROM $1 AS "ontahi_constraint_0"',
+    ]);
+    expect(compiled.targetProjection).toEqual([
+      '"target_enabled" IS NOT DISTINCT FROM $2 AS "ontahi_constraint_1"',
+    ]);
+    expect(compiled.stateProjection).toEqual([
+      'COALESCE((SELECT BOOL_AND("ontahi_constraint_0") FROM source_rows), TRUE) AS "ontahi_constraint_0"',
+      'COALESCE((SELECT BOOL_AND("ontahi_constraint_1") FROM target_rows), TRUE) AS "ontahi_constraint_1"',
+    ]);
+    expect(compiled.rejectionExpression).toBe(
+      'CASE WHEN NOT "ontahi_constraint_0" THEN $3::jsonb WHEN NOT "ontahi_constraint_1" THEN $4::jsonb ELSE NULL::jsonb END',
+    );
+    expect(values).toEqual([2, true, rejected, targetRejected]);
+  });
+
+  it('does not duplicate projections or rejection parameters for a self Relation', () => {
+    const Node = entity('ConstraintSqlNode', { id: field.id(), active: field.boolean() });
+    Node.belongsTo('parent', Node, {
+      constraints: [
+        relationConstraint.source(Node, node => node.active.eq(true), {
+          code: 'inactive_node',
+          message: 'Only active nodes may be linked.',
+          parameters: { participant: 'source' },
+        }),
+      ],
+    });
+    const mapping = postgresMapping({
+      entity: Node,
+      table: 'constraint_nodes',
+      columns: { id: 'node_id', active: 'is_active' },
+    });
+    const constraints = resolveDirectRelationConstraints(
+      {
+        sourceEntityName: Node.name,
+        fieldName: 'parent',
+        targetEntityName: Node.name,
+      },
+      Node,
+      Node,
+    );
+    const values: unknown[] = [];
+    const compiled = compilePostgresRelationConstraints(constraints, mapping, mapping, values);
+
+    expect(compiled.sourceProjection).toHaveLength(1);
+    expect(compiled.targetProjection).toEqual([]);
+    expect(compiled.rejectionExpression).toBe(
+      'CASE WHEN NOT "ontahi_constraint_0" THEN $2::jsonb ELSE NULL::jsonb END',
+    );
+    expect(values).toEqual([
+      true,
+      {
+        version: 1,
+        code: 'inactive_node',
+        message: 'Only active nodes may be linked.',
+        parameters: { participant: 'source' },
+      },
+    ]);
   });
 });

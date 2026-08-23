@@ -66,7 +66,7 @@ const assertRelationConstraints = (
 
   for (const constraint of constraints) {
     const participantRef = constraint.participant === 'source' ? command.source : command.target;
-    if (!participantRef) return;
+    if (!participantRef) continue;
     const participantRows = (dataset[constraint.entity.name] ?? []).filter(row =>
       matchesRef(row, participantRef),
     );

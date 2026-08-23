@@ -62,6 +62,6 @@ facts remain repairable.
 
 A real PostgreSQL 17 integration proves direct rejection without mutation, nullable fail-closed
 evaluation, conditional transition precedence, mixed many-to-many all-or-nothing behavior, and
-repairing unlink. The package closes with 59 passing tests and 91.9% line coverage; Core has 551
+repairing unlink. The package closes with 61 passing tests and 92.19% line coverage; Core has 553
 passing tests. Typecheck, lint, build, format, Changeset status, and clean-room package artifact
 verification pass.

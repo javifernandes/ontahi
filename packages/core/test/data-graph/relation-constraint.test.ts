@@ -5,6 +5,7 @@ import {
   field,
   relationConstraint,
   resolveDirectRelationConstraints,
+  resolveManyToManyRelationConstraints,
 } from '../../src/data-graph/index.js';
 
 describe('Relation constraint authoring', () => {
@@ -109,6 +110,67 @@ describe('Relation constraint authoring', () => {
         entityName: 'ConstraintStudent',
         code: 'inactive_inverse_student',
       },
+    ]);
+  });
+
+  it('visits a self-referential direct Relation only once', () => {
+    const Node = entity('ConstraintNode', {
+      id: field.id(),
+      active: field.boolean(),
+    });
+    Node.belongsTo('parent', Node, {
+      constraints: [
+        relationConstraint.source(Node, node => node.active.eq(true), {
+          code: 'inactive_node',
+          message: 'Only active nodes may be linked.',
+          parameters: { participant: 'source' },
+        }),
+      ],
+    });
+
+    const resolved = resolveDirectRelationConstraints(
+      {
+        sourceEntityName: Node.name,
+        fieldName: 'parent',
+        targetEntityName: Node.name,
+      },
+      Node,
+      Node,
+    );
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]).toMatchObject({
+      participant: 'source',
+      entity: Node,
+      rejection: {
+        code: 'inactive_node',
+        parameters: { participant: 'source' },
+      },
+    });
+  });
+
+  it('resolves many-to-many participants through one Core contract', () => {
+    const Tag = entity('ConstraintTag', { id: field.id(), assignable: field.boolean() });
+    const TodoDefinition = entity('ConstraintManyTodo', {
+      id: field.id(),
+      completed: field.boolean(),
+    });
+    const Todo = TodoDefinition.manyToMany('tags', Tag, {
+      constraints: [
+        relationConstraint.source(TodoDefinition, todo => todo.completed.eq(false), {
+          code: 'completed_todo',
+          message: 'Completed todos cannot be tagged.',
+        }),
+        relationConstraint.target(Tag, tag => tag.assignable.eq(true), {
+          code: 'unassignable_tag',
+          message: 'Tag is not assignable.',
+        }),
+      ],
+    });
+
+    expect(resolveManyToManyRelationConstraints(Todo.relations.tags, Todo, Tag)).toMatchObject([
+      { participant: 'source', entity: Todo, rejection: { code: 'completed_todo' } },
+      { participant: 'target', entity: Tag, rejection: { code: 'unassignable_tag' } },
     ]);
   });
 });

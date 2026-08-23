@@ -274,29 +274,32 @@ describe('PostgreSQL data graph runtime', () => {
       },
     );
     await pool.query(`UPDATE relationship_todos SET is_completed = true WHERE id = 'todo-2'`);
-    await expect(
-      Effect.runPromise(
-        runtime
-          .runManyToManyRelationshipCommand(
-            relationshipSet(
-              RelationshipTodo,
-              'tags',
-              selection(RelationshipTodo, todo => todo.title.eq('Selected')),
-            ).add(selection(RelationshipTag, tag => tag.label.eq('Other'))),
-          )
-          .pipe(Effect.either),
-      ),
-    ).resolves.toMatchObject({
-      _tag: 'Left',
-      left: {
-        reason: 'relation_constraint_rejected',
-        rejection: { code: 'todo_completed' },
-      },
-    });
-    await expect(
-      pool.query(`SELECT todo_id FROM relationship_todo_tags WHERE tag_id = 'tag-2'`),
-    ).resolves.toMatchObject({ rows: [] });
-    await pool.query(`UPDATE relationship_todos SET is_completed = false WHERE id = 'todo-2'`);
+    try {
+      await expect(
+        Effect.runPromise(
+          runtime
+            .runManyToManyRelationshipCommand(
+              relationshipSet(
+                RelationshipTodo,
+                'tags',
+                selection(RelationshipTodo, todo => todo.title.eq('Selected')),
+              ).add(selection(RelationshipTag, tag => tag.label.eq('Other'))),
+            )
+            .pipe(Effect.either),
+        ),
+      ).resolves.toMatchObject({
+        _tag: 'Left',
+        left: {
+          reason: 'relation_constraint_rejected',
+          rejection: { code: 'todo_completed' },
+        },
+      });
+      await expect(
+        pool.query(`SELECT todo_id FROM relationship_todo_tags WHERE tag_id = 'tag-2'`),
+      ).resolves.toMatchObject({ rows: [] });
+    } finally {
+      await pool.query(`UPDATE relationship_todos SET is_completed = false WHERE id = 'todo-2'`);
+    }
     await expect(
       Effect.runPromise(
         runtime

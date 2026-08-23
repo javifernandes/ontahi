@@ -4,6 +4,7 @@ import {
   type AnyEntityDefinition,
   type PortableSelectionExpression,
   type RelationConstraintRejection,
+  type RelationDefinition,
   type RelationParticipantSelectionConstraint,
 } from './definitions.js';
 import type { CanonicalRelationIdentity } from './relationship-command.js';
@@ -40,19 +41,78 @@ export const relationConstraint = {
   ) => participantSelection('target', entity, build, rejection),
 };
 
-export type ResolvedDirectRelationConstraint = {
-  /** Participant is relative to the canonical direct Relation identity. */
+export type ResolvedRelationConstraint = {
+  /** Participant is relative to the canonical Relation identity. */
   readonly participant: 'source' | 'target';
   readonly entity: AnyEntityDefinition;
   readonly selection: PortableSelectionExpression;
   readonly rejection: RelationConstraintRejection;
 };
 
+export type ResolvedDirectRelationConstraint = ResolvedRelationConstraint;
+
+type DirectRelationDirection = 'forward' | 'inverse';
+
+const resolveDirectRelationDirection = (
+  declaringEntity: AnyEntityDefinition,
+  relationName: string,
+  relation: RelationDefinition,
+  identity: CanonicalRelationIdentity,
+): DirectRelationDirection | undefined => {
+  if (
+    relation.relationKind === 'belongsTo' &&
+    declaringEntity.name === identity.sourceEntityName &&
+    relation.target.name === identity.targetEntityName &&
+    (relation.sourceField ?? relationName) === identity.fieldName
+  ) {
+    return 'forward';
+  }
+  if (
+    relation.relationKind !== 'hasMany' ||
+    declaringEntity.name !== identity.targetEntityName ||
+    relation.target.name !== identity.sourceEntityName
+  ) {
+    return undefined;
+  }
+
+  const targetField = resolveHasManyTargetField(declaringEntity, relation);
+  if (!targetField) {
+    throw new Error(
+      `Cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
+    );
+  }
+  return targetField === identity.fieldName ? 'inverse' : undefined;
+};
+
+const canonicalParticipant = (
+  participant: RelationParticipantSelectionConstraint['participant'],
+  direction: DirectRelationDirection,
+): RelationParticipantSelectionConstraint['participant'] => {
+  if (direction === 'forward') return participant;
+  return participant === 'source' ? 'target' : 'source';
+};
+
+const resolveConstraints = (
+  relation: RelationDefinition,
+  direction: DirectRelationDirection,
+  sourceEntity: AnyEntityDefinition,
+  targetEntity: AnyEntityDefinition,
+): readonly ResolvedRelationConstraint[] =>
+  (relation.constraints ?? []).map(constraint => {
+    const participant = canonicalParticipant(constraint.participant, direction);
+    return {
+      participant,
+      entity: participant === 'source' ? sourceEntity : targetEntity,
+      selection: constraint.selection,
+      rejection: constraint.rejection,
+    };
+  });
+
 export const resolveDirectRelationConstraints = (
   identity: CanonicalRelationIdentity,
   sourceEntity: AnyEntityDefinition,
   targetEntity: AnyEntityDefinition,
-): readonly ResolvedDirectRelationConstraint[] => {
+): readonly ResolvedRelationConstraint[] => {
   if (
     identity.sourceEntityName !== sourceEntity.name ||
     identity.targetEntityName !== targetEntity.name
@@ -60,49 +120,30 @@ export const resolveDirectRelationConstraints = (
     throw new Error('Direct Relation constraint Entities do not match its canonical identity.');
   }
 
-  const resolved: ResolvedDirectRelationConstraint[] = [];
-  for (const declaringEntity of [sourceEntity, targetEntity]) {
+  const resolved: ResolvedRelationConstraint[] = [];
+  for (const declaringEntity of new Set([sourceEntity, targetEntity])) {
     for (const [relationName, relation] of Object.entries(declaringEntity.relations)) {
       if ((relation.constraints?.length ?? 0) === 0) continue;
-
-      let direction: 'forward' | 'inverse' | undefined;
-      if (
-        relation.relationKind === 'belongsTo' &&
-        declaringEntity.name === identity.sourceEntityName &&
-        relation.target.name === identity.targetEntityName &&
-        (relation.sourceField ?? relationName) === identity.fieldName
-      ) {
-        direction = 'forward';
-      } else if (
-        relation.relationKind === 'hasMany' &&
-        declaringEntity.name === identity.targetEntityName &&
-        relation.target.name === identity.sourceEntityName
-      ) {
-        const targetField = resolveHasManyTargetField(declaringEntity, relation);
-        if (!targetField) {
-          throw new Error(
-            `Cannot resolve constrained inverse Relation ${declaringEntity.name}.${relationName}.`,
-          );
-        }
-        if (targetField === identity.fieldName) direction = 'inverse';
-      }
+      const direction = resolveDirectRelationDirection(
+        declaringEntity,
+        relationName,
+        relation,
+        identity,
+      );
       if (!direction) continue;
-
-      for (const constraint of relation.constraints ?? []) {
-        const participant =
-          direction === 'forward'
-            ? constraint.participant
-            : constraint.participant === 'source'
-              ? 'target'
-              : 'source';
-        resolved.push({
-          participant,
-          entity: participant === 'source' ? sourceEntity : targetEntity,
-          selection: constraint.selection,
-          rejection: constraint.rejection,
-        });
-      }
+      resolved.push(...resolveConstraints(relation, direction, sourceEntity, targetEntity));
     }
   }
   return resolved;
+};
+
+export const resolveManyToManyRelationConstraints = (
+  relation: RelationDefinition,
+  sourceEntity: AnyEntityDefinition,
+  targetEntity: AnyEntityDefinition,
+): readonly ResolvedRelationConstraint[] => {
+  if (relation.relationKind !== 'manyToMany' || relation.target.name !== targetEntity.name) {
+    throw new Error('Many-to-many Relation constraints do not match their endpoint Entities.');
+  }
+  return resolveConstraints(relation, 'forward', sourceEntity, targetEntity);
 };

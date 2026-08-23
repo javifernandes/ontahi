@@ -1,6 +1,7 @@
 import {
   createEntityIdentityRef,
   getEntityIdentityLocator,
+  resolveManyToManyRelationConstraints,
   type AnyEntityDefinition,
   type ManyToManyRelationMapping,
   type ManyToManyRelationshipCommand,
@@ -55,7 +56,7 @@ const resolveRelationMapping = (
       `PostgreSQL many-to-many Relation ${source.entity.name}.${command.relation.relationName} is not mapped.`,
     );
   }
-  return relation.mapping;
+  return { relation, mapping: relation.mapping };
 };
 
 const assertMapping = (
@@ -94,8 +95,7 @@ export const compilePostgresManyToManyCommand = (
   }
   const sourceIdentityField = identityField(source.entity);
   const targetIdentityField = identityField(target.entity);
-  const relationMapping = resolveRelationMapping(command, source, target);
-  const relation = source.entity.relations[command.relation.relationName]!;
+  const { relation, mapping: relationMapping } = resolveRelationMapping(command, source, target);
   assertMapping(relationMapping, source, sourceIdentityField, target, targetIdentityField);
 
   const values: unknown[] = [];
@@ -103,11 +103,7 @@ export const compilePostgresManyToManyCommand = (
   const targetSelection = compilePostgresSelection(command.targets.selection, target, values);
   const constraints = compilePostgresRelationConstraints(
     command.action === 'link'
-      ? (relation.constraints ?? []).map(constraint => ({
-          participant: constraint.participant,
-          selection: constraint.selection,
-          rejection: constraint.rejection,
-        }))
+      ? resolveManyToManyRelationConstraints(relation, source.entity, target.entity)
       : [],
     source,
     target,

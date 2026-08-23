@@ -3,6 +3,7 @@ import {
   createEntityIdentityRef,
   getEntityIdentityLocator,
   getEntityMapping,
+  resolveManyToManyRelationConstraints,
   type ManyToManyRelationshipCommand,
   type RelationConstraintRejection,
   type RelationshipDelta,
@@ -79,12 +80,7 @@ export const compileSupabaseManyToManyRpcPayload = (
   const constraints =
     command.action === 'link'
       ? compileSupabaseRelationConstraints(
-          (relation.constraints ?? []).map(constraint => ({
-            participant: constraint.participant,
-            entity: constraint.participant === 'source' ? source : target,
-            selection: constraint.selection,
-            rejection: constraint.rejection,
-          })),
+          resolveManyToManyRelationConstraints(relation, source, target),
         )
       : [];
   return {

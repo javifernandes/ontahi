@@ -175,6 +175,9 @@ describe('PostgreSQL many-to-many commands', () => {
 
     expect(compiled.sql.text).toContain('constraint_rejection');
     expect(compiled.sql.text).toContain('FOR SHARE');
+    expect(compiled.sql.text).toContain('"is_completed" IS NOT DISTINCT FROM');
+    expect(compiled.sql.text).toContain('"is_assignable" IS NOT DISTINCT FROM');
+    expect(compiled.sql.text).toContain('AND constraint_rejection IS NULL ON CONFLICT DO NOTHING');
     expect(
       materializePostgresManyToManyDelta(command, compiled, [
         {

@@ -2,7 +2,7 @@ import {
   compileSelectionExpression,
   type CompiledSelectionExpression,
   type RelationConstraintRejection,
-  type ResolvedDirectRelationConstraint,
+  type ResolvedRelationConstraint,
 } from '@ontahi/core/data-graph';
 
 export type SupabaseRelationParticipantConstraint = {
@@ -12,7 +12,7 @@ export type SupabaseRelationParticipantConstraint = {
 };
 
 export const compileSupabaseRelationConstraints = (
-  constraints: readonly ResolvedDirectRelationConstraint[],
+  constraints: readonly ResolvedRelationConstraint[],
 ): readonly SupabaseRelationParticipantConstraint[] =>
   constraints.map(constraint => ({
     participant: constraint.participant,
