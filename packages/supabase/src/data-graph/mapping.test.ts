@@ -2,7 +2,7 @@ import { entity, field, getEntityMapping } from '@ontahi/core/data-graph';
 import { relation, entity as ontahiEntity } from '@ontahi/core/entity';
 import { describe, expect, it } from 'vitest';
 
-import { applySupabaseDataGraphMappings, supabaseNaming } from '../../src/data-graph/mapping.js';
+import { applySupabaseDataGraphMappings, supabaseNaming } from './mapping.js';
 
 describe('Supabase data graph mapping inference', () => {
   it('derives conventional tables, columns, and belongs-to foreign keys with overrides', () => {

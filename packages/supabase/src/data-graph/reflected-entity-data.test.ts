@@ -1,7 +1,7 @@
 import { entity, field, mapEntity, mapRelation } from '@ontahi/core/data-graph';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createSupabaseReflectedEntityDataReader } from '../../src/data-graph/index.js';
+import { createSupabaseReflectedEntityDataReader } from './index.js';
 
 const supabaseMock = {
   attempts: [] as Array<{

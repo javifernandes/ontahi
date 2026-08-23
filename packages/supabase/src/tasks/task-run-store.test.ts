@@ -2,8 +2,8 @@ import type { TaskTrigger } from '@ontahi/core/runtime/server/tasks';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { createSupabaseTaskStorage } from '../../src/tasks/index.js';
-import type { SupabaseTaskStorageClient } from '../../src/tasks/index.js';
+import { createSupabaseTaskStorage } from './index.js';
+import type { SupabaseTaskStorageClient } from './index.js';
 
 type FakeRow = Record<string, any>;
 

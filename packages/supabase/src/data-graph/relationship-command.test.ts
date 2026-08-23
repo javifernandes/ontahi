@@ -14,7 +14,7 @@ import {
   createSupabaseDataGraphRuntime,
   executeSupabaseRelationshipCommandEffect,
   supabaseRelationshipRpcSql,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
 const Course = entity('Course', { id: field.id(), name: field.string() });
 const Student = entity('Student', {

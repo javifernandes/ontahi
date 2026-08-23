@@ -18,6 +18,8 @@ import {
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { defineAudienceGraph, expectedAudienceResult } from './fixtures.test-support.js';
+
 import {
   createSupabaseDataGraphRuntime,
   compileSupabaseManyToManyRpcPayload,
@@ -30,9 +32,8 @@ import {
   materializeSupabaseEntityRow,
   supabaseManyToManyRpcSql,
   toSupabaseEntityRow,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
-import { defineAudienceGraph, expectedAudienceResult } from './fixtures.js';
 
 type QueryResult = {
   count?: number | null;

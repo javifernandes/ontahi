@@ -17,7 +17,7 @@ import {
   hasEmptySupabaseInPredicate,
   mapEntityPayloadToSupabaseColumns,
   mapSupabaseRowToEntityFields,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
 describe('data-graph supabase adapter helpers', () => {
   it('compiles recursive selections to sanitized PostgREST logic', () => {

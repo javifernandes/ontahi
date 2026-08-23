@@ -20,7 +20,7 @@ import {
   compileSupabaseManyToManyRpcPayload,
   supabaseManyToManyRpcSql,
   supabaseRelationshipRpcSql,
-} from '../../src/data-graph/index.js';
+} from './index.js';
 
 const Course = entity('RpcCourse', { id: field.id(), name: field.string() });
 const Student = entity('RpcStudent', {
