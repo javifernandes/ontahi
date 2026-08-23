@@ -4,15 +4,15 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { importGeneratedModule } from './generated-module/generated-module.test-support.js';
 import {
   analyzeOntahiApplication,
   createClientEntityCodegenRunner,
   createFileSystemSourceLoader,
   parseClientEntityCodegenArguments,
   runClientEntityCodegenCli,
-} from '../src/index.mjs';
+} from './index.mjs';
 
-import { importGeneratedModule } from './support/generated-module.js';
 
 const tempDirectories = [];
 

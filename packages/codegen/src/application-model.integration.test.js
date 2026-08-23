@@ -12,7 +12,7 @@ import {
   formatCodegenDiagnostic,
   renderGeneratedClientEntityModule,
   renderGeneratedTaskDefinitionRegistryModule,
-} from '../src/index.mjs';
+} from './index.mjs';
 
 const tempDirectories = [];
 

@@ -7,7 +7,7 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
       include: ['src/**/*.mjs'],
-      exclude: ['src/**/*.test.js', 'test/**/*.js'],
+      exclude: ['src/**/*.test.js', 'src/**/*.test-support.js'],
       thresholds: {
         statements: 78,
         branches: 71,
@@ -17,6 +17,6 @@ export default defineConfig({
     },
     reporters: ['default', ['junit', { outputFile: './coverage/junit.xml' }]],
     environment: 'node',
-    include: ['src/**/*.test.js', 'test/**/*.test.js'],
+    include: ['src/**/*.test.js'],
   },
 });

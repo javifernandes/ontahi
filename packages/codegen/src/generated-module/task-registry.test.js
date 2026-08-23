@@ -5,9 +5,9 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { assertGeneratedModuleTypechecks } from '../../test/support/generated-module.js';
 import { renderGeneratedTaskDefinitionRegistryModule } from '../projections.mjs';
 
+import { assertGeneratedModuleTypechecks } from './generated-module.test-support.js';
 import {
   createTaskRegistryModuleModel,
   renderSemanticTaskDefinitionRegistryModule,

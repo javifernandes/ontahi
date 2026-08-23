@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, expect, it } from 'vitest';
 
-import { importGeneratedModule } from './support/generated-module.js';
+import { importGeneratedModule } from './generated-module.test-support.js';
 
 const tempDirectories = [];
 
