@@ -1,6 +1,6 @@
 # 139. Relations Lifecycle Release Proof
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/139-relations-lifecycle-release-proof`
 
@@ -13,9 +13,10 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
 ## Ordered Slices
 
 1. Complete PostgreSQL/Supabase direct conditional transition parity and remaining atomic
-   eligibility work under Plan 136.
+   eligibility work under Plan 136. The participant-eligibility adapter proof is complete.
 2. Define an honest compositional transaction capability; do not equate sequenced Operation
-   Effects with shared rollback.
+   Effects with shared rollback. Completed in
+   [139a. Composable Data Graph Transactions](../done/139a-composable-data-graph-transactions.md).
 3. Add ergonomic Reaction matcher/intent factories and application/runtime registration under
    Plan 135 without attaching callbacks to Relation metadata.
 4. Transport precondition conflicts as structured outcomes, then offer an explicit

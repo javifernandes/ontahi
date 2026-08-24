@@ -7,6 +7,7 @@ import {
   createEntityRef,
   entity,
   field,
+  isDataGraphTransactionCapability,
   mapRelation,
   relationConstraint,
   relationship,
@@ -25,7 +26,7 @@ import {
 } from '@ontahi/core/data-graph';
 import { createExpressGraphReadHandler } from '@ontahi/runtime-express/graph-read';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import express from 'express';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -244,6 +245,76 @@ describe('PostgreSQL data graph runtime', () => {
     await expect(Effect.runPromise(runtime().run(query(TodoEntity), undefined))).resolves.toEqual([
       { id: 'todo-1', title: 'Persistent', completed: false },
     ]);
+  });
+
+  it('commits required mutations composed through one transaction runtime', async () => {
+    await pool.query('TRUNCATE TABLE todos');
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings: [TodoMapping] });
+
+    const result = await Effect.runPromise(
+      runtime.transaction(tx =>
+        Effect.gen(function* () {
+          expect(isDataGraphTransactionCapability(tx)).toBe(false);
+          yield* tx.runCommand({
+            kind: 'command',
+            operation: 'insert',
+            root: TodoEntity,
+            selection: { kind: 'none' },
+            payload: { id: 'todo-1', title: 'First', completed: false },
+          });
+          yield* tx.runCommand({
+            kind: 'command',
+            operation: 'insert',
+            root: TodoEntity,
+            selection: { kind: 'none' },
+            payload: { id: 'todo-2', title: 'Second', completed: false },
+          });
+
+          return 'committed' as const;
+        }),
+      ),
+    );
+
+    expect(result).toBe('committed');
+    await expect(
+      Effect.runPromise(
+        runtime.run(
+          query(TodoEntity).orderBy(todo => todo.id),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual([
+      { id: 'todo-1', title: 'First', completed: false },
+      { id: 'todo-2', title: 'Second', completed: false },
+    ]);
+  });
+
+  it('rolls back every composed mutation and preserves the callback failure', async () => {
+    await pool.query('TRUNCATE TABLE todos');
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings: [TodoMapping] });
+    const rejection = { code: 'course_capacity_rejected' } as const;
+
+    const result = await Effect.runPromise(
+      runtime
+        .transaction(tx =>
+          Effect.gen(function* () {
+            yield* tx.runCommand({
+              kind: 'command',
+              operation: 'insert',
+              root: TodoEntity,
+              selection: { kind: 'none' },
+              payload: { id: 'todo-rollback', title: 'Rollback', completed: false },
+            });
+
+            return yield* Effect.fail(rejection);
+          }),
+        )
+        .pipe(Effect.either),
+    );
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) expect(result.left).toBe(rejection);
+    await expect(Effect.runPromise(runtime.run(query(TodoEntity), undefined))).resolves.toEqual([]);
   });
 
   it('applies Selection-valued many-to-many commands atomically with exact deltas', async () => {

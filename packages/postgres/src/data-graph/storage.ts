@@ -11,16 +11,18 @@ import {
   createPostgresReflectedEntityDataReader,
   type PostgresReflectedEntityDataReaderOptions,
 } from './reflected-entity-data.js';
-import { createPostgresDataGraphRuntime } from './runtime.js';
+import {
+  createPostgresDataGraphRuntime,
+  type PostgresTransactionDataGraphRuntime,
+} from './runtime.js';
 
-export type PostgresDataGraphStorage = DataGraphDefaultStorage<
-  ReturnType<typeof createPostgresDataGraphRuntime>
-> & {
-  kind: 'postgres';
-};
+export type PostgresDataGraphStorage =
+  DataGraphDefaultStorage<PostgresTransactionDataGraphRuntime> & {
+    kind: 'postgres';
+  };
 
 export const createPostgresDataGraphStorage = (options: {
-  pool: Pick<Pool, 'query'>;
+  pool: Pick<Pool, 'connect' | 'query'>;
   mappings?: readonly PostgresEntityMapping[];
   naming?: PostgresDataGraphNaming;
   overrides?: PostgresDataGraphMappingOverrides;

@@ -13,6 +13,7 @@ import {
   type AnyEntityDefinition,
   type AnyRelationQueryBuilder,
   type DataGraphExecutionRuntime,
+  type DataGraphTransactionCapability,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
@@ -33,6 +34,10 @@ import {
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
 import { PostgresDataGraphError } from './runtime-error.js';
 import { compilePostgresQuery, quotePostgresIdentifier } from './sql.js';
+import {
+  createPostgresTransactionCapability,
+  type PostgresTransactionClient,
+} from './transaction.js';
 
 export { PostgresDataGraphError, type PostgresDataGraphErrorReason } from './runtime-error.js';
 
@@ -45,17 +50,35 @@ const mappingFor = (
   return mapping;
 };
 
-export const createPostgresDataGraphRuntime = (input: {
-  pool: Pick<Pool, 'query'>;
-  mappings: readonly PostgresEntityMapping[];
-}): DataGraphExecutionRuntime<
+type PostgresDataGraphRuntime = DataGraphExecutionRuntime<
   PostgresDataGraphError,
   undefined,
   undefined,
   PostgresDataGraphError
 > &
   ManyToManyRelationshipCommandExecutionRuntime<PostgresDataGraphError> &
-  RelationshipCommandExecutionRuntime<PostgresDataGraphError> => {
+  RelationshipCommandExecutionRuntime<PostgresDataGraphError>;
+
+export type PostgresTransactionDataGraphRuntime = PostgresDataGraphRuntime &
+  DataGraphTransactionCapability<PostgresDataGraphRuntime, PostgresDataGraphError>;
+
+type PostgresRuntimeInput = {
+  pool: Pick<Pool, 'query'>;
+  mappings: readonly PostgresEntityMapping[];
+};
+
+type PostgresTransactionPool = Pick<Pool, 'connect' | 'query'>;
+
+type CreatePostgresDataGraphRuntime = {
+  (
+    input: Omit<PostgresRuntimeInput, 'pool'> & { pool: PostgresTransactionPool },
+  ): PostgresTransactionDataGraphRuntime;
+  (input: PostgresRuntimeInput): PostgresDataGraphRuntime;
+};
+
+const createPostgresBaseDataGraphRuntime = (
+  input: PostgresRuntimeInput,
+): PostgresDataGraphRuntime => {
   const registry = createPostgresMappingRegistry(input.mappings);
   const executeQuery = <TRow extends QueryResultRow>(sql: { text: string; values: unknown[] }) =>
     input.pool.query<TRow>(sql.text, sql.values);
@@ -368,3 +391,20 @@ export const createPostgresDataGraphRuntime = (input: {
       executePostgresRelationshipCommand({ command, executeQuery, mappings: input.mappings }),
   };
 };
+
+export const createPostgresDataGraphRuntime = ((input: PostgresRuntimeInput) => {
+  const runtime = createPostgresBaseDataGraphRuntime(input);
+  const pool = input.pool as Pick<Pool, 'query'> & Partial<Pick<Pool, 'connect'>>;
+
+  return typeof pool.connect === 'function'
+    ? Object.assign(
+        runtime,
+        createPostgresTransactionCapability(pool as PostgresTransactionPool, client =>
+          createPostgresBaseDataGraphRuntime({
+            pool: client as PostgresTransactionClient & Pick<Pool, 'query'>,
+            mappings: input.mappings,
+          }),
+        ),
+      )
+    : runtime;
+}) as CreatePostgresDataGraphRuntime;

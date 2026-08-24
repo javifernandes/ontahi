@@ -50,3 +50,8 @@ authoritative.
 Use `relationshipRpcName` or `manyToManyRpcName` only when a project installs the corresponding
 function under a non-default name. If `rpc` is unavailable, neither path degrades to a racy
 PostgREST read followed by update.
+
+Each RPC is atomic for its one Relationship Command. The Supabase/PostgREST runtime does not
+advertise Ontahi's compositional transaction capability: several client requests cannot honestly
+share rollback merely because they are sequenced in one Effect. Required multi-mutation
+coordination needs a server-side Operation or RPC that owns its database transaction.
