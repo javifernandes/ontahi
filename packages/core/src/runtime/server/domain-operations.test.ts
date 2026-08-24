@@ -1,7 +1,13 @@
 import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
-import { createEntityRef, entity, field, graphSchema } from '../../data-graph/index.js';
+import {
+  createEntityRef,
+  entity,
+  field,
+  graphSchema,
+  type EntityRef,
+} from '../../data-graph/index.js';
 
 import {
   defineDomainOperation,
@@ -217,6 +223,60 @@ describe('server Domain Operation Ref resolution', () => {
     expect(book).not.toHaveProperty('resolve');
     expect(book).not.toHaveProperty('invalidate');
     expect(book).not.toHaveProperty('refresh');
+  });
+
+  it('hydrates only direct Ref fields declared at the Operation input root', async () => {
+    const Book = entity('UnitOfWorkTopLevelBook', {
+      id: field.id(),
+    });
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: graphSchema.object({
+            books: graphSchema.array(graphSchema.ref(Book)),
+            direct: graphSchema.ref(Book),
+            nested: graphSchema.object({ book: graphSchema.ref(Book) }),
+            payload: graphSchema.json<EntityRef<'UnitOfWorkTopLevelBook', { id: string }>>(),
+          }),
+          run: ({ books, direct, nested, payload }) => {
+            type NestedBook = typeof nested.book;
+            type BookItem = (typeof books)[number];
+
+            expectTypeOf(direct).toHaveProperty('resolve');
+            expectTypeOf<NestedBook>().not.toHaveProperty('resolve');
+            expectTypeOf<BookItem>().not.toHaveProperty('resolve');
+            expectTypeOf(payload).not.toHaveProperty('resolve');
+
+            return Effect.succeed({
+              arrayMethod: typeof (books[0] as { resolve?: unknown }).resolve,
+              directMethod: typeof direct.resolve,
+              nestedMethod: typeof (nested.book as { resolve?: unknown }).resolve,
+              payloadMethod: typeof (payload as { resolve?: unknown }).resolve,
+            });
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.unit-of-work.top-level-refs' },
+    ).inspect;
+    const book = createEntityRef(Book, { id: 'book-1' });
+
+    const result = await runServerDomainOperationRaw(inspect, {
+      books: [book],
+      direct: book,
+      nested: { book },
+      payload: book,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        arrayMethod: 'undefined',
+        directMethod: 'function',
+        nestedMethod: 'undefined',
+        payloadMethod: 'undefined',
+      },
+    });
   });
 
   it('preserves optional and nullable schema-native Refs', async () => {

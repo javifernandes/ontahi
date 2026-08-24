@@ -110,7 +110,7 @@ Operation is the practical proof: it now validates its `list` participant with `
 
 Delivery verification:
 
-1. Core: 86 files and 594 tests passed.
+1. Core: 86 files and 596 tests passed.
 2. React: 11 files and 68 tests passed.
 3. Explorer React: 22 files and 115 tests passed.
 4. Runtime Express: 4 files and 26 tests passed.

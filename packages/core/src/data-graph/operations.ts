@@ -16,7 +16,7 @@ import {
   isEntityRef,
   type AnyEntityRef,
   type BoundEntityRefLocators,
-  readEntityRefQueryInputValue,
+  normalizeEntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
 } from './ref/index.js';
@@ -62,8 +62,12 @@ export type QueryKeySegment<TInput> =
 
 export const queryRef =
   <TInput = Record<string, unknown>>(inputRefName: string): QueryKeySegment<TInput> =>
-  (input: TInput) =>
-    readEntityRefQueryInputValue(input, inputRefName) ?? null;
+  (input: TInput) => {
+    if (typeof input !== 'object' || input === null) return null;
+
+    const directRef = (input as Record<string, unknown>)[inputRefName];
+    return isEntityRef(directRef) ? normalizeEntityRef(directRef) : null;
+  };
 
 export type DomainOperationBridgeMetadata<TInput> = {
   query?: readonly QueryKeySegment<TInput>[];
@@ -108,7 +112,7 @@ export const cacheRef =
       return context.resolveRef?.(directRef) ?? directRef;
     }
 
-    return readEntityRefQueryInputValue(input, inputRefName) ?? null;
+    return null;
   };
 
 export type DomainOperationClientCacheMetadata<TInput = unknown, TResult = unknown> = {

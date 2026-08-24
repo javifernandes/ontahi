@@ -206,7 +206,7 @@ export type HydratedEntityRef<
   refresh: () => SchemaNativeRefResolution<TEntity, TCustomResolution>;
 };
 
-export type HydratedOperationInput<TInput> =
+type HydratedTopLevelOperationInputValue<TInput> =
   TInput extends SchemaEntityRef<
     infer TEntityName,
     infer TLocator,
@@ -214,6 +214,11 @@ export type HydratedOperationInput<TInput> =
     infer TCustomResolution
   >
     ? HydratedEntityRef<TEntityName, TLocator, TEntity, TCustomResolution>
+    : HydratedSemanticSelections<TInput>;
+
+type HydratedSemanticSelections<TInput> =
+  TInput extends EntityRef<any, any>
+    ? TInput
     : TInput extends SemanticSelection<any, infer TEntity, infer TCardinality>
       ? TEntity extends AnyEntityDefinition
         ? HydratedSemanticSelection<TEntity, TCardinality>
@@ -221,12 +226,21 @@ export type HydratedOperationInput<TInput> =
       : TInput extends Date
         ? TInput
         : TInput extends (infer TItem)[]
-          ? HydratedOperationInput<TItem>[]
+          ? HydratedSemanticSelections<TItem>[]
           : TInput extends readonly (infer TItem)[]
-            ? readonly HydratedOperationInput<TItem>[]
+            ? readonly HydratedSemanticSelections<TItem>[]
             : TInput extends object
-              ? { [TKey in keyof TInput]: HydratedOperationInput<TInput[TKey]> }
+              ? { [TKey in keyof TInput]: HydratedSemanticSelections<TInput[TKey]> }
               : TInput;
+
+export type HydratedOperationInput<TInput> =
+  TInput extends SemanticSelection<any, any, any>
+    ? HydratedSemanticSelections<TInput>
+    : TInput extends Date | readonly unknown[]
+      ? HydratedSemanticSelections<TInput>
+      : TInput extends object
+        ? { [TKey in keyof TInput]: HydratedTopLevelOperationInputValue<TInput[TKey]> }
+        : TInput;
 
 type DomainOperationGraphRead<TResult> = TResult extends readonly (infer TItem)[]
   ? { build: () => GraphReadSpec<any, TItem> }

@@ -40,7 +40,7 @@ export type SchemaEntityRef<
   TResolution = never,
 > = EntityRef<TEntityName, TLocator> & {
   /** @internal Type-only schema metadata; absent from portable Ref values. */
-  readonly __schemaRef?: {
+  readonly __schemaRef: {
     readonly entity: TEntity;
     readonly resolution: TResolution;
   };

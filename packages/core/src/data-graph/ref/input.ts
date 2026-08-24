@@ -8,6 +8,7 @@ import {
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
   type EntityRefLocatorFactory,
+  type SchemaEntityRef,
 } from './model.js';
 
 type SingleLocatorArgument<TLocator> = TLocator extends (...args: infer TArguments) => unknown
@@ -116,17 +117,19 @@ export type EntityRefInputDirectRefs<TInputRefs extends EntityRefInputDeclaratio
 };
 
 export type SemanticSelectionPublicInput<TInput> =
-  TInput extends SemanticSelection<infer TEntityName, infer TEntity>
-    ? TEntity extends AnyEntityDefinition
-      ? TInput | EntitySelectionInputItem<TEntity> | readonly EntitySelectionInputItem<TEntity>[]
-      : TInput | EntityRef<TEntityName>
-    : TInput extends Date
-      ? TInput
-      : TInput extends readonly (infer TItem)[]
-        ? readonly SemanticSelectionPublicInput<TItem>[]
-        : TInput extends object
-          ? { [TKey in keyof TInput]: SemanticSelectionPublicInput<TInput[TKey]> }
-          : TInput;
+  TInput extends SchemaEntityRef<infer TEntityName, infer TLocator, any, any>
+    ? EntityRef<TEntityName, TLocator>
+    : TInput extends SemanticSelection<infer TEntityName, infer TEntity>
+      ? TEntity extends AnyEntityDefinition
+        ? TInput | EntitySelectionInputItem<TEntity> | readonly EntitySelectionInputItem<TEntity>[]
+        : TInput | EntityRef<TEntityName>
+      : TInput extends Date
+        ? TInput
+        : TInput extends readonly (infer TItem)[]
+          ? readonly SemanticSelectionPublicInput<TItem>[]
+          : TInput extends object
+            ? { [TKey in keyof TInput]: SemanticSelectionPublicInput<TInput[TKey]> }
+            : TInput;
 
 export type EntityRefInputPublicInput<
   TInput,

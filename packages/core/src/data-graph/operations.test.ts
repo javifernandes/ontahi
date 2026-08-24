@@ -17,6 +17,7 @@ import {
   field,
   graphOutput,
   graphSchema,
+  queryRef,
   selection,
   type AnyEntityDefinition,
   resolveDomainOperations,
@@ -386,7 +387,7 @@ describe('data-graph operations', () => {
     expect(fromName.listProfiles.id).toBe('Profile.listProfiles');
   });
 
-  it('resolves cache refs from direct entity refs when client contracts omit inputRefs', () => {
+  it('resolves query and cache keys only from direct Entity Refs', () => {
     const Book = entity('Book', {
       id: field.id(),
       slug: field.string(),
@@ -399,12 +400,17 @@ describe('data-graph operations', () => {
         resolveRef?: (ref: unknown) => unknown;
       },
     ) => unknown;
+    const resolveBookQueryRef = queryRef('book') as (
+      input: Record<string, unknown>,
+      context: { input: Record<string, unknown>; operation: {} },
+    ) => unknown;
+    const slugBookRef = createEntityRef(Book, { slug: 'progbook' });
     const canonicalBookRef = createEntityRef(Book, { id: 'book-1' });
 
     expect(
       resolveBookCacheRef(
         {
-          book: createEntityRef(Book, { slug: 'progbook' }),
+          book: slugBookRef,
         },
         {
           input: {},
@@ -413,9 +419,11 @@ describe('data-graph operations', () => {
         },
       ),
     ).toBe(canonicalBookRef);
-    expect(resolveBookCacheRef({ bookSlug: 'progbook' }, { input: {}, operation: {} })).toBe(
-      'progbook',
+    expect(resolveBookQueryRef({ book: slugBookRef }, { input: {}, operation: {} })).toBe(
+      'Book:{"slug":"progbook"}',
     );
+    expect(resolveBookCacheRef({ bookId: 'book-1' }, { input: {}, operation: {} })).toBeNull();
+    expect(resolveBookQueryRef({ bookId: 'book-1' }, { input: {}, operation: {} })).toBeNull();
   });
 
   it('rejects non-Ontahi domain operation contracts during resolution', () => {

@@ -1,12 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  createEntityRef,
   defineDomainOperationMetadata,
   entity,
   field,
   graphOutput,
   graphSchema,
   type InferGraphSchemaClientInput,
+  type EntityRef,
   normalizeGraphSchemaClientInput,
   resolveDomainOperations,
   safeParseGraphSchema,
@@ -240,6 +242,16 @@ describe('data-graph schema DSL', () => {
         },
       },
     });
+  });
+
+  it('keeps schema-native Ref client inputs portable', () => {
+    const Book = entity('SchemaClientBook', { id: field.id() });
+    const inputSchema = graphSchema.object({ book: graphSchema.ref(Book) });
+    type ClientInput = InferGraphSchemaClientInput<typeof inputSchema>;
+    const book = createEntityRef(Book, { id: 'book-1' });
+
+    expectTypeOf<ClientInput>().toEqualTypeOf<{ book: EntityRef<'SchemaClientBook'> }>();
+    expect(normalizeGraphSchemaClientInput(inputSchema, { book })).toEqual({ book });
   });
 
   it('recognizes selections created by another loaded Ontahi entrypoint', () => {
