@@ -1,6 +1,6 @@
 # 74a. Unit Of Work Runtime Scope
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/74a-unit-of-work-runtime-scope`
 
@@ -144,13 +144,13 @@ The first implementation evicts. It does not automatically refresh.
 
 ## Verification
 
-- [ ] Repeated resolves of the same ref in one top-level operation share one loader execution.
-- [ ] Separate top-level operation executions do not share ref-resolution cache.
-- [ ] Nested operations reuse the parent UoW.
-- [ ] Explicit invalidation evicts a resolved ref.
-- [ ] Existing operation result cache tag behavior remains unchanged.
-- [ ] Existing client query/cache behavior remains unchanged.
-- [ ] UoW does not introduce hidden property-triggered I/O.
+- [x] Repeated resolves of the same ref in one top-level operation share one loader execution.
+- [x] Separate top-level operation executions do not share ref-resolution cache.
+- [x] Nested operations reuse the parent UoW.
+- [x] Explicit invalidation evicts a resolved ref.
+- [x] Existing operation result cache tag behavior remains unchanged.
+- [x] Existing client query/cache behavior remains unchanged.
+- [x] UoW does not introduce hidden property-triggered I/O.
 
 ## Decisions
 
@@ -166,9 +166,40 @@ Durable workflow steps should later get fresh UoW boundaries per step/retry.
 
 ## Closure / Evolution
 
-This plan is still open.
+This plan is complete.
 
-It should be picked up when entity-ref resolution ergonomics become the bottleneck, not merely because refs exist.
+`UnitOfWork.refs` owns a normalized, operation-scoped resolution store. Server Domain Operation
+input Refs delegate their explicit `resolve()` method to that store. Effect-valued resolvers are
+memoized at execution time, so concurrent callers share the authorized Query rather than merely
+sharing an unevaluated Effect value. Promise and synchronous loaders share the same store contract.
+
+The cache key combines portable Ref identity, resolver identity, and execution identity (`principal`
+plus `cacheScope`). This prevents a summary projection, a detail projection, or a differently
+authorized nested invocation from satisfying each other while still allowing normally nested
+Operations that preserve both resolver and authority to share work. Resolver-backed derived Refs
+are separate runtime objects, so attaching two representations never mutates or overwrites the
+portable Ref supplied by the caller.
+
+`UnitOfWork.refs.invalidate(ref)` evicts every representation for that normalized Ref. Reload is
+explicit on the next `resolve()`. Automatic invalidation remains intentionally deferred: arbitrary
+Graph Commands do not provide enough evidence to infer every affected Ref safely, and Relation
+Commands should gain invalidation only through a later declared consistency contract.
+
+The default application Data Graph Ref resolver continues to construct a Query and execute it
+through the active runtime. UnitOfWork stores only that authorized resolver result; it does not
+duplicate Query or policy logic. Child UnitOfWorks, including transaction scopes, own fresh stores,
+which prevents values observed under a scoped runtime or rolled-back transaction from leaking into
+the parent. Durable tasks and browser/client caches remain outside this slice.
+
+Delivery verification:
+
+1. Complete Core coverage suite: 85 files and 589 tests passed; 89.22% statements and 79.5%
+   branches.
+2. All ten package typechecks and the TodoApp codegen/typecheck passed.
+3. Repository lint and formatting passed.
+4. All ten packages built and passed clean-room artifact install, public type, and runtime checks.
+5. Public Core evolution is recorded in `.changeset/wise-refs-reuse.md`; durable semantics are
+   recorded in `ontahi://atlas/model/unit-of-work` and this completed Plan.
 
 Related evolution:
 
@@ -184,11 +215,11 @@ original decision above: UnitOfWork remains the wider runtime identity and is no
 database transaction.
 
 [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md) completed a
-small first intervention from this plan. It names the existing resource identity, proves isolated
-child scopes, and lets a provider transaction install its connection-scoped Data Graph runtime in
-one child. Ref-resolution reuse and invalidation remain later Plan 74a slices.
+small first intervention from this plan. It named the existing resource identity, proved isolated
+child scopes, and let a provider transaction install its connection-scoped Data Graph runtime in
+one child. This closing slice adds Ref-resolution reuse and explicit invalidation to that boundary.
 
 Related current work:
 
-1. [139. Relations Lifecycle Release Proof](./139-relations-lifecycle-release-proof.md)
+1. [139. Relations Lifecycle Release Proof](../current/139-relations-lifecycle-release-proof.md)
 2. [139a. Composable Data Graph Transactions](../done/139a-composable-data-graph-transactions.md)

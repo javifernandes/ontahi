@@ -100,6 +100,31 @@ Every top-level server Operation has a UnitOfWork backed by its runtime resource
 Operations reuse that identity. `application.app.runtime.unitOfWork.current()` and `.required()`
 expose the scope without turning it into a database transaction or a cross-request cache.
 
+Resolved input Refs also use that boundary. `app.graph.refInput(Entity)` resolves through the
+active Data Graph Query runtime, so existing graph-read policy remains the authorization owner.
+Repeated explicit `resolve()` calls for the same normalized Ref and resolver share one in-flight or
+completed read inside the UnitOfWork:
+
+```ts
+const inspectBook = app.operation.define({
+  input: graphSchema.object({ book: field.ref(Book) }),
+  inputRefs: { book: app.graph.refInput(Book) },
+  run: ({ refs }) =>
+    Effect.gen(function* () {
+      const first = yield* refs.book.resolve();
+      const same = yield* refs.book.resolve();
+
+      return { first, same };
+    }),
+});
+```
+
+Different resolver declarations and execution identities (`principal` plus `cacheScope`) stay
+isolated representations of the same Ref. A mutation can explicitly evict all of them with
+`application.app.runtime.unitOfWork.required().refs.invalidate(ref)`. The next `resolve()` reloads;
+this slice does not infer automatic invalidation from arbitrary Commands. Separate top-level
+Operations and transaction child UnitOfWorks never share resolved values.
+
 Providers may advertise the optional `DataGraphTransactionCapability`. Application code can use
 the contextual facade inside an Operation:
 

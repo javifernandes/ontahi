@@ -403,20 +403,28 @@ const bindEntityRefInputResolver = <
 >(
   ref: TRef,
   resolver: TResolver,
+  resolutionScope?: EntityRefInputResolutionScope,
 ) => {
   if (!resolver) {
     return ref;
   }
 
+  const resolvedRef = createEntityRef(ref.entityName, ref.locator) as TRef;
   let hasResolved = false;
   let resolved: unknown;
 
-  Object.defineProperty(ref, 'resolve', {
+  Object.defineProperty(resolvedRef, 'resolve', {
     configurable: true,
     enumerable: false,
     value: () => {
+      if (resolutionScope) {
+        return resolutionScope.resolve(
+          resolvedRef,
+          resolver as EntityRefInputResolver<TRef['entityName'], unknown>,
+        );
+      }
       if (!hasResolved) {
-        resolved = resolver(ref);
+        resolved = resolver(resolvedRef);
         hasResolved = true;
       }
 
@@ -424,16 +432,24 @@ const bindEntityRefInputResolver = <
     },
   });
 
-  return ref as TRef & {
+  return resolvedRef as TRef & {
     resolve: () => TResolver extends EntityRefInputResolver<TRef['entityName'], infer TResult>
       ? TResult
       : never;
   };
 };
 
+export type EntityRefInputResolutionScope = {
+  resolve: <TResult>(
+    ref: AnyEntityRef,
+    resolver: EntityRefInputResolver<string, TResult>,
+  ) => TResult;
+};
+
 export const deriveEntityRefInputRefs = <TInputRefs extends EntityRefInputDeclarations>(
   input: object,
   inputRefs: TInputRefs | undefined,
+  resolutionScope?: EntityRefInputResolutionScope,
 ): EntityRefInputDerivedRefs<TInputRefs> => {
   const inputRecord = input as Record<string, unknown>;
 
@@ -450,7 +466,9 @@ export const deriveEntityRefInputRefs = <TInputRefs extends EntityRefInputDeclar
           return locator ? createEntityRef(inputRef.entityName, locator) : undefined;
         })();
 
-      return ref ? [[name, bindEntityRefInputResolver(ref, inputRef.resolver)]] : [];
+      return ref
+        ? [[name, bindEntityRefInputResolver(ref, inputRef.resolver, resolutionScope)]]
+        : [];
     }),
   ) as EntityRefInputDerivedRefs<TInputRefs>;
 };
@@ -461,8 +479,9 @@ export const attachEntityRefInputRefs = <
 >(
   input: TInput,
   inputRefs: TInputRefs | undefined,
+  resolutionScope?: EntityRefInputResolutionScope,
 ): EntityRefInputRunInput<TInput, TInputRefs> => {
-  const refs = deriveEntityRefInputRefs(input, inputRefs);
+  const refs = deriveEntityRefInputRefs(input, inputRefs, resolutionScope);
   const hasInputRefs = Object.keys(inputRefs ?? {}).length > 0;
 
   return !hasInputRefs

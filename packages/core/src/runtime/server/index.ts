@@ -130,6 +130,8 @@ export {
   withChildUnitOfWork,
   type ChildUnitOfWorkOptions,
   type UnitOfWork,
+  type UnitOfWorkRefResolutionApi,
+  type UnitOfWorkRefResolutionOptions,
 } from './unit-of-work.js';
 export {
   createContextResourceApi,

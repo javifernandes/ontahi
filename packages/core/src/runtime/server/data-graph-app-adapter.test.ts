@@ -7,6 +7,7 @@ import {
   DataGraphTransactionUnavailableError,
   entity,
   field,
+  graphSchema,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
 } from '../../data-graph/index.js';
@@ -20,6 +21,7 @@ import {
   getRequiredOperationRuntimeContext,
   getRequiredUnitOfWork,
   layer,
+  runServerDomainOperationRaw,
 } from './index.js';
 
 describe('data graph architecture adapter', () => {
@@ -103,6 +105,56 @@ describe('data graph architecture adapter', () => {
         scope: 'features.books.readRuntime',
       }),
     );
+  });
+
+  it('resolves an input Ref through one authorized graph read per UnitOfWork', async () => {
+    const runtime = createRuntime('unit-of-work');
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      never,
+      { authority: 'viewer' },
+      { authority: 'system' }
+    >({ createRuntime: () => runtime });
+    const Book = graph.defineEntity(BookDefinition, {
+      domainOperationDefaults: {
+        authority: 'server',
+        exposure: 'server-only',
+      },
+      domainOperations: {
+        inspectRef: defineDomainOperation({
+          input: graphSchema.object({ book: field.ref(BookDefinition) }),
+          inputRefs: { book: graph.refInput(BookDefinition) },
+          concerns: [graph.withRuntime()],
+          run: ({ refs }) =>
+            Effect.all([refs.book.resolve(), refs.book.resolve()], {
+              concurrency: 'unbounded',
+            }),
+        }),
+      },
+    });
+
+    const result = await runServerDomainOperationRaw(Book.domain.inspectRef, {
+      book: Book.ref({ id: 'book-1' }),
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: [
+        {
+          authority: undefined,
+          id: 'book-1',
+          slug: 'progbook',
+          tenant: 'unit-of-work',
+        },
+        {
+          authority: undefined,
+          id: 'book-1',
+          slug: 'progbook',
+          tenant: 'unit-of-work',
+        },
+      ],
+    });
+    expect(runtime.get).toHaveBeenCalledOnce();
   });
 
   it('exposes reflected reads from the configured default storage', () => {
