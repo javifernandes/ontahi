@@ -23,7 +23,10 @@ import {
   type EntityRefLocatorDeclarations,
 } from './ref/index.js';
 import type { EntityName } from './ref/model.js';
-import { bindEntityRefRelationshipCommands } from './relationship-command.js';
+import {
+  bindEntityRefRelationshipCommands,
+  type RelationshipCommandExecutor,
+} from './relationship-command.js';
 import { isGraphSchemaDefinition } from './schema-descriptor.js';
 import type { SemanticSelection } from './selection-ast.js';
 import {
@@ -1105,6 +1108,7 @@ type BoundEntityFor<
 export const createGraphEntityFactory =
   <TBindSelectionEntity extends BindSelectionEntity>(input: {
     bindSelectionEntity: TBindSelectionEntity;
+    relationshipCommandExecutor?: RelationshipCommandExecutor<any, any>;
   }) =>
   <
     TEntity extends AnyEntityDefinition,
@@ -1166,6 +1170,7 @@ export const createGraphEntityFactory =
                 bindEntityRefRelationshipCommands(
                   createEntityRef(entityDefinition, toLocator(...args)),
                   entityDefinition,
+                  input.relationshipCommandExecutor,
                 ),
                 graphEntity.domain,
                 {
@@ -1183,6 +1188,7 @@ export const createGraphEntityFactory =
           bindEntityRefRelationshipCommands(
             createEntityRef(entityDefinition, locator),
             entityDefinition,
+            input.relationshipCommandExecutor,
           ),
           graphEntity.domain,
           {

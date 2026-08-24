@@ -24,6 +24,7 @@ import {
   type QuerySpec,
   type RuntimeBoundClientEntity,
 } from '@ontahi/core/data-graph';
+import { createDataGraphArchitectureAdapter, layer } from '@ontahi/core/runtime/server';
 import { createExpressGraphReadHandler } from '@ontahi/runtime-express/graph-read';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Effect, Either } from 'effect';
@@ -42,6 +43,8 @@ import { dataGraphRuntimeConformance } from './runtime-conformance.test-support.
 import {
   createPostgresDataGraphRuntime,
   createPostgresDataGraphStorage,
+  type PostgresDataGraphError,
+  type PostgresTransactionDataGraphRuntime,
   postgresMapping,
 } from './index.js';
 
@@ -287,6 +290,46 @@ describe('PostgreSQL data graph runtime', () => {
       { id: 'todo-1', title: 'First', completed: false },
       { id: 'todo-2', title: 'Second', completed: false },
     ]);
+  });
+
+  it('routes bound application commands through the contextual transaction runtime', async () => {
+    await pool.query('TRUNCATE TABLE todos');
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      PostgresDataGraphError,
+      undefined,
+      undefined,
+      PostgresTransactionDataGraphRuntime
+    >({
+      defaultStorage: createPostgresDataGraphStorage({ pool, mappings: [TodoMapping] }),
+    });
+    const Todo = graph.defineEntity(TodoEntity);
+    const transition = layer('tests.postgres', {
+      concerns: [graph.withRuntime()],
+    }).effect('contextualTransaction', () =>
+      graph.transaction(
+        Effect.gen(function* () {
+          yield* Todo.insert({
+            id: 'todo-context-1',
+            title: 'Context first',
+            completed: false,
+          }).run();
+          yield* Todo.insert({
+            id: 'todo-context-2',
+            title: 'Context second',
+            completed: false,
+          }).run();
+        }),
+      ),
+    );
+
+    await transition();
+
+    await expect(
+      pool.query<{ id: string }>('SELECT todo_id AS id FROM todos ORDER BY todo_id'),
+    ).resolves.toMatchObject({
+      rows: [{ id: 'todo-context-1' }, { id: 'todo-context-2' }],
+    });
   });
 
   it('rolls back every composed mutation and preserves the callback failure', async () => {

@@ -55,3 +55,8 @@ Each RPC is atomic for its one Relationship Command. The Supabase/PostgREST runt
 advertise Ontahi's compositional transaction capability: several client requests cannot honestly
 share rollback merely because they are sequenced in one Effect. Required multi-mutation
 coordination needs a server-side Operation or RPC that owns its database transaction.
+
+Supabase-backed Operations still participate in Ontahi's ordinary UnitOfWork resource scope. That
+scope can later coordinate Ref resolution and invalidation, but it does not manufacture a database
+session. Calling the contextual `app.graph.transaction(effect)` facade with a Supabase/PostgREST
+runtime fails before evaluating `effect`; it never degrades into sequential client requests.

@@ -43,7 +43,7 @@ describe('bound relationship commands', () => {
       relations: { tags: relation.manyToMany(Tag) },
     });
 
-    ontahi({
+    const application = ontahi({
       storage: createInMemoryDataGraphStorage({
         dataset: { Course: [], Student: [], Member: [], Team: [], Tag: [], Todo: [] },
       }),
@@ -56,6 +56,12 @@ describe('bound relationship commands', () => {
     const member = Member.refById('member-1');
     const todo = Todo.refById('todo-1');
     const tag = Tag.refById('tag-1');
+    const boundStudent = application.graph.entities.Student.refById('student-1');
+    const boundCourse = application.graph.entities.Course.refById('course-1');
+    const boundAssign = boundStudent.course.assign(boundCourse);
+
+    expect(typeof application.app.graph.transaction).toBe('function');
+    expect(application.app.runtime.unitOfWork.current()).toBeUndefined();
 
     expect(student.course.assign(course)).toEqual({
       kind: 'relationship-command',
@@ -99,6 +105,10 @@ describe('bound relationship commands', () => {
         cardinality: 'many-to-many',
       },
     });
+    expectTypeOf(boundAssign.run).toBeFunction();
+    expect(typeof boundAssign.run).toBe('function');
+    expect(Object.keys(boundAssign)).toEqual(['kind', 'action', 'relation', 'source', 'target']);
+    expect(JSON.parse(JSON.stringify(boundAssign))).toEqual(student.course.assign(course));
 
     expectTypeOf(student.course.assign).parameter(0).toEqualTypeOf<EntityRef<'Course'>>();
     expect(student.course.assign(Course.refById('course-2'), { ifCurrent: course })).toMatchObject({

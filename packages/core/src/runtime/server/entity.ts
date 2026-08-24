@@ -33,6 +33,7 @@ import {
   type RecursiveEntityViewDefinition,
   type ResolveDomainOperations,
   type RuntimeBoundSelectionEntity,
+  type RuntimeBoundEntityRefRelationshipCommands,
   selection,
   type SelectionBuilder,
 } from '../../data-graph/index.js';
@@ -593,7 +594,13 @@ type BoundOntahiEntityBase<
     TEntity,
     ResolveDomainOperations<TEntity['name'], DomainOperationsFrom<TOperations>>,
     EntityRefLocators<TEntity>,
-    unknown
+    unknown,
+    {},
+    RuntimeBoundEntityRefRelationshipCommands<
+      TEntity,
+      RuntimeCommandError<TRuntime>,
+      RuntimeCommandOptions<TRuntime>
+    >
   > & { values: BoundRuntimeValueRefs<TValues> };
 
 export type BoundOntahiEntity<

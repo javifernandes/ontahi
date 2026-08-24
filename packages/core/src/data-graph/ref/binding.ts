@@ -81,6 +81,9 @@ export type BoundEntityRefLocators<
   TLocators extends EntityRefLocatorDeclarations,
   TResult,
   TRelations extends Record<string, Record<string, unknown>> = {},
+  TStructuralRelations = TEntity extends AnyEntityDefinition
+    ? import('../relationship-command.js').BoundEntityRefRelationshipCommands<TEntity>
+    : {},
 > = {
   ref: <TLocator extends EntityRefLocator>(
     locator: TLocator,
@@ -90,9 +93,7 @@ export type BoundEntityRefLocators<
     TResult
   > &
     BoundEntityRefRelations<TRelations, TResult> &
-    (TEntity extends AnyEntityDefinition
-      ? import('../relationship-command.js').BoundEntityRefRelationshipCommands<TEntity>
-      : {});
+    TStructuralRelations;
 } & {
   [TName in keyof TLocators]: (
     ...args: Parameters<TLocators[TName]>
@@ -102,9 +103,7 @@ export type BoundEntityRefLocators<
     TResult
   > &
     BoundEntityRefRelations<TRelations, TResult> &
-    (TEntity extends AnyEntityDefinition
-      ? import('../relationship-command.js').BoundEntityRefRelationshipCommands<TEntity>
-      : {});
+    TStructuralRelations;
 };
 
 export function createEntityRefFactory<

@@ -9,7 +9,7 @@ export type RuntimeOperationCacheStore = {
   entriesByRef: Map<string, Set<string>>;
 };
 
-const OPERATION_CACHE_STORE_RESOURCE_KEY = 'runtime.operation-cache-store';
+export const OPERATION_CACHE_STORE_RESOURCE_KEY = 'runtime.operation-cache-store';
 
 const createRuntimeOperationCacheStore = (): RuntimeOperationCacheStore => ({
   entries: new Map(),

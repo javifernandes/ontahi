@@ -62,6 +62,7 @@ export {
   getCurrentDataGraphRuntime,
   getRequiredDataGraphRuntime,
   getRequiredDataGraphRuntimeEffect,
+  withDataGraphTransaction,
   withDataGraph,
   type WithDataGraphOptions,
 } from './data-graph.js';
@@ -123,6 +124,13 @@ export {
   serverContext,
   toContextRecord,
 } from './context.js';
+export {
+  getCurrentUnitOfWork,
+  getRequiredUnitOfWork,
+  withChildUnitOfWork,
+  type ChildUnitOfWorkOptions,
+  type UnitOfWork,
+} from './unit-of-work.js';
 export {
   createContextResourceApi,
   createServerRuntimeResources,

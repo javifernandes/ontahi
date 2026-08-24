@@ -45,6 +45,7 @@ import {
   toContextRecord,
 } from './context.js';
 import {
+  createContextualRelationshipCommandExecutor,
   getCurrentDataGraphRuntime,
   getRequiredDataGraphRuntime,
   getRequiredDataGraphRuntimeEffect,
@@ -101,6 +102,11 @@ import {
   startTask,
   inProcessTasks,
 } from './tasks.js';
+import {
+  getCurrentUnitOfWork,
+  getRequiredUnitOfWork,
+  withChildUnitOfWork,
+} from './unit-of-work.js';
 import { failIfError, fromNullable, fromValueOrPromise } from './values.js';
 
 type ArchitectureDefinitionKey = keyof ArchitectureDefinition<unknown>;
@@ -313,6 +319,11 @@ const runtimeFacadeBase = {
   runServerEffect,
   serverContext,
   toContextRecord,
+  unitOfWork: {
+    current: getCurrentUnitOfWork,
+    required: getRequiredUnitOfWork,
+    withChild: withChildUnitOfWork,
+  },
   withInvocationContext,
 };
 
@@ -416,6 +427,9 @@ const attachConfiguredEntityRefLocators = (
   entityOrName: unknown,
   graphEntity: object,
   invokeConfigured: ConfiguredOperationInvoke,
+  relationshipCommandExecutor: ReturnType<
+    typeof createContextualRelationshipCommandExecutor<unknown, unknown>
+  >,
 ) => {
   const entityRefTarget = resolveEntityRefTarget(entityOrName, graphEntity);
   const domainOperations = getDomainOperations(graphEntity);
@@ -426,7 +440,11 @@ const attachConfiguredEntityRefLocators = (
 
   const bindRelationships = <TRef extends EntityRef>(ref: TRef) =>
     typeof entityOrName === 'object' && entityOrName !== null && 'relations' in entityOrName
-      ? bindEntityRefRelationshipCommands(ref, entityOrName as AnyEntityDefinition)
+      ? bindEntityRefRelationshipCommands(
+          ref,
+          entityOrName as AnyEntityDefinition,
+          relationshipCommandExecutor,
+        )
       : ref;
 
   const locators = <TLocators extends EntityRefLocatorDeclarations>(
@@ -544,6 +562,10 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
   definition: TDefinition,
 ): GraphFacade<TDefinition> => {
   const invokeConfigured = createConfiguredOperationInvoke(definition);
+  const relationshipCommandExecutor = createContextualRelationshipCommandExecutor<
+    unknown,
+    unknown
+  >();
   const refProvider = ((
     entityOrName: EntityRefTarget,
     operations: Record<string, unknown>,
@@ -555,6 +577,7 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
           ? bindEntityRefRelationshipCommands(
               createEntityRef(entityOrName, toLocator(...args)),
               entityOrName as AnyEntityDefinition,
+              relationshipCommandExecutor,
             )
           : createEntityRef(entityOrName, toLocator(...args)),
         operations,
@@ -598,6 +621,7 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
       entity,
       defineEntity(entity, graphConfig),
       invokeConfigured,
+      relationshipCommandExecutor,
     );
     const entityLocators =
       entity &&

@@ -1,3 +1,5 @@
+import type { Effect } from 'effect';
+
 import {
   resolveHasManyTargetField,
   type AnyEntityDefinition,
@@ -62,36 +64,64 @@ export type RelationshipDelta = {
   removed: RelationshipFact[];
 };
 
+export type ExecutableRelationshipCommand<
+  TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
+  TError = never,
+  TOptions = undefined,
+> = TCommand & {
+  run: (options?: TOptions) => Effect.Effect<RelationshipDelta, TError>;
+};
+
 type RelationTargetRef<TRelation extends RelationDefinition> = EntityRef<
   TRelation['target']['name']
 >;
 
-export type BoundRelationshipCommandOperations<TRelation extends RelationDefinition> =
+export type BoundRelationshipCommandOperations<
+  TRelation extends RelationDefinition,
+  TDirectCommand extends RelationshipCommand = RelationshipCommand,
+  TManyToManyCommand extends ManyToManyRelationshipCommand = ManyToManyRelationshipCommand,
+> =
   TRelation extends RelationDefinition<'belongsTo'>
     ? {
         assign: (
           target: RelationTargetRef<TRelation>,
           options?: RelationshipAssignOptions<TRelation>,
-        ) => RelationshipCommand;
-        clear: () => RelationshipCommand;
+        ) => TDirectCommand;
+        clear: () => TDirectCommand;
       }
     : TRelation extends RelationDefinition<'hasMany'>
       ? {
-          add: (source: RelationTargetRef<TRelation>) => RelationshipCommand;
-          remove: (source: RelationTargetRef<TRelation>) => RelationshipCommand;
+          add: (source: RelationTargetRef<TRelation>) => TDirectCommand;
+          remove: (source: RelationTargetRef<TRelation>) => TDirectCommand;
         }
       : TRelation extends RelationDefinition<'manyToMany'>
         ? {
-            add: (target: RelationTargetRef<TRelation>) => ManyToManyRelationshipCommand;
-            remove: (target: RelationTargetRef<TRelation>) => ManyToManyRelationshipCommand;
+            add: (target: RelationTargetRef<TRelation>) => TManyToManyCommand;
+            remove: (target: RelationTargetRef<TRelation>) => TManyToManyCommand;
           }
         : never;
 
-export type BoundEntityRefRelationshipCommands<TEntity extends AnyEntityDefinition> = {
+export type BoundEntityRefRelationshipCommands<
+  TEntity extends AnyEntityDefinition,
+  TDirectCommand extends RelationshipCommand = RelationshipCommand,
+  TManyToManyCommand extends ManyToManyRelationshipCommand = ManyToManyRelationshipCommand,
+> = {
   [TRelationName in keyof TEntity['relations']]: BoundRelationshipCommandOperations<
-    TEntity['relations'][TRelationName]
+    TEntity['relations'][TRelationName],
+    TDirectCommand,
+    TManyToManyCommand
   >;
 };
+
+export type RuntimeBoundEntityRefRelationshipCommands<
+  TEntity extends AnyEntityDefinition,
+  TError = never,
+  TOptions = undefined,
+> = BoundEntityRefRelationshipCommands<
+  TEntity,
+  ExecutableRelationshipCommand<RelationshipCommand, TError, TOptions>,
+  ExecutableRelationshipCommand<ManyToManyRelationshipCommand, TError, TOptions>
+>;
 
 export interface RelationshipCommandExecutionRuntime<TError = never, TOptions = undefined> {
   runRelationshipCommand(
@@ -109,6 +139,12 @@ export interface ManyToManyRelationshipCommandExecutionRuntime<
     options?: TOptions,
   ): import('effect').Effect.Effect<RelationshipDelta, TError>;
 }
+
+export type RelationshipCommandExecutor<
+  TError = never,
+  TOptions = undefined,
+> = RelationshipCommandExecutionRuntime<TError, TOptions> &
+  ManyToManyRelationshipCommandExecutionRuntime<TError, TOptions>;
 
 type RelationshipSelectionInput = AnyEntityRef | EntitySelectionSource<AnyEntityDefinition>;
 
@@ -283,22 +319,73 @@ export const relationship = (
   };
 };
 
+type EntityRefRelationshipCommandsForExecutor<TEntity extends AnyEntityDefinition, TExecutor> = [
+  TExecutor,
+] extends [undefined]
+  ? BoundEntityRefRelationshipCommands<TEntity>
+  : RuntimeBoundEntityRefRelationshipCommands<
+      TEntity,
+      TExecutor extends RelationshipCommandExecutionRuntime<infer TError, any> ? TError : never,
+      TExecutor extends RelationshipCommandExecutionRuntime<any, infer TOptions>
+        ? TOptions
+        : undefined
+    >;
+
+const bindExecutableRelationshipCommand = <
+  TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
+  TError,
+  TOptions,
+>(
+  command: TCommand,
+  executor: RelationshipCommandExecutor<TError, TOptions>,
+): ExecutableRelationshipCommand<TCommand, TError, TOptions> => {
+  Object.defineProperty(command, 'run', {
+    configurable: true,
+    enumerable: false,
+    value: (options?: TOptions) =>
+      command.kind === 'relationship-command'
+        ? executor.runRelationshipCommand(command, options)
+        : executor.runManyToManyRelationshipCommand(command, options),
+    writable: true,
+  });
+
+  return command as ExecutableRelationshipCommand<TCommand, TError, TOptions>;
+};
+
 export const bindEntityRefRelationshipCommands = <
   TEntity extends AnyEntityDefinition,
   TRef extends AnyEntityRef,
+  TExecutor extends RelationshipCommandExecutor<any, any> | undefined = undefined,
 >(
   ref: TRef,
   entity: TEntity,
-): TRef & BoundEntityRefRelationshipCommands<TEntity> => {
+  executor?: TExecutor,
+): TRef & EntityRefRelationshipCommandsForExecutor<TEntity, TExecutor> => {
+  const bindCommand = <TCommand extends RelationshipCommand | ManyToManyRelationshipCommand>(
+    command: TCommand,
+  ) => (executor ? bindExecutableRelationshipCommand(command, executor) : command);
+  const bindDirectOperations = (relationName: string) => {
+    const direct = relationship(entity, relationName, ref);
+
+    return {
+      assign: (target: AnyEntityRef, options?: { ifCurrent: AnyEntityRef }) =>
+        bindCommand(direct.assign(target, options)),
+      clear: () => bindCommand(direct.clear()),
+      add: (source: AnyEntityRef) => bindCommand(direct.add(source)),
+      remove: (source: AnyEntityRef) => bindCommand(direct.remove(source)),
+    };
+  };
+
   for (const [relationName, definition] of Object.entries(entity.relations)) {
     const operations =
       definition.relationKind === 'manyToMany'
         ? {
-            add: (target: AnyEntityRef) => relationshipSet(entity, relationName, ref).add(target),
+            add: (target: AnyEntityRef) =>
+              bindCommand(relationshipSet(entity, relationName, ref).add(target)),
             remove: (target: AnyEntityRef) =>
-              relationshipSet(entity, relationName, ref).remove(target),
+              bindCommand(relationshipSet(entity, relationName, ref).remove(target)),
           }
-        : relationship(entity, relationName, ref);
+        : bindDirectOperations(relationName);
 
     Object.defineProperty(ref, relationName, {
       configurable: true,
@@ -308,5 +395,5 @@ export const bindEntityRefRelationshipCommands = <
     });
   }
 
-  return ref as TRef & BoundEntityRefRelationshipCommands<TEntity>;
+  return ref as TRef & EntityRefRelationshipCommandsForExecutor<TEntity, TExecutor>;
 };

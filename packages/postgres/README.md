@@ -26,23 +26,24 @@ relation includes, relation-root reads, inserts, bulk inserts, upserts, updates,
 rows and cardinality enforcement.
 
 When constructed with a PostgreSQL `Pool`, the runtime also exposes an optional compositional
-transaction capability. The callback receives a runtime bound to one checked-out connection, so
-required graph and Relationship Commands share commit or rollback:
+transaction capability. Application Operations normally enter it through the contextual graph
+facade, so bound execution discovers the runtime associated with one checked-out connection:
 
 ```ts
-const transition = runtime.transaction(tx =>
+const transition = application.app.graph.transaction(
   Effect.gen(function* () {
-    yield* tx.runRelationshipCommand(
-      student.course.assign(nextCourse, { ifCurrent: previousCourse }),
-    );
-    yield* tx.runCommand(updateCourseCapacity);
+    yield* student.course.assign(nextCourse, { ifCurrent: previousCourse }).run();
+    yield* updateCourseCapacity.run();
   }),
 );
 ```
 
-A callback success commits and returns its value. A typed failure or defect rolls back before the
-connection is released. The transaction-scoped runtime deliberately omits `transaction`, so this
-first contract does not imply nested transactions or savepoints.
+The provider-level `runtime.transaction(tx => effect)` contract remains available to adapter and
+low-level runtime code. At application level the child UnitOfWork routes bound Queries and explicit
+Command `.run()` calls, including normally nested Operations, without exposing `tx`. Success commits
+and returns its value. A typed failure or defect rolls back before the connection is released and
+restores the parent runtime. The transaction-scoped runtime deliberately omits `transaction`, so
+this first contract does not imply nested transactions or savepoints.
 
 Direct `belongsTo/hasMany` Relationship Commands are lowered to one guarded PostgreSQL statement.
 Conditional to-one assignment preserves its expected current target atomically:
