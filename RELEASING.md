@@ -62,6 +62,23 @@ dry-run validates the exact public payload without credentials. The publish step
 incomplete package set, changed tarballs, a source/version mismatch, a stable version, or an npm
 version that already exists with different contents.
 
+## Developer documentation gate
+
+Treat developer documentation as part of the release candidate, not as a follow-up after
+publishing. An agent or maintainer preparing a release must complete this reconciliation before
+merging the generated release pull request:
+
+1. Use the accumulated Changesets since the previous tag as the consumer-visible change index.
+2. Cross-check that index against completed Plans and changed Atlas items; Changesets are concise
+   release notes, not the complete conceptual source.
+3. Verify the documented APIs against the packed artifacts and the executable Todo and Classroom
+   examples that apply to the candidate.
+4. Update the canonical developer documentation for the resulting model, lifecycle, examples, and
+   migration guidance. If its canonical source moves repositories, preserve provenance and leave a
+   relocation notice instead of maintaining duplicate copies.
+5. Do not merge the release pull request until package notes, durable design records, executable
+   examples, and developer documentation describe the same shipped surface.
+
 ## Trusted publishing
 
 Every package authorizes the same GitHub Actions workflow through npm trusted publishing. The
