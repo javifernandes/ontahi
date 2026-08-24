@@ -6,15 +6,12 @@ import {
   type BoundGraphRead,
   createGraphEntityFactory,
   defineGraphRelation,
-  defineEntityRefInput,
   createRuntimeBoundDataGraphApi,
   type DataGraphExecutionRuntime,
   type DataGraphDefaultStorage,
   type DomainOperationDefaults,
   type DomainOperationDeclarations,
   type EntityRefLocators,
-  type EntityName,
-  type EntityRefInputBuilder,
   type EntityRefLocatorDeclarations,
   type GraphEntityExposure,
   type GraphEntityWithOperations,
@@ -167,78 +164,6 @@ export const createDataGraphArchitectureAdapter = <
     TCommandOptions,
     TCommandError
   >;
-  type DefaultEntityRefResolution<TEntity extends AnyEntityDefinition> = ReturnType<
-    ReturnType<AdapterSelectionEntity<TEntity>['all']>['get']
-  >;
-
-  const unsupportedLocatorEffect = <TEntity extends AnyEntityDefinition>(
-    entityDefinition: TEntity,
-    unsupportedFields: readonly string[],
-  ): DefaultEntityRefResolution<TEntity> =>
-    Effect.die(
-      new Error(
-        `Default ref resolver for ${entityDefinition.name} cannot resolve locator field${
-          unsupportedFields.length === 1 ? '' : 's'
-        } ${unsupportedFields.join(', ')} because ${
-          unsupportedFields.length === 1 ? 'it is not a field' : 'they are not fields'
-        } on ${entityDefinition.name}. Use resolveWith(...) for virtual/path locators.`,
-      ),
-    ) as DefaultEntityRefResolution<TEntity>;
-  const emptyLocatorEffect = <TEntity extends AnyEntityDefinition>(
-    entityDefinition: TEntity,
-  ): DefaultEntityRefResolution<TEntity> =>
-    Effect.die(
-      new Error(
-        `Default ref resolver for ${entityDefinition.name} cannot resolve an empty locator. Pass a locator declared on ${entityDefinition.name} or use resolveWith(...) for custom references.`,
-      ),
-    ) as DefaultEntityRefResolution<TEntity>;
-
-  const createDefaultEntityRefInputResolver =
-    <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) =>
-    (ref: { locator: Record<string, unknown> }): DefaultEntityRefResolution<TEntity> => {
-      const locatorEntries = Object.entries(ref.locator);
-      const unsupportedFields = locatorEntries
-        .map(([fieldName]) => fieldName)
-        .filter(fieldName => !(fieldName in entityDefinition.fields));
-
-      if (locatorEntries.length === 0) {
-        return emptyLocatorEffect(entityDefinition);
-      }
-
-      if (unsupportedFields.length > 0) {
-        return unsupportedLocatorEffect(entityDefinition, unsupportedFields);
-      }
-
-      const entity = boundDataGraph.bindSelectionEntity(entityDefinition);
-      const selection = locatorEntries.reduce(
-        (currentSelection, [fieldName, value]) =>
-          currentSelection.where(root => {
-            const fieldRef = (
-              root as unknown as Record<string, { eq: (nextValue: unknown) => never }>
-            )[fieldName];
-
-            return fieldRef.eq(value);
-          }),
-        entity.all(),
-      );
-
-      return selection.get() as DefaultEntityRefResolution<TEntity>;
-    };
-
-  function refInput<TEntity extends AnyEntityDefinition>(
-    entityDefinition: TEntity,
-  ): EntityRefInputBuilder<EntityName<TEntity>, false, DefaultEntityRefResolution<TEntity>>;
-  function refInput<TEntityName extends string>(
-    entityName: TEntityName,
-  ): EntityRefInputBuilder<TEntityName, false, never>;
-  function refInput(entityOrName: AnyEntityDefinition | string) {
-    return typeof entityOrName === 'string'
-      ? defineEntityRefInput(entityOrName)
-      : defineEntityRefInput(entityOrName).resolveWith(
-          createDefaultEntityRefInputResolver(entityOrName),
-        );
-  }
-
   const relationshipCommandExecutor =
     options.relationshipCommandExecutor ??
     createContextualRelationshipCommandExecutor<TCommandError, TCommandOptions>();
@@ -380,7 +305,6 @@ export const createDataGraphArchitectureAdapter = <
     defineGraphEntity: defineEntity,
     defineRelation: defineGraphRelation,
     namedGraphRead,
-    refInput,
     transaction: <TValue, TWorkError = never, TRequirements = never>(
       effect: Effect.Effect<TValue, TWorkError, TRequirements>,
     ) => withDataGraphTransaction<TRuntime, TValue, TWorkError, TRequirements>(effect),

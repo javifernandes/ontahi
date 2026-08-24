@@ -4,7 +4,6 @@ import {
   cacheRef,
   createEntityRef,
   createGraphClientCache,
-  defineEntityRefInput,
   entity,
   field,
   getOperationClientCacheKey,
@@ -41,9 +40,6 @@ describe('data-graph operation client cache helpers', () => {
     const operation = {
       entityName: 'Book',
       name: 'fetchBook',
-      inputRefs: {
-        book: defineEntityRefInput(Book),
-      },
       clientCache: {
         query: [cacheRef('book')],
       },
@@ -83,9 +79,6 @@ describe('data-graph operation client cache helpers', () => {
       entityName: 'Book',
       name: 'fetchBook',
       graphOutput: graphOutput.entity(Book),
-      inputRefs: {
-        book: defineEntityRefInput(Book),
-      },
     };
 
     cache.writeEntity(Book, book);
@@ -108,9 +101,6 @@ describe('data-graph operation client cache helpers', () => {
     const operation = {
       entityName: 'Book',
       name: 'deleteBook',
-      inputRefs: {
-        book: defineEntityRefInput(Book),
-      },
       clientCache: {
         invalidate: [
           ({ value }: { value: { deletedBookId: string } }) =>

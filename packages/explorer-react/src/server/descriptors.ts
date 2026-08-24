@@ -1,7 +1,6 @@
 import {
   field,
   graphSchema,
-  inferEntityRefInputLocatorFieldGroups,
   reflectSchemaRelations,
   value,
   type AnyEntityDefinition,
@@ -109,25 +108,6 @@ export type ExplorerOperationLike = {
     query?: readonly unknown[];
     invalidate?: readonly (readonly unknown[])[];
   };
-  inputRefs?: Record<
-    string,
-    {
-      kind?: string;
-      entityName?: string;
-      isReceiver?: boolean;
-      isOptional?: boolean;
-      locators?: readonly {
-        name?: string;
-        fields?: readonly string[];
-        sourceFields?: readonly string[];
-      }[];
-      inferredLocators?: readonly {
-        name?: string;
-        fields?: readonly string[];
-        sourceFields?: readonly string[];
-      }[];
-    }
-  >;
   graphOps?: {
     inputRefs?: Record<
       string,
@@ -365,8 +345,6 @@ const mermaidString = (value: string) => value.replaceAll('"', '#quot;');
 const mermaidId = (prefix: string, value: string) =>
   `${prefix}_${value.replaceAll(/[^a-zA-Z0-9_]/g, '_')}`;
 
-const uniqueStrings = (values: readonly string[]) => [...new Set(values)];
-
 type ExplorerOperationInputRefLocatorPath = NonNullable<
   ExplorerOperationInputRefDescriptor['locators'][number]['path']
 >;
@@ -409,46 +387,23 @@ const describeInputRefLocatorPath = (
     : undefined;
 };
 
-const describeInputRefLocators = (
+const describeSchemaRefLocators = (
   path: string,
-  inputRef: NonNullable<ExplorerOperationLike['inputRefs']>[string],
+  target: ExplorerEntityLike,
   operation: ExplorerOperationLike,
 ) => {
-  const locators = inputRef.locators ?? [];
-
-  if (locators.length > 0) {
-    return locators.flatMap(locator => {
-      if (!locator.name) {
-        return [];
-      }
-
-      const locatorPath = describeInputRefLocatorPath(operation, path, locator.name);
-
-      return [
-        {
-          name: locator.name,
-          fields: [...(locator.fields ?? [])],
-          sourceFields: [...(locator.sourceFields ?? locator.fields ?? [])],
-          ...(locatorPath ? { path: locatorPath } : {}),
-        },
-      ];
-    });
-  }
-
-  return (inputRef.inferredLocators ?? []).flatMap(locator => {
-    if (!locator.name) {
+  return Object.entries(target.refLocators ?? {}).flatMap(([name, locator]) => {
+    const sourceFields = locator.fields ?? [];
+    if (sourceFields.length === 0) {
       return [];
     }
 
-    const sourceFields = locator.sourceFields ?? locator.fields ?? [];
-    const locatorPath = describeInputRefLocatorPath(operation, path, locator.name);
+    const locatorPath = describeInputRefLocatorPath(operation, path, name);
 
     return [
       {
-        name: locator.name,
-        fields: uniqueStrings(
-          inferEntityRefInputLocatorFieldGroups(path, sourceFields).flatMap(group => [...group]),
-        ),
+        name,
+        fields: [path],
         sourceFields: [...sourceFields],
         ...(locatorPath ? { path: locatorPath } : {}),
       },
@@ -456,21 +411,55 @@ const describeInputRefLocators = (
   });
 };
 
+type ExplorerSchemaLike = {
+  kind?: string;
+  fields?: Record<string, unknown>;
+  fieldType?: string;
+  optional?: boolean;
+  item?: unknown;
+  target?: ExplorerEntityLike;
+};
+
+const unwrapSchemaRef = (
+  schema: unknown,
+): { optional: boolean; target: ExplorerEntityLike } | undefined => {
+  let current = schema as ExplorerSchemaLike | undefined;
+  let optional = false;
+
+  while (current?.kind === 'schema.optional' || current?.kind === 'schema.nullable') {
+    optional ||= current.kind === 'schema.optional';
+    current = current.item as ExplorerSchemaLike | undefined;
+  }
+
+  if (current?.kind !== 'field' || current.fieldType !== 'reference' || !current.target?.name) {
+    return undefined;
+  }
+
+  return {
+    optional: optional || current.optional === true,
+    target: current.target,
+  };
+};
+
 const describeOperationInputRefs = (
   operation: ExplorerOperationLike,
 ): ExplorerOperationDescriptor['inputRefs'] => {
-  const descriptors = Object.entries(operation.inputRefs ?? {}).flatMap(([path, inputRef]) => {
-    if (inputRef.kind !== 'entity-ref-input' || !inputRef.entityName) {
+  const input = operation.input as ExplorerSchemaLike | undefined;
+  const fields =
+    input?.kind === 'schema.object' || input?.kind === 'value' ? (input.fields ?? {}) : {};
+  const descriptors = Object.entries(fields).flatMap(([path, schema]) => {
+    const inputRef = unwrapSchemaRef(schema);
+    if (!inputRef?.target.name) {
       return [];
     }
 
     return [
       {
         path,
-        entityName: inputRef.entityName,
-        receiver: Boolean(inputRef.isReceiver),
-        optional: Boolean(inputRef.isOptional),
-        locators: describeInputRefLocators(path, inputRef, operation),
+        entityName: inputRef.target.name,
+        receiver: false,
+        optional: inputRef.optional,
+        locators: describeSchemaRefLocators(path, inputRef.target, operation),
       },
     ];
   });

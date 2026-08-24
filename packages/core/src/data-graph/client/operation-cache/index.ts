@@ -3,19 +3,12 @@ import type {
   DomainOperationClientCacheMetadata,
 } from '../../operations.js';
 import type { GraphOutputDescriptor } from '../../output/index.js';
-import {
-  deriveEntityRefInputRefs,
-  isEntityRef,
-  normalizeEntityRef,
-  type AnyEntityRef,
-  type EntityRefInputDeclarations,
-} from '../../ref/index.js';
+import { isEntityRef, normalizeEntityRef, type AnyEntityRef } from '../../ref/index.js';
 import type { GraphClientCache } from '../cache/index.js';
 
 export type GraphClientCacheOperationLike<TInput = unknown, TData = unknown> = {
   entityName: string;
   graphOutput?: GraphOutputDescriptor;
-  inputRefs?: EntityRefInputDeclarations;
   name: string;
   clientCache?: DomainOperationClientCacheMetadata<TInput, TData>;
 };
@@ -36,6 +29,11 @@ export const reconcileOperationOutput = <TInput, TData>(
 
 const asEntityRefList = (value: unknown): AnyEntityRef[] =>
   (Array.isArray(value) ? value : value ? [value] : []).filter(isEntityRef);
+
+const directInputRefs = (input: unknown): AnyEntityRef[] =>
+  typeof input === 'object' && input !== null && !Array.isArray(input)
+    ? Object.values(input).filter(isEntityRef)
+    : [];
 
 const uniqueEntityRefs = (refs: readonly AnyEntityRef[]): AnyEntityRef[] => {
   const seen = new Set<string>();
@@ -70,12 +68,8 @@ export const invalidateOperationCacheRefs = <TInput, TData>(
     }
   };
 
-  if (typeof input === 'object' && input !== null) {
-    const refs = deriveEntityRefInputRefs(input, operation.inputRefs);
-
-    for (const ref of Object.values(refs)) {
-      invalidateRef(ref);
-    }
+  for (const ref of directInputRefs(input)) {
+    invalidateRef(ref);
   }
 
   for (const resolveInvalidation of operation.clientCache?.invalidate ?? []) {
@@ -164,8 +158,7 @@ export const readInitialOperationCacheValueFromCache = <TInput, TData>(
   }
 
   if (descriptor.kind === 'graph-output.entity' && typeof input === 'object' && input !== null) {
-    const refs = deriveEntityRefInputRefs(input, operation.inputRefs);
-    const ref = Object.values(refs).find(
+    const ref = directInputRefs(input).find(
       candidate => candidate?.entityName === descriptor.entity.name,
     );
 

@@ -12,13 +12,21 @@ export type {
   EntityRefLocatorDeclarations,
   EntityRefLocatorFactory,
   EntityRefLocatorValue,
+  SchemaEntityRef,
 } from './model.js';
+
+export { getGraphSchemaReferenceResolver, graphSchemaReference } from './schema-reference.js';
+export type {
+  GraphSchemaReferenceDefinition,
+  GraphSchemaReferenceResolver,
+} from './schema-reference.js';
 
 export { createEntityIdentityRef, getEntityIdentityLocator } from './identity.js';
 
 export { defineEntityRefInput } from './input.js';
 export {
   attachEntityRefInputRefs,
+  bindEntityRefInputResolver,
   deriveEntityRefInputRefs,
   inferEntityRefInputLocatorFieldGroups,
   normalizeEntityRefInput,

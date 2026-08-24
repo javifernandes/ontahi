@@ -8,12 +8,11 @@ import { graphOutput } from '../../data-graph/output/index.js';
 import {
   bindEntityRefOperationProxy,
   createEntityRef,
-  defineEntityRefInput,
   type BoundEntityRefOperationProxy,
   type EntityRefLocatorDeclarations,
   type EntityRef,
-  type EntityRefInputPublicInput,
   type EntityRefLocator,
+  type SemanticSelectionPublicInput,
 } from '../../data-graph/ref/index.js';
 import {
   bindEntityRefRelationshipCommands,
@@ -141,30 +140,23 @@ const graphFacadeBase = {
   getRequiredRuntimeEffect: getRequiredDataGraphRuntimeEffect,
   output: graphOutput,
   queryRef,
-  refInput: defineEntityRefInput,
   withRuntime: withDataGraph,
 };
 
-type AnyResolvedDomainOperation = ResolvedDomainOperationDeclaration<any, any, any, any, any>;
+type AnyResolvedDomainOperation = ResolvedDomainOperationDeclaration<any, any, any, any>;
 
 type ConfiguredOperationInput<TOperation extends AnyResolvedDomainOperation> =
-  TOperation extends ResolvedDomainOperationDeclaration<
-    infer TInput,
-    any,
-    any,
-    any,
-    infer TInputRefs
-  >
-    ? EntityRefInputPublicInput<TInput, TInputRefs>
+  TOperation extends ResolvedDomainOperationDeclaration<infer TInput, any, any, any>
+    ? SemanticSelectionPublicInput<TInput>
     : never;
 
 type ConfiguredOperationResult<TOperation extends AnyResolvedDomainOperation> =
-  TOperation extends ResolvedDomainOperationDeclaration<any, infer TResult, any, any, any>
+  TOperation extends ResolvedDomainOperationDeclaration<any, infer TResult, any, any>
     ? TResult
     : never;
 
 type ConfiguredOperationFailure<TOperation extends AnyResolvedDomainOperation> =
-  TOperation extends ResolvedDomainOperationDeclaration<any, any, infer TFailure, any, any>
+  TOperation extends ResolvedDomainOperationDeclaration<any, any, infer TFailure, any>
     ? TFailure
     : never;
 

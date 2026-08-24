@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/116-ontahi-selection-model
   - bookops://plans/122-ontahi-developer-book
   - ontahi://plans/125-ontahi-reference-fields
+  - ontahi://plans/74b-schema-native-operation-refs
 migratedFrom: bookops://atlas/model/ref
 sourceCommit: 67713696
 ---
@@ -40,3 +41,14 @@ Refs are where routing, authorization, graph selection, cache invalidation, and 
 A Reference Field extends that vocabulary into materialized Entity values. Instead of degrading a
 relationship to an unrelated `bookId: string`, `field.ref(Book)` preserves that the value points to
 a Book while a storage adapter decides how to encode its locator.
+
+The same declaration is sufficient in a Domain Operation input. The implementation receives the
+Ref at its declared field path, enriched on a fresh runtime copy with non-enumerable `resolve()`,
+`invalidate()`, and `refresh()` methods. The caller's Ref and its JSON form remain only
+`kind`, `entityName`, and `locator`.
+
+`resolve()` executes the default authorized Entity Query and reuses its result inside the current
+[[ontahi.model.unit-of-work|Unit Of Work]]. `invalidate()` evicts that Ref locally; `refresh()` is
+invalidate followed by resolve. A schema node can opt into a different projection or semantic
+lookup with `graphSchema.ref(Entity).resolveWith(resolver)`. The resolver remains runtime metadata;
+reflection and transport expose the target Entity and locators, never the callback.

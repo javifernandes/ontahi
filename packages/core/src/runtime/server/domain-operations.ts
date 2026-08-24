@@ -9,6 +9,7 @@ import {
   type GraphSchemaLike,
   type GraphSelectionDefinition,
   type InferGraphSchemaValue,
+  type InferEntityRecord,
 } from '../../data-graph/definitions.js';
 import {
   attachOperationInputSchema,
@@ -26,11 +27,11 @@ import {
 import type { GraphOutputDescriptor } from '../../data-graph/output/index.js';
 import type { GraphReadSpec } from '../../data-graph/query.js';
 import {
-  attachEntityRefInputRefs,
-  normalizeEntityRefInput,
-  type EntityRefInputDeclarations,
-  type EntityRefInputPublicInput,
-  type EntityRefInputRunInput,
+  type EntityRefInputResolver,
+  type EntityRef,
+  type EntityRefLocator,
+  type SchemaEntityRef,
+  type SemanticSelectionPublicInput,
 } from '../../data-graph/ref/index.js';
 import { RelationRootSelection } from '../../data-graph/relation-root.js';
 import {
@@ -64,6 +65,7 @@ import type {
   OperationFailure,
 } from './operation/types.js';
 import type { ServerRuntimeValueRef } from './operation/value-ref.js';
+import { hydrateSchemaNativeOperationRefs } from './operation-ref.js';
 import { toOperationInvocationResult, type OperationInvocationResult } from './operation-result.js';
 import { unitOfWorkEntityRefInputResolutionScope } from './ref-resolution.js';
 import { bindRequirements } from './requirements.js';
@@ -95,6 +97,84 @@ const operationInputDataGraph = createRuntimeBoundDataGraphApi<
   >(),
 );
 
+type DefaultOperationRefResolution<TEntity extends AnyEntityDefinition> = Effect.Effect<
+  InferEntityRecord<TEntity['fields']> | null,
+  OperationRuntimeError
+>;
+
+const defaultOperationRefResolvers = new WeakMap<
+  AnyEntityDefinition,
+  EntityRefInputResolver<string, unknown>
+>();
+
+const getDefaultOperationRefResolver = <TEntity extends AnyEntityDefinition>(
+  entityDefinition: TEntity,
+): EntityRefInputResolver<TEntity['name'], DefaultOperationRefResolution<TEntity>> => {
+  const existing = defaultOperationRefResolvers.get(entityDefinition);
+  if (existing) {
+    return existing as EntityRefInputResolver<
+      TEntity['name'],
+      DefaultOperationRefResolution<TEntity>
+    >;
+  }
+
+  const resolver = ((ref: { locator: Record<string, unknown> }) => {
+    const locatorEntries = Object.entries(ref.locator);
+    const unsupportedFields = locatorEntries
+      .map(([fieldName]) => fieldName)
+      .filter(fieldName => !(fieldName in entityDefinition.fields));
+
+    if (locatorEntries.length === 0) {
+      return Effect.die(
+        new Error(
+          `Default ref resolver for ${entityDefinition.name} cannot resolve an empty locator. Pass a locator declared on ${entityDefinition.name} or use resolveWith(...) for custom references.`,
+        ),
+      ) as DefaultOperationRefResolution<TEntity>;
+    }
+
+    if (unsupportedFields.length > 0) {
+      return Effect.die(
+        new Error(
+          `Default ref resolver for ${entityDefinition.name} cannot resolve locator field${
+            unsupportedFields.length === 1 ? '' : 's'
+          } ${unsupportedFields.join(', ')} because ${
+            unsupportedFields.length === 1 ? 'it is not a field' : 'they are not fields'
+          } on ${entityDefinition.name}. Use resolveWith(...) for virtual/path locators.`,
+        ),
+      ) as DefaultOperationRefResolution<TEntity>;
+    }
+
+    const entity = operationInputDataGraph.bindSelectionEntity(entityDefinition);
+    const selection = locatorEntries.reduce(
+      (currentSelection, [fieldName, value]) =>
+        currentSelection.where(root => {
+          const fieldRef = (
+            root as unknown as Record<string, { eq: (nextValue: unknown) => never }>
+          )[fieldName];
+          return fieldRef.eq(value);
+        }),
+      entity.all(),
+    );
+
+    return selection.get() as DefaultOperationRefResolution<TEntity>;
+  }) as EntityRefInputResolver<TEntity['name'], DefaultOperationRefResolution<TEntity>>;
+
+  defaultOperationRefResolvers.set(entityDefinition, resolver);
+  return resolver;
+};
+
+const hydrateOperationInputRefs = <TInput extends object>(
+  operation: Pick<ResolvedDomainOperationDeclaration<any, any, any, any>, 'input'>,
+  input: TInput,
+  resolutionScope = unitOfWorkEntityRefInputResolutionScope,
+): TInput =>
+  hydrateSchemaNativeOperationRefs(
+    operation.input,
+    input,
+    getDefaultOperationRefResolver,
+    resolutionScope,
+  );
+
 export type DomainOperationSuccess = unknown;
 
 export type HydratedSemanticSelection<
@@ -109,20 +189,44 @@ export type HydratedSemanticSelection<
   OperationRuntimeError
 >;
 
+type SchemaNativeRefResolution<TEntity, TCustomResolution> = [TCustomResolution] extends [never]
+  ? TEntity extends AnyEntityDefinition
+    ? Effect.Effect<InferEntityRecord<TEntity['fields']> | null, OperationRuntimeError>
+    : never
+  : TCustomResolution;
+
+export type HydratedEntityRef<
+  TEntityName extends string,
+  TLocator extends EntityRefLocator,
+  TEntity,
+  TCustomResolution,
+> = EntityRef<TEntityName, TLocator> & {
+  resolve: () => SchemaNativeRefResolution<TEntity, TCustomResolution>;
+  invalidate: () => void;
+  refresh: () => SchemaNativeRefResolution<TEntity, TCustomResolution>;
+};
+
 export type HydratedOperationInput<TInput> =
-  TInput extends SemanticSelection<any, infer TEntity, infer TCardinality>
-    ? TEntity extends AnyEntityDefinition
-      ? HydratedSemanticSelection<TEntity, TCardinality>
-      : TInput
-    : TInput extends Date
-      ? TInput
-      : TInput extends (infer TItem)[]
-        ? HydratedOperationInput<TItem>[]
-        : TInput extends readonly (infer TItem)[]
-          ? readonly HydratedOperationInput<TItem>[]
-          : TInput extends object
-            ? { [TKey in keyof TInput]: HydratedOperationInput<TInput[TKey]> }
-            : TInput;
+  TInput extends SchemaEntityRef<
+    infer TEntityName,
+    infer TLocator,
+    infer TEntity,
+    infer TCustomResolution
+  >
+    ? HydratedEntityRef<TEntityName, TLocator, TEntity, TCustomResolution>
+    : TInput extends SemanticSelection<any, infer TEntity, infer TCardinality>
+      ? TEntity extends AnyEntityDefinition
+        ? HydratedSemanticSelection<TEntity, TCardinality>
+        : TInput
+      : TInput extends Date
+        ? TInput
+        : TInput extends (infer TItem)[]
+          ? HydratedOperationInput<TItem>[]
+          : TInput extends readonly (infer TItem)[]
+            ? readonly HydratedOperationInput<TItem>[]
+            : TInput extends object
+              ? { [TKey in keyof TInput]: HydratedOperationInput<TInput[TKey]> }
+              : TInput;
 
 type DomainOperationGraphRead<TResult> = TResult extends readonly (infer TItem)[]
   ? { build: () => GraphReadSpec<any, TItem> }
@@ -181,20 +285,13 @@ export type DomainOperationDeclaration<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
   TFailure extends OperationFailure = OperationFailure,
   TInfraError extends OperationRuntimeError = never,
-  TInputRefs extends EntityRefInputDeclarations = {},
 > = ServerDomainOperationMetadata<TInput, TResult> & {
   input?: InputSchemaLike<TInput>;
   output?: OutputSchemaLike<TResult>;
   graphOutput?: GraphOutputDescriptor;
-  inputRefs?: TInputRefs;
   graphOps?: DomainOperationGraphOpsMetadata;
   layer?: string;
-  run: DomainOperationRun<
-    EntityRefInputRunInput<HydratedOperationInput<NoInfer<TInput>>, TInputRefs>,
-    TResult,
-    TFailure,
-    TInfraError
-  >;
+  run: DomainOperationRun<HydratedOperationInput<NoInfer<TInput>>, TResult, TFailure, TInfraError>;
   defectLogMessage?: string;
   defectPublicMessage?: string;
   extra?: (input: TInput) => Record<string, unknown>;
@@ -215,7 +312,7 @@ export type DomainOperationDeclaration<
 
 export type DomainOperationDeclarations = Record<
   string,
-  DomainOperationDeclaration<any, any, any, any, any>
+  DomainOperationDeclaration<any, any, any, any>
 >;
 
 export type InferOperationSchemaValue<TSchema extends GraphSchemaDefinition> =
@@ -226,8 +323,7 @@ export type ResolvedDomainOperationDeclaration<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
   TFailure extends OperationFailure = OperationFailure,
   TInfraError extends OperationRuntimeError = never,
-  TInputRefs extends EntityRefInputDeclarations = {},
-> = Omit<DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>, 'run'> & {
+> = Omit<DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>, 'run'> & {
   id: string;
   entityName: string;
   name: string;
@@ -243,12 +339,8 @@ type DefinedDomainOperation<
   TResult extends DomainOperationSuccess,
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
-  TInputRefs extends EntityRefInputDeclarations,
   TOutput extends OutputSchemaLike<any> | undefined,
-> = Omit<
-  DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-  'output'
-> & {
+> = Omit<DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>, 'output'> & {
   authority: 'server';
   input: OperationInputSchema<InputSchemaLike<TInput>, TInput>;
 } & (TOutput extends OutputSchemaLike<any> ? { output: TOutput } : { output?: undefined });
@@ -259,17 +351,16 @@ type DefineDomainOperation = {
     TResult extends DomainOperationSuccess,
     TFailure extends OperationFailure = OperationFailure,
     TInfraError extends OperationRuntimeError = never,
-    TInputRefs extends EntityRefInputDeclarations = {},
     TOutput extends OutputSchemaLike<any> | undefined = undefined,
   >(
     operation: Omit<
-      DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
+      DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
       'kind' | 'durable' | 'output'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
       output?: TOutput;
     },
-  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs, TOutput> & {
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
     durable: DurableOperationDeclarationMetadata<TInput, TResult>;
   };
   <
@@ -277,18 +368,17 @@ type DefineDomainOperation = {
     TResult extends DomainOperationSuccess,
     TFailure extends OperationFailure = OperationFailure,
     TInfraError extends OperationRuntimeError = never,
-    TInputRefs extends EntityRefInputDeclarations = {},
     TOutput extends OutputSchemaLike<any> | undefined = undefined,
   >(
     operation: Omit<
-      DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
+      DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
       'kind' | 'output'
     > & { output?: TOutput },
-  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TInputRefs, TOutput>;
+  ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput>;
 };
 
 const defineDomainOperationImplementation = (
-  operation: Omit<DomainOperationDeclaration<any, any, any, any, any>, 'kind'>,
+  operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind'>,
 ) => ({
   kind: 'domain-operation',
   authority: 'server',
@@ -330,23 +420,17 @@ type DomainOperationRunner<
   TInput extends OperationInput = OperationInput,
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
   TFailure extends OperationFailure = OperationFailure,
-  TInputRefs extends EntityRefInputDeclarations = {},
-> = (
-  input: EntityRefInputPublicInput<TInput, TInputRefs>,
-) => Promise<OperationResult<TResult, TFailure>>;
+> = (input: SemanticSelectionPublicInput<TInput>) => Promise<OperationResult<TResult, TFailure>>;
 
-const operationRunnerCache = new WeakMap<object, DomainOperationRunner<any, any, any, any>>();
+const operationRunnerCache = new WeakMap<object, DomainOperationRunner<any, any, any>>();
 
 const normalizeDomainOperationInput = (
   operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
-  input: EntityRefInputPublicInput<any, any>,
+  input: SemanticSelectionPublicInput<any>,
 ) =>
-  normalizeEntityRefInput(
-    normalizeGraphSchemaClientInput(operation.input, input, {
-      bindSelection: selection => operationInputDataGraph.bindSelection(selection),
-    }) as object,
-    operation.inputRefs,
-  );
+  normalizeGraphSchemaClientInput(operation.input, input, {
+    bindSelection: selection => operationInputDataGraph.bindSelection(selection),
+  }) as object;
 
 export const inspectProjectedDomainOperationQuery = (
   operation: ResolvedDomainOperationDeclaration<any, any, any, any>,
@@ -354,7 +438,7 @@ export const inspectProjectedDomainOperationQuery = (
   view: RecursiveEntityViewDefinition<any, any, any>,
 ): GraphReadSpec<any, any> => {
   const normalizedInput = normalizeDomainOperationInput(operation, input);
-  const result = operation.run(attachEntityRefInputRefs(normalizedInput, operation.inputRefs));
+  const result = operation.run(hydrateOperationInputRefs(operation, normalizedInput, undefined));
   const read =
     result instanceof Selection
       ? operationInputDataGraph.bindSelection(result)
@@ -416,39 +500,29 @@ const resolveDomainOperationRunner = <
   TResult extends DomainOperationSuccess,
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
-  TInputRefs extends EntityRefInputDeclarations,
 >(
-  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
+  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
   projection?: {
     view: RecursiveEntityViewDefinition<any, any, any>;
     cardinality: 'one' | 'many';
   },
-): DomainOperationRunner<TInput, TResult, TFailure, TInputRefs> => {
+): DomainOperationRunner<TInput, TResult, TFailure> => {
   const cached = projection ? undefined : operationRunnerCache.get(operation);
 
   if (cached) {
-    return cached as DomainOperationRunner<TInput, TResult, TFailure, TInputRefs>;
+    return cached as DomainOperationRunner<TInput, TResult, TFailure>;
   }
 
   const normalizeOperationInput = (
-    input: EntityRefInputPublicInput<TInput, TInputRefs>,
-  ): EntityRefInputPublicInput<TInput, TInputRefs> =>
-    normalizeDomainOperationInput(operation, input) as EntityRefInputPublicInput<
-      TInput,
-      TInputRefs
-    >;
+    input: SemanticSelectionPublicInput<TInput>,
+  ): SemanticSelectionPublicInput<TInput> =>
+    normalizeDomainOperationInput(operation, input) as SemanticSelectionPublicInput<TInput>;
 
   const runOperation = (
-    input: EntityRefInputPublicInput<TInput, TInputRefs>,
+    input: SemanticSelectionPublicInput<TInput>,
   ): Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError> =>
     executeDomainOperationRunResult(
-      operation.run(
-        attachEntityRefInputRefs(
-          input,
-          operation.inputRefs,
-          unitOfWorkEntityRefInputResolutionScope,
-        ) as never,
-      ),
+      operation.run(hydrateOperationInputRefs(operation, input as object) as never),
       projection ??
         (operation.output?.kind === 'schema.selection'
           ? { cardinality: (operation.output as GraphSelectionDefinition).cardinality }
@@ -469,13 +543,12 @@ const resolveDomainOperationRunner = <
     contracts: operation.contracts,
     cache: operation.cache,
     effects: operation.effects,
-  } as never) as DomainOperationRunner<TInput, TResult, TFailure, TInputRefs>;
-  const runner = ((input: EntityRefInputPublicInput<TInput, TInputRefs>) =>
+  } as never) as DomainOperationRunner<TInput, TResult, TFailure>;
+  const runner = ((input: SemanticSelectionPublicInput<TInput>) =>
     normalizedRunner(normalizeOperationInput(input) as never)) as DomainOperationRunner<
     TInput,
     TResult,
-    TFailure,
-    TInputRefs
+    TFailure
   >;
 
   if (!projection) operationRunnerCache.set(operation, runner);
@@ -487,10 +560,9 @@ export const runServerDomainOperationRaw = <
   TResult extends DomainOperationSuccess,
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
-  TInputRefs extends EntityRefInputDeclarations,
 >(
-  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-  input: EntityRefInputPublicInput<TInput, TInputRefs>,
+  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
+  input: SemanticSelectionPublicInput<TInput>,
 ) => resolveDomainOperationRunner(operation)(input);
 
 const isDurableOperation = (operation: ResolvedDomainOperationDeclaration<any, any, any, any>) =>
@@ -501,10 +573,9 @@ const runDomainOperationSuccessHook = async <
   TResult extends DomainOperationSuccess,
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
-  TInputRefs extends EntityRefInputDeclarations,
 >(
-  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-  input: EntityRefInputPublicInput<TInput, TInputRefs>,
+  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
+  input: SemanticSelectionPublicInput<TInput>,
   result: OperationResult<unknown, OperationFailure>,
 ) => {
   if (!result.success) {
@@ -529,14 +600,13 @@ export const invokeServerDomainOperation = async <
   TResult extends DomainOperationSuccess,
   TFailure extends OperationFailure,
   TInfraError extends OperationRuntimeError,
-  TInputRefs extends EntityRefInputDeclarations,
 >(
-  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError, TInputRefs>,
-  input: EntityRefInputPublicInput<TInput, TInputRefs>,
+  operation: ResolvedDomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
+  input: SemanticSelectionPublicInput<TInput>,
 ): Promise<OperationInvocationResult<TResult, TFailure>> => {
   const result = await runServerDomainOperationRaw(operation, input);
 
-  await runDomainOperationSuccessHook<TInput, TResult, TFailure, TInfraError, TInputRefs>(
+  await runDomainOperationSuccessHook<TInput, TResult, TFailure, TInfraError>(
     operation,
     input,
     result,
@@ -569,7 +639,7 @@ export const createTaskDefinitionFromDurableDomainOperation = <
     ),
     run: ((input, context) =>
       executeDomainOperationRunResult(
-        operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never, context),
+        operation.run(hydrateOperationInputRefs(operation, input) as never, context),
       )) as TaskDefinition<TInput, TResult>['run'],
   };
 };
@@ -675,8 +745,8 @@ export const runConfiguredServerDomainOperationRaw = <
           TInfraError
         >,
         startDurableOperation,
-      )(input as EntityRefInputPublicInput<TInput, {}>)
-    : resolveDomainOperationRunner(operation)(input as EntityRefInputPublicInput<TInput, {}>);
+      )(input as SemanticSelectionPublicInput<TInput>)
+    : resolveDomainOperationRunner(operation)(input as SemanticSelectionPublicInput<TInput>);
 
 export const invokeConfiguredServerDomainOperation = async <
   TInput extends OperationInput,
@@ -694,9 +764,9 @@ export const invokeConfiguredServerDomainOperation = async <
     startDurableOperation,
   );
 
-  await runDomainOperationSuccessHook<TInput, TResult, TFailure, TInfraError, {}>(
+  await runDomainOperationSuccessHook<TInput, TResult, TFailure, TInfraError>(
     operation,
-    input as EntityRefInputPublicInput<TInput, {}>,
+    input as SemanticSelectionPublicInput<TInput>,
     result,
   );
 

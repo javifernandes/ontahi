@@ -121,7 +121,7 @@ export const TodoItem = entity({
     entities: () => ({ TodoList }),
   },
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation, ingress, entities, app }) => {
+  operations: ({ self, commands, operation, ingress, app }) => {
     const runCompleteAll = createRunCompleteAll(() =>
       commands
         .where(todo => todo.completed.eq(false))
@@ -140,11 +140,9 @@ export const TodoItem = entity({
         bridge: { invalidate: [['TodoItem']] },
         run: ({ id, list, title }) =>
           Effect.gen(function* () {
-            const lists = yield* entities.TodoList.where(list)
-              .select(list => ({ id: list.id }))
-              .run();
+            const existingList = yield* list.resolve();
 
-            if (lists.length === 0) {
+            if (!existingList) {
               return yield* failOperation('todo_list_not_found', 'Todo list does not exist.', {
                 list,
               });

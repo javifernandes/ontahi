@@ -1,7 +1,6 @@
 import {
   createEntityRef,
   defineClientDomainOperation,
-  defineEntityRefInput,
   entity,
   field,
   graphSchema,
@@ -69,9 +68,6 @@ describe('operation bridge query keys', () => {
       ...defineClientDomainOperation({
         authority: 'server',
         exposure: 'bridge',
-        inputRefs: {
-          book: defineEntityRefInput(Book),
-        },
         bridge: {
           query: [({ cursor: _cursor, ...rest }: Record<string, unknown>) => rest],
         },
@@ -87,22 +83,18 @@ describe('operation bridge query keys', () => {
       },
     );
 
+    const book = createEntityRef(Book, { slug: 'progbook' });
+
     expect(
       getActionQueryKey(action, {
-        book: createEntityRef(Book, {
-          slug: 'progbook',
-        }),
+        book,
         cursor: 'next-page',
         stateFilter: 'all',
       }),
-    ).toEqual([
-      'CommentThread',
-      'listThreadsForBook',
-      { bookSlug: 'progbook', stateFilter: 'all' },
-    ]);
+    ).toEqual(['CommentThread', 'listThreadsForBook', { book, stateFilter: 'all' }]);
   });
 
-  it('resolves semantic ref query key segments from direct refs and legacy fields', () => {
+  it('resolves semantic ref query key segments from direct refs', () => {
     const Book = entity('Book', {
       id: field.id(),
       slug: field.string(),
@@ -117,9 +109,6 @@ describe('operation bridge query keys', () => {
       ...defineClientDomainOperation({
         authority: 'server',
         exposure: 'bridge',
-        inputRefs: {
-          book: defineEntityRefInput(Book),
-        },
         bridge: {
           query: [queryRef('book')],
         },
@@ -141,13 +130,7 @@ describe('operation bridge query keys', () => {
           slug: 'progbook',
         }),
       }),
-    ).toEqual(['Book', 'fetchBookInfo', 'progbook']);
-
-    expect(
-      getActionQueryKey(action, {
-        bookSlug: 'progbook',
-      }),
-    ).toEqual(['Book', 'fetchBookInfo', 'progbook']);
+    ).toEqual(['Book', 'fetchBookInfo', 'Book:{"slug":"progbook"}']);
   });
 
   it('normalizes direct entity refs before resolving affected query keys', () => {
@@ -163,11 +146,13 @@ describe('operation bridge query keys', () => {
       ...defineClientDomainOperation({
         authority: 'server',
         exposure: 'bridge',
-        inputRefs: {
-          thread: defineEntityRefInput(Thread),
-        },
         bridge: {
-          invalidate: [['CommentThread', (input: { threadId: string }) => input.threadId]],
+          invalidate: [
+            [
+              'CommentThread',
+              (input: { thread: { locator: { id: string } } }) => input.thread.locator.id,
+            ],
+          ],
         },
       }),
     };

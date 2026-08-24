@@ -42,7 +42,6 @@ const listOperation = {
   authority: 'server' as const,
   exposure: 'bridge' as const,
   input: value('ListTodosInput', {}),
-  inputRefs: undefined,
   layer: 'todos',
   run: vi.fn(),
 };

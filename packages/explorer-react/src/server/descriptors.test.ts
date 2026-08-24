@@ -1,10 +1,14 @@
-import { entity, field, value } from '@ontahi/core/data-graph';
+import { entity, field, graphSchema, value } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from './index.js';
 
 describe('explorer descriptor builder', () => {
   it('builds reflected entity, operation, task, ingress, and event descriptors', () => {
+    const OperationBook = entity('Book', {
+      id: field.id(),
+      slug: field.string(),
+    }).locators({ refBySlug: 'slug' });
     const snapshot = buildExplorerSnapshot({
       entities: [
         {
@@ -64,18 +68,7 @@ describe('explorer descriptor builder', () => {
           name: 'publish',
           authority: 'domain',
           exposure: 'bridge',
-          inputRefs: {
-            book: {
-              kind: 'entity-ref-input',
-              entityName: 'Book',
-              inferredLocators: [
-                {
-                  name: 'refBySlug',
-                  sourceFields: ['slug'],
-                },
-              ],
-            },
-          },
+          input: graphSchema.object({ book: graphSchema.ref(OperationBook) }),
           durable: {
             taskId: 'book.publish',
             runtime: 'test-runtime',
@@ -179,8 +172,13 @@ describe('explorer descriptor builder', () => {
             optional: false,
             locators: [
               {
+                name: 'refById',
+                fields: ['book'],
+                sourceFields: ['id'],
+              },
+              {
                 name: 'refBySlug',
-                fields: ['bookSlug', 'slug', 'book.slug'],
+                fields: ['book'],
                 sourceFields: ['slug'],
               },
             ],
@@ -206,6 +204,41 @@ describe('explorer descriptor builder', () => {
         resultSchema: expect.objectContaining({ summary: 'object with 1 field' }),
       }),
     );
+  });
+
+  it('derives optional Ref controls from the Operation input schema', () => {
+    const Book = entity('Book', { id: field.id() });
+    const snapshot = buildExplorerSnapshot({
+      entities: [Book],
+      domainOperations: [
+        {
+          id: 'Book.inspect',
+          entityName: 'Book',
+          name: 'inspect',
+          authority: 'server',
+          exposure: 'bridge',
+          input: graphSchema.object({
+            book: graphSchema.optional(field.ref(Book)),
+          }),
+        },
+      ],
+    });
+
+    expect(snapshot.operations[0]?.inputRefs).toEqual([
+      {
+        path: 'book',
+        entityName: 'Book',
+        receiver: false,
+        optional: true,
+        locators: [
+          {
+            name: 'refById',
+            fields: ['book'],
+            sourceFields: ['id'],
+          },
+        ],
+      },
+    ]);
   });
 
   it('builds entity details with relation diagrams', () => {

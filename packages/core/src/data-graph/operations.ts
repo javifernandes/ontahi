@@ -13,11 +13,9 @@ import {
   bindEntityRefOperationProxy,
   bindEntityRefRelationOperations,
   createEntityRef,
-  deriveEntityRefInputRefs,
   isEntityRef,
   type AnyEntityRef,
   type BoundEntityRefLocators,
-  type EntityRefInputDeclarations,
   readEntityRefQueryInputValue,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
@@ -55,9 +53,7 @@ export type DurableOperationIdempotencyPolicy =
 
 export type QueryKeySegmentContext<TInput> = {
   input: TInput;
-  operation: {
-    inputRefs?: EntityRefInputDeclarations;
-  };
+  operation: object;
 };
 
 export type QueryKeySegment<TInput> =
@@ -66,12 +62,8 @@ export type QueryKeySegment<TInput> =
 
 export const queryRef =
   <TInput = Record<string, unknown>>(inputRefName: string): QueryKeySegment<TInput> =>
-  (input: TInput, context: QueryKeySegmentContext<TInput>) =>
-    readEntityRefQueryInputValue(
-      input,
-      inputRefName,
-      context.operation.inputRefs?.[inputRefName],
-    ) ?? null;
+  (input: TInput) =>
+    readEntityRefQueryInputValue(input, inputRefName) ?? null;
 
 export type DomainOperationBridgeMetadata<TInput> = {
   query?: readonly QueryKeySegment<TInput>[];
@@ -82,7 +74,7 @@ export type DomainOperationClientCacheInvalidationContext<TInput, TResult> = {
   input: TInput;
   value: TResult;
   operation: {
-    inputRefs?: EntityRefInputDeclarations;
+    readonly [key: string]: unknown;
   };
 };
 
@@ -93,7 +85,7 @@ export type DomainOperationClientCacheInvalidation<TInput = unknown, TResult = u
 export type ClientCacheKeySegmentContext<TInput> = {
   input: TInput;
   operation: {
-    inputRefs?: EntityRefInputDeclarations;
+    readonly [key: string]: unknown;
   };
   resolveRef?: (ref: AnyEntityRef) => AnyEntityRef;
 };
@@ -110,16 +102,6 @@ export const cacheRef =
     }
 
     const inputRecord = input as Record<string, unknown>;
-    const refs = deriveEntityRefInputRefs(input, context.operation.inputRefs) as Record<
-      string,
-      AnyEntityRef
-    >;
-    const ref = refs[inputRefName];
-
-    if (ref) {
-      return context.resolveRef?.(ref) ?? ref;
-    }
-
     const directRef = inputRecord[inputRefName];
 
     if (isEntityRef(directRef)) {
@@ -243,7 +225,6 @@ export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult 
   bridge?: DomainOperationBridgeMetadata<TInput>;
   clientCache?: DomainOperationClientCacheMetadata<TInput, TResult>;
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
-  inputRefs?: EntityRefInputDeclarations;
   graphOps?: DomainOperationGraphOpsMetadata;
   cache?: TCache;
   durable?: DurableOperationMetadata<TInput, TResult>;
@@ -505,7 +486,6 @@ type ResolvedDomainOperationLike = {
   bridge?: DomainOperationBridgeMetadata<any>;
   clientCache?: DomainOperationClientCacheMetadata<any, any>;
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<any>>;
-  inputRefs?: EntityRefInputDeclarations;
   graphOps?: DomainOperationGraphOpsMetadata;
   durable?: DurableOperationMetadata<any, any>;
 };

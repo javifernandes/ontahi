@@ -1,19 +1,12 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  createEntityRef,
-  defineEntityRefInput,
-  entity,
-  field,
-  graphSchema,
-} from '../../data-graph/index.js';
+import { createEntityRef, entity, field, graphSchema } from '../../data-graph/index.js';
 
 import {
   defineDomainOperation,
   defineDomainOperationsForEntity,
   getCurrentInvocationContext,
-  getRequiredUnitOfWork,
   runServerDomainOperationRaw,
   withInvocationContext,
 } from './index.js';
@@ -26,15 +19,13 @@ describe('server Domain Operation Ref resolution', () => {
     });
     let queryCount = 0;
     const load = vi.fn(ref => Effect.sync(() => ({ ref, sequence: (queryCount += 1) })));
-    const bookInput = defineEntityRefInput(Book).resolveWith(load);
-    const input = graphSchema.object({ book: field.ref(Book) });
+    const input = graphSchema.object({ book: graphSchema.ref(Book).resolveWith(load) });
     const inner = defineDomainOperationsForEntity(
       Book,
       {
         resolve: defineDomainOperation({
           input,
-          inputRefs: { book: bookInput },
-          run: ({ refs }) => refs.book.resolve(),
+          run: ({ book }) => book.resolve(),
         }),
       },
       { exposure: 'server-only', layer: 'tests.unit-of-work.ref-resolution' },
@@ -44,17 +35,17 @@ describe('server Domain Operation Ref resolution', () => {
       {
         resolveNested: defineDomainOperation({
           input,
-          inputRefs: { book: bookInput },
-          run: ({ refs }) =>
+          run: ({ book }) =>
             Effect.gen(function* () {
-              const first = yield* refs.book.resolve();
+              const first = yield* book.resolve();
               const nested = yield* Effect.promise(() =>
-                runServerDomainOperationRaw(inner, { book: refs.book }),
+                runServerDomainOperationRaw(inner, { book }),
               );
               if (!nested.success) return yield* Effect.die(new Error(nested.error));
-              getRequiredUnitOfWork().refs.invalidate(refs.book);
-              const afterInvalidation = yield* refs.book.resolve();
-              return { afterInvalidation, first, nested: nested.data };
+              book.invalidate();
+              const afterInvalidation = yield* book.resolve();
+              const refreshed = yield* book.refresh();
+              return { afterInvalidation, first, nested: nested.data, refreshed };
             }),
         }),
       },
@@ -71,18 +62,20 @@ describe('server Domain Operation Ref resolution', () => {
         first: { ref: book, sequence: 1 },
         nested: { ref: book, sequence: 1 },
         afterInvalidation: { ref: book, sequence: 2 },
+        refreshed: { ref: book, sequence: 3 },
       },
     });
     expect(secondRun).toEqual({
       success: true,
       data: {
-        first: { ref: book, sequence: 3 },
-        nested: { ref: book, sequence: 3 },
-        afterInvalidation: { ref: book, sequence: 4 },
+        first: { ref: book, sequence: 4 },
+        nested: { ref: book, sequence: 4 },
+        afterInvalidation: { ref: book, sequence: 5 },
+        refreshed: { ref: book, sequence: 6 },
       },
     });
-    expect(load).toHaveBeenCalledTimes(4);
-    expect(queryCount).toBe(4);
+    expect(load).toHaveBeenCalledTimes(6);
+    expect(queryCount).toBe(6);
   });
 
   it('keeps resolver projections isolated for the same Ref', async () => {
@@ -97,17 +90,13 @@ describe('server Domain Operation Ref resolution', () => {
       {
         inspect: defineDomainOperation({
           input: graphSchema.object({
-            detailBook: field.ref(Book),
-            summaryBook: field.ref(Book),
+            detailBook: graphSchema.ref(Book).resolveWith(loadDetails),
+            summaryBook: graphSchema.ref(Book).resolveWith(loadSummary),
           }),
-          inputRefs: {
-            detailBook: defineEntityRefInput(Book).resolveWith(loadDetails),
-            summaryBook: defineEntityRefInput(Book).resolveWith(loadSummary),
-          },
-          run: ({ refs }) =>
+          run: ({ detailBook, summaryBook }) =>
             Effect.all({
-              details: refs.detailBook.resolve(),
-              summary: refs.summaryBook.resolve(),
+              details: detailBook.resolve(),
+              summary: summaryBook.resolve(),
             }),
         }),
       },
@@ -141,15 +130,13 @@ describe('server Domain Operation Ref resolution', () => {
         subject: getCurrentInvocationContext()?.principal?.subject ?? 'anonymous',
       })),
     );
-    const input = graphSchema.object({ book: field.ref(Book) });
-    const bookInput = defineEntityRefInput(Book).resolveWith(load);
+    const input = graphSchema.object({ book: graphSchema.ref(Book).resolveWith(load) });
     const inner = defineDomainOperationsForEntity(
       Book,
       {
         inspect: defineDomainOperation({
           input,
-          inputRefs: { book: bookInput },
-          run: ({ refs }) => refs.book.resolve(),
+          run: ({ book }) => book.resolve(),
         }),
       },
       { exposure: 'server-only', layer: 'tests.unit-of-work.ref-authority' },
@@ -159,17 +146,16 @@ describe('server Domain Operation Ref resolution', () => {
       {
         inspect: defineDomainOperation({
           input,
-          inputRefs: { book: bookInput },
-          run: ({ refs }) =>
+          run: ({ book }) =>
             Effect.gen(function* () {
-              const first = yield* refs.book.resolve();
+              const first = yield* book.resolve();
               const nested = yield* Effect.promise(() =>
                 withInvocationContext({ principal: { kind: 'user', subject: 'reader-2' } }, () =>
-                  runServerDomainOperationRaw(inner, { book: refs.book }),
+                  runServerDomainOperationRaw(inner, { book }),
                 ),
               );
               if (!nested.success) return yield* Effect.die(new Error(nested.error));
-              const restored = yield* refs.book.resolve();
+              const restored = yield* book.resolve();
               return { first, nested: nested.data, restored };
             }),
         }),
@@ -192,5 +178,67 @@ describe('server Domain Operation Ref resolution', () => {
       },
     });
     expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps runtime Ref methods off the caller value and its portable serialization', async () => {
+    const Book = entity('UnitOfWorkPortableBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: graphSchema.object({
+            book: graphSchema.ref(Book).resolveWith(ref => Effect.succeed({ ref })),
+          }),
+          run: ({ book }) =>
+            Effect.succeed({
+              enumerableKeys: Object.keys(book),
+              json: JSON.stringify(book),
+              methods: [typeof book.resolve, typeof book.invalidate, typeof book.refresh],
+            }),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.unit-of-work.ref-portability' },
+    ).inspect;
+    const book = createEntityRef(Book, { id: 'book-1' });
+
+    const result = await runServerDomainOperationRaw(inspect, { book });
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        enumerableKeys: ['kind', 'entityName', 'locator'],
+        json: JSON.stringify(book),
+        methods: ['function', 'function', 'function'],
+      },
+    });
+    expect(book).not.toHaveProperty('resolve');
+    expect(book).not.toHaveProperty('invalidate');
+    expect(book).not.toHaveProperty('refresh');
+  });
+
+  it('preserves optional and nullable schema-native Refs', async () => {
+    const Book = entity('UnitOfWorkOptionalBook', {
+      id: field.id(),
+    });
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: graphSchema.object({
+            nullableBook: graphSchema.nullable(graphSchema.ref(Book)),
+            optionalBook: graphSchema.optional(graphSchema.ref(Book)),
+          }),
+          run: input => Effect.succeed(input),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.unit-of-work.optional-refs' },
+    ).inspect;
+
+    const result = await runServerDomainOperationRaw(inspect, { nullableBook: null });
+
+    expect(result).toEqual({ success: true, data: { nullableBook: null } });
   });
 });

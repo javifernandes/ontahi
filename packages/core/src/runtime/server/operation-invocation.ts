@@ -1,5 +1,4 @@
 import type { GraphSelectionDefinition } from '../../data-graph/definitions.js';
-import { normalizeEntityRefInput } from '../../data-graph/ref/index.js';
 import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
 import { createRecursiveEntityViewFromAst } from '../../data-graph/view.js';
 import {
@@ -50,11 +49,7 @@ const normalizeOperationInput = (
   input: unknown,
 ): unknown => {
   const operationInput = input === undefined ? {} : input;
-  return typeof operationInput === 'object' &&
-    operationInput !== null &&
-    !Array.isArray(operationInput)
-    ? normalizeEntityRefInput(operationInput, operation.inputRefs)
-    : operationInput;
+  return operationInput;
 };
 
 const unknownOperationResponse = (
