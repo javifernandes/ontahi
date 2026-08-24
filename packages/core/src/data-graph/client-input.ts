@@ -3,6 +3,7 @@ import type {
   GraphSchemaFields,
   GraphSchemaLike,
   InferGraphSchemaValue,
+  ReferenceFieldDefinition,
 } from './definitions.js';
 import {
   createEntityIdentityRef,
@@ -46,28 +47,35 @@ export type GraphSelectionClientInput<
       ? EntitySelectionInputItem<TEntity>
       : readonly EntitySelectionInputItem<TEntity>[]);
 
-export type InferGraphSchemaClientInput<TSchema extends GraphSchemaLike> = TSchema extends {
-  kind: 'schema.selection';
-  entity: infer TEntity extends AnyEntityDefinition;
-  cardinality: infer TCardinality extends 'one' | 'many';
-}
-  ? GraphSelectionClientInput<TEntity, TCardinality>
-  : TSchema extends { kind: 'value' | 'schema.object'; fields: infer TFields }
-    ? TFields extends GraphSchemaFields
-      ? ClientInputFields<TFields>
-      : never
-    : TSchema extends { kind: 'schema.array'; item: infer TItem extends GraphSchemaLike }
-      ? InferGraphSchemaClientInput<TItem>[]
-      : TSchema extends { kind: 'schema.optional'; item: infer TItem extends GraphSchemaLike }
-        ? InferGraphSchemaClientInput<TItem> | undefined
-        : TSchema extends { kind: 'schema.nullable'; item: infer TItem extends GraphSchemaLike }
-          ? InferGraphSchemaClientInput<TItem> | null
-          : TSchema extends {
-                kind: 'schema.named' | 'schema.default' | 'schema.transform' | 'schema.refinement';
-                item: infer TItem extends GraphSchemaLike;
-              }
-            ? InferGraphSchemaClientInput<TItem>
-            : InferGraphSchemaValue<TSchema>;
+export type InferGraphSchemaClientInput<TSchema extends GraphSchemaLike> =
+  TSchema extends ReferenceFieldDefinition<infer TEntity>
+    ? EntityRef<TEntity['name']>
+    : TSchema extends {
+          kind: 'schema.selection';
+          entity: infer TEntity extends AnyEntityDefinition;
+          cardinality: infer TCardinality extends 'one' | 'many';
+        }
+      ? GraphSelectionClientInput<TEntity, TCardinality>
+      : TSchema extends { kind: 'value' | 'schema.object'; fields: infer TFields }
+        ? TFields extends GraphSchemaFields
+          ? ClientInputFields<TFields>
+          : never
+        : TSchema extends { kind: 'schema.array'; item: infer TItem extends GraphSchemaLike }
+          ? InferGraphSchemaClientInput<TItem>[]
+          : TSchema extends { kind: 'schema.optional'; item: infer TItem extends GraphSchemaLike }
+            ? InferGraphSchemaClientInput<TItem> | undefined
+            : TSchema extends { kind: 'schema.nullable'; item: infer TItem extends GraphSchemaLike }
+              ? InferGraphSchemaClientInput<TItem> | null
+              : TSchema extends {
+                    kind:
+                      | 'schema.named'
+                      | 'schema.default'
+                      | 'schema.transform'
+                      | 'schema.refinement';
+                    item: infer TItem extends GraphSchemaLike;
+                  }
+                ? InferGraphSchemaClientInput<TItem>
+                : InferGraphSchemaValue<TSchema>;
 
 const selectionInputItemToRef = (
   entity: AnyEntityDefinition,

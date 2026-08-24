@@ -41,4 +41,7 @@ export const unitOfWorkEntityRefInputResolutionScope: EntityRefInputResolutionSc
       load: () => memoizeEffectResolution(resolver(ref)),
     });
   },
+  invalidate: ref => {
+    getCurrentUnitOfWork()?.refs.invalidate(ref);
+  },
 };

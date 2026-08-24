@@ -26,6 +26,7 @@ relatedPlans:
   - ontahi://plans/116-ontahi-selection-model
   - bookops://plans/122-ontahi-developer-book
   - bookops://plans/125-ontahi-ai-operations
+  - ontahi://plans/74b-schema-native-operation-refs
 migratedFrom: bookops://atlas/model/domain-operation
 sourceCommit: 67713696
 ---
@@ -54,9 +55,8 @@ implementation type. Runtime composition validates name drift, while codegen ana
 and preserves target-specific operation contracts.
 
 Entity references are semantically part of an operation's input contract, not an independent kind
-of operation metadata. The current `input` plus `inputRefs` authoring split is transitional:
-`inputRefs` claims scalar locator fields from the runtime schema, normalizes public refs onto those
-wire fields, and hydrates resolvers for the operation implementation. Reflection must expose the
-semantic ref only, never both the ref and its claimed scalar backing fields. The target authoring
-surface is one input tree containing scalar, value, selection, and entity-ref nodes; Ontahi should
-derive validation, wire lowering, reflection, codegen, and hydrated `refs` from that single tree.
+of operation metadata. The input tree contains scalar, value, Selection, and Entity Ref nodes;
+validation, transport, reflection, codegen, Explorer controls, and server hydration derive from that
+single schema. A Ref remains at the declared field path across the bridge and gains explicit runtime
+methods only on the server-side copy. There is no parallel authored `inputRefs` bag or implementation
+`refs` namespace.

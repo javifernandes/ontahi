@@ -104,7 +104,6 @@ describe('operation invocation dispatcher', () => {
     authority: 'server' as const,
     exposure: 'bridge' as const,
     input: value('RenameBookInput', { title: field.nonEmptyString() }),
-    inputRefs: undefined,
     layer: 'books',
     run: vi.fn(),
   };

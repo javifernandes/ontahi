@@ -5,7 +5,6 @@ import type {
   EntityViewAst,
   QueryKeySegment,
 } from '@ontahi/core/data-graph';
-import { normalizeEntityRefQueryInput } from '@ontahi/core/data-graph';
 import {
   attachActionRuntime,
   getActionErrorMessage,
@@ -191,14 +190,12 @@ export const resolveOperationBridgeQueryKey = <TInput, TData>(
   operation: BridgedOperationLike<TInput, TData>,
   input: TInput,
 ): ActionQueryKey => {
-  const queryInput = normalizeEntityRefQueryInput(input, operation.inputRefs);
-
   return [
     operation.entityName,
     operation.name,
     ...(operation.view ? [operation.view] : []),
     ...(operation.bridge?.query?.map(segment =>
-      resolveOperationBridgeQueryKeySegment(segment, operation, queryInput),
+      resolveOperationBridgeQueryKeySegment(segment, operation, input),
     ) ?? []),
   ];
 };
@@ -207,13 +204,9 @@ export const resolveOperationBridgeInvalidationQueryKeys = <TInput, TData>(
   operation: BridgedOperationLike<TInput, TData>,
   input: TInput,
 ): ActionQueryKey[] => {
-  const queryInput = normalizeEntityRefQueryInput(input, operation.inputRefs);
-
   return (
     operation.bridge?.invalidate?.map(querySpec =>
-      querySpec.map(segment =>
-        resolveOperationBridgeQueryKeySegment(segment, operation, queryInput),
-      ),
+      querySpec.map(segment => resolveOperationBridgeQueryKeySegment(segment, operation, input)),
     ) ?? []
   );
 };

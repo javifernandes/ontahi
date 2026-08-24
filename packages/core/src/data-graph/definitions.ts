@@ -3,12 +3,14 @@ import { isJsonValue, type JsonValue } from '../value/json.js';
 import type { RelationNodeSpec } from './query.js';
 import {
   getEntityIdentityLocator,
+  graphSchemaReference,
   type AnyEntityRef,
   type EntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
   type EntityRefLocatorFactory,
   type EntityRefLocatorValue,
+  type SchemaEntityRef,
 } from './ref/index.js';
 import type { SemanticSelection } from './selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape, type EntityViewFactory } from './view.js';
@@ -164,11 +166,23 @@ type InferGraphSchemaFields<TFields extends GraphSchemaFields> = Simplify<
 
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
 
-export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> = TSchema extends {
-  __value?: infer TValue;
+type GraphSchemaReferenceResolution<TSchema> = TSchema extends {
+  readonly __graphSchemaRef?: { readonly resolution: infer TResolution };
 }
-  ? TValue
+  ? TResolution
   : never;
+
+export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> =
+  TSchema extends ReferenceFieldDefinition<infer TTarget>
+    ? SchemaEntityRef<
+        TTarget['name'],
+        EntityRefLocator,
+        TTarget,
+        GraphSchemaReferenceResolution<TSchema>
+      >
+    : TSchema extends { __value?: infer TValue }
+      ? TValue
+      : never;
 
 export type ValueDefinition<
   TName extends string = string,
@@ -1271,7 +1285,7 @@ export const graphSchema = {
   date: field.date,
   json: field.json,
   enum: field.enum,
-  ref: field.ref,
+  ref: graphSchemaReference,
 };
 
 export const mapEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) => ({

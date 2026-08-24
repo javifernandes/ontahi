@@ -1,5 +1,5 @@
 import { Effect, Stream } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
   type DataGraphExecutionRuntime,
@@ -123,12 +123,20 @@ describe('data graph architecture adapter', () => {
       domainOperations: {
         inspectRef: defineDomainOperation({
           input: graphSchema.object({ book: field.ref(BookDefinition) }),
-          inputRefs: { book: graph.refInput(BookDefinition) },
           concerns: [graph.withRuntime()],
-          run: ({ refs }) =>
-            Effect.all([refs.book.resolve(), refs.book.resolve()], {
+          run: ({ book }) => {
+            expectTypeOf(book.resolve).returns.toEqualTypeOf<
+              Effect.Effect<
+                { id: string; slug: string; title: string } | null,
+                import('./operation/types.js').OperationRuntimeError
+              >
+            >();
+            expectTypeOf(book.invalidate).returns.toEqualTypeOf<void>();
+
+            return Effect.all([book.resolve(), book.resolve()], {
               concurrency: 'unbounded',
-            }),
+            });
+          },
         }),
       },
     });

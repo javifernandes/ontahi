@@ -397,7 +397,7 @@ export const normalizeEntityRefQueryInput = <
   return normalized as TInput;
 };
 
-const bindEntityRefInputResolver = <
+export const bindEntityRefInputResolver = <
   TRef extends AnyEntityRef,
   TResolver extends EntityRefInputResolver<TRef['entityName'], unknown> | undefined,
 >(
@@ -413,27 +413,55 @@ const bindEntityRefInputResolver = <
   let hasResolved = false;
   let resolved: unknown;
 
-  Object.defineProperty(resolvedRef, 'resolve', {
-    configurable: true,
-    enumerable: false,
-    value: () => {
-      if (resolutionScope) {
-        return resolutionScope.resolve(
-          resolvedRef,
-          resolver as EntityRefInputResolver<TRef['entityName'], unknown>,
-        );
-      }
-      if (!hasResolved) {
-        resolved = resolver(resolvedRef);
-        hasResolved = true;
-      }
+  const resolve = () => {
+    if (!resolver) return resolvedRef;
+    if (resolutionScope) {
+      return resolutionScope.resolve(
+        resolvedRef,
+        resolver as EntityRefInputResolver<TRef['entityName'], unknown>,
+      );
+    }
+    if (!hasResolved) {
+      resolved = resolver(resolvedRef);
+      hasResolved = true;
+    }
 
-      return resolved;
+    return resolved;
+  };
+
+  const invalidate = () => {
+    hasResolved = false;
+    resolved = undefined;
+    resolutionScope?.invalidate(resolvedRef);
+  };
+
+  Object.defineProperties(resolvedRef, {
+    resolve: {
+      configurable: true,
+      enumerable: false,
+      value: resolve,
+    },
+    invalidate: {
+      configurable: true,
+      enumerable: false,
+      value: invalidate,
+    },
+    refresh: {
+      configurable: true,
+      enumerable: false,
+      value: () => {
+        invalidate();
+        return resolve();
+      },
     },
   });
 
   return resolvedRef as TRef & {
     resolve: () => TResolver extends EntityRefInputResolver<TRef['entityName'], infer TResult>
+      ? TResult
+      : never;
+    invalidate: () => void;
+    refresh: () => TResolver extends EntityRefInputResolver<TRef['entityName'], infer TResult>
       ? TResult
       : never;
   };
@@ -444,6 +472,7 @@ export type EntityRefInputResolutionScope = {
     ref: AnyEntityRef,
     resolver: EntityRefInputResolver<string, TResult>,
   ) => TResult;
+  invalidate: (ref: AnyEntityRef) => void;
 };
 
 export const deriveEntityRefInputRefs = <TInputRefs extends EntityRefInputDeclarations>(

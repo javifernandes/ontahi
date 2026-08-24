@@ -33,6 +33,19 @@ export type EntityRef<
   locator: TLocator;
 };
 
+export type SchemaEntityRef<
+  TEntityName extends string,
+  TLocator extends EntityRefLocator,
+  TEntity,
+  TResolution = never,
+> = EntityRef<TEntityName, TLocator> & {
+  /** @internal Type-only schema metadata; absent from portable Ref values. */
+  readonly __schemaRef: {
+    readonly entity: TEntity;
+    readonly resolution: TResolution;
+  };
+};
+
 export type AnyEntityRef = EntityRef<string, EntityRefLocator>;
 
 export const resolveEntityRefName = <TEntity extends NamedEntity | string>(

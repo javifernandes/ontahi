@@ -9,6 +9,7 @@ relatedPlans:
   - ontahi://plans/74a-unit-of-work-runtime-scope
   - ontahi://plans/139a-composable-data-graph-transactions
   - ontahi://plans/139b-transaction-scoped-unit-of-work
+  - ontahi://plans/74b-schema-native-operation-refs
 ---
 
 A UnitOfWork is the server runtime identity boundary shared by one top-level invocation/Operation
@@ -20,14 +21,16 @@ coordinate without becoming properties of an Entity, Relation, Ref, Query, or Co
 portable Ref identity, resolver identity, and execution identity (`principal` plus `cacheScope`),
 keeping distinct projections and authorization boundaries separate even when nested invocation
 contexts share runtime resources. Effect-valued resolvers are memoized at execution time, including
-in-flight work. Repeated explicit `ref.resolve()` calls in one scope therefore reuse one authorized
-Query result; separate top-level invocations do not.
+in-flight work. Repeated explicit `book.resolve()` calls on a schema-native Operation input in one
+scope therefore reuse one authorized Query result; separate top-level invocations do not.
 
 The UnitOfWork does not authorize or materialize a Ref by itself. Application Ref resolvers still
 build Queries and execute them through the active Data Graph runtime and graph-read policy. The
-store only retains their result. `refs.invalidate(ref)` evicts every representation of that Ref and
-the next explicit `resolve()` reloads it. Automatic Command-driven invalidation remains future work
-until Ontahi has declared evidence for affected Ref identities.
+store only retains their result. Ordinary Operation code uses `book.invalidate()` and
+`book.refresh()` rather than reaching through `app.runtime.unitOfWork`; the lower-level
+`refs.invalidate(ref)` capability remains the mechanism beneath those methods. Automatic
+Command-driven invalidation remains future work until Ontahi has declared evidence for affected
+Ref identities.
 
 The first implemented facade exposes the current scope's typed resource API. Repeated access over
 the same resource map returns the same UnitOfWork identity. A child UnitOfWork starts with inherited

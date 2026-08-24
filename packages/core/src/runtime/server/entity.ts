@@ -19,7 +19,7 @@ import {
   type RelationOptions,
   type EntityRefLocatorFactories,
   type EntityRefLocators,
-  type EntityRefInputPublicInput,
+  type SemanticSelectionPublicInput,
   isReferenceFieldDefinition,
   assertPortableRelationConstraints,
   type EntitySelectionFactory,
@@ -354,16 +354,10 @@ type OntahiOperationDeclaration =
   | DomainOperationDeclarations[string];
 type OntahiOperationDeclarations = Record<string, OntahiOperationDeclaration>;
 
-export type OntahiOperationGroupDeclaration = DomainOperationDeclaration<
-  any,
-  any,
-  any,
-  any,
-  any
-> & {
+export type OntahiOperationGroupDeclaration = DomainOperationDeclaration<any, any, any, any> & {
   kind: 'domain-operation';
   authority: 'server';
-  input: NonNullable<DomainOperationDeclaration<any, any, any, any, any>['input']>;
+  input: NonNullable<DomainOperationDeclaration<any, any, any, any>['input']>;
 };
 
 export type OntahiOperationGroupContext = {
@@ -419,13 +413,7 @@ type DomainOperationsFrom<TOperations extends OntahiOperationDeclarations> = {
 };
 
 type DirectDomainOperationMethod<TOperation> =
-  TOperation extends DomainOperationDeclaration<
-    infer TInput,
-    infer TResult,
-    infer TFailure,
-    any,
-    infer TInputRefs
-  >
+  TOperation extends DomainOperationDeclaration<infer TInput, infer TResult, infer TFailure, any>
     ? TOperation extends {
         output: GraphSelectionDefinition<infer TEntity, infer TCardinality>;
       }
@@ -435,7 +423,7 @@ type DirectDomainOperationMethod<TOperation> =
               ? []
               : keyof TInput extends never
                 ? []
-                : [input: EntityRefInputPublicInput<TInput, TInputRefs>]
+                : [input: SemanticSelectionPublicInput<TInput>]
           ) => ProjectableOperationCall<TEntity, NonNullable<TCardinality>, TFailure>
         : never
       : (
@@ -443,7 +431,7 @@ type DirectDomainOperationMethod<TOperation> =
             ? []
             : keyof TInput extends never
               ? []
-              : [input: EntityRefInputPublicInput<TInput, TInputRefs>]
+              : [input: SemanticSelectionPublicInput<TInput>]
         ) => Promise<
           OperationInvocationResult<
             TOperation extends { durable: object } ? TaskRunRef : TResult,
