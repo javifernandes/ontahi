@@ -125,3 +125,65 @@ Relationship Command adds `.run()` non-enumerably, so its canonical serialized s
 callbacks or authority-dependent metadata. If the active runtime does not advertise compositional
 transactions, the effect fails with `DataGraphTransactionUnavailableError` before evaluating its
 work.
+
+## Applied Relationship outcomes and Reactions
+
+An application may register declarative Reactions separately from Relation metadata. The factories
+derive the canonical relation identity from either endpoint and keep delivery policy visible:
+
+```ts
+import { reaction } from '@ontahi/core/data-graph';
+
+const application = ontahi({
+  storage,
+  entities: [Course, Student],
+  reactions: () => [
+    reaction
+      .relationship(Course, 'students')
+      .removed({ id: 'course.students.removed', delivery: 'inline' })
+      .then(outcome => [
+        reaction.intent.invoke('Course.recordRemoval', {
+          studentId: outcome.command.source.locator.id,
+        }),
+        reaction.intent.emit({
+          type: 'StudentRemovedFromCourse',
+          student: outcome.command.source,
+          course: outcome.command.target,
+        }),
+      ]),
+  ],
+});
+```
+
+The thunk form is useful when circular Entity declarations defer Relation resolution. Ontahi
+evaluates it once after resolving the application Entity registry, validates unique non-empty
+Reaction ids, and stores the canonical matchers. A static array is also accepted.
+
+Bound Relationship Command execution returns application evidence while provider runtimes keep
+their lower-level `RelationshipDelta` contract:
+
+```ts
+const result =
+  yield *
+  application.graph.entities.Course.refById('course-1')
+    .students.remove(application.graph.entities.Student.refById('student-1'))
+    .run();
+
+result.status; // 'applied'
+result.outcome.command;
+result.outcome.delta;
+result.reactions;
+```
+
+`reaction.intent.execute(...)`, `.invoke(...)`, and `.emit(...)` express follow-up Commands,
+Operation Invocations, and Events without embedding an arbitrary effect callback in Relation
+metadata. A failed follow-up is recorded in `result.reactions`; it does not rewrite the already
+applied parent as failed. `inline` and `best-effort` make immediate attempts. Durable acceptance
+still requires a dedicated runtime capability and does not imply exactly-once execution.
+
+Required coordinated changes remain explicit inside an Operation and
+`application.app.graph.transaction(...)`. When a Relationship Command runs in that transaction,
+Ontahi queues its Reactions: they are absent from the result inside the transaction callback, run
+only after the provider confirms commit, and are visible before the outer transaction Effect
+returns. Rollback discards the queue. Follow-up Commands then resolve the restored parent runtime,
+not the released transaction runtime.

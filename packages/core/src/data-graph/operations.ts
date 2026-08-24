@@ -1108,7 +1108,7 @@ type BoundEntityFor<
 export const createGraphEntityFactory =
   <TBindSelectionEntity extends BindSelectionEntity>(input: {
     bindSelectionEntity: TBindSelectionEntity;
-    relationshipCommandExecutor?: RelationshipCommandExecutor<any, any>;
+    relationshipCommandExecutor?: RelationshipCommandExecutor<any, any, any>;
   }) =>
   <
     TEntity extends AnyEntityDefinition,

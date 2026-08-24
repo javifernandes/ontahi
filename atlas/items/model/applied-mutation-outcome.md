@@ -35,3 +35,10 @@ leaving topology on Relation and invariant-preserving coordination inside Operat
 Post-application reaction failure does not mean that the parent mutation was rolled back. Durable
 acceptance, retry, and idempotency require explicit runtime capabilities and Plan 132's identity
 model.
+
+Application-bound Relationship Commands expose the outcome as
+`{ status: 'applied', outcome, reactions }` without changing provider or transport contracts that
+return a Relationship Delta. When execution belongs to an outer Data Graph transaction, `applied`
+first describes transaction-local application rather than a premature commit claim. Registered
+Reactions are interpreted only after that transaction commits; rollback publishes neither their
+effects nor their execution evidence.

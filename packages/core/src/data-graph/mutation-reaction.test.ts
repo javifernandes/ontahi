@@ -540,4 +540,43 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       }),
     ]);
   });
+
+  it('observes an already-applied many-to-many root without executing it again', async () => {
+    const graph = defineSchoolGraph();
+    const Club = entity('AppliedClub', { id: field.id() }).manyToMany('courses', graph.Course);
+    const club = createEntityRef(Club, { id: 'club-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const command = relationshipSet(Club, 'courses', club).remove(course);
+    const delta = {
+      added: [],
+      removed: [{ relation: command.relation, source: club, target: course }],
+    } satisfies RelationshipDelta;
+    const executeRelationshipCommand = vi.fn(async () => emptyDelta());
+    const executeManyToManyRelationshipCommand = vi.fn(async () => emptyDelta());
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-applied',
+      executeRelationshipCommand,
+      executeManyToManyRelationshipCommand,
+      reactions: [],
+    });
+
+    const result = await run.applied(command, delta);
+
+    expect(executeRelationshipCommand).not.toHaveBeenCalled();
+    expect(executeManyToManyRelationshipCommand).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      root: {
+        kind: 'applied-mutation-outcome',
+        mutationKind: 'relationship-command',
+        command,
+        delta,
+        causality: {
+          outcomeId: 'outcome-applied',
+          rootOutcomeId: 'outcome-applied',
+          depth: 0,
+        },
+      },
+      reactions: [],
+    });
+  });
 });

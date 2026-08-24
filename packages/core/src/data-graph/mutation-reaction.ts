@@ -134,6 +134,12 @@ export type MutationReactionResult = {
   reactions: MutationReactionExecution[];
 };
 
+export type AppliedRelationshipMutationResult = {
+  status: 'applied';
+  outcome: AppliedRelationshipMutationOutcome;
+  reactions: MutationReactionExecution[];
+};
+
 export type CreateMutationReactionRunnerOptions = {
   reactions: readonly MutationReaction[];
   executeRelationshipCommand: (command: RelationshipCommand) => Promise<RelationshipDelta>;
@@ -148,6 +154,34 @@ export type CreateMutationReactionRunnerOptions = {
   ) => Promise<DurableMutationReactionAcceptance>;
   createOutcomeId: () => string;
   maxDepth?: number;
+};
+
+export const assertMutationReactionConfiguration = (
+  reactions: readonly MutationReaction[],
+  maxDepth = 8,
+) => {
+  if (!Number.isInteger(maxDepth) || maxDepth < 0) {
+    throw new Error('Mutation Reaction maximum depth must be a non-negative integer.');
+  }
+  if (reactions.some(reaction => reaction.id.length === 0)) {
+    throw new Error('Mutation Reactions require a non-empty id.');
+  }
+  if (new Set(reactions.map(reaction => reaction.id)).size !== reactions.length) {
+    throw new Error('Mutation Reaction ids must be unique.');
+  }
+};
+
+export type MutationReactionRunner = {
+  (command: RelationshipCommand): Promise<MutationReactionResult>;
+  createAppliedOutcome: (
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    delta: RelationshipDelta,
+  ) => AppliedRelationshipMutationOutcome;
+  react: (outcome: AppliedMutationOutcome) => Promise<MutationReactionResult>;
+  applied: (
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    delta: RelationshipDelta,
+  ) => Promise<MutationReactionResult>;
 };
 
 const sameRelation = (
@@ -195,15 +229,7 @@ export const createMutationReactionRunner = ({
   createOutcomeId,
   maxDepth = 8,
 }: CreateMutationReactionRunnerOptions) => {
-  if (!Number.isInteger(maxDepth) || maxDepth < 0) {
-    throw new Error('Mutation Reaction maximum depth must be a non-negative integer.');
-  }
-  if (reactions.some(reaction => reaction.id.length === 0)) {
-    throw new Error('Mutation Reactions require a non-empty id.');
-  }
-  if (new Set(reactions.map(reaction => reaction.id)).size !== reactions.length) {
-    throw new Error('Mutation Reaction ids must be unique.');
-  }
+  assertMutationReactionConfiguration(reactions, maxDepth);
 
   const causalityFor = (parent?: AppliedMutationOutcome): MutationCausality => {
     const outcomeId = createOutcomeId();
@@ -373,8 +399,9 @@ export const createMutationReactionRunner = ({
     }
   };
 
-  return async (command: RelationshipCommand): Promise<MutationReactionResult> => {
-    const root = await applyRelationship(command);
+  const processAppliedOutcome = async (
+    root: AppliedMutationOutcome,
+  ): Promise<MutationReactionResult> => {
     const pending: AppliedMutationOutcome[] = [root];
     const executions: MutationReactionExecution[] = [];
 
@@ -384,6 +411,9 @@ export const createMutationReactionRunner = ({
         try {
           const matchedIntents = reactToOutcome(reaction, source);
           if (!matchedIntents) continue;
+          if (!Array.isArray(matchedIntents)) {
+            throw new Error('Mutation Reaction must return an array of follow-up intents.');
+          }
           intents = matchedIntents;
         } catch {
           executions.push({
@@ -432,4 +462,25 @@ export const createMutationReactionRunner = ({
 
     return { root, reactions: executions };
   };
+
+  const run = (async (command: RelationshipCommand): Promise<MutationReactionResult> =>
+    processAppliedOutcome(await applyRelationship(command))) as MutationReactionRunner;
+
+  run.createAppliedOutcome = (
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    delta: RelationshipDelta,
+  ) => ({
+    kind: 'applied-mutation-outcome',
+    mutationKind: 'relationship-command',
+    command,
+    delta,
+    causality: causalityFor(),
+  });
+  run.react = processAppliedOutcome;
+  run.applied = (
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    delta: RelationshipDelta,
+  ) => processAppliedOutcome(run.createAppliedOutcome(command, delta));
+
+  return run;
 };

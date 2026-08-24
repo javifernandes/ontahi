@@ -22,7 +22,8 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
    Completed in
    [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md).
 4. Add ergonomic Reaction matcher/intent factories and application/runtime registration under
-   Plan 135 without attaching callbacks to Relation metadata.
+   Plan 135 without attaching callbacks to Relation metadata. Completed through
+   [135b. Declarative Reaction Authoring And Registration](../done/135b-declarative-reaction-authoring-and-registration.md).
 5. Transport precondition conflicts as structured outcomes, then offer an explicit
    `onMismatch: 'skip'` mode whose `not-applied` outcome remains observable. Keep conflict as the
    default and do not collapse skipped, idempotent, and applied transitions into one empty delta.
@@ -41,7 +42,7 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
 
 ## Acceptance Checklist
 
-- [ ] Required coordinated mutation and post-application Reaction semantics are separately documented and executable.
+- [x] Required coordinated mutation and post-application Reaction semantics are separately documented and executable.
 - [ ] Classroom demonstrates conditional reassignment, unlink Reaction, and stateful Enrollment lifecycle.
 - [ ] Todo remains small and passes as a packaged consumer.
 - [ ] Developer docs live at one canonical source and match the candidate release.

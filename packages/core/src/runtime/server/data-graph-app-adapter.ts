@@ -24,11 +24,14 @@ import {
   type RuntimeBoundGraphSelection,
   type RuntimeBoundSelectionEntity,
   type RuntimeBoundEntityRefRelationshipCommands,
+  type RelationshipCommandExecutor,
+  type RelationshipDelta,
   type ViewDefinition,
 } from '../../data-graph/index.js';
 
 import {
   createContextualRelationshipCommandExecutor,
+  DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR,
   getRequiredDataGraphRuntime,
   withDataGraph,
   withDataGraphTransaction,
@@ -70,16 +73,43 @@ type ConfiguredEntityRefOperationInvoke = <
   ? ReturnType<typeof invokeConfiguredServerDomainOperation<TInput, TResult, TFailure, TInfraError>>
   : never;
 
+type RelationshipCommandExecutorOption<TRuntime, TCommandOptions, TRelationshipResult> = [
+  TRelationshipResult,
+] extends [RelationshipDelta]
+  ? [RelationshipDelta] extends [TRelationshipResult]
+    ? {
+        relationshipCommandExecutor?: RelationshipCommandExecutor<
+          RuntimeCommandError<TRuntime>,
+          TCommandOptions,
+          TRelationshipResult
+        >;
+      }
+    : {
+        relationshipCommandExecutor: RelationshipCommandExecutor<
+          RuntimeCommandError<TRuntime>,
+          TCommandOptions,
+          TRelationshipResult
+        >;
+      }
+  : {
+      relationshipCommandExecutor: RelationshipCommandExecutor<
+        RuntimeCommandError<TRuntime>,
+        TCommandOptions,
+        TRelationshipResult
+      >;
+    };
+
 export type DataGraphArchitectureAdapterOptions<
   TInput,
   TError,
   TReadOptions,
   TCommandOptions,
   TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, any>,
+  TRelationshipResult = RelationshipDelta,
 > = {
   createRuntime?: (runtime: LayerConcernRuntime<TInput>) => TRuntime;
   defaultStorage?: DataGraphDefaultStorage<TRuntime>;
-};
+} & RelationshipCommandExecutorOption<TRuntime, TCommandOptions, TRelationshipResult>;
 
 type RuntimeCommandError<TRuntime> =
   TRuntime extends DataGraphExecutionRuntime<any, any, any, infer TCommandError>
@@ -93,13 +123,15 @@ export const createDataGraphArchitectureAdapter = <
   TCommandOptions = TReadOptions,
   TRuntime extends DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions, any> =
     DataGraphExecutionRuntime<TError, TReadOptions, TCommandOptions>,
+  TRelationshipResult = RelationshipDelta,
 >(
   options: DataGraphArchitectureAdapterOptions<
     TInput,
     TError,
     TReadOptions,
     TCommandOptions,
-    TRuntime
+    TRuntime,
+    TRelationshipResult
   >,
 ) => {
   if (!options.createRuntime && !options.defaultStorage) {
@@ -207,12 +239,12 @@ export const createDataGraphArchitectureAdapter = <
         );
   }
 
+  const relationshipCommandExecutor =
+    options.relationshipCommandExecutor ??
+    createContextualRelationshipCommandExecutor<TCommandError, TCommandOptions>();
   const defineBoundGraphEntity = createGraphEntityFactory({
     bindSelectionEntity: boundDataGraph.bindSelectionEntity,
-    relationshipCommandExecutor: createContextualRelationshipCommandExecutor<
-      TCommandError,
-      TCommandOptions
-    >(),
+    relationshipCommandExecutor,
   });
 
   const defineEntity = <
@@ -251,7 +283,12 @@ export const createDataGraphArchitectureAdapter = <
         EntityRefLocators<TEntity> & TLocators,
         ConfiguredEntityRefOperationInvoke,
         {},
-        RuntimeBoundEntityRefRelationshipCommands<TEntity, TCommandError, TCommandOptions>
+        RuntimeBoundEntityRefRelationshipCommands<
+          TEntity,
+          TCommandError,
+          TCommandOptions,
+          TRelationshipResult
+        >
       > & { values: BoundRuntimeValueRefs<TValues> },
     TTasks
   > => {
@@ -298,7 +335,12 @@ export const createDataGraphArchitectureAdapter = <
           EntityRefLocators<TEntity> & TLocators,
           ConfiguredEntityRefOperationInvoke,
           {},
-          RuntimeBoundEntityRefRelationshipCommands<TEntity, TCommandError, TCommandOptions>
+          RuntimeBoundEntityRefRelationshipCommands<
+            TEntity,
+            TCommandError,
+            TCommandOptions,
+            TRelationshipResult
+          >
         > & { values: BoundRuntimeValueRefs<TValues> },
       TTasks
     >;
@@ -331,6 +373,7 @@ export const createDataGraphArchitectureAdapter = <
 
   return {
     ...boundDataGraph,
+    [DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR]: relationshipCommandExecutor,
     createRuntime,
     ...(options.defaultStorage ? { readEntityData: options.defaultStorage.readEntityData } : {}),
     defineEntity,

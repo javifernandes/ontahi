@@ -18,6 +18,7 @@ import {
 import {
   bindEntityRefRelationshipCommands,
   type BoundEntityRefRelationshipCommands,
+  type RelationshipCommandExecutor,
 } from '../../data-graph/relationship-command.js';
 import { parseGraphSchema, safeParseGraphSchema } from '../../data-graph/schema.js';
 
@@ -46,6 +47,7 @@ import {
 } from './context.js';
 import {
   createContextualRelationshipCommandExecutor,
+  DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR,
   getCurrentDataGraphRuntime,
   getRequiredDataGraphRuntime,
   getRequiredDataGraphRuntimeEffect,
@@ -427,9 +429,9 @@ const attachConfiguredEntityRefLocators = (
   entityOrName: unknown,
   graphEntity: object,
   invokeConfigured: ConfiguredOperationInvoke,
-  relationshipCommandExecutor: ReturnType<
-    typeof createContextualRelationshipCommandExecutor<unknown, unknown>
-  >,
+  relationshipCommandExecutor:
+    | ReturnType<typeof createContextualRelationshipCommandExecutor<unknown, unknown>>
+    | RelationshipCommandExecutor<unknown, unknown, unknown>,
 ) => {
   const entityRefTarget = resolveEntityRefTarget(entityOrName, graphEntity);
   const domainOperations = getDomainOperations(graphEntity);
@@ -562,10 +564,14 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
   definition: TDefinition,
 ): GraphFacade<TDefinition> => {
   const invokeConfigured = createConfiguredOperationInvoke(definition);
-  const relationshipCommandExecutor = createContextualRelationshipCommandExecutor<
-    unknown,
-    unknown
-  >();
+  const configuredRelationshipCommandExecutor = (
+    definition.graph as Record<PropertyKey, unknown> | undefined
+  )?.[DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR] as
+    | RelationshipCommandExecutor<unknown, unknown, unknown>
+    | undefined;
+  const relationshipCommandExecutor =
+    configuredRelationshipCommandExecutor ??
+    createContextualRelationshipCommandExecutor<unknown, unknown>();
   const refProvider = ((
     entityOrName: EntityRefTarget,
     operations: Record<string, unknown>,
