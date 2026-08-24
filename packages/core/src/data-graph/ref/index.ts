@@ -25,6 +25,7 @@ export {
   normalizeEntityRefQueryInput,
   readEntityRefQueryInputValue,
 } from './input-normalization.js';
+export type { EntityRefInputResolutionScope } from './input-normalization.js';
 export type {
   EntityRefInputBuilder,
   EntityRefInputDeclaration,

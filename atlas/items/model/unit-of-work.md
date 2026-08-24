@@ -16,6 +16,19 @@ and normally nested Operations. It names the existing runtime resource scope so 
 authority, memoized loaders, Ref resolution, invalidation, and optional provider sessions can
 coordinate without becoming properties of an Entity, Relation, Ref, Query, or Command.
 
+`UnitOfWork.refs` is the server-side identity map for resolved Refs. Its key combines normalized
+portable Ref identity, resolver identity, and execution identity (`principal` plus `cacheScope`),
+keeping distinct projections and authorization boundaries separate even when nested invocation
+contexts share runtime resources. Effect-valued resolvers are memoized at execution time, including
+in-flight work. Repeated explicit `ref.resolve()` calls in one scope therefore reuse one authorized
+Query result; separate top-level invocations do not.
+
+The UnitOfWork does not authorize or materialize a Ref by itself. Application Ref resolvers still
+build Queries and execute them through the active Data Graph runtime and graph-read policy. The
+store only retains their result. `refs.invalidate(ref)` evicts every representation of that Ref and
+the next explicit `resolve()` reloads it. Automatic Command-driven invalidation remains future work
+until Ontahi has declared evidence for affected Ref identities.
+
 The first implemented facade exposes the current scope's typed resource API. Repeated access over
 the same resource map returns the same UnitOfWork identity. A child UnitOfWork starts with inherited
 resource values but owns a distinct map, so a local override does not mutate its parent or a
@@ -38,5 +51,7 @@ scope, but multiple client requests cannot share database rollback. Its individu
 Command RPCs remain atomic while contextual compositional transaction work fails before evaluation
 when the active runtime does not advertise the capability.
 
-Runtime-scoped Ref resolution reuse and explicit invalidation remain the next Plan 74a slices. They
-must not become cross-request cache or hidden property-triggered I/O.
+Child UnitOfWorks own fresh Ref-resolution stores. A transaction therefore cannot leak values read
+through its scoped runtime into the restored parent after commit or rollback. Durable workflow
+steps and browser/client normalized caches remain separate future boundaries; the server store is
+neither cross-request cache nor hidden property-triggered I/O.

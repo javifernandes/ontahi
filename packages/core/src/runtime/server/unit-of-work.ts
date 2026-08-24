@@ -1,5 +1,7 @@
 import { Effect, Exit, Fiber, Runtime } from 'effect';
 
+import { normalizeEntityRef, type AnyEntityRef } from '../../data-graph/ref/index.js';
+
 import {
   createContextResourceApi,
   type ServerContextResourceApi,
@@ -14,6 +16,17 @@ import {
 
 export type UnitOfWork = {
   readonly resources: ServerContextResourceApi;
+  readonly refs: UnitOfWorkRefResolutionApi;
+};
+
+export type UnitOfWorkRefResolutionOptions<TValue> = {
+  readonly key?: string | symbol;
+  readonly load: () => TValue;
+};
+
+export type UnitOfWorkRefResolutionApi = {
+  resolve: <TValue>(ref: AnyEntityRef, options: UnitOfWorkRefResolutionOptions<TValue>) => TValue;
+  invalidate: (ref: AnyEntityRef) => void;
 };
 
 export type ChildUnitOfWorkOptions = {
@@ -22,6 +35,34 @@ export type ChildUnitOfWorkOptions = {
 };
 
 const unitOfWorkByResources = new WeakMap<ServerRuntimeResourceMap, UnitOfWork>();
+const DEFAULT_REF_RESOLUTION_KEY = Symbol('ontahi.unitOfWork.refs.default');
+
+const createUnitOfWorkRefResolutionApi = (): UnitOfWorkRefResolutionApi => {
+  const resolutionsByRef = new Map<string, Map<string | symbol, unknown>>();
+
+  return {
+    resolve: <TValue>(
+      ref: AnyEntityRef,
+      options: UnitOfWorkRefResolutionOptions<TValue>,
+    ): TValue => {
+      const refKey = normalizeEntityRef(ref);
+      let resolutions = resolutionsByRef.get(refKey);
+      if (!resolutions) {
+        resolutions = new Map();
+        resolutionsByRef.set(refKey, resolutions);
+      }
+      const resolutionKey = options.key ?? DEFAULT_REF_RESOLUTION_KEY;
+      if (resolutions.has(resolutionKey)) return resolutions.get(resolutionKey) as TValue;
+
+      const loaded = options.load();
+      resolutions.set(resolutionKey, loaded);
+      return loaded;
+    },
+    invalidate: ref => {
+      resolutionsByRef.delete(normalizeEntityRef(ref));
+    },
+  };
+};
 
 const resolveUnitOfWork = (resources: ServerRuntimeResourceMap): UnitOfWork => {
   const existing = unitOfWorkByResources.get(resources);
@@ -29,6 +70,7 @@ const resolveUnitOfWork = (resources: ServerRuntimeResourceMap): UnitOfWork => {
 
   const created = {
     resources: createContextResourceApi(resources),
+    refs: createUnitOfWorkRefResolutionApi(),
   };
   unitOfWorkByResources.set(resources, created);
   return created;

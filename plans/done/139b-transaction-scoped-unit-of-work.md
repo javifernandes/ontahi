@@ -6,7 +6,7 @@ Canonical ID: `ontahi://plans/139b-transaction-scoped-unit-of-work`
 
 Parent: [139. Relations Lifecycle Release Proof](../current/139-relations-lifecycle-release-proof.md)
 
-Advances: [74a. Unit Of Work Runtime Scope](../current/74a-unit-of-work-runtime-scope.md)
+Advances: [74a. Unit Of Work Runtime Scope](./74a-unit-of-work-runtime-scope.md)
 
 ## Summary
 

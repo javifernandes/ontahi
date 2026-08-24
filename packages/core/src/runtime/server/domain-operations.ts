@@ -65,6 +65,7 @@ import type {
 } from './operation/types.js';
 import type { ServerRuntimeValueRef } from './operation/value-ref.js';
 import { toOperationInvocationResult, type OperationInvocationResult } from './operation-result.js';
+import { unitOfWorkEntityRefInputResolutionScope } from './ref-resolution.js';
 import { bindRequirements } from './requirements.js';
 import type {
   TaskContext,
@@ -441,7 +442,13 @@ const resolveDomainOperationRunner = <
     input: EntityRefInputPublicInput<TInput, TInputRefs>,
   ): Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError> =>
     executeDomainOperationRunResult(
-      operation.run(attachEntityRefInputRefs(input, operation.inputRefs) as never),
+      operation.run(
+        attachEntityRefInputRefs(
+          input,
+          operation.inputRefs,
+          unitOfWorkEntityRefInputResolutionScope,
+        ) as never,
+      ),
       projection ??
         (operation.output?.kind === 'schema.selection'
           ? { cardinality: (operation.output as GraphSelectionDefinition).cardinality }

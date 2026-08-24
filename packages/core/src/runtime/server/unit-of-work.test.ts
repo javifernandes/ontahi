@@ -1,9 +1,67 @@
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { createEntityRef } from '../../data-graph/index.js';
 
 import { getRequiredUnitOfWork, runServerEffect, withChildUnitOfWork } from './index.js';
 
 describe('server UnitOfWork', () => {
+  it('coalesces concurrent resolution for equivalent normalized Refs', async () => {
+    const load = vi.fn(async () => ({ title: 'Programming Book' }));
+    const result = await runServerEffect(
+      Effect.promise(async () => {
+        const unitOfWork = getRequiredUnitOfWork();
+        const first = unitOfWork.refs.resolve(
+          createEntityRef('Book', { tenant: { id: 'bookops', region: 'ar' }, slug: 'progbook' }),
+          { load },
+        );
+        const second = unitOfWork.refs.resolve(
+          createEntityRef('Book', { slug: 'progbook', tenant: { region: 'ar', id: 'bookops' } }),
+          { load },
+        );
+
+        expect(second).toBe(first);
+        return Promise.all([first, second]);
+      }),
+      { scope: 'tests.unit-of-work.ref-resolution' },
+    );
+
+    expect(result[0]).toBe(result[1]);
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates every cached representation of one Ref', async () => {
+    const ref = createEntityRef('Book', { slug: 'progbook' });
+    const summaryLoad = vi.fn(() => ({
+      projection: 'summary',
+      sequence: summaryLoad.mock.calls.length,
+    }));
+    const detailLoad = vi.fn(() => ({
+      projection: 'detail',
+      sequence: detailLoad.mock.calls.length,
+    }));
+
+    const result = await runServerEffect(
+      Effect.sync(() => {
+        const unitOfWork = getRequiredUnitOfWork();
+        const firstSummary = unitOfWork.refs.resolve(ref, { key: 'summary', load: summaryLoad });
+        const firstDetail = unitOfWork.refs.resolve(ref, { key: 'detail', load: detailLoad });
+        unitOfWork.refs.invalidate(ref);
+        const secondSummary = unitOfWork.refs.resolve(ref, { key: 'summary', load: summaryLoad });
+        const secondDetail = unitOfWork.refs.resolve(ref, { key: 'detail', load: detailLoad });
+        return { firstDetail, firstSummary, secondDetail, secondSummary };
+      }),
+      { scope: 'tests.unit-of-work.ref-invalidation' },
+    );
+
+    expect(result).toEqual({
+      firstDetail: { projection: 'detail', sequence: 1 },
+      firstSummary: { projection: 'summary', sequence: 1 },
+      secondDetail: { projection: 'detail', sequence: 2 },
+      secondSummary: { projection: 'summary', sequence: 2 },
+    });
+  });
+
   it('does not share UnitOfWork identity across separate top-level operations', async () => {
     const readUnitOfWork = () =>
       runServerEffect(
@@ -70,6 +128,34 @@ describe('server UnitOfWork', () => {
     expect(result.child.inherited).toBe('bookops');
     expect(result.child.current.resources.has('scoped-cache')).toBe(false);
     expect(result.leaked).toBe(false);
+  });
+
+  it('isolates Ref resolutions in a child and restores the parent store', async () => {
+    const ref = createEntityRef('Book', { slug: 'progbook' });
+    const result = await runServerEffect(
+      Effect.gen(function* () {
+        const parent = getRequiredUnitOfWork();
+        const parentValue = parent.refs.resolve(ref, { load: () => ({ scope: 'parent' }) });
+        const childValue = yield* withChildUnitOfWork(
+          Effect.sync(() =>
+            getRequiredUnitOfWork().refs.resolve(ref, { load: () => ({ scope: 'child' }) }),
+          ),
+        );
+        const restoredValue = getRequiredUnitOfWork().refs.resolve(ref, {
+          load: () => ({ scope: 'unexpected' }),
+        });
+
+        return { childValue, parentValue, restoredValue };
+      }),
+      { scope: 'tests.unit-of-work.ref-child' },
+    );
+
+    expect(result).toEqual({
+      childValue: { scope: 'child' },
+      parentValue: { scope: 'parent' },
+      restoredValue: { scope: 'parent' },
+    });
+    expect(result.restoredValue).toBe(result.parentValue);
   });
 
   it('isolates concurrent child resource overrides and restores the parent', async () => {
