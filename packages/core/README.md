@@ -141,7 +141,7 @@ const application = ontahi({
     reaction
       .relationship(Course, 'students')
       .removed({ id: 'course.students.removed', delivery: 'inline' })
-      .then(outcome => [
+      .react(outcome => [
         reaction.intent.invoke('Course.recordRemoval', {
           studentId: outcome.command.source.locator.id,
         }),

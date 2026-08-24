@@ -70,7 +70,7 @@ const defineRelationshipReaction = <
   action: RelationshipCommand['action'],
   config: ReactionConfig,
 ) => {
-  const then = (
+  const react = (
     project: RelationshipOutcomeProjector<
       RelationshipOutcomeFor<TEntity, TRelationName>,
       readonly MutationReactionIntent[]
@@ -91,16 +91,12 @@ const defineRelationshipReaction = <
     return declaration;
   };
 
-  const emitReaction = ((
-    event:
-      | unknown
-      | RelationshipOutcomeProjector<RelationshipOutcomeFor<TEntity, TRelationName>, unknown>,
-  ) =>
-    then(outcome => [
+  const emitReaction = ((event: unknown) =>
+    react(outcome => [
       emit(typeof event === 'function' ? event(outcome) : event),
     ])) as RelationshipEventAuthoring<RelationshipOutcomeFor<TEntity, TRelationName>>;
 
-  return { then, emit: emitReaction };
+  return { react, emit: emitReaction };
 };
 
 const relationship = <

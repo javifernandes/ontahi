@@ -38,7 +38,7 @@ opaque executable functions.
 
 Applications register Relationship Reactions through `ontahi({ reactions })`. The
 `reaction.relationship(Entity, relationName).added(...)` and `.removed(...)` factories normalize
-forward and inverse authoring to the canonical Relation identity. Their `.then(...)`, `.emit(...)`,
+forward and inverse authoring to the canonical Relation identity. Their `.react(...)`, `.emit(...)`,
 and `reaction.intent` helpers produce the existing execution IR; Relation reflection remains free
 of executable callbacks. Deferred registration is evaluated once after Entity references resolve,
 then non-empty unique ids and canonical matchers are fixed for the application lifetime.

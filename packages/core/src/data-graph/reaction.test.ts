@@ -38,6 +38,16 @@ const outcomeFor = (
 });
 
 describe('Reaction authoring', () => {
+  it('does not make an incomplete Reaction builder Promise-like', () => {
+    const { Course } = defineClassroomGraph();
+
+    const builder = reaction
+      .relationship(Course, 'students')
+      .removed({ id: 'student-removed', delivery: 'inline' });
+
+    expect(builder).not.toHaveProperty('then');
+  });
+
   it('derives one canonical matcher from forward and inverse Relation authoring', () => {
     const { Course, Student } = defineClassroomGraph();
     const config = { id: 'student-removed', delivery: 'inline' } as const;
@@ -90,7 +100,7 @@ describe('Reaction authoring', () => {
     const declaration = reaction
       .relationship(Course, 'students')
       .removed({ id: 'record-removal', delivery: 'inline' })
-      .then(outcome => [
+      .react(outcome => [
         reaction.intent.emit({ type: 'StudentRemoved', student: outcome.command.source }),
         reaction.intent.invoke('Course.recordRemoval', {
           studentId: outcome.command.source.locator.id,

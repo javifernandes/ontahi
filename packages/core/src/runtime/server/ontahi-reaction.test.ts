@@ -82,7 +82,7 @@ describe('Ontahi Reaction registration', () => {
         reaction
           .relationship(Course, 'students')
           .removed({ id: 'course.students.removed', delivery: 'inline' })
-          .then(outcome => [
+          .react(outcome => [
             reaction.intent.invoke('ReactionClassroomCourse.recordRemoval', {
               studentId: outcome.command.source.locator.id,
               courseId: outcome.command.target?.locator.id,
@@ -336,7 +336,7 @@ describe('Ontahi Reaction registration', () => {
     const declaration = reaction
       .relationship(Course, 'students')
       .removed({ id: 'registered-once', delivery: 'inline' })
-      .then(() => []);
+      .react(() => []);
     const application = ontahi({
       storage,
       entities: [Course, Student],
@@ -410,7 +410,7 @@ describe('Ontahi Reaction registration', () => {
         reaction
           .relationship(Club, 'courses')
           .added({ id: 'club-course-added', delivery: 'inline' })
-          .then(() => []),
+          .react(() => []),
       ],
     });
     const addCourse = layer('tests.classroom.reaction-many-to-many', {
@@ -476,7 +476,7 @@ describe('Ontahi Reaction registration', () => {
         reaction
           .relationship(Student, 'course')
           .removed({ id: 'move-and-record', delivery: 'inline' })
-          .then(outcome => [
+          .react(outcome => [
             reaction.intent.execute(
               Student.refById(outcome.command.source.locator.id as string).course.assign(
                 Course.refById('course-2'),

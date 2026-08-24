@@ -51,7 +51,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
             Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
           >();
         if (typeof runtime.runRelationshipCommand !== 'function') {
-          throw new Error(
+          throw new TypeError(
             'The current Data Graph runtime does not support direct Relationship Command execution.',
           );
         }
@@ -63,7 +63,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
             Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
           >();
         if (typeof runtime.runManyToManyRelationshipCommand !== 'function') {
-          throw new Error(
+          throw new TypeError(
             'The current Data Graph runtime does not support many-to-many Relationship Command execution.',
           );
         }
@@ -99,7 +99,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
             Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
           >();
         if (typeof runtime.runRelationshipCommand !== 'function') {
-          throw new Error(
+          throw new TypeError(
             'The current Data Graph runtime does not support direct Relationship Command execution.',
           );
         }
@@ -114,7 +114,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
             Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
           >();
         if (typeof runtime.runManyToManyRelationshipCommand !== 'function') {
-          throw new Error(
+          throw new TypeError(
             'The current Data Graph runtime does not support many-to-many Relationship Command execution.',
           );
         }

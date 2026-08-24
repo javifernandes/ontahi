@@ -446,6 +446,84 @@ export const createMutationReactionRunner = ({
     }
   };
 
+  const evaluateReaction = (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+  ): readonly MutationReactionIntent[] | undefined => {
+    const intents = reactToOutcome(reaction, source);
+    if (!intents) return undefined;
+    if (!Array.isArray(intents)) {
+      throw new TypeError('Mutation Reaction must return an array of follow-up intents.');
+    }
+    if (!intents.every(isMutationReactionIntent)) {
+      throw new TypeError('Mutation Reaction returned an invalid follow-up intent.');
+    }
+    return intents;
+  };
+
+  const reactionEvaluationFailure = (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+  ): MutationReactionExecution => ({
+    reactionId: reaction.id,
+    reactionKey: `${reaction.id}:${source.causality.outcomeId}`,
+    sourceOutcomeId: source.causality.outcomeId,
+    delivery: reaction.delivery,
+    status: 'failed',
+    failure: {
+      code: 'reaction_failed',
+      message: 'Post-commit Reaction evaluation failed.',
+    },
+  });
+
+  const interpretReactionIntent = async (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+    intent: MutationReactionIntent,
+    intentIndex: number,
+  ): Promise<MutationReactionExecution> => {
+    const execution: ExecutionContext = {
+      reactionId: reaction.id,
+      reactionKey: `${reaction.id}:${source.causality.outcomeId}:${intentIndex}`,
+      sourceOutcomeId: source.causality.outcomeId,
+      delivery: reaction.delivery,
+      intentIndex,
+    };
+    if (source.causality.depth >= maxDepth) {
+      return failedExecution(
+        execution,
+        'max_depth_exceeded',
+        `Post-commit Reaction exceeded maximum depth ${maxDepth}.`,
+        'depth-exceeded',
+      );
+    }
+    return reaction.delivery === 'durable'
+      ? acceptDurableIntent(reaction, source, intent, execution)
+      : applyFollowUpIntent(intent, source, execution);
+  };
+
+  const interpretReaction = async (
+    reaction: MutationReaction,
+    source: AppliedMutationOutcome,
+    pending: AppliedMutationOutcome[],
+    executions: MutationReactionExecution[],
+  ) => {
+    let intents: readonly MutationReactionIntent[] | undefined;
+    try {
+      intents = evaluateReaction(reaction, source);
+    } catch {
+      executions.push(reactionEvaluationFailure(reaction, source));
+      return;
+    }
+    if (!intents) return;
+
+    for (const [intentIndex, intent] of intents.entries()) {
+      const result = await interpretReactionIntent(reaction, source, intent, intentIndex);
+      if (result.status === 'applied') pending.push(result.outcome);
+      executions.push(result);
+    }
+  };
+
   const processAppliedOutcome = async (
     root: AppliedMutationOutcome,
   ): Promise<MutationReactionResult> => {
@@ -454,59 +532,7 @@ export const createMutationReactionRunner = ({
 
     for (const source of pending) {
       for (const reaction of reactions) {
-        let intents: readonly MutationReactionIntent[];
-        try {
-          const matchedIntents = reactToOutcome(reaction, source);
-          if (!matchedIntents) continue;
-          if (!Array.isArray(matchedIntents)) {
-            throw new TypeError('Mutation Reaction must return an array of follow-up intents.');
-          }
-          if (!matchedIntents.every(isMutationReactionIntent)) {
-            throw new TypeError('Mutation Reaction returned an invalid follow-up intent.');
-          }
-          intents = matchedIntents;
-        } catch {
-          executions.push({
-            reactionId: reaction.id,
-            reactionKey: `${reaction.id}:${source.causality.outcomeId}`,
-            sourceOutcomeId: source.causality.outcomeId,
-            delivery: reaction.delivery,
-            status: 'failed',
-            failure: {
-              code: 'reaction_failed',
-              message: 'Post-commit Reaction evaluation failed.',
-            },
-          });
-          continue;
-        }
-        for (const [intentIndex, intent] of intents.entries()) {
-          const execution: ExecutionContext = {
-            reactionId: reaction.id,
-            reactionKey: `${reaction.id}:${source.causality.outcomeId}:${intentIndex}`,
-            sourceOutcomeId: source.causality.outcomeId,
-            delivery: reaction.delivery,
-            intentIndex,
-          };
-          if (source.causality.depth >= maxDepth) {
-            executions.push(
-              failedExecution(
-                execution,
-                'max_depth_exceeded',
-                `Post-commit Reaction exceeded maximum depth ${maxDepth}.`,
-                'depth-exceeded',
-              ),
-            );
-            continue;
-          }
-
-          if (reaction.delivery === 'durable') {
-            executions.push(await acceptDurableIntent(reaction, source, intent, execution));
-            continue;
-          }
-          const result = await applyFollowUpIntent(intent, source, execution);
-          if (result.status === 'applied') pending.push(result.outcome);
-          executions.push(result);
-        }
+        await interpretReaction(reaction, source, pending, executions);
       }
     }
 
