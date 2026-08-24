@@ -23,10 +23,16 @@ import {
   type ResolveDomainOperations,
   type RuntimeBoundGraphSelection,
   type RuntimeBoundSelectionEntity,
+  type RuntimeBoundEntityRefRelationshipCommands,
   type ViewDefinition,
 } from '../../data-graph/index.js';
 
-import { getRequiredDataGraphRuntime, withDataGraph } from './data-graph.js';
+import {
+  createContextualRelationshipCommandExecutor,
+  getRequiredDataGraphRuntime,
+  withDataGraph,
+  withDataGraphTransaction,
+} from './data-graph.js';
 import type {
   invokeConfiguredServerDomainOperation,
   ResolvedDomainOperationDeclaration,
@@ -203,6 +209,10 @@ export const createDataGraphArchitectureAdapter = <
 
   const defineBoundGraphEntity = createGraphEntityFactory({
     bindSelectionEntity: boundDataGraph.bindSelectionEntity,
+    relationshipCommandExecutor: createContextualRelationshipCommandExecutor<
+      TCommandError,
+      TCommandOptions
+    >(),
   });
 
   const defineEntity = <
@@ -239,7 +249,9 @@ export const createDataGraphArchitectureAdapter = <
         TEntity,
         ResolveDomainOperations<TEntity['name'], TDomainOperations>,
         EntityRefLocators<TEntity> & TLocators,
-        ConfiguredEntityRefOperationInvoke
+        ConfiguredEntityRefOperationInvoke,
+        {},
+        RuntimeBoundEntityRefRelationshipCommands<TEntity, TCommandError, TCommandOptions>
       > & { values: BoundRuntimeValueRefs<TValues> },
     TTasks
   > => {
@@ -284,7 +296,9 @@ export const createDataGraphArchitectureAdapter = <
           TEntity,
           ResolveDomainOperations<TEntity['name'], TDomainOperations>,
           EntityRefLocators<TEntity> & TLocators,
-          ConfiguredEntityRefOperationInvoke
+          ConfiguredEntityRefOperationInvoke,
+          {},
+          RuntimeBoundEntityRefRelationshipCommands<TEntity, TCommandError, TCommandOptions>
         > & { values: BoundRuntimeValueRefs<TValues> },
       TTasks
     >;
@@ -324,6 +338,9 @@ export const createDataGraphArchitectureAdapter = <
     defineRelation: defineGraphRelation,
     namedGraphRead,
     refInput,
+    transaction: <TValue, TWorkError = never, TRequirements = never>(
+      effect: Effect.Effect<TValue, TWorkError, TRequirements>,
+    ) => withDataGraphTransaction<TRuntime, TValue, TWorkError, TRequirements>(effect),
     withRuntime: <TLayerInput = TInput>() =>
       withDataGraph<TLayerInput, TRuntime>({
         createRuntime: createRuntime as unknown as (

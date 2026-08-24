@@ -4,6 +4,7 @@ import {
   createRelatedRootReadSpec,
   entity,
   field,
+  isDataGraphTransactionCapability,
   mapEntity,
   mapRelation,
   relationConstraint,
@@ -1232,6 +1233,8 @@ describe('data-graph supabase runtime helpers', () => {
       getCommandClient: () => Effect.succeed(commandSupabase),
       createError,
     });
+
+    expect(isDataGraphTransactionCapability(runtime)).toBe(false);
 
     await expect(
       Effect.runPromise(runtime.get(query(BookWithCollaborators), undefined)),

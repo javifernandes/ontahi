@@ -93,3 +93,35 @@ The implementation is intentionally process-local. It provides no restart durabi
 migrations, or database constraints; production adapters own those guarantees. Core defines an
 optional `DataGraphTransactionCapability`, but the in-memory reference runtime does not advertise
 it. Sequencing its Effects therefore does not imply shared rollback.
+
+## UnitOfWork and contextual transactions
+
+Every top-level server Operation has a UnitOfWork backed by its runtime resources. Normally nested
+Operations reuse that identity. `application.app.runtime.unitOfWork.current()` and `.required()`
+expose the scope without turning it into a database transaction or a cross-request cache.
+
+Providers may advertise the optional `DataGraphTransactionCapability`. Application code can use
+the contextual facade inside an Operation:
+
+```ts
+const transition = Effect.gen(function* () {
+  yield* application.app.graph.transaction(
+    Effect.gen(function* () {
+      yield* student.course.assign(nextCourse, { ifCurrent: previousCourse }).run();
+      yield* updateCourseCapacity.run();
+    }),
+  );
+});
+```
+
+The transaction creates an isolated child UnitOfWork and binds the provider's transaction runtime
+there. Bound reads, Graph Commands, direct Relationship Commands, and many-to-many Relationship
+Commands resolve it lazily; normally nested Operations remain inside the same boundary. The parent
+scope is restored after success, typed failure, or defect. Transaction children use a fresh
+Operation-result cache so a rolled-back observation is not published into the parent UnitOfWork.
+
+`.run()` remains explicit because creating a Command is pure and portable. A runtime-bound
+Relationship Command adds `.run()` non-enumerably, so its canonical serialized shape does not gain
+callbacks or authority-dependent metadata. If the active runtime does not advertise compositional
+transactions, the effect fails with `DataGraphTransactionUnavailableError` before evaluating its
+work.

@@ -29,6 +29,7 @@ relatedPlans:
   - ontahi://plans/137a-read-only-relation-explorer
   - ontahi://plans/139-relations-lifecycle-release-proof
   - ontahi://plans/139a-composable-data-graph-transactions
+  - ontahi://plans/139b-transaction-scoped-unit-of-work
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -110,6 +111,10 @@ remain portable identity values with no methods or embedded Entity definition. T
 `relationship(Entity, relationName, subject)` factory remains the primitive beneath the facade,
 not the preferred application spelling.
 
+When a Ref belongs to a runtime-bound application Entity, the produced Relationship Command also
+has a non-enumerable `.run()` binding. The canonical enumerable command remains the same portable
+value; `.run()` resolves the active Data Graph runtime only when explicitly invoked.
+
 Authoring forms need not erase meaningful preconditions. `student.course.clear()` means unlink any
 current target, while `course.students.remove(student)` names the expected target and must not erase
 a concurrent reassignment. They share canonical Relation identity and `unlink` action; the applied
@@ -158,10 +163,13 @@ The mutation lifecycle keeps those responsibilities explicit:
 Only steps required for the primary invariant belong before edge application. Reactions occur after
 an applied outcome and cannot imply rollback. A Data Graph transaction capability may coordinate
 several required reads and mutations before that outcome. Its callback receives a transaction-
-scoped runtime; using another runtime is outside the boundary. Success commits the whole callback,
-while failure or defect rolls it back. Sequencing Effects without this capability still does not
-promise one shared transaction, and adapters must not publish committed outcomes or run
-post-application Reactions before the outer transaction commits.
+scoped runtime; using another runtime is outside the boundary. The provider callback is the
+low-level contract. Application code uses `app.graph.transaction(effect)`, which establishes an
+isolated child [[ontahi.model.unit-of-work|UnitOfWork]] and lets bound Query and Command `.run()`
+methods discover that runtime contextually. Success commits the whole effect, while failure or
+defect rolls it back and restores the parent scope. Sequencing Effects without this capability
+still does not promise one shared transaction, and adapters must not publish committed outcomes or
+run post-application Reactions before the outer transaction commits.
 
 Transaction is an optional execution capability, not Relation metadata or a portable Command.
 PostgreSQL proves it with one checked-out connection and a transaction-scoped runtime that omits

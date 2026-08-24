@@ -4,6 +4,15 @@ export interface DataGraphTransactionCapability<TRuntime, TTransactionError = ne
   ): import('effect').Effect.Effect<TResult, TTransactionError | TWorkError, TRequirements>;
 }
 
+export class DataGraphTransactionUnavailableError extends Error {
+  readonly _tag = 'DataGraphTransactionUnavailableError';
+
+  constructor() {
+    super('The current Data Graph runtime does not support compositional transactions.');
+    this.name = 'DataGraphTransactionUnavailableError';
+  }
+}
+
 export const isDataGraphTransactionCapability = <TRuntime = unknown, TError = unknown>(
   value: unknown,
 ): value is DataGraphTransactionCapability<TRuntime, TError> =>
