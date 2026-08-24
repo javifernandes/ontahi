@@ -1,6 +1,9 @@
 import { isJsonValue } from '../value/json.js';
+import { hasOwn, isRecord } from '../value/object.js';
 
+import { parseGraphCommandRequest } from './command-protocol.js';
 import type { EntityMutationCommand, EntityMutationDelta } from './entity-mutation-command.js';
+import { isEntityRef } from './ref/index.js';
 import type {
   CanonicalManyToManyRelationIdentity,
   CanonicalRelationIdentity,
@@ -182,6 +185,50 @@ export type MutationReactionRunner = {
     command: RelationshipCommand | ManyToManyRelationshipCommand,
     delta: RelationshipDelta,
   ) => Promise<MutationReactionResult>;
+};
+
+const isRelationshipCommandIntent = (
+  command: unknown,
+  kind: RelationshipCommand['kind'] | ManyToManyRelationshipCommand['kind'],
+) =>
+  isRecord(command) &&
+  command.kind === kind &&
+  parseGraphCommandRequest({ version: 1, kind: 'graph-command', command }).success;
+
+const isEntityMutationCommand = (command: unknown): command is EntityMutationCommand => {
+  if (
+    !isRecord(command) ||
+    command.kind !== 'entity-mutation-command' ||
+    typeof command.entityName !== 'string'
+  ) {
+    return false;
+  }
+  if (command.action === 'create') return isRecord(command.values);
+  if (command.action === 'update') {
+    return isEntityRef(command.target) && isRecord(command.values);
+  }
+  return command.action === 'delete' && isEntityRef(command.target);
+};
+
+const isMutationReactionIntent = (intent: unknown): intent is MutationReactionIntent => {
+  if (!isRecord(intent)) return false;
+  if (intent.kind === 'execute-relationship-command') {
+    return isRelationshipCommandIntent(intent.command, 'relationship-command');
+  }
+  if (intent.kind === 'execute-many-to-many-relationship-command') {
+    return isRelationshipCommandIntent(intent.command, 'many-to-many-relationship-command');
+  }
+  if (intent.kind === 'execute-entity-mutation-command') {
+    return isEntityMutationCommand(intent.command);
+  }
+  if (intent.kind === 'invoke-operation') {
+    return (
+      isRecord(intent.request) &&
+      intent.request.kind === 'invoke' &&
+      typeof intent.request.operationId === 'string'
+    );
+  }
+  return intent.kind === 'emit-event' && hasOwn(intent, 'event');
 };
 
 const sameRelation = (
@@ -412,7 +459,10 @@ export const createMutationReactionRunner = ({
           const matchedIntents = reactToOutcome(reaction, source);
           if (!matchedIntents) continue;
           if (!Array.isArray(matchedIntents)) {
-            throw new Error('Mutation Reaction must return an array of follow-up intents.');
+            throw new TypeError('Mutation Reaction must return an array of follow-up intents.');
+          }
+          if (!matchedIntents.every(isMutationReactionIntent)) {
+            throw new TypeError('Mutation Reaction returned an invalid follow-up intent.');
           }
           intents = matchedIntents;
         } catch {

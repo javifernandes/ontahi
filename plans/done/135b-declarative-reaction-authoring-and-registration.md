@@ -116,9 +116,9 @@ work and post-application behavior without claiming durable or exactly-once deli
 ## Verification
 
 1. Focused Reaction factory, engine, adapter, and application integration suites passed: 4 files
-   and 26 tests.
-2. The complete Core suite passed: 84 files and 580 tests.
-3. Core coverage passed at 88.93% statements and 89.23% lines; the new authoring factory reached
+   and 27 tests.
+2. The complete Core suite passed: 84 files and 581 tests.
+3. Core coverage passed at 88.89% statements and 89.20% lines; the new authoring factory reached
    100% line coverage and the contextual executor reached 88.23%.
 4. Repository formatting, all-package lint, and all-package plus Todo typechecks passed.
 5. Clean-room artifact build, pack, install, public type, and runtime checks passed for all ten

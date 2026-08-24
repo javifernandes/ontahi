@@ -11,6 +11,7 @@ import {
   relationshipSet,
   toGraphCommandRequest,
   type DurableMutationReactionEnvelope,
+  type MutationReactionIntent,
   type RelationshipCommand,
   type RelationshipDelta,
 } from './index.js';
@@ -172,6 +173,50 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       {
         reactionId: 'broken-reaction',
         reactionKey: 'broken-reaction:outcome-1',
+        sourceOutcomeId: 'outcome-1',
+        delivery: 'inline',
+        status: 'failed',
+        failure: {
+          code: 'reaction_failed',
+          message: 'Post-commit Reaction evaluation failed.',
+        },
+      },
+    ]);
+  });
+
+  it('rejects every malformed follow-up intent before interpreting any of them', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const executeRelationshipCommand = vi.fn(async () => emptyDelta());
+    const emitEvent = vi.fn(async () => undefined);
+    const malformedIntents = [
+      { kind: 'emit-event', event: { type: 'must-not-be-emitted' } },
+      { kind: 'unknown' },
+    ] as unknown as readonly MutationReactionIntent[];
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-1',
+      executeRelationshipCommand,
+      emitEvent,
+      reactions: [
+        {
+          id: 'malformed-reaction',
+          delivery: 'inline',
+          when: { mutationKind: 'relationship-command' },
+          react: () => malformedIntents,
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(executeRelationshipCommand).toHaveBeenCalledOnce();
+    expect(emitEvent).not.toHaveBeenCalled();
+    expect(result.reactions).toEqual([
+      {
+        reactionId: 'malformed-reaction',
+        reactionKey: 'malformed-reaction:outcome-1',
         sourceOutcomeId: 'outcome-1',
         delivery: 'inline',
         status: 'failed',
