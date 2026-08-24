@@ -8,7 +8,7 @@ Parent: [139. Relations Lifecycle Release Proof](../current/139-relations-lifecy
 
 Related plans:
 
-1. [135. Applied Mutation Outcomes And Reactions](../current/135-applied-mutation-outcomes-and-reactions.md)
+1. [135. Applied Mutation Outcomes And Reactions](./135-applied-mutation-outcomes-and-reactions.md)
 2. [136. Relation Constraints And Eligibility Semantics](../current/136-relation-constraints-and-eligibility.md)
 
 ## Summary

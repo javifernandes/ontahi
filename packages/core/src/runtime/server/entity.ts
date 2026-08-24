@@ -34,6 +34,7 @@ import {
   type ResolveDomainOperations,
   type RuntimeBoundSelectionEntity,
   type RuntimeBoundEntityRefRelationshipCommands,
+  type RelationshipDelta,
   selection,
   type SelectionBuilder,
 } from '../../data-graph/index.js';
@@ -584,6 +585,7 @@ type BoundOntahiEntityBase<
     any,
     any
   >,
+  TRelationshipResult = RelationshipDelta,
 > = GraphEntityWithOperations<
   TEntity,
   OntahiSelectionEntity<TEntity, TRuntime>,
@@ -599,7 +601,8 @@ type BoundOntahiEntityBase<
     RuntimeBoundEntityRefRelationshipCommands<
       TEntity,
       RuntimeCommandError<TRuntime>,
-      RuntimeCommandOptions<TRuntime>
+      RuntimeCommandOptions<TRuntime>,
+      TRelationshipResult
     >
   > & { values: BoundRuntimeValueRefs<TValues> };
 
@@ -613,10 +616,11 @@ export type BoundOntahiEntity<
     any,
     any
   >,
-> = BoundOntahiEntityBase<TEntity, TOperations, TValues, TRuntime> &
+  TRelationshipResult = RelationshipDelta,
+> = BoundOntahiEntityBase<TEntity, TOperations, TValues, TRuntime, TRelationshipResult> &
   DirectDomainOperationMethods<
     DomainOperationsFrom<TOperations>,
-    keyof BoundOntahiEntityBase<TEntity, TOperations, TValues, TRuntime>
+    keyof BoundOntahiEntityBase<TEntity, TOperations, TValues, TRuntime, TRelationshipResult>
   >;
 
 export type OntahiEntityDeclaration<
@@ -743,6 +747,7 @@ export type BoundOntahiEntityDeclaration<
     any,
     any
   >,
+  TRelationshipResult = RelationshipDelta,
 > = TDeclaration extends {
   readonly [ONTAHI_CUSTOM_ENTITY_TYPE]: infer TBoundEntity extends object;
 }
@@ -754,7 +759,7 @@ export type BoundOntahiEntityDeclaration<
           values: infer TValues extends RuntimeValueRefDeclarations;
         };
       }
-    ? BoundOntahiEntity<TEntity, TOperations, TValues, TRuntime>
+    ? BoundOntahiEntity<TEntity, TOperations, TValues, TRuntime, TRelationshipResult>
     : never;
 
 type BoundOntahiEntityCommands<TEntity extends AnyEntityDefinition> = TEntity extends {

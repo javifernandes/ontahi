@@ -3,6 +3,8 @@ import { Effect } from 'effect';
 import {
   createGraphReadDispatcher as createDataGraphReadDispatcher,
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
+  assertMutationReactionConfiguration,
+  type AppliedRelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
   type DataGraphExecutionRuntime,
@@ -13,6 +15,7 @@ import {
   type RelationshipCommandPolicy,
   type ManyToManyRelationshipCommandPolicy,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type MutationReaction,
   type RelationshipCommandExecutionRuntime,
 } from '../../data-graph/index.js';
 
@@ -30,6 +33,7 @@ import {
   type AnyOntahiEntityDeclaration,
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
+import { createContextualMutationReactionExecutor } from './mutation-reaction.js';
 import type { TaskConfig } from './tasks.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
@@ -69,7 +73,8 @@ type OntahiGraphFacade<TRuntime extends AnyDataGraphRuntime> = ReturnType<
     RuntimeError<TRuntime>,
     RuntimeReadOptions<TRuntime>,
     RuntimeCommandOptions<TRuntime>,
-    TRuntime
+    TRuntime,
+    AppliedRelationshipMutationResult
   >
 >;
 type OntahiOwnedRuntimeDefinition<TRuntime extends AnyDataGraphRuntime> = {
@@ -114,6 +119,7 @@ export type OntahiOptions<
   entities:
     | TEntities
     | ((app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>) => TEntities);
+  reactions?: readonly MutationReaction[] | (() => readonly MutationReaction[]);
 };
 
 type BoundEntityRecord<
@@ -123,7 +129,8 @@ type BoundEntityRecord<
   ? {
       [TEntity in TEntities[number] as TEntity['name']]: BoundOntahiEntityDeclaration<
         TEntity,
-        TRuntime
+        TRuntime,
+        AppliedRelationshipMutationResult
       >;
     }
   : TEntities extends Record<string, object>
@@ -135,7 +142,7 @@ type BoundEntityRegistrationRecord<
   TRuntime extends AnyDataGraphRuntime,
 > = {
   [TName in keyof TEntities]: TEntities[TName] extends AnyOntahiEntityDeclaration
-    ? BoundOntahiEntityDeclaration<TEntities[TName], TRuntime>
+    ? BoundOntahiEntityDeclaration<TEntities[TName], TRuntime, AppliedRelationshipMutationResult>
     : TEntities[TName];
 };
 
@@ -154,7 +161,11 @@ export type ComposedOntahiApplication<
   app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>;
   registerEntity: <TDeclaration extends AnyOntahiEntityDeclaration>(
     declaration: TDeclaration,
-  ) => BoundOntahiEntityDeclaration<TDeclaration, StorageRuntime<TStorage>>;
+  ) => BoundOntahiEntityDeclaration<
+    TDeclaration,
+    StorageRuntime<TStorage>,
+    AppliedRelationshipMutationResult
+  >;
   registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
     entity: TEntity,
     boundEntity: TBoundEntity,
@@ -171,8 +182,42 @@ export const ontahi = <
 >(
   options: OntahiOptions<TStorage, TEntities, TCapabilities>,
 ): ComposedOntahiApplication<TStorage, TEntities, TCapabilities> => {
-  const graph = createDataGraphArchitectureAdapter<unknown, any, any, any, AnyDataGraphRuntime>({
+  let registeredForReactions: RegisteredArchitecture<any, any> | undefined;
+  let applicationForReactions: OntahiApplication | undefined;
+  let registeredReactions: readonly MutationReaction[] = [];
+  const relationshipCommandExecutor = createContextualMutationReactionExecutor<any, any>({
+    getReactions: () => registeredReactions,
+    invokeOperation: request => {
+      const operation = applicationForReactions?.resolveOperation(request.operationId);
+      if (!operation || !applicationForReactions) {
+        throw new Error(`Unknown Operation ${request.operationId}.`);
+      }
+      return applicationForReactions.invokeOperation(operation, request.input);
+    },
+    emitEvent: event => {
+      const effectors = registeredForReactions?.app.effects.effectors as
+        | {
+            'emit-event'?: (intent: {
+              kind: 'emit-event';
+              event: unknown;
+            }) => Effect.Effect<void, unknown>;
+          }
+        | undefined;
+      const effector = effectors?.['emit-event'];
+      if (!effector) throw new Error('No effector registered for emit-event intents');
+      return Effect.runPromise(effector({ kind: 'emit-event', event }));
+    },
+  });
+  const graph = createDataGraphArchitectureAdapter<
+    unknown,
+    any,
+    any,
+    any,
+    AnyDataGraphRuntime,
+    AppliedRelationshipMutationResult
+  >({
     defaultStorage: options.storage,
+    relationshipCommandExecutor,
   });
   const definition = {
     ...options.capabilities,
@@ -180,6 +225,7 @@ export const ontahi = <
     task: options.tasks ?? {},
   } as OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>;
   const registered = architecture(definition);
+  registeredForReactions = registered;
   const declaredEntities =
     typeof options.entities === 'function' ? options.entities(registered.app) : options.entities;
   if (Array.isArray(declaredEntities)) {
@@ -202,6 +248,15 @@ export const ontahi = <
     );
     options.storage.bindEntities?.(semanticDeclarations);
   }
+  const declaredReactions =
+    typeof options.reactions === 'function' ? options.reactions() : (options.reactions ?? []);
+  assertMutationReactionConfiguration(declaredReactions);
+  registeredReactions = declaredReactions.map(declaration => ({
+    id: declaration.id,
+    delivery: declaration.delivery,
+    when: declaration.when,
+    react: declaration.react,
+  }));
   const entityCommands = Object.fromEntries(
     semanticDeclarations.map(entity => [entity.name, graph.defineEntity(entity)]),
   );
@@ -226,10 +281,15 @@ export const ontahi = <
     entities,
     runtime: registered.app,
   });
+  applicationForReactions = application;
 
   const registerEntity = <TDeclaration extends AnyOntahiEntityDeclaration>(
     declaration: TDeclaration,
-  ): BoundOntahiEntityDeclaration<TDeclaration, StorageRuntime<TStorage>> => {
+  ): BoundOntahiEntityDeclaration<
+    TDeclaration,
+    StorageRuntime<TStorage>,
+    AppliedRelationshipMutationResult
+  > => {
     if (entityRegistry[declaration.name]) {
       throw new Error(`Entity ${declaration.name} is already registered.`);
     }
@@ -254,7 +314,11 @@ export const ontahi = <
       bindingContext,
     );
     entityRegistry[declaration.name] = bound;
-    return bound as BoundOntahiEntityDeclaration<TDeclaration, StorageRuntime<TStorage>>;
+    return bound as unknown as BoundOntahiEntityDeclaration<
+      TDeclaration,
+      StorageRuntime<TStorage>,
+      AppliedRelationshipMutationResult
+    >;
   };
   const registerBoundEntity = <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
     entity: TEntity,

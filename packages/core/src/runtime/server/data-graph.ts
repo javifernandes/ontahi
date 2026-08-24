@@ -1,6 +1,9 @@
 import { Effect } from 'effect';
 
-import type { RelationshipCommandExecutor } from '../../data-graph/relationship-command.js';
+import type {
+  RelationshipCommandExecutor,
+  RelationshipDelta,
+} from '../../data-graph/relationship-command.js';
 import {
   DataGraphTransactionUnavailableError,
   isDataGraphTransactionCapability,
@@ -13,7 +16,22 @@ import { OPERATION_CACHE_STORE_RESOURCE_KEY } from './operation/cache.js';
 import { withChildUnitOfWork } from './unit-of-work.js';
 
 export const DATA_GRAPH_RUNTIME_RESOURCE_KEY = 'dataGraph.runtime';
+export const DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR = Symbol(
+  'ontahi.dataGraph.relationshipCommandExecutor',
+);
 const DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY = 'dataGraph.transactionScope';
+const DATA_GRAPH_POST_COMMIT_WORK_RESOURCE_KEY = 'dataGraph.postCommitWork';
+
+type DataGraphPostCommitWork = () => Promise<void>;
+
+export const deferDataGraphPostCommitWork = (work: DataGraphPostCommitWork): boolean => {
+  const queue = getOperationRuntimeContext()?.resources.get(
+    DATA_GRAPH_POST_COMMIT_WORK_RESOURCE_KEY,
+  ) as DataGraphPostCommitWork[] | undefined;
+  if (!queue) return false;
+  queue.push(work);
+  return true;
+};
 
 export type WithDataGraphOptions<TInput, TRuntime> = {
   createRuntime: (runtime: LayerConcernRuntime<TInput>) => TRuntime;
@@ -55,15 +73,26 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
       return Effect.fail(new DataGraphTransactionUnavailableError());
     }
 
-    return runtime.transaction(transactionRuntime =>
-      withChildUnitOfWork(effect, {
-        isolatedResources: [OPERATION_CACHE_STORE_RESOURCE_KEY],
-        resources: [
-          [DATA_GRAPH_RUNTIME_RESOURCE_KEY, transactionRuntime],
-          [DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY, true],
-        ],
-      }),
-    );
+    const postCommitWork: DataGraphPostCommitWork[] = [];
+    return runtime
+      .transaction(transactionRuntime =>
+        withChildUnitOfWork(effect, {
+          isolatedResources: [OPERATION_CACHE_STORE_RESOURCE_KEY],
+          resources: [
+            [DATA_GRAPH_RUNTIME_RESOURCE_KEY, transactionRuntime],
+            [DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY, true],
+            [DATA_GRAPH_POST_COMMIT_WORK_RESOURCE_KEY, postCommitWork],
+          ],
+        }),
+      )
+      .pipe(
+        Effect.flatMap(value =>
+          Effect.promise(async () => {
+            for (const work of postCommitWork) await work();
+            return value;
+          }),
+        ),
+      );
   }) as Effect.Effect<
     TValue,
     TError | DataGraphTransactionError<TRuntime> | DataGraphTransactionUnavailableError,
@@ -73,7 +102,7 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
 export const createContextualRelationshipCommandExecutor = <
   TError = unknown,
   TOptions = undefined,
->(): RelationshipCommandExecutor<TError, TOptions> => ({
+>(): RelationshipCommandExecutor<TError, TOptions, RelationshipDelta> => ({
   runRelationshipCommand: (command, options) =>
     Effect.suspend(() => {
       const runtime =

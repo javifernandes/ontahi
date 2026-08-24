@@ -26,6 +26,7 @@ export * from './operation-input.js';
 export * from './output/index.js';
 export * from './planning.js';
 export * from './query.js';
+export * from './reaction.js';
 export * from './relationship-command.js';
 export * from './read-dispatcher.js';
 export * from './read-protocol.js';

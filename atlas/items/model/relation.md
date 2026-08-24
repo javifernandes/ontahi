@@ -171,6 +171,11 @@ defect rolls it back and restores the parent scope. Sequencing Effects without t
 still does not promise one shared transaction, and adapters must not publish committed outcomes or
 run post-application Reactions before the outer transaction commits.
 
+Application-bound execution enforces that boundary: it queues registered Reaction interpretation
+in the transaction child UnitOfWork, drains it after provider commit against the restored parent
+runtime, and discards it on rollback. Provider Relationship Command contracts still return only
+their exact Relationship Delta.
+
 Transaction is an optional execution capability, not Relation metadata or a portable Command.
 PostgreSQL proves it with one checked-out connection and a transaction-scoped runtime that omits
 the transaction method, making nested behavior unavailable in the first version. Remote runtimes,

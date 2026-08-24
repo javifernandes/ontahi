@@ -68,8 +68,9 @@ export type ExecutableRelationshipCommand<
   TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
   TError = never,
   TOptions = undefined,
+  TResult = RelationshipDelta,
 > = TCommand & {
-  run: (options?: TOptions) => Effect.Effect<RelationshipDelta, TError>;
+  run: (options?: TOptions) => Effect.Effect<TResult, TError>;
 };
 
 type RelationTargetRef<TRelation extends RelationDefinition> = EntityRef<
@@ -117,34 +118,41 @@ export type RuntimeBoundEntityRefRelationshipCommands<
   TEntity extends AnyEntityDefinition,
   TError = never,
   TOptions = undefined,
+  TResult = RelationshipDelta,
 > = BoundEntityRefRelationshipCommands<
   TEntity,
-  ExecutableRelationshipCommand<RelationshipCommand, TError, TOptions>,
-  ExecutableRelationshipCommand<ManyToManyRelationshipCommand, TError, TOptions>
+  ExecutableRelationshipCommand<RelationshipCommand, TError, TOptions, TResult>,
+  ExecutableRelationshipCommand<ManyToManyRelationshipCommand, TError, TOptions, TResult>
 >;
 
-export interface RelationshipCommandExecutionRuntime<TError = never, TOptions = undefined> {
+export interface RelationshipCommandExecutionRuntime<
+  TError = never,
+  TOptions = undefined,
+  TResult = RelationshipDelta,
+> {
   runRelationshipCommand(
     command: RelationshipCommand,
     options?: TOptions,
-  ): import('effect').Effect.Effect<RelationshipDelta, TError>;
+  ): import('effect').Effect.Effect<TResult, TError>;
 }
 
 export interface ManyToManyRelationshipCommandExecutionRuntime<
   TError = never,
   TOptions = undefined,
+  TResult = RelationshipDelta,
 > {
   runManyToManyRelationshipCommand(
     command: ManyToManyRelationshipCommand,
     options?: TOptions,
-  ): import('effect').Effect.Effect<RelationshipDelta, TError>;
+  ): import('effect').Effect.Effect<TResult, TError>;
 }
 
 export type RelationshipCommandExecutor<
   TError = never,
   TOptions = undefined,
-> = RelationshipCommandExecutionRuntime<TError, TOptions> &
-  ManyToManyRelationshipCommandExecutionRuntime<TError, TOptions>;
+  TResult = RelationshipDelta,
+> = RelationshipCommandExecutionRuntime<TError, TOptions, TResult> &
+  ManyToManyRelationshipCommandExecutionRuntime<TError, TOptions, TResult>;
 
 type RelationshipSelectionInput = AnyEntityRef | EntitySelectionSource<AnyEntityDefinition>;
 
@@ -248,6 +256,22 @@ const resolveRelation = (entity: AnyEntityDefinition, relationName: string): Res
   );
 };
 
+export const resolveCanonicalRelationshipIdentity = (
+  entity: AnyEntityDefinition,
+  relationName: string,
+): CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity => {
+  const definition = entity.relations[relationName];
+  if (definition?.relationKind === 'manyToMany') {
+    return {
+      sourceEntityName: entity.name,
+      relationName,
+      targetEntityName: definition.target.name,
+      cardinality: 'many-to-many',
+    };
+  }
+  return resolveRelation(entity, relationName).identity;
+};
+
 const assertRefEntity = (ref: AnyEntityRef, entity: AnyEntityDefinition, role: string) => {
   if (ref.entityName !== entity.name) {
     throw new Error(`Expected ${role} Ref for ${entity.name}, got ${ref.entityName}.`);
@@ -325,20 +349,24 @@ type EntityRefRelationshipCommandsForExecutor<TEntity extends AnyEntityDefinitio
   ? BoundEntityRefRelationshipCommands<TEntity>
   : RuntimeBoundEntityRefRelationshipCommands<
       TEntity,
-      TExecutor extends RelationshipCommandExecutionRuntime<infer TError, any> ? TError : never,
-      TExecutor extends RelationshipCommandExecutionRuntime<any, infer TOptions>
+      TExecutor extends RelationshipCommandExecutor<infer TError, any, any> ? TError : never,
+      TExecutor extends RelationshipCommandExecutor<any, infer TOptions, any>
         ? TOptions
-        : undefined
+        : undefined,
+      TExecutor extends RelationshipCommandExecutor<any, any, infer TResult>
+        ? TResult
+        : RelationshipDelta
     >;
 
 const bindExecutableRelationshipCommand = <
   TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
   TError,
   TOptions,
+  TResult,
 >(
   command: TCommand,
-  executor: RelationshipCommandExecutor<TError, TOptions>,
-): ExecutableRelationshipCommand<TCommand, TError, TOptions> => {
+  executor: RelationshipCommandExecutor<TError, TOptions, TResult>,
+): ExecutableRelationshipCommand<TCommand, TError, TOptions, TResult> => {
   Object.defineProperty(command, 'run', {
     configurable: true,
     enumerable: false,
@@ -349,13 +377,13 @@ const bindExecutableRelationshipCommand = <
     writable: true,
   });
 
-  return command as ExecutableRelationshipCommand<TCommand, TError, TOptions>;
+  return command as ExecutableRelationshipCommand<TCommand, TError, TOptions, TResult>;
 };
 
 export const bindEntityRefRelationshipCommands = <
   TEntity extends AnyEntityDefinition,
   TRef extends AnyEntityRef,
-  TExecutor extends RelationshipCommandExecutor<any, any> | undefined = undefined,
+  TExecutor extends RelationshipCommandExecutor<any, any, any> | undefined = undefined,
 >(
   ref: TRef,
   entity: TEntity,

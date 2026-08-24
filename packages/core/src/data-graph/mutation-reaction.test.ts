@@ -11,6 +11,7 @@ import {
   relationshipSet,
   toGraphCommandRequest,
   type DurableMutationReactionEnvelope,
+  type MutationReactionIntent,
   type RelationshipCommand,
   type RelationshipDelta,
 } from './index.js';
@@ -172,6 +173,50 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       {
         reactionId: 'broken-reaction',
         reactionKey: 'broken-reaction:outcome-1',
+        sourceOutcomeId: 'outcome-1',
+        delivery: 'inline',
+        status: 'failed',
+        failure: {
+          code: 'reaction_failed',
+          message: 'Post-commit Reaction evaluation failed.',
+        },
+      },
+    ]);
+  });
+
+  it('rejects every malformed follow-up intent before interpreting any of them', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const executeRelationshipCommand = vi.fn(async () => emptyDelta());
+    const emitEvent = vi.fn(async () => undefined);
+    const malformedIntents = [
+      { kind: 'emit-event', event: { type: 'must-not-be-emitted' } },
+      { kind: 'unknown' },
+    ] as unknown as readonly MutationReactionIntent[];
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-1',
+      executeRelationshipCommand,
+      emitEvent,
+      reactions: [
+        {
+          id: 'malformed-reaction',
+          delivery: 'inline',
+          when: { mutationKind: 'relationship-command' },
+          react: () => malformedIntents,
+        },
+      ],
+    });
+
+    const result = await run(parent);
+
+    expect(executeRelationshipCommand).toHaveBeenCalledOnce();
+    expect(emitEvent).not.toHaveBeenCalled();
+    expect(result.reactions).toEqual([
+      {
+        reactionId: 'malformed-reaction',
+        reactionKey: 'malformed-reaction:outcome-1',
         sourceOutcomeId: 'outcome-1',
         delivery: 'inline',
         status: 'failed',
@@ -539,5 +584,44 @@ describe('Applied Mutation Outcomes and Reactions', () => {
         }),
       }),
     ]);
+  });
+
+  it('observes an already-applied many-to-many root without executing it again', async () => {
+    const graph = defineSchoolGraph();
+    const Club = entity('AppliedClub', { id: field.id() }).manyToMany('courses', graph.Course);
+    const club = createEntityRef(Club, { id: 'club-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const command = relationshipSet(Club, 'courses', club).remove(course);
+    const delta = {
+      added: [],
+      removed: [{ relation: command.relation, source: club, target: course }],
+    } satisfies RelationshipDelta;
+    const executeRelationshipCommand = vi.fn(async () => emptyDelta());
+    const executeManyToManyRelationshipCommand = vi.fn(async () => emptyDelta());
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'outcome-applied',
+      executeRelationshipCommand,
+      executeManyToManyRelationshipCommand,
+      reactions: [],
+    });
+
+    const result = await run.applied(command, delta);
+
+    expect(executeRelationshipCommand).not.toHaveBeenCalled();
+    expect(executeManyToManyRelationshipCommand).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      root: {
+        kind: 'applied-mutation-outcome',
+        mutationKind: 'relationship-command',
+        command,
+        delta,
+        causality: {
+          outcomeId: 'outcome-applied',
+          rootOutcomeId: 'outcome-applied',
+          depth: 0,
+        },
+      },
+      reactions: [],
+    });
   });
 });

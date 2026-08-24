@@ -1,12 +1,13 @@
 # 135. Applied Mutation Outcomes And Reactions
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/135-applied-mutation-outcomes-and-reactions`
 
 Implemented slices:
 
-1. [135a. Selection-Valued Many-To-Many Core](../done/135a-selection-valued-many-to-many-core.md)
+1. [135a. Selection-Valued Many-To-Many Core](./135a-selection-valued-many-to-many-core.md)
+2. [135b. Declarative Reaction Authoring And Registration](./135b-declarative-reaction-authoring-and-registration.md)
 
 ## Summary
 
@@ -263,9 +264,9 @@ After Core and adapter conformance became green, the implementation:
 - [x] In-memory, PostgreSQL, and Supabase pass many-to-many Relation conformance.
 - [x] Todo no longer wraps structural tag add/remove behavior in Domain Operations.
 - [x] Ontahi developer docs and the BookOps developer book teach the expanded Relation concept.
-- [ ] Required coordination and post-application reaction are documented and tested separately.
-- [ ] `run-effect` is documented as a non-portable compatibility escape hatch.
-- [ ] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.
+- [x] Required coordination and post-application reaction are documented and tested separately.
+- [x] `run-effect` is documented as a non-portable compatibility escape hatch.
+- [x] Plan 132 remains the owner of durable identity, retry, and idempotency semantics.
 
 ## Open Questions
 
