@@ -86,9 +86,11 @@ the callback result, typed failure, and Effect requirements intact.
 `createPostgresDataGraphRuntime(...)` advertises that capability when its input is a PostgreSQL
 `Pool`. Execution checks out one client, begins the transaction, constructs a query-capable runtime
 over that client, and commits only after the callback succeeds. A typed failure, interruption, or
-defect rolls back before release. The scoped runtime is intentionally query-only and therefore
-cannot recursively start another transaction. A lower-level query-only runtime, Supabase, and the
-remote runtime remain non-transactional.
+defect rolls back before release. Transaction work is suspended until after `BEGIN`, so synchronous
+construction failures enter the same rollback path. A failed rollback does not replace the original
+work cause. The scoped runtime is intentionally query-only and therefore cannot recursively start
+another transaction. A lower-level query-only runtime, Supabase, and the remote runtime remain
+non-transactional.
 
 The Relation Atlas and provider READMEs now distinguish single-command atomicity, required
 multi-command coordination, and post-application Reactions. The public Core and PostgreSQL changes
@@ -97,9 +99,9 @@ are recorded in `.changeset/brave-transactions-compose.md`.
 ## Verification
 
 1. Core focused transaction contract: 2 tests passed.
-2. PostgreSQL focused transaction lifecycle: 3 tests passed.
+2. PostgreSQL focused transaction lifecycle: 5 tests passed.
 3. Complete Core suite: 81 files and 562 tests passed.
-4. Complete PostgreSQL suite: 8 files and 66 tests passed, including 34 tests against an ephemeral
+4. Complete PostgreSQL suite: 8 files and 68 tests passed, including 34 tests against an ephemeral
    PostgreSQL instance.
 5. All ten package typechecks passed.
 6. Core and PostgreSQL lint and builds passed.

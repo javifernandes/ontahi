@@ -38,11 +38,11 @@ export const createPostgresTransactionCapability = <TRuntime>(
       client =>
         executeTransactionStatement(client, 'BEGIN').pipe(
           Effect.zipRight(
-            work(createRuntime(client)).pipe(
+            Effect.suspend(() => work(createRuntime(client))).pipe(
               Effect.matchCauseEffect({
                 onFailure: cause =>
                   executeTransactionStatement(client, 'ROLLBACK').pipe(
-                    Effect.orDie,
+                    Effect.exit,
                     Effect.zipRight(Effect.failCause(cause)),
                   ),
                 onSuccess: result =>
