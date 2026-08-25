@@ -185,8 +185,9 @@ run post-application Reactions before the outer transaction commits.
 
 Application-bound execution enforces that boundary: it queues registered Reaction interpretation
 in the transaction child UnitOfWork, drains it after provider commit against the restored parent
-runtime, and discards it on rollback. Provider Relationship Command contracts still return only
-their exact Relationship Delta.
+runtime, and discards it on rollback. Provider Relationship Command contracts return an explicit
+result envelope: the applied variant carries the exact Relationship Delta, while an explicitly
+skipped stale precondition carries only its safe diagnostic.
 
 Transaction is an optional execution capability, not Relation metadata or a portable Command.
 PostgreSQL proves it with one checked-out connection and a transaction-scoped runtime that omits

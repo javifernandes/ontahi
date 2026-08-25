@@ -61,7 +61,9 @@ const isRelationshipFact = (value: unknown): value is RelationshipFact =>
   isRecord(value) &&
   isCanonicalRelationIdentity(value.relation) &&
   isEntityRef(value.source) &&
-  isEntityRef(value.target);
+  value.source.entityName === value.relation.sourceEntityName &&
+  isEntityRef(value.target) &&
+  value.target.entityName === value.relation.targetEntityName;
 
 export const isRelationshipCommandResult = (value: unknown): value is RelationshipCommandResult =>
   isRecord(value) &&
@@ -104,6 +106,23 @@ export const notAppliedRelationshipCommand = (
   diagnostic: relationshipPreconditionDiagnostic(command),
 });
 
+const diagnosticFromRecord = (
+  value: Record<string, unknown>,
+  command: RelationshipCommand | ManyToManyRelationshipCommand,
+): RelationshipCommandDiagnostic | undefined => {
+  if (isRelationshipCommandDiagnostic(value.diagnostic)) return value.diagnostic;
+  if (
+    value.reason === 'relation_constraint_rejected' &&
+    isRelationConstraintRejection(value.rejection)
+  ) {
+    return relationshipConstraintDiagnostic(value.rejection);
+  }
+  return value.reason === 'relationship_precondition_failed' &&
+    command.kind === 'relationship-command'
+    ? relationshipPreconditionDiagnostic(command)
+    : undefined;
+};
+
 export const relationshipCommandDiagnosticFromError = (
   error: unknown,
   command: RelationshipCommand | ManyToManyRelationshipCommand,
@@ -114,19 +133,8 @@ export const relationshipCommandDiagnosticFromError = (
     const current = pending.shift();
     if (!isRecord(current) || seen.has(current)) continue;
     seen.add(current);
-    if (isRelationshipCommandDiagnostic(current.diagnostic)) return current.diagnostic;
-    if (
-      current.reason === 'relation_constraint_rejected' &&
-      isRelationConstraintRejection(current.rejection)
-    ) {
-      return relationshipConstraintDiagnostic(current.rejection);
-    }
-    if (
-      current.reason === 'relationship_precondition_failed' &&
-      command.kind === 'relationship-command'
-    ) {
-      return relationshipPreconditionDiagnostic(command);
-    }
+    const diagnostic = diagnosticFromRecord(current, command);
+    if (diagnostic) return diagnostic;
     for (const key of Reflect.ownKeys(current)) {
       const nested = current[key as keyof typeof current];
       if (isRecord(nested) && !seen.has(nested)) pending.push(nested);

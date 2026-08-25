@@ -47,6 +47,36 @@ describe('Relationship Command results', () => {
         delta: { added: [{ relation: command.relation }], removed: [] },
       }),
     ).toBe(false);
+    expect(
+      isRelationshipCommandResult({
+        status: 'applied',
+        delta: {
+          added: [
+            {
+              relation: command.relation,
+              source: createEntityRef(graph.Course, { id: 'course-as-source' }),
+              target,
+            },
+          ],
+          removed: [],
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isRelationshipCommandResult({
+        status: 'applied',
+        delta: {
+          added: [
+            {
+              relation: command.relation,
+              source: command.source,
+              target: createEntityRef(graph.Student, { id: 'student-as-target' }),
+            },
+          ],
+          removed: [],
+        },
+      }),
+    ).toBe(false);
   });
 
   it('extracts only canonical safe diagnostics from nested provider failures', () => {
