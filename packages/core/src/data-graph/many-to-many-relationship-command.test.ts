@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
+  appliedRelationshipCommand,
   createEntityRef,
   createGraphCommandDispatcher,
   createInMemoryDataGraphRuntime,
@@ -117,7 +118,10 @@ describe('many-to-many Relationship Commands', () => {
           selection(Todo, todo => todo.id.eq('missing')),
         ).add(createEntityRef(Tag, { id: 'assignable' })),
       ),
-    ).resolves.toMatchObject({ _tag: 'Right', right: { added: [], removed: [] } });
+    ).resolves.toMatchObject({
+      _tag: 'Right',
+      right: { status: 'applied', delta: { added: [], removed: [] } },
+    });
     expect(facts).toEqual(beforeEmpty);
 
     facts.push({
@@ -133,7 +137,10 @@ describe('many-to-many Relationship Commands', () => {
           createEntityRef(Tag, { id: 'blocked' }),
         ),
       ),
-    ).resolves.toMatchObject({ _tag: 'Right', right: { removed: expect.any(Array) } });
+    ).resolves.toMatchObject({
+      _tag: 'Right',
+      right: { status: 'applied', delta: { removed: expect.any(Array) } },
+    });
     expect(facts.some(fact => fact.source.locator.id === 'completed')).toBe(false);
   });
   it('declares direct topology and preserves Selection-valued endpoints', () => {
@@ -217,10 +224,15 @@ describe('many-to-many Relationship Commands', () => {
       Effect.runPromise(runtime.runManyToManyRelationshipCommand(command));
 
     const added = await execute(add);
-    expect(added.added).toHaveLength(4);
-    expect(added.removed).toEqual([]);
-    expect(facts).toEqual(added.added);
-    await expect(execute(add)).resolves.toEqual({ added: [], removed: [] });
+    expect(added).toMatchObject({ status: 'applied' });
+    if (added.status !== 'applied') throw new Error('Expected an applied command.');
+    expect(added.delta.added).toHaveLength(4);
+    expect(added.delta.removed).toEqual([]);
+    expect(facts).toEqual(added.delta.added);
+    await expect(execute(add)).resolves.toEqual({
+      status: 'applied',
+      delta: { added: [], removed: [] },
+    });
     await expect(
       Effect.runPromise(
         runtime.get(
@@ -243,15 +255,21 @@ describe('many-to-many Relationship Commands', () => {
       createEntityRef(Tag, { id: 'tag-1' }),
     );
     await expect(execute(removeTag)).resolves.toEqual({
-      added: [],
-      removed: [
-        expect.objectContaining({
-          source: createEntityRef(Todo, { id: 'todo-1' }),
-          target: createEntityRef(Tag, { id: 'tag-1' }),
-        }),
-      ],
+      status: 'applied',
+      delta: {
+        added: [],
+        removed: [
+          expect.objectContaining({
+            source: createEntityRef(Todo, { id: 'todo-1' }),
+            target: createEntityRef(Tag, { id: 'tag-1' }),
+          }),
+        ],
+      },
     });
-    await expect(execute(removeTag)).resolves.toEqual({ added: [], removed: [] });
+    await expect(execute(removeTag)).resolves.toEqual({
+      status: 'applied',
+      delta: { added: [], removed: [] },
+    });
     expect(facts).toHaveLength(3);
   });
 
@@ -297,7 +315,7 @@ describe('many-to-many Relationship Commands', () => {
           emptyFiltered,
         ),
       ),
-    ).resolves.toEqual({ added: [], removed: [] });
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
   });
 
   it('is default-deny and executes through an explicit many-to-many policy', async () => {
@@ -317,11 +335,11 @@ describe('many-to-many Relationship Commands', () => {
     const command = relationshipSet(Todo, 'tags', todoRef).add(tagRef);
     const denied = createGraphCommandDispatcher({
       policies: [],
-      execute: async () => ({ added: [], removed: [] }),
+      execute: async () => appliedRelationshipCommand({ added: [], removed: [] }),
     });
     const allowed = createGraphCommandDispatcher({
       policies: [{ entity: Todo, relationName: 'tags', actions: ['link', 'unlink'] }],
-      execute: async () => ({ added: [], removed: [] }),
+      execute: async () => appliedRelationshipCommand({ added: [], removed: [] }),
       executeManyToMany: manyCommand =>
         Effect.runPromise(runtime.runManyToManyRelationshipCommand(manyCommand)),
     });
@@ -336,8 +354,11 @@ describe('many-to-many Relationship Commands', () => {
       {
         kind: 'graph-command-result',
         value: {
-          added: [expect.objectContaining({ source: todoRef, target: tagRef })],
-          removed: [],
+          status: 'applied',
+          delta: {
+            added: [expect.objectContaining({ source: todoRef, target: tagRef })],
+            removed: [],
+          },
         },
       },
     );
@@ -359,7 +380,7 @@ describe('many-to-many Relationship Commands', () => {
     });
     const dispatch = createGraphCommandDispatcher({
       policies: [{ entity: server.Todo, relationName: 'tags', actions: ['link'] }],
-      execute: async () => ({ added: [], removed: [] }),
+      execute: async () => appliedRelationshipCommand({ added: [], removed: [] }),
       executeManyToMany: command =>
         Effect.runPromise(serverRuntime.runManyToManyRelationshipCommand(command)),
     });
@@ -376,14 +397,17 @@ describe('many-to-many Relationship Commands', () => {
     await expect(
       Effect.runPromise(remote.runManyToManyRelationshipCommand(command)),
     ).resolves.toEqual({
-      added: [
-        {
-          relation: command.relation,
-          source: createEntityRef(client.Todo, { id: 'todo-1' }),
-          target: createEntityRef(client.Tag, { id: 'tag-1' }),
-        },
-      ],
-      removed: [],
+      status: 'applied',
+      delta: {
+        added: [
+          {
+            relation: command.relation,
+            source: createEntityRef(client.Todo, { id: 'todo-1' }),
+            target: createEntityRef(client.Tag, { id: 'tag-1' }),
+          },
+        ],
+        removed: [],
+      },
     });
     expect(facts).toHaveLength(1);
   });

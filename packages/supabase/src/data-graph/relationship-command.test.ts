@@ -77,8 +77,11 @@ describe('Supabase direct Relationship Commands', () => {
         ),
       ),
     ).resolves.toEqual({
-      added: [{ relation: command.relation, source: student, target: next }],
-      removed: [{ relation: command.relation, source: student, target: previous }],
+      status: 'applied',
+      delta: {
+        added: [{ relation: command.relation, source: student, target: next }],
+        removed: [{ relation: command.relation, source: student, target: previous }],
+      },
     });
     expect(rpc).toHaveBeenCalledWith('ontahi_apply_relationship', {
       command: compileSupabaseRelationshipRpcPayload(command, [Student, Course]),
@@ -114,6 +117,81 @@ describe('Supabase direct Relationship Commands', () => {
     ).rejects.toThrow('current target did not match its precondition');
   });
 
+  it('exposes a structured precondition cause to the configured error boundary', async () => {
+    const command = relationship(Student, 'course', student).assign(next, {
+      ifCurrent: previous,
+    });
+    const createStructuredError = (input: {
+      message: string;
+      logMessage: string;
+      cause: unknown;
+    }) => input;
+
+    const result = await Effect.runPromise(
+      executeSupabaseRelationshipCommandEffect(
+        {
+          getClient: () =>
+            Effect.succeed({
+              from: vi.fn(),
+              rpc: vi.fn().mockResolvedValue({
+                data: {
+                  sourceCount: 1,
+                  targetCount: 1,
+                  oldTarget: 'course-3',
+                  preconditionMatched: false,
+                  changed: false,
+                },
+                error: null,
+              }),
+            }),
+          createError: createStructuredError,
+          entities: [Student, Course],
+        },
+        command,
+      ).pipe(Effect.either),
+    );
+
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: {
+        cause: { reason: 'relationship_precondition_failed' },
+      },
+    });
+  });
+
+  it('returns not-applied when a stale conditional assignment opts into skip', async () => {
+    const command = relationship(Student, 'course', student).assign(next, {
+      ifCurrent: previous,
+      onMismatch: 'skip',
+    });
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        sourceCount: 1,
+        targetCount: 1,
+        oldTarget: 'course-3',
+        preconditionMatched: false,
+        changed: false,
+      },
+      error: null,
+    });
+
+    await expect(
+      Effect.runPromise(
+        executeSupabaseRelationshipCommandEffect(
+          {
+            getClient: () => Effect.succeed({ from: vi.fn(), rpc }),
+            createError,
+            entities: [Student, Course],
+          },
+          command,
+        ),
+      ),
+    ).resolves.toMatchObject({
+      status: 'not-applied',
+      diagnostic: { reason: 'relationship_precondition_failed' },
+    });
+  });
+
   it('routes the focused runtime capability with a configurable RPC name', async () => {
     const command = relationship(Course, 'students', previous).remove(student);
     const rpc = vi.fn().mockResolvedValue({
@@ -135,8 +213,11 @@ describe('Supabase direct Relationship Commands', () => {
     });
 
     await expect(Effect.runPromise(runtime.runRelationshipCommand(command))).resolves.toEqual({
-      added: [],
-      removed: [{ relation: command.relation, source: student, target: previous }],
+      status: 'applied',
+      delta: {
+        added: [],
+        removed: [{ relation: command.relation, source: student, target: previous }],
+      },
     });
     expect(rpc).toHaveBeenCalledWith('apply_direct_relation', { command: expect.any(Object) });
   });
@@ -165,7 +246,7 @@ describe('Supabase direct Relationship Commands', () => {
           command,
         ),
       ),
-    ).resolves.toEqual({ added: [], removed: [] });
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
   });
 
   it('fails explicitly when the atomic RPC capability is absent', async () => {

@@ -383,13 +383,16 @@ describe('PostgreSQL data graph runtime', () => {
     await expect(
       Effect.runPromise(runtime.runManyToManyRelationshipCommand(add)),
     ).resolves.toMatchObject({
-      added: [{ target: { locator: { id: 'tag-1' } } }, { target: { locator: { id: 'tag-1' } } }],
-      removed: [],
+      status: 'applied',
+      delta: {
+        added: [{ target: { locator: { id: 'tag-1' } } }, { target: { locator: { id: 'tag-1' } } }],
+        removed: [],
+      },
     });
     await expect(Effect.runPromise(runtime.runManyToManyRelationshipCommand(add))).resolves.toEqual(
       {
-        added: [],
-        removed: [],
+        status: 'applied',
+        delta: { added: [], removed: [] },
       },
     );
     await pool.query(`UPDATE relationship_todos SET is_completed = true WHERE id = 'todo-2'`);
@@ -453,7 +456,7 @@ describe('PostgreSQL data graph runtime', () => {
           ).add(selection(RelationshipTag, tag => tag.label.eq('Core'))),
         ),
       ),
-    ).resolves.toEqual({ added: [], removed: [] });
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
     const remove = relationshipSet(
       RelationshipTodo,
       'tags',
@@ -462,15 +465,18 @@ describe('PostgreSQL data graph runtime', () => {
     await expect(
       Effect.runPromise(runtime.runManyToManyRelationshipCommand(remove)),
     ).resolves.toMatchObject({
-      added: [],
-      removed: [
-        { source: { locator: { id: 'todo-1' } }, target: { locator: { id: 'tag-1' } } },
-        { source: { locator: { id: 'todo-2' } }, target: { locator: { id: 'tag-1' } } },
-      ],
+      status: 'applied',
+      delta: {
+        added: [],
+        removed: [
+          { source: { locator: { id: 'todo-1' } }, target: { locator: { id: 'tag-1' } } },
+          { source: { locator: { id: 'todo-2' } }, target: { locator: { id: 'tag-1' } } },
+        ],
+      },
     });
     await expect(
       Effect.runPromise(runtime.runManyToManyRelationshipCommand(remove)),
-    ).resolves.toEqual({ added: [], removed: [] });
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
     await expect(
       pool.query('SELECT todo_id, tag_id FROM relationship_todo_tags ORDER BY todo_id, tag_id'),
     ).resolves.toMatchObject({ rows: [] });
@@ -557,28 +563,31 @@ describe('PostgreSQL data graph runtime', () => {
         ),
       ),
     ).resolves.toEqual({
-      added: [
-        {
-          relation: {
-            sourceEntityName: 'RelationshipStudent',
-            fieldName: 'course',
-            targetEntityName: 'RelationshipCourse',
+      status: 'applied',
+      delta: {
+        added: [
+          {
+            relation: {
+              sourceEntityName: 'RelationshipStudent',
+              fieldName: 'course',
+              targetEntityName: 'RelationshipCourse',
+            },
+            source: student,
+            target: next,
           },
-          source: student,
-          target: next,
-        },
-      ],
-      removed: [
-        {
-          relation: {
-            sourceEntityName: 'RelationshipStudent',
-            fieldName: 'course',
-            targetEntityName: 'RelationshipCourse',
+        ],
+        removed: [
+          {
+            relation: {
+              sourceEntityName: 'RelationshipStudent',
+              fieldName: 'course',
+              targetEntityName: 'RelationshipCourse',
+            },
+            source: student,
+            target: previous,
           },
-          source: student,
-          target: previous,
-        },
-      ],
+        ],
+      },
     });
     await pool.query(
       `UPDATE relationship_students SET course_id = 'course-3' WHERE id = 'student-1'`,
@@ -598,6 +607,19 @@ describe('PostgreSQL data graph runtime', () => {
       left: { reason: 'relationship_precondition_failed' },
     });
     await expect(
+      Effect.runPromise(
+        runtime.runRelationshipCommand(
+          relationship(RelationshipStudent, 'course', student).assign(next, {
+            ifCurrent: previous,
+            onMismatch: 'skip',
+          }),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      status: 'not-applied',
+      diagnostic: { reason: 'relationship_precondition_failed' },
+    });
+    await expect(
       pool.query(`SELECT course_id FROM relationship_students WHERE id = 'student-1'`),
     ).resolves.toMatchObject({ rows: [{ course_id: 'course-3' }] });
 
@@ -607,7 +629,7 @@ describe('PostgreSQL data graph runtime', () => {
           relationship(RelationshipCourse, 'students', previous).remove(student),
         ),
       ),
-    ).resolves.toEqual({ added: [], removed: [] });
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
     const concurrent = createEntityRef(RelationshipCourse, { id: 'course-3' });
     await expect(
       Effect.runPromise(
@@ -616,18 +638,21 @@ describe('PostgreSQL data graph runtime', () => {
         ),
       ),
     ).resolves.toEqual({
-      added: [],
-      removed: [
-        {
-          relation: {
-            sourceEntityName: 'RelationshipStudent',
-            fieldName: 'course',
-            targetEntityName: 'RelationshipCourse',
+      status: 'applied',
+      delta: {
+        added: [],
+        removed: [
+          {
+            relation: {
+              sourceEntityName: 'RelationshipStudent',
+              fieldName: 'course',
+              targetEntityName: 'RelationshipCourse',
+            },
+            source: student,
+            target: concurrent,
           },
-          source: student,
-          target: concurrent,
-        },
-      ],
+        ],
+      },
     });
     await expect(
       Effect.runPromise(
@@ -635,14 +660,20 @@ describe('PostgreSQL data graph runtime', () => {
           relationship(RelationshipStudent, 'course', student).assign(next),
         ),
       ),
-    ).resolves.toMatchObject({ added: [{ target: next }], removed: [] });
+    ).resolves.toMatchObject({
+      status: 'applied',
+      delta: { added: [{ target: next }], removed: [] },
+    });
     await expect(
       Effect.runPromise(
         runtime.runRelationshipCommand(
           relationship(RelationshipStudent, 'course', student).clear(),
         ),
       ),
-    ).resolves.toMatchObject({ added: [], removed: [{ target: next }] });
+    ).resolves.toMatchObject({
+      status: 'applied',
+      delta: { added: [], removed: [{ target: next }] },
+    });
   });
 
   it('runs one fluent client Entity read directly and through Express over PostgreSQL', async () => {

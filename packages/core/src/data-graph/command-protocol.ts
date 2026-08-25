@@ -117,8 +117,13 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       typeof command.relation.targetEntityName !== 'string' ||
       !isEntityRef(command.source) ||
       (command.target !== undefined && !isEntityRef(command.target)) ||
+      (command.precondition !== undefined && command.action !== 'link') ||
       (command.precondition !== undefined &&
-        (!isRecord(command.precondition) || !isEntityRef(command.precondition.currentTarget))) ||
+        (!isRecord(command.precondition) ||
+          !isEntityRef(command.precondition.currentTarget) ||
+          (command.precondition.onMismatch !== undefined &&
+            command.precondition.onMismatch !== 'fail' &&
+            command.precondition.onMismatch !== 'skip'))) ||
       (command.action === 'link' && command.target === undefined) ||
       !isJsonValue(value)
     ) {
@@ -148,7 +153,14 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
           ...(command.target === undefined ? {} : { target: command.target }),
           ...(command.precondition === undefined
             ? {}
-            : { precondition: { currentTarget: command.precondition.currentTarget } }),
+            : {
+                precondition: {
+                  currentTarget: command.precondition.currentTarget,
+                  ...(command.precondition.onMismatch === undefined
+                    ? {}
+                    : { onMismatch: command.precondition.onMismatch }),
+                },
+              }),
         },
       }) as GraphCommandRequestV1,
     };

@@ -7,6 +7,7 @@ import {
   type RelationKind,
 } from './definitions.js';
 import type { AnyEntityRef, EntityRef } from './ref/index.js';
+import type { RelationshipCommandResult } from './relationship-command-result.js';
 import {
   copySelectionExpression,
   selectionReferences,
@@ -44,11 +45,15 @@ export type RelationshipCommand = {
   relation: CanonicalRelationIdentity;
   source: AnyEntityRef;
   target?: AnyEntityRef;
-  precondition?: { currentTarget: AnyEntityRef };
+  precondition?: {
+    currentTarget: AnyEntityRef;
+    onMismatch?: 'fail' | 'skip';
+  };
 };
 
 export type RelationshipAssignOptions<TRelation extends RelationDefinition> = {
   ifCurrent: RelationTargetRef<TRelation>;
+  onMismatch?: 'fail' | 'skip';
 };
 
 export type ManyToManyRelationshipCommand = {
@@ -68,7 +73,7 @@ export type ExecutableRelationshipCommand<
   TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
   TError = never,
   TOptions = undefined,
-  TResult = RelationshipDelta,
+  TResult = RelationshipCommandResult,
 > = TCommand & {
   run: (options?: TOptions) => Effect.Effect<TResult, TError>;
 };
@@ -118,7 +123,7 @@ export type RuntimeBoundEntityRefRelationshipCommands<
   TEntity extends AnyEntityDefinition,
   TError = never,
   TOptions = undefined,
-  TResult = RelationshipDelta,
+  TResult = RelationshipCommandResult,
 > = BoundEntityRefRelationshipCommands<
   TEntity,
   ExecutableRelationshipCommand<RelationshipCommand, TError, TOptions, TResult>,
@@ -128,7 +133,7 @@ export type RuntimeBoundEntityRefRelationshipCommands<
 export interface RelationshipCommandExecutionRuntime<
   TError = never,
   TOptions = undefined,
-  TResult = RelationshipDelta,
+  TResult = RelationshipCommandResult,
 > {
   runRelationshipCommand(
     command: RelationshipCommand,
@@ -139,7 +144,7 @@ export interface RelationshipCommandExecutionRuntime<
 export interface ManyToManyRelationshipCommandExecutionRuntime<
   TError = never,
   TOptions = undefined,
-  TResult = RelationshipDelta,
+  TResult = RelationshipCommandResult,
 > {
   runManyToManyRelationshipCommand(
     command: ManyToManyRelationshipCommand,
@@ -150,7 +155,7 @@ export interface ManyToManyRelationshipCommandExecutionRuntime<
 export type RelationshipCommandExecutor<
   TError = never,
   TOptions = undefined,
-  TResult = RelationshipDelta,
+  TResult = RelationshipCommandResult,
 > = RelationshipCommandExecutionRuntime<TError, TOptions, TResult> &
   ManyToManyRelationshipCommandExecutionRuntime<TError, TOptions, TResult>;
 
@@ -320,12 +325,22 @@ export const relationship = (
   };
 
   return {
-    assign: (target: AnyEntityRef, options?: { ifCurrent: AnyEntityRef }) => {
+    assign: (
+      target: AnyEntityRef,
+      options?: { ifCurrent: AnyEntityRef; onMismatch?: 'fail' | 'skip' },
+    ) => {
       assertDirection('forward', 'assign');
       if (options) assertRefEntity(options.ifCurrent, resolved.targetEntity, 'current target');
       return {
         ...command('link', target),
-        ...(options ? { precondition: { currentTarget: options.ifCurrent } } : {}),
+        ...(options
+          ? {
+              precondition: {
+                currentTarget: options.ifCurrent,
+                ...(options.onMismatch === undefined ? {} : { onMismatch: options.onMismatch }),
+              },
+            }
+          : {}),
       };
     },
     clear: () => {
@@ -396,8 +411,10 @@ export const bindEntityRefRelationshipCommands = <
     const direct = relationship(entity, relationName, ref);
 
     return {
-      assign: (target: AnyEntityRef, options?: { ifCurrent: AnyEntityRef }) =>
-        bindCommand(direct.assign(target, options)),
+      assign: (
+        target: AnyEntityRef,
+        options?: { ifCurrent: AnyEntityRef; onMismatch?: 'fail' | 'skip' },
+      ) => bindCommand(direct.assign(target, options)),
       clear: () => bindCommand(direct.clear()),
       add: (source: AnyEntityRef) => bindCommand(direct.add(source)),
       remove: (source: AnyEntityRef) => bindCommand(direct.remove(source)),

@@ -1,9 +1,7 @@
 import { Effect } from 'effect';
 
-import type {
-  RelationshipCommandExecutor,
-  RelationshipDelta,
-} from '../../data-graph/relationship-command.js';
+import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
+import type { RelationshipCommandExecutor } from '../../data-graph/relationship-command.js';
 import {
   DataGraphTransactionUnavailableError,
   isDataGraphTransactionCapability,
@@ -102,7 +100,7 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
 export const createContextualRelationshipCommandExecutor = <
   TError = unknown,
   TOptions = undefined,
->(): RelationshipCommandExecutor<TError, TOptions, RelationshipDelta> => ({
+>(): RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult> => ({
   runRelationshipCommand: (command, options) =>
     Effect.suspend(() => {
       const runtime =

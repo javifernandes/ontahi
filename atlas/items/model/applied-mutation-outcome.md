@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/131-relationship-semantics
   - ontahi://plans/135-applied-mutation-outcomes-and-reactions
   - ontahi://plans/132-durable-invocation-identity-and-idempotency
+  - ontahi://plans/136g-portable-relationship-command-outcomes
 ---
 
 An [[ontahi.model.applied-mutation-outcome|Applied Mutation Outcome]] is a transport-neutral fact
@@ -36,9 +37,15 @@ Post-application reaction failure does not mean that the parent mutation was rol
 acceptance, retry, and idempotency require explicit runtime capabilities and Plan 132's identity
 model.
 
-Application-bound Relationship Commands expose the outcome as
-`{ status: 'applied', outcome, reactions }` without changing provider or transport contracts that
-return a Relationship Delta. When execution belongs to an outer Data Graph transaction, `applied`
-first describes transaction-local application rather than a premature commit claim. Registered
-Reactions are interpreted only after that transaction commits; rollback publishes neither their
-effects nor their execution evidence.
+Provider and remote Relationship Command execution expose an explicit result envelope. Applied
+commands return `{ status: 'applied', delta }`; a conditional command authored with
+`onMismatch: 'skip'` may return `{ status: 'not-applied', diagnostic }`. An applied idempotent empty
+delta is therefore not confused with a stale transition. Default conditional mismatch remains a
+typed failure.
+
+Application-bound Relationship Commands enrich the applied variant as
+`{ status: 'applied', outcome, reactions }`. The not-applied variant creates no Applied Mutation
+Outcome and runs no Reactions. When execution belongs to an outer Data Graph transaction,
+`applied` first describes transaction-local application rather than a premature commit claim.
+Registered Reactions are interpreted only after that transaction commits; rollback publishes
+neither their effects nor their execution evidence.

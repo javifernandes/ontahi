@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  appliedRelationshipCommand,
   createEntityRef,
   createGraphCommandDispatcher,
   entity,
@@ -88,7 +89,8 @@ describe('graph Relationship Command dispatcher', () => {
       ],
       removed: [],
     };
-    const execute = vi.fn(async () => delta);
+    const result = appliedRelationshipCommand(delta);
+    const execute = vi.fn(async () => result);
     const dispatch = createGraphCommandDispatcher({
       policies: [policyFor(server, ['link'])],
       execute,
@@ -97,7 +99,7 @@ describe('graph Relationship Command dispatcher', () => {
 
     await expect(dispatch(toGraphCommandRequest(commandFor(client)), context)).resolves.toEqual({
       kind: 'graph-command-result',
-      value: delta,
+      value: result,
     });
     expect(execute).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledWith(commandFor(server), context);
@@ -120,6 +122,66 @@ describe('graph Relationship Command dispatcher', () => {
       error: {
         code: 'execution_unavailable',
         message: 'Data graph Command execution is temporarily unavailable.',
+      },
+    });
+    expect(reportError).toHaveBeenCalledWith(cause);
+  });
+
+  it('rejects malformed executor results at the transport boundary', async () => {
+    const graph = defineSchoolGraph();
+    const reportError = vi.fn();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [policyFor(graph)],
+      execute: vi.fn(async () => ({ added: [], removed: [] }) as never),
+      reportError,
+    });
+
+    await expect(
+      dispatch(toGraphCommandRequest(commandFor(graph)), { authority: undefined }),
+    ).resolves.toEqual({
+      kind: 'protocol-error',
+      error: {
+        code: 'execution_unavailable',
+        message: 'Data graph Command execution is temporarily unavailable.',
+      },
+    });
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Relationship Command result must be valid and JSON-safe.',
+      }),
+    );
+  });
+
+  it('preserves structured Relationship constraint rejections without leaking provider errors', async () => {
+    const graph = defineSchoolGraph();
+    const cause = Object.assign(new Error('provider detail'), {
+      reason: 'relation_constraint_rejected' as const,
+      rejection: {
+        version: 1 as const,
+        code: 'course_closed',
+        message: 'This course is closed.',
+        parameters: { status: 'closed' },
+      },
+    });
+    const reportError = vi.fn();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [policyFor(graph)],
+      execute: vi.fn(async () => Promise.reject(cause)),
+      reportError,
+    });
+
+    await expect(
+      dispatch(toGraphCommandRequest(commandFor(graph)), { authority: undefined }),
+    ).resolves.toEqual({
+      kind: 'graph-command-rejection',
+      diagnostic: {
+        reason: 'relation_constraint_rejected',
+        rejection: {
+          version: 1,
+          code: 'course_closed',
+          message: 'This course is closed.',
+          parameters: { status: 'closed' },
+        },
       },
     });
     expect(reportError).toHaveBeenCalledWith(cause);

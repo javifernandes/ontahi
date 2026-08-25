@@ -8,7 +8,7 @@ import {
   type GraphCommandSpec,
   type GraphReadIntent,
   type ManyToManyRelationshipCommand,
-  type RelationshipDelta,
+  type RelationshipCommandResult,
   type QueryOrView,
   type ViewDefinition,
 } from '@ontahi/core/data-graph';
@@ -178,8 +178,13 @@ export function useManyToManyRelationshipCommand<
   TCommandOptions = TReadOptions,
 >(
   buildCommand: (variables: TVariables) => ManyToManyRelationshipCommand,
-  options?: GraphCommandHookOptions<RelationshipDelta, TVariables, TContext, TCommandOptions>,
-): UseMutationResult<RelationshipDelta, Error, TVariables, TContext> {
+  options?: GraphCommandHookOptions<
+    RelationshipCommandResult,
+    TVariables,
+    TContext,
+    TCommandOptions
+  >,
+): UseMutationResult<RelationshipCommandResult, Error, TVariables, TContext> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
   const queryClient = useQueryClient();
 

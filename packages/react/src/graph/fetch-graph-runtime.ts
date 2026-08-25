@@ -2,6 +2,7 @@
 
 import {
   createRemoteDataGraphRuntime,
+  isGraphCommandRejection,
   isGraphCommandProtocolError,
   isGraphReadProtocolError,
   type DataGraphExecutionRuntime,
@@ -83,7 +84,11 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
       body: JSON.stringify(request),
     });
     const payload: unknown = await response.json();
-    if (!response.ok && !isGraphCommandProtocolError(payload)) {
+    if (
+      !response.ok &&
+      !isGraphCommandProtocolError(payload) &&
+      !isGraphCommandRejection(payload)
+    ) {
       throw new Error(`Graph Command request failed with status ${response.status}.`);
     }
     return payload;

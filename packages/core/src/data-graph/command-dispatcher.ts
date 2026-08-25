@@ -1,4 +1,5 @@
 import { cloneJson, isJsonValue } from '../value/json.js';
+import { isRecord } from '../value/object.js';
 
 import {
   graphCommandProtocolError,
@@ -7,11 +8,14 @@ import {
   type GraphCommandProtocolError,
 } from './command-protocol.js';
 import { isReferenceFieldDefinition, type AnyEntityDefinition } from './definitions.js';
-import type {
-  ManyToManyRelationshipCommand,
-  RelationshipCommand,
-  RelationshipDelta,
-} from './relationship-command.js';
+import {
+  isRelationshipCommandDiagnostic,
+  isRelationshipCommandResult,
+  relationshipCommandDiagnosticFromError,
+  type RelationshipCommandDiagnostic,
+  type RelationshipCommandResult,
+} from './relationship-command-result.js';
+import type { ManyToManyRelationshipCommand, RelationshipCommand } from './relationship-command.js';
 
 export type RelationshipCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   readonly entity: TEntity;
@@ -32,18 +36,22 @@ export type GraphCommandDispatchContext<TAuthority> = {
 };
 
 export type GraphCommandDispatchResponse =
-  | { readonly kind: 'graph-command-result'; readonly value: RelationshipDelta }
+  | { readonly kind: 'graph-command-result'; readonly value: RelationshipCommandResult }
+  | {
+      readonly kind: 'graph-command-rejection';
+      readonly diagnostic: RelationshipCommandDiagnostic;
+    }
   | GraphCommandProtocolError;
 
 export type GraphCommandDispatchExecutor<TAuthority> = (
   command: RelationshipCommand,
   context: GraphCommandDispatchContext<TAuthority>,
-) => Promise<RelationshipDelta>;
+) => Promise<RelationshipCommandResult>;
 
 export type ManyToManyGraphCommandDispatchExecutor<TAuthority> = (
   command: ManyToManyRelationshipCommand,
   context: GraphCommandDispatchContext<TAuthority>,
-) => Promise<RelationshipDelta>;
+) => Promise<RelationshipCommandResult>;
 
 export type CreateGraphCommandDispatcherOptions<TAuthority> = {
   readonly policies: readonly (RelationshipCommandPolicy | ManyToManyRelationshipCommandPolicy)[];
@@ -51,6 +59,13 @@ export type CreateGraphCommandDispatcherOptions<TAuthority> = {
   readonly executeManyToMany?: ManyToManyGraphCommandDispatchExecutor<TAuthority>;
   readonly reportError?: (error: unknown) => void;
 };
+
+export const isGraphCommandRejection = (
+  value: unknown,
+): value is Extract<GraphCommandDispatchResponse, { kind: 'graph-command-rejection' }> =>
+  isRecord(value) &&
+  value.kind === 'graph-command-rejection' &&
+  isRelationshipCommandDiagnostic(value.diagnostic);
 
 const policyKey = (entityName: string, fieldName: string, targetEntityName: string) =>
   `${entityName}\u0000${fieldName}\u0000${targetEntityName}`;
@@ -123,14 +138,19 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
   }
 
   const executeSafely = async (
-    run: () => Promise<RelationshipDelta>,
+    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    run: () => Promise<RelationshipCommandResult>,
   ): Promise<GraphCommandDispatchResponse> => {
     try {
       const value = await run();
-      if (!isJsonValue(value)) throw new Error('Relationship Delta must be JSON-safe.');
+      if (!isRelationshipCommandResult(value) || !isJsonValue(value)) {
+        throw new Error('Relationship Command result must be valid and JSON-safe.');
+      }
       return { kind: 'graph-command-result', value: cloneJson(value) };
     } catch (error) {
       reportError?.(error);
+      const diagnostic = relationshipCommandDiagnosticFromError(error, command);
+      if (diagnostic) return { kind: 'graph-command-rejection', diagnostic };
       return graphCommandProtocolError(
         'execution_unavailable',
         'Data graph Command execution is temporarily unavailable.',
@@ -167,7 +187,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         'Many-to-many Relationship Command execution is unavailable.',
       );
     }
-    return executeSafely(() => executeManyToMany(resolvedCommand, context));
+    return executeSafely(resolvedCommand, () => executeManyToMany(resolvedCommand, context));
   };
 
   const dispatchDirect = async (
@@ -193,7 +213,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     if (resolvedCommand.kind !== 'relationship-command') {
       return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
     }
-    return executeSafely(() => execute(resolvedCommand, context));
+    return executeSafely(resolvedCommand, () => execute(resolvedCommand, context));
   };
 
   return async (

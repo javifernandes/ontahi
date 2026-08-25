@@ -378,14 +378,17 @@ describe('data-graph supabase runtime helpers', () => {
         ),
       ),
     ).resolves.toEqual({
-      added: [
-        {
-          relation: command.relation,
-          source: createEntityRef(Todo, { id: 'todo-1' }),
-          target: createEntityRef(Tag, { id: 'tag-1' }),
-        },
-      ],
-      removed: [],
+      status: 'applied',
+      delta: {
+        added: [
+          {
+            relation: command.relation,
+            source: createEntityRef(Todo, { id: 'todo-1' }),
+            target: createEntityRef(Tag, { id: 'tag-1' }),
+          },
+        ],
+        removed: [],
+      },
     });
     expect(rpc).toHaveBeenCalledOnce();
     expect(rpc).toHaveBeenCalledWith('ontahi_apply_many_to_many_relationship', {

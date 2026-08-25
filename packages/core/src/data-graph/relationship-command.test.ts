@@ -71,8 +71,11 @@ describe('relationship commands', () => {
         executeInMemoryRelationshipCommandEffect(dataset, [Course, Student], command),
       ),
     ).resolves.toEqual({
-      added: [{ relation: command.relation, source: student, target: next }],
-      removed: [{ relation: command.relation, source: student, target: previous }],
+      status: 'applied',
+      delta: {
+        added: [{ relation: command.relation, source: student, target: next }],
+        removed: [{ relation: command.relation, source: student, target: previous }],
+      },
     });
     expect(dataset.Student).toEqual([{ id: 'student-1', course: 'course-2' }]);
   });
@@ -100,6 +103,43 @@ describe('relationship commands', () => {
     expect(dataset.Student).toEqual([{ id: 'student-1', course: 'course-3' }]);
   });
 
+  it('returns an observable not-applied result when a stale assignment opts into skip', async () => {
+    const current = createEntityRef(Course, { id: 'course-3' });
+    const expected = createEntityRef(Course, { id: 'course-1' });
+    const next = createEntityRef(Course, { id: 'course-2' });
+    const dataset = {
+      Course: [{ id: 'course-1' }, { id: 'course-2' }, { id: 'course-3' }],
+      Student: [{ id: 'student-1', course: 'course-3' }],
+    };
+    const command = relationship(Student, 'course', student).assign(next, {
+      ifCurrent: expected,
+      onMismatch: 'skip',
+    });
+
+    await expect(
+      Effect.runPromise(
+        executeInMemoryRelationshipCommandEffect(dataset, [Course, Student], command),
+      ),
+    ).resolves.toEqual({
+      status: 'not-applied',
+      diagnostic: {
+        reason: 'relationship_precondition_failed',
+        rejection: {
+          version: 1,
+          code: 'relationship_precondition_failed',
+          message: 'Current Relation target did not match the command precondition.',
+          parameters: {
+            sourceEntityName: 'Student',
+            fieldName: 'course',
+            targetEntityName: 'Course',
+          },
+        },
+      },
+    });
+    expect(command.precondition).toEqual({ currentTarget: expected, onMismatch: 'skip' });
+    expect(dataset.Student).toEqual([{ id: 'student-1', course: current.locator.id }]);
+  });
+
   it('rejects endpoint refs that do not belong to the Relation', () => {
     expect(() => relationship(Student, 'course', course)).toThrow(
       'Expected relationship subject Ref for Student, got Course.',
@@ -125,36 +165,45 @@ describe('relationship commands', () => {
 
     await expect(execute(relationship(Student, 'course', student).assign(course))).resolves.toEqual(
       {
-        added: [
-          {
-            relation: {
-              sourceEntityName: 'Student',
-              fieldName: 'course',
-              targetEntityName: 'Course',
+        status: 'applied',
+        delta: {
+          added: [
+            {
+              relation: {
+                sourceEntityName: 'Student',
+                fieldName: 'course',
+                targetEntityName: 'Course',
+              },
+              source: student,
+              target: course,
             },
-            source: student,
-            target: course,
-          },
-        ],
-        removed: [],
+          ],
+          removed: [],
+        },
       },
     );
     await expect(execute(relationship(Course, 'students', course).add(student))).resolves.toEqual({
-      added: [],
-      removed: [],
+      status: 'applied',
+      delta: { added: [], removed: [] },
     });
     await expect(
       execute(relationship(Student, 'course', student).assign(otherCourse)),
     ).resolves.toEqual({
-      added: [expect.objectContaining({ target: otherCourse })],
-      removed: [expect.objectContaining({ target: course })],
+      status: 'applied',
+      delta: {
+        added: [expect.objectContaining({ target: otherCourse })],
+        removed: [expect.objectContaining({ target: course })],
+      },
     });
     await expect(
       execute(relationship(Course, 'students', course).remove(student)),
-    ).resolves.toEqual({ added: [], removed: [] });
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
     await expect(execute(relationship(Student, 'course', student).clear())).resolves.toEqual({
-      added: [],
-      removed: [expect.objectContaining({ target: otherCourse })],
+      status: 'applied',
+      delta: {
+        added: [],
+        removed: [expect.objectContaining({ target: otherCourse })],
+      },
     });
     expect(dataset.Student).toEqual([{ id: 'student-1', course: null }]);
   });

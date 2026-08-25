@@ -9,6 +9,7 @@ import {
   type AppliedRelationshipMutationResult,
   type InMemoryDataGraphError,
   type InMemoryDataset,
+  type RelationshipMutationResult,
 } from '../../data-graph/index.js';
 
 import { entity, layer, ontahi, relation } from './index.js';
@@ -43,6 +44,12 @@ const defineClassroom = () => {
     }),
   });
   return { Course, Student };
+};
+
+const assertApplied: (
+  result: RelationshipMutationResult,
+) => asserts result is AppliedRelationshipMutationResult = result => {
+  expect(result.status).toBe('applied');
 };
 
 describe('Ontahi Reaction registration', () => {
@@ -99,7 +106,7 @@ describe('Ontahi Reaction registration', () => {
       'course-1',
     ).students.remove(application.graph.entities.ReactionClassroomStudent.refById('student-1'));
     expectTypeOf(command.run()).toEqualTypeOf<
-      Effect.Effect<AppliedRelationshipMutationResult, InMemoryDataGraphError>
+      Effect.Effect<RelationshipMutationResult, InMemoryDataGraphError>
     >();
     const removeStudent = layer('tests.classroom.reactions', {
       concerns: [application.app.graph.withRuntime()],
@@ -107,7 +114,8 @@ describe('Ontahi Reaction registration', () => {
 
     const result = await removeStudent();
 
-    expectTypeOf(result.status).toEqualTypeOf<'applied'>();
+    expectTypeOf(result.status).toEqualTypeOf<'applied' | 'not-applied'>();
+    assertApplied(result);
     expect(runRelationshipCommand).toHaveBeenCalledOnce();
     expect(result).toMatchObject({
       status: 'applied',
@@ -289,6 +297,7 @@ describe('Ontahi Reaction registration', () => {
               application.graph.entities.ReactionClassroomStudent.refById('student-1'),
             )
             .run();
+          assertApplied(result);
           expect(order).toEqual(['begin', 'apply']);
           expect(result.reactions).toEqual([]);
           return result;
@@ -298,6 +307,7 @@ describe('Ontahi Reaction registration', () => {
 
     const result = await transition();
 
+    assertApplied(result);
     expect(order).toEqual(['begin', 'apply', 'commit', 'reaction']);
     expect(result.reactions).toMatchObject([{ reactionId: 'after-commit', status: 'emitted' }]);
 
@@ -494,6 +504,7 @@ describe('Ontahi Reaction registration', () => {
 
     const result = await removeCourse();
 
+    assertApplied(result);
     expect(result.reactions).toMatchObject([
       {
         reactionId: 'move-and-record',
@@ -510,5 +521,53 @@ describe('Ontahi Reaction registration', () => {
       { id: 'student-1', course: 'course-2' },
     ]);
     expect(relationships).toHaveLength(1);
+  });
+
+  it('does not create an Applied Mutation Outcome or run Reactions for a skipped mismatch', async () => {
+    const { Course, Student } = defineClassroom();
+    const dataset: InMemoryDataset = {
+      ReactionClassroomCourse: [
+        { id: 'course-1', availableSeats: 1 },
+        { id: 'course-2', availableSeats: 1 },
+        { id: 'course-3', availableSeats: 1 },
+      ],
+      ReactionClassroomStudent: [{ id: 'student-1', course: 'course-3' }],
+    };
+    const events: unknown[] = [];
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset }),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [Course, Student],
+      reactions: () => [
+        reaction
+          .relationship(Course, 'students')
+          .added({ id: 'student-added', delivery: 'inline' })
+          .emit({ type: 'StudentAddedToCourse' }),
+      ],
+    });
+    const reassign = layer('tests.classroom.skipped-reassignment', {
+      concerns: [application.app.graph.withRuntime()],
+    }).effect('reassign', () =>
+      application.graph.entities.ReactionClassroomStudent.refById('student-1')
+        .course.assign(application.graph.entities.ReactionClassroomCourse.refById('course-2'), {
+          ifCurrent: application.graph.entities.ReactionClassroomCourse.refById('course-1'),
+          onMismatch: 'skip',
+        })
+        .run(),
+    );
+
+    await expect(reassign()).resolves.toMatchObject({
+      status: 'not-applied',
+      diagnostic: { reason: 'relationship_precondition_failed' },
+    });
+    expect(events).toEqual([]);
+    expect(dataset.ReactionClassroomStudent).toEqual([{ id: 'student-1', course: 'course-3' }]);
   });
 });

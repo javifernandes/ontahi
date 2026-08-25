@@ -184,8 +184,25 @@ The thunk form is useful when circular Entity declarations defer Relation resolu
 evaluates it once after resolving the application Entity registry, validates unique non-empty
 Reaction ids, and stores the canonical matchers. A static array is also accepted.
 
-Bound Relationship Command execution returns application evidence while provider runtimes keep
-their lower-level `RelationshipDelta` contract:
+Provider runtimes return an explicit Relationship Command result. An applied command carries its
+exact delta, including an idempotent empty delta; a conditional command may instead report that it
+was not applied:
+
+```ts
+const result =
+  yield *
+  student.course.assign(nextCourse, { ifCurrent: previousCourse, onMismatch: 'skip' }).run();
+
+if (result.status === 'not-applied') {
+  result.diagnostic.reason; // 'relationship_precondition_failed'
+}
+```
+
+Omitting `onMismatch` (or setting it to `fail`) preserves the typed failure channel. Constraint and
+precondition diagnostics remain JSON-safe through remote execution; they expose structural
+Relation identity and declared safe rejection parameters, not the actual current target.
+
+Application-bound execution enriches only applied results with mutation and Reaction evidence:
 
 ```ts
 const result =
@@ -199,6 +216,9 @@ result.outcome.command;
 result.outcome.delta;
 result.reactions;
 ```
+
+A skipped application-bound command returns `{ status: 'not-applied', diagnostic }`, creates no
+Applied Mutation Outcome, and runs no Reactions.
 
 `reaction.intent.execute(...)`, `.invoke(...)`, and `.emit(...)` express follow-up Commands,
 Operation Invocations, and Events without embedding an arbitrary effect callback in Relation

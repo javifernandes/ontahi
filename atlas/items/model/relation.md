@@ -25,6 +25,7 @@ relatedPlans:
   - ontahi://plans/136d-supabase-direct-relation-compare-and-set
   - ontahi://plans/136e-postgres-relation-participant-eligibility
   - ontahi://plans/136f-supabase-relation-participant-eligibility
+  - ontahi://plans/136g-portable-relationship-command-outcomes
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
   - ontahi://plans/139-relations-lifecycle-release-proof
@@ -129,7 +130,11 @@ student.course.assign(nextCourse, { ifCurrent: previousCourse });
 This is one conditional structural transition. The canonical command carries portable expected
 current-target identity, and execution compares it inside the same mutation boundary that replaces
 the edge. A mismatch is an observable conflict, not a successful no-op; unconditional `assign`
-remains available when last-write-wins is intentional. Provider-backed compare-and-set compilation
+remains available when last-write-wins is intentional. The default mismatch remains a typed
+failure. Callers that explicitly choose
+`assign(nextCourse, { ifCurrent: previousCourse, onMismatch: 'skip' })` receive a portable
+`not-applied` result instead. Applied results always retain an exact delta, so an idempotent empty
+delta is distinguishable from a skipped stale transition. Provider-backed compare-and-set compilation
 must preserve that atomic boundary before advertising support. PostgreSQL now lowers direct
 Relationship Commands to one guarded statement that locks and resolves the source, verifies the
 target and expected current edge, applies the change, and returns enough state to materialize the
@@ -156,9 +161,16 @@ The mutation lifecycle keeps those responsibilities explicit:
 1. cardinality-specific authoring produces a canonical Relationship Command;
 2. policy establishes whether the caller may attempt it;
 3. execution resolves participants and verifies structural preconditions and eligibility;
-4. storage applies the edge change atomically and returns the exact Relationship Delta;
-5. the runtime records an Applied Mutation Outcome;
+4. storage either applies the edge atomically and returns `applied` with the exact Relationship
+   Delta, or returns an explicitly requested `not-applied` precondition result;
+5. only an applied result becomes an Applied Mutation Outcome;
 6. application-registered Reactions may match that outcome and request semantic follow-up intents.
+
+The graph boundary transports precondition and constraint rejections as structured JSON-safe
+diagnostics. Constraint diagnostics preserve the declaration's version, stable code, safe message,
+and scalar parameters. Precondition diagnostics expose canonical Relation identity without
+revealing the actual current target. Protocol validation, policy denial, semantic rejection, and
+infrastructure unavailability remain distinct response categories.
 
 Only steps required for the primary invariant belong before edge application. Reactions occur after
 an applied outcome and cannot imply rollback. A Data Graph transaction capability may coordinate
@@ -173,8 +185,9 @@ run post-application Reactions before the outer transaction commits.
 
 Application-bound execution enforces that boundary: it queues registered Reaction interpretation
 in the transaction child UnitOfWork, drains it after provider commit against the restored parent
-runtime, and discards it on rollback. Provider Relationship Command contracts still return only
-their exact Relationship Delta.
+runtime, and discards it on rollback. Provider Relationship Command contracts return an explicit
+result envelope: the applied variant carries the exact Relationship Delta, while an explicitly
+skipped stale precondition carries only its safe diagnostic.
 
 Transaction is an optional execution capability, not Relation metadata or a portable Command.
 PostgreSQL proves it with one checked-out connection and a transaction-scoped runtime that omits

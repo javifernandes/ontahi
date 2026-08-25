@@ -102,6 +102,67 @@ describe('Relationship Command runtime routing', () => {
     });
   });
 
+  it('preserves conditional mismatch semantics through remote execution', async () => {
+    const client = defineSchoolGraph();
+    const server = defineSchoolGraph();
+    const serverDataset: InMemoryDataset = {
+      Course: [{ id: 'course-1' }, { id: 'course-2' }, { id: 'course-3' }],
+      Student: [{ id: 'student-1', course: 'course-3' }],
+    };
+    const serverRuntime = createInMemoryDataGraphRuntime({
+      dataset: serverDataset,
+      entities: [server.Student, server.Course],
+    });
+    const dispatch = createGraphCommandDispatcher({
+      policies: [{ entity: server.Student, fieldName: 'course', actions: ['link'] }],
+      execute: command => Effect.runPromise(serverRuntime.runRelationshipCommand(command)),
+    });
+    const remote = createRemoteDataGraphRuntime({
+      transport: vi.fn(),
+      commandTransport: request => dispatch(request, { authority: undefined }),
+    });
+    const assign = (onMismatch?: 'skip') =>
+      relationship(
+        client.Student,
+        'course',
+        createEntityRef(client.Student, { id: 'student-1' }),
+      ).assign(createEntityRef(client.Course, { id: 'course-2' }), {
+        ifCurrent: createEntityRef(client.Course, { id: 'course-1' }),
+        ...(onMismatch ? { onMismatch } : {}),
+      });
+
+    await expect(
+      Effect.runPromise(remote.runRelationshipCommand(assign()).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        code: 'relationship_precondition_failed',
+        diagnostic: {
+          rejection: { version: 1, code: 'relationship_precondition_failed' },
+        },
+      },
+    });
+    await expect(Effect.runPromise(remote.runRelationshipCommand(assign('skip')))).resolves.toEqual(
+      {
+        status: 'not-applied',
+        diagnostic: {
+          reason: 'relationship_precondition_failed',
+          rejection: {
+            version: 1,
+            code: 'relationship_precondition_failed',
+            message: 'Current Relation target did not match the command precondition.',
+            parameters: {
+              sourceEntityName: 'Student',
+              fieldName: 'course',
+              targetEntityName: 'Course',
+            },
+          },
+        },
+      },
+    );
+    expect(serverDataset.Student).toEqual([{ id: 'student-1', course: 'course-3' }]);
+  });
+
   it('preserves protocol errors and distinguishes malformed results from transport failures', async () => {
     const graph = defineSchoolGraph();
     const command = relationship(

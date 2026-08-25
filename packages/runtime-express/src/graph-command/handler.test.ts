@@ -25,10 +25,13 @@ const invokeHandler = async (handler: RequestHandler, body: unknown) => {
 
 describe('Express graph Command adapter', () => {
   it('passes the protocol request through a server-derived authority boundary', async () => {
-    const dispatcher = vi.fn(async (_request, context: { authority: string }) => ({
+    const dispatcher = vi.fn(async () => ({
       kind: 'graph-command-result' as const,
-      value: { added: [], removed: [], authority: context.authority },
-    })) as unknown as GraphCommandDispatcher<string>;
+      value: {
+        status: 'applied' as const,
+        delta: { added: [], removed: [] },
+      },
+    })) as GraphCommandDispatcher<string>;
     const response = await invokeHandler(
       createExpressGraphCommandHandler({
         dispatcher,
@@ -39,6 +42,29 @@ describe('Express graph Command adapter', () => {
 
     expect(response.status).toBe(200);
     expect(dispatcher).toHaveBeenCalledWith(requestBody, { authority: 'server-owned' });
+  });
+
+  it('maps structured Relationship rejections to an HTTP conflict without flattening them', async () => {
+    const rejection = {
+      kind: 'graph-command-rejection' as const,
+      diagnostic: {
+        reason: 'relationship_precondition_failed' as const,
+        rejection: {
+          version: 1 as const,
+          code: 'relationship_precondition_failed',
+          message: 'Current Relation target did not match the command precondition.',
+        },
+      },
+    };
+    const response = await invokeHandler(
+      createExpressGraphCommandHandler({
+        dispatcher: vi.fn(async () => rejection),
+        context: () => ({ authority: undefined }),
+      }),
+      requestBody,
+    );
+
+    expect(response).toEqual({ status: 409, payload: rejection });
   });
 
   it.each([
