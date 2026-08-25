@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ontahi_classroom
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_USER: postgres
+    ports:
+      - '127.0.0.1:54330:5432'
+    volumes:
+      - classroom-postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d ontahi_classroom']
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  classroom-postgres-data:

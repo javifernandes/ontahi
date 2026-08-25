@@ -1,11 +1,6 @@
-import {
-  createInMemoryDataGraphStorage,
-  field,
-  graphSchema,
-  reaction,
-} from '@ontahi/core/data-graph';
+import { field, graphSchema } from '@ontahi/core/data-graph';
 import { entity, relation } from '@ontahi/core/entity';
-import { failOperation, ontahi } from '@ontahi/core/runtime/server';
+import { failOperation } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 
 const entityDefaults = {
@@ -46,30 +41,165 @@ const CourseFields = {
   title: field.nonEmptyString({ trim: true }),
   school: field.ref(School),
   teacher: field.ref(Teacher),
+  availableSeats: field.nonNegativeInteger(),
 };
 const CourseRef = entity.ref('Course', { fields: CourseFields });
 
+const StudentFields = {
+  id: field.id(),
+  name: field.nonEmptyString({ trim: true }),
+  school: field.ref(School),
+  currentCourse: field.nullable(field.ref(CourseRef)),
+};
+const StudentRef = entity.ref('Student', { fields: StudentFields });
+
+const EnrollmentFields = {
+  id: field.id(),
+  student: field.ref(StudentRef),
+  course: field.ref(CourseRef),
+  status: field.enum(['pending', 'active', 'cancelled'] as const),
+  startedAt: field.datetime(),
+  endedAt: field.nullable(field.datetime()),
+  credits: field.positiveInteger(),
+};
+const EnrollmentRef = entity.ref('Enrollment', { fields: EnrollmentFields });
+
+export const Course = entity({
+  name: 'Course',
+  fields: CourseFields,
+  relations: {
+    students: relation.hasMany(StudentRef, { via: 'currentCourse' }),
+    enrollments: relation.hasMany(EnrollmentRef, { via: 'course' }),
+  },
+});
+
 export const Student = entity({
   name: 'Student',
-  fields: {
-    id: field.id(),
-    name: field.nonEmptyString({ trim: true }),
-    school: field.ref(School),
-    currentCourse: field.nullable(field.ref(CourseRef)),
+  fields: StudentFields,
+  domainOperationDefaults: entityDefaults,
+  uses: {
+    entities: { Course },
+  },
+  operations: ({ self, operation, app, entities }) => {
+    const students = app.graph.defineEntity(self);
+
+    return {
+      transfer: operation({
+        input: graphSchema.object({
+          student: field.ref(self),
+          previousCourse: field.ref(Course),
+          nextCourse: field.ref(Course),
+        }),
+        run: ({ student, previousCourse, nextCourse }) =>
+          app.graph
+            .transaction(
+              Effect.gen(function* () {
+                const currentStudent = yield* student.resolve();
+                const currentPreviousCourse = yield* previousCourse.resolve();
+                const currentNextCourse = yield* nextCourse.resolve();
+
+                if (!currentStudent) {
+                  return yield* failOperation('student_not_found', 'Student does not exist.', {
+                    student,
+                  });
+                }
+                if (!currentPreviousCourse) {
+                  return yield* failOperation(
+                    'course_not_found',
+                    'Previous Course does not exist.',
+                    { course: previousCourse },
+                  );
+                }
+                if (!currentNextCourse) {
+                  return yield* failOperation('course_not_found', 'Next Course does not exist.', {
+                    course: nextCourse,
+                  });
+                }
+
+                const relationship = yield* students
+                  .refById(currentStudent.id)
+                  .currentCourse.assign(Course.refById(currentNextCourse.id), {
+                    ifCurrent: Course.refById(currentPreviousCourse.id),
+                    onMismatch: 'skip',
+                  })
+                  .run()
+                  .pipe(Effect.orDie);
+
+                if (relationship.status === 'not-applied') {
+                  return yield* failOperation(
+                    'student_course_changed',
+                    'Student is no longer assigned to the expected Course.',
+                    { student, expectedCourse: previousCourse },
+                  );
+                }
+
+                if (currentNextCourse.availableSeats === 0) {
+                  return yield* failOperation(
+                    'course_full',
+                    'Next Course has no available seats.',
+                    { course: nextCourse },
+                  );
+                }
+
+                const [releasedPreviousCourse] = yield* entities.Course.selection(course =>
+                  course.id.eq(currentPreviousCourse.id),
+                )
+                  .and(course => course.availableSeats.eq(currentPreviousCourse.availableSeats))
+                  .updateReturning({ availableSeats: currentPreviousCourse.availableSeats + 1 }, [
+                    'id',
+                    'availableSeats',
+                  ])
+                  .run()
+                  .pipe(Effect.orDie);
+                if (!releasedPreviousCourse) {
+                  return yield* failOperation(
+                    'course_capacity_changed',
+                    'Previous Course capacity changed during transfer.',
+                    { course: previousCourse },
+                  );
+                }
+
+                const [reservedNextCourse] = yield* entities.Course.selection(course =>
+                  course.id.eq(currentNextCourse.id),
+                )
+                  .and(course => course.availableSeats.eq(currentNextCourse.availableSeats))
+                  .updateReturning({ availableSeats: currentNextCourse.availableSeats - 1 }, [
+                    'id',
+                    'availableSeats',
+                  ])
+                  .run()
+                  .pipe(Effect.orDie);
+                if (!reservedNextCourse) {
+                  return yield* failOperation(
+                    'course_capacity_changed',
+                    'Next Course capacity changed during transfer.',
+                    { course: nextCourse },
+                  );
+                }
+
+                return {
+                  relationship,
+                  previousCourse: releasedPreviousCourse,
+                  nextCourse: reservedNextCourse,
+                };
+              }),
+            )
+            .pipe(
+              Effect.catchTag('DataGraphTransactionUnavailableError', () =>
+                failOperation(
+                  'transaction_unavailable',
+                  'Student transfer requires transactional Data Graph storage.',
+                ),
+              ),
+            ),
+      }),
+    };
   },
 });
 
 export const Enrollment = entity({
   name: 'Enrollment',
-  fields: {
-    id: field.id(),
-    student: field.ref(Student),
-    course: field.ref(CourseRef),
-    status: field.enum(['pending', 'active', 'cancelled'] as const),
-    startedAt: field.datetime(),
-    endedAt: field.nullable(field.datetime()),
-    credits: field.positiveInteger(),
-  },
+  fields: EnrollmentFields,
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, operation }) => ({
     enroll: operation({
@@ -159,50 +289,10 @@ export const Enrollment = entity({
   }),
 });
 
-export const Course = entity({
-  name: 'Course',
-  fields: CourseFields,
-  relations: () => ({
-    students: relation.inverse(Student.fields.currentCourse),
-    enrollments: relation.inverse(Enrollment.fields.course),
-  }),
-});
-
 export type StudentRemovedFromCourse = {
   type: 'StudentRemovedFromCourse';
   student: ReturnType<typeof Student.refById>;
   course: ReturnType<typeof Course.refById>;
 };
 
-export const classroomEvents: unknown[] = [];
-
-export const ClassroomApplication = ontahi({
-  storage: createInMemoryDataGraphStorage({
-    dataset: {
-      School: [],
-      Teacher: [],
-      Course: [],
-      Student: [],
-      Enrollment: [],
-    },
-  }),
-  capabilities: {
-    effectors: {
-      'emit-event': (intent: { event: unknown }) =>
-        Effect.sync(() => {
-          classroomEvents.push(intent.event);
-        }),
-    },
-  },
-  entities: [School, Teacher, Course, Student, Enrollment],
-  reactions: () => [
-    reaction
-      .relationship(Course, 'students')
-      .removed({ id: 'course.students.removed', delivery: 'inline' })
-      .emit(outcome => ({
-        type: 'StudentRemovedFromCourse',
-        student: outcome.command.source,
-        course: outcome.command.target,
-      })),
-  ],
-});
+export const classroomEntities = [School, Teacher, Course, Student, Enrollment] as const;

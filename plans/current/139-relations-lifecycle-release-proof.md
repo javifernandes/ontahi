@@ -33,6 +33,8 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
    Enrollment Association Entity. Begin with schema and behavioral scenarios; add UI only where it
    proves a framework affordance. The headless lifecycle proof is complete in
    [139c. Executable Classroom Lifecycle Proof](../done/139c-executable-classroom-lifecycle-proof.md).
+   Its provider-backed coordinated transfer proof is complete in
+   [139d. PostgreSQL Classroom Transfer](../done/139d-postgres-classroom-transfer.md).
 7. Keep Todo Express as the simple compatibility proof rather than forcing complex lifecycle rules
    into it.
 8. Move the developer documentation source from `ontahi-library` into this repository if that
@@ -47,6 +49,7 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
 
 - [x] Required coordinated mutation and post-application Reaction semantics are separately documented and executable.
 - [x] Classroom demonstrates conditional reassignment, unlink Reaction, and stateful Enrollment lifecycle.
+- [x] Classroom proves a Domain Operation can coordinate Relation and Entity Commands with PostgreSQL rollback.
 - [ ] Todo remains small and passes as a packaged consumer.
 - [ ] Developer docs live at one canonical source and match the candidate release.
 - [ ] Package, artifact, example and release dry-run verification pass.

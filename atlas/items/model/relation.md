@@ -32,6 +32,7 @@ relatedPlans:
   - ontahi://plans/139a-composable-data-graph-transactions
   - ontahi://plans/139b-transaction-scoped-unit-of-work
   - ontahi://plans/139c-executable-classroom-lifecycle-proof
+  - ontahi://plans/139d-postgres-classroom-transfer
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -275,6 +276,12 @@ unlink yields one canonical Relationship Command; only an applied command create
 by the Reaction and emits portable Student/Course Ref identities. This application registration is
 deliberately separate from static Relation metadata and from any required transactional
 coordination.
+
+The PostgreSQL Classroom transfer keeps that required coordination in `Student.transfer(...)`.
+The Domain Operation resolves portable Student/Course input Refs in the transaction UnitOfWork,
+applies `currentCourse.assign(next, { ifCurrent: previous })`, and compare-and-set updates both
+capacity counters. A full or stale destination fails the Operation and rolls the tentative Relation
+change back; no capacity callback or aggregate state is added to Relation metadata.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally

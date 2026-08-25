@@ -10,6 +10,7 @@ relatedPlans:
   - ontahi://plans/139a-composable-data-graph-transactions
   - ontahi://plans/139b-transaction-scoped-unit-of-work
   - ontahi://plans/74b-schema-native-operation-refs
+  - ontahi://plans/139d-postgres-classroom-transfer
 ---
 
 A UnitOfWork is the server runtime identity boundary shared by one top-level invocation/Operation
@@ -44,6 +45,12 @@ child UnitOfWork. Bound Queries and explicit Command `.run()` calls discover tha
 context, including normally nested Operations. The child starts with a fresh Operation-result cache
 so reads observed before rollback cannot leak into its parent. Success, typed failure, and defect
 all restore the parent scope.
+
+The provider-backed Classroom proof exercises that boundary from an ordinary Domain Operation.
+`Student.transfer(...)` resolves three input Refs, conditionally changes one Relation, and updates
+two Course rows without receiving a transaction runtime parameter. PostgreSQL commits all three
+mutations together or restores them all when a full destination or stale capacity produces a domain
+failure.
 
 Command construction remains pure and portable. Entering a UnitOfWork or transaction never makes
 construction execute a Command implicitly. The explicit execution marker is `.run()`; context only

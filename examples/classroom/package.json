@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:start": "docker compose up -d --wait",
+    "db:stop": "docker compose down",
     "test": "pnpm exec vitest run",
+    "test:postgres": "CLASSROOM_POSTGRES_TEST_URL=postgresql://postgres@127.0.0.1:54330/ontahi_classroom pnpm exec vitest run src/classroom-postgres.integration.test.ts",
     "typecheck": "pnpm exec tsc -p tsconfig.json",
     "lint": "pnpm exec eslint \"src/**/*.ts\" --max-warnings 0"
   },
@@ -14,7 +18,10 @@
     "effect": "^3.21.0"
   },
   "devDependencies": {
+    "@ontahi/postgres": "workspace:*",
     "@types/node": "^20.0.0",
+    "@types/pg": "^8.15.5",
+    "pg": "^8.16.3",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
   }
