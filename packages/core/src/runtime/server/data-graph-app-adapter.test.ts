@@ -2,6 +2,7 @@ import { Effect, Stream } from 'effect';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+  appliedRelationshipCommand,
   type DataGraphExecutionRuntime,
   type DataGraphTransactionCapability,
   DataGraphTransactionUnavailableError,
@@ -243,11 +244,11 @@ describe('data graph architecture adapter', () => {
       },
       runRelationshipCommand: () => {
         calls.push(`${name}:relationship`);
-        return Effect.succeed({ added: [], removed: [] });
+        return Effect.succeed(appliedRelationshipCommand({ added: [], removed: [] }));
       },
       runManyToManyRelationshipCommand: () => {
         calls.push(`${name}:many-to-many`);
-        return Effect.succeed({ added: [], removed: [] });
+        return Effect.succeed(appliedRelationshipCommand({ added: [], removed: [] }));
       },
     });
     const transactionRuntime = createExecutionRuntime('transaction');
@@ -368,7 +369,9 @@ describe('data graph architecture adapter', () => {
       id: field.id(),
       course: field.ref(CourseDefinition),
     });
-    const runRelationshipCommand = vi.fn(() => Effect.succeed({ added: [], removed: [] }));
+    const runRelationshipCommand = vi.fn(() =>
+      Effect.succeed(appliedRelationshipCommand({ added: [], removed: [] })),
+    );
     const runtime = Object.assign(createRuntime('direct-only'), { runRelationshipCommand });
     const graph = createDataGraphArchitectureAdapter<
       unknown,

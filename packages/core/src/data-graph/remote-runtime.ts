@@ -3,6 +3,7 @@ import { Effect, Stream } from 'effect';
 import { isJsonValue } from '../value/json.js';
 import { isRecord } from '../value/object.js';
 
+import { isGraphCommandRejection } from './command-dispatcher.js';
 import {
   isGraphCommandProtocolError,
   toGraphCommandRequest,
@@ -18,19 +19,23 @@ import {
   type GraphReadProtocolErrorCode,
   type GraphReadRequestV1,
 } from './read-protocol.js';
-import { isEntityRef } from './ref/index.js';
 import {
-  type ManyToManyRelationshipCommand,
-  type ManyToManyRelationshipCommandExecutionRuntime,
-  type RelationshipCommand,
-  type RelationshipCommandExecutionRuntime,
-  type RelationshipDelta,
+  isRelationshipCommandResult,
+  type RelationshipCommandDiagnostic,
+  type RelationshipCommandResult,
+} from './relationship-command-result.js';
+import type {
+  ManyToManyRelationshipCommand,
+  ManyToManyRelationshipCommandExecutionRuntime,
+  RelationshipCommand,
+  RelationshipCommandExecutionRuntime,
 } from './relationship-command.js';
 import type { DataGraphExecutionRuntime } from './runtime.js';
 
 export type RemoteDataGraphErrorCode =
   | GraphReadProtocolErrorCode
   | GraphCommandProtocolErrorCode
+  | RelationshipCommandDiagnostic['reason']
   | 'invalid_response'
   | 'transport_failure'
   | 'unsupported_capability';
@@ -42,6 +47,7 @@ export class RemoteDataGraphError extends Error {
     readonly code: RemoteDataGraphErrorCode,
     message: string,
     readonly cause?: unknown,
+    readonly diagnostic?: RelationshipCommandDiagnostic,
   ) {
     super(message);
     this.name = 'RemoteDataGraphError';
@@ -102,35 +108,28 @@ const unsupportedCapability = (capability: string) =>
     `Remote data graph ${capability} execution is not supported.`,
   );
 
-const isRelationshipFact = (value: unknown) =>
-  isRecord(value) &&
-  isRecord(value.relation) &&
-  typeof value.relation.sourceEntityName === 'string' &&
-  (typeof value.relation.fieldName === 'string' ||
-    (typeof value.relation.relationName === 'string' &&
-      value.relation.cardinality === 'many-to-many')) &&
-  typeof value.relation.targetEntityName === 'string' &&
-  isEntityRef(value.source) &&
-  isEntityRef(value.target);
-
-const readCommandResponseValue = (response: unknown): RelationshipDelta => {
+const readCommandResponseValue = (response: unknown): RelationshipCommandResult => {
   if (!isRecord(response)) throw invalidResponse('Relationship Command');
   if (response.kind === 'protocol-error') {
     if (!isGraphCommandProtocolError(response)) throw invalidResponse('Relationship Command');
     throw new RemoteDataGraphError(response.error.code, response.error.message);
   }
+  if (isGraphCommandRejection(response)) {
+    throw new RemoteDataGraphError(
+      response.diagnostic.reason,
+      response.diagnostic.rejection.message,
+      undefined,
+      response.diagnostic,
+    );
+  }
   if (
     response.kind !== 'graph-command-result' ||
-    !isRecord(response.value) ||
-    !Array.isArray(response.value.added) ||
-    !response.value.added.every(isRelationshipFact) ||
-    !Array.isArray(response.value.removed) ||
-    !response.value.removed.every(isRelationshipFact) ||
+    !isRelationshipCommandResult(response.value) ||
     !isJsonValue(response.value)
   ) {
     throw invalidResponse('Relationship Command');
   }
-  return response.value as RelationshipDelta;
+  return response.value as RelationshipCommandResult;
 };
 
 export const createRemoteDataGraphRuntime = <TOptions = undefined>({

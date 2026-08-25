@@ -4,7 +4,7 @@ import {
   createGraphReadDispatcher as createDataGraphReadDispatcher,
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   assertMutationReactionConfiguration,
-  type AppliedRelationshipMutationResult,
+  type RelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
   type DataGraphExecutionRuntime,
@@ -74,7 +74,7 @@ type OntahiGraphFacade<TRuntime extends AnyDataGraphRuntime> = ReturnType<
     RuntimeReadOptions<TRuntime>,
     RuntimeCommandOptions<TRuntime>,
     TRuntime,
-    AppliedRelationshipMutationResult
+    RelationshipMutationResult
   >
 >;
 type OntahiOwnedRuntimeDefinition<TRuntime extends AnyDataGraphRuntime> = {
@@ -130,7 +130,7 @@ type BoundEntityRecord<
       [TEntity in TEntities[number] as TEntity['name']]: BoundOntahiEntityDeclaration<
         TEntity,
         TRuntime,
-        AppliedRelationshipMutationResult
+        RelationshipMutationResult
       >;
     }
   : TEntities extends Record<string, object>
@@ -142,7 +142,7 @@ type BoundEntityRegistrationRecord<
   TRuntime extends AnyDataGraphRuntime,
 > = {
   [TName in keyof TEntities]: TEntities[TName] extends AnyOntahiEntityDeclaration
-    ? BoundOntahiEntityDeclaration<TEntities[TName], TRuntime, AppliedRelationshipMutationResult>
+    ? BoundOntahiEntityDeclaration<TEntities[TName], TRuntime, RelationshipMutationResult>
     : TEntities[TName];
 };
 
@@ -164,7 +164,7 @@ export type ComposedOntahiApplication<
   ) => BoundOntahiEntityDeclaration<
     TDeclaration,
     StorageRuntime<TStorage>,
-    AppliedRelationshipMutationResult
+    RelationshipMutationResult
   >;
   registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
     entity: TEntity,
@@ -214,7 +214,7 @@ export const ontahi = <
     any,
     any,
     AnyDataGraphRuntime,
-    AppliedRelationshipMutationResult
+    RelationshipMutationResult
   >({
     defaultStorage: options.storage,
     relationshipCommandExecutor,
@@ -288,7 +288,7 @@ export const ontahi = <
   ): BoundOntahiEntityDeclaration<
     TDeclaration,
     StorageRuntime<TStorage>,
-    AppliedRelationshipMutationResult
+    RelationshipMutationResult
   > => {
     if (entityRegistry[declaration.name]) {
       throw new Error(`Entity ${declaration.name} is already registered.`);
@@ -317,7 +317,7 @@ export const ontahi = <
     return bound as unknown as BoundOntahiEntityDeclaration<
       TDeclaration,
       StorageRuntime<TStorage>,
-      AppliedRelationshipMutationResult
+      RelationshipMutationResult
     >;
   };
   const registerBoundEntity = <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(

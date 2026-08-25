@@ -470,7 +470,10 @@ describe('Ontahi todo portability example', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       kind: 'graph-command-result',
-      value: { added: expect.any(Array), removed: [] },
+      value: {
+        status: 'applied',
+        delta: { added: expect.any(Array), removed: [] },
+      },
     });
     expect(getTodoRelationships()).toHaveLength(2);
   });
@@ -526,10 +529,17 @@ describe('Ontahi todo portability example', () => {
       body: JSON.stringify(toGraphCommandRequest(command)),
     });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
-      kind: 'protocol-error',
-      error: { code: 'execution_unavailable' },
+      kind: 'graph-command-rejection',
+      diagnostic: {
+        reason: 'relation_constraint_rejected',
+        rejection: {
+          version: 1,
+          code: 'completed_todo_cannot_be_tagged',
+          message: 'Completed todos cannot be tagged.',
+        },
+      },
     });
     expect(getTodoRelationships()).toEqual([]);
   });

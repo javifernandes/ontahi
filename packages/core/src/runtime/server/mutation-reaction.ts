@@ -5,7 +5,9 @@ import {
   type AppliedRelationshipMutationResult,
   type InvokeOperationReactionIntent,
   type MutationReaction,
+  type RelationshipMutationResult,
 } from '../../data-graph/mutation-reaction.js';
+import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
 import type {
   ManyToManyRelationshipCommand,
   RelationshipCommand,
@@ -36,7 +38,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
 }: ContextualMutationReactionExecutorOptions): RelationshipCommandExecutor<
   TError,
   TOptions,
-  AppliedRelationshipMutationResult
+  RelationshipMutationResult
 > => {
   const applyReactions = (
     command: RelationshipCommand | ManyToManyRelationshipCommand,
@@ -48,7 +50,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
       executeRelationshipCommand: followUp => {
         const runtime =
           getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
+            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
           >();
         if (typeof runtime.runRelationshipCommand !== 'function') {
           throw new TypeError(
@@ -60,7 +62,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
       executeManyToManyRelationshipCommand: followUp => {
         const runtime =
           getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
+            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
           >();
         if (typeof runtime.runManyToManyRelationshipCommand !== 'function') {
           throw new TypeError(
@@ -96,7 +98,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
       Effect.suspend(() => {
         const runtime =
           getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
+            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
           >();
         if (typeof runtime.runRelationshipCommand !== 'function') {
           throw new TypeError(
@@ -105,13 +107,21 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
         }
         return runtime
           .runRelationshipCommand(command, options)
-          .pipe(Effect.flatMap(delta => applyReactions(command, delta, options)));
+          .pipe(
+            Effect.flatMap(result =>
+              result.status === 'not-applied'
+                ? Effect.succeed<RelationshipMutationResult>(result)
+                : applyReactions(command, result.delta, options).pipe(
+                    Effect.map(applied => applied as RelationshipMutationResult),
+                  ),
+            ),
+          );
       }),
     runManyToManyRelationshipCommand: (command, options) =>
       Effect.suspend(() => {
         const runtime =
           getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipDelta>>
+            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
           >();
         if (typeof runtime.runManyToManyRelationshipCommand !== 'function') {
           throw new TypeError(
@@ -120,7 +130,15 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
         }
         return runtime
           .runManyToManyRelationshipCommand(command, options)
-          .pipe(Effect.flatMap(delta => applyReactions(command, delta, options)));
+          .pipe(
+            Effect.flatMap(result =>
+              result.status === 'not-applied'
+                ? Effect.succeed<RelationshipMutationResult>(result)
+                : applyReactions(command, result.delta, options).pipe(
+                    Effect.map(applied => applied as RelationshipMutationResult),
+                  ),
+            ),
+          );
       }),
   };
 };

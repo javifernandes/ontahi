@@ -85,6 +85,41 @@ describe('PostgreSQL direct Relationship Commands', () => {
     ).toEqual({ preconditionFailed: true });
   });
 
+  it('returns not-applied instead of failing when a stale assignment opts into skip', async () => {
+    const student = createEntityRef(Student, { id: 'student-1' });
+    const command = relationship(Student, 'course', student).assign(
+      createEntityRef(Course, { id: 'course-2' }),
+      {
+        ifCurrent: createEntityRef(Course, { id: 'course-1' }),
+        onMismatch: 'skip',
+      },
+    );
+
+    await expect(
+      Effect.runPromise(
+        executePostgresRelationshipCommand({
+          command,
+          mappings: [studentMapping, courseMapping],
+          executeQuery: vi.fn().mockResolvedValue({
+            rowCount: 1,
+            rows: [
+              {
+                source_count: 1,
+                target_count: 1,
+                updated_count: 0,
+                old_target: 'course-3',
+                precondition_matched: false,
+              },
+            ],
+          }),
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'not-applied',
+      diagnostic: { reason: 'relationship_precondition_failed' },
+    });
+  });
+
   it('compiles inverse-declared participant constraints and materializes their rejection', () => {
     const GuardedCourse = entity('GuardedCourse', { id: field.id(), open: field.boolean() });
     const GuardedStudent = entity('GuardedStudent', {

@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import type { AnyEntityDefinition, RelationDefinition } from '../definitions.js';
 import { createEntityIdentityRef } from '../ref/index.js';
+import { appliedRelationshipCommand } from '../relationship-command-result.js';
 import type {
   ManyToManyRelationshipCommand,
   RelationshipEndpointSelection,
@@ -165,7 +166,7 @@ export const executeInMemoryManyToManyRelationshipCommandEffect = (
   command: ManyToManyRelationshipCommand,
 ) =>
   Effect.try({
-    try: () => execute(dataset, entities, facts, command),
+    try: () => appliedRelationshipCommand(execute(dataset, entities, facts, command)),
     catch: cause =>
       cause instanceof InMemoryDataGraphError
         ? cause

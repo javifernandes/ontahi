@@ -1,5 +1,7 @@
 import {
+  appliedRelationshipCommand,
   liftEntityReferenceRecord,
+  notAppliedRelationshipCommand,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommand,
   type RelationConstraintRejection,
@@ -112,7 +114,7 @@ export const executePostgresManyToManyCommand = (input: {
           'cardinality_mismatch',
         );
       }
-      return materialized.delta;
+      return appliedRelationshipCommand(materialized.delta);
     },
     catch: cause => {
       if (cause instanceof PostgresDataGraphError) return cause;
@@ -154,6 +156,9 @@ export const executePostgresRelationshipCommand = (input: {
         );
       }
       if ('preconditionFailed' in materialized) {
+        if (input.command.precondition?.onMismatch === 'skip') {
+          return notAppliedRelationshipCommand(input.command);
+        }
         throw new PostgresDataGraphError(
           'PostgreSQL Relationship Command current target did not match its precondition.',
           'relationship_precondition_failed',
@@ -167,7 +172,7 @@ export const executePostgresRelationshipCommand = (input: {
           materialized.constraintRejected,
         );
       }
-      return materialized.delta;
+      return appliedRelationshipCommand(materialized.delta);
     },
     catch: cause =>
       cause instanceof PostgresDataGraphError

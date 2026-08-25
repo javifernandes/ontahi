@@ -32,6 +32,7 @@ export type CreateExpressGraphCommandHandlerOptions<TAuthority> = {
 
 const responseStatus = (response: GraphCommandDispatchResponse) => {
   if (response.kind === 'graph-command-result') return 200;
+  if (response.kind === 'graph-command-rejection') return 409;
   if (response.error.code === 'access_denied') return 403;
   if (response.error.code === 'execution_unavailable') return 503;
   return 400;

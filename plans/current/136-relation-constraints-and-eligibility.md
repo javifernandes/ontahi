@@ -16,6 +16,8 @@ Completed child: [136e. PostgreSQL Relation Participant Eligibility](../done/136
 
 Completed child: [136f. Supabase Relation Participant Eligibility](../done/136f-supabase-relation-participant-eligibility.md)
 
+Completed child: [136g. Portable Relationship Command Outcomes](../done/136g-portable-relationship-command-outcomes.md)
+
 ## Summary
 
 Let a Relation declare portable structural eligibility beyond topology and cardinality. The same
@@ -76,7 +78,7 @@ identity, not an executable closure transported to the server.
 - [x] Constraints have a canonical JSON-safe representation.
 - [x] The model distinguishes eligibility, authorization, and coordinated domain invariants.
 - [x] Server execution remains authoritative and default-deny policy still applies independently.
-- [ ] Rejections use a versioned, canonical JSON-safe descriptor with a stable code, safe
+- [x] Rejections use a versioned, canonical JSON-safe descriptor with a stable code, safe
       parameters, and explicit redaction rules shared by Explorer, agents, and headless UI.
 - [x] Forward and inverse commands enforce the same canonical constraints.
 - [x] Batch commands define all-or-nothing, empty-selection, and affected-set semantics explicitly.
@@ -110,5 +112,7 @@ forward/inverse participants to the canonical command. Providers lock the comple
 participant rows, evaluate every constraint without narrowing the affected set, preserve the first
 stable rejection descriptor, and guard the edge mutation. Supabase uses payload version 2 only for
 constrained links, so an older RPC fails closed; unconstrained and unlink commands retain version 1
-compatibility. Aggregate/cardinality and current-population constraints, structured remote Graph
-Command rejection transport, conflict retry policy, and advisory preflight remain open here.
+compatibility. Plan 136g carries stable precondition and constraint diagnostics through the remote
+Graph Command boundary and distinguishes applied empty deltas from explicit skipped
+preconditions. Aggregate/cardinality and current-population constraints, conflict retry policy,
+and advisory preflight remain open here.

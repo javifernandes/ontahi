@@ -414,9 +414,15 @@ producing identical exact deltas while keeping credentials and authority options
 serialized command. Generated Entity Refs now author the same command fluently; a dedicated
 client/React execution facade remains a follow-up rather than a new protocol.
 
-Plan 135 now owns Applied Mutation Outcomes and generic post-application Reactions. Future remote
-Command transport must preserve that semantic envelope; an HTTP adapter must not invent
-Relation-specific hooks or flatten a failed Reaction into fictional Command rollback.
+Plan 135 owns Applied Mutation Outcomes and generic post-application Reactions. Remote Command
+transport preserves the semantic result boundary; an HTTP adapter must not invent Relation-specific
+hooks or flatten a failed Reaction into fictional Command rollback.
+
+Plan 136g adds the portable Relationship Command result envelope and semantic rejection response.
+Direct and remote execution now distinguish applied exact deltas, explicit skipped preconditions,
+constraint rejection, protocol denial, and infrastructure failure without exposing current graph
+state. First-class generated-client and React authoring ergonomics remain the next Command-bridge
+slice.
 
 Remote insert, update, upsert, and delete remain explicitly outside this first pull. They reuse the
 protocol/runtime shape only after the read boundary demonstrates a credible authority model.

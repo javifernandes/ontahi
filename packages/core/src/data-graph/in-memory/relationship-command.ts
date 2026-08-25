@@ -4,11 +4,12 @@ import type { AnyEntityDefinition, AnyReferenceFieldDefinition } from '../defini
 import { isReferenceFieldDefinition } from '../definitions.js';
 import { liftEntityReferenceValue, lowerEntityReferenceValue } from '../reference-field.js';
 import { resolveDirectRelationConstraints } from '../relation-constraint.js';
-import type {
-  RelationshipCommand,
-  RelationshipDelta,
-  RelationshipFact,
-} from '../relationship-command.js';
+import {
+  appliedRelationshipCommand,
+  notAppliedRelationshipCommand,
+  type RelationshipCommandResult,
+} from '../relationship-command-result.js';
+import type { RelationshipCommand, RelationshipFact } from '../relationship-command.js';
 
 import { InMemoryDataGraphError } from './command.js';
 import type { InMemoryDataset } from './materialization.js';
@@ -98,7 +99,7 @@ type RelationshipMutationContext = {
   currentTarget?: RelationshipFact['target'];
 };
 
-const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
+const applyLink = (context: RelationshipMutationContext): RelationshipCommandResult => {
   const { command, dataset, targetEntity, sourceField, rows, rowIndex, row, currentValue } =
     context;
   if (!command.target) {
@@ -109,6 +110,9 @@ const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
     (!context.currentTarget ||
       currentValue !== lowerEntityReferenceValue(sourceField, command.precondition.currentTarget))
   ) {
+    if (command.precondition?.onMismatch === 'skip') {
+      return notAppliedRelationshipCommand(command);
+    }
     throw new InMemoryDataGraphError(
       `Current target for ${command.relation.sourceEntityName}.${command.relation.fieldName} does not match the conditional assignment precondition.`,
       'relationship_precondition_failed',
@@ -125,16 +129,18 @@ const applyLink = (context: RelationshipMutationContext): RelationshipDelta => {
   }
   assertRelationConstraints(dataset, context.sourceEntity, context.targetEntity, command);
   const nextValue = lowerEntityReferenceValue(sourceField, command.target);
-  if (context.currentTarget && currentValue === nextValue) return { added: [], removed: [] };
+  if (context.currentTarget && currentValue === nextValue) {
+    return appliedRelationshipCommand({ added: [], removed: [] });
+  }
   rows[rowIndex] = { ...row, [command.relation.fieldName]: nextValue };
   dataset[context.sourceEntity.name] = rows;
-  return {
+  return appliedRelationshipCommand({
     added: [fact(command, command.target)],
     removed: context.currentTarget ? [fact(command, context.currentTarget)] : [],
-  };
+  });
 };
 
-const applyUnlink = (context: RelationshipMutationContext): RelationshipDelta => {
+const applyUnlink = (context: RelationshipMutationContext): RelationshipCommandResult => {
   const { command, dataset, sourceEntity, sourceField, rows, rowIndex, row, currentValue } =
     context;
   if (!sourceField.nullable && !sourceField.optional) {
@@ -143,20 +149,23 @@ const applyUnlink = (context: RelationshipMutationContext): RelationshipDelta =>
       'invalid_command',
     );
   }
-  if (!context.currentTarget) return { added: [], removed: [] };
+  if (!context.currentTarget) return appliedRelationshipCommand({ added: [], removed: [] });
   if (command.target && currentValue !== lowerEntityReferenceValue(sourceField, command.target)) {
-    return { added: [], removed: [] };
+    return appliedRelationshipCommand({ added: [], removed: [] });
   }
   rows[rowIndex] = { ...row, [command.relation.fieldName]: null };
   dataset[sourceEntity.name] = rows;
-  return { added: [], removed: [fact(command, context.currentTarget)] };
+  return appliedRelationshipCommand({
+    added: [],
+    removed: [fact(command, context.currentTarget)],
+  });
 };
 
 const execute = (
   dataset: InMemoryDataset,
   entities: readonly AnyEntityDefinition[],
   command: RelationshipCommand,
-): RelationshipDelta => {
+): RelationshipCommandResult => {
   const sourceEntity = findEntity(entities, command.relation.sourceEntityName);
   const targetEntity = findEntity(entities, command.relation.targetEntityName);
   const sourceField = sourceEntity.fields[command.relation.fieldName];
@@ -213,7 +222,7 @@ export const executeInMemoryRelationshipCommandEffect = (
   dataset: InMemoryDataset,
   entities: readonly AnyEntityDefinition[],
   command: RelationshipCommand,
-): Effect.Effect<RelationshipDelta, InMemoryDataGraphError> =>
+): Effect.Effect<RelationshipCommandResult, InMemoryDataGraphError> =>
   Effect.try({
     try: () => execute(dataset, entities, command),
     catch: cause =>

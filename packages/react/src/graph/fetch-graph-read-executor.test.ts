@@ -198,15 +198,16 @@ describe('Fetch graph read executor', () => {
       ],
       removed: [],
     };
+    const result = { status: 'applied' as const, delta };
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: vi.fn().mockResolvedValue({ kind: 'graph-command-result', value: delta }),
+      json: vi.fn().mockResolvedValue({ kind: 'graph-command-result', value: result }),
     });
     vi.stubGlobal('fetch', fetchMock);
     const executor = createFetchGraphReadExecutor({ commandEndpoint: '/graph/commands' });
 
-    await expect(executor.runManyToManyRelationshipCommand!(command)).resolves.toEqual(delta);
+    await expect(executor.runManyToManyRelationshipCommand!(command)).resolves.toEqual(result);
     expect(fetchMock).toHaveBeenCalledWith('/graph/commands', {
       method: 'POST',
       headers: expect.any(Headers),
@@ -217,6 +218,43 @@ describe('Fetch graph read executor', () => {
       version: 1,
       kind: 'graph-command',
       command: { kind: 'many-to-many-relationship-command', action: 'link' },
+    });
+  });
+
+  it('preserves a structured Relationship rejection returned with a conflict status', async () => {
+    const Tag = entity('RejectedTag', { id: field.id() });
+    const TaggedTodo = entity('RejectedTodo', { id: field.id() }).manyToMany('tags', Tag);
+    const command = relationshipSet(
+      TaggedTodo,
+      'tags',
+      createEntityRef(TaggedTodo, { id: 'todo-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: vi.fn().mockResolvedValue({
+          kind: 'graph-command-rejection',
+          diagnostic: {
+            reason: 'relation_constraint_rejected',
+            rejection: {
+              version: 1,
+              code: 'tag_unavailable',
+              message: 'This tag is unavailable.',
+            },
+          },
+        }),
+      }),
+    );
+    const executor = createFetchGraphReadExecutor();
+
+    await expect(executor.runManyToManyRelationshipCommand!(command)).rejects.toMatchObject({
+      name: 'RemoteDataGraphError',
+      code: 'relation_constraint_rejected',
+      diagnostic: {
+        rejection: { version: 1, code: 'tag_unavailable' },
+      },
     });
   });
 });

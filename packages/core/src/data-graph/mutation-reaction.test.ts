@@ -1,17 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  appliedRelationshipCommand,
   createEntityRef,
   createGraphCommandDispatcher,
   createMutationReactionRunner,
   entity,
   field,
   mutateEntity,
+  notAppliedRelationshipCommand,
   relationship,
   relationshipSet,
   toGraphCommandRequest,
   type DurableMutationReactionEnvelope,
   type MutationReactionIntent,
+  type MutationReactionResult,
+  type MutationReactionRunner,
   type RelationshipCommand,
   type RelationshipDelta,
 } from './index.js';
@@ -36,6 +40,15 @@ const defineSchoolGraph = () => {
 };
 
 const emptyDelta = (): RelationshipDelta => ({ added: [], removed: [] });
+const appliedEmptyDelta = () => appliedRelationshipCommand(emptyDelta());
+const runApplied = async (
+  runner: MutationReactionRunner,
+  command: RelationshipCommand,
+): Promise<MutationReactionResult> => {
+  const result = await runner(command);
+  if ('status' in result) throw new Error('Expected an applied Relationship Command.');
+  return result;
+};
 
 describe('Applied Mutation Outcomes and Reactions', () => {
   it('runs declared follow-up commands after the parent is applied and preserves causality', async () => {
@@ -53,7 +66,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       })(),
       executeRelationshipCommand: async command => {
         applied.push(command);
-        return emptyDelta();
+        return appliedEmptyDelta();
       },
       reactions: [
         {
@@ -69,7 +82,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(applied).toEqual([parent, followUp]);
     expect(result.root).toMatchObject({
@@ -106,11 +119,14 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const parent = relationship(graph.Student, 'course', student).assign(course);
     const dispatch = createGraphCommandDispatcher({
       policies: [{ entity: graph.Student, fieldName: 'course', actions: ['link'] }],
-      execute: async () => emptyDelta(),
+      execute: async () => appliedEmptyDelta(),
     });
     const execute = vi.fn(async (command: RelationshipCommand) => {
       const response = await dispatch(toGraphCommandRequest(command), { authority: 'system' });
       if (response.kind === 'protocol-error') throw new Error(response.error.code);
+      if (response.kind === 'graph-command-rejection') {
+        throw new Error(response.diagnostic.rejection.code);
+      }
       return response.value;
     });
     const run = createMutationReactionRunner({
@@ -131,7 +147,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(result.root.command).toEqual(parent);
     expect(result.reactions).toEqual([
@@ -146,6 +162,43 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
+  it('records a skipped follow-up without creating a child Applied Mutation Outcome', async () => {
+    const graph = defineSchoolGraph();
+    const student = createEntityRef(graph.Student, { id: 'student-1' });
+    const course = createEntityRef(graph.Course, { id: 'course-1' });
+    const parent = relationship(graph.Student, 'course', student).assign(course);
+    const skipped = relationship(graph.Student, 'course', student).assign(course, {
+      ifCurrent: createEntityRef(graph.Course, { id: 'course-2' }),
+      onMismatch: 'skip',
+    });
+    const run = createMutationReactionRunner({
+      createOutcomeId: () => 'parent-outcome',
+      executeRelationshipCommand: async command =>
+        command === skipped ? notAppliedRelationshipCommand(command) : appliedEmptyDelta(),
+      reactions: [
+        {
+          id: 'conditional-follow-up',
+          delivery: 'inline',
+          when: { mutationKind: 'relationship-command', relation: parent.relation },
+          react: outcome =>
+            outcome.command === parent
+              ? [{ kind: 'execute-relationship-command', command: skipped }]
+              : [],
+        },
+      ],
+    });
+
+    const result = await runApplied(run, parent);
+
+    expect(result.reactions).toEqual([
+      expect.objectContaining({
+        reactionId: 'conditional-follow-up',
+        status: 'not-applied',
+        diagnostic: expect.objectContaining({ reason: 'relationship_precondition_failed' }),
+      }),
+    ]);
+  });
+
   it('reports Reaction evaluation failure without hiding the applied parent', async () => {
     const graph = defineSchoolGraph();
     const student = createEntityRef(graph.Student, { id: 'student-1' });
@@ -153,7 +206,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const parent = relationship(graph.Student, 'course', student).assign(course);
     const run = createMutationReactionRunner({
       createOutcomeId: () => 'outcome-1',
-      executeRelationshipCommand: async () => emptyDelta(),
+      executeRelationshipCommand: async () => appliedEmptyDelta(),
       reactions: [
         {
           id: 'broken-reaction',
@@ -166,7 +219,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(result.root.command).toEqual(parent);
     expect(result.reactions).toEqual([
@@ -189,7 +242,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const student = createEntityRef(graph.Student, { id: 'student-1' });
     const course = createEntityRef(graph.Course, { id: 'course-1' });
     const parent = relationship(graph.Student, 'course', student).assign(course);
-    const executeRelationshipCommand = vi.fn(async () => emptyDelta());
+    const executeRelationshipCommand = vi.fn(async () => appliedEmptyDelta());
     const emitEvent = vi.fn(async () => undefined);
     const malformedIntents = [
       { kind: 'emit-event', event: { type: 'must-not-be-emitted' } },
@@ -209,7 +262,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(executeRelationshipCommand).toHaveBeenCalledOnce();
     expect(emitEvent).not.toHaveBeenCalled();
@@ -235,7 +288,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const assign = relationship(graph.Student, 'course', student).assign(course);
     const clear = relationship(graph.Student, 'course', student).clear();
     let nextId = 0;
-    const execute = vi.fn(async () => emptyDelta());
+    const execute = vi.fn(async () => appliedEmptyDelta());
     const run = createMutationReactionRunner({
       createOutcomeId: () => `outcome-${++nextId}`,
       executeRelationshipCommand: execute,
@@ -255,7 +308,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(assign);
+    const result = await runApplied(run, assign);
 
     expect(execute).toHaveBeenCalledTimes(2);
     expect(result.reactions.map(reaction => reaction.status)).toEqual([
@@ -277,7 +330,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const course = createEntityRef(graph.Course, { id: 'course-1' });
     const parent = relationship(graph.Student, 'course', student).assign(course);
     const followUp = relationship(graph.Mentor, 'course', mentor).assign(course);
-    const execute = vi.fn(async () => emptyDelta());
+    const execute = vi.fn(async () => appliedEmptyDelta());
     const acceptDurableReaction = vi.fn(async (_envelope: DurableMutationReactionEnvelope) => ({
       acceptanceId: 'accepted-1',
     }));
@@ -295,7 +348,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(execute).toHaveBeenCalledOnce();
     expect(acceptDurableReaction).toHaveBeenCalledWith({
@@ -324,7 +377,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const parent = relationship(graph.Student, 'course', student).assign(course);
     const run = createMutationReactionRunner({
       createOutcomeId: () => 'outcome-1',
-      executeRelationshipCommand: async () => emptyDelta(),
+      executeRelationshipCommand: async () => appliedEmptyDelta(),
       reactions: [
         {
           id: 'durable-clear',
@@ -340,7 +393,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(result.root.command).toEqual(parent);
     expect(result.reactions).toEqual([
@@ -364,7 +417,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const emitEvent = vi.fn(async () => undefined);
     const run = createMutationReactionRunner({
       createOutcomeId: () => 'outcome-1',
-      executeRelationshipCommand: async () => emptyDelta(),
+      executeRelationshipCommand: async () => appliedEmptyDelta(),
       invokeOperation,
       emitEvent,
       reactions: [
@@ -400,7 +453,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(invokeOperation).toHaveBeenCalledWith({
       kind: 'invoke',
@@ -426,7 +479,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     const acceptDurableReaction = vi.fn();
     const run = createMutationReactionRunner({
       createOutcomeId: () => 'outcome-1',
-      executeRelationshipCommand: async () => emptyDelta(),
+      executeRelationshipCommand: async () => appliedEmptyDelta(),
       acceptDurableReaction,
       reactions: [
         {
@@ -438,7 +491,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(acceptDurableReaction).not.toHaveBeenCalled();
     expect(result.reactions).toEqual([
@@ -468,7 +521,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     let nextId = 0;
     const run = createMutationReactionRunner({
       createOutcomeId: () => `outcome-${++nextId}`,
-      executeRelationshipCommand: async () => emptyDelta(),
+      executeRelationshipCommand: async () => appliedEmptyDelta(),
       executeEntityMutationCommand: async command => ({
         created: [
           {
@@ -512,7 +565,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(result.reactions).toEqual([
       expect.objectContaining({
@@ -547,17 +600,18 @@ describe('Applied Mutation Outcomes and Reactions', () => {
     let nextId = 0;
     const run = createMutationReactionRunner({
       createOutcomeId: () => `outcome-${++nextId}`,
-      executeRelationshipCommand: async () => emptyDelta(),
-      executeManyToManyRelationshipCommand: async command => ({
-        added: [
-          {
-            relation: command.relation,
-            source: todo,
-            target: course,
-          },
-        ],
-        removed: [],
-      }),
+      executeRelationshipCommand: async () => appliedEmptyDelta(),
+      executeManyToManyRelationshipCommand: async command =>
+        appliedRelationshipCommand({
+          added: [
+            {
+              relation: command.relation,
+              source: todo,
+              target: course,
+            },
+          ],
+          removed: [],
+        }),
       reactions: [
         {
           id: 'relate-todo-course',
@@ -568,7 +622,7 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       ],
     });
 
-    const result = await run(parent);
+    const result = await runApplied(run, parent);
 
     expect(result.reactions).toEqual([
       expect.objectContaining({
@@ -596,8 +650,8 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       added: [],
       removed: [{ relation: command.relation, source: club, target: course }],
     } satisfies RelationshipDelta;
-    const executeRelationshipCommand = vi.fn(async () => emptyDelta());
-    const executeManyToManyRelationshipCommand = vi.fn(async () => emptyDelta());
+    const executeRelationshipCommand = vi.fn(async () => appliedEmptyDelta());
+    const executeManyToManyRelationshipCommand = vi.fn(async () => appliedEmptyDelta());
     const run = createMutationReactionRunner({
       createOutcomeId: () => 'outcome-applied',
       executeRelationshipCommand,

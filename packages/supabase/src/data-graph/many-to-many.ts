@@ -1,4 +1,5 @@
 import {
+  appliedRelationshipCommand,
   compileSelectionExpression,
   createEntityIdentityRef,
   getEntityIdentityLocator,
@@ -6,7 +7,7 @@ import {
   resolveManyToManyRelationConstraints,
   type ManyToManyRelationshipCommand,
   type RelationConstraintRejection,
-  type RelationshipDelta,
+  type RelationshipCommandResult,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 
@@ -140,7 +141,7 @@ export const executeSupabaseManyToManyRelationshipCommandEffect = <
   },
   command: ManyToManyRelationshipCommand,
   options?: TOptions,
-): Effect.Effect<RelationshipDelta, TError> =>
+): Effect.Effect<RelationshipCommandResult, TError> =>
   Effect.gen(function* () {
     const client = yield* deps.getClient(options);
     if (!client.rpc) {
@@ -218,7 +219,7 @@ export const executeSupabaseManyToManyRelationshipCommandEffect = <
       source: createEntityIdentityRef(source, { [sourceField]: change.source })!,
       target: createEntityIdentityRef(target, { [targetField]: change.target })!,
     }));
-    return command.action === 'link'
-      ? { added: facts, removed: [] }
-      : { added: [], removed: facts };
+    return appliedRelationshipCommand(
+      command.action === 'link' ? { added: facts, removed: [] } : { added: [], removed: facts },
+    );
   });

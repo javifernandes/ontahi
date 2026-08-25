@@ -56,6 +56,7 @@ describe('data graph Relationship Command protocol', () => {
     const next = createEntityRef(graph.Course, { id: 'course-2' });
     const command = relationship(graph.Student, 'course', student).assign(next, {
       ifCurrent: previous,
+      onMismatch: 'skip',
     });
     const parsed = parseGraphCommandRequest(
       JSON.parse(JSON.stringify(toGraphCommandRequest(command))),
@@ -87,6 +88,30 @@ describe('data graph Relationship Command protocol', () => {
     ).toEqual({
       success: true,
       request: { version: 1, kind: 'graph-command', command },
+    });
+  });
+
+  it('rejects an unknown conditional mismatch mode', () => {
+    const graph = defineSchoolGraph();
+    const command = relationship(
+      graph.Student,
+      'course',
+      createEntityRef(graph.Student, { id: 'student-1' }),
+    ).assign(createEntityRef(graph.Course, { id: 'course-2' }), {
+      ifCurrent: createEntityRef(graph.Course, { id: 'course-1' }),
+    });
+
+    expect(
+      parseGraphCommandRequest({
+        ...toGraphCommandRequest(command),
+        command: {
+          ...command,
+          precondition: { ...command.precondition, onMismatch: 'ignore' },
+        },
+      }),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_request' } },
     });
   });
 

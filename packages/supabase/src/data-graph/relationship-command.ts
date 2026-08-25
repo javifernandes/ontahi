@@ -1,14 +1,17 @@
 import {
+  appliedRelationshipCommand,
   compileSelectionExpression,
   getEntityMapping,
   isReferenceFieldDefinition,
   liftEntityReferenceValue,
   lowerEntityReferenceValue,
+  notAppliedRelationshipCommand,
   resolveDirectRelationConstraints,
   selectionReferences,
   type AnyEntityDefinition,
   type RelationConstraintRejection,
   type RelationshipCommand,
+  type RelationshipCommandResult,
   type RelationshipDelta,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
@@ -180,7 +183,7 @@ export const executeSupabaseRelationshipCommandEffect = <
   },
   command: RelationshipCommand,
   options?: TOptions,
-): Effect.Effect<RelationshipDelta, TError> =>
+): Effect.Effect<RelationshipCommandResult, TError> =>
   Effect.gen(function* () {
     const client = yield* deps.getClient(options);
     if (!client.rpc) {
@@ -239,11 +242,14 @@ export const executeSupabaseRelationshipCommandEffect = <
       );
     }
     if (command.precondition && !response.data.preconditionMatched) {
+      if (command.precondition.onMismatch === 'skip') {
+        return notAppliedRelationshipCommand(command);
+      }
       return yield* Effect.fail(
         deps.createError({
           message: 'Supabase Relationship current target did not match its precondition',
           logMessage: 'Supabase Relationship precondition failed',
-          cause: 'relationship_precondition_failed',
+          cause: { reason: 'relationship_precondition_failed' },
         }),
       );
     }
@@ -256,5 +262,5 @@ export const executeSupabaseRelationshipCommandEffect = <
         }),
       );
     }
-    return materializeDelta(command, deps.entities, response.data);
+    return appliedRelationshipCommand(materializeDelta(command, deps.entities, response.data));
   });

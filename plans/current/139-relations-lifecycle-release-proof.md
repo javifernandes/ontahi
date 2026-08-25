@@ -27,6 +27,8 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
 5. Transport precondition conflicts as structured outcomes, then offer an explicit
    `onMismatch: 'skip'` mode whose `not-applied` outcome remains observable. Keep conflict as the
    default and do not collapse skipped, idempotent, and applied transitions into one empty delta.
+   Completed through
+   [136g. Portable Relationship Command Outcomes](../done/136g-portable-relationship-command-outcomes.md).
 6. Add a small executable `classroom` example centered on School, Course, Student, Teacher and an
    Enrollment Association Entity. Begin with schema and behavioral scenarios; add UI only where it
    proves a framework affordance.
