@@ -31,6 +31,7 @@ relatedPlans:
   - ontahi://plans/139-relations-lifecycle-release-proof
   - ontahi://plans/139a-composable-data-graph-transactions
   - ontahi://plans/139b-transaction-scoped-unit-of-work
+  - ontahi://plans/139c-executable-classroom-lifecycle-proof
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -260,6 +261,20 @@ observe the same relationship fact as a direct Relation, while Applied Outcomes 
 important distinction between changing a primitive edge and creating or deleting an Entity with its
 own identity and lifecycle. Generic Entity Mutation Commands still lack a public remote bridge;
 Relationship Commands already have a versioned, default-deny remote path.
+
+The executable `examples/classroom` proof keeps a direct Relation and an association-shaped Entity
+side by side. `Student.currentCourse` represents the student's current placement and supports an
+atomic conditional reassignment; `Course.students` is its named inverse. `Enrollment` instead owns
+an id, Student and Course participant Refs, credits, timestamps, and a
+pending/active/cancelled lifecycle. Its named lifecycle Operations resolve their schema-native input
+Ref through the operation-scoped UnitOfWork and update through ordinary Entity commands. Required
+participant Refs alone still do not classify it as an Association Entity in reflection.
+
+The same example registers `Course.students.removed` behavior at `ontahi({ reactions })`. An inverse
+unlink yields one canonical Relationship Command; only an applied command creates the outcome seen
+by the Reaction and emits portable Student/Course Ref identities. This application registration is
+deliberately separate from static Relation metadata and from any required transactional
+coordination.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally

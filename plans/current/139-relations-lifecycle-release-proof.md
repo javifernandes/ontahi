@@ -31,7 +31,8 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
    [136g. Portable Relationship Command Outcomes](../done/136g-portable-relationship-command-outcomes.md).
 6. Add a small executable `classroom` example centered on School, Course, Student, Teacher and an
    Enrollment Association Entity. Begin with schema and behavioral scenarios; add UI only where it
-   proves a framework affordance.
+   proves a framework affordance. The headless lifecycle proof is complete in
+   [139c. Executable Classroom Lifecycle Proof](../done/139c-executable-classroom-lifecycle-proof.md).
 7. Keep Todo Express as the simple compatibility proof rather than forcing complex lifecycle rules
    into it.
 8. Move the developer documentation source from `ontahi-library` into this repository if that
@@ -45,7 +46,7 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
 ## Acceptance Checklist
 
 - [x] Required coordinated mutation and post-application Reaction semantics are separately documented and executable.
-- [ ] Classroom demonstrates conditional reassignment, unlink Reaction, and stateful Enrollment lifecycle.
+- [x] Classroom demonstrates conditional reassignment, unlink Reaction, and stateful Enrollment lifecycle.
 - [ ] Todo remains small and passes as a packaged consumer.
 - [ ] Developer docs live at one canonical source and match the candidate release.
 - [ ] Package, artifact, example and release dry-run verification pass.

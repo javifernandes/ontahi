@@ -76,6 +76,25 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  examples/classroom:
+    dependencies:
+      '@ontahi/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      effect:
+        specifier: 3.21.0
+        version: 3.21.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.24
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@20.19.24)(@vitest/coverage-v8@4.1.10)(jsdom@28.1.0)(vite@6.4.3(@types/node@20.19.24)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
   examples/todo-express:
     dependencies:
       '@ontahi/core':
