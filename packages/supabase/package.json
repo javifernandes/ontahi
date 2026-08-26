@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/supabase",
-  "version": "0.1.0-alpha.7",
+  "version": "1.0.0-alpha.8",
   "description": "Supabase adapters for Ontahi graph and task runtimes",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/supabase",
   "license": "Apache-2.0",

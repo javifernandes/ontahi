@@ -1,5 +1,23 @@
 # @ontahi/runtime-vercel-workflows
 
+## 1.0.0-alpha.8
+
+### Patch Changes
+
+- Updated dependencies [aa8659c]
+- Updated dependencies [213f4ec]
+- Updated dependencies [2d526f3]
+- Updated dependencies [0ad7a06]
+- Updated dependencies [4dd7be4]
+- Updated dependencies [0247a29]
+- Updated dependencies [fd725a2]
+- Updated dependencies [3165893]
+- Updated dependencies [f3f292c]
+- Updated dependencies [ca98ccd]
+- Updated dependencies [f579e0f]
+- Updated dependencies [302e4d3]
+  - @ontahi/core@1.0.0-alpha.8
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes
