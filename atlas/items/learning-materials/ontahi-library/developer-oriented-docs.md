@@ -13,6 +13,7 @@ relatedPlans:
   - bookops://plans/122-ontahi-developer-book
   - ontahi://plans/139-relations-lifecycle-release-proof
   - ontahi://plans/139e-relations-developer-documentation
+  - ontahi://plans/139f-relations-lifecycle-release-rehearsal
 migratedFrom: bookops://atlas/learning-materials/ontahi-library/developer-oriented-docs
 sourceCommit: 67713696
 ---
@@ -64,3 +65,6 @@ lifecycle edition teaches semantic reflected endpoints, conditional and constrai
 Commands, explicit outcomes, schema-native Ref resolution, UnitOfWork, compositional PostgreSQL
 transactions, post-commit Reactions, read-only Explorer navigation, and the current remote
 Relationship Command boundary.
+
+The `1.0.0-alpha.8` rehearsal cross-checked that narrative against the generated changelogs, exact
+packed artifacts, tarball-only Todo consumer, and provider-backed Classroom proof before release.

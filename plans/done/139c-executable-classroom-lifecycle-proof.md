@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/139c-executable-classroom-lifecycle-proof`
 
-Parent: [139. Relations Lifecycle Release Proof](../current/139-relations-lifecycle-release-proof.md)
+Parent: [139. Relations Lifecycle Release Proof](./139-relations-lifecycle-release-proof.md)
 
 ## Summary
 

@@ -221,5 +221,5 @@ one child. This closing slice adds Ref-resolution reuse and explicit invalidatio
 
 Related current work:
 
-1. [139. Relations Lifecycle Release Proof](../current/139-relations-lifecycle-release-proof.md)
+1. [139. Relations Lifecycle Release Proof](./139-relations-lifecycle-release-proof.md)
 2. [139a. Composable Data Graph Transactions](../done/139a-composable-data-graph-transactions.md)
