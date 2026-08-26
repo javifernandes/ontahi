@@ -115,6 +115,13 @@ export const Student = entity({
                     course: nextCourse,
                   });
                 }
+                if (currentPreviousCourse.id === currentNextCourse.id) {
+                  return yield* failOperation(
+                    'same_course',
+                    'Previous and Next Course must differ.',
+                    { course: nextCourse },
+                  );
+                }
                 if (currentNextCourse.availableSeats === 0) {
                   return yield* failOperation(
                     'course_full',

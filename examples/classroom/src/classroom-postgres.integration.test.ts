@@ -127,12 +127,45 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
     }
   });
 
+  it('rejects a transfer whose previous and next Course are the same', async () => {
+    await expect(
+      classroom.Student.transfer({
+        student: Student.refById('student-1'),
+        previousCourse: Course.refById('course-1'),
+        nextCourse: Course.refById('course-1'),
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      failure: {
+        reason: 'same_course',
+        course: Course.refById('course-1'),
+      },
+    });
+
+    await expect(
+      pool.query(
+        `SELECT id, current_course_id FROM students WHERE id = 'student-1';
+         SELECT id, available_seats FROM courses ORDER BY id;`,
+      ),
+    ).resolves.toMatchObject([
+      { rows: [{ id: 'student-1', current_course_id: 'course-1' }] },
+      {
+        rows: [
+          { id: 'course-1', available_seats: 0 },
+          { id: 'course-2', available_seats: 2 },
+        ],
+      },
+    ]);
+  });
+
   it('reports a stale current Course as a domain failure without changing state', async () => {
+    await pool.query(`UPDATE courses SET available_seats = 1 WHERE id = 'course-1'`);
+
     await expect(
       classroom.Student.transfer({
         student: Student.refById('student-1'),
         previousCourse: Course.refById('course-2'),
-        nextCourse: Course.refById('course-2'),
+        nextCourse: Course.refById('course-1'),
       }),
     ).resolves.toMatchObject({
       ok: false,
@@ -152,7 +185,7 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
       { rows: [{ id: 'student-1', current_course_id: 'course-1' }] },
       {
         rows: [
-          { id: 'course-1', available_seats: 0 },
+          { id: 'course-1', available_seats: 1 },
           { id: 'course-2', available_seats: 2 },
         ],
       },

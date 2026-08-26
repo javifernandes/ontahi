@@ -42,11 +42,11 @@ await classroom.Student.transfer({
 The Operation enters `app.graph.transaction(effect)`, resolves those schema-native Refs through
 the transaction-scoped UnitOfWork, executes the conditional Relationship Command with `.run()`,
 and updates both capacities through Entity Commands. PostgreSQL runs every read and write through
-the same checked-out connection. A known-full destination is rejected before the Relationship
-Command. A later capacity compare-and-set mismatch returns a domain failure and rolls the complete
-transition back. A stale `previousCourse` is translated from the portable Relationship Command
-outcome into `student_course_changed`, without leaking a provider error through the Domain
-Operation contract.
+the same checked-out connection. Equal previous and next Courses return `same_course`, and a
+known-full destination is rejected before the Relationship Command. A later capacity
+compare-and-set mismatch returns a domain failure and rolls the complete transition back. A stale
+`previousCourse` is translated from the portable Relationship Command outcome into
+`student_course_changed`, without leaking a provider error through the Domain Operation contract.
 
 The capacity counter is intentionally an application invariant, not Relation metadata or an
 aggregate Relation constraint. The example rejects stale evidence rather than adding an implicit
