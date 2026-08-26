@@ -16,10 +16,10 @@ Related plans:
 ## Summary
 
 Let an Ontahí model declare input resolution requirements, Operation preconditions and
-postconditions, permanent Entity/Relation invariants, derived graph values, and execution
+postconditions, permanent Entity/Relation invariants, derived graph fields, and execution
 requirements in one statically analyzable TypeScript vocabulary. Compile that authoring form into
 portable reflection and expression IR so clients can provide advisory validation and documentation
-while the selected authoritative runtime preserves atomicity and consistency.
+while the selected authoritative runtime preserves the declared execution guarantees.
 
 Static requirements and runtime affordances remain separate. A Domain Operation may declare that
 it requires atomic Data Graph execution without naming PostgreSQL, a server, or another deployment
@@ -49,8 +49,9 @@ manual coordination in application code:
 The example also exposes a distribution boundary. A client can determine from local data that a
 Course is already full and avoid an unnecessary invocation, but a locally satisfied check is not
 proof that capacity remains available at authoritative execution time. Two offline replicas can
-each make a locally atomic decision and still violate a strict global capacity invariant after
-merge unless the topology provides serialization or a convergence mechanism such as escrow.
+each make a locally atomic decision and still violate an authority-serialized global capacity
+invariant after merge unless the topology provides serialization or a convergence mechanism such
+as escrow.
 
 ## Semantic Categories
 
@@ -61,7 +62,7 @@ merge unless the topology provides serialization or a convergence mechanism such
 | Operation precondition | Student is still assigned to previous Course        | guarded Command or atomic Operation boundary     | expected stale/domain rejection           |
 | Permanent invariant    | Course students never exceed capacity               | every affected mutation's authoritative boundary | model mutation rejection                  |
 | Postcondition          | successful transfer leaves Student in next Course   | after the body and before commit                 | contract or implementation violation      |
-| Derived value          | available seats equals capacity minus student count | graph read or provider-owned materialization     | definition/evaluation failure             |
+| Derived Field          | available seats equals capacity minus student count | graph read or provider-owned materialization     | definition/evaluation failure             |
 
 A precondition does not automatically make a whole Operation transactional. A pure input condition
 requires no storage boundary. A state precondition attached to one Relationship Command should be
@@ -81,6 +82,8 @@ const Course = entity({
   fields: {
     id: field.id(),
     capacity: field.nonNegativeInteger(),
+    occupiedSeats: field.derived(({ students }) => students.count()),
+    availableSeats: field.derived(({ capacity, students }) => capacity - students.count()),
   },
 
   relations: {
@@ -89,14 +92,9 @@ const Course = entity({
     }),
   },
 
-  derived: {
-    occupiedSeats: derive(({ students }) => students.count()),
-    availableSeats: derive(({ capacity, students }) => capacity - students.count()),
-  },
-
   invariants: {
     withinCapacity: invariant(({ capacity, students }) => students.count() <= capacity, {
-      consistency: 'strict',
+      enforcement: 'authority-serialized',
       rejection: relationRejection.courseFull(),
     }),
   },
@@ -121,13 +119,16 @@ transfer: operation.atomic({
     studentWasTransferred: ({ student, nextCourse }) => student.currentCourse.is(nextCourse),
   },
 
-  run: ({ student, previousCourse, nextCourse }) =>
-    student.ref.currentCourse
-      .assign(nextCourse.ref, { ifCurrent: previousCourse.ref })
-      .run()
-      .pipe(operation.requireApplied()),
+  run: ({ student, nextCourse }) => student.ref.currentCourse.assign(nextCourse.ref),
 });
 ```
+
+Derived values remain Fields because callers select, project, reflect, display, and navigate them
+through the same Entity field surface. `field.derived(...)` distinguishes their read-only semantic
+definition from stored Fields; Commands cannot assign them. Relation declarations remain the
+structural edge surface that a derived Field may reference. This follows the same rule as
+schema-native input Refs: express a semantic distinction in the Field definition rather than
+creating a parallel container that callers must learn and traverse.
 
 `existingRef(Entity)` has a conventional structured `entity_not_found` rejection derived from the
 Entity and input path. A custom rejection remains an override, not required boilerplate. Named
@@ -136,9 +137,20 @@ messages are optional authoring refinements. A failed postcondition normally rep
 violation rather than an expected user rejection.
 
 The target Operation contains no manual capacity read or update. The Relation invariant rejects an
-addition that would exceed Course capacity, while the derived value observes the resulting
+addition that would exceed Course capacity, while the derived Fields observe the resulting
 membership. An unlink remains possible even when an existing Course has become invalid under a
 newer rule.
+
+The Operation invoker recognizes a closed set of canonical Ontahí executable values, including
+Graph Commands, Relationship Commands, and graph reads, and executes a returned value through the
+current runtime. It must not duck-type and invoke arbitrary objects that happen to expose `run()`.
+This makes a single returned Relationship Command executable without `.run()`. The declared
+`studentStillAssigned` precondition is lowered into the command's atomic compare-and-set, so the
+body does not repeat it as `ifCurrent` or translate `not-applied` with a `.pipe(...)`. An explicitly
+requested observable `onMismatch: 'skip'` remains available for lower-level workflows that want to
+handle that outcome themselves. Sequencing multiple Commands inside an imperative Effect remains a
+separate ergonomics question; automatic execution of the Operation's returned value does not imply
+recursive execution of arbitrary nested values.
 
 ## TypeScript Expression Language
 
@@ -211,53 +223,99 @@ still does not gain permission to execute the mutation.
 
 `operation.atomic(...)` should establish both an authoring shortcut and a reflected static
 requirement. The runner, not the application body, owns the transaction boundary so declaration and
-behavior cannot drift.
+behavior cannot drift. Within this plan, it has one precise meaning: all authorized Data Graph
+reads, state-dependent preconditions, Commands, invariant enforcement, and state-dependent
+postconditions performed by the Operation share one commit-or-rollback boundary. Post-commit
+Reactions and external services are outside that boundary unless a later coordination model says
+otherwise.
 
-One possible portable shape is:
+Do not add an execution `scope` property. The existing Operation scope identifies an Operation for
+telemetry, failures, cache keys, and concerns; it is not a transaction resource selector. Plan 142
+only promises Data Graph atomicity. A future contract that coordinates an event log, workflow
+engine, or external resource needs explicit semantics rather than overloading `scope: 'data-graph'`.
+
+### Execution Vocabulary
+
+| Term                           | Meaning                                                                                                             | Does not claim                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Operation scope                | Stable identity used by invocation concerns such as telemetry, failures, and cache keys.                            | A selectable transaction resource or consistency boundary.                  |
+| Data Graph atomicity           | The Operation's covered Data Graph work commits completely or leaves no mutation visible.                           | Atomic external APIs, post-commit Reactions, or globally distributed state. |
+| Capability requirement         | A compiler-derived, provider-neutral guarantee needed to execute the compiled program honestly.                     | A provider choice or manually duplicated author declaration.                |
+| Runtime capability             | A live runtime claim, backed by conformance evidence, that it can satisfy a requirement for the compiled program.   | Permission to execute; Policy and authority still apply.                    |
+| Authority-serialized invariant | Relevant mutations pass through one authority that checks prospective state and prevents conflicting valid commits. | Global serializability of unrelated state or offline merge safety.          |
+| Merge-safe invariant           | A future topology-specific proof that concurrent accepted changes preserve the invariant after convergence.         | Ordinary local transactions being sufficient.                               |
+| Runtime execution affordance   | The current binding result: execute locally, bridge, queue, or report unavailable.                                  | Static model metadata or a choice delegated to UI code.                     |
+
+One possible portable reflection shape is:
 
 ```ts
 {
   execution: {
     atomicity: 'required',
-    scope: 'data-graph',
-    consistency: 'strict',
-    capabilities: [
-      'relation.compare-and-set',
-      'relation.aggregate-constraint',
+    requiredCapabilities: [
+      { kind: 'relation.compare-and-set' },
+      {
+        kind: 'relation.aggregate-invariant',
+        enforcement: 'authority-serialized',
+      },
     ],
   },
 }
 ```
 
-The exact vocabulary remains open. It must describe semantic requirements without naming a server,
-browser, PostgreSQL, Supabase, or transport. Binding an Application to a concrete runtime produces a
-separate authority-dependent affordance:
+These capabilities are compiler-derived requirements, not another author-maintained list:
+
+1. `relation.compare-and-set` means the runtime can test the current Relation endpoint and apply the
+   corresponding mutation as one indivisible provider operation; it cannot implement this as an
+   unguarded read followed by a write.
+2. `relation.aggregate-invariant` with `enforcement: 'authority-serialized'` means every mutation
+   that can affect the declared aggregate is evaluated against the prospective graph state and
+   applied or rejected within one authority-controlled serialization boundary.
+
+`atomicity: 'required'` is itself a semantic guarantee rather than shorthand for the current
+`data-graph.transaction` runtime API. A runtime may satisfy it by compiling the complete Operation
+to one atomic statement or RPC, or by using a compositional storage transaction. This distinction
+allows a focused Supabase RPC to satisfy one atomic Operation without falsely advertising general
+compositional transactions.
+
+The vocabulary must stay small, versioned, technology-independent, and backed by conformance tests.
+`operation.atomic`, lowered state preconditions, and permanent invariants contribute requirements;
+a runtime advertises only guarantees it actually implements. PostgreSQL, Supabase, a browser
+database, and a remote bridge can therefore satisfy different subsets without appearing in model
+metadata. Binding an Application to a concrete runtime produces a separate authority-dependent
+affordance:
 
 ```ts
 type OperationExecutionAffordance =
   | { status: 'local'; runtime: string }
   | { status: 'bridge'; authority: string; bridge: string }
   | { status: 'queued'; topology: string }
-  | { status: 'unavailable'; missingCapabilities: readonly string[] };
+  | {
+      status: 'unavailable';
+      missingCapabilities: readonly ExecutionCapabilityRequirement[];
+    };
 ```
 
 UI application code invokes the same Operation facade in every case. It may inspect the affordance
 to present availability, but it does not choose a provider or duplicate routing logic.
 
-Atomicity is scoped to the selected execution boundary. It does not imply global serializability or
-safe convergence across replicas. A strict aggregate invariant may require an authority-serialized
-runtime. A future storage topology may satisfy the same contract locally through a bounded counter,
-escrow, or another declared convergence capability; Plan 142 does not design that algorithm.
+Do not use a generic `consistency: 'strict'` flag: it conflates atomic commit, transaction isolation,
+freshness, authority, and replica convergence. The first aggregate-invariant slice requires
+`authority-serialized` enforcement: all relevant mutations pass through an authority that prevents
+concurrent commits from violating the invariant. This does not claim global serializability for
+unrelated state or safe convergence across replicas. A future topology may instead advertise a
+separately defined `merge-safe` guarantee backed by bounded counters, escrow, or another proven
+algorithm; Plan 142 does not design or equate that guarantee.
 
-## Derived Values And Materialization
+## Derived Fields And Materialization
 
-A derived value has one semantic definition and at least two possible execution strategies:
+A derived Field has one semantic definition and at least two possible execution strategies:
 
 1. virtual: compile the expression into graph reads and calculate it on demand;
 2. materialized: persist provider-specific projection state and update it atomically from committed
    mutation deltas.
 
-Materialization is an optimization and execution capability, not a second authored field formula.
+Materialization is an optimization and execution capability, not a second authored Field formula.
 An applied Relationship Delta already identifies removals and additions across both Course
 endpoints, making incremental maintenance possible inside the same storage commit. A post-commit
 Reaction is too late to preserve an invariant and must not become the materialization mechanism.
@@ -276,14 +334,14 @@ rebuilds, drift detection, and repair require a later focused plan.
 3. **Existing Ref and condition contracts:** add conventional `existingRef`, named preconditions,
    postconditions, portable rejection defaults, dependency reflection, and tri-state advisory
    evaluation. State-dependent checks must execute inside the selected UnitOfWork.
-4. **Derived graph values:** prove one virtual `Course.availableSeats` derived value in memory and
+4. **Derived graph Fields:** prove one virtual `Course.availableSeats` derived Field in memory and
    through one authorized provider read without storing a counter.
 5. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
    `Course.students` additions atomically in memory and one provider. Preserve unlink repair and
    concurrent conflict semantics.
 6. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
-   offline queueing, replication, convergence evidence, and strict versus merge-safe invariant
-   requirements in a separate plan.
+   offline queueing, replication, convergence evidence, and authority-serialized versus merge-safe
+   invariant requirements in a separate plan.
 
 Each slice requires TDD, semantic runtime assertions, compile-time contract coverage when public
 types change, proportional provider integration evidence, and a Changeset for public package
@@ -302,12 +360,14 @@ surfaces.
 7. No replacement of Policy, authorization, Reactions, or Applied Mutation Outcomes with model
    invariants.
 8. No source-language feature that cannot produce stable reflection and JSON-safe canonical IR.
+9. No generic transaction over external services or capabilities hidden behind an execution
+   `scope` string.
 
 ## Acceptance Checklist
 
 - [ ] One Classroom sketch distinguishes input constraints, Ref resolution requirements,
-      preconditions, permanent invariants, postconditions, and derived values without manual counter
-      maintenance.
+      preconditions, permanent invariants, postconditions, and derived Fields without manual
+      counter maintenance.
 - [ ] The authoring experiment permits natural arithmetic and boolean expressions or records
       concrete evidence that an explicit builder is required.
 - [ ] Every accepted expression lowers to stable JSON-safe IR with source-located diagnostics for
@@ -318,11 +378,14 @@ surfaces.
       authoritative validation after a local success.
 - [ ] State preconditions compile into one guarded Command when possible; otherwise their required
       atomic Operation boundary is explicit.
-- [ ] Permanent invariants apply to every relevant mutation path and distinguish strict,
+- [ ] Permanent invariants apply to every relevant mutation path and distinguish
       authority-serialized requirements from future merge-safe execution.
-- [ ] Derived values have one semantic definition independent from virtual or materialized execution.
+- [ ] Derived Fields share the ordinary Field reflection/query surface, remain read-only to
+      Commands, and have one semantic definition independent from virtual or materialized execution.
 - [ ] Static Operation execution requirements remain separate from runtime local/bridge/queued/
       unavailable affordances.
+- [ ] Required capabilities are derived from model semantics, have explicit testable guarantees,
+      and are never a manually duplicated list in Operation authoring.
 - [ ] UI invocation remains provider- and topology-transparent while availability stays inspectable.
 - [ ] The first executable slice remains small and extracts aggregate enforcement, materialization,
       and distribution into linked follow-ups.
@@ -335,13 +398,13 @@ surfaces.
    remain distinct without recreating a parallel `refs` namespace?
 3. Which preconditions can be proven to lower into one Command, and how does the compiler explain
    when Operation-level atomicity is still required?
-4. Is `atomicity: 'required'` sufficient, or must the contract separately name transaction scope,
-   isolation, and strict versus convergent consistency?
+4. What is the smallest versioned capability vocabulary that can express the selected Operation's
+   derived requirements without turning provider implementation details into model metadata?
 5. How are conventional rejection codes named and localized without forcing boilerplate or making
    domain failures unstable?
 6. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
    inaccessible condition evidence?
-7. Can virtual relation aggregates compose with existing Queries and Views without a parallel
-   computed-field query language?
+7. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
+   Field surface without a parallel computed-field query language?
 8. How should generated clients expose execution availability while keeping the ordinary invocation
    spelling unchanged?
