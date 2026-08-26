@@ -27,8 +27,8 @@ after the edge change rolls the entire transition back.
 2. Resolve Student and Course input Refs through the transaction-scoped UnitOfWork.
 3. Apply the conditional direct Relation transition and capacity updates through bound `.run()`
    methods discovered from context.
-4. Reject a full destination Course after the tentative Relation transition and prove PostgreSQL
-   rollback restores every row.
+4. Reject a known-full destination before attempting the Relation transition, then use stale
+   capacity evidence to prove PostgreSQL rollback restores every row after a tentative transition.
 5. Guard capacity writes with the values read by the Operation so a stale counter fails the whole
    transaction instead of silently overwriting it.
 6. Add a conventional PostgreSQL migration, local Docker configuration, and real integration tests
@@ -46,7 +46,7 @@ after the edge change rolls the entire transition back.
 
 - [x] The public Operation spelling is `Student.transfer(...)`; application code receives no `tx`.
 - [x] A successful PostgreSQL transfer commits the Relation delta and both capacity changes.
-- [x] A full destination fails after the tentative edge change and PostgreSQL restores all state.
+- [x] A full destination fails before the Operation attempts its Relation transition.
 - [x] A stale current Course becomes an explicit domain failure without provider details leaking.
 - [x] Stale capacity evidence causes an explicit domain failure and rollback.
 - [x] Existing in-memory Classroom scenarios remain green.
@@ -66,11 +66,12 @@ Refs in the child UnitOfWork, executes the conditional `currentCourse` Relations
 its contextual `.run()`, and compare-and-set updates both Course capacities through Entity Commands.
 
 The Operation explicitly requests the portable `onMismatch: 'skip'` result and translates it into
-the domain failure `student_course_changed`. A full destination fails after the tentative Relation
-change, while an observed-capacity mismatch becomes `course_capacity_changed`; both failures roll
-the whole PostgreSQL transaction back. The stale-capacity integration case uses a database trigger
-owned only by the test to force a change between the authorized read and guarded write, without
-adding a test hook or callback to production Relation metadata.
+the domain failure `student_course_changed`. A known-full destination is rejected before attempting
+the Relation change. An observed-capacity mismatch after that change becomes
+`course_capacity_changed` and rolls the whole PostgreSQL transaction back. The stale-capacity
+integration case uses a database trigger owned only by the test to force a change between the
+authorized read and guarded write, without adding a test hook or callback to production Relation
+metadata.
 
 The Classroom package now exposes one application factory shared by in-memory and PostgreSQL
 runtimes, a conventional migration, an isolated Docker Compose service, and commands for starting,
@@ -80,7 +81,7 @@ changed, so no Changeset is required.
 ## Verification
 
 1. The real PostgreSQL integration suite passed all four transfer scenarios: commit, full-course
-   rollback, stale-current domain failure, and stale-capacity rollback.
+   rejection before Relation mutation, stale-current domain failure, and stale-capacity rollback.
 2. Classroom's three existing in-memory lifecycle tests passed; Todo Express passed all 29 tests.
    Todo's localhost OAuth tests were rerun outside the filesystem sandbox after the sandboxed sweep
    timed out at its network boundary.

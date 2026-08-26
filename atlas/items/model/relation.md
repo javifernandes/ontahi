@@ -280,8 +280,9 @@ coordination.
 The PostgreSQL Classroom transfer keeps that required coordination in `Student.transfer(...)`.
 The Domain Operation resolves portable Student/Course input Refs in the transaction UnitOfWork,
 applies `currentCourse.assign(next, { ifCurrent: previous })`, and compare-and-set updates both
-capacity counters. A full or stale destination fails the Operation and rolls the tentative Relation
-change back; no capacity callback or aggregate state is added to Relation metadata.
+capacity counters. A known-full destination fails before the Relation change; stale capacity after
+that change rolls the tentative transition back. No capacity callback or aggregate state is added
+to Relation metadata.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally

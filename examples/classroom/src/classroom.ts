@@ -115,6 +115,13 @@ export const Student = entity({
                     course: nextCourse,
                   });
                 }
+                if (currentNextCourse.availableSeats === 0) {
+                  return yield* failOperation(
+                    'course_full',
+                    'Next Course has no available seats.',
+                    { course: nextCourse },
+                  );
+                }
 
                 const relationship = yield* students
                   .refById(currentStudent.id)
@@ -130,14 +137,6 @@ export const Student = entity({
                     'student_course_changed',
                     'Student is no longer assigned to the expected Course.',
                     { student, expectedCourse: previousCourse },
-                  );
-                }
-
-                if (currentNextCourse.availableSeats === 0) {
-                  return yield* failOperation(
-                    'course_full',
-                    'Next Course has no available seats.',
-                    { course: nextCourse },
                   );
                 }
 

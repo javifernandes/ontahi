@@ -48,9 +48,9 @@ all restore the parent scope.
 
 The provider-backed Classroom proof exercises that boundary from an ordinary Domain Operation.
 `Student.transfer(...)` resolves three input Refs, conditionally changes one Relation, and updates
-two Course rows without receiving a transaction runtime parameter. PostgreSQL commits all three
-mutations together or restores them all when a full destination or stale capacity produces a domain
-failure.
+two Course rows without receiving a transaction runtime parameter. A known-full destination stops
+before structural mutation. PostgreSQL commits all three mutations together or restores them all
+when stale capacity produces a domain failure after the Relation change.
 
 Command construction remains pure and portable. Entering a UnitOfWork or transaction never makes
 construction execute a Command implicitly. The explicit execution marker is `.run()`; context only

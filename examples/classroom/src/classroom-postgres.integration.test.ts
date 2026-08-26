@@ -79,34 +79,52 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
     ]);
   });
 
-  it('rolls the tentative Relation transition back when the destination is full', async () => {
+  it('rejects a full destination before attempting the Relation transition', async () => {
     await pool.query(`UPDATE courses SET available_seats = 0 WHERE id = 'course-2'`);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION classroom_test_reject_student_update() RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'Student Relation transition should not be attempted';
+      END;
+      $$ LANGUAGE plpgsql;
 
-    await expect(
-      classroom.Student.transfer({
-        student: Student.refById('student-1'),
-        previousCourse: Course.refById('course-1'),
-        nextCourse: Course.refById('course-2'),
-      }),
-    ).resolves.toMatchObject({
-      ok: false,
-      failure: { reason: 'course_full', course: Course.refById('course-2') },
-    });
+      CREATE TRIGGER classroom_test_reject_student_update
+      BEFORE UPDATE OF current_course_id ON students
+      FOR EACH ROW EXECUTE FUNCTION classroom_test_reject_student_update();
+    `);
 
-    await expect(
-      pool.query(
-        `SELECT id, current_course_id FROM students WHERE id = 'student-1';
-         SELECT id, available_seats FROM courses ORDER BY id;`,
-      ),
-    ).resolves.toMatchObject([
-      { rows: [{ id: 'student-1', current_course_id: 'course-1' }] },
-      {
-        rows: [
-          { id: 'course-1', available_seats: 0 },
-          { id: 'course-2', available_seats: 0 },
-        ],
-      },
-    ]);
+    try {
+      await expect(
+        classroom.Student.transfer({
+          student: Student.refById('student-1'),
+          previousCourse: Course.refById('course-1'),
+          nextCourse: Course.refById('course-2'),
+        }),
+      ).resolves.toMatchObject({
+        ok: false,
+        failure: { reason: 'course_full', course: Course.refById('course-2') },
+      });
+
+      await expect(
+        pool.query(
+          `SELECT id, current_course_id FROM students WHERE id = 'student-1';
+           SELECT id, available_seats FROM courses ORDER BY id;`,
+        ),
+      ).resolves.toMatchObject([
+        { rows: [{ id: 'student-1', current_course_id: 'course-1' }] },
+        {
+          rows: [
+            { id: 'course-1', available_seats: 0 },
+            { id: 'course-2', available_seats: 0 },
+          ],
+        },
+      ]);
+    } finally {
+      await pool.query(`
+        DROP TRIGGER IF EXISTS classroom_test_reject_student_update ON students;
+        DROP FUNCTION IF EXISTS classroom_test_reject_student_update();
+      `);
+    }
   });
 
   it('reports a stale current Course as a domain failure without changing state', async () => {
