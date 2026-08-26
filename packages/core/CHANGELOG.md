@@ -1,5 +1,57 @@
 # @ontahi/core
 
+## 1.0.0-alpha.8
+
+### Major Changes
+
+- fd725a2: Return explicit applied or not-applied Relationship Command results, add conditional
+  `onMismatch: 'skip'`, and preserve structured precondition and constraint diagnostics through
+  direct providers and the remote Express/Fetch bridge.
+
+  This replaces the raw `RelationshipDelta` previously returned by provider, remote, and React graph
+  executors. Those consumers must first check `result.status`; applied commands expose the exact
+  delta through `result.delta`, while `not-applied` commands expose a diagnostic and have no delta.
+  Application-bound callers must likewise narrow `result.status` before reading
+  `result.outcome.delta` or `result.reactions`. Existing callers that intentionally retain
+  failure-on-mismatch behavior can omit `onMismatch` or use `onMismatch: 'fail'`.
+
+### Minor Changes
+
+- aa8659c: Define an optional compositional Data Graph transaction capability and implement it for PostgreSQL
+  with one checked-out connection, typed callback failures, and real commit/rollback behavior.
+- 213f4ec: Add declarative application-registered Relationship Reactions, typed matcher and intent factories,
+  observable applied outcomes, and transaction-aware post-commit interpretation for bound commands.
+- 2d526f3: Reflect semantic Relation descriptors, render portable Entity references as navigable identity, and
+  support read-only related-instance panels through a host-provided Query-backed reader. Schema
+  reflection also exposes undeclared inverse endpoints as non-executable, read-only topology.
+- 0ad7a06: Enforce portable source and target participant constraints atomically across Selection-valued
+  many-to-many Relationship Commands.
+- 4dd7be4: Add server UnitOfWork scopes, contextual Data Graph transactions, and runtime-bound Relationship
+  Command `.run()` execution while preserving portable command serialization.
+- 0247a29: Add conditional to-one Relation assignment with portable expected-current target preconditions.
+- 3165893: Make top-level Domain Operation Ref inputs schema-native: declare `field.ref(Entity)` once, use the
+  Ref directly with `resolve()`, `invalidate()`, and `refresh()` in server implementations, preserve
+  portable Refs across the client bridge, and derive Explorer Ref controls from reflected schema.
+
+  Remove the transitional authored `inputRefs` Domain Operation contract and legacy scalar lowering.
+
+  Migration: replace declarations such as `inputRefs: { book: app.graph.refInput(Book) }` plus
+  `run: ({ refs }) => refs.book.resolve()` with a single schema field
+  `input: graphSchema.object({ book: field.ref(Book) })` and access it directly as
+  `run: ({ book }) => book.resolve()`. Bridge and client-cache `queryRef('book')`/`cacheRef('book')`
+  now require `input.book` to be a portable Entity Ref; scalar substitutes such as `bookId` or
+  `bookSlug` are no longer lowered or accepted as Ref identity.
+
+- f3f292c: Add typed factories for portable Relation source/target participant constraints, stable rejection
+  descriptors, static reflection, and authoritative in-memory Relationship Command enforcement.
+- ca98ccd: Execute direct Relationship Commands through an atomic invoker-rights Supabase RPC, and resolve
+  constrained inverse `hasMany` Relations from a unique target `belongsTo` field when `via` is omitted.
+- f579e0f: Resolve direct Relation constraints against canonical participants and enforce portable
+  source/target eligibility atomically across PostgreSQL and Supabase direct and many-to-many
+  Relationship Commands, preserving structured rejection descriptors without partial edge changes.
+- 302e4d3: Add operation-scoped UnitOfWork Ref resolution reuse and explicit invalidation, including
+  transparent memoization for authorized Data Graph input Ref Queries.
+
 ## 0.1.0-alpha.7
 
 ### Minor Changes

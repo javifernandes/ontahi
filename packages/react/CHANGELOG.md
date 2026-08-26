@@ -1,5 +1,54 @@
 # @ontahi/react
 
+## 1.0.0-alpha.8
+
+### Major Changes
+
+- fd725a2: Return explicit applied or not-applied Relationship Command results, add conditional
+  `onMismatch: 'skip'`, and preserve structured precondition and constraint diagnostics through
+  direct providers and the remote Express/Fetch bridge.
+
+  This replaces the raw `RelationshipDelta` previously returned by provider, remote, and React graph
+  executors. Those consumers must first check `result.status`; applied commands expose the exact
+  delta through `result.delta`, while `not-applied` commands expose a diagnostic and have no delta.
+  Application-bound callers must likewise narrow `result.status` before reading
+  `result.outcome.delta` or `result.reactions`. Existing callers that intentionally retain
+  failure-on-mismatch behavior can omit `onMismatch` or use `onMismatch: 'fail'`.
+
+### Minor Changes
+
+- 2d526f3: Reflect semantic Relation descriptors, render portable Entity references as navigable identity, and
+  support read-only related-instance panels through a host-provided Query-backed reader. Schema
+  reflection also exposes undeclared inverse endpoints as non-executable, read-only topology.
+- 3165893: Make top-level Domain Operation Ref inputs schema-native: declare `field.ref(Entity)` once, use the
+  Ref directly with `resolve()`, `invalidate()`, and `refresh()` in server implementations, preserve
+  portable Refs across the client bridge, and derive Explorer Ref controls from reflected schema.
+
+  Remove the transitional authored `inputRefs` Domain Operation contract and legacy scalar lowering.
+
+  Migration: replace declarations such as `inputRefs: { book: app.graph.refInput(Book) }` plus
+  `run: ({ refs }) => refs.book.resolve()` with a single schema field
+  `input: graphSchema.object({ book: field.ref(Book) })` and access it directly as
+  `run: ({ book }) => book.resolve()`. Bridge and client-cache `queryRef('book')`/`cacheRef('book')`
+  now require `input.book` to be a portable Entity Ref; scalar substitutes such as `bookId` or
+  `bookSlug` are no longer lowered or accepted as Ref identity.
+
+### Patch Changes
+
+- Updated dependencies [aa8659c]
+- Updated dependencies [213f4ec]
+- Updated dependencies [2d526f3]
+- Updated dependencies [0ad7a06]
+- Updated dependencies [4dd7be4]
+- Updated dependencies [0247a29]
+- Updated dependencies [fd725a2]
+- Updated dependencies [3165893]
+- Updated dependencies [f3f292c]
+- Updated dependencies [ca98ccd]
+- Updated dependencies [f579e0f]
+- Updated dependencies [302e4d3]
+  - @ontahi/core@1.0.0-alpha.8
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes

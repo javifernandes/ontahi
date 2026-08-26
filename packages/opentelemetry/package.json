@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/opentelemetry",
-  "version": "0.1.0-alpha.7",
+  "version": "1.0.0-alpha.8",
   "description": "OpenTelemetry adapter for Ontahi server runtimes",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/opentelemetry",
   "license": "Apache-2.0",
