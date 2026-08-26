@@ -2,6 +2,10 @@
 
 Supabase adapters for Ontahi applications.
 
+See the canonical [Relations](../../docs/developers/02-core-concepts/03-relations.md) and
+[storage adapters](../../docs/developers/03-runtimes/02-storage-adapters.md) chapters for the
+application-level model and transaction boundary. This README documents provider-specific behavior.
+
 This package depends on `@ontahi/core` and should not leak back into core. It currently contains:
 
 1. `@ontahi/supabase/data-graph`: Supabase execution runtime and query/command helpers for the Ontahi data graph.

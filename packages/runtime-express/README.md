@@ -3,7 +3,9 @@
 Express runtime adapters for Ontahi applications.
 
 See [Application Data Access](../../docs/application-data-access.md) for the complete path from
-Entity policy through generated React Queries and Operations.
+Entity policy through generated React Queries, Relationship Commands, and Operations. The
+canonical [transport chapter](../../docs/developers/03-runtimes/03-transport-and-http-ingress.md)
+places those paths in the wider application model.
 
 Mount a complete Ontahi application with one middleware:
 
@@ -25,6 +27,8 @@ server.use(
 - `POST /runtime/ontahi/operations` for invocation and permission checks.
 - `POST /runtime/ontahi/graph/reads` when graph-read policies or a lower-level dispatcher are
   configured.
+- `POST /runtime/ontahi/graph/commands` when Relationship Command policies or a lower-level
+  dispatcher are configured.
 - `GET /runtime/ontahi/operations/tasks/:taskId/:runId` for durable task snapshots.
 - `GET /runtime/ontahi/application` for reflected application metadata.
 - `/runtime/ontahi/explorer/*` when Explorer is enabled.

@@ -2,6 +2,10 @@
 
 Direct PostgreSQL storage for Ontahi applications.
 
+See the canonical [Relations](../../docs/developers/02-core-concepts/03-relations.md) and
+[runtime composition](../../docs/developers/03-runtimes/01-runtime-composition-and-capabilities.md)
+chapters for the application-level lifecycle. This README documents provider-specific behavior.
+
 The host owns its PostgreSQL schema and migrations. When the storage is composed through
 `ontahi(...)`, the adapter conventionally maps registered Entities to plural snake-case tables and
 snake-case columns, then binds execution and reflected browsing together:

@@ -39,11 +39,14 @@ Classroom domain, migrate/update developer documentation, and rehearse the relea
    into it.
 8. Move the developer documentation source from `ontahi-library` into this repository if that
    ownership decision remains current, preserving provenance and replacing the old source with a
-   relocation notice rather than a duplicate canonical copy.
+   relocation notice rather than a duplicate canonical copy. In progress through
+   [139e. Relations Developer Documentation](./139e-relations-developer-documentation.md).
 9. Teach the complete lifecycle with concrete Classroom examples and verify all public APIs against
    packed artifacts.
 10. Run the release rehearsal and merge the generated release PR only after Todo, Classroom and the
     developer docs agree with the shipped surface.
+
+The release rehearsal will be extracted as Plan 139f after 139e closes the documentation gate.
 
 ## Acceptance Checklist
 

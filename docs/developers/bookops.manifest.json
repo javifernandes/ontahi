@@ -1,0 +1,134 @@
+{
+  "format": "bookops-md",
+  "version": 1,
+  "book": {
+    "slug": "ontahi-for-developers",
+    "title": "Ontahí for Developers",
+    "subtitle": "Model the domain once. Let runtimes carry it.",
+    "author": "Javier Fernandes",
+    "language": "en"
+  },
+  "structure": {
+    "kind": "numbered-folders-and-files",
+    "partsAreNumberedFolders": true,
+    "chaptersAreNumberedMarkdownFiles": true,
+    "rootReadmeIsMetadataOnly": true
+  },
+  "bookops": {
+    "recommendedMountPath": "ontahi/docs/developers",
+    "localAssets": true,
+    "localAssetsPath": "/figures",
+    "style": {
+      "version": 1,
+      "name": "ontahi-botanical-language",
+      "tokens": {
+        "color": {
+          "background": "#F6F2EB",
+          "foreground": "#1F2A24",
+          "mutedForeground": "#5F746D",
+          "surface": "#FBF8F0",
+          "surfaceWarm": "#E8E2D3",
+          "border": "#D9D1C0",
+          "accent": "#D94C43",
+          "accentForeground": "#FFFFFF",
+          "accentSoft": "#F1B1AC",
+          "organic": "#7A7F52",
+          "forest": "#1F2A24",
+          "overline": "#465538"
+        },
+        "typography": {
+          "heading": "var(--font-ontahi-serif), Fraunces, Lora, ui-serif, Georgia, serif",
+          "body": "var(--font-ontahi-sans), Alegreya Sans, Inter, ui-sans-serif, system-ui, sans-serif",
+          "mono": "JetBrains Mono, ui-monospace, SFMono-Regular, monospace"
+        },
+        "radius": { "panel": "8px", "control": "6px" }
+      },
+      "reader": {
+        "layout": { "minWidth": "48rem" },
+        "loading": {
+          "markImage": "url(\"data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%3E%3Cpath%20d%3D%22M61%2071c-7%2013-9%2025-4%2038%22%20stroke%3D%22%23465538%22%20stroke-width%3D%227%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M56%2084c-15-8-26-4-34%2011%2014%203%2026-1%2034-11Z%22%20fill%3D%22%237A7F52%22%2F%3E%3Cpath%20d%3D%22M63%2077c14%200%2024%207%2030%2021-15%200-25-7-30-21Z%22%20fill%3D%22%2398A16B%22%2F%3E%3Cpath%20d%3D%22M62%2066c-18-2-31-12-38-29%2019-1%2032%209%2038%2029Z%22%20fill%3D%22%23D94C43%22%2F%3E%3Cpath%20d%3D%22M66%2060c-9-17-8-34%203-49%2013%2015%2012%2032-3%2049Z%22%20fill%3D%22%23E06A61%22%2F%3E%3Cpath%20d%3D%22M72%2062c8-16%2022-24%2040-24-6%2018-19%2027-40%2024Z%22%20fill%3D%22%23D94C43%22%2F%3E%3Cpath%20d%3D%22M70%2070c16%203%2028%2014%2035%2031-19%200-31-10-35-31Z%22%20fill%3D%22%23E06A61%22%2F%3E%3Cpath%20d%3D%22M56%2063c-15%208-30%208-45%200%2012-13%2028-13%2045%200Z%22%20fill%3D%22%23D94C43%22%2F%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2266%22%20r%3D%227%22%20fill%3D%22%23F6F2EB%22%20stroke%3D%22%23D94C43%22%20stroke-width%3D%223%22%2F%3E%3C%2Fsvg%3E\")",
+          "markSize": "5rem",
+          "fallbackMarkDisplay": "none"
+        },
+        "canvas": {
+          "texture": "url(\"data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22920%22%20height%3D%22640%22%20viewBox%3D%220%200%20920%20640%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23C2B7A4%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20opacity%3D%22.68%22%3E%3Cpath%20d%3D%22M-40%20560C90%20450%20180%20330%20320%20260C480%20180%20620%20120%20980%20-10%22%2F%3E%3Cpath%20d%3D%22M170%20356C126%20338%2094%20300%2082%20252C130%20260%20160%20302%20170%20356Z%22%2F%3E%3Cpath%20d%3D%22M235%20302C218%20246%20236%20198%20280%20164C294%20224%20276%20272%20235%20302Z%22%2F%3E%3Cpath%20d%3D%22M312%20260C354%20220%20414%20198%20482%20204C438%20256%20374%20278%20312%20260Z%22%2F%3E%3Cpath%20d%3D%22M440%20198C412%20144%20416%2092%20452%2042C486%2098%20482%20152%20440%20198Z%22%2F%3E%3Cpath%20d%3D%22M560%20150C612%20108%20684%2092%20752%20112C698%20166%20626%20182%20560%20150Z%22%2F%3E%3Cpath%20d%3D%22M666%20104C650%2046%20676%20-4%20728%20-36C740%2026%20718%2076%20666%20104Z%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23FBF8F0%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20opacity%3D%22.82%22%3E%3Cpath%20d%3D%22M730%20520C650%20448%20560%20414%20448%20412C330%20410%20238%20376%20162%20302%22%2F%3E%3Cpath%20d%3D%22M528%20414C548%20360%20588%20326%20644%20316C636%20374%20592%20410%20528%20414Z%22%2F%3E%3Cpath%20d%3D%22M408%20410C376%20360%20372%20310%20398%20258C438%20304%20442%20356%20408%20410Z%22%2F%3E%3Cpath%20d%3D%22M296%20384C242%20368%20204%20330%20184%20276C244%20286%20284%20324%20296%20384Z%22%2F%3E%3Cpath%20d%3D%22M622%20478C676%20462%20728%20470%20776%20504C720%20530%20670%20522%20622%20478Z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E\"), url(\"data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22620%22%20height%3D%22520%22%20viewBox%3D%220%200%20620%20520%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23D9D1C0%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20opacity%3D%22.44%22%3E%3Cpath%20d%3D%22M64%20430C148%20340%20214%20256%20340%20210C452%20168%20534%20102%20626%2012%22%2F%3E%3Cpath%20d%3D%22M168%20322C130%20310%20104%20282%2092%20242C134%20248%20160%20278%20168%20322Z%22%2F%3E%3Cpath%20d%3D%22M238%20272C220%20226%20232%20186%20266%20154C286%20200%20276%20244%20238%20272Z%22%2F%3E%3Cpath%20d%3D%22M318%20220C352%20188%20400%20172%20456%20178C420%20220%20372%20234%20318%20220Z%22%2F%3E%3Cpath%20d%3D%22M436%20154C424%20104%20444%2064%20486%2038C500%2090%20480%20132%20436%20154Z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E\")",
+          "textureOpacity": "0.3",
+          "texturePosition": "right -14rem top 2rem, left -8rem bottom -6rem",
+          "textureRepeat": "no-repeat, repeat-y",
+          "textureSize": "76rem auto, 42rem auto",
+          "wash": "radial-gradient(circle at 15% 12%, rgba(122, 127, 82, 0.08), transparent 34%), radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.46), transparent 30%)"
+        },
+        "content": {
+          "background": "#F6F2EB",
+          "foreground": "#1F2A24",
+          "headingColor": "#0F252C",
+          "captionColor": "#5F746D",
+          "linkColor": "#D94C43",
+          "ruleColor": "#D9D1C0",
+          "backgroundPattern": "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='360'%20height='180'%20viewBox='0%200%20360%20180'%3E%3Cg%20fill='none'%20stroke='%23C2B7A4'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%20opacity='.75'%3E%3Cpath%20d='M68%20144C92%20112%20122%2088%20162%2068'/%3E%3Cpath%20d='M101%20109C85%20103%2073%2089%2069%2071C87%2074%2099%2089%20101%20109Z'/%3E%3Cpath%20d='M122%2092C118%2075%20123%2059%20137%2046C145%2064%20140%2081%20122%2092Z'/%3E%3Cpath%20d='M140%2081C154%2070%20172%2065%20191%2070C179%2084%20160%2089%20140%2081Z'/%3E%3C/g%3E%3C/svg%3E\")",
+          "backgroundPatternOpacity": "0.13",
+          "backgroundPatternPosition": "right 2rem top 3rem",
+          "backgroundPatternRepeat": "repeat",
+          "backgroundPatternSize": "28rem auto"
+        },
+        "figure": { "background": "#F6F2EB", "border": "#E8E2D3", "captionColor": "#5F746D" },
+        "code": { "background": "#FBF8F0", "border": "#D9D1C0", "foreground": "#1F2A24" }
+      },
+      "navigation": {
+        "background": "#FBF8F0",
+        "foreground": "#1F2A24",
+        "mutedForeground": "#5F746D",
+        "accent": "#D94C43",
+        "activeBackground": "#F6E2DF",
+        "border": "#D9D1C0"
+      },
+      "chrome": { "modal": { "background": "#FBF8F0", "border": "#D9D1C0" } },
+      "modes": {
+        "dark": {
+          "tokens": {
+            "color": {
+              "background": "#162018",
+              "foreground": "#F6F2EB",
+              "mutedForeground": "#B9C2AA",
+              "surface": "#1F2A24",
+              "surfaceWarm": "#2B382E",
+              "border": "#465538",
+              "accent": "#E06A61",
+              "accentForeground": "#FFF8EF",
+              "accentSoft": "#3A2A24",
+              "organic": "#98A16B",
+              "forest": "#162018",
+              "overline": "#C2B7A4"
+            }
+          },
+          "reader": {
+            "canvas": {
+              "textureOpacity": "0.18",
+              "wash": "radial-gradient(circle at 15% 12%, rgba(152, 161, 107, 0.16), transparent 36%), radial-gradient(circle at 82% 16%, rgba(217, 76, 67, 0.12), transparent 32%)"
+            },
+            "content": {
+              "background": "#162018",
+              "foreground": "#F6F2EB",
+              "headingColor": "#F6F2EB",
+              "captionColor": "#B9C2AA",
+              "linkColor": "#E06A61",
+              "ruleColor": "#465538",
+              "backgroundPatternOpacity": "0.08"
+            },
+            "figure": { "background": "#1F2A24", "border": "#465538", "captionColor": "#B9C2AA" },
+            "code": { "background": "#101713", "border": "#465538", "foreground": "#F6F2EB" }
+          },
+          "navigation": {
+            "background": "#1F2A24",
+            "foreground": "#F6F2EB",
+            "mutedForeground": "#B9C2AA",
+            "accent": "#E06A61",
+            "activeBackground": "#2B382E",
+            "border": "#465538"
+          },
+          "chrome": { "modal": { "background": "#1F2A24", "border": "#465538" } }
+        }
+      }
+    }
+  }
+}
