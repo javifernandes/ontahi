@@ -13,6 +13,8 @@ Website: [https://ontahi.org](https://ontahi.org)
 
 ## Developer documentation
 
+- [`Ontahí for Developers`](./docs/developers/README.md) is the canonical long-form guide to the
+  application model, Relations lifecycle, runtimes, reflection, and browser projection.
 - [`Application data access`](./docs/application-data-access.md) is the end-to-end path from server
   Entities and default-deny policy through generated client Views, React Queries, and Operations.
 - [`DEVELOPMENT.md`](./DEVELOPMENT.md) covers repository setup, Todo development, sibling hosts, and
@@ -24,6 +26,7 @@ Website: [https://ontahi.org](https://ontahi.org)
 - `apps/www`: the static website for `ontahi.org`.
 - `packages/*`: the public `@ontahi/*` framework packages.
 - `examples/todo-express`: a standalone executable application using the public framework surface.
+- `examples/classroom`: a headless proof of richer Relation lifecycle and transactional coordination.
 - `fixtures/package-consumer`: the clean package-consumer proof.
 
 ## Local Development
@@ -59,7 +62,7 @@ options.
 ## Contributing
 
 Start with [`DEVELOPMENT.md`](./DEVELOPMENT.md) for framework development or
-[`Application data access`](./docs/application-data-access.md) for application authoring.
+[`Ontahí for Developers`](./docs/developers/README.md) for application authoring.
 Repository guidance for code style, testing, change scope, bug fixing, and public package changes
 lives under [`docs/`](./docs/). Automated coding agents must also follow
 [`AGENTS.md`](./AGENTS.md).

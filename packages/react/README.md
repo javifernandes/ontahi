@@ -15,7 +15,9 @@ host application. Reusable reflective UI lives in `@ontahi/explorer-react`; host
 own routes, access control, theme/auth composition, and application-specific UI enrichments.
 
 Start with the end-to-end [Application Data Access](../../docs/application-data-access.md) guide for
-the recommended server, codegen, and React composition. This README is the package-level reference.
+the recommended server, codegen, and React composition. The canonical
+[browser projection chapter](../../docs/developers/04-reflection-and-clients/02-browser-client-and-projection.md)
+adds the model context; this README is the package-level reference.
 
 Projectable Operations keep population on the server and shape in the caller:
 

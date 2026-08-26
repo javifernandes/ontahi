@@ -8,16 +8,18 @@ Ordinary data access does not need an application-specific wrapper endpoint or D
 Operations remain the language for named domain behavior: invariants, side effects, capabilities,
 authorization requirements, coordination, and durable work.
 
-| Need                                            | Primary Ontahi API |
-| ----------------------------------------------- | ------------------ |
-| Choose a set of Entities                        | Selection          |
-| Read, order, limit, count, or shape that set    | Query + View       |
-| Perform a simple storage mutation               | Command            |
-| Express named domain behavior or durable intent | Operation          |
+| Need                                            | Primary Ontahi API   |
+| ----------------------------------------------- | -------------------- |
+| Choose a set of Entities                        | Selection            |
+| Read, order, limit, count, or shape that set    | Query + View         |
+| Perform a simple storage mutation               | Command              |
+| Link or unlink a declared Relation              | Relationship Command |
+| Express named domain behavior or durable intent | Operation            |
 
-Remote Queries are available today. Remote Commands are not yet part of the public transport
-protocol, so browser writes against server-only storage still use Operations. That is an explicit
-alpha limitation rather than a reason to wrap ordinary reads in Operations.
+Remote Queries and explicitly policy-scoped Relationship Commands are available today. Generic
+remote Entity insert, update, upsert, and delete Commands are not, so browser writes of those
+shapes against server-only storage still use Operations. That is an explicit alpha limitation
+rather than a reason to wrap ordinary reads or structural Relation changes in Operations.
 
 ## Compose the server application
 
@@ -239,6 +241,7 @@ authoritative Principal independently.
 The default Fetch client is lazy and uses:
 
 - `/graph/reads` for Queries;
+- `/graph/commands` for explicitly permitted Relationship Commands;
 - `/operations` for Operations;
 - `/operations/tasks` for durable task snapshots;
 - `/explorer/entities` for reflected Explorer data.
@@ -249,7 +252,10 @@ Customize the bundle when the host uses another mount root:
 import { createFetchGraphClient } from '@ontahi/react/graph';
 
 const graphClient = createFetchGraphClient({
-  graphRead: { endpoint: '/runtime/ontahi/graph/reads' },
+  graphRead: {
+    endpoint: '/runtime/ontahi/graph/reads',
+    commandEndpoint: '/runtime/ontahi/graph/commands',
+  },
   operations: { mountPath: '/runtime/ontahi' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
@@ -327,12 +333,38 @@ The runtime combines the Operation's declarative Selection and the caller's View
 Query. Complete composition requires the Operation to return that Selection without first
 materializing imperative reads.
 
+## Expose structural Relation changes separately
+
+The graph-command bridge carries only canonical Relationship Commands: the Relation identity,
+`link` or `unlink`, and Ref- or Selection-valued participants. The server must opt each Relation
+and action into a separate default-deny policy:
+
+```ts
+ontahiExpress(TodoApplication, {
+  graphRead: { policies: todoGraphReadPolicies },
+  graphCommand: {
+    policies: [{ entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] }],
+  },
+});
+```
+
+The server resolves the canonical Relation from its own Entity catalog and applies cardinality,
+nullability, participant constraints, graph-command policy, and storage authorization. The client
+does not send table names, columns, SQL, executable predicates, or an authority decision.
+
+Relationship Commands return an explicit applied/not-applied result. Applied results carry the
+exact added and removed links; an explicitly skipped conditional precondition carries a safe
+diagnostic and no delta. Use a Domain Operation instead when the intention coordinates several
+mutations, requires secrets or Capabilities, or owns a domain invariant beyond one structural
+edge.
+
 ## Current alpha boundaries
 
 - Remote Query policies and `ExecutionIdentity` are intentionally public but still evolving
   authoring surfaces.
-- Remote Commands are unsupported. Use Operations for current browser writes to server-only
-  storage; do not assume every temporary write wrapper is permanent domain vocabulary.
+- Remote Relationship Commands are supported behind an explicit graph-command policy. Generic
+  remote Entity Commands remain unsupported; use Operations for those server-only writes without
+  assuming every temporary wrapper is permanent domain vocabulary.
 - Client Views are ordinary source declarations. Persisted or server-approved View catalogs are a
   separate future concern.
 - The conventional Fetch client removes repetitive client setup. It does not mount server routes,
@@ -340,4 +372,8 @@ materializing imperative reads.
 
 The executable reference is [`examples/todo-express`](../examples/todo-express/README.md). It shows
 the full path from Entity declarations and policy through codegen, Express, React Queries,
-Operations, authentication, and both in-memory and PostgreSQL storage.
+Operations, policy-scoped tag Relationship Commands, authentication, and both in-memory and
+PostgreSQL storage. The canonical long-form guide is
+[`Ontahí for Developers`](./developers/README.md); its Relations chapter uses the focused
+[`Classroom`](../examples/classroom/README.md) proof for conditional transitions, UnitOfWork,
+transactions, Reactions, and Association Entity lifecycle.

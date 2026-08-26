@@ -14,9 +14,14 @@ migratedFrom: bookops://atlas/learning-materials/ontahi-library
 sourceCommit: 67713696
 ---
 
-Ontahi Library is the documentation and essay source for Ontahi books.
+Ontahi Library is the documentation and essay lineage for Ontahi books.
 
-Its source currently lives in [`javifernandes/ontahi-library`](https://github.com/javifernandes/ontahi-library). It can absorb the standalone book-of-style later if the documentation source wants one home.
+_Living Systems_ and the remaining editorial library source live in
+[`javifernandes/ontahi-library`](https://github.com/javifernandes/ontahi-library). The canonical
+_Ontahi for Developers_ source moved to
+[`ontahi/docs/developers`](../../../docs/developers/README.md) so public API changes, executable
+examples, durable model records, and release documentation can evolve in one repository. The old
+library path is a relocation notice, not a second maintained copy.
 
 ## Child Items
 

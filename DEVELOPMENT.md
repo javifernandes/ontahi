@@ -22,6 +22,10 @@ pnpm verify:artifacts
 
 ## Application authoring
 
+[`Ontahí for Developers`](./docs/developers/README.md) is the canonical long-form guide to the
+application model. Its Relations chapter and the headless Classroom example cover the richer
+lifecycle; the Todo application below remains the simpler end-to-end compatibility spine.
+
 [`Application data access`](./docs/application-data-access.md) documents the recommended application
 path: compose the server graph, expose an explicit read policy, generate browser Entity facades,
 author caller-owned Views and Queries, configure React, and reserve Operations for domain behavior.

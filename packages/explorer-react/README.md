@@ -2,6 +2,10 @@
 
 Headless contracts, reflected descriptors, and React surfaces for exploring an Ontahi application.
 
+The canonical [Reflection and Explorer](../../docs/developers/04-reflection-and-clients/01-reflection-and-explorer.md)
+chapter explains semantic Ref links, read-only Relation topology, Query-backed related instances,
+and the authority boundary. This README is the package-level reference.
+
 The browser package exports the Explorer shell and focused components:
 
 ```tsx

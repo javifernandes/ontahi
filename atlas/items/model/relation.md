@@ -33,6 +33,7 @@ relatedPlans:
   - ontahi://plans/139b-transaction-scoped-unit-of-work
   - ontahi://plans/139c-executable-classroom-lifecycle-proof
   - ontahi://plans/139d-postgres-classroom-transfer
+  - ontahi://plans/139e-relations-developer-documentation
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -329,3 +330,9 @@ Explorer delegates it to a host-provided Relation-root Query capability that mus
 the configured runtime and graph-read policy. Explorer does not lower provider queries or duplicate
 authorization. Association Entities remain ordinary Entities; tooling reports an explicit
 association role only when metadata says so and otherwise classifies the role as `unknown`.
+
+The canonical developer narrative for this complete lifecycle now lives in
+[`docs/developers/02-core-concepts/03-relations.md`](../../../docs/developers/02-core-concepts/03-relations.md).
+Todo remains the small direct-many-to-many proof; Classroom keeps conditional direct placement,
+coordinated capacity updates, post-commit removal behavior, and stateful Enrollment lifecycle in a
+separate focused example.
