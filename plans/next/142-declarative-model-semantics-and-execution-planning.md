@@ -141,6 +141,40 @@ addition that would exceed Course capacity, while the derived Fields observe the
 membership. An unlink remains possible even when an existing Course has become invalid under a
 newer rule.
 
+### Canonical Relation Mutation And Invariant Enforcement
+
+Forward and inverse APIs are authoring surfaces over one canonical Relation fact, not independent
+mutation paths. Before storage execution, every structural command must produce its complete
+prospective `RelationshipDelta`:
+
+1. `student.currentCourse.assign(nextCourse)` removes the existing
+   `Student.currentCourse -> previousCourse` fact, when present, and adds the
+   `Student.currentCourse -> nextCourse` fact;
+2. `nextCourse.students.add(student)` produces the same canonical added fact as the forward
+   assignment;
+3. `student.currentCourse.clear()` and `course.students.remove(student)` produce the same canonical
+   removed fact.
+
+An invariant dependency on `Course.students` is registered against that canonical Relation
+identity. The runtime therefore evaluates `withinCapacity` for every Course endpoint affected by
+the complete prospective delta, regardless of which authoring direction produced it. A transfer
+evaluates the destination with the added Student already included and the previous Course with the
+removal already applied, before any part of the delta becomes visible.
+
+Aggregate upper-bound invariants use repair-safe enforcement. An addition or another change that
+increases a violation must leave the prospective state satisfying the invariant. A removal or
+capacity increase that only reduces an existing violation may proceed even if older invalid data is
+not repaired completely by that one mutation. An empty delta does not trigger aggregate
+revalidation; an Operation may separately reject a domain-level no-op such as a same-Course
+transfer through an input precondition.
+
+If an affected endpoint rejects the prospective state, the entire Relationship Command or atomic
+Operation fails: no edge is changed, no derived value is invalidated as if committed, and no
+post-commit Reaction observes an Applied Mutation Outcome. The aggregate-invariant slice must add
+semantic tests proving identical rejection and unchanged state for both
+`student.currentCourse.assign(fullCourse)` and `fullCourse.students.add(student)`, plus successful
+coverage through both directions and removal from already-invalid data.
+
 The Operation invoker recognizes a closed set of canonical Ontahí executable values, including
 Graph Commands, Relationship Commands, and graph reads, and executes a returned value through the
 current runtime. It must not duck-type and invoke arbitrary objects that happen to expose `run()`.
@@ -323,6 +357,42 @@ Reaction is too late to preserve an invariant and must not become the materializ
 The first implementation slice should prove virtual derivation. Provider-owned materialization,
 rebuilds, drift detection, and repair require a later focused plan.
 
+### Classroom Migration And Compatibility Contract
+
+Plan 139d intentionally keeps `Course.availableSeats` backed by
+`courses.available_seats` as an explicit coordination proof. Plan 142 must not silently reinterpret
+that stored value as total capacity. The derived-Field slice introduces a new ordered migration
+after `001-create-classroom.sql` with this contract:
+
+1. run the example migration with Course and Student writes paused inside one database transaction;
+2. add nullable `courses.capacity` and backfill each Course as
+   `available_seats + count(students where current_course_id = course.id)`;
+3. validate `capacity >= count(Course.students)`, make `capacity` non-null with a non-negative check,
+   and abort rather than clamp or guess when legacy state is inconsistent;
+4. drop `courses.available_seats` in the same migration after validation, because the private
+   example does not support a mixed-version rolling deployment or a dual-write transition.
+
+Migration history remains append-only: do not rewrite `001-create-classroom.sql`. Fresh integration
+databases apply all migration files in order and then insert fixtures using `capacity`; a dedicated
+upgrade fixture inserts legacy `available_seats` plus current Student assignments before the new
+migration and proves the backfilled capacity. Schema-contract validation should reject running the
+new model against the old database shape rather than falling back to the stored counter.
+
+After the migration, the Ontahí model and provider mapping expose stored `Course.capacity` plus
+read-only derived `occupiedSeats` and `availableSeats`; no command or mapping references
+`available_seats`. `Student.transfer(...)` returns the applied Relationship Command outcome instead
+of the previous and next counter-update rows. Integration assertions query stored capacity and the
+derived Fields through authorized Views/Queries, and verify both the success result shape and graph
+state without direct counter updates.
+
+The authoritative formula is exactly `capacity - count(Course.students)` over the canonical
+`Student.currentCourse` Relation; Enrollment rows do not participate. A provider must evaluate that
+virtual Field as an authorized graph projection, not by counting whichever Student rows happen to
+be present in a client cache or visible through a separately filtered Relation panel. Policy decides
+whether the caller may receive the derived Field without granting access to its participant rows.
+If the selected runtime cannot evaluate the dependency without violating graph-read policy, the
+projection or advisory evaluation is unavailable/`unknown`; it must never return a partial count.
+
 ## Execution Slices
 
 1. **Language and IR experiment:** prove a minimal arithmetic/boolean/Ref/relation-aggregate
@@ -334,11 +404,13 @@ rebuilds, drift detection, and repair require a later focused plan.
 3. **Existing Ref and condition contracts:** add conventional `existingRef`, named preconditions,
    postconditions, portable rejection defaults, dependency reflection, and tri-state advisory
    evaluation. State-dependent checks must execute inside the selected UnitOfWork.
-4. **Derived graph Fields:** prove one virtual `Course.availableSeats` derived Field in memory and
-   through one authorized provider read without storing a counter.
+4. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
+   remove the stored counter from the model and result shape, then prove virtual
+   `Course.availableSeats` in memory and through one authorized provider read.
 5. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
-   `Course.students` additions atomically in memory and one provider. Preserve unlink repair and
-   concurrent conflict semantics.
+   `Course.students` additions atomically in memory and one provider through both the forward
+   `Student.currentCourse` and inverse `Course.students` APIs. Preserve unlink repair and concurrent
+   conflict semantics.
 6. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
    offline queueing, replication, convergence evidence, and authority-serialized versus merge-safe
    invariant requirements in a separate plan.
@@ -380,8 +452,12 @@ surfaces.
       atomic Operation boundary is explicit.
 - [ ] Permanent invariants apply to every relevant mutation path and distinguish
       authority-serialized requirements from future merge-safe execution.
+- [ ] Forward assignment and inverse has-many mutation produce one canonical prospective delta and
+      enforce the same aggregate invariant, rejection, rollback, and Applied Mutation Outcome rules.
 - [ ] Derived Fields share the ordinary Field reflection/query surface, remain read-only to
       Commands, and have one semantic definition independent from virtual or materialized execution.
+- [ ] The Classroom migration backfills `capacity` from the stored available seats plus canonical
+      Student membership, removes the counter, and proves both upgrade and fresh-install fixtures.
 - [ ] Static Operation execution requirements remain separate from runtime local/bridge/queued/
       unavailable affordances.
 - [ ] Required capabilities are derived from model semantics, have explicit testable guarantees,
