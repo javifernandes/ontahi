@@ -1,6 +1,6 @@
 # 139e. Relations Developer Documentation
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/139e-relations-developer-documentation`
 
@@ -67,22 +67,22 @@ code review unnecessarily cross-repository.
 
 ## Acceptance Checklist
 
-- [ ] `docs/developers` contains the complete canonical book plus provenance and valid local assets.
-- [ ] `ontahi-library` contains only a relocation notice for the moved developer book and retains
+- [x] `docs/developers` contains the complete canonical book plus provenance and valid local assets.
+- [x] `ontahi-library` contains only a relocation notice for the moved developer book and retains
       _Living Systems_ unchanged.
-- [ ] Todo remains the simple executable spine and Classroom teaches the richer lifecycle.
-- [ ] Relations distinguish forward/inverse topology, direct versus Association Entity modeling,
+- [x] Todo remains the simple executable spine and Classroom teaches the richer lifecycle.
+- [x] Relations distinguish forward/inverse topology, direct versus Association Entity modeling,
       cardinality-specific verbs, constraints, and outcomes.
-- [ ] Operations teach schema-native Ref hydration, UnitOfWork reuse, and honest transactional
+- [x] Operations teach schema-native Ref hydration, UnitOfWork reuse, and honest transactional
       coordination without an application-visible `tx` parameter.
-- [ ] Reactions are registered application behavior over Applied Mutation Outcomes, not callbacks
+- [x] Reactions are registered application behavior over Applied Mutation Outcomes, not callbacks
       attached to Relation metadata and not part of rollback.
-- [ ] Explorer documentation presents current read-only semantic navigation without claiming
+- [x] Explorer documentation presents current read-only semantic navigation without claiming
       mutation or authorization affordances.
-- [ ] Remote documentation distinguishes supported Queries and Relationship Commands from
+- [x] Remote documentation distinguishes supported Queries and Relationship Commands from
       unsupported generic remote Entity Commands.
-- [ ] Repository and package documentation link to the new canonical source without stale copies.
-- [ ] Markdown links, code references, formatting, Todo packaged-consumer checks, and proportional
+- [x] Repository and package documentation link to the new canonical source without stale copies.
+- [x] Markdown links, code references, formatting, Todo example checks, and proportional
       documentation verification pass.
 
 ## Split Point
@@ -91,15 +91,24 @@ Stop after documentation and executable-consumer reconciliation. Package candida
 artifact manifest validation, npm dry-run, release PR review, and Plan 139 closure belong to the
 separate Plan 139f release rehearsal.
 
-## Progress
+## Delivery
 
-The complete book unit has been copied to `docs/developers` with source provenance and its BookOps
-mount path now points to this repository. The current reconciliation covers the pending Relations
+The complete book unit now lives at `docs/developers` with source provenance, local assets, and a
+BookOps manifest rooted in this repository. The reconciliation covers the accumulated Relations
 Changesets, Classroom, read-only Explorer, remote Relationship Commands, schema-native input Refs,
-UnitOfWork, PostgreSQL transactions, and post-commit Reactions. Repository and durable Learning
-Materials entrypoints now identify the new canonical source.
+UnitOfWork, PostgreSQL transactions, post-commit Reactions, and the explicit boundary before generic
+remote Entity Commands.
 
-Migration is intentionally two-phase across repositories. The `ontahi-library` chapter tree stays
-untouched until this destination is merged into Ontahí `main`; immediately afterward it will be
-replaced by a relocation notice in the source repository. This avoids a window where the old
-canonical content disappears before the new canonical path exists on the default branch.
+After the destination reached Ontahí `main`, commit `47742e3` replaced the former
+`ontahi-library/library/02-ontahi-for-developers` chapter and asset tree with a relocation notice.
+_Living Systems_ remains unchanged there, and BookOps now publishes the canonical source imported
+from `javifernandes/ontahi`, branch `main`, path `docs/developers`.
+
+## Verification
+
+1. Classroom and Todo tests, typechecks, and lint passed in the delivery pull request.
+2. The complete CI package and test matrix passed on Node 20.19 and Node 24.
+3. Local Markdown links, code references, formatting, and Changeset status passed.
+4. The source-repository cleanup and the new BookOps publication were verified after merge.
+5. Candidate tarball and packed-consumer verification remains intentionally owned by
+   [139f. Relations Lifecycle Release Rehearsal](./139f-relations-lifecycle-release-rehearsal.md).

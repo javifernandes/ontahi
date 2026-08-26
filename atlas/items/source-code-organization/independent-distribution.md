@@ -15,6 +15,8 @@ relatedPlans:
   - bookops://plans/129b-ontahi-bookops-versioned-consumer-loop
   - bookops://plans/129c-ontahi-public-repository-and-prerelease-proof
   - bookops://plans/129d-ontahi-stable-release-lifecycle
+  - ontahi://plans/139-relations-lifecycle-release-proof
+  - ontahi://plans/139f-relations-lifecycle-release-rehearsal
 migratedFrom: bookops://atlas/source-code-organization/independent-distribution
 sourceCommit: 67713696
 ---
@@ -40,12 +42,18 @@ registry tree.
 
 The first independent release proof published all ten packages through the intentional
 `0.1.0-alpha.3` line with Apache-2.0 legal files, explicit public metadata, npm provenance, and
-Trusted Publishing. Current package manifests have advanced in lockstep to `0.1.0-alpha.4`;
-publication and consumer verification remain release evidence rather than something inferred from
-the manifest version alone. Changesets accumulates feature changes in a generated release PR;
-merging that PR is the explicit publication action and also creates the immutable tag and GitHub
-prerelease. Public-repository CI owns package tests, packed-artifact inspection, dependency
-closure, and clean-consumer verification.
+Trusted Publishing. The last published prerelease is `1.0.0-alpha.7`; generated release PR #57
+contains the lockstep `1.0.0-alpha.8` Relations candidate. Publication and consumer verification
+remain release evidence rather than something inferred from a manifest version alone. Changesets
+accumulates feature changes in a generated release PR; merging that PR is the explicit publication
+action and also creates the immutable tag and GitHub prerelease. Public-repository CI owns package
+tests, packed-artifact inspection, dependency closure, and clean-consumer verification.
+
+The `alpha.8` rehearsal verifies the exact generated-release commit rather than `main`: all ten
+tarballs pass the clean-room artifact and offline npm boundaries, Todo passes as an isolated
+tarball-only consumer, and Classroom proves the richer headless and PostgreSQL transaction paths.
+This is the representative application gate expected before a maintainer merges the bot-owned
+release pull request.
 
 BookOps contains no framework source. Its exact package pins and compatibility checks are
 host-owned evidence linked from the relevant plans. Todo Express established the original

@@ -6,7 +6,7 @@ Canonical ID: `ontahi://plans/135b-declarative-reaction-authoring-and-registrati
 
 Parent: [135. Applied Mutation Outcomes And Reactions](./135-applied-mutation-outcomes-and-reactions.md)
 
-Advances: [139. Relations Lifecycle Release Proof](../current/139-relations-lifecycle-release-proof.md)
+Advances: [139. Relations Lifecycle Release Proof](./139-relations-lifecycle-release-proof.md)
 
 ## Summary
 

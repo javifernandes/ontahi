@@ -34,6 +34,7 @@ relatedPlans:
   - ontahi://plans/139c-executable-classroom-lifecycle-proof
   - ontahi://plans/139d-postgres-classroom-transfer
   - ontahi://plans/139e-relations-developer-documentation
+  - ontahi://plans/139f-relations-lifecycle-release-rehearsal
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -336,3 +337,7 @@ The canonical developer narrative for this complete lifecycle now lives in
 Todo remains the small direct-many-to-many proof; Classroom keeps conditional direct placement,
 coordinated capacity updates, post-commit removal behavior, and stateful Enrollment lifecycle in a
 separate focused example.
+
+The generated `1.0.0-alpha.8` release candidate was rehearsed at its exact commit with all ten
+package tarballs, a tarball-only Todo consumer, and Classroom's real PostgreSQL commit/rollback
+suite. That candidate is the first release boundary teaching this lifecycle as one coherent model.

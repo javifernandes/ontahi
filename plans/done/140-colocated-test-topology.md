@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/140-colocated-test-topology`
 Related plans:
 
 1. [134. Semantic Codegen Pipeline, Organization, And Coverage](../current/134-codegen-analysis-organization-and-semantic-coverage.md)
-2. [139. Relations Lifecycle Release Proof](../current/139-relations-lifecycle-release-proof.md)
+2. [139. Relations Lifecycle Release Proof](./139-relations-lifecycle-release-proof.md)
 
 ## Summary
 
