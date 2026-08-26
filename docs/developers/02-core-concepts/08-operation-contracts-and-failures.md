@@ -109,6 +109,13 @@ contract without duplicating `archive` as UI knowledge.
 
 ## Keep preconditions dynamic
 
+`contracts.pre` and `contracts.post` are supported but anticipatory server-runtime surfaces. They
+predate schema-native Ref inputs, UnitOfWork, portable Relation constraints, and compositional Data
+Graph transactions. The repository's executable applications do not currently use them; only
+focused Core tests and this documentation exercise the callbacks. Treat them as a low-level escape
+hatch while their portable and reflected form is consolidated, not as the default home for every
+domain rule.
+
 Uniqueness depends on current application state. A `create` operation may query for an existing
 TodoList before running its command:
 
@@ -165,7 +172,9 @@ contracts: {
 ```
 
 Returning a failure changes the operation result. It does not undo effects the body already
-performed, so a postcondition is an assertion—not a transaction or rollback policy.
+performed, so a current callback postcondition is an assertion—not a transaction or rollback
+policy. A future stateful postcondition that promises rollback needs an explicit atomic Operation
+boundary; the existing spelling alone does not supply one.
 
 ## Gate execution with requirements
 
