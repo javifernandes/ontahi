@@ -1,6 +1,6 @@
 import { layer } from '@ontahi/core/runtime/server';
 
-import { ClassroomApplication } from './classroom.js';
+import { ClassroomApplication } from './application.js';
 
 const classroomScenarios = layer('examples.classroom', {
   concerns: [ClassroomApplication.app.graph.withRuntime()],

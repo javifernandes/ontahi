@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ClassroomApplication, classroomEvents, Course, Enrollment, Student } from './classroom.js';
+import { ClassroomApplication, classroomEvents } from './application.js';
+import { Course, Enrollment, Student } from './classroom.js';
 import { reassignStudent, removeStudentFromCourse } from './scenarios.js';
 
 const seedClassroom = () => {
@@ -13,18 +14,21 @@ const seedClassroom = () => {
       title: 'Algebra',
       school: 'school-1',
       teacher: 'teacher-1',
+      availableSeats: 0,
     },
     {
       id: 'course-2',
       title: 'Geometry',
       school: 'school-1',
       teacher: 'teacher-1',
+      availableSeats: 2,
     },
     {
       id: 'course-3',
       title: 'History',
       school: 'school-1',
       teacher: 'teacher-1',
+      availableSeats: 4,
     },
   ];
   dataset.Student = [
