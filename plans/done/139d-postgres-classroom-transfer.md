@@ -57,6 +57,13 @@ after the edge change rolls the entire transition back.
 Stop after one honest PostgreSQL application proof. Remote execution, aggregate eligibility,
 Supabase, UI, and generalized transaction authoring remain later work.
 
+Review of the executable example extracted
+[142. Declarative Model Semantics And Execution Planning](../next/142-declarative-model-semantics-and-execution-planning.md).
+That plan owns reflected atomic Operation requirements, conventional existing-Ref resolution,
+portable pre/postconditions, permanent aggregate invariants, derived graph values, advisory client
+evaluation, and topology-transparent runtime planning. Plan 139d retains the explicit coordination
+code as evidence of the ergonomics and model semantics those slices should replace.
+
 ## Delivery
 
 `Course.availableSeats` and the provider-neutral `Student.transfer(...)` Domain Operation now make
