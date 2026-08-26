@@ -15,11 +15,19 @@ Related plans:
 
 ## Summary
 
-Let an Ontahí model declare input resolution requirements, Operation preconditions and
-postconditions, permanent Entity/Relation invariants, derived graph fields, and execution
-requirements in one statically analyzable TypeScript vocabulary. Compile that authoring form into
-portable reflection and expression IR so clients can provide advisory validation and documentation
-while the selected authoritative runtime preserves the declared execution guarantees.
+Evolve Ontahí's existing Operation `contracts.pre` / `contracts.post` categories so input
+resolution requirements, preconditions, postconditions, permanent Entity/Relation invariants,
+derived graph fields, and execution requirements can participate in one statically analyzable
+TypeScript vocabulary. Compile the declarative authoring form into portable reflection and
+expression IR so clients can provide advisory validation and documentation while the selected
+authoritative runtime preserves the declared execution guarantees.
+
+Do not introduce a parallel `preconditions` / `postconditions` namespace as if Operation contracts
+did not already exist. The current contract callbacks are real public runtime behavior but are an
+anticipatory, code-bearing surface with no application adoption in this repository. The first
+slice must decide explicitly whether to extend their types compatibly, retain callbacks as an
+opaque escape hatch, or deprecate and replace them during the alpha; spelling continuity must not
+override the semantic and reflection evidence.
 
 Static requirements and runtime affordances remain separate. A Domain Operation may declare that
 it requires atomic Data Graph execution without naming PostgreSQL, a server, or another deployment
@@ -45,6 +53,9 @@ manual coordination in application code:
    execution contract;
 6. none of these requirements are currently reflected for clients, Explorer, agents, execution
    routing, or documentation.
+7. Ontahí already runs `contracts.pre` before the body and `contracts.post` after a successful body,
+   but Classroom and the other executable applications do not use that surface; their dynamic
+   rules remain imperative inside `run`.
 
 The example also exposes a distribution boundary. A client can determine from local data that a
 Course is already full and avoid an unnecessary invocation, but a locally satisfied check is not
@@ -53,16 +64,48 @@ each make a locally atomic decision and still violate an authority-serialized gl
 invariant after merge unless the topology provides serialization or a convergence mechanism such
 as escrow.
 
+## Existing Operation Contract Surface
+
+Core already exposes `OperationContracts<TInput, TResult, TFailure>`:
+
+```ts
+contracts: {
+  pre: input => checkBeforeBody(input),
+  post: (input, result) => checkAfterBody(input, result),
+},
+```
+
+The current runtime contract is concrete:
+
+1. `pre` and `post` each accept one callback or an ordered array;
+2. a callback may return synchronously, through a Promise, or as an Effect;
+3. callbacks may return one or several `OperationFailure` values;
+4. pre-checks run sequentially before the body and stop on the first failing check;
+5. post-checks run sequentially after a successful body and receive the unwrapped success value;
+6. a post-check failure changes the Operation result but does not undo body effects;
+7. callbacks also receive the low-level `LayerConcernRuntime`.
+
+That breadth made the surface useful before Refs, locators, UnitOfWork, portable Selection
+predicates, Relationship Command preconditions, and compositional transactions existed. It also
+makes the callbacks opaque: arbitrary code cannot be serialized, reflected, evaluated advisory on
+a client, lowered into a guarded Command, or used to derive execution requirements.
+
+Repository evidence is intentionally weak adoption evidence: the only direct use is Core's focused
+contract test suite plus the developer-book example. No executable application or package behavior
+declares `contracts.pre` or `contracts.post`. Plan 142 therefore treats the current API as a
+compatibility input to investigate, not as either dead code to ignore or a settled declarative
+foundation to preserve unchanged.
+
 ## Semantic Categories
 
-| Category               | Example                                             | Evaluation boundary                              | Failure meaning                           |
-| ---------------------- | --------------------------------------------------- | ------------------------------------------------ | ----------------------------------------- |
-| Input constraint       | previous and next Course differ                     | pure input validation; client-safe when portable | expected invalid input                    |
-| Resolution requirement | Student Ref resolves exactly once                   | authorized UnitOfWork selected for execution     | expected missing/inaccessible participant |
-| Operation precondition | Student is still assigned to previous Course        | guarded Command or atomic Operation boundary     | expected stale/domain rejection           |
-| Permanent invariant    | Course students never exceed capacity               | every affected mutation's authoritative boundary | model mutation rejection                  |
-| Postcondition          | successful transfer leaves Student in next Course   | after the body and before commit                 | contract or implementation violation      |
-| Derived Field          | available seats equals capacity minus student count | graph read or provider-owned materialization     | definition/evaluation failure             |
+| Category               | Example                                             | Evaluation boundary                                                          | Failure meaning                           |
+| ---------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
+| Input constraint       | previous and next Course differ                     | pure input validation; client-safe when portable                             | expected invalid input                    |
+| Resolution requirement | Student Ref resolves exactly once                   | authorized UnitOfWork selected for execution                                 | expected missing/inaccessible participant |
+| Operation precondition | Student is still assigned to previous Course        | current `contracts.pre`; future guarded Command or atomic Operation boundary | expected stale/domain rejection           |
+| Permanent invariant    | Course students never exceed capacity               | every affected mutation's authoritative boundary                             | model mutation rejection                  |
+| Postcondition          | successful transfer leaves Student in next Course   | after the body and before commit                                             | contract or implementation violation      |
+| Derived Field          | available seats equals capacity minus student count | graph read or provider-owned materialization                                 | definition/evaluation failure             |
 
 A precondition does not automatically make a whole Operation transactional. A pure input condition
 requires no storage boundary. A state precondition attached to one Relationship Command should be
@@ -109,14 +152,17 @@ transfer: operation.atomic({
     nextCourse: graphSchema.existingRef(Course),
   }),
 
-  preconditions: {
-    differentCourses: ({ previousCourse, nextCourse }) => !previousCourse.is(nextCourse),
+  contracts: {
+    pre: {
+      differentCourses: ({ previousCourse, nextCourse }) => !previousCourse.is(nextCourse),
 
-    studentStillAssigned: ({ student, previousCourse }) => student.currentCourse.is(previousCourse),
-  },
+      studentStillAssigned: ({ student, previousCourse }) =>
+        student.currentCourse.is(previousCourse),
+    },
 
-  postconditions: {
-    studentWasTransferred: ({ student, nextCourse }) => student.currentCourse.is(nextCourse),
+    post: {
+      studentWasTransferred: ({ student, nextCourse }) => student.currentCourse.is(nextCourse),
+    },
   },
 
   run: ({ student, nextCourse }) => student.ref.currentCourse.assign(nextCourse.ref),
@@ -129,6 +175,10 @@ definition from stored Fields; Commands cannot assign them. Relation declaration
 structural edge surface that a derived Field may reference. This follows the same rule as
 schema-native input Refs: express a semantic distinction in the Field definition rather than
 creating a parallel container that callers must learn and traverse.
+
+The object form inside `contracts.pre` / `contracts.post` is provisional. It illustrates named,
+portable conditions within the existing semantic categories; it is not a commitment to overload
+the current callback-or-array type with exactly this shape.
 
 `existingRef(Entity)` has a conventional structured `entity_not_found` rejection derived from the
 Entity and input path. A custom rejection remains an override, not required boilerplate. Named
@@ -185,6 +235,27 @@ requested observable `onMismatch: 'skip'` remains available for lower-level work
 handle that outcome themselves. Sequencing multiple Commands inside an imperative Effect remains a
 separate ergonomics question; automatic execution of the Operation's returned value does not imply
 recursive execution of arbitrary nested values.
+
+## Contract Compatibility Decision Gate
+
+Before publishing declarative condition syntax, the first implementation slice must answer these
+questions with tests and repository evidence:
+
+1. Which current callback semantics are intentional contract behavior, and which are historical
+   generality from the pre-Ref/UnitOfWork model?
+2. Can a portable condition declaration coexist under `contracts.pre` / `contracts.post` with the
+   existing callback-or-array form without ambiguous typing, execution, or reflection?
+3. If opaque callbacks remain, how does reflection report them honestly as server-only executable
+   checks with unknown dependencies and no advisory evaluation?
+4. Should postconditions continue to produce ordinary expected `OperationFailure` values, or
+   should declarative postcondition violation have a distinct contract/implementation meaning?
+5. How does `operation.atomic(...)` move stateful post-checks before provider commit while preserving
+   the current non-atomic post-check behavior for ordinary Operations?
+
+There is no migration pressure from application code today, but the API is exported and
+documented. If evidence favors replacement, remove or deprecate it explicitly with an alpha
+Changeset, migration note, and developer-doc update. Do not silently leave two authoritative
+contract models or keep an opaque API merely because it shipped first.
 
 ## TypeScript Expression Language
 
@@ -395,23 +466,29 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
 
 ## Execution Slices
 
-1. **Language and IR experiment:** prove a minimal arithmetic/boolean/Ref/relation-aggregate
+1. **Existing contract characterization:** add Operation-level tests for current callback ordering,
+   failure meaning, schema-native Ref hydration, UnitOfWork visibility, post-body mutation behavior,
+   and interaction with `app.graph.transaction(...)`. Record the compatibility decision before
+   adding another authoring shape.
+2. **Language and IR experiment:** prove a minimal arithmetic/boolean/Ref/relation-aggregate
    TypeScript subset against three Classroom expressions. Compare static analysis with an explicit
    builder and stop before publishing a public DSL.
-2. **Reflected atomic Operation requirement:** add the smallest static metadata and
+3. **Reflected atomic Operation requirement:** add the smallest static metadata and
    `operation.atomic(...)` factory, make the server runner own the transaction boundary, and expose
    local/bridge/unavailable execution planning without implementing replication.
-3. **Existing Ref and condition contracts:** add conventional `existingRef`, named preconditions,
-   postconditions, portable rejection defaults, dependency reflection, and tri-state advisory
-   evaluation. State-dependent checks must execute inside the selected UnitOfWork.
-4. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
+4. **Existing Ref and declarative condition contracts:** evolve or explicitly replace
+   `contracts.pre` / `contracts.post` according to the compatibility decision; add conventional
+   `existingRef`, named portable conditions, rejection defaults, dependency reflection, and
+   tri-state advisory evaluation. State-dependent checks must execute inside the selected
+   UnitOfWork.
+5. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
    remove the stored counter from the model and result shape, then prove virtual
    `Course.availableSeats` in memory and through one authorized provider read.
-5. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
+6. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
    `Course.students` additions atomically in memory and one provider through both the forward
    `Student.currentCourse` and inverse `Course.students` APIs. Preserve unlink repair and concurrent
    conflict semantics.
-6. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
+7. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
    offline queueing, replication, convergence evidence, and authority-serialized versus merge-safe
    invariant requirements in a separate plan.
 
@@ -434,12 +511,17 @@ surfaces.
 8. No source-language feature that cannot produce stable reflection and JSON-safe canonical IR.
 9. No generic transaction over external services or capabilities hidden behind an execution
    `scope` string.
+10. No parallel top-level `preconditions` / `postconditions` API that ignores the existing
+    `contracts.pre` / `contracts.post` surface and leaves two competing sources of truth.
 
 ## Acceptance Checklist
 
 - [ ] One Classroom sketch distinguishes input constraints, Ref resolution requirements,
       preconditions, permanent invariants, postconditions, and derived Fields without manual
       counter maintenance.
+- [ ] Existing `contracts.pre` / `contracts.post` behavior and real repository adoption are covered
+      by evidence; the plan records a compatible evolution or an explicit alpha deprecation path
+      before publishing declarative condition syntax.
 - [ ] The authoring experiment permits natural arithmetic and boolean expressions or records
       concrete evidence that an explicit builder is required.
 - [ ] Every accepted expression lowers to stable JSON-safe IR with source-located diagnostics for
@@ -468,19 +550,23 @@ surfaces.
 
 ## Open Questions
 
-1. Can the existing codegen analyzer support a useful restricted TypeScript expression subset
+1. Should portable named conditions extend `contracts.pre` / `contracts.post` alongside opaque
+   callbacks, or should the anticipatory callback surface be deprecated and replaced during alpha?
+2. Which current semantics—ordered arrays, multiple returned failures, Promise/Effect callbacks,
+   raw runtime access, and postcondition `OperationFailure`—belong in the enduring model?
+3. Can the existing codegen analyzer support a useful restricted TypeScript expression subset
    without making runtime-only authoring second class?
-2. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
+4. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
    remain distinct without recreating a parallel `refs` namespace?
-3. Which preconditions can be proven to lower into one Command, and how does the compiler explain
+5. Which preconditions can be proven to lower into one Command, and how does the compiler explain
    when Operation-level atomicity is still required?
-4. What is the smallest versioned capability vocabulary that can express the selected Operation's
+6. What is the smallest versioned capability vocabulary that can express the selected Operation's
    derived requirements without turning provider implementation details into model metadata?
-5. How are conventional rejection codes named and localized without forcing boilerplate or making
+7. How are conventional rejection codes named and localized without forcing boilerplate or making
    domain failures unstable?
-6. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
+8. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
    inaccessible condition evidence?
-7. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
+9. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
    Field surface without a parallel computed-field query language?
-8. How should generated clients expose execution availability while keeping the ordinary invocation
-   spelling unchanged?
+10. How should generated clients expose execution availability while keeping the ordinary invocation
+    spelling unchanged?
