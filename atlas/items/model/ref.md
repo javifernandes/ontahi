@@ -15,6 +15,7 @@ relatedPlans:
   - bookops://plans/122-ontahi-developer-book
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/74b-schema-native-operation-refs
+  - ontahi://plans/142d-existing-operation-refs
 migratedFrom: bookops://atlas/model/ref
 sourceCommit: 67713696
 ---
@@ -52,3 +53,9 @@ Ref at its declared field path, enriched on a fresh runtime copy with non-enumer
 invalidate followed by resolve. A schema node can opt into a different projection or semantic
 lookup with `graphSchema.ref(Entity).resolveWith(resolver)`. The resolver remains runtime metadata;
 reflection and transport expose the target Entity and locators, never the callback.
+
+When existence is part of the input contract, `graphSchema.existingRef(Entity)` preserves the same
+portable caller value but materializes it before the immediate Operation body. The body receives
+authorized fields plus a non-enumerable `.ref` carrying the original identity. Absence and policy
+filtering intentionally share the safe `entity_not_found` result; neither reflection nor the
+failure leaks locator values or resolved data.

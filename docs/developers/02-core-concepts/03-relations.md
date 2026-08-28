@@ -291,17 +291,18 @@ compare-and-set updates both Course capacities inside one PostgreSQL transaction
 ```ts
 const students = app.graph.defineEntity(self);
 
-run: ({ student, previousCourse, nextCourse }) =>
-  app.graph.transaction(
+transfer: operation.atomic({
+  input: graphSchema.object({
+    student: graphSchema.existingRef(self),
+    previousCourse: graphSchema.existingRef(Course),
+    nextCourse: graphSchema.existingRef(Course),
+  }),
+  run: ({ student, previousCourse, nextCourse }) =>
     Effect.gen(function* () {
-      const currentStudent = yield* student.resolve();
-      const previous = yield* previousCourse.resolve();
-      const next = yield* nextCourse.resolve();
-
       const relationship = yield* students
-        .refById(currentStudent.id)
-        .currentCourse.assign(Course.refById(next.id), {
-          ifCurrent: Course.refById(previous.id),
+        .refById(student.id)
+        .currentCourse.assign(nextCourse.ref, {
+          ifCurrent: previousCourse.ref,
           onMismatch: 'skip',
         })
         .run();
@@ -309,14 +310,15 @@ run: ({ student, previousCourse, nextCourse }) =>
       // Capacity Commands run through the same contextual transaction runtime.
       return relationship;
     }),
-  ),
+}),
 ```
 
-`app.graph.transaction(effect)` creates an isolated child UnitOfWork. Bound Queries and explicit
-Command `.run()` calls discover its connection-scoped runtime; application code receives no `tx`
-parameter. A typed failure or defect rolls the whole effect back. PostgreSQL currently supplies
-this compositional capability. Supabase/PostgREST keeps each Relationship Command RPC atomic but
-does not pretend that several HTTP requests share rollback.
+`operation.atomic(...)` lets the Operation runner create the isolated transaction UnitOfWork before
+it materializes the required participants. Bound Queries and explicit Command `.run()` calls
+discover its connection-scoped runtime; application code receives no `tx` parameter. A typed
+failure or defect rolls the whole effect back. PostgreSQL currently supplies this compositional
+capability. Supabase/PostgREST keeps each Relationship Command RPC atomic but does not pretend that
+several HTTP requests share rollback.
 
 Follow-up behavior that is not required to validate the primary mutation is a \concept{Reaction},
 registered on the application rather than attached as a Relation callback:

@@ -172,4 +172,26 @@ describe('ExplorerOperationSignature', () => {
     expect(screen.getByText('UserNotification selection (many)')).toBeTruthy();
     expect(screen.queryByText('object')).toBeNull();
   });
+
+  it('distinguishes existing participants from portable Refs', () => {
+    render(
+      <ExplorerOperationSignature
+        operation={buildOperation({
+          inputRefs: [
+            {
+              path: 'book',
+              entityName: 'Book',
+              receiver: false,
+              optional: false,
+              resolution: 'existing',
+              locators: [],
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('book')).toBeTruthy();
+    expect(screen.getByText('Existing<Book>')).toBeTruthy();
+  });
 });

@@ -243,6 +243,31 @@ describe('explorer descriptor builder', () => {
     ]);
   });
 
+  it('reflects when an Operation Ref requires an existing participant', () => {
+    const Book = entity('ExistingInputBook', { id: field.id() });
+    const snapshot = buildExplorerSnapshot({
+      entities: [Book],
+      domainOperations: [
+        {
+          id: 'ExistingInputBook.inspect',
+          entityName: 'ExistingInputBook',
+          name: 'inspect',
+          authority: 'server',
+          exposure: 'bridge',
+          input: graphSchema.object({ book: graphSchema.existingRef(Book) }),
+        },
+      ],
+    });
+
+    expect(snapshot.operations[0]?.inputRefs).toEqual([
+      expect.objectContaining({
+        path: 'book',
+        entityName: 'ExistingInputBook',
+        resolution: 'existing',
+      }),
+    ]);
+  });
+
   it('builds entity details with relation diagrams', () => {
     const detail = getExplorerEntityDetail(
       {

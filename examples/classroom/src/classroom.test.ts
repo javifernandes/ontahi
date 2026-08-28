@@ -45,6 +45,13 @@ describe('Classroom Relations lifecycle', () => {
     expect(ClassroomApplication.graph.entities.Student.domain.transfer.execution).toEqual({
       atomicity: 'required',
     });
+    expect(
+      (
+        ClassroomApplication.graph.entities.Student.domain.transfer.input as unknown as {
+          fields: { student: unknown };
+        }
+      ).fields.student,
+    ).toMatchObject({ referenceRequirement: 'existing' });
   });
 
   it('reassigns a Student conditionally and distinguishes conflict from explicit skip', async () => {

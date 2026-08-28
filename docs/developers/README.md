@@ -81,7 +81,8 @@ and its end-to-end assertions in
 Todo stays deliberately small. The headless
 [`classroom` example](https://github.com/javifernandes/ontahi/tree/main/examples/classroom) is the
 focused proof for conditional to-one transitions, Association Entity lifecycle, schema-native Ref
-resolution, PostgreSQL transaction coordination, and post-commit Reactions. Chapters link to it
+resolution and existence requirements, PostgreSQL transaction coordination, and post-commit
+Reactions. Chapters link to it
 where those richer Relation semantics become relevant.
 
 ## Writing posture

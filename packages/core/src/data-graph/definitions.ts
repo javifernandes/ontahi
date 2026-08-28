@@ -3,6 +3,7 @@ import { isJsonValue, type JsonValue } from '../value/json.js';
 import type { RelationNodeSpec } from './query.js';
 import {
   getEntityIdentityLocator,
+  graphSchemaExistingReference,
   graphSchemaReference,
   type AnyEntityRef,
   type EntityRef,
@@ -45,6 +46,7 @@ export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEn
     target: TTarget;
     source?: AnyEntityDefinition;
     fieldName?: string;
+    referenceRequirement?: 'existing';
   };
 
 export type AnyReferenceFieldDefinition = ReferenceFieldDefinition<AnyEntityDefinition>;
@@ -172,13 +174,20 @@ type GraphSchemaReferenceResolution<TSchema> = TSchema extends {
   ? TResolution
   : never;
 
+type GraphSchemaReferenceRequirement<TSchema> = TSchema extends {
+  readonly __graphSchemaRef?: { readonly requirement: infer TRequirement };
+}
+  ? TRequirement
+  : 'portable';
+
 export type InferGraphSchemaValue<TSchema extends GraphSchemaLike> =
   TSchema extends ReferenceFieldDefinition<infer TTarget>
     ? SchemaEntityRef<
         TTarget['name'],
         EntityRefLocator,
         TTarget,
-        GraphSchemaReferenceResolution<TSchema>
+        GraphSchemaReferenceResolution<TSchema>,
+        GraphSchemaReferenceRequirement<TSchema>
       >
     : TSchema extends { __value?: infer TValue }
       ? TValue
@@ -1286,6 +1295,7 @@ export const graphSchema = {
   json: field.json,
   enum: field.enum,
   ref: graphSchemaReference,
+  existingRef: graphSchemaExistingReference,
 };
 
 export const mapEntity = <TEntity extends AnyEntityDefinition>(entityDefinition: TEntity) => ({

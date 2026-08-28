@@ -86,7 +86,8 @@ const getOperationParameters = (operation: ExplorerOperationDescriptor): Operati
   const inputRefs = operation.inputRefs ?? [];
   const refParameters = inputRefs.map(inputRef => ({
     name: inputRef.path,
-    type: inputRef.entityName,
+    type:
+      inputRef.resolution === 'existing' ? `Existing<${inputRef.entityName}>` : inputRef.entityName,
   }));
   const refCoveredInputFields = getRefCoveredInputFields(inputRefs);
   const refInputPaths = new Set(inputRefs.map(inputRef => inputRef.path));

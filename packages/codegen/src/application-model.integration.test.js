@@ -474,6 +474,52 @@ describe('Ontahi application declaration analysis', () => {
     expect(generated.Note.domain.archive.execution).toEqual({ atomicity: 'required' });
   }, 30_000);
 
+  it('preserves existing Ref input semantics in generated client operations', async () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity } from '@ontahi/core/entity';
+
+        export const Note = entity({
+          name: 'Note',
+          fields: { id: field.id(), title: field.string() },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'notes',
+          },
+          operations: ({ self, operation }) => ({
+            inspect: operation({
+              input: graphSchema.object({ note: graphSchema.existingRef(self) }),
+              run: ({ note }) => note,
+            }),
+          }),
+        });
+      `,
+      'Note',
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition?.operations[0]).toMatchObject({
+      name: 'inspect',
+      inputSchemaText: 'graphSchema.object({ note: graphSchema.existingRef(NoteSchema) })',
+    });
+
+    const source = renderGeneratedClientEntityModule({ entities: [analysis.definition] });
+    expect(source).toContain(
+      'input: graphSchema.object({ note: graphSchema.existingRef(NoteSchema) }),',
+    );
+
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-existing-ref-'));
+    tempDirectories.push(directory);
+    const generated = await importGeneratedModule({ directory, source });
+
+    expect(generated.Note.domain.inspect.input.fields.note).toMatchObject({
+      fieldType: 'reference',
+      referenceRequirement: 'existing',
+      target: { name: 'Note' },
+    });
+  }, 30_000);
+
   it('projects a schema-only unified entity', () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `

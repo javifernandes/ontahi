@@ -38,11 +38,13 @@ export type SchemaEntityRef<
   TLocator extends EntityRefLocator,
   TEntity,
   TResolution = never,
+  TRequirement = 'portable',
 > = EntityRef<TEntityName, TLocator> & {
   /** @internal Type-only schema metadata; absent from portable Ref values. */
   readonly __schemaRef: {
     readonly entity: TEntity;
     readonly resolution: TResolution;
+    readonly requirement: TRequirement;
   };
 };
 

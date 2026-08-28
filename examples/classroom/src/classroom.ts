@@ -86,46 +86,27 @@ export const Student = entity({
     return {
       transfer: operation.atomic({
         input: graphSchema.object({
-          student: field.ref(self),
-          previousCourse: field.ref(Course),
-          nextCourse: field.ref(Course),
+          student: graphSchema.existingRef(self),
+          previousCourse: graphSchema.existingRef(Course),
+          nextCourse: graphSchema.existingRef(Course),
         }),
         run: ({ student, previousCourse, nextCourse }) =>
           Effect.gen(function* () {
-            const currentStudent = yield* student.resolve();
-            const currentPreviousCourse = yield* previousCourse.resolve();
-            const currentNextCourse = yield* nextCourse.resolve();
-
-            if (!currentStudent) {
-              return yield* failOperation('student_not_found', 'Student does not exist.', {
-                student,
-              });
-            }
-            if (!currentPreviousCourse) {
-              return yield* failOperation('course_not_found', 'Previous Course does not exist.', {
-                course: previousCourse,
-              });
-            }
-            if (!currentNextCourse) {
-              return yield* failOperation('course_not_found', 'Next Course does not exist.', {
-                course: nextCourse,
-              });
-            }
-            if (currentPreviousCourse.id === currentNextCourse.id) {
+            if (previousCourse.id === nextCourse.id) {
               return yield* failOperation('same_course', 'Previous and Next Course must differ.', {
-                course: nextCourse,
+                course: nextCourse.ref,
               });
             }
-            if (currentNextCourse.availableSeats === 0) {
+            if (nextCourse.availableSeats === 0) {
               return yield* failOperation('course_full', 'Next Course has no available seats.', {
-                course: nextCourse,
+                course: nextCourse.ref,
               });
             }
 
             const relationship = yield* students
-              .refById(currentStudent.id)
-              .currentCourse.assign(Course.refById(currentNextCourse.id), {
-                ifCurrent: Course.refById(currentPreviousCourse.id),
+              .refById(student.id)
+              .currentCourse.assign(nextCourse.ref, {
+                ifCurrent: previousCourse.ref,
                 onMismatch: 'skip',
               })
               .run()
@@ -135,15 +116,15 @@ export const Student = entity({
               return yield* failOperation(
                 'student_course_changed',
                 'Student is no longer assigned to the expected Course.',
-                { student, expectedCourse: previousCourse },
+                { student: student.ref, expectedCourse: previousCourse.ref },
               );
             }
 
             const [releasedPreviousCourse] = yield* entities.Course.selection(course =>
-              course.id.eq(currentPreviousCourse.id),
+              course.id.eq(previousCourse.id),
             )
-              .and(course => course.availableSeats.eq(currentPreviousCourse.availableSeats))
-              .updateReturning({ availableSeats: currentPreviousCourse.availableSeats + 1 }, [
+              .and(course => course.availableSeats.eq(previousCourse.availableSeats))
+              .updateReturning({ availableSeats: previousCourse.availableSeats + 1 }, [
                 'id',
                 'availableSeats',
               ])
@@ -153,15 +134,15 @@ export const Student = entity({
               return yield* failOperation(
                 'course_capacity_changed',
                 'Previous Course capacity changed during transfer.',
-                { course: previousCourse },
+                { course: previousCourse.ref },
               );
             }
 
             const [reservedNextCourse] = yield* entities.Course.selection(course =>
-              course.id.eq(currentNextCourse.id),
+              course.id.eq(nextCourse.id),
             )
-              .and(course => course.availableSeats.eq(currentNextCourse.availableSeats))
-              .updateReturning({ availableSeats: currentNextCourse.availableSeats - 1 }, [
+              .and(course => course.availableSeats.eq(nextCourse.availableSeats))
+              .updateReturning({ availableSeats: nextCourse.availableSeats - 1 }, [
                 'id',
                 'availableSeats',
               ])
@@ -171,7 +152,7 @@ export const Student = entity({
               return yield* failOperation(
                 'course_capacity_changed',
                 'Next Course capacity changed during transfer.',
-                { course: nextCourse },
+                { course: nextCourse.ref },
               );
             }
 
