@@ -144,15 +144,10 @@ export const createOperationRunner = <
         })
       : (() => {
           const bodyEffect = Effect.suspend(() => effect(input));
-          const concernedBody = applyLayerConcerns(concernRuntime, otherConcerns, bodyEffect);
-          const contractedBody = applyLayerConcerns(
-            concernRuntime,
-            opaqueContractConcerns,
-            concernedBody,
-          );
+          const concernedBody = applyLayerConcerns(concernRuntime, metadata.concerns, bodyEffect);
           return requirementsEffect.pipe(
             Effect.flatMap(() => conditionsEffect),
-            Effect.flatMap(() => contractedBody),
+            Effect.flatMap(() => concernedBody),
           );
         })();
 

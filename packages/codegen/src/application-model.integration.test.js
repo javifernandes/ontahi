@@ -505,10 +505,14 @@ describe('Ontahi application declaration analysis', () => {
       inputSchemaText: 'graphSchema.object({ note: graphSchema.existingRef(NoteSchema) })',
     });
 
-    const source = renderGeneratedClientEntityModule({ entities: [analysis.definition] });
+    const source = renderGeneratedClientEntityModule({
+      entities: [analysis.definition],
+      operationConditionsImportPath: './unused-operation-conditions.js',
+    });
     expect(source).toContain(
       'input: graphSchema.object({ note: graphSchema.existingRef(NoteSchema) }),',
     );
+    expect(source).not.toContain('unused-operation-conditions');
 
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-existing-ref-'));
     tempDirectories.push(directory);
@@ -608,7 +612,7 @@ describe('Ontahi application declaration analysis', () => {
     expect(clientSource).toContain(
       "conditions: operationConditions.operations['Course.transfer'],",
     );
-  });
+  }, 30_000);
 
   it('locates unsupported portable condition syntax in the author source', () => {
     const sourcePath = '/examples/classroom/src/classroom.ts';

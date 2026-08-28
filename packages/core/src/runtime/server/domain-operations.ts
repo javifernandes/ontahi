@@ -12,9 +12,7 @@ import {
   type InferEntityRecord,
 } from '../../data-graph/definitions.js';
 import {
-  resolveOperationConditionContracts,
   type OperationConditionContracts,
-  type PortableOperationConditionRegistry,
   type PortableOperationConditions,
 } from '../../data-graph/model-expression/index.js';
 import {
@@ -61,6 +59,7 @@ import type { EffectSuccessPayload } from './effect-intents/types.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import type { LayerConcern } from './layer-types.js';
 import type { OperationCacheConfig, OperationEffectsConfig } from './operation/options-types.js';
+import { materializeDomainOperationConditions } from './operation/portable-conditions.js';
 import type { OperationInput, OperationRequirement } from './operation/requirement-types.js';
 import { runServerOperation } from './operation/run.js';
 import type {
@@ -532,24 +531,7 @@ export const defineDomainOperationsForEntity = <
     TOperations
   >;
 
-export const materializeDomainOperationConditions = <
-  TOperations extends DomainOperationDeclarations,
->(
-  entityName: string,
-  operations: TOperations,
-  registry?: PortableOperationConditionRegistry,
-): TOperations =>
-  Object.fromEntries(
-    Object.entries(operations).map(([name, operation]) => {
-      const { contracts, ...portableOperation } = operation;
-      const conditions = resolveOperationConditionContracts(
-        `${entityName}.${name}`,
-        contracts,
-        registry,
-      );
-      return [name, { ...portableOperation, ...(conditions ? { conditions } : {}) }];
-    }),
-  ) as TOperations;
+export { materializeDomainOperationConditions } from './operation/portable-conditions.js';
 
 type DomainOperationRunner<
   TInput extends OperationInput = OperationInput,

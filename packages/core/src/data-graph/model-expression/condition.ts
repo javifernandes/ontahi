@@ -186,7 +186,10 @@ export const resolveOperationConditionContracts = <TInput extends object>(
     }
     return generated;
   });
-  const authoredNames = new Set(authored.map(([name]) => name));
+  const callbackAuthored = authored.filter(
+    ([, condition]) => !isExplicitOperationCondition(condition),
+  );
+  const authoredNames = new Set(callbackAuthored.map(([name]) => name));
   const staleGenerated =
     compiled?.pre.filter(condition => !authoredNames.has(condition.name)) ?? [];
   if (staleGenerated.length > 0) {
@@ -196,7 +199,7 @@ export const resolveOperationConditionContracts = <TInput extends object>(
         .join(', ')}. Run Ontahi codegen.`,
     );
   }
-  if (compiled?.pre.some((condition, index) => condition.name !== authored[index]?.[0])) {
+  if (compiled?.pre.some((condition, index) => condition.name !== callbackAuthored[index]?.[0])) {
     throw new TypeError(
       `Operation ${operationId} has stale compiled precondition order. Run Ontahi codegen.`,
     );

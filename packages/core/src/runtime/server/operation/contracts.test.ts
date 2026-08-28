@@ -32,6 +32,48 @@ const createReadRuntime = () =>
   }) as DataGraphExecutionRuntime<never>;
 
 describe('opaque Domain Operation contract concerns', () => {
+  it('preserves authored concern order for non-atomic operations', async () => {
+    const markerConcern = {
+      run: <TSuccess, TError>(
+        runtime: { resources: Map<string, unknown> },
+        next: Effect.Effect<TSuccess, TError>,
+      ) =>
+        Effect.sync(() => runtime.resources.set('contract-runtime-ready', true)).pipe(
+          Effect.zipRight(next),
+        ),
+    };
+    const body = vi.fn(() => Effect.succeed({ inspected: true as const }));
+    const inspect = defineDomainOperation({
+      concerns: [
+        markerConcern,
+        contract({
+          pre: (_input, runtime) =>
+            runtime.resources.get('contract-runtime-ready')
+              ? undefined
+              : createOperationFailure(
+                  'contract_runtime_missing',
+                  'The earlier concern did not initialize its runtime resource.',
+                ),
+        }),
+      ],
+      run: body,
+    });
+    const operation = defineDomainOperationsForEntity(
+      'ConcernOrder',
+      { inspect },
+      {
+        exposure: 'server-only',
+        layer: 'tests.operation.concern-order',
+      },
+    ).inspect;
+
+    await expect(runServerDomainOperationRaw(operation, {})).resolves.toEqual({
+      success: true,
+      data: { inspected: true },
+    });
+    expect(body).toHaveBeenCalledOnce();
+  });
+
   it('runs synchronous, Promise, and Effect checks sequentially around the body', async () => {
     const Book = entity('ContractOrderingBook', {
       id: field.id(),
@@ -270,7 +312,7 @@ describe('opaque Domain Operation contract concerns', () => {
     expect(bodyUnitOfWork).toBe(preUnitOfWork);
     expect(postUnitOfWork).toBe(preUnitOfWork);
     expect(postRuntimeResources).toBe(preRuntimeResources);
-    expect(preDataGraphRuntime).toBeUndefined();
+    expect(preDataGraphRuntime).toBe(runtime);
     expect(bodyDataGraphRuntime).toBe(runtime);
     expect(postDataGraphRuntime).toBe(runtime);
     expect(runtime.get).toHaveBeenCalledOnce();

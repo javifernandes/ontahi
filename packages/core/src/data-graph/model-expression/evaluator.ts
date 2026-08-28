@@ -56,6 +56,72 @@ const booleanValue = (value: unknown, expression: ModelExpression) => {
   return value;
 };
 
+type BinaryOperands =
+  | { status: 'value'; left: unknown; right: unknown }
+  | { status: 'unknown'; missing: ModelExpressionDependency[] };
+
+const evaluateOperands = (
+  expression: Extract<ModelExpression, { left: ModelExpression; right: ModelExpression }>,
+  context: ModelExpressionEvaluationContext,
+): BinaryOperands => {
+  const left = evaluateNode(expression.left, context);
+  const right = evaluateNode(expression.right, context);
+  if (left.status === 'unknown' || right.status === 'unknown') {
+    return {
+      status: 'unknown',
+      missing: mergeMissing(
+        left.status === 'unknown' ? left.missing : [],
+        right.status === 'unknown' ? right.missing : [],
+      ),
+    };
+  }
+  return { status: 'value', left: left.value, right: right.value };
+};
+
+const evaluateArithmetic = (
+  expression: Extract<ModelExpression, { kind: 'arithmetic' }>,
+  context: ModelExpressionEvaluationContext,
+): NodeEvaluation => {
+  const operands = evaluateOperands(expression, context);
+  return operands.status === 'unknown'
+    ? operands
+    : {
+        status: 'value',
+        value:
+          numericValue(operands.left, expression.left) -
+          numericValue(operands.right, expression.right),
+      };
+};
+
+const evaluateComparison = (
+  expression: Extract<ModelExpression, { kind: 'compare' }>,
+  context: ModelExpressionEvaluationContext,
+): NodeEvaluation => {
+  const operands = evaluateOperands(expression, context);
+  return operands.status === 'unknown'
+    ? operands
+    : {
+        status: 'value',
+        value:
+          numericValue(operands.left, expression.left) <=
+          numericValue(operands.right, expression.right),
+      };
+};
+
+const evaluateRefIdentity = (
+  expression: Extract<ModelExpression, { kind: 'ref-identity' }>,
+  context: ModelExpressionEvaluationContext,
+): NodeEvaluation => {
+  const operands = evaluateOperands(expression, context);
+  if (operands.status === 'unknown') return operands;
+  const leftRef = portableRef(operands.left);
+  const rightRef = portableRef(operands.right);
+  if (!leftRef || !rightRef) {
+    throw new TypeError('Model Ref identity comparison requires two portable Entity Refs.');
+  }
+  return { status: 'value', value: entityRefsEqual(leftRef, rightRef) };
+};
+
 const evaluateNode = (
   expression: ModelExpression,
   context: ModelExpressionEvaluationContext,
@@ -88,41 +154,11 @@ const evaluateNode = (
           };
     }
     case 'arithmetic':
+      return evaluateArithmetic(expression, context);
     case 'compare':
-    case 'ref-identity': {
-      const left = evaluateNode(expression.left, context);
-      const right = evaluateNode(expression.right, context);
-      if (left.status === 'unknown' || right.status === 'unknown') {
-        return {
-          status: 'unknown',
-          missing: mergeMissing(
-            left.status === 'unknown' ? left.missing : [],
-            right.status === 'unknown' ? right.missing : [],
-          ),
-        };
-      }
-      if (expression.kind === 'arithmetic') {
-        return {
-          status: 'value',
-          value:
-            numericValue(left.value, expression.left) - numericValue(right.value, expression.right),
-        };
-      }
-      if (expression.kind === 'compare') {
-        return {
-          status: 'value',
-          value:
-            numericValue(left.value, expression.left) <=
-            numericValue(right.value, expression.right),
-        };
-      }
-      const leftRef = portableRef(left.value);
-      const rightRef = portableRef(right.value);
-      if (!leftRef || !rightRef) {
-        throw new TypeError('Model Ref identity comparison requires two portable Entity Refs.');
-      }
-      return { status: 'value', value: entityRefsEqual(leftRef, rightRef) };
-    }
+      return evaluateComparison(expression, context);
+    case 'ref-identity':
+      return evaluateRefIdentity(expression, context);
     case 'not': {
       const operand = evaluateNode(expression.operand, context);
       return operand.status === 'unknown'

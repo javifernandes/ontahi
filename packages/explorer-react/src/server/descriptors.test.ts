@@ -1,6 +1,8 @@
 import {
+  createEntityRef,
   definePortableOperationConditionRegistry,
   entity,
+  evaluatePortableOperationCondition,
   field,
   graphSchema,
   modelExpression,
@@ -22,9 +24,11 @@ describe('explorer descriptor builder', () => {
         'Book.publish': {
           pre: [
             {
-              name: 'publishable',
+              name: 'differentBooks',
               expression: modelExpression.define(
-                modelExpression.not(modelExpression.ref('book').is(modelExpression.ref('draft'))),
+                modelExpression.not(
+                  modelExpression.ref('book').is(modelExpression.ref('otherBook')),
+                ),
               ),
             },
           ],
@@ -92,7 +96,10 @@ describe('explorer descriptor builder', () => {
           exposure: 'bridge',
           execution: { atomicity: 'required' },
           conditions: publishConditions,
-          input: graphSchema.object({ book: graphSchema.ref(OperationBook) }),
+          input: graphSchema.object({
+            book: graphSchema.ref(OperationBook),
+            otherBook: graphSchema.ref(OperationBook),
+          }),
           durable: {
             taskId: 'book.publish',
             runtime: 'test-runtime',
@@ -209,9 +216,40 @@ describe('explorer descriptor builder', () => {
               },
             ],
           },
+          {
+            path: 'otherBook',
+            entityName: 'Book',
+            receiver: false,
+            optional: false,
+            locators: [
+              {
+                name: 'refById',
+                fields: ['otherBook'],
+                sourceFields: ['id'],
+              },
+              {
+                name: 'refBySlug',
+                fields: ['otherBook'],
+                sourceFields: ['slug'],
+              },
+            ],
+          },
         ],
       }),
     );
+    const sameBook = createEntityRef(OperationBook, { slug: 'same-book' });
+    expect(
+      evaluatePortableOperationCondition(publishConditions.pre[0], {
+        book: sameBook,
+        otherBook: sameBook,
+      }),
+    ).toEqual({
+      status: 'rejected',
+      rejection: {
+        reason: 'operation_condition_rejected',
+        message: 'Operation condition "differentBooks" was not satisfied.',
+      },
+    });
     expect(snapshot.tasks[0]?.steps[0]?.inputSchema).toEqual(
       expect.objectContaining({
         source: 'ontahi',

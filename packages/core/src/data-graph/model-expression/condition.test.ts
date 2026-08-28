@@ -148,4 +148,34 @@ describe('portable model conditions', () => {
       'Operation Student.transfer has stale compiled precondition order. Run Ontahi codegen.',
     );
   });
+
+  it('compares generated order only with callback-authored conditions', () => {
+    const registry = definePortableOperationConditionRegistry({
+      version: 1,
+      operations: {
+        'Student.transfer': {
+          pre: [{ name: 'differentCourses', expression: differentCourses }],
+        },
+      },
+    });
+    const explicit = modelExpression.condition(differentCourses);
+
+    expect(
+      resolveOperationConditionContracts(
+        'Student.transfer',
+        {
+          pre: {
+            explicitlyAllowed: explicit,
+            differentCourses: () => true,
+          },
+        },
+        registry,
+      ),
+    ).toEqual({
+      pre: [
+        expect.objectContaining({ name: 'explicitlyAllowed', expression: differentCourses }),
+        expect.objectContaining({ name: 'differentCourses', expression: differentCourses }),
+      ],
+    });
+  });
 });

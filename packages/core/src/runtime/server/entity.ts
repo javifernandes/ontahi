@@ -44,8 +44,8 @@ import type {
   DomainOperationDeclaration,
   ResolvedDomainOperationDeclaration,
 } from './domain-operations.js';
-import { materializeDomainOperationConditions } from './domain-operations.js';
 import type { OntahiApplicationBuilder, OntahiBinderApp, OntahiCapabilities } from './ontahi.js';
+import { materializeDomainOperationConditions } from './operation/portable-conditions.js';
 import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './operation/value-ref.js';
 import type { OperationInvocationResult } from './operation-result.js';
 import type { TaskFailure, TaskRunRef } from './tasks.js';

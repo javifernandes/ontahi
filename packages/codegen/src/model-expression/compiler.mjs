@@ -65,7 +65,7 @@ const compileIdentifier = (identifier, context) => {
   }
 
   if (symbol.kind === 'field') {
-    return expressionValue('field', fieldExpression(symbol.field));
+    return expressionValue(symbol.semantic ?? 'field', fieldExpression(symbol.field));
   }
   if (symbol.kind === 'input-ref') {
     return expressionValue('input-ref', inputRefExpression(symbol.input), {
@@ -170,9 +170,28 @@ const compileCall = (call, context) => {
 };
 
 const binaryOperators = new Map([
-  [ts.SyntaxKind.MinusToken, { kind: 'arithmetic', operator: 'subtract', semantic: 'number' }],
-  [ts.SyntaxKind.LessThanEqualsToken, { kind: 'compare', operator: 'lte', semantic: 'boolean' }],
+  [
+    ts.SyntaxKind.MinusToken,
+    { kind: 'arithmetic', operator: 'subtract', semantic: 'number', operand: 'number' },
+  ],
+  [
+    ts.SyntaxKind.LessThanEqualsToken,
+    { kind: 'compare', operator: 'lte', semantic: 'boolean', operand: 'number' },
+  ],
 ]);
+
+const requireOperandSemantic = (compiled, expected, context, node) => {
+  if (compiled.semantic !== expected) {
+    return failAt(
+      context,
+      node,
+      'model_expression_invalid_operand',
+      `Operand must have ${expected} semantics.`,
+    );
+  }
+
+  return requireExpression(compiled, context, node);
+};
 
 const compileBinary = (binary, context) => {
   const operator = binaryOperators.get(binary.operatorToken.kind);
@@ -191,8 +210,8 @@ const compileBinary = (binary, context) => {
   return expressionValue(operator.semantic, {
     kind: operator.kind,
     operator: operator.operator,
-    left: requireExpression(left, context, binary.left),
-    right: requireExpression(right, context, binary.right),
+    left: requireOperandSemantic(left, operator.operand, context, binary.left),
+    right: requireOperandSemantic(right, operator.operand, context, binary.right),
   });
 };
 

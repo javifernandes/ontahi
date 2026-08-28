@@ -187,6 +187,9 @@ export const renderGeneratedClientEntityModule = ({
   operationContracts = 'all',
   operationConditionsImportPath,
 }) => {
+  const usesOperationConditions =
+    Boolean(operationConditionsImportPath) &&
+    entities.some(entity => entity.operations.some(operation => operation.conditions?.pre?.length));
   const helperTexts = Array.from(new Set(entities.flatMap(entity => entity.helperTexts ?? [])));
   const helperSection = helperTexts.length > 0 ? `${helperTexts.join('\n\n')}\n\n` : '';
   const usesQueryRef = helperTexts.some(helperText => /\bqueryRef\b/.test(helperText));
@@ -333,7 +336,7 @@ export const renderGeneratedClientEntityModule = ({
         operationContracts,
         projectedNames,
         namedDefinitionLocalNames,
-        operationConditionsImportPath ? 'operationConditions' : undefined,
+        usesOperationConditions ? 'operationConditions' : undefined,
       ),
     )
     .join('\n\n');
@@ -409,7 +412,7 @@ ${coreImports.map(name => `  ${name},`).join('\n')}
 } from '@ontahi/core/data-graph';
 
 ${
-  operationConditionsImportPath
+  usesOperationConditions
     ? `import { operationConditions } from '${operationConditionsImportPath}';\n\n`
     : ''
 }${schemaImportSection}${schemaImportSection ? '\n' : ''}${entitySchemaSection}${

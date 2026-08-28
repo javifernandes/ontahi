@@ -344,10 +344,10 @@ const parseOperationConditions = ({
       diagnostics: [`${operationName}.contracts must be an object literal.`],
     };
   }
-  const post = contracts.properties.find(
+  const hasPost = contracts.properties.some(
     property => ts.isPropertyAssignment(property) && propertyNameText(property) === 'post',
   );
-  if (post) {
+  if (hasPost) {
     return {
       conditions: undefined,
       diagnostics: [
@@ -366,6 +366,14 @@ const parseOperationConditions = ({
     return {
       conditions: undefined,
       diagnostics: [`${operationName}.contracts.pre must be an object of named conditions.`],
+    };
+  }
+  if (!schemaContext) {
+    return {
+      conditions: undefined,
+      diagnostics: [
+        `${operationName}.contracts.pre cannot be compiled without its TypeScript source context.`,
+      ],
     };
   }
 

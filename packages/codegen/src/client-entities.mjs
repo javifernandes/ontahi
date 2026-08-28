@@ -95,7 +95,8 @@ export const createClientEntityCodegenRunner = ({
             const relative = path
               .relative(path.dirname(resolvedOutputPath), resolvedOperationConditionsOutputPath)
               .replaceAll(path.sep, '/')
-              .replace(/\.(?:mts|ts)$/, '.js');
+              .replace(/\.mts$/, '.mjs')
+              .replace(/\.ts$/, '.js');
             return relative.startsWith('.') ? relative : `./${relative}`;
           })()
         : undefined;

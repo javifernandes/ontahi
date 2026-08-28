@@ -146,8 +146,39 @@ describe('conventional client entity codegen', () => {
     await runner.generate();
 
     await expect(readFile(outputPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(readFile(operationConditionsOutputPath, 'utf8')).resolves.toContain(
-      'Student.transfer',
+    const registrySource = await readFile(operationConditionsOutputPath, 'utf8');
+    const generatedRegistry = await importGeneratedModule({ directory, source: registrySource });
+    expect(generatedRegistry.operationConditions.operations['Student.transfer']).toEqual({
+      pre: [
+        expect.objectContaining({
+          name: 'differentCourses',
+          expression: {
+            version: 1,
+            expression: {
+              kind: 'not',
+              operand: {
+                kind: 'ref-identity',
+                operator: 'is',
+                left: { kind: 'input-ref', input: 'previousCourse' },
+                right: { kind: 'input-ref', input: 'nextCourse' },
+              },
+            },
+          },
+        }),
+      ],
+    });
+
+    const mtsOutputPath = path.join(sourceDirectory, 'generated/client-entities.mts');
+    const mtsConditionsPath = path.join(sourceDirectory, 'generated/operation-conditions.mts');
+    const mtsRunner = createClientEntityCodegenRunner({
+      rootDir: directory,
+      outputPath: mtsOutputPath,
+      operationConditionsOutputPath: mtsConditionsPath,
+    });
+    await mtsRunner.generate();
+
+    await expect(readFile(mtsOutputPath, 'utf8')).resolves.toContain(
+      "import { operationConditions } from './operation-conditions.mjs';",
     );
   });
 
