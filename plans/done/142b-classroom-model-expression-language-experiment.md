@@ -132,8 +132,8 @@ two-frontend decision and the semantic symbol-resolution work that remains.
 
 ## Verification
 
-1. The focused experiment suite passed all seven cases.
-2. Codegen passed all 80 tests across nine files.
+1. The focused experiment suite passed all eight cases.
+2. Codegen passed all 81 tests across nine files.
 3. Codegen typecheck, lint, and build passed.
 4. Repository formatting and `git diff --check` passed.
 5. The `@ontahi/codegen` npm pack dry-run contained no model-expression or test-support file.

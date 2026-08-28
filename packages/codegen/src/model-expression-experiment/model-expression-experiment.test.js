@@ -109,6 +109,26 @@ describe('model expression language experiment', () => {
     }
   });
 
+  it('makes the explicit Ref builder fail closed for a non-Ref operand', () => {
+    let failure;
+
+    try {
+      modelExpression.ref('previousCourse').is(modelExpression.field('capacity'));
+    } catch (error) {
+      failure = error;
+    }
+
+    expect({
+      name: failure?.name,
+      code: failure?.code,
+      message: failure?.message,
+    }).toEqual({
+      name: 'TypeError',
+      code: 'model_expression_invalid_argument',
+      message: 'is(...) requires a Ref built by modelExpression.ref().',
+    });
+  });
+
   it('round-trips every compiled program through JSON', () => {
     for (const fixture of classroomExpressions) {
       const analyzed = analyzeModelExpressionSource(fixture.sourceText, {

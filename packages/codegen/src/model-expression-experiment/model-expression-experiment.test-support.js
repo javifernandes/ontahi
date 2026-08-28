@@ -17,16 +17,28 @@ const field = fieldName => fieldExpression(fieldName);
 const relation = relationName => ({
   count: () => relationAggregateExpression(relationName),
 });
+const failBuilder = (code, message) => {
+  throw Object.assign(new TypeError(message), { code });
+};
 const ref = inputName => {
   const left = inputRefExpression(inputName);
 
   return {
-    is: right => ({
-      kind: 'ref-identity',
-      operator: 'is',
-      left,
-      right: right.expression,
-    }),
+    is: right => {
+      if (right?.expression?.kind !== 'input-ref') {
+        return failBuilder(
+          'model_expression_invalid_argument',
+          'is(...) requires a Ref built by modelExpression.ref().',
+        );
+      }
+
+      return {
+        kind: 'ref-identity',
+        operator: 'is',
+        left,
+        right: right.expression,
+      };
+    },
     expression: left,
   };
 };
