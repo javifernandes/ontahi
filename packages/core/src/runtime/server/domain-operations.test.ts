@@ -66,7 +66,7 @@ describe('server Domain Operation Ref resolution', () => {
       title: field.string(),
     });
     const row = { id: 'book-1', title: 'Programming Book' };
-    const load = vi.fn(() => Effect.succeed(row));
+    const load = vi.fn(() => Effect.promise(() => Promise.resolve(row)));
     const existingBook = graphSchema.existingRef(Book).resolveWith(load);
     const inspect = defineDomainOperationsForEntity(
       Book,

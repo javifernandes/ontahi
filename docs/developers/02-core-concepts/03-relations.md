@@ -286,7 +286,10 @@ invariant, coordinating other mutations, requiring authority, or starting durabl
 
 A structural command owns one edge mutation. Required multi-step consistency belongs in a Domain
 Operation and an honest provider transaction. The Classroom example reassigns a Student and
-compare-and-set updates both Course capacities inside one PostgreSQL transaction:
+compare-and-set updates both Course capacities inside one PostgreSQL transaction. This abbreviated
+excerpt focuses on the Relation transition; the
+[executable Classroom Operation](../../../examples/classroom/src/classroom.ts) contains both Course
+capacity updates:
 
 ```ts
 const students = app.graph.defineEntity(self);
@@ -297,19 +300,18 @@ transfer: operation.atomic({
     previousCourse: graphSchema.existingRef(Course),
     nextCourse: graphSchema.existingRef(Course),
   }),
-  run: ({ student, previousCourse, nextCourse }) =>
-    Effect.gen(function* () {
-      const relationship = yield* students
-        .refById(student.id)
-        .currentCourse.assign(nextCourse.ref, {
-          ifCurrent: previousCourse.ref,
-          onMismatch: 'skip',
-        })
-        .run();
+  *run({ student, previousCourse, nextCourse }) {
+    const relationship = yield* students
+      .refById(student.id)
+      .currentCourse.assign(nextCourse.ref, {
+        ifCurrent: previousCourse.ref,
+        onMismatch: 'skip',
+      })
+      .run();
 
-      // Capacity Commands run through the same contextual transaction runtime.
-      return relationship;
-    }),
+    // Abbreviated: both capacity compare-and-set Commands follow in Classroom.
+    return relationship;
+  },
 }),
 ```
 
