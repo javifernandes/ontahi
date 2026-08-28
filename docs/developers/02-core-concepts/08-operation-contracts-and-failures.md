@@ -107,14 +107,16 @@ This is a headless operation-input model, not a visual form framework. The compo
 render fields and errors; the operation supplies their meaning. Another UI can consume the same
 contract without duplicating `archive` as UI knowledge.
 
-## Keep preconditions dynamic
+## Keep dynamic checks explicit
 
 `contracts.pre` and `contracts.post` are supported but anticipatory server-runtime surfaces. They
 predate schema-native Ref inputs, UnitOfWork, portable Relation constraints, and compositional Data
 Graph transactions. The repository's executable applications do not currently use them; only
 focused Core tests and this documentation exercise the callbacks. Treat them as a low-level escape
 hatch while their portable and reflected form is consolidated, not as the default home for every
-domain rule.
+domain rule. Existing declarations remain compatible during this alpha. For new opaque server-only
+checks, prefer the explicit `app.validation.contract(...)` concern so application code does not
+claim that arbitrary callbacks are the future reflected contract model.
 
 Uniqueness depends on current application state. A `create` operation may query for an existing
 TodoList before running its command:
@@ -124,18 +126,20 @@ operations: ({ self, commands, operation, app }) => ({
   create: operation({
     input: O.pick(self, ['id', 'name']).named('CreateTodoListInput'),
     output: self,
-    contracts: {
-      pre: ({ name }) =>
-        commands
-          .where(list => list.name.eq(name))
-          .exists()
-          .thenIf(
-            app.operation.fail(
-              'todo_list_name_taken',
-              'A TodoList already uses that name.',
+    concerns: [
+      app.validation.contract({
+        pre: ({ name }) =>
+          commands
+            .where(list => list.name.eq(name))
+            .exists()
+            .thenIf(
+              app.operation.fail(
+                'todo_list_name_taken',
+                'A TodoList already uses that name.',
+              ),
             ),
-          ),
-    },
+      }),
+    ],
     run: input => commands.insertReturning(input, ['id', 'name']),
   }),
 }),
@@ -146,29 +150,33 @@ before the operation body. `exists()` is a lazy boolean computation; `thenIf(...
 computation to continue with. Here the true branch fails and the omitted false branch does nothing.
 No row needs to be materialized.
 
-Executable checks are necessarily less transparent than schema constraints. Reflection can expose
-that the operation has a precondition, but it cannot predict the result without executing the
+Executable checks are necessarily less transparent than schema constraints. The current callback
+cannot be serialized or reflected with trustworthy dependencies. A future reflection model can at
+most report it as an opaque server-only check; it cannot predict the result without executing the
 required reads.
 
 > [!MARGIN] **The shortcut is not the contract.** `thenIf(...)` is fluent composition for the
 > common boolean case. A `pre` check may still return synchronously, return a Promise, or return any
-> executable computation. That freedom is useful, but these code-bearing operation surfaces are
-> less settled than schemas and Selections; their spelling and reflection will keep evolving.
+> executable computation. That freedom is useful, but it is also why `contract(...)` is explicitly
+> server-only and opaque to reflection. The future top-level `contracts.pre` / `contracts.post`
+> vocabulary is reserved for portable declarations; that replacement has not shipped yet.
 
 ## Check the result with a postcondition
 
 A postcondition receives both the accepted input and the result:
 
 ```ts
-contracts: {
-  post: ({ id }, created) =>
-    created.id === id
-      ? undefined
-      : app.operation.createFailure(
-          'unexpected_created_identity',
-          'The created TodoList has a different identity.',
-        ),
-},
+concerns: [
+  app.validation.contract({
+    post: ({ id }, created) =>
+      created.id === id
+        ? undefined
+        : app.operation.createFailure(
+            'unexpected_created_identity',
+            'The created TodoList has a different identity.',
+          ),
+  }),
+],
 ```
 
 Returning a failure changes the operation result. It does not undo effects the body already
@@ -209,13 +217,14 @@ An operation currently has these distinct extension points:
 | ---------------------------------- | ------------------------------------------------------------------------------ |
 | `input`                            | Describe and validate admissible values.                                       |
 | `requires`                         | Gate whether execution may be attempted in the current context.                |
-| `contracts.pre` / `contracts.post` | Assert dynamic facts immediately around the body.                              |
+| `contracts.pre` / `contracts.post` | Compatibility-only callbacks pending one portable declarative replacement.     |
 | `concerns`                         | Wrap execution with cross-cutting behavior such as rate limiting or telemetry. |
 | success effects                    | Emit events or run follow-up work only after a successful result.              |
 
-The runtime order is input validation, requirements, preconditions, concerns around the body,
-postconditions, then success effects. Cache invalidation and host hooks happen after successful
-execution.
+For the compatibility property, the runtime order is input validation, requirements,
+`contracts.pre`, concerns around the body, `contracts.post`, then success effects. A
+`contract(...)` concern instead runs at its declared concern position. Cache invalidation and host
+hooks happen after successful execution.
 
 `concerns: [...]` is the current middleware seam: a concern receives the next computation and can
 act before it, after it, or around a failure. A success effect is different. The operation body

@@ -11,6 +11,7 @@ supports:
   - bookops.semantic-editorial-experience
 relatedPlans:
   - ontahi://plans/142-declarative-model-semantics-and-execution-planning
+  - ontahi://plans/142a-existing-operation-contract-compatibility-baseline
 migratedFrom: bookops://atlas/operation-contracts
 sourceCommit: 67713696
 ---
@@ -25,9 +26,20 @@ does not roll back effects already performed.
 
 This surface predates schema-native Ref hydration, UnitOfWork, portable Relation constraints, and
 compositional Data Graph transactions. Its only repository use is focused Core tests and developer
-documentation, not executable application behavior. Plan 142 must therefore characterize it before
-adding declarative conditions: evolve the existing semantic categories compatibly or deprecate the
-anticipatory callback API explicitly, but do not create a parallel pre/postcondition namespace.
+documentation, not executable application behavior. Plan 142a characterized it at the public
+Domain Operation runner: callbacks receive portable normalized Refs while the body receives its
+separate runtime-bound Ref facade; ordinary pre, body, and post phases share one UnitOfWork; and a
+post failure neither rolls back body effects nor reopens an explicit Data Graph transaction that
+already committed.
+
+The alpha compatibility decision is to keep the callback-valued top-level property working until a
+portable replacement ships, while treating it as deprecated design rather than the enduring model.
+Opaque server-only checks remain available through the explicit `contract(...)` Layer Concern,
+whose ordering and non-portability are honest. Plan 142 may then reuse the established
+`contracts.pre` / `contracts.post` categories for one reflected declarative vocabulary instead of
+adding a callback/object union or a parallel pre/postcondition namespace. The replacement slice,
+not the characterization slice, owns the public removal, migration Changeset, and final type
+surface.
 
 ## Child Items
 
