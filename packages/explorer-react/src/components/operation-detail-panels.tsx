@@ -41,6 +41,14 @@ export const ExplorerOperationMetadata = ({
     ...(operation.execution?.atomicity
       ? [{ label: 'Atomicity', value: operation.execution.atomicity }]
       : []),
+    ...(operation.conditions?.pre.length
+      ? [
+          {
+            label: 'Preconditions',
+            value: operation.conditions.pre.map(condition => condition.name).join(', '),
+          },
+        ]
+      : []),
     ...(operation.hasBridgeQuery
       ? [{ label: 'Bridge Query', value: `${operation.bridgeQueryCount} query key parts` }]
       : []),

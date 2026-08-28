@@ -39,6 +39,9 @@ describe('conventional client entity codegen', () => {
         'browser/generated/entities.ts',
         '--schema-import',
         '../schema.js',
+        '--operation-conditions-output',
+        'server/generated/operation-conditions.ts',
+        '--operation-conditions-only',
         '--watch',
       ]),
     ).toEqual({
@@ -47,6 +50,8 @@ describe('conventional client entity codegen', () => {
         graphApiPath: 'server/application.ts',
         outputPath: 'browser/generated/entities.ts',
         schemaImportPath: '../schema.js',
+        operationConditionsOutputPath: 'server/generated/operation-conditions.ts',
+        operationConditionsOnly: true,
       },
       runnerArguments: ['--watch'],
     });
@@ -71,6 +76,79 @@ describe('conventional client entity codegen', () => {
         formatOutput: vi.fn(),
       }),
     ).toThrow(/either formatter or formatOutput/);
+    expect(() => createClientEntityCodegenRunner({ operationConditionsOnly: true })).toThrow(
+      /requires --operation-conditions-output/,
+    );
+  });
+
+  it('can generate the shared condition registry without projecting a client module', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-operation-conditions-only-'));
+    const sourceDirectory = path.join(directory, 'src');
+    const graphApiPath = path.join(sourceDirectory, 'graph.ts');
+    const outputPath = path.join(sourceDirectory, 'generated/client-entities.ts');
+    const operationConditionsOutputPath = path.join(
+      sourceDirectory,
+      'generated/operation-conditions.ts',
+    );
+    tempDirectories.push(directory);
+    await mkdir(sourceDirectory, { recursive: true });
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Course, Student } from './classroom';
+
+        export const ClassroomGraphApi = defineGraphApi({ entities: [Course, Student] });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(sourceDirectory, 'classroom.ts'),
+      `
+        import { field, graphSchema } from '@ontahi/core/data-graph';
+        import { entity } from '@ontahi/core/entity';
+
+        export const Course = entity({ name: 'Course', fields: { id: field.id() } });
+        export const Student = entity({
+          name: 'Student',
+          fields: { id: field.id() },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'classroom',
+          },
+          operations: ({ operation }) => ({
+            transfer: operation({
+              input: graphSchema.object({
+                previousCourse: graphSchema.existingRef(Course),
+                nextCourse: graphSchema.existingRef(Course),
+              }),
+              contracts: {
+                pre: {
+                  differentCourses: ({ previousCourse, nextCourse }) =>
+                    !previousCourse.is(nextCourse),
+                },
+              },
+              run: () => undefined,
+            }),
+          }),
+        });
+      `,
+      'utf8',
+    );
+
+    const runner = createClientEntityCodegenRunner({
+      rootDir: directory,
+      operationConditionsOnly: true,
+      operationConditionsOutputPath,
+    });
+    await runner.generate();
+
+    await expect(readFile(outputPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(operationConditionsOutputPath, 'utf8')).resolves.toContain(
+      'Student.transfer',
+    );
   });
 
   it('projects entity dependencies embedded in named Value operation contracts', async () => {

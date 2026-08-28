@@ -25,6 +25,7 @@ import {
   type EntitySelectionFactory,
   type GraphEntityWithOperations,
   type GraphEntityExposure,
+  type PortableOperationConditionRegistry,
   type GraphOperationDeclaration,
   type GraphOperationDeclarations,
   type GraphSelectionDefinition,
@@ -43,6 +44,7 @@ import type {
   DomainOperationDeclaration,
   ResolvedDomainOperationDeclaration,
 } from './domain-operations.js';
+import { materializeDomainOperationConditions } from './domain-operations.js';
 import type { OntahiApplicationBuilder, OntahiBinderApp, OntahiCapabilities } from './ontahi.js';
 import type { BoundRuntimeValueRefs, RuntimeValueRefDeclarations } from './operation/value-ref.js';
 import type { OperationInvocationResult } from './operation-result.js';
@@ -338,6 +340,7 @@ export type OntahiEntityCommandCatalog = Record<string, OntahiEntityCommands<Any
 
 export type OntahiEntityBindingContext<TEntities extends object = OntahiEntityCommandCatalog> = {
   entities: TEntities;
+  operationConditions?: PortableOperationConditionRegistry;
 };
 
 export type OntahiEntityOperationContext<TEntity extends AnyEntityDefinition> = {
@@ -1117,11 +1120,17 @@ const defineOntahiEntity = <
             ([, declaration]) => declaration.kind === 'graph-operation',
           ),
         ) as GraphOperationDeclarations;
-        const domainOperations = Object.fromEntries(
+        const authoredDomainOperations = Object.fromEntries(
           Object.entries(declarations).filter(
             ([, declaration]) => declaration.kind === 'domain-operation',
           ),
         ) as DomainOperationsFrom<TOperations>;
+        const domainOperations = materializeDomainOperationConditions(
+          schema.name,
+          authoredDomainOperations as DomainOperationsFrom<TOperations> &
+            Record<string, DomainOperationDeclaration<any, any, any, any>>,
+          context.operationConditions,
+        );
 
         const boundEntity = app.graph.defineEntity(schema, {
           exposure: config.exposure,

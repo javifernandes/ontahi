@@ -8,6 +8,7 @@ import { ontahi } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 
 import { classroomEntities, Course } from './classroom.js';
+import { operationConditions } from './generated/operation-conditions.js';
 
 type AnyDataGraphStorage = DataGraphDefaultStorage<DataGraphExecutionRuntime<any, any, any, any>>;
 
@@ -22,6 +23,7 @@ export const createClassroomApplication = <TStorage extends AnyDataGraphStorage>
 }: CreateClassroomApplicationOptions<TStorage>) =>
   ontahi({
     storage,
+    operationConditions,
     capabilities: {
       effectors: {
         'emit-event': (intent: { event: unknown }) =>

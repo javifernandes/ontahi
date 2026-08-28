@@ -11,6 +11,7 @@ import {
 } from '../../../data-graph/index.js';
 import {
   createDataGraphArchitectureAdapter,
+  contract,
   createOperationFailure,
   defineDomainOperation,
   defineDomainOperationsForEntity,
@@ -30,7 +31,7 @@ const createReadRuntime = () =>
     runCommand: vi.fn(() => Effect.succeed(undefined)),
   }) as DataGraphExecutionRuntime<never>;
 
-describe('Domain Operation callback contracts', () => {
+describe('opaque Domain Operation contract concerns', () => {
   it('runs synchronous, Promise, and Effect checks sequentially around the body', async () => {
     const Book = entity('ContractOrderingBook', {
       id: field.id(),
@@ -42,31 +43,33 @@ describe('Domain Operation callback contracts', () => {
       {
         inspect: defineDomainOperation({
           input: graphSchema.object({ book: field.ref(Book) }),
-          contracts: {
-            pre: [
-              ({ book }) => {
-                calls.push(`pre:sync:${book.locator.id}`);
-              },
-              async () => {
-                await Promise.resolve();
-                calls.push('pre:promise');
-              },
-              () =>
-                Effect.sync(() => {
-                  calls.push('pre:effect');
-                }),
-            ],
-            post: [
-              async (_input, result) => {
-                await Promise.resolve();
-                calls.push(`post:promise:${result.title}`);
-              },
-              () =>
-                Effect.sync(() => {
-                  calls.push('post:effect');
-                }),
-            ],
-          },
+          concerns: [
+            contract({
+              pre: [
+                ({ book }) => {
+                  calls.push(`pre:sync:${book.locator.id}`);
+                },
+                async () => {
+                  await Promise.resolve();
+                  calls.push('pre:promise');
+                },
+                () =>
+                  Effect.sync(() => {
+                    calls.push('pre:effect');
+                  }),
+              ],
+              post: [
+                async (_input, result: { title: string }) => {
+                  await Promise.resolve();
+                  calls.push(`post:promise:${result.title}`);
+                },
+                () =>
+                  Effect.sync(() => {
+                    calls.push('post:effect');
+                  }),
+              ],
+            }),
+          ],
           run: () =>
             Effect.sync(() => {
               calls.push('body');
@@ -106,10 +109,12 @@ describe('Domain Operation callback contracts', () => {
       Book,
       {
         inspect: defineDomainOperation({
-          contracts: {
-            pre: [() => [first, second], remainingPreCheck],
-            post,
-          },
+          concerns: [
+            contract({
+              pre: [() => [first, second], remainingPreCheck],
+              post,
+            }),
+          ],
           run: () =>
             Effect.sync(() => {
               bodyEffect();
@@ -143,9 +148,11 @@ describe('Domain Operation callback contracts', () => {
       Book,
       {
         mutate: defineDomainOperation({
-          contracts: {
-            post: () => [first, second],
-          },
+          concerns: [
+            contract({
+              post: () => [first, second],
+            }),
+          ],
           run: () =>
             Effect.sync(() => {
               state.mutations += 1;
@@ -192,47 +199,43 @@ describe('Domain Operation callback contracts', () => {
       domainOperations: {
         inspect: defineDomainOperation({
           input: graphSchema.object({ book: field.ref(BookDefinition) }),
-          concerns: [graph.withRuntime()],
-          contracts: {
-            pre: ({ book }, contractRuntime) => {
-              expectTypeOf(book).not.toHaveProperty('resolve');
-              expectTypeOf(book).not.toHaveProperty('invalidate');
-              expectTypeOf(book).not.toHaveProperty('refresh');
-              preUnitOfWork = getRequiredUnitOfWork();
-              preRuntimeResources = contractRuntime.resources;
-              preDataGraphRuntime = getCurrentDataGraphRuntime();
-              const portableBook = book as {
-                resolve?: unknown;
-                invalidate?: unknown;
-                refresh?: unknown;
-              };
-              observedMethods.push([
-                typeof portableBook.resolve,
-                typeof portableBook.invalidate,
-                typeof portableBook.refresh,
-              ]);
-              contractRuntime.resources.set('contract-marker', 'pre');
-            },
-            post: ({ book }, result, contractRuntime) => {
-              expectTypeOf(book).not.toHaveProperty('resolve');
-              expectTypeOf(book).not.toHaveProperty('invalidate');
-              expectTypeOf(book).not.toHaveProperty('refresh');
-              postUnitOfWork = getRequiredUnitOfWork();
-              postRuntimeResources = contractRuntime.resources;
-              postDataGraphRuntime = getCurrentDataGraphRuntime();
-              const portableBook = book as {
-                resolve?: unknown;
-                invalidate?: unknown;
-                refresh?: unknown;
-              };
-              observedMethods.push([
-                typeof portableBook.resolve,
-                typeof portableBook.invalidate,
-                typeof portableBook.refresh,
-              ]);
-              expect(result).toEqual({ title: 'Programming Book' });
-            },
-          },
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              pre: ({ book }, contractRuntime) => {
+                preUnitOfWork = getRequiredUnitOfWork();
+                preRuntimeResources = contractRuntime.resources;
+                preDataGraphRuntime = getCurrentDataGraphRuntime();
+                const portableBook = book as {
+                  resolve?: unknown;
+                  invalidate?: unknown;
+                  refresh?: unknown;
+                };
+                observedMethods.push([
+                  typeof portableBook.resolve,
+                  typeof portableBook.invalidate,
+                  typeof portableBook.refresh,
+                ]);
+                contractRuntime.resources.set('contract-marker', 'pre');
+              },
+              post: ({ book }, result, contractRuntime) => {
+                postUnitOfWork = getRequiredUnitOfWork();
+                postRuntimeResources = contractRuntime.resources;
+                postDataGraphRuntime = getCurrentDataGraphRuntime();
+                const portableBook = book as {
+                  resolve?: unknown;
+                  invalidate?: unknown;
+                  refresh?: unknown;
+                };
+                observedMethods.push([
+                  typeof portableBook.resolve,
+                  typeof portableBook.invalidate,
+                  typeof portableBook.refresh,
+                ]);
+                expect(result).toEqual({ title: 'Programming Book' });
+              },
+            }),
+          ],
           run: ({ book }) => {
             expectTypeOf(book).toHaveProperty('resolve');
             expectTypeOf(book).toHaveProperty('invalidate');
@@ -316,22 +319,24 @@ describe('Domain Operation callback contracts', () => {
       },
       domainOperations: {
         mutate: defineDomainOperation({
-          concerns: [graph.withRuntime()],
-          contracts: {
-            pre: () => {
-              parentUnitOfWork = getRequiredUnitOfWork();
-              events.push('pre');
-            },
-            post: () => {
-              postUnitOfWork = getRequiredUnitOfWork();
-              events.push('post');
-              expect(state.committed).toBe(true);
-              return createOperationFailure(
-                'transactional_postcondition',
-                'The committed result failed its post-check.',
-              );
-            },
-          },
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              pre: () => {
+                parentUnitOfWork = getRequiredUnitOfWork();
+                events.push('pre');
+              },
+              post: () => {
+                postUnitOfWork = getRequiredUnitOfWork();
+                events.push('post');
+                expect(state.committed).toBe(true);
+                return createOperationFailure(
+                  'transactional_postcondition',
+                  'The committed result failed its post-check.',
+                );
+              },
+            }),
+          ],
           run: () =>
             graph.transaction(
               Effect.sync(() => {

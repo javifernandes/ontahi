@@ -29,6 +29,7 @@ relatedPlans:
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/142d-existing-operation-refs
+  - ontahi://plans/142e-portable-operation-condition-bridge
 migratedFrom: bookops://atlas/model/domain-operation
 sourceCommit: 67713696
 ---
@@ -94,3 +95,15 @@ Static execution guarantees remain distinct from live execution affordances. Ref
 generated clients preserve atomicity, while a runtime planner reports whether the current binding
 can execute locally, bridge the same Operation invocation to an authority, or cannot execute it.
 UI code may explain that result but does not choose a provider or change the invocation API.
+
+A Domain Operation may declare named portable input conditions under `contracts.pre`. The
+TypeScript callback is authoring syntax analyzed at build time, never executable runtime metadata.
+Codegen emits canonical Model Expression IR into a shared registry; server execution, generated
+clients, reflection, Explorer, and advisory evaluation consume the same stable condition identity
+and dependencies. A missing or stale registry fails application composition instead of falling
+back to arbitrary callback execution.
+
+Portable conditions run after execution requirements and before the body. In an atomic Operation
+they share its authoritative transaction boundary, but the presence of a pure input condition does
+not itself imply atomicity. Arbitrary server-only pre/post code remains available explicitly as a
+`contract(...)` concern and is not represented as portable model meaning.

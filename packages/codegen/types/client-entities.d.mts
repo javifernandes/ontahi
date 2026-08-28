@@ -8,6 +8,8 @@ export type ClientEntityCodegenOptions = {
   outputPath?: string;
   schemaImportPath?: string;
   operationContracts?: 'all' | 'selection' | 'none';
+  operationConditionsOutputPath?: string;
+  operationConditionsOnly?: boolean;
   aliases?: FileSystemSourceLoaderOptions['aliases'];
   formatter?: 'oxfmt';
   formatOutput?: CodegenRunnerOptions<CodegenTarget>['formatOutput'];
@@ -22,7 +24,12 @@ export const parseClientEntityCodegenArguments: (argv?: readonly string[]) => {
   help: boolean;
   options: Pick<
     ClientEntityCodegenOptions,
-    'graphApiPath' | 'outputPath' | 'schemaImportPath' | 'formatter'
+    | 'graphApiPath'
+    | 'outputPath'
+    | 'schemaImportPath'
+    | 'operationConditionsOutputPath'
+    | 'operationConditionsOnly'
+    | 'formatter'
   >;
   runnerArguments: string[];
 };

@@ -16,6 +16,7 @@ import {
   type ManyToManyRelationshipCommandPolicy,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type MutationReaction,
+  type PortableOperationConditionRegistry,
   type RelationshipCommandExecutionRuntime,
 } from '../../data-graph/index.js';
 
@@ -120,6 +121,7 @@ export type OntahiOptions<
     | TEntities
     | ((app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>) => TEntities);
   reactions?: readonly MutationReaction[] | (() => readonly MutationReaction[]);
+  operationConditions?: PortableOperationConditionRegistry;
 };
 
 type BoundEntityRecord<
@@ -260,7 +262,10 @@ export const ontahi = <
   const entityCommands = Object.fromEntries(
     semanticDeclarations.map(entity => [entity.name, graph.defineEntity(entity)]),
   );
-  const bindingContext = { entities: entityCommands };
+  const bindingContext = {
+    entities: entityCommands,
+    operationConditions: options.operationConditions,
+  };
   const entities = (
     Array.isArray(declaredEntities)
       ? Object.fromEntries(

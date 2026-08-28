@@ -5,6 +5,7 @@ import {
   value,
   type AnyEntityDefinition,
   type ReflectedSchemaRelation,
+  type PortableOperationConditions,
 } from '@ontahi/core/data-graph';
 
 import type {
@@ -105,6 +106,7 @@ export type ExplorerOperationLike = {
   execution?: {
     atomicity?: 'required';
   };
+  conditions?: PortableOperationConditions;
   input?: unknown;
   output?: unknown;
   bridge?: {
@@ -710,6 +712,7 @@ const describeDomainOperation = (
     operation.execution?.atomicity === 'required'
       ? { atomicity: operation.execution.atomicity }
       : undefined,
+  conditions: operation.conditions,
   hasBridgeQuery: Boolean(operation.bridge?.query?.length),
   bridgeQueryCount: operation.bridge?.query?.length ?? 0,
   bridgeInvalidationCount: operation.bridge?.invalidate?.length ?? 0,

@@ -12,36 +12,31 @@ supports:
 relatedPlans:
   - ontahi://plans/142-declarative-model-semantics-and-execution-planning
   - ontahi://plans/142a-existing-operation-contract-compatibility-baseline
+  - ontahi://plans/142e-portable-operation-condition-bridge
 migratedFrom: bookops://atlas/operation-contracts
 sourceCommit: 67713696
 ---
 
 Operation Contracts cover inputs, results, validation, schemas, operation invocation, and the way UI, server, and LLM agents can talk about executable work.
 
-The current server Operation surface includes code-bearing `contracts.pre` and `contracts.post`
-callbacks. Each accepts one check or an ordered array; checks may be synchronous, Promise-valued,
-or Effect-valued and may produce `OperationFailure` values. Pre-checks run before the body.
-Post-checks receive the successful result after the body. For an ordinary Operation, a failure
-changes the Operation result but does not roll back effects already performed. In an
-`operation.atomic(...)`, requirements, pre-checks, body, and post-checks execute inside the same
-Data Graph transaction, so a post failure rolls that boundary back.
+Plan 142e replaced callback-valued top-level contracts during the alpha. `contracts.pre` now owns
+an object of named portable input conditions. Codegen analyzes their natural TypeScript expressions
+without executing them and emits versioned Model Expression IR. The canonical runtime metadata
+contains a stable id, dependencies, and conventional rejection; it is reflected and shared with
+generated clients. Advisory evaluation may be satisfied, rejected, or unknown, and never removes
+authoritative evaluation before the body.
 
-This surface predates schema-native Ref hydration, UnitOfWork, portable Relation constraints, and
-compositional Data Graph transactions. Its only repository use is focused Core tests and developer
-documentation, not executable application behavior. Plan 142a characterized it at the public
-Domain Operation runner: callbacks receive portable normalized Refs while the body receives its
-separate runtime-bound Ref facade; ordinary pre, body, and post phases share one UnitOfWork; and a
-post failure neither rolls back body effects nor reopens an explicit Data Graph transaction that
-already committed.
+The first portable subset compares Operation input Ref identities. It does not yet include
+stateful preconditions, portable postconditions, derived Fields, or permanent invariants. Those
+categories share expression vocabulary only after their different read, transaction, and mutation
+lifecycle guarantees are proven.
 
-The alpha compatibility decision is to keep the callback-valued top-level property working until a
-portable replacement ships, while treating it as deprecated design rather than the enduring model.
-Opaque server-only checks remain available through the explicit `contract(...)` Layer Concern,
-whose ordering and non-portability are honest. Plan 142 may then reuse the established
-`contracts.pre` / `contracts.post` categories for one reflected declarative vocabulary instead of
-adding a callback/object union or a parallel pre/postcondition namespace. The replacement slice,
-not the characterization slice, owns the public removal, migration Changeset, and final type
-surface.
+Arbitrary server-only checks remain available through the explicit `contract(...)` Layer Concern.
+Its pre/post callbacks may be synchronous, Promise-valued, or Effect-valued and may produce
+`OperationFailure` values. They remain intentionally opaque to reflection and clients. In an
+ordinary Operation an opaque post failure does not undo body effects; in `operation.atomic(...)`,
+requirements, portable preconditions, and opaque pre/body/post checks execute inside the same Data
+Graph transaction and can roll it back.
 
 ## Child Items
 

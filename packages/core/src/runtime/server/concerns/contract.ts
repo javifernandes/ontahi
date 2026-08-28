@@ -16,10 +16,15 @@ import type { OperationFailure } from '../operation/types.js';
 
 import type {
   ContractCheckFailure,
-  OperationContracts,
+  OpaqueOperationContracts,
   ContractPostCheck,
   ContractPreCheck,
 } from './contract-types.js';
+
+const opaqueContractConcerns = new WeakSet<object>();
+
+export const isOpaqueContractConcern = (concern: LayerConcern<any, unknown>): boolean =>
+  opaqueContractConcerns.has(concern);
 
 export type ValidationResult<TValue, TIssue = unknown> =
   | { success: true; data: TValue }
@@ -144,12 +149,12 @@ export const contract = <
   TResult,
   TFailure extends OperationFailure = OperationFailure,
 >(
-  contracts: OperationContracts<TInput, TResult, TFailure>,
+  contracts: OpaqueOperationContracts<TInput, TResult, TFailure>,
 ): LayerConcern<TInput, TFailure | unknown> => {
   const preChecks = toReadonlyArray(contracts.pre);
   const postChecks = toReadonlyArray(contracts.post);
 
-  return {
+  const concern: LayerConcern<TInput, TFailure | unknown> = {
     run: (runtime, next) =>
       Effect.gen(function* () {
         if (preChecks.length > 0) {
@@ -168,16 +173,9 @@ export const contract = <
         return rawResult;
       }),
   };
+  opaqueContractConcerns.add(concern);
+  return concern;
 };
-
-export const toContractConcern = <
-  TInput extends OperationInput,
-  TResult,
-  TFailure extends OperationFailure = OperationFailure,
->(
-  contracts: OperationContracts<TInput, TResult, TFailure> | undefined,
-): LayerConcern<TInput, TFailure | unknown> | undefined =>
-  contracts ? contract(contracts) : undefined;
 
 export const contractFromValidation = <
   TInput extends OperationInput,

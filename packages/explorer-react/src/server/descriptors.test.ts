@@ -1,4 +1,11 @@
-import { entity, field, graphSchema, value } from '@ontahi/core/data-graph';
+import {
+  definePortableOperationConditionRegistry,
+  entity,
+  field,
+  graphSchema,
+  modelExpression,
+  value,
+} from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from './index.js';
@@ -9,6 +16,21 @@ describe('explorer descriptor builder', () => {
       id: field.id(),
       slug: field.string(),
     }).locators({ refBySlug: 'slug' });
+    const publishConditions = definePortableOperationConditionRegistry({
+      version: 1,
+      operations: {
+        'Book.publish': {
+          pre: [
+            {
+              name: 'publishable',
+              expression: modelExpression.define(
+                modelExpression.not(modelExpression.ref('book').is(modelExpression.ref('draft'))),
+              ),
+            },
+          ],
+        },
+      },
+    }).operations['Book.publish'];
     const snapshot = buildExplorerSnapshot({
       entities: [
         {
@@ -69,6 +91,7 @@ describe('explorer descriptor builder', () => {
           authority: 'domain',
           exposure: 'bridge',
           execution: { atomicity: 'required' },
+          conditions: publishConditions,
           input: graphSchema.object({ book: graphSchema.ref(OperationBook) }),
           durable: {
             taskId: 'book.publish',
@@ -139,6 +162,7 @@ describe('explorer descriptor builder', () => {
       expect.objectContaining({
         kind: 'durable',
         execution: { atomicity: 'required' },
+        conditions: publishConditions,
         durable: {
           taskId: 'book.publish',
           runtime: 'test-runtime',

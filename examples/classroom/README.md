@@ -48,8 +48,10 @@ still send portable Refs, while the body receives authorized Student and Course 
 each with a non-enumerable `.ref` identity. The ordinary Operation runner derives the
 `data-graph.atomicity` requirement and starts or reuses the active runtime's transaction before
 materializing those participants through the transaction-scoped UnitOfWork. PostgreSQL runs every
-read and write through the same checked-out connection. Equal previous and next Courses return
-`same_course`, and a known-full destination is rejected before the Relationship Command. A later
+read and write through the same checked-out connection. The named `differentCourses` precondition
+is compiled into portable Model Expression metadata shared by server and generated clients; equal
+previous and next Courses therefore return `operation_condition_rejected` before the body runs. A
+known-full destination remains an authoritative stateful check before the Relationship Command. A later
 capacity compare-and-set mismatch returns a domain failure and rolls the complete transition back. A stale
 `previousCourse` is translated from the portable Relationship Command outcome into
 `student_course_changed`, without leaking a provider error through the Domain Operation contract.

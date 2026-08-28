@@ -86,7 +86,6 @@ export {
   contractFromValidation,
   createTypiaValidationMessageFormatter,
   typiaFieldMessage,
-  toContractConcern,
   type CreateTypiaValidationMessageFormatterOptions,
   type ContractFromGraphSchemaOptions,
   type ContractFromTypiaOptions,
@@ -98,7 +97,7 @@ export {
 } from './concerns/contract.js';
 export type {
   ContractCheckFailure,
-  OperationContracts,
+  OpaqueOperationContracts,
   ContractPostCheck,
   ContractPreCheck,
 } from './concerns/contract-types.js';

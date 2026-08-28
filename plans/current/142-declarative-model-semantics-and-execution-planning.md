@@ -13,7 +13,8 @@ Related plans:
 5. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
 6. [139d. PostgreSQL Classroom Transfer](../done/139d-postgres-classroom-transfer.md)
 7. [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md)
-8. [142e. Portable Operation Condition Bridge](../next/142e-portable-operation-condition-bridge.md)
+8. [142e. Portable Operation Condition Bridge](../done/142e-portable-operation-condition-bridge.md)
+9. [142f. Virtual Derived Fields And Classroom Capacity](../next/142f-virtual-derived-fields-and-classroom-capacity.md)
 
 ## Summary
 
@@ -25,11 +26,10 @@ expression IR so clients can provide advisory validation and documentation while
 authoritative runtime preserves the declared execution guarantees.
 
 Do not introduce a parallel `preconditions` / `postconditions` namespace as if Operation contracts
-did not already exist. The current contract callbacks are real public runtime behavior but are an
-anticipatory, code-bearing surface with no application adoption in this repository. The first
-slice must decide explicitly whether to extend their types compatibly, retain callbacks as an
-opaque escape hatch, or deprecate and replace them during the alpha; spelling continuity must not
-override the semantic and reflection evidence.
+did not already exist. At the start of this plan, contract callbacks were real public runtime
+behavior but an anticipatory, code-bearing surface with no application adoption in this
+repository. Plan 142e reused `contracts.pre` for named portable conditions and moved arbitrary
+server-only pre/post callbacks to the explicit `contract(...)` concern during the alpha.
 
 Static requirements and runtime affordances remain separate. A Domain Operation may declare that
 it requires atomic Data Graph execution without naming PostgreSQL, a server, or another deployment
@@ -51,13 +51,12 @@ manual coordination in application code:
    mutation path;
 4. `availableSeats` is maintained as a stored counter even though it can be derived from Course
    capacity and current students;
-5. the body calls `app.graph.transaction(effect)` even though atomicity is part of the Operation's
-   execution contract;
-6. none of these requirements are currently reflected for clients, Explorer, agents, execution
-   routing, or documentation.
-7. Ontahí already runs `contracts.pre` before the body and `contracts.post` after a successful body,
-   but Classroom and the other executable applications do not use that surface; their dynamic
-   rules remain imperative inside `run`.
+5. before Plan 142c, the body called `app.graph.transaction(effect)` even though atomicity is part
+   of the Operation's execution contract;
+6. the remaining stateful capacity and expected-current rules are not yet reflected for clients,
+   Explorer, agents, execution routing, or documentation;
+7. before Plan 142e, callback-valued `contracts.pre/post` could not represent portable meaning;
+   Classroom now uses the first named portable input condition for same-Course rejection.
 
 The example also exposes a distribution boundary. A client can determine from local data that a
 Course is already full and avoid an unnecessary invocation, but a locally satisfied check is not
@@ -66,9 +65,9 @@ each make a locally atomic decision and still violate an authority-serialized gl
 invariant after merge unless the topology provides serialization or a convergence mechanism such
 as escrow.
 
-## Existing Operation Contract Surface
+## Former Operation Callback Surface
 
-Core already exposes `OperationContracts<TInput, TResult, TFailure>`:
+Before Plan 142e, Core exposed `OperationContracts<TInput, TResult, TFailure>`:
 
 ```ts
 contracts: {
@@ -77,7 +76,7 @@ contracts: {
 },
 ```
 
-The current runtime contract is concrete:
+Plan 142a characterized that runtime contract:
 
 1. `pre` and `post` each accept one callback or an ordered array;
 2. a callback may return synchronously, through a Promise, or as an Effect;
@@ -92,22 +91,22 @@ predicates, Relationship Command preconditions, and compositional transactions e
 makes the callbacks opaque: arbitrary code cannot be serialized, reflected, evaluated advisory on
 a client, lowered into a guarded Command, or used to derive execution requirements.
 
-Repository evidence is intentionally weak adoption evidence: the only direct use is Core's focused
+Repository evidence was intentionally weak adoption evidence: the only direct use was Core's focused
 contract test suite plus the developer-book example. No executable application or package behavior
-declares `contracts.pre` or `contracts.post`. Plan 142 therefore treats the current API as a
-compatibility input to investigate, not as either dead code to ignore or a settled declarative
-foundation to preserve unchanged.
+declared callback-valued `contracts.pre` or `contracts.post`. Plan 142e therefore removed that
+top-level callback shape during the alpha. The behavior remains available deliberately through
+`contract(...)`, while top-level `contracts.pre` now owns named portable conditions.
 
 ## Semantic Categories
 
-| Category               | Example                                             | Evaluation boundary                                                          | Failure meaning                           |
-| ---------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
-| Input constraint       | previous and next Course differ                     | pure input validation; client-safe when portable                             | expected invalid input                    |
-| Resolution requirement | Student Ref resolves exactly once                   | authorized UnitOfWork selected for execution                                 | expected missing/inaccessible participant |
-| Operation precondition | Student is still assigned to previous Course        | current `contracts.pre`; future guarded Command or atomic Operation boundary | expected stale/domain rejection           |
-| Permanent invariant    | Course students never exceed capacity               | every affected mutation's authoritative boundary                             | model mutation rejection                  |
-| Postcondition          | successful transfer leaves Student in next Course   | after the body and before commit                                             | contract or implementation violation      |
-| Derived Field          | available seats equals capacity minus student count | graph read or provider-owned materialization                                 | definition/evaluation failure             |
+| Category               | Example                                             | Evaluation boundary                                 | Failure meaning                           |
+| ---------------------- | --------------------------------------------------- | --------------------------------------------------- | ----------------------------------------- |
+| Input constraint       | previous and next Course differ                     | pure input validation; client-safe when portable    | expected invalid input                    |
+| Resolution requirement | Student Ref resolves exactly once                   | authorized UnitOfWork selected for execution        | expected missing/inaccessible participant |
+| Operation precondition | Student is still assigned to previous Course        | future guarded Command or atomic Operation boundary | expected stale/domain rejection           |
+| Permanent invariant    | Course students never exceed capacity               | every affected mutation's authoritative boundary    | model mutation rejection                  |
+| Postcondition          | successful transfer leaves Student in next Course   | after the body and before commit                    | contract or implementation violation      |
+| Derived Field          | available seats equals capacity minus student count | graph read or provider-owned materialization        | definition/evaluation failure             |
 
 A precondition does not automatically make a whole Operation transactional. A pure input condition
 requires no storage boundary. A state precondition attached to one Relationship Command should be
@@ -178,9 +177,9 @@ structural edge surface that a derived Field may reference. This follows the sam
 schema-native input Refs: express a semantic distinction in the Field definition rather than
 creating a parallel container that callers must learn and traverse.
 
-The object form inside `contracts.pre` / `contracts.post` is provisional. It illustrates named,
-portable conditions within the existing semantic categories; it is not a commitment to overload
-the current callback-or-array type with exactly this shape.
+Plan 142e accepted the named object form for portable `contracts.pre`. Portable
+`contracts.post` remains provisional until its result/state dependencies and rollback meaning are
+proved.
 
 `existingRef(Entity)` has a conventional structured `entity_not_found` rejection derived from the
 Entity and input path. A custom rejection remains an override, not required boilerplate. Named
@@ -244,26 +243,23 @@ adapts the latter to the ordinary Effect path while preserving contextual input 
 contracts, atomicity, failures, and defects. Recognition is limited to actual generator functions,
 not arbitrary objects implementing the iterator protocol.
 
-## Contract Compatibility Decision Gate
+## Contract Compatibility Decision
 
-Before publishing declarative condition syntax, the first implementation slice must answer these
-questions with tests and repository evidence:
+Plan 142a answered the compatibility questions with tests and repository evidence; Plan 142e made
+the alpha migration:
 
-1. Which current callback semantics are intentional contract behavior, and which are historical
-   generality from the pre-Ref/UnitOfWork model?
-2. Can a portable condition declaration coexist under `contracts.pre` / `contracts.post` with the
-   existing callback-or-array form without ambiguous typing, execution, or reflection?
-3. If opaque callbacks remain, how does reflection report them honestly as server-only executable
-   checks with unknown dependencies and no advisory evaluation?
-4. Should postconditions continue to produce ordinary expected `OperationFailure` values, or
-   should declarative postcondition violation have a distinct contract/implementation meaning?
-5. How does `operation.atomic(...)` move stateful post-checks before provider commit while preserving
-   the current non-atomic post-check behavior for ordinary Operations?
+1. callback-valued top-level contracts were historical generality, not portable model semantics;
+2. mixing callbacks and declarations would make typing, execution, and reflection ambiguous, so
+   top-level `contracts.pre` accepts named portable declarations only;
+3. opaque pre/post callbacks remain explicit through `contract(...)`, with no reflected
+   dependencies or advisory result;
+4. opaque post failures preserve their characterized expected-failure behavior, including rollback
+   when enclosed by `operation.atomic(...)`;
+5. portable postcondition violation remains open and was not disguised by retaining the old
+   callback spelling.
 
-There is no migration pressure from application code today, but the API is exported and
-documented. If evidence favors replacement, remove or deprecate it explicitly with an alpha
-Changeset, migration note, and developer-doc update. Do not silently leave two authoritative
-contract models or keep an opaque API merely because it shipped first.
+The public removal carries an alpha Changeset and developer migration note. There is one portable
+top-level contract model and one deliberately opaque concern escape hatch.
 
 ## TypeScript Expression Language
 
@@ -324,11 +320,11 @@ builder remains the honest runtime-only fallback because it creates the same IR 
 source text. It is more verbose and repeats model member names as strings, so it should not become
 the default merely because it is easier to implement.
 
-The experiment does not justify publication yet. Its compiler-owned symbol table was supplied as a
-fixture; current codegen still needs a real semantic bridge from Entity Fields, Relations, and
-Operation input Refs into that table. The canonical IR must also move to a technology-independent
-Core boundary before reflection or runtimes consume it. No callback is serialized or evaluated at
-runtime, and runtime-only applications must retain builder parity for every promoted node.
+Plan 142e supplied the publication evidence for the first consumer: codegen derives Operation input
+Ref symbols from the real schema, while technology-independent Core owns the canonical IR,
+dependency collection, and evaluator. No callback is serialized or evaluated at runtime, and the
+explicit builder supplies runtime-only parity for every promoted node. Field and Relation symbol
+discovery still belongs to the derived-Field and invariant slices that consume those nodes.
 
 ## Reflection And Advisory Evaluation
 
@@ -511,11 +507,11 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    rejection, portable identity, UnitOfWork materialization, and reflection without coupling it to
    the not-yet-production expression compiler. Delivered through
    [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md).
-5. **Portable condition bridge:** promote the experimental IR and real model symbol discovery,
+5. **Portable condition bridge (complete):** promote the experimental IR and real model symbol discovery,
    then explicitly replace callback-valued top-level `contracts.pre` / `contracts.post` with named
    portable conditions, rejection defaults, dependency reflection, and tri-state advisory
    evaluation. Extracted as
-   [142e. Portable Operation Condition Bridge](../next/142e-portable-operation-condition-bridge.md).
+   [142e. Portable Operation Condition Bridge](../done/142e-portable-operation-condition-bridge.md).
 6. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
    remove the stored counter from the model and result shape, then prove virtual
    `Course.availableSeats` in memory and through one authorized provider read.
@@ -563,7 +559,7 @@ surfaces.
       unsupported code.
 - [x] `existingRef(Entity)` has a conventional safe failure and preserves portable Ref identity
       separately from authorized resolved data.
-- [ ] Client condition evaluation is reflected as satisfied, rejected, or unknown and never skips
+- [x] Client condition evaluation is reflected as satisfied, rejected, or unknown and never skips
       authoritative validation after a local success.
 - [ ] State preconditions compile into one guarded Command when possible; otherwise their required
       atomic Operation boundary is explicit.

@@ -85,6 +85,9 @@ importers:
         specifier: 3.21.0
         version: 3.21.0
     devDependencies:
+      '@ontahi/codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
       '@ontahi/postgres':
         specifier: workspace:*
         version: link:../../packages/postgres
@@ -94,6 +97,9 @@ importers:
       '@types/pg':
         specifier: ^8.15.5
         version: 8.21.0
+      oxfmt:
+        specifier: ^0.53.0
+        version: 0.53.0
       pg:
         specifier: ^8.16.3
         version: 8.23.0

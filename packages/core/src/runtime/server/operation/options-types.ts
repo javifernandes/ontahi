@@ -1,5 +1,5 @@
+import type { PortableOperationConditions } from '../../../data-graph/model-expression/index.js';
 import type { DomainOperationExecutionMetadata } from '../../../data-graph/operation-execution.js';
-import type { OperationContracts } from '../concerns/contract-types.js';
 import type { EffectSuccessPayload } from '../effect-intents/types.js';
 import type { LayerConcern, LayerScopedOptions } from '../layer-types.js';
 
@@ -47,7 +47,7 @@ export type OperationOptions<
   telemetrySpanName?: string;
   requires?: ReadonlyArray<OperationRequirement<TInput>>;
   concerns?: ReadonlyArray<LayerConcern<TInput, unknown>>;
-  contracts?: OperationContracts<TInput, TResult, TFailure>;
+  conditions?: PortableOperationConditions;
   execution?: DomainOperationExecutionMetadata;
   cache?: OperationCacheConfig<TInput>;
   effects?: OperationEffectsConfig<TInput, TResult>;
@@ -76,7 +76,7 @@ export type OperationRunner<
   > &
     Pick<
       OperationOptions<TInput, TData, TFailure>,
-      'defectPublicMessage' | 'extra' | 'requires' | 'concerns' | 'contracts'
+      'defectPublicMessage' | 'extra' | 'requires' | 'concerns' | 'conditions'
     > &
     Pick<OperationOptions<TInput, TData, TFailure>, 'execution'> &
     Pick<OperationOptions<TInput, TData, TFailure>, 'cache' | 'effects'>;

@@ -8,6 +8,7 @@ import {
   type RelationConstraint,
   type RelationKind,
 } from './definitions.js';
+import type { PortableOperationConditions } from './model-expression/index.js';
 import type {
   DomainOperationExecutionMetadata,
   OperationExecutionAffordance,
@@ -129,6 +130,7 @@ export type ReflectedOperationDescriptor<TInput = unknown, TData = unknown> = {
   authority?: string;
   exposure?: string;
   execution?: DomainOperationExecutionMetadata;
+  conditions?: PortableOperationConditions;
   _input?: TInput;
   _data?: TData;
 };

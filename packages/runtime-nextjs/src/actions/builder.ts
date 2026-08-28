@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { PortableOperationConditions } from '@ontahi/core/data-graph';
 import {
   attachActionRuntime,
   createFeatureAllQueryTarget,
@@ -174,7 +175,7 @@ type CanonicalDomainOperationForClient<TClient> = {
   telemetrySpanName?: string;
   requires?: ReadonlyArray<OperationRequirement<InferClientParsedInput<TClient> & OperationInput>>;
   concerns?: ReadonlyArray<LayerConcern<InferClientParsedInput<TClient>, unknown>>;
-  contracts?: unknown;
+  conditions?: PortableOperationConditions;
 };
 
 type AnyDomainOperationForClient<TClient, Data> =
@@ -481,7 +482,7 @@ const createActionBuilder = <Client extends AnySafeActionClient>(
         telemetrySpanName: operation.telemetrySpanName,
         requires: operation.requires,
         concerns: operation.concerns,
-        contracts: operation.contracts,
+        conditions: operation.conditions,
       } as never,
     ) as ActionInputFnForClient<Client, Data>;
 

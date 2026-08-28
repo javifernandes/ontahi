@@ -8,6 +8,7 @@ export {
   renderGeneratedClientEntityModule,
   renderGeneratedTaskDefinitionRegistryModule,
 } from './projections.mjs';
+export { renderGeneratedOperationConditionRegistryModule } from './model-expression/registry-module.mjs';
 export { analyzeOntahiApplication, formatCodegenDiagnostic } from './application-analysis.mjs';
 export {
   createClientEntityCodegenRunner,

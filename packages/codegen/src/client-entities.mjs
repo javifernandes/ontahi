@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { analyzeOntahiApplication } from './application-analysis.mjs';
+import { renderGeneratedOperationConditionRegistryModule } from './model-expression/registry-module.mjs';
 import { renderGeneratedClientEntityModule } from './projections.mjs';
 import { createOntahiCodegenRunner, createStdinCommandFormatter } from './runner.mjs';
 import { createFileSystemSourceLoader } from './source-loader.mjs';
@@ -15,6 +16,10 @@ Options:
   --graph <path>          Composition root (default: src/graph.ts)
   --output <path>         Generated module (default: src/generated/client-entities.ts)
   --schema-import <path>  Fallback import for external entity schemas
+  --operation-conditions-output <path>
+                          Shared portable condition registry module
+  --operation-conditions-only
+                          Generate only the portable condition registry
   --format oxfmt          Format through the host project's oxfmt binary
   --check                 Fail when generated output is stale
   --watch                 Regenerate when application sources change
@@ -42,6 +47,8 @@ export const createClientEntityCodegenRunner = ({
   outputPath = conventionalOutputPath,
   schemaImportPath = './schema',
   operationContracts = 'all',
+  operationConditionsOutputPath,
+  operationConditionsOnly = false,
   aliases,
   formatter,
   formatOutput,
@@ -50,35 +57,80 @@ export const createClientEntityCodegenRunner = ({
   if (formatter && formatOutput) {
     throw new Error('Use either formatter or formatOutput for Ontahi client codegen, not both.');
   }
+  if (operationConditionsOnly && !operationConditionsOutputPath) {
+    throw new Error('--operation-conditions-only requires --operation-conditions-output.');
+  }
 
   const resolvedRoot = path.resolve(rootDir);
   const resolvedGraphApiPath = path.resolve(resolvedRoot, graphApiPath);
   const resolvedOutputPath = path.resolve(resolvedRoot, outputPath);
+  const resolvedOperationConditionsOutputPath = operationConditionsOutputPath
+    ? path.resolve(resolvedRoot, operationConditionsOutputPath)
+    : undefined;
   const sourceLoader = createFileSystemSourceLoader({ rootDir: resolvedRoot, aliases });
   const target = {
-    name: 'client-entities',
+    name: operationConditionsOnly ? 'operation-conditions' : 'client-entities',
     sourcePath: resolvedGraphApiPath,
-    outputPath: resolvedOutputPath,
+    outputPath: resolvedOperationConditionsOutputPath ?? resolvedOutputPath,
   };
 
   return createOntahiCodegenRunner({
     targets: [target],
     analyzeApplication: sourcePath =>
       analyzeOntahiApplication({ graphApiPath: sourcePath, sourceLoader }),
-    renderTarget: ({ application }) => ({
-      outputs: [
-        {
-          outputPath: resolvedOutputPath,
-          source: renderGeneratedClientEntityModule({
-            entities: application.clientEntities,
-            schemaEntities: application.entities,
-            namedDefinitions: application.namedDefinitions,
-            schemaImportPath,
-            operationContracts,
-          }),
-        },
-      ],
-    }),
+    renderTarget: ({ application }) => {
+      const hasOperationConditions = application.operations.some(
+        operation => operation.conditions?.pre?.length,
+      );
+      if (hasOperationConditions && !resolvedOperationConditionsOutputPath) {
+        return {
+          diagnostics: [
+            'Portable Operation conditions require --operation-conditions-output so server and generated clients consume one artifact.',
+          ],
+          outputs: [],
+        };
+      }
+      const conditionImportPath = resolvedOperationConditionsOutputPath
+        ? (() => {
+            const relative = path
+              .relative(path.dirname(resolvedOutputPath), resolvedOperationConditionsOutputPath)
+              .replaceAll(path.sep, '/')
+              .replace(/\.(?:mts|ts)$/, '.js');
+            return relative.startsWith('.') ? relative : `./${relative}`;
+          })()
+        : undefined;
+
+      return {
+        diagnostics: [],
+        outputs: [
+          ...(operationConditionsOnly
+            ? []
+            : [
+                {
+                  outputPath: resolvedOutputPath,
+                  source: renderGeneratedClientEntityModule({
+                    entities: application.clientEntities,
+                    schemaEntities: application.entities,
+                    namedDefinitions: application.namedDefinitions,
+                    schemaImportPath,
+                    operationContracts,
+                    operationConditionsImportPath: conditionImportPath,
+                  }),
+                },
+              ]),
+          ...(resolvedOperationConditionsOutputPath
+            ? [
+                {
+                  outputPath: resolvedOperationConditionsOutputPath,
+                  source: renderGeneratedOperationConditionRegistryModule({
+                    operations: application.operations,
+                  }),
+                },
+              ]
+            : []),
+        ],
+      };
+    },
     formatOutput: formatOutput ?? resolveFormatter({ formatter, rootDir: resolvedRoot }),
     staleCommand,
   });
@@ -101,6 +153,7 @@ export const parseClientEntityCodegenArguments = (argv = []) => {
     ['--graph', 'graphApiPath'],
     ['--output', 'outputPath'],
     ['--schema-import', 'schemaImportPath'],
+    ['--operation-conditions-output', 'operationConditionsOutputPath'],
     ['--format', 'formatter'],
   ]);
 
@@ -111,6 +164,15 @@ export const parseClientEntityCodegenArguments = (argv = []) => {
     if (argument === '--help' || argument === '-h') {
       if (help) throw new Error('--help may only be provided once.');
       help = true;
+      continue;
+    }
+
+    if (argument === '--operation-conditions-only') {
+      if (seenOptions.has(argument)) {
+        throw new Error(`${argument} may only be provided once.`);
+      }
+      seenOptions.add(argument);
+      options.operationConditionsOnly = true;
       continue;
     }
 

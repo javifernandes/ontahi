@@ -6,6 +6,11 @@ export const renderGeneratedClientEntityModule: (input: {
   namedDefinitions?: readonly AnalyzedNamedDefinition[];
   schemaImportPath?: string;
   operationContracts?: string;
+  operationConditionsImportPath?: string;
+}) => string;
+
+export const renderGeneratedOperationConditionRegistryModule: (input: {
+  operations: readonly import('./contracts.mjs').AnalyzedOperation[];
 }) => string;
 
 export const renderGeneratedTaskDefinitionRegistryModule: (input: {

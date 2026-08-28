@@ -1,8 +1,14 @@
 import {
+  createEntityRef,
+  definePortableOperationConditionRegistry,
+  modelExpression,
+} from '@ontahi/core/data-graph';
+import {
   getActionInvalidationQueryKeys,
   getActionQueryKey,
   getActionRuntime,
 } from '@ontahi/core/runtime/actions';
+import { Effect } from 'effect';
 import { DEFAULT_SERVER_ERROR_MESSAGE } from 'next-safe-action';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -173,6 +179,51 @@ describe('action builder', () => {
         data: { inviteId: 'invite-1' },
       },
     });
+  });
+
+  it('enforces canonical portable conditions before a Domain Operation body', async () => {
+    const body = vi.fn(() => Effect.succeed({ status: 'applied' }));
+    const conditions = definePortableOperationConditionRegistry({
+      version: 1,
+      operations: {
+        'Student.transfer': {
+          pre: [
+            {
+              name: 'differentCourses',
+              expression: modelExpression.define(
+                modelExpression.not(
+                  modelExpression.ref('previousCourse').is(modelExpression.ref('nextCourse')),
+                ),
+              ),
+            },
+          ],
+        },
+      },
+    }).operations['Student.transfer'];
+    const algebra = createEntityRef('Course', { id: 'algebra' });
+    const action = createFeatureActions()('classroom')
+      .public('transferStudent')
+      .inputType(
+        z.object({
+          previousCourse: z.any(),
+          nextCourse: z.any(),
+        }),
+      )
+      .runDomainOperation({
+        name: 'transfer',
+        layer: 'classroom',
+        conditions,
+        run: body,
+      });
+
+    const result = await action({ previousCourse: algebra, nextCourse: algebra });
+
+    expect(result.data).toMatchObject({
+      success: false,
+      reason: 'operation_condition_rejected',
+      conditionId: 'Student.transfer.pre.differentCourses',
+    });
+    expect(body).not.toHaveBeenCalled();
   });
 
   it('attaches canonical query-key metadata to read actions', async () => {

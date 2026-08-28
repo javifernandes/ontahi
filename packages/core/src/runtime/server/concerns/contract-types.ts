@@ -31,7 +31,7 @@ export type ContractPostCheck<
   | PromiseLike<void | ContractCheckFailure<TFailure>>
   | import('effect').Effect.Effect<void | ContractCheckFailure<TFailure>, unknown>;
 
-export type OperationContracts<
+export type OpaqueOperationContracts<
   TInput extends object = object,
   TResult = unknown,
   TFailure extends OperationFailure = OperationFailure,

@@ -3,7 +3,7 @@ id: ontahi.model.model-expression
 kind: concept
 title: Model Expression
 parent: ontahi.model
-status: shaping
+status: active
 horizon: now
 supports:
   - ontahi.model.field
@@ -34,13 +34,18 @@ familiar arithmetic and boolean syntax. The explicit builder is required for run
 not a second semantic language. Both must fail closed for unsupported nodes, and neither may execute
 or serialize arbitrary author code.
 
-The IR is not yet a public Core surface. The experiment supplied a compiler-owned semantic symbol
-table as fixture evidence. Publication requires codegen to derive that table from actual Entity
-Fields, Relations, and Operation input Refs, and requires Core to own the canonical IR independently
-from TypeScript ASTs. Reflection and runtimes consume only that IR; static analysis remains an
-optional authoring frontend.
+Plan 142e promoted the IR to technology-independent Core. Codegen derives Operation input Ref
+symbols from the actual schema, compiles named expression-bodied `contracts.pre` callbacks without
+executing them, and emits one condition registry consumed by both the authority and generated
+clients. Unsupported syntax carries stable source locations. A runtime-only application can use
+the explicit `modelExpression` builder to produce the same IR.
 
-Plan 142d deliberately shipped `existingRef` without pretending that this private experiment was a
-runtime contract language. Plan 142e owns the production bridge: Core IR, symbol discovery from the
-real model, one generated semantic artifact, authoritative evaluation, and tri-state advisory
-evaluation before callback-valued top-level Operation contracts can be replaced honestly.
+The first production consumer is a pure Operation input condition. Its reflected metadata includes
+a stable condition id, dependencies, and conventional rejection. Evaluation is tri-state:
+`satisfied`, `rejected`, or `unknown` when a dependency is unavailable. Client evaluation is only
+advisory; the selected authority evaluates the same IR again before the Operation body.
+
+The broader IR nodes for Field reads, Relation `count()`, arithmetic, and comparison are now public
+Core vocabulary but do not yet imply a read strategy. Derived Fields and permanent Relation
+invariants remain separate lifecycle consumers that must prove their own dependency discovery,
+authorization, provider lowering, and enforcement boundaries.
