@@ -359,7 +359,7 @@ type DefinedDomainOperation<
   input: OperationInputSchema<InputSchemaLike<TInput>, TInput>;
 } & (TOutput extends OutputSchemaLike<any> ? { output: TOutput } : { output?: undefined });
 
-type DefineDomainOperation = {
+type DefineDomainOperationCall = {
   <
     TInput extends OperationInput,
     TResult extends DomainOperationSuccess,
@@ -369,7 +369,7 @@ type DefineDomainOperation = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'durable' | 'output'
+      'kind' | 'durable' | 'execution' | 'output'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
       output?: TOutput;
@@ -386,21 +386,58 @@ type DefineDomainOperation = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'output'
+      'kind' | 'execution' | 'output'
     > & { output?: TOutput },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput>;
 };
 
+type DefineAtomicDomainOperation = <
+  TInput extends OperationInput,
+  TResult extends DomainOperationSuccess,
+  TFailure extends OperationFailure = OperationFailure,
+  TInfraError extends OperationRuntimeError = never,
+  TOutput extends OutputSchemaLike<any> | undefined = undefined,
+>(
+  operation: Omit<
+    DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
+    'kind' | 'durable' | 'execution' | 'output'
+  > & { output?: TOutput },
+) => DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput> & {
+  execution: { atomicity: 'required' };
+};
+
+type DefineDomainOperation = DefineDomainOperationCall & {
+  atomic: DefineAtomicDomainOperation;
+};
+
 const defineDomainOperationImplementation = (
   operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind'>,
-) => ({
-  kind: 'domain-operation',
-  authority: 'server',
-  ...operation,
-  input: attachOperationInputSchema((operation.input ?? EmptyInputSchema) as InputSchemaLike<any>),
-});
+) => {
+  if (operation.durable && operation.execution?.atomicity === 'required') {
+    throw new Error('Durable Domain Operations cannot require one Data Graph atomic boundary.');
+  }
 
-export const defineDomainOperation = defineDomainOperationImplementation as DefineDomainOperation;
+  return {
+    kind: 'domain-operation',
+    authority: 'server',
+    ...operation,
+    input: attachOperationInputSchema(
+      (operation.input ?? EmptyInputSchema) as InputSchemaLike<any>,
+    ),
+  };
+};
+
+const defineAtomicDomainOperationImplementation = (
+  operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind' | 'execution'>,
+) =>
+  defineDomainOperationImplementation({
+    ...operation,
+    execution: { atomicity: 'required' },
+  });
+
+export const defineDomainOperation = Object.assign(defineDomainOperationImplementation, {
+  atomic: defineAtomicDomainOperationImplementation,
+}) as DefineDomainOperation;
 
 export const defineDomainOperationsForEntity = <
   TEntity extends { name: string } | string,
@@ -555,6 +592,7 @@ const resolveDomainOperationRunner = <
     }),
     concerns: operation.concerns,
     contracts: operation.contracts,
+    execution: operation.execution,
     cache: operation.cache,
     effects: operation.effects,
   } as never) as DomainOperationRunner<TInput, TResult, TFailure>;
@@ -731,6 +769,7 @@ const resolveDurableDomainOperationRunner = <
       }),
       concerns: operation.concerns,
       contracts: operation.contracts,
+      execution: operation.execution,
       cache: operation.cache,
       effects: operation.effects as never,
     } as never,

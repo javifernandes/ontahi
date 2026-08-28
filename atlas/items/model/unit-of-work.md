@@ -11,6 +11,7 @@ relatedPlans:
   - ontahi://plans/139b-transaction-scoped-unit-of-work
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/139d-postgres-classroom-transfer
+  - ontahi://plans/142c-reflected-atomic-operation-execution
 ---
 
 A UnitOfWork is the server runtime identity boundary shared by one top-level invocation/Operation
@@ -39,14 +40,16 @@ resource values but owns a distinct map, so a local override does not mutate its
 concurrent sibling.
 
 A database transaction is one possible child UnitOfWork lifetime; it is not another name for
-UnitOfWork. `app.graph.transaction(effect)` asks the current Data Graph runtime for its optional
-transaction capability, then installs the returned connection-scoped runtime only in an isolated
-child UnitOfWork. Bound Queries and explicit Command `.run()` calls discover that runtime from
-context, including normally nested Operations. The child starts with a fresh Operation-result cache
-so reads observed before rollback cannot leak into its parent. Success, typed failure, and defect
-all restore the parent scope.
+UnitOfWork. The lower-level `app.graph.transaction(effect)` API asks the current Data Graph runtime
+for its optional transaction capability. A Domain Operation normally expresses the semantic
+guarantee with `operation.atomic({...})`, allowing its runner to establish the same boundary before
+evaluating requirements, checks, or body code. Either path installs the returned connection-scoped
+runtime only in an isolated child UnitOfWork. Bound Queries and explicit Command `.run()` calls
+discover that runtime from context, including normally nested Operations. The child starts with a
+fresh Operation-result cache so reads observed before rollback cannot leak into its parent. Success,
+typed failure, and defect all restore the parent scope.
 
-The provider-backed Classroom proof exercises that boundary from an ordinary Domain Operation.
+The provider-backed Classroom proof exercises that boundary from an atomic Domain Operation.
 `Student.transfer(...)` resolves three input Refs, conditionally changes one Relation, and updates
 two Course rows without receiving a transaction runtime parameter. A known-full destination stops
 before structural mutation. PostgreSQL commits all three mutations together or restores them all

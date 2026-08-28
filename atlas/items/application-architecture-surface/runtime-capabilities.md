@@ -19,6 +19,7 @@ relatedPlans:
   - bookops://plans/125-ontahi-ai-operations
   - bookops://plans/126-ontahi-runtime-data-reflection
   - bookops://plans/130-ontahi-authentication-principal-and-invocation-context
+  - ontahi://plans/142c-reflected-atomic-operation-execution
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
 sourceCommit: 67713696
 ---
@@ -55,3 +56,10 @@ the complete execution port. It owns live seeded state, plain and relation-root 
 commands, and reflected Explorer data. Supabase provides external durability, while
 `@ontahi/postgres` now provides provider-executed SQL, host-owned physical mappings, graph runtime
 conformance, and reflected Entity data over direct PostgreSQL connections.
+
+Operation declarations may require a semantic guarantee without naming the adapter that supplies
+it. `operation.atomic(...)` reflects `execution.atomicity: 'required'`, from which Core derives the
+`data-graph.atomicity` requirement. A live runtime capability claim is separate evidence: the
+server validates it against the active Data Graph runtime, while client bindings can advertise a
+local executor or a bridge. The provider-neutral planner reports `local`, `bridge`, or
+`unavailable`; it does not turn deployment topology into model metadata or authorization.

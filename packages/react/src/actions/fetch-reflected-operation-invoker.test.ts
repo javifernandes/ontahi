@@ -123,6 +123,21 @@ describe('createFetchReflectedOperationInvoker', () => {
         exposure: 'server-only',
       }),
     ).toBe(false);
+    expect(
+      invoker.getOperationExecutionAffordance?.({
+        ...operation,
+        kind: 'domain',
+        exposure: 'bridge',
+        execution: { atomicity: 'required' },
+      }),
+    ).toEqual({ status: 'bridge', authority: 'server', bridge: 'fetch' });
+    expect(
+      invoker.getOperationExecutionAffordance?.({
+        ...operation,
+        kind: 'graph',
+        exposure: 'bridge',
+      }),
+    ).toEqual({ status: 'unavailable', missingCapabilities: [] });
   });
 
   it('derives bridge and task endpoints from the runtime mount path', async () => {

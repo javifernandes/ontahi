@@ -9,8 +9,10 @@ import {
 } from '../../data-graph/transaction.js';
 
 import { getOperationRuntimeContext, getRequiredOperationRuntimeContext } from './context.js';
+import { failOperation } from './failures.js';
 import type { LayerConcern, LayerConcernRuntime } from './layer-types.js';
 import { OPERATION_CACHE_STORE_RESOURCE_KEY } from './operation/cache.js';
+import type { OperationFailure } from './operation/types.js';
 import { withChildUnitOfWork } from './unit-of-work.js';
 
 export const DATA_GRAPH_RUNTIME_RESOURCE_KEY = 'dataGraph.runtime';
@@ -96,6 +98,36 @@ export const withDataGraphTransaction = <TRuntime, TValue, TError = never, TRequ
     TError | DataGraphTransactionError<TRuntime> | DataGraphTransactionUnavailableError,
     TRequirements
   >;
+
+export const withAtomicDataGraphExecution = <TInput>(): LayerConcern<
+  TInput,
+  OperationFailure<'execution_unavailable'>
+> => ({
+  run: <TSuccess, TNextError>(
+    _runtime: LayerConcernRuntime<TInput>,
+    next: Effect.Effect<TSuccess, TNextError>,
+  ): Effect.Effect<TSuccess, TNextError | OperationFailure<'execution_unavailable'>> =>
+    Effect.suspend(
+      (): Effect.Effect<TSuccess, TNextError | OperationFailure<'execution_unavailable'>> => {
+        if (
+          getRequiredOperationRuntimeContext().resources.has(
+            DATA_GRAPH_TRANSACTION_SCOPE_RESOURCE_KEY,
+          )
+        ) {
+          return next;
+        }
+
+        return withDataGraphTransaction(next).pipe(
+          Effect.catchTag('DataGraphTransactionUnavailableError', () =>
+            failOperation(
+              'execution_unavailable',
+              'This Operation requires atomic Data Graph execution, but the current runtime cannot provide it.',
+            ),
+          ),
+        );
+      },
+    ),
+});
 
 export const createContextualRelationshipCommandExecutor = <
   TError = unknown,

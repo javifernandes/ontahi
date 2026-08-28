@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
   - ontahi://plans/128a-ontahi-recursive-views-and-projectable-operation-results
   - ontahi://plans/128b-ontahi-projectable-operation-client-bridge
+  - ontahi://plans/142c-reflected-atomic-operation-execution
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - bookops://plans/57-client-runtime-bridge-and-server-dispatch
   - bookops://plans/68j-graph-execution-authority-api
@@ -38,6 +39,13 @@ provide equivalent enforcement at its authoritative data boundary, such as Postg
 
 Runtime binding must preserve one call-site language, result model, cache identity, observability
 surface, and provider-capability diagnostics across direct and remote execution.
+
+Reflected Domain Operations also preserve static execution requirements. The current planner
+combines `execution.atomicity: 'required'` with explicit live bindings and returns a local, bridge,
+or unavailable affordance. React and Explorer consume that value to explain executability, but
+invocation still travels through the same reflected Operation facade. A bridge affordance means a
+route is configured; the authoritative server remains responsible for validating transaction
+support and policy before evaluating the Operation.
 
 The first proof exists in-process: a Selection authored from a runtime-bound Entity retains
 that binding while its JSON form remains portable; read shaping and Command shortcuts execute

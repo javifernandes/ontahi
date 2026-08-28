@@ -4,6 +4,7 @@ import type {
   ReflectedOperationInvocation,
   ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
+import { resolveOperationExecutionAffordance } from '@ontahi/core/data-graph';
 import type {
   OperationInvocationResult,
   TaskRunIdentity,
@@ -141,12 +142,26 @@ export const createFetchReflectedOperationInvoker = (
   options: FetchOperationBridgeOptions = {},
 ): ReflectedOperationInvoker => {
   const endpoint = operationEndpoint(options);
+  const canInvokeOperation: NonNullable<
+    ReflectedOperationInvoker['canInvokeOperation']
+  > = operation =>
+    operation.kind === undefined
+      ? operation.exposure === undefined || operation.exposure === 'bridge'
+      : operation.kind !== 'graph' && operation.exposure === 'bridge';
 
   return {
-    canInvokeOperation: operation =>
-      operation.kind === undefined
-        ? operation.exposure === undefined || operation.exposure === 'bridge'
-        : operation.kind !== 'graph' && operation.exposure === 'bridge',
+    canInvokeOperation,
+    getOperationExecutionAffordance: operation =>
+      resolveOperationExecutionAffordance(operation, {
+        ...(canInvokeOperation(operation)
+          ? {
+              bridge: {
+                authority: operation.authority ?? 'server',
+                bridge: 'fetch',
+              },
+            }
+          : {}),
+      }),
     invokeOperation: async <TInput = unknown, TData = unknown>({
       input,
       operationId,

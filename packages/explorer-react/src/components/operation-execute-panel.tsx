@@ -1013,6 +1013,16 @@ export function ExplorerOperationExecutePanel({
 
   return (
     <div className={cx('grid gap-4', className)}>
+      {executor.executionAffordance?.status === 'local' ? (
+        <p className='text-sm text-muted-foreground'>
+          Execution: local on {executor.executionAffordance.runtime}.
+        </p>
+      ) : executor.executionAffordance?.status === 'bridge' ? (
+        <p className='text-sm text-muted-foreground'>
+          Execution: bridge to {executor.executionAffordance.authority} via{' '}
+          {executor.executionAffordance.bridge}.
+        </p>
+      ) : null}
       {executor.executable ? (
         <>
           <ExplorerOperationInputForm
@@ -1133,7 +1143,12 @@ export function ExplorerOperationExecutePanel({
         </>
       ) : (
         <p className='rounded-md bg-muted/35 px-3 py-2 text-sm text-muted-foreground'>
-          Execution is not available for this operation yet.
+          {executor.executionAffordance?.status === 'unavailable' &&
+          executor.executionAffordance.missingCapabilities.length > 0
+            ? `Execution requires ${executor.executionAffordance.missingCapabilities
+                .map(capability => capability.kind)
+                .join(', ')}.`
+            : 'Execution is not available for this operation yet.'}
         </p>
       )}
     </div>

@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { importGeneratedModule } from './generated-module/generated-module.test-support.js';
 import {
   analyzeOntahiApplication,
   analyzeGraphApiModule,
@@ -400,10 +401,11 @@ describe('Ontahi application declaration analysis', () => {
     });
   });
 
-  it('projects operations from a unified entity declaration', () => {
+  it('projects atomic operations from unified and public factory declarations', async () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
         import { entity } from '@ontahi/core/entity';
+        import { defineDomainOperation } from '@ontahi/core/runtime/server';
 
         export const Note = entity({
           name: 'Note',
@@ -414,11 +416,14 @@ describe('Ontahi application declaration analysis', () => {
             layer: 'notes',
           },
           operations: ({ self, operation }) => ({
-            list: operation({
+            list: operation.atomic({
               input: graphSchema.object({ notes: self.many() }),
               output: self.array(),
               bridge: { query: [() => 'all'] },
               run: () => [],
+            }),
+            archive: defineDomainOperation.atomic({
+              run: () => undefined,
             }),
           }),
         });
@@ -440,8 +445,15 @@ describe('Ontahi application declaration analysis', () => {
           name: 'list',
           authority: 'server',
           exposure: 'bridge',
+          execution: { atomicity: 'required' },
           inputSchemaText: 'graphSchema.object({ notes: NoteSchema.many() })',
           outputSchemaText: 'NoteSchema.array()',
+        },
+        {
+          name: 'archive',
+          authority: 'server',
+          exposure: 'bridge',
+          execution: { atomicity: 'required' },
         },
       ],
     });
@@ -453,7 +465,14 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(source).toContain('input: graphSchema.object({ notes: NoteSchema.many() }),');
     expect(source).not.toContain('output: NoteSchema.array(),');
-  });
+
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-atomic-operation-'));
+    tempDirectories.push(directory);
+    const generated = await importGeneratedModule({ directory, source });
+
+    expect(generated.Note.domain.list.execution).toEqual({ atomicity: 'required' });
+    expect(generated.Note.domain.archive.execution).toEqual({ atomicity: 'required' });
+  }, 30_000);
 
   it('projects a schema-only unified entity', () => {
     const analysis = analyzeSpecificDomainEntityExport(

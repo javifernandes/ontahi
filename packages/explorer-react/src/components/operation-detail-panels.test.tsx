@@ -32,6 +32,7 @@ const operation: ExplorerOperationDescriptor = {
   hasBridgeQuery: true,
   bridgeQueryCount: 2,
   bridgeInvalidationCount: 1,
+  execution: { atomicity: 'required' },
   durable: {
     taskId: 'book.get-sharing-info',
     runtime: 'BookOps runtime',
@@ -124,7 +125,8 @@ describe('Explorer operation detail panels', () => {
     expect(screen.getByText('Invalidate')).toBeTruthy();
     expect(screen.getByText('1 invalidations')).toBeTruthy();
     expect(screen.getByText('BookOps runtime')).toBeTruthy();
-    expect(screen.getByText('required')).toBeTruthy();
+    expect(screen.getByText('Atomicity')).toBeTruthy();
+    expect(screen.getAllByText('required')).toHaveLength(2);
   });
 
   it('renders operation ingress routes and empty state', () => {

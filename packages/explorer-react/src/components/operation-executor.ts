@@ -4,7 +4,11 @@ import type {
   OperationInvocationResult,
   OperationValidationIssue,
 } from '@ontahi/core/runtime/contracts';
-import { useReflectedOperationRunner, useReflectedOperationSupport } from '@ontahi/react/graph';
+import {
+  useReflectedOperationExecutionAffordance,
+  useReflectedOperationRunner,
+  useReflectedOperationSupport,
+} from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 
 import type {
@@ -1027,24 +1031,30 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
       name: operation.name,
       authority: operation.authority,
       exposure: operation.exposure,
+      ...(operation.execution ? { execution: operation.execution } : {}),
     }),
     [
       operation.authority,
       operation.entityName,
       operation.exposure,
       operation.id,
+      operation.execution,
       operation.kind,
       operation.name,
     ],
   );
   const runOperation = useReflectedOperationRunner(reflectedOperation);
   const supportsOperation = useReflectedOperationSupport();
+  const executionAffordance = useReflectedOperationExecutionAffordance(reflectedOperation);
   const inputDraftText = useMemo(() => formatExplorerOperationInputDraft(operation), [operation]);
   const [inputJson, setInputJson] = useState(() => inputDraftText);
   const [confirmed, setConfirmed] = useState(false);
   const [state, setState] = useState<ExplorerOperationExecutionState>({ status: 'idle' });
-  const executable =
-    isExplorerOperationExecutable(operation) && supportsOperation(reflectedOperation);
+  const executable = executionAffordance
+    ? executionAffordance.status !== 'unavailable'
+    : operation.execution?.atomicity !== 'required' &&
+      isExplorerOperationExecutable(operation) &&
+      supportsOperation(reflectedOperation);
   const destructive = isExplorerOperationPotentiallyDestructive(operation);
   const inputSyntax = (operation.inputRefs?.length ?? 0) > 0 ? 'expression' : 'json';
 
@@ -1130,6 +1140,7 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
     confirmed,
     destructive,
     executable,
+    executionAffordance,
     inputJson,
     inputSyntax,
     localValidationIssues,

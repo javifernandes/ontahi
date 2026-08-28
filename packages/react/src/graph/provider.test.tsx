@@ -27,6 +27,7 @@ import {
   useHasOperationBridgeRuntime,
   useOperationBridgeAdapter,
   useReflectedEntityDataReader,
+  useReflectedOperationExecutionAffordance,
   useReflectedOperationInvoker,
   type ReactGraphExecutor,
 } from './index.js';
@@ -265,6 +266,41 @@ describe('OntahiGraphProvider', () => {
 
     expect(result.current.invoker).toBe(reflectedOperationInvoker);
     expect(result.current.hasInvoker).toBe(true);
+  });
+
+  it('exposes the runtime execution affordance for a reflected operation', () => {
+    const getOperationExecutionAffordance = vi.fn(() => ({
+      status: 'bridge' as const,
+      authority: 'server',
+      bridge: 'fetch',
+    }));
+    const reflectedOperationInvoker = {
+      getOperationExecutionAffordance,
+      invokeOperation: vi.fn(),
+    };
+    const operation = {
+      id: 'Book.transfer',
+      entityName: 'Book',
+      name: 'transfer',
+      kind: 'domain' as const,
+      authority: 'server',
+      exposure: 'bridge',
+      execution: { atomicity: 'required' as const },
+    };
+
+    const { result } = renderHook(() => useReflectedOperationExecutionAffordance(operation), {
+      wrapper: createWrapper({
+        runtime: { name: 'bookops-runtime' },
+        reflectedOperationInvoker,
+      }),
+    });
+
+    expect(result.current).toEqual({
+      status: 'bridge',
+      authority: 'server',
+      bridge: 'fetch',
+    });
+    expect(getOperationExecutionAffordance).toHaveBeenCalledWith(operation);
   });
 
   it('reports when no reflected operation invoker is registered', () => {

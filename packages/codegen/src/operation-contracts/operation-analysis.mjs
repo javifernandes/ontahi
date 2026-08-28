@@ -11,6 +11,19 @@ import { unwrapExpression } from './typescript-ast.mjs';
 
 const getNodeText = node => node.getText();
 
+const isAtomicOperationReceiver = expression =>
+  (ts.isIdentifier(expression) &&
+    ['defineDomainOperation', 'operation'].includes(expression.text)) ||
+  (ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 'operation' &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'app');
+
+const isAtomicOperationCall = expression =>
+  ts.isPropertyAccessExpression(expression) &&
+  expression.name.text === 'atomic' &&
+  isAtomicOperationReceiver(expression.expression);
+
 const isAppIngressHttpCall = expression =>
   ts.isPropertyAccessExpression(expression) &&
   expression.name.text === 'http' &&
@@ -454,6 +467,9 @@ export const parseOperationDefinition = (
   const inputNode = config.get('input');
   const graphOutputNode = config.get('graphOutput');
   const clientCacheNode = config.get('clientCache');
+  const execution = isAtomicOperationCall(initializer.expression)
+    ? { atomicity: 'required' }
+    : undefined;
 
   const authority =
     authorityNode && ts.isStringLiteral(authorityNode) ? authorityNode.text : defaults.authority;
@@ -680,6 +696,7 @@ export const parseOperationDefinition = (
     name: operationName,
     authority,
     exposure,
+    execution,
     bridgeQueryText,
     bridgeInvalidateText,
     graphOutputText,

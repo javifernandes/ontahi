@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  resolveOperationExecutionAffordance,
   safeParseUnknownGraphSchema,
   type GraphOperationDeclaration,
+  type ReflectedOperationDescriptor,
   type ReflectedOperationInvocation,
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
@@ -42,16 +44,59 @@ export const createReflectedOperationInvoker = ({
   graphOperations = [],
 }: CreateReflectedOperationInvokerOptions): ReflectedOperationInvoker => {
   const graphOperationsById = new Map(graphOperations.map(operation => [operation.id, operation]));
+  const getOperationExecutionAffordance = (operation: ReflectedOperationDescriptor) => {
+    const fallbackAffordance = fallback?.getOperationExecutionAffordance?.(operation);
+
+    if (Boolean(graphExecutor) && graphOperationsById.has(operation.id)) {
+      return resolveOperationExecutionAffordance(operation, {
+        local: {
+          runtime: 'browser-data-graph',
+          capabilities: [],
+        },
+        ...(fallbackAffordance?.status === 'bridge'
+          ? {
+              bridge: {
+                authority: fallbackAffordance.authority,
+                bridge: fallbackAffordance.bridge,
+              },
+            }
+          : {}),
+      });
+    }
+
+    if (fallbackAffordance) return fallbackAffordance;
+    if (fallback && (fallback.canInvokeOperation?.(operation) ?? true)) return undefined;
+    return resolveOperationExecutionAffordance(operation, {});
+  };
 
   return {
-    canInvokeOperation: operation =>
-      (Boolean(graphExecutor) && graphOperationsById.has(operation.id)) ||
-      Boolean(fallback && (fallback.canInvokeOperation?.(operation) ?? true)),
+    canInvokeOperation: operation => {
+      const affordance = getOperationExecutionAffordance(operation);
+      return affordance
+        ? affordance.status !== 'unavailable'
+        : Boolean(fallback && (fallback.canInvokeOperation?.(operation) ?? true));
+    },
+    getOperationExecutionAffordance,
     invokeOperation: async <TInput = unknown, TData = unknown>(
       invocation: ReflectedOperationInvocation<TInput>,
     ): Promise<OperationInvocationResult<TData>> => {
       const { input, operation, operationId } = invocation;
       const graphOperation = graphOperationsById.get(operationId);
+
+      if (graphOperation && graphExecutor && operation) {
+        const affordance = getOperationExecutionAffordance(operation);
+
+        if (affordance?.status === 'bridge' && fallback) {
+          return fallback.invokeOperation<TInput, TData>(invocation);
+        }
+
+        if (affordance?.status === 'unavailable') {
+          return operationRejected(
+            'execution_unavailable',
+            `The current runtime cannot satisfy the execution requirements for ${operationId}.`,
+          );
+        }
+      }
 
       if (!graphOperation || !graphExecutor) {
         if (fallback) {

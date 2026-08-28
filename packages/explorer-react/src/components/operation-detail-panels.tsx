@@ -38,6 +38,9 @@ export const ExplorerOperationMetadata = ({
     { label: 'Kind', value: operation.kind },
     { label: 'Exposure', value: operation.exposure },
     { label: 'Authority', value: operation.authority },
+    ...(operation.execution?.atomicity
+      ? [{ label: 'Atomicity', value: operation.execution.atomicity }]
+      : []),
     ...(operation.hasBridgeQuery
       ? [{ label: 'Bridge Query', value: `${operation.bridgeQueryCount} query key parts` }]
       : []),

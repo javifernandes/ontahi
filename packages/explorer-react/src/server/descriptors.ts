@@ -102,6 +102,9 @@ export type ExplorerOperationLike = {
   authority: string;
   exposure: string;
   description?: string;
+  execution?: {
+    atomicity?: 'required';
+  };
   input?: unknown;
   output?: unknown;
   bridge?: {
@@ -694,6 +697,10 @@ const describeDomainOperation = (
   description: operation.description,
   authority: operation.authority,
   exposure: operation.exposure,
+  execution:
+    operation.execution?.atomicity === 'required'
+      ? { atomicity: operation.execution.atomicity }
+      : undefined,
   hasBridgeQuery: Boolean(operation.bridge?.query?.length),
   bridgeQueryCount: operation.bridge?.query?.length ?? 0,
   bridgeInvalidationCount: operation.bridge?.invalidate?.length ?? 0,

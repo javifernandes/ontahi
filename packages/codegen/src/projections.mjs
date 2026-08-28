@@ -142,6 +142,10 @@ ${relationDefinitions
         lines.push('      },');
       }
 
+      if (operation.execution?.atomicity === 'required') {
+        lines.push("      execution: { atomicity: 'required' },");
+      }
+
       if (graphOutputText) {
         lines.push(`      graphOutput: ${graphOutputText},`);
       }

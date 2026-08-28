@@ -23,6 +23,7 @@ export * from './mapping-conventions.js';
 export * from './mutation-reaction.js';
 export * from './operations.js';
 export * from './operation-input.js';
+export * from './operation-execution.js';
 export * from './output/index.js';
 export * from './planning.js';
 export * from './query.js';
