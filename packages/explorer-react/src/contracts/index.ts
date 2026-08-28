@@ -7,6 +7,7 @@ import type {
   ReflectedEntityDataResult,
   ReflectedEntityDataSort,
   ReflectedEntityDisplayDescriptor,
+  PortableOperationConditions,
 } from '@ontahi/core/data-graph';
 import type { TaskRunListItem, TaskRunSource } from '@ontahi/core/runtime/contracts';
 
@@ -154,6 +155,7 @@ export type ExplorerOperationDescriptor = {
   execution?: {
     atomicity: 'required';
   };
+  conditions?: PortableOperationConditions;
   hasBridgeQuery?: boolean;
   bridgeQueryCount?: number;
   bridgeInvalidationCount?: number;

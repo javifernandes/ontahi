@@ -1,5 +1,8 @@
 import ts from 'typescript';
 
+import { compileModelExpressionCallback } from '../model-expression/compiler.mjs';
+
+import { resolveEntitySchemaProjection } from './entity-schema-projection.mjs';
 import {
   deriveGraphOutputFromSchemaNode,
   isGraphOutputSchemaCall,
@@ -253,6 +256,162 @@ const resolveObjectLiteralExpression = (node, declarations, visited = new Set())
   return undefined;
 };
 
+const propertyNameText = property =>
+  ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
+    ? property.name.text
+    : undefined;
+
+const resolveExpressionInitializer = (node, declarations, visited = new Set()) => {
+  const expression = unwrapExpression(node);
+  if (!ts.isIdentifier(expression) || visited.has(expression.text)) return expression;
+  const declaration = declarations.get(expression.text);
+  if (!declaration?.initializer) return expression;
+  visited.add(expression.text);
+  return resolveExpressionInitializer(declaration.initializer, declarations, visited);
+};
+
+const graphSchemaCallName = node => {
+  const expression = unwrapExpression(node);
+  return ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    ts.isIdentifier(expression.expression.expression) &&
+    ['graphSchema', 'field'].includes(expression.expression.expression.text)
+    ? expression.expression.name.text
+    : undefined;
+};
+
+const unwrapInputRefSchemaCall = node => {
+  const expression = unwrapExpression(node);
+  if (!ts.isCallExpression(expression)) return undefined;
+  const callName = graphSchemaCallName(expression);
+  if (callName === 'existingRef' || callName === 'ref') return expression;
+  return (callName === 'optional' || callName === 'nullable') && expression.arguments[0]
+    ? unwrapInputRefSchemaCall(expression.arguments[0])
+    : undefined;
+};
+
+const resolveInputRefEntityName = (target, schemaContext, entityContext) => {
+  const expression = unwrapExpression(target);
+  if (!ts.isIdentifier(expression)) return undefined;
+  if (expression.text === 'self') return entityContext?.entityName;
+  return resolveEntitySchemaProjection(expression.text, schemaContext)?.name ?? expression.text;
+};
+
+const deriveOperationInputSymbols = (inputNode, declarations, schemaContext, entityContext) => {
+  const resolvedInput = resolveExpressionInitializer(inputNode, declarations);
+  if (
+    !resolvedInput ||
+    !ts.isCallExpression(resolvedInput) ||
+    graphSchemaCallName(resolvedInput) !== 'object' ||
+    !resolvedInput.arguments[0] ||
+    !ts.isObjectLiteralExpression(resolvedInput.arguments[0])
+  ) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    resolvedInput.arguments[0].properties.flatMap(property => {
+      if (!ts.isPropertyAssignment(property)) return [];
+      const input = propertyNameText(property);
+      const refCall = unwrapInputRefSchemaCall(property.initializer);
+      const target = refCall?.arguments[0];
+      const entityName = target
+        ? resolveInputRefEntityName(target, schemaContext, entityContext)
+        : undefined;
+      return input && refCall && entityName
+        ? [[input, { kind: 'input-ref', input, entityName }]]
+        : [];
+    }),
+  );
+};
+
+const formatModelExpressionDiagnostic = diagnostic =>
+  `${diagnostic.source.path}:${diagnostic.source.line}:${diagnostic.source.column} [${diagnostic.code}] ${diagnostic.message}`;
+
+const parseOperationConditions = ({
+  operationName,
+  contractsNode,
+  inputNode,
+  declarations,
+  schemaContext,
+  entityContext,
+}) => {
+  if (!contractsNode) return { conditions: undefined, diagnostics: [] };
+  const contracts = resolveObjectLiteralExpression(contractsNode, declarations);
+  if (!contracts) {
+    return {
+      conditions: undefined,
+      diagnostics: [`${operationName}.contracts must be an object literal.`],
+    };
+  }
+  const hasPost = contracts.properties.some(
+    property =>
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+      propertyNameText(property) === 'post',
+  );
+  if (hasPost) {
+    return {
+      conditions: undefined,
+      diagnostics: [
+        `${operationName}.contracts.post is not portable in this slice; use contract(...) for an opaque server-only check.`,
+      ],
+    };
+  }
+  const preProperty = contracts.properties.find(
+    property => ts.isPropertyAssignment(property) && propertyNameText(property) === 'pre',
+  );
+  if (!preProperty || !ts.isPropertyAssignment(preProperty)) {
+    return { conditions: undefined, diagnostics: [] };
+  }
+  const pre = resolveObjectLiteralExpression(preProperty.initializer, declarations);
+  if (!pre) {
+    return {
+      conditions: undefined,
+      diagnostics: [`${operationName}.contracts.pre must be an object of named conditions.`],
+    };
+  }
+  if (!schemaContext) {
+    return {
+      conditions: undefined,
+      diagnostics: [
+        `${operationName}.contracts.pre cannot be compiled without its TypeScript source context.`,
+      ],
+    };
+  }
+
+  const symbols = deriveOperationInputSymbols(
+    inputNode,
+    declarations,
+    schemaContext,
+    entityContext,
+  );
+  const conditions = [];
+  const diagnostics = [];
+  for (const property of pre.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = propertyNameText(property);
+    if (!name) {
+      diagnostics.push(`${operationName}.contracts.pre condition names must be static.`);
+      continue;
+    }
+    const callback = resolveExpressionInitializer(property.initializer, declarations);
+    const compiled = compileModelExpressionCallback(callback, {
+      sourceFile: schemaContext.sourceFile,
+      sourcePath: schemaContext.sourcePath,
+      symbols,
+    });
+    diagnostics.push(...compiled.diagnostics.map(formatModelExpressionDiagnostic));
+    if (compiled.program) {
+      conditions.push({ name, expression: compiled.program });
+    }
+  }
+
+  return {
+    conditions: conditions.length > 0 ? { pre: conditions } : undefined,
+    diagnostics,
+  };
+};
+
 export const parseDomainOperationDefaults = (configArg, declarations = new Map()) => {
   const defaultsProperty = configArg.properties.find(
     item =>
@@ -434,6 +593,7 @@ export const parseOperationDefinition = (
   importMap,
   defaults = {},
   schemaContext,
+  entityContext,
 ) => {
   if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) {
     return undefined;
@@ -467,6 +627,7 @@ export const parseOperationDefinition = (
   const inputNode = config.get('input');
   const graphOutputNode = config.get('graphOutput');
   const clientCacheNode = config.get('clientCache');
+  const contractsNode = config.get('contracts');
   const execution = isAtomicOperationCall(initializer.expression)
     ? { atomicity: 'required' }
     : undefined;
@@ -542,6 +703,7 @@ export const parseOperationDefinition = (
   let inputNamedDefinition;
   let outputNamedDefinition;
   const helperDeclarations = new Map();
+  let resolvedInputNode;
 
   if (inputNode) {
     const unwrappedInput = unwrapExpression(inputNode);
@@ -561,6 +723,7 @@ export const parseOperationDefinition = (
       unwrappedInput && ts.isIdentifier(unwrappedInput)
         ? (localInputDeclaration?.initializer ?? importedInputDeclaration?.initializer)
         : unwrappedInput;
+    resolvedInputNode = localInputNode;
 
     inputNamedDefinition = analyzeNamedValueDefinition({
       node: localInputNode,
@@ -691,12 +854,24 @@ export const parseOperationDefinition = (
       diagnostics: parsedIngress.diagnostics,
     };
   }
+  const parsedConditions = parseOperationConditions({
+    operationName,
+    contractsNode,
+    inputNode: resolvedInputNode ?? inputNode,
+    declarations,
+    schemaContext,
+    entityContext,
+  });
+  if (parsedConditions.diagnostics.length > 0) {
+    return { diagnostics: parsedConditions.diagnostics };
+  }
 
   return {
     name: operationName,
     authority,
     exposure,
     execution,
+    conditions: parsedConditions.conditions,
     bridgeQueryText,
     bridgeInvalidateText,
     graphOutputText,

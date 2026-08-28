@@ -107,19 +107,69 @@ This is a headless operation-input model, not a visual form framework. The compo
 render fields and errors; the operation supplies their meaning. Another UI can consume the same
 contract without duplicating `archive` as UI knowledge.
 
-## Keep dynamic checks explicit
+## Declare portable input conditions
 
-`contracts.pre` and `contracts.post` are supported but anticipatory server-runtime surfaces. They
-predate schema-native Ref inputs, UnitOfWork, portable Relation constraints, and compositional Data
-Graph transactions. The repository's executable applications do not currently use them; only
-focused Core tests and this documentation exercise the callbacks. Treat them as a low-level escape
-hatch while their portable and reflected form is consolidated, not as the default home for every
-domain rule. Existing declarations remain compatible during this alpha. For new opaque server-only
-checks, prefer the explicit `app.validation.contract(...)` concern so application code does not
-claim that arbitrary callbacks are the future reflected contract model.
+A named `contracts.pre` condition is source authoring for portable Model Expression metadata. The
+first supported Operation slice compares input Ref identity:
 
-Uniqueness depends on current application state. A `create` operation may query for an existing
-TodoList before running its command:
+```ts
+transfer: operation.atomic({
+  input: graphSchema.object({
+    student: graphSchema.existingRef(Student),
+    previousCourse: graphSchema.existingRef(Course),
+    nextCourse: graphSchema.existingRef(Course),
+  }),
+
+  contracts: {
+    pre: {
+      differentCourses: ({ previousCourse, nextCourse }) =>
+        !previousCourse.is(nextCourse),
+    },
+  },
+
+  *run({ student, previousCourse, nextCourse }) {
+    // authoritative stateful work
+  },
+}),
+```
+
+Codegen analyzes the expression-bodied callback without invoking it and emits versioned JSON-safe
+IR. The server application and generated clients import the same condition registry. The
+authoring callback is never a runtime fallback: missing or stale generated metadata fails during
+application composition. Unsupported syntax fails codegen at its source line rather than becoming
+opaque JavaScript.
+
+Every condition has a stable id such as `Student.transfer.pre.differentCourses`, declared input
+dependencies, and the conventional `operation_condition_rejected` failure. A client with the
+dependencies can evaluate it before invocation:
+
+```ts
+const condition = Student.domain.transfer.conditions?.pre[0];
+
+if (condition) {
+  const result = evaluatePortableOperationCondition(condition, {
+    previousCourse,
+    nextCourse,
+  });
+
+  // satisfied | rejected | unknown
+}
+```
+
+This is advisory UX. The authority evaluates the same IR again immediately before the body. A
+client result never reserves state or substitutes for authoritative execution. `unknown` means a
+dependency is unavailable; it is not rejection or permission denial.
+
+Runtime-only applications can author the same IR explicitly with
+`modelExpression.condition(modelExpression.define(...))`. That is a parity escape hatch for
+environments without source analysis, not a second semantic model.
+
+## Keep opaque dynamic checks explicit
+
+Queries, Capabilities, time, and arbitrary Effect programs are not portable conditions. Put these
+checks in the explicit `contract(...)` concern. Uniqueness, for example, depends on current
+application state. A `create` Operation may query for an existing TodoList before running its
+Command:
 
 ```ts
 operations: ({ self, commands, operation, app }) => ({
@@ -150,20 +200,22 @@ before the operation body. `exists()` is a lazy boolean computation; `thenIf(...
 computation to continue with. Here the true branch fails and the omitted false branch does nothing.
 No row needs to be materialized.
 
-Executable checks are necessarily less transparent than schema constraints. The current callback
-cannot be serialized or reflected with trustworthy dependencies. A future reflection model can at
-most report it as an opaque server-only check; it cannot predict the result without executing the
-required reads.
+Executable checks are necessarily less transparent than schema constraints and Model Expressions.
+The callback cannot be serialized or reflected with trustworthy dependencies. Reflection may at
+most report it as an opaque server-only concern; a client cannot predict it without executing the
+required reads under authority.
 
 > [!MARGIN] **The shortcut is not the contract.** `thenIf(...)` is fluent composition for the
-> common boolean case. A `pre` check may still return synchronously, return a Promise, or return any
-> executable computation. That freedom is useful, but it is also why `contract(...)` is explicitly
-> server-only and opaque to reflection. The future top-level `contracts.pre` / `contracts.post`
-> vocabulary is reserved for portable declarations; that replacement has not shipped yet.
+> common boolean case. An opaque `pre` check may still return synchronously, return a Promise, or
+> return an Effect. That freedom is useful, but it is also why `contract(...)` is explicitly
+> server-only and opaque to reflection. The runner recognizes this concern as the opaque contract
+> phase so atomic Operations keep its pre/body/post work inside one rollback boundary. Top-level
+> `contracts.pre` now accepts named portable declarations only.
 
 ## Check the result with a postcondition
 
-A postcondition receives both the accepted input and the result:
+Portable postconditions are not part of the first Model Expression bridge. An opaque postcondition
+receives both the accepted input and the result:
 
 ```ts
 concerns: [
@@ -213,18 +265,19 @@ for the settled authentication path.
 
 An operation currently has these distinct extension points:
 
-| Surface                            | Responsibility                                                                 |
-| ---------------------------------- | ------------------------------------------------------------------------------ |
-| `input`                            | Describe and validate admissible values.                                       |
-| `requires`                         | Gate whether execution may be attempted in the current context.                |
-| `contracts.pre` / `contracts.post` | Compatibility-only callbacks pending one portable declarative replacement.     |
-| `concerns`                         | Wrap execution with cross-cutting behavior such as rate limiting or telemetry. |
-| success effects                    | Emit events or run follow-up work only after a successful result.              |
+| Surface               | Responsibility                                                                 |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `input`               | Describe and validate admissible values.                                       |
+| `requires`            | Gate whether execution may be attempted in the current context.                |
+| named `contracts.pre` | Portable input conditions compiled to reflected Model Expression IR.           |
+| `contract(...)`       | Explicit opaque server-only pre/post checks.                                   |
+| `concerns`            | Wrap execution with cross-cutting behavior such as rate limiting or telemetry. |
+| success effects       | Emit events or run follow-up work only after a successful result.              |
 
-For the compatibility property, the runtime order is input validation, requirements,
-`contracts.pre`, concerns around the body, `contracts.post`, then success effects. A
-`contract(...)` concern instead runs at its declared concern position. Cache invalidation and host
-hooks happen after successful execution.
+The runtime order is input validation, requirements, portable preconditions, opaque contract
+checks around the body, then success effects. For `operation.atomic(...)`, requirements, portable
+conditions, opaque pre/body/post checks, and their Data Graph work share the declared transaction.
+Cache invalidation and host hooks happen after successful execution.
 
 `concerns: [...]` is the current middleware seam: a concern receives the next computation and can
 act before it, after it, or around a failure. A success effect is different. The operation body
@@ -286,10 +339,10 @@ atomically because that guard is part of the structural command. An Operation pr
 resolves a Ref and then runs several independent Commands has not acquired that guarantee merely
 because it ran first.
 
-When several reads and mutations jointly define valid state, put them in the operation body and
-enter `app.graph.transaction(effect)` on a runtime that advertises the compositional transaction
-capability. PostgreSQL currently provides that boundary; Supabase/PostgREST does not turn several
-requests into one rollback unit. See [Relations](03-relations.md) and
+When several reads and mutations jointly define valid state, put them in an
+`operation.atomic(...)` body. The Operation runner opens or reuses the compositional transaction
+on a runtime that provides it; PostgreSQL currently does, while Supabase/PostgREST does not turn
+several requests into one rollback unit. See [Relations](03-relations.md) and
 [Runtime Composition and Capabilities](../03-runtimes/01-runtime-composition-and-capabilities.md).
 
 True uniqueness wants to live as a declarative Entity invariant interpreted by storage. Ontahí

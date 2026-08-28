@@ -85,17 +85,18 @@ export const Student = entity({
 
     return {
       transfer: operation.atomic({
+        exposure: 'bridge',
         input: graphSchema.object({
           student: graphSchema.existingRef(self),
           previousCourse: graphSchema.existingRef(Course),
           nextCourse: graphSchema.existingRef(Course),
         }),
+        contracts: {
+          pre: {
+            differentCourses: ({ previousCourse, nextCourse }) => !previousCourse.is(nextCourse),
+          },
+        },
         *run({ student, previousCourse, nextCourse }) {
-          if (previousCourse.id === nextCourse.id) {
-            return yield* failOperation('same_course', 'Previous and Next Course must differ.', {
-              course: nextCourse.ref,
-            });
-          }
           if (nextCourse.availableSeats === 0) {
             return yield* failOperation('course_full', 'Next Course has no available seats.', {
               course: nextCourse.ref,

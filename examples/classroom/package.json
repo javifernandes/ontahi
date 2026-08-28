@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "pnpm exec tsc -p tsconfig.build.json",
+    "codegen": "ontahi-codegen --graph src/graph.ts --operation-conditions-output src/generated/operation-conditions.ts --operation-conditions-only --format oxfmt",
+    "codegen:check": "ontahi-codegen --graph src/graph.ts --operation-conditions-output src/generated/operation-conditions.ts --operation-conditions-only --format oxfmt --check",
     "db:reset": "docker compose down -v && docker compose up -d --wait",
     "db:start": "docker compose up -d --wait",
     "db:stop": "docker compose down",
     "test": "pnpm exec vitest run",
     "test:postgres": "CLASSROOM_POSTGRES_TEST_URL=postgresql://postgres@127.0.0.1:54330/ontahi_classroom pnpm exec vitest run src/classroom-postgres.integration.test.ts",
-    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "typecheck": "pnpm run codegen:check && pnpm exec tsc -p tsconfig.json",
     "lint": "pnpm exec eslint \"src/**/*.ts\" --max-warnings 0"
   },
   "dependencies": {
@@ -18,9 +20,11 @@
     "effect": "^3.21.0"
   },
   "devDependencies": {
+    "@ontahi/codegen": "workspace:*",
     "@ontahi/postgres": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.15.5",
+    "oxfmt": "^0.53.0",
     "pg": "^8.16.3",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"

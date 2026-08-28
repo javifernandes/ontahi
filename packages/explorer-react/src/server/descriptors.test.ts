@@ -1,4 +1,13 @@
-import { entity, field, graphSchema, value } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  definePortableOperationConditionRegistry,
+  entity,
+  evaluatePortableOperationCondition,
+  field,
+  graphSchema,
+  modelExpression,
+  value,
+} from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from './index.js';
@@ -9,6 +18,23 @@ describe('explorer descriptor builder', () => {
       id: field.id(),
       slug: field.string(),
     }).locators({ refBySlug: 'slug' });
+    const publishConditions = definePortableOperationConditionRegistry({
+      version: 1,
+      operations: {
+        'Book.publish': {
+          pre: [
+            {
+              name: 'differentBooks',
+              expression: modelExpression.define(
+                modelExpression.not(
+                  modelExpression.ref('book').is(modelExpression.ref('otherBook')),
+                ),
+              ),
+            },
+          ],
+        },
+      },
+    }).operations['Book.publish'];
     const snapshot = buildExplorerSnapshot({
       entities: [
         {
@@ -69,7 +95,11 @@ describe('explorer descriptor builder', () => {
           authority: 'domain',
           exposure: 'bridge',
           execution: { atomicity: 'required' },
-          input: graphSchema.object({ book: graphSchema.ref(OperationBook) }),
+          conditions: publishConditions,
+          input: graphSchema.object({
+            book: graphSchema.ref(OperationBook),
+            otherBook: graphSchema.ref(OperationBook),
+          }),
           durable: {
             taskId: 'book.publish',
             runtime: 'test-runtime',
@@ -139,6 +169,7 @@ describe('explorer descriptor builder', () => {
       expect.objectContaining({
         kind: 'durable',
         execution: { atomicity: 'required' },
+        conditions: publishConditions,
         durable: {
           taskId: 'book.publish',
           runtime: 'test-runtime',
@@ -185,9 +216,40 @@ describe('explorer descriptor builder', () => {
               },
             ],
           },
+          {
+            path: 'otherBook',
+            entityName: 'Book',
+            receiver: false,
+            optional: false,
+            locators: [
+              {
+                name: 'refById',
+                fields: ['otherBook'],
+                sourceFields: ['id'],
+              },
+              {
+                name: 'refBySlug',
+                fields: ['otherBook'],
+                sourceFields: ['slug'],
+              },
+            ],
+          },
         ],
       }),
     );
+    const sameBook = createEntityRef(OperationBook, { slug: 'same-book' });
+    expect(
+      evaluatePortableOperationCondition(publishConditions.pre[0], {
+        book: sameBook,
+        otherBook: sameBook,
+      }),
+    ).toEqual({
+      status: 'rejected',
+      rejection: {
+        reason: 'operation_condition_rejected',
+        message: 'Operation condition "differentBooks" was not satisfied.',
+      },
+    });
     expect(snapshot.tasks[0]?.steps[0]?.inputSchema).toEqual(
       expect.objectContaining({
         source: 'ontahi',

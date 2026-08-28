@@ -1032,6 +1032,7 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
       authority: operation.authority,
       exposure: operation.exposure,
       ...(operation.execution ? { execution: operation.execution } : {}),
+      ...(operation.conditions ? { conditions: operation.conditions } : {}),
     }),
     [
       operation.authority,
@@ -1039,6 +1040,7 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
       operation.exposure,
       operation.id,
       operation.execution,
+      operation.conditions,
       operation.kind,
       operation.name,
     ],

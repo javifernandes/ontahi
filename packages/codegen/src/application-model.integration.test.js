@@ -12,6 +12,7 @@ import {
   createFileSystemSourceLoader,
   formatCodegenDiagnostic,
   renderGeneratedClientEntityModule,
+  renderGeneratedOperationConditionRegistryModule,
   renderGeneratedTaskDefinitionRegistryModule,
 } from './index.mjs';
 
@@ -504,10 +505,14 @@ describe('Ontahi application declaration analysis', () => {
       inputSchemaText: 'graphSchema.object({ note: graphSchema.existingRef(NoteSchema) })',
     });
 
-    const source = renderGeneratedClientEntityModule({ entities: [analysis.definition] });
+    const source = renderGeneratedClientEntityModule({
+      entities: [analysis.definition],
+      operationConditionsImportPath: './unused-operation-conditions.js',
+    });
     expect(source).toContain(
       'input: graphSchema.object({ note: graphSchema.existingRef(NoteSchema) }),',
     );
+    expect(source).not.toContain('unused-operation-conditions');
 
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-existing-ref-'));
     tempDirectories.push(directory);
@@ -519,6 +524,140 @@ describe('Ontahi application declaration analysis', () => {
       target: { name: 'Note' },
     });
   }, 30_000);
+
+  it('compiles named Operation conditions from real Ref input schemas without executing them', async () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity } from '@ontahi/core/entity';
+
+        export const Course = entity({
+          name: 'Course',
+          fields: { id: field.id() },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'classroom',
+          },
+          operations: ({ self, operation }) => ({
+            transfer: operation.atomic({
+              input: graphSchema.object({
+                previousCourse: graphSchema.existingRef(self),
+                nextCourse: graphSchema.existingRef(self),
+              }),
+              contracts: {
+                pre: {
+                  differentCourses: ({ previousCourse, nextCourse }) =>
+                    !previousCourse.is(nextCourse),
+                },
+              },
+              run: () => undefined,
+            }),
+          }),
+        });
+      `,
+      'Course',
+      { sourcePath: '/examples/classroom/src/classroom.ts' },
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition?.operations[0]).toMatchObject({
+      name: 'transfer',
+      conditions: {
+        pre: [
+          {
+            name: 'differentCourses',
+            expression: {
+              version: 1,
+              expression: {
+                kind: 'not',
+                operand: {
+                  kind: 'ref-identity',
+                  operator: 'is',
+                  left: { kind: 'input-ref', input: 'previousCourse' },
+                  right: { kind: 'input-ref', input: 'nextCourse' },
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const operation = { ...analysis.definition.operations[0], entityName: 'Course' };
+    const registrySource = renderGeneratedOperationConditionRegistryModule({
+      operations: [operation],
+    });
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-operation-conditions-'));
+    tempDirectories.push(directory);
+    const generatedRegistry = await importGeneratedModule({ directory, source: registrySource });
+    expect(generatedRegistry.operationConditions.operations['Course.transfer']).toEqual({
+      pre: [
+        expect.objectContaining({
+          id: 'Course.transfer.pre.differentCourses',
+          dependencies: [
+            { kind: 'input-ref', input: 'previousCourse' },
+            { kind: 'input-ref', input: 'nextCourse' },
+          ],
+        }),
+      ],
+    });
+
+    const clientSource = renderGeneratedClientEntityModule({
+      entities: [analysis.definition],
+      operationConditionsImportPath: './operation-conditions.js',
+    });
+    expect(clientSource).toContain(
+      "import { operationConditions } from './operation-conditions.js';",
+    );
+    expect(clientSource).toContain(
+      "conditions: operationConditions.operations['Course.transfer'],",
+    );
+  }, 30_000);
+
+  it('locates unsupported portable condition syntax in the author source', () => {
+    const sourcePath = '/examples/classroom/src/classroom.ts';
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity } from '@ontahi/core/entity';
+
+        export const Course = entity({
+          name: 'Course',
+          fields: { id: field.id() },
+          domainOperationDefaults: {
+            authority: 'server',
+            exposure: 'bridge',
+            layer: 'classroom',
+          },
+          operations: ({ self, operation }) => ({
+            transfer: operation({
+              input: graphSchema.object({
+                previousCourse: graphSchema.existingRef(self),
+                nextCourse: graphSchema.existingRef(self),
+              }),
+              contracts: {
+                pre: {
+                  differentCourses: ({ previousCourse, nextCourse }) =>
+                    previousCourse.id !== nextCourse.id,
+                },
+              },
+              run: () => undefined,
+            }),
+          }),
+        });
+      `,
+      'Course',
+      { sourcePath },
+    );
+
+    expect(analysis?.definition?.operations).toEqual([]);
+    expect(analysis?.diagnostics).toEqual([
+      expect.stringMatching(
+        new RegExp(
+          `^${sourcePath.replaceAll('/', '\\/')}:\\d+:\\d+ \\[model_expression_unsupported_operator\\]`,
+        ),
+      ),
+    ]);
+  });
 
   it('projects a schema-only unified entity', () => {
     const analysis = analyzeSpecificDomainEntityExport(

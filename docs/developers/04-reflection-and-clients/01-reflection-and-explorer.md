@@ -49,7 +49,7 @@ Explorer's server projection combines the catalogs into neutral descriptors:
 - Entities include fields, semantic Relation topology, display metadata, exposure, and operation
   counts;
 - operations include identity, kind, authority, exposure, input and output schemas, Ref inputs,
-  bridge metadata, durable lifecycle, and HTTP ingress;
+  named portable conditions and dependencies, bridge metadata, durable lifecycle, and HTTP ingress;
 - tasks include their input, progress, result, and step contracts.
 
 Those descriptors are plain data. `@ontahi/explorer-react` consumes them to render the overview,

@@ -12,6 +12,10 @@ import {
   type InferEntityRecord,
 } from '../../data-graph/definitions.js';
 import {
+  type OperationConditionContracts,
+  type PortableOperationConditions,
+} from '../../data-graph/model-expression/index.js';
+import {
   attachOperationInputSchema,
   type OperationInputSchema,
 } from '../../data-graph/operation-input.js';
@@ -44,7 +48,6 @@ import { Selection } from '../../data-graph/selection-value.js';
 import { GraphSelection } from '../../data-graph/selection.js';
 import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 
-import type { OperationContracts } from './concerns/contract-types.js';
 import {
   getOperationRuntimeContext,
   operationRuntimeContextStorage,
@@ -56,6 +59,7 @@ import type { EffectSuccessPayload } from './effect-intents/types.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import type { LayerConcern } from './layer-types.js';
 import type { OperationCacheConfig, OperationEffectsConfig } from './operation/options-types.js';
+import { materializeDomainOperationConditions } from './operation/portable-conditions.js';
 import type { OperationInput, OperationRequirement } from './operation/requirement-types.js';
 import { runServerOperation } from './operation/run.js';
 import type {
@@ -331,7 +335,7 @@ type ServerDomainOperationMetadata<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
 > = Omit<
   DomainOperationMetadata<TInput, DomainOperationCacheMetadata<TInput>, TResult>,
-  'authority' | 'exposure' | 'durable'
+  'authority' | 'exposure' | 'durable' | 'conditions'
 > &
   Partial<
     Pick<
@@ -360,7 +364,7 @@ export type DomainOperationDeclaration<
   telemetrySpanName?: string;
   requires?: ReadonlyArray<OperationRequirement<TInput>>;
   concerns?: ReadonlyArray<LayerConcern<TInput, unknown>>;
-  contracts?: OperationContracts<TInput, TResult, TFailure>;
+  contracts?: OperationConditionContracts<TInput>;
   effects?: DomainOperationEffectsMetadata<TInput, TResult>;
   onSuccess?: (args: {
     input: TInput;
@@ -385,7 +389,10 @@ export type ResolvedDomainOperationDeclaration<
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
   TFailure extends OperationFailure = OperationFailure,
   TInfraError extends OperationRuntimeError = never,
-> = Omit<DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>, 'run'> & {
+> = Omit<
+  DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
+  'run' | 'contracts'
+> & {
   id: string;
   entityName: string;
   name: string;
@@ -394,6 +401,7 @@ export type ResolvedDomainOperationDeclaration<
   input: InputSchemaLike<TInput>;
   layer: string;
   run: DomainOperationRun<any, TResult, TFailure, TInfraError>;
+  conditions?: PortableOperationConditions;
 };
 
 type DefinedDomainOperation<
@@ -509,7 +517,10 @@ export const defineDomainOperationsForEntity = <
 > =>
   resolveDomainOperations(
     typeof entityOrName === 'string' ? entityOrName : entityOrName.name,
-    operations,
+    materializeDomainOperationConditions(
+      typeof entityOrName === 'string' ? entityOrName : entityOrName.name,
+      operations,
+    ),
     defaults,
   ) as ResolveDomainOperations<
     TEntity extends string
@@ -519,6 +530,8 @@ export const defineDomainOperationsForEntity = <
         : never,
     TOperations
   >;
+
+export { materializeDomainOperationConditions } from './operation/portable-conditions.js';
 
 type DomainOperationRunner<
   TInput extends OperationInput = OperationInput,
@@ -661,7 +674,7 @@ const resolveDomainOperationRunner = <
       scope: operation.id,
     }),
     concerns: operation.concerns,
-    contracts: operation.contracts,
+    conditions: operation.conditions,
     execution: operation.execution,
     cache: operation.cache,
     effects: operation.effects,
@@ -842,7 +855,7 @@ const resolveDurableDomainOperationRunner = <
         scope: operation.id,
       }),
       concerns: operation.concerns,
-      contracts: operation.contracts,
+      conditions: operation.conditions,
       execution: operation.execution,
       cache: operation.cache,
       effects: operation.effects as never,

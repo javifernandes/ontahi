@@ -33,6 +33,35 @@ const operation: ExplorerOperationDescriptor = {
   bridgeQueryCount: 2,
   bridgeInvalidationCount: 1,
   execution: { atomicity: 'required' },
+  conditions: {
+    pre: [
+      {
+        id: 'Book.getSharingInfo.pre.distinctBooks',
+        name: 'distinctBooks',
+        phase: 'pre',
+        expression: {
+          version: 1,
+          expression: {
+            kind: 'not',
+            operand: {
+              kind: 'ref-identity',
+              operator: 'is',
+              left: { kind: 'input-ref', input: 'source' },
+              right: { kind: 'input-ref', input: 'target' },
+            },
+          },
+        },
+        dependencies: [
+          { kind: 'input-ref', input: 'source' },
+          { kind: 'input-ref', input: 'target' },
+        ],
+        rejection: {
+          reason: 'operation_condition_rejected',
+          message: 'Operation condition "distinctBooks" was not satisfied.',
+        },
+      },
+    ],
+  },
   durable: {
     taskId: 'book.get-sharing-info',
     runtime: 'BookOps runtime',
@@ -126,6 +155,8 @@ describe('Explorer operation detail panels', () => {
     expect(screen.getByText('1 invalidations')).toBeTruthy();
     expect(screen.getByText('BookOps runtime')).toBeTruthy();
     expect(screen.getByText('Atomicity')).toBeTruthy();
+    expect(screen.getByText('Preconditions')).toBeTruthy();
+    expect(screen.getByText('distinctBooks')).toBeTruthy();
     expect(screen.getAllByText('required')).toHaveLength(2);
   });
 

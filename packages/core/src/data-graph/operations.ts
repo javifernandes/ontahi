@@ -6,6 +6,7 @@ import type {
   GraphSchemaLike,
   RelationKind,
 } from './definitions.js';
+import type { PortableOperationConditions } from './model-expression/index.js';
 import type { DomainOperationExecutionMetadata } from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
@@ -232,6 +233,7 @@ export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult 
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
   graphOps?: DomainOperationGraphOpsMetadata;
   execution?: DomainOperationExecutionMetadata;
+  conditions?: PortableOperationConditions;
   cache?: TCache;
   durable?: DurableOperationMetadata<TInput, TResult>;
 };
@@ -333,6 +335,7 @@ export type ResolveDomainOperation<TEntityName extends string, TName extends str
         authority: DomainOperationAuthority;
         exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
         layer: string;
+        conditions?: PortableOperationConditions;
       } & ((
           input: InferResolvedOperationInput<TOperation>,
         ) => DomainOperationInvocation<
@@ -494,6 +497,7 @@ type ResolvedDomainOperationLike = {
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<any>>;
   graphOps?: DomainOperationGraphOpsMetadata;
   execution?: DomainOperationExecutionMetadata;
+  conditions?: PortableOperationConditions;
   durable?: DurableOperationMetadata<any, any>;
 };
 
@@ -565,6 +569,7 @@ type GraphApiSummary = {
     authority: DomainOperationAuthority;
     exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
     execution?: DomainOperationExecutionMetadata;
+    conditions?: PortableOperationConditions;
     hasBridgeQuery: boolean;
   }>;
   durableOperations: GraphApiDurableOperationSummary[];
@@ -1348,6 +1353,7 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         authority: operation.authority,
         exposure: operation.exposure,
         ...(operation.execution ? { execution: operation.execution } : {}),
+        ...(operation.conditions ? { conditions: operation.conditions } : {}),
         hasBridgeQuery: Boolean(operation.bridge?.query?.length),
       })),
       durableOperations: listDurableDomainOperations().map(operation => {

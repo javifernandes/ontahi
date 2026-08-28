@@ -1,6 +1,6 @@
 # 142e. Portable Operation Condition Bridge
 
-Status: next
+Status: done
 
 Canonical ID: `ontahi://plans/142e-portable-operation-condition-bridge`
 
@@ -49,9 +49,37 @@ that both the authority and clients consume.
 
 ## Acceptance Checklist
 
-- [ ] Core owns one versioned JSON-safe IR and semantic evaluator.
-- [ ] Codegen derives symbols from the real Operation/Entity model with source-located diagnostics.
-- [ ] Server and generated client artifacts consume the same compiled condition identity and IR.
-- [ ] Advisory evaluation is tri-state and never substitutes for authoritative execution.
-- [ ] Callback-valued top-level contracts have one explicit alpha migration path.
-- [ ] Classroom's same-Course branch is replaced by the first portable condition.
+- [x] Core owns one versioned JSON-safe IR and semantic evaluator.
+- [x] Codegen derives symbols from the real Operation/Entity model with source-located diagnostics.
+- [x] Server and generated client artifacts consume the same compiled condition identity and IR.
+- [x] Advisory evaluation is tri-state and never substitutes for authoritative execution.
+- [x] Callback-valued top-level contracts have one explicit alpha migration path.
+- [x] Classroom's same-Course branch is replaced by the first portable condition.
+
+## Closure
+
+Core now owns the canonical Model Expression program, validation, dependency collection, explicit
+builder, interpreter, condition registry, and tri-state evaluator. Codegen derives Ref symbols from
+real Operation input schemas, compiles natural TypeScript without invoking callbacks, emits one
+shared registry, and makes generated clients reference it. Missing or stale generated conditions
+fail closed during server composition.
+
+The public alpha migration is complete: top-level `contracts.pre` accepts named portable
+conditions; arbitrary pre/post callbacks move to the explicit `contract(...)` concern. Reflection
+and Explorer expose named conditions, while runtime execution remains authoritative and preserves
+atomic rollback for opaque contracts. Classroom generates a conditions-only artifact, uses it in
+the server application and advisory proof, and no longer contains an imperative same-Course
+branch.
+
+Follow-up: [142f. Virtual Derived Fields And Classroom Capacity](../next/142f-virtual-derived-fields-and-classroom-capacity.md).
+
+## Verification
+
+1. Core, Codegen, Explorer React, Runtime Next.js, and Classroom focused/full test suites pass.
+2. Classroom's five PostgreSQL integration tests pass against its isolated service.
+3. Affected typechecks, lints, builds, generated-artifact drift checks, and repository format check
+   pass.
+4. Core, Codegen, and Explorer coverage suites pass; their overall statement coverage is 89.15%,
+   84.76%, and 83.01% respectively.
+5. All ten public packages build and pass clean-room package artifact verification.
+6. Changeset status resolves the fixed package group to one minor prerelease increment.

@@ -6,7 +6,7 @@ import {
 } from './model-expression-experiment.test-support.js';
 
 const courseSymbols = {
-  capacity: { kind: 'field', field: 'capacity' },
+  capacity: { kind: 'field', field: 'capacity', semantic: 'number' },
   students: { kind: 'relation', relation: 'students' },
 };
 
@@ -210,6 +210,57 @@ describe('model expression language experiment', () => {
             path: '/examples/classroom/operator.ts',
             line: 1,
             column: 44,
+          },
+        },
+      ],
+    });
+  });
+
+  it('rejects operands whose semantics do not match a supported operator', () => {
+    const sourceText =
+      'const invalid = ({ capacity, previousCourse }) => capacity - previousCourse;';
+
+    expect(
+      analyzeModelExpressionSource(sourceText, {
+        declarationName: 'invalid',
+        sourcePath: '/examples/classroom/operand.ts',
+        symbols: { ...courseSymbols, ...transferSymbols },
+      }),
+    ).toEqual({
+      program: undefined,
+      diagnostics: [
+        {
+          code: 'model_expression_invalid_operand',
+          message: 'Operand must have number semantics.',
+          source: {
+            path: '/examples/classroom/operand.ts',
+            line: 1,
+            column: 62,
+          },
+        },
+      ],
+    });
+  });
+
+  it('rejects logical negation of a non-boolean operand', () => {
+    const sourceText = 'const invalid = ({ capacity }) => !capacity;';
+
+    expect(
+      analyzeModelExpressionSource(sourceText, {
+        declarationName: 'invalid',
+        sourcePath: '/examples/classroom/not-operand.ts',
+        symbols: courseSymbols,
+      }),
+    ).toEqual({
+      program: undefined,
+      diagnostics: [
+        {
+          code: 'model_expression_invalid_operand',
+          message: 'Operand must have boolean semantics.',
+          source: {
+            path: '/examples/classroom/not-operand.ts',
+            line: 1,
+            column: 36,
           },
         },
       ],

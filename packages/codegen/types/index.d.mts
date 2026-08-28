@@ -8,6 +8,7 @@ export {
 } from './operation-contracts.mjs';
 export {
   renderGeneratedClientEntityModule,
+  renderGeneratedOperationConditionRegistryModule,
   renderGeneratedTaskDefinitionRegistryModule,
 } from './projections.mjs';
 export { analyzeOntahiApplication, formatCodegenDiagnostic } from './application.mjs';

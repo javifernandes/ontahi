@@ -137,8 +137,8 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
     ).resolves.toMatchObject({
       ok: false,
       failure: {
-        reason: 'same_course',
-        course: Course.refById('course-1'),
+        reason: 'operation_condition_rejected',
+        conditionId: 'Student.transfer.pre.differentCourses',
       },
     });
 

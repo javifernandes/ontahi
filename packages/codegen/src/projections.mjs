@@ -72,6 +72,7 @@ const renderClientEntityExport = (
   operationContracts = 'all',
   projectedNames = new Map(),
   namedDefinitionLocalNames = new Map(),
+  operationConditionsBinding,
 ) => {
   const entityExportName = definition.entityName;
   const entityArgument = definition.entitySchemaProjection
@@ -146,6 +147,17 @@ ${relationDefinitions
         lines.push("      execution: { atomicity: 'required' },");
       }
 
+      if (operation.conditions?.pre?.length) {
+        if (!operationConditionsBinding) {
+          throw new Error(
+            `Generated client Operation ${definition.entityName}.${operation.name} requires an operationConditionsImportPath.`,
+          );
+        }
+        lines.push(
+          `      conditions: ${operationConditionsBinding}.operations['${definition.entityName}.${operation.name}'],`,
+        );
+      }
+
       if (graphOutputText) {
         lines.push(`      graphOutput: ${graphOutputText},`);
       }
@@ -173,7 +185,11 @@ export const renderGeneratedClientEntityModule = ({
   namedDefinitions = [],
   schemaImportPath = './schema',
   operationContracts = 'all',
+  operationConditionsImportPath,
 }) => {
+  const usesOperationConditions =
+    Boolean(operationConditionsImportPath) &&
+    entities.some(entity => entity.operations.some(operation => operation.conditions?.pre?.length));
   const helperTexts = Array.from(new Set(entities.flatMap(entity => entity.helperTexts ?? [])));
   const helperSection = helperTexts.length > 0 ? `${helperTexts.join('\n\n')}\n\n` : '';
   const usesQueryRef = helperTexts.some(helperText => /\bqueryRef\b/.test(helperText));
@@ -320,6 +336,7 @@ export const renderGeneratedClientEntityModule = ({
         operationContracts,
         projectedNames,
         namedDefinitionLocalNames,
+        usesOperationConditions ? 'operationConditions' : undefined,
       ),
     )
     .join('\n\n');
@@ -394,7 +411,11 @@ import {
 ${coreImports.map(name => `  ${name},`).join('\n')}
 } from '@ontahi/core/data-graph';
 
-${schemaImportSection}${schemaImportSection ? '\n' : ''}${entitySchemaSection}${
+${
+  usesOperationConditions
+    ? `import { operationConditions } from '${operationConditionsImportPath}';\n\n`
+    : ''
+}${schemaImportSection}${schemaImportSection ? '\n' : ''}${entitySchemaSection}${
     entitySchemaSection ? '\n' : ''
   }${namedValueDefinitionTexts.join('\n\n')}${
     namedValueDefinitionTexts.length > 0 ? '\n\n' : ''

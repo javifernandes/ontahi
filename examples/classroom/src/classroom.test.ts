@@ -1,7 +1,9 @@
+import { evaluatePortableOperationCondition } from '@ontahi/core/data-graph';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ClassroomApplication, classroomEvents } from './application.js';
 import { Course, Enrollment, Student } from './classroom.js';
+import { operationConditions } from './generated/operation-conditions.js';
 import { reassignStudent, removeStudentFromCourse } from './scenarios.js';
 
 const seedClassroom = () => {
@@ -52,6 +54,32 @@ describe('Classroom Relations lifecycle', () => {
         }
       ).fields.student,
     ).toMatchObject({ referenceRequirement: 'existing' });
+    expect(ClassroomApplication.graph.entities.Student.domain.transfer.conditions).toEqual(
+      operationConditions.operations['Student.transfer'],
+    );
+  });
+
+  it('evaluates the portable same-Course condition without resolving either Ref', () => {
+    const condition = operationConditions.operations['Student.transfer'].pre[0];
+
+    expect(
+      evaluatePortableOperationCondition(condition, {
+        previousCourse: Course.refById('course-1'),
+        nextCourse: Course.refById('course-1'),
+      }),
+    ).toEqual({
+      status: 'rejected',
+      rejection: {
+        reason: 'operation_condition_rejected',
+        message: 'Operation condition "differentCourses" was not satisfied.',
+      },
+    });
+    expect(
+      evaluatePortableOperationCondition(condition, {
+        previousCourse: Course.refById('course-1'),
+        nextCourse: Course.refById('course-2'),
+      }),
+    ).toEqual({ status: 'satisfied' });
   });
 
   it('reassigns a Student conditionally and distinguishes conflict from explicit skip', async () => {

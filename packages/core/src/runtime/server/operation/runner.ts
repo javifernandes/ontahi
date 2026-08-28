@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
 
-import { toContractConcern } from '../concerns/contract.js';
-import { applyLayerConcerns, combineConcerns } from '../concerns.js';
+import { evaluatePortableOperationCondition } from '../../../data-graph/model-expression/index.js';
+import { isOpaqueContractConcern } from '../concerns/contract.js';
+import { applyLayerConcerns } from '../concerns.js';
 import type { OperationRuntimeContext } from '../context-types.js';
 import {
   getOperationRuntimeContext,
@@ -10,6 +11,7 @@ import {
 } from '../context.js';
 import { withAtomicDataGraphExecution } from '../data-graph.js';
 import type { UnwrapEffectSuccess } from '../effect-intents/types.js';
+import { createOperationFailure } from '../failures.js';
 import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
 
@@ -56,7 +58,7 @@ export const createOperationRunner = <
     telemetrySpanName: options.telemetrySpanName ?? options.scope,
     requires: options.requires,
     concerns: options.concerns,
-    contracts: options.contracts,
+    conditions: options.conditions,
     execution: options.execution,
     cache: options.cache,
     effects: options.effects,
@@ -76,9 +78,6 @@ export const createOperationRunner = <
       extra,
       resources: parentContext?.resources ?? invocationContext?.resources ?? new Map(),
     };
-    const contractConcern = toContractConcern<TInput, UnwrapEffectSuccess<TRawSuccess>, TFailure>(
-      metadata.contracts,
-    );
     const concernRuntime = {
       scope: context.scope,
       telemetrySpanName: context.telemetrySpanName,
@@ -94,28 +93,62 @@ export const createOperationRunner = <
             discard: true,
           })
         : Effect.void;
+    const conditionsEffect = metadata.conditions?.pre.length
+      ? Effect.forEach(
+          metadata.conditions.pre,
+          condition =>
+            Effect.suspend(() => {
+              const evaluation = evaluatePortableOperationCondition(condition, inputRecord ?? {});
+              if (evaluation.status === 'satisfied') return Effect.void;
+              if (evaluation.status === 'rejected') {
+                return Effect.fail(
+                  createOperationFailure(
+                    evaluation.rejection.reason,
+                    evaluation.rejection.message,
+                    { conditionId: condition.id },
+                  ),
+                );
+              }
+              return Effect.fail(
+                createOperationFailure(
+                  'operation_condition_unknown',
+                  `Operation condition "${condition.name}" could not be evaluated authoritatively.`,
+                  { conditionId: condition.id, missing: evaluation.missing },
+                ),
+              );
+            }),
+          { concurrency: 1, discard: true },
+        )
+      : Effect.void;
+    const opaqueContractConcerns = metadata.concerns?.filter(isOpaqueContractConcern);
+    const otherConcerns = metadata.concerns?.filter(concern => !isOpaqueContractConcern(concern));
     const isAtomic = metadata.execution?.atomicity === 'required';
     const guardedEffect = isAtomic
       ? Effect.suspend(() => {
           const bodyEffect = Effect.suspend(() => effect(input));
-          const contractedBody = contractConcern
-            ? applyLayerConcerns(concernRuntime, [contractConcern], bodyEffect)
-            : bodyEffect;
-          const operationEffect = requirementsEffect.pipe(Effect.flatMap(() => contractedBody));
-          const concerns = combineConcerns(metadata.concerns, [withAtomicDataGraphExecution()]);
-          return applyLayerConcerns(concernRuntime, concerns, operationEffect);
+          const contractedBody = applyLayerConcerns(
+            concernRuntime,
+            opaqueContractConcerns,
+            bodyEffect,
+          );
+          const operationEffect = requirementsEffect.pipe(
+            Effect.flatMap(() => conditionsEffect),
+            Effect.flatMap(() => contractedBody),
+          );
+          const atomicEffect = applyLayerConcerns(
+            concernRuntime,
+            [withAtomicDataGraphExecution()],
+            operationEffect,
+          );
+          return applyLayerConcerns(concernRuntime, otherConcerns, atomicEffect);
         })
       : (() => {
-          const concerns = combineConcerns(
-            contractConcern ? [contractConcern] : undefined,
-            metadata.concerns,
+          const bodyEffect = Effect.suspend(() => effect(input));
+          const concernedBody = applyLayerConcerns(concernRuntime, metadata.concerns, bodyEffect);
+          return requirementsEffect.pipe(
+            Effect.flatMap(() => conditionsEffect),
+            Effect.flatMap(() => concernedBody),
           );
-          const bodyEffect = Effect.suspend(() =>
-            applyLayerConcerns(concernRuntime, concerns, effect(input)),
-          );
-          return metadata.requires && metadata.requires.length > 0
-            ? requirementsEffect.pipe(Effect.flatMap(() => bodyEffect))
-            : bodyEffect;
         })();
 
     return operationRuntimeContextStorage.run(context, async () => {

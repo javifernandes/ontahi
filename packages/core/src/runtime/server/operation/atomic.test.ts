@@ -11,6 +11,7 @@ import {
 } from '../../../data-graph/index.js';
 import {
   createDataGraphArchitectureAdapter,
+  contract,
   createOperationFailure,
   defineDomainOperation,
   defineDomainOperationsForEntity,
@@ -136,7 +137,17 @@ describe('atomic Domain Operations', () => {
       RecordDefinition,
       {
         mutate: defineDomainOperation.atomic({
-          concerns: [graph.withRuntime()],
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              pre: () => {
+                events.push('pre');
+              },
+              post: () => {
+                events.push('post');
+              },
+            }),
+          ],
           requires: [
             {
               run: () =>
@@ -145,14 +156,6 @@ describe('atomic Domain Operations', () => {
                 }),
             },
           ],
-          contracts: {
-            pre: () => {
-              events.push('pre');
-            },
-            post: () => {
-              events.push('post');
-            },
-          },
           run: () => records.insert({ id: 'record-1', revision: 1 }).run(),
         }),
       },
@@ -218,15 +221,17 @@ describe('atomic Domain Operations', () => {
                 }),
             },
           ],
-          concerns: [graph.withRuntime()],
-          contracts: {
-            pre: () => {
-              events.push('pre');
-            },
-            post: () => {
-              events.push('post');
-            },
-          },
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              pre: () => {
+                events.push('pre');
+              },
+              post: () => {
+                events.push('post');
+              },
+            }),
+          ],
           run: ({ record }) =>
             Effect.sync(() => {
               events.push('body');
@@ -258,10 +263,12 @@ describe('atomic Domain Operations', () => {
       RecordDefinition,
       {
         mutate: defineDomainOperation.atomic({
-          concerns: [graph.withRuntime()],
-          contracts: {
-            post: () => createOperationFailure('invalid_revision', 'Revision did not advance.'),
-          },
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              post: () => createOperationFailure('invalid_revision', 'Revision did not advance.'),
+            }),
+          ],
           run: () => records.insert({ id: 'record-1', revision: 1 }).run(),
         }),
       },
@@ -282,11 +289,13 @@ describe('atomic Domain Operations', () => {
       RecordDefinition,
       {
         mutate: defineDomainOperation.atomic({
-          concerns: [graph.withRuntime()],
-          contracts: {
-            pre: () =>
-              records.insert({ id: 'record-1', revision: 1 }).run().pipe(Effect.as(failure)),
-          },
+          concerns: [
+            graph.withRuntime(),
+            contract({
+              pre: () =>
+                records.insert({ id: 'record-1', revision: 1 }).run().pipe(Effect.as(failure)),
+            }),
+          ],
           run: () => Effect.void,
         }),
       },
@@ -335,8 +344,7 @@ describe('atomic Domain Operations', () => {
       RecordDefinition,
       {
         mutate: defineDomainOperation.atomic({
-          concerns: [graph.withRuntime()],
-          contracts: { pre },
+          concerns: [graph.withRuntime(), contract({ pre })],
           run: body,
         }),
       },

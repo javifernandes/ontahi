@@ -145,6 +145,7 @@ export const findDomainEntityDefinition = (sourceFile, expectedExportName, optio
           importMap,
           defaults,
           schemaContext,
+          { entityName },
         );
         if (!parsed) {
           continue;
