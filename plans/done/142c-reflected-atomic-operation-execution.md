@@ -63,6 +63,8 @@ another authority. The slice must keep those facts separate while preserving one
    `consistency: 'strict'` flag.
 7. No claim that a bridge route proves the remote authority remains healthy; authoritative
    execution still validates its own capabilities and policy.
+8. No atomicity claim across durable scheduling and deferred task execution; the factory rejects
+   that combination until a durable execution boundary is designed explicitly.
 
 ## Intended Contract
 
@@ -128,7 +130,9 @@ Completed 2026-08-28. `Student.transfer` is the executable proof: its declaratio
 atomicity guarantee while PostgreSQL supplies the existing transaction capability and
 transaction-scoped UnitOfWork. The runtime planner is intentionally separate from portable
 metadata; React and Explorer report local, bridge, or unavailable execution without changing the
-invocation facade.
+invocation facade. Required atomicity is fail-closed: legacy invokers without an explicit
+affordance cannot execute it, generated modules preserve both supported public authoring forms,
+and durable Operations cannot claim a boundary that ends before their deferred body runs.
 
 Verification included focused red/green tests, the complete Core, codegen, React, Explorer React,
 and Classroom suites, all five Classroom PostgreSQL integration scenarios, repository typecheck,

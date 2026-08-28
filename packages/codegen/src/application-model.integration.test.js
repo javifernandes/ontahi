@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { importGeneratedModule } from './generated-module/generated-module.test-support.js';
 import {
   analyzeOntahiApplication,
   analyzeGraphApiModule,
@@ -400,10 +401,11 @@ describe('Ontahi application declaration analysis', () => {
     });
   });
 
-  it('projects operations from a unified entity declaration', () => {
+  it('projects atomic operations from unified and public factory declarations', async () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `
         import { entity } from '@ontahi/core/entity';
+        import { defineDomainOperation } from '@ontahi/core/runtime/server';
 
         export const Note = entity({
           name: 'Note',
@@ -419,6 +421,9 @@ describe('Ontahi application declaration analysis', () => {
               output: self.array(),
               bridge: { query: [() => 'all'] },
               run: () => [],
+            }),
+            archive: defineDomainOperation.atomic({
+              run: () => undefined,
             }),
           }),
         });
@@ -444,6 +449,12 @@ describe('Ontahi application declaration analysis', () => {
           inputSchemaText: 'graphSchema.object({ notes: NoteSchema.many() })',
           outputSchemaText: 'NoteSchema.array()',
         },
+        {
+          name: 'archive',
+          authority: 'server',
+          exposure: 'bridge',
+          execution: { atomicity: 'required' },
+        },
       ],
     });
 
@@ -453,8 +464,14 @@ describe('Ontahi application declaration analysis', () => {
     });
 
     expect(source).toContain('input: graphSchema.object({ notes: NoteSchema.many() }),');
-    expect(source).toContain("execution: { atomicity: 'required' },");
     expect(source).not.toContain('output: NoteSchema.array(),');
+
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-atomic-operation-'));
+    tempDirectories.push(directory);
+    const generated = await importGeneratedModule({ directory, source });
+
+    expect(generated.Note.domain.list.execution).toEqual({ atomicity: 'required' });
+    expect(generated.Note.domain.archive.execution).toEqual({ atomicity: 'required' });
   });
 
   it('projects a schema-only unified entity', () => {

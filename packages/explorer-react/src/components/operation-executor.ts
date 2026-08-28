@@ -1052,7 +1052,9 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
   const [state, setState] = useState<ExplorerOperationExecutionState>({ status: 'idle' });
   const executable = executionAffordance
     ? executionAffordance.status !== 'unavailable'
-    : isExplorerOperationExecutable(operation) && supportsOperation(reflectedOperation);
+    : operation.execution?.atomicity !== 'required' &&
+      isExplorerOperationExecutable(operation) &&
+      supportsOperation(reflectedOperation);
   const destructive = isExplorerOperationPotentiallyDestructive(operation);
   const inputSyntax = (operation.inputRefs?.length ?? 0) > 0 ? 'expression' : 'json';
 

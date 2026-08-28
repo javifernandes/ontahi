@@ -304,6 +304,17 @@ describe('ExplorerOperationExecutePanel', () => {
     expect(screen.queryByRole('button', { name: /run/i })).toBeNull();
   });
 
+  it('does not execute an atomic operation through a legacy invoker without an affordance', () => {
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({ execution: { atomicity: 'required' } })}
+      />,
+    );
+
+    expect(screen.getByText('Execution is not available for this operation yet.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /run/i })).toBeNull();
+  });
+
   it('shows when the current runtime will bridge an atomic operation', () => {
     renderWithGraphRuntime(
       <ExplorerOperationExecutePanel

@@ -11,14 +11,18 @@ import { unwrapExpression } from './typescript-ast.mjs';
 
 const getNodeText = node => node.getText();
 
+const isAtomicOperationReceiver = expression =>
+  (ts.isIdentifier(expression) &&
+    ['defineDomainOperation', 'operation'].includes(expression.text)) ||
+  (ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 'operation' &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'app');
+
 const isAtomicOperationCall = expression =>
   ts.isPropertyAccessExpression(expression) &&
   expression.name.text === 'atomic' &&
-  ((ts.isIdentifier(expression.expression) && expression.expression.text === 'operation') ||
-    (ts.isPropertyAccessExpression(expression.expression) &&
-      expression.expression.name.text === 'operation' &&
-      ts.isIdentifier(expression.expression.expression) &&
-      expression.expression.expression.text === 'app'));
+  isAtomicOperationReceiver(expression.expression);
 
 const isAppIngressHttpCall = expression =>
   ts.isPropertyAccessExpression(expression) &&

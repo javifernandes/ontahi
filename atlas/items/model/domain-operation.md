@@ -71,6 +71,11 @@ legacy pre-checks, the body, and legacy post-checks. If the authoritative runtim
 capability, execution returns a safe `execution_unavailable` failure before those phases are
 evaluated.
 
+This guarantee belongs to immediate code-bodied Operations. A durable Operation schedules work
+whose body executes in a later task lifecycle, so it cannot claim one Data Graph atomic boundary
+spanning scheduling and deferred execution. The server factory rejects the durable-plus-atomic
+combination until a future durable execution contract defines an honest boundary.
+
 Static execution guarantees remain distinct from live execution affordances. Reflection and
 generated clients preserve atomicity, while a runtime planner reports whether the current binding
 can execute locally, bridge the same Operation invocation to an authority, or cannot execute it.

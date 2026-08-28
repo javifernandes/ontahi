@@ -84,6 +84,16 @@ describe('atomic Domain Operations', () => {
     expectTypeOf(mutate.execution.atomicity).toEqualTypeOf<'required'>();
   });
 
+  it('rejects atomicity on durable Operations before creating a deferred task', () => {
+    expect(() =>
+      defineDomainOperation({
+        durable: { runtime: 'in-process' },
+        execution: { atomicity: 'required' },
+        run: () => Effect.void,
+      } as never),
+    ).toThrow('Durable Domain Operations cannot require one Data Graph atomic boundary.');
+  });
+
   it('runs callback preconditions, body, and postconditions inside one committed boundary', async () => {
     const events: string[] = [];
     const state = { revisions: 0 };

@@ -369,7 +369,7 @@ type DefineDomainOperationCall = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'durable' | 'output'
+      'kind' | 'durable' | 'execution' | 'output'
     > & {
       durable: DurableOperationDeclarationMetadata<TInput, TResult>;
       output?: TOutput;
@@ -386,7 +386,7 @@ type DefineDomainOperationCall = {
   >(
     operation: Omit<
       DomainOperationDeclaration<TInput, TResult, TFailure, TInfraError>,
-      'kind' | 'output'
+      'kind' | 'execution' | 'output'
     > & { output?: TOutput },
   ): DefinedDomainOperation<TInput, TResult, TFailure, TInfraError, TOutput>;
 };
@@ -412,12 +412,20 @@ type DefineDomainOperation = DefineDomainOperationCall & {
 
 const defineDomainOperationImplementation = (
   operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind'>,
-) => ({
-  kind: 'domain-operation',
-  authority: 'server',
-  ...operation,
-  input: attachOperationInputSchema((operation.input ?? EmptyInputSchema) as InputSchemaLike<any>),
-});
+) => {
+  if (operation.durable && operation.execution?.atomicity === 'required') {
+    throw new Error('Durable Domain Operations cannot require one Data Graph atomic boundary.');
+  }
+
+  return {
+    kind: 'domain-operation',
+    authority: 'server',
+    ...operation,
+    input: attachOperationInputSchema(
+      (operation.input ?? EmptyInputSchema) as InputSchemaLike<any>,
+    ),
+  };
+};
 
 const defineAtomicDomainOperationImplementation = (
   operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind' | 'execution'>,

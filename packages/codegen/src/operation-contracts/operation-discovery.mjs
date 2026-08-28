@@ -1,5 +1,13 @@
 import ts from 'typescript';
 
+const isAtomicOperationReceiver = expression =>
+  (ts.isIdentifier(expression) &&
+    ['defineDomainOperation', 'operation'].includes(expression.text)) ||
+  (ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 'operation' &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'app');
+
 const isDomainOperationDefineCall = expression =>
   (ts.isIdentifier(expression) && expression.text === 'defineDomainOperation') ||
   (ts.isIdentifier(expression) && expression.text === 'operation') ||
@@ -11,11 +19,7 @@ const isDomainOperationDefineCall = expression =>
     expression.expression.expression.text === 'app') ||
   (ts.isPropertyAccessExpression(expression) &&
     expression.name.text === 'atomic' &&
-    ((ts.isIdentifier(expression.expression) && expression.expression.text === 'operation') ||
-      (ts.isPropertyAccessExpression(expression.expression) &&
-        expression.expression.name.text === 'operation' &&
-        ts.isIdentifier(expression.expression.expression) &&
-        expression.expression.expression.text === 'app')));
+    isAtomicOperationReceiver(expression.expression));
 
 export const resolveOperationInitializer = (initializer, declarations, visited = new Set()) => {
   if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
