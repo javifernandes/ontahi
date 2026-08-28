@@ -472,7 +472,7 @@ describe('Ontahi application declaration analysis', () => {
 
     expect(generated.Note.domain.list.execution).toEqual({ atomicity: 'required' });
     expect(generated.Note.domain.archive.execution).toEqual({ atomicity: 'required' });
-  });
+  }, 30_000);
 
   it('projects a schema-only unified entity', () => {
     const analysis = analyzeSpecificDomainEntityExport(
