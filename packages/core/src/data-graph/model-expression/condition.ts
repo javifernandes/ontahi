@@ -209,20 +209,12 @@ export const resolveOperationConditionContracts = <TInput extends object>(
     return compiled;
   }
 
-  const resolvedDeclarations = authored.map(([name, condition]) => {
+  const resolvedDeclarations = authored.map(([name, condition], index) => {
     if (isExplicitOperationCondition(condition)) {
       return { name, expression: condition.expression, rejection: condition.rejection };
     }
 
-    if (typeof condition !== 'function') {
-      throw new TypeError(`Operation ${operationId} precondition ${name} is not portable.`);
-    }
-    const generated = compiled?.pre.find(candidate => candidate.name === name);
-    if (!generated) {
-      throw new TypeError(
-        `Operation ${operationId} precondition ${name} has no compiled Model Expression. Run Ontahi codegen or use modelExpression.condition(...) for runtime-only authoring.`,
-      );
-    }
+    const generated = generatedConditions[index]!;
     return {
       name,
       expression: generated.expression,
