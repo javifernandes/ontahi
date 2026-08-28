@@ -238,6 +238,12 @@ handle that outcome themselves. Sequencing multiple Commands inside an imperativ
 separate ergonomics question; automatic execution of the Operation's returned value does not imply
 recursive execution of arbitrary nested values.
 
+Effect sequencing itself does not require an `Effect.gen(function* () { ... })` wrapper inside
+`run`. Operations accept `Effect.fn(...)` and direct `*run(...)` Effect generators; the invoker
+adapts the latter to the ordinary Effect path while preserving contextual input typing, UnitOfWork,
+contracts, atomicity, failures, and defects. Recognition is limited to actual generator functions,
+not arbitrary objects implementing the iterator protocol.
+
 ## Contract Compatibility Decision Gate
 
 Before publishing declarative condition syntax, the first implementation slice must answer these

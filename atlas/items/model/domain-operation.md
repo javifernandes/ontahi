@@ -50,6 +50,12 @@ An operation whose implementation is entirely a graph read may return that read 
 includes ordinary selections and reads rooted through a declared relation; the selected runtime
 interprets either form as the operation result.
 
+An effectful implementation may return an Effect, use `Effect.fn(...)`, or declare `*run(...)`
+directly as an Effect generator. The direct form is authoring sugar: the server invoker adapts the
+generator function to the same Effect execution path, preserving input hydration, UnitOfWork,
+contracts, atomicity, failures, and defects. Ontahí recognizes the generator function category
+explicitly rather than executing arbitrary iterator-shaped values.
+
 Large operation families may be authored behind `operationGroup(...)`. An operation group is not a
 new domain behavior or runtime container; it is a declaration and compiler boundary that names the
 operations exported by an entity without forcing the application root to structurally expand every

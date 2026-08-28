@@ -15,6 +15,7 @@ import {
   createDataGraphArchitectureAdapter,
   defineDomainOperation,
   defineDomainOperationsForEntity,
+  failOperation,
   getCurrentInvocationContext,
   runServerDomainOperationRaw,
   withInvocationContext,
@@ -486,5 +487,84 @@ describe('server Domain Operation Ref resolution', () => {
     const result = await runServerDomainOperationRaw(inspect, { nullableBook: null });
 
     expect(result).toEqual({ success: true, data: { nullableBook: null } });
+  });
+});
+
+describe('server Domain Operation Effect generator authoring', () => {
+  it('accepts Effect.fn bodies without an Effect.gen wrapper', async () => {
+    const calculate = defineDomainOperationsForEntity(
+      'EffectFnCalculator',
+      {
+        calculate: defineDomainOperation({
+          input: graphSchema.object({ value: field.integer() }),
+          run: Effect.fn(function* ({ value }) {
+            expectTypeOf(value).toEqualTypeOf<number>();
+            const increment = yield* Effect.succeed(1);
+            return { result: value + increment };
+          }),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.effect-fn' },
+    ).calculate;
+
+    await expect(runServerDomainOperationRaw(calculate, { value: 2 })).resolves.toEqual({
+      success: true,
+      data: { result: 3 },
+    });
+  });
+
+  it('accepts a direct Effect generator with contextually typed input', async () => {
+    const events: string[] = [];
+    const calculate = defineDomainOperationsForEntity(
+      'EffectGeneratorCalculator',
+      {
+        calculate: defineDomainOperation({
+          input: graphSchema.object({ value: field.integer() }),
+          *run({ value }) {
+            expectTypeOf(value).toEqualTypeOf<number>();
+            events.push('body');
+            const increment = yield* Effect.succeed(1);
+            return { result: value + increment };
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.effect-generator' },
+    ).calculate;
+
+    expect(events).toEqual([]);
+    await expect(runServerDomainOperationRaw(calculate, { value: 2 })).resolves.toEqual({
+      success: true,
+      data: { result: 3 },
+    });
+    expect(events).toEqual(['body']);
+  });
+
+  it('preserves failures yielded by a direct Effect generator', async () => {
+    const calculate = defineDomainOperationsForEntity(
+      'FailingEffectGeneratorCalculator',
+      {
+        calculate: defineDomainOperation({
+          input: graphSchema.object({ value: field.integer() }),
+          *run({ value }) {
+            if (value < 0) {
+              return yield* failOperation('negative_value', 'Value must not be negative.', {
+                value,
+              });
+            }
+            return { result: value };
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.effect-generator-failure' },
+    ).calculate;
+
+    await expect(runServerDomainOperationRaw(calculate, { value: -1 })).resolves.toEqual({
+      success: false,
+      reason: 'negative_value',
+      message: 'Value must not be negative.',
+      value: -1,
+      error: 'Value must not be negative.',
+      errorType: 'negative_value',
+    });
   });
 });

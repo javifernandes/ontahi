@@ -309,11 +309,10 @@ describe('atomic Domain Operations', () => {
       {
         mutate: defineDomainOperation.atomic({
           concerns: [graph.withRuntime()],
-          run: () =>
-            records
-              .insert({ id: 'record-1', revision: 1 })
-              .run()
-              .pipe(Effect.flatMap(() => failBody)),
+          *run() {
+            yield* records.insert({ id: 'record-1', revision: 1 }).run();
+            return yield* failBody;
+          },
         }),
       },
       { exposure: 'server-only', layer: 'tests.operation.atomic-body-rollback' },

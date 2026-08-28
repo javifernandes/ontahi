@@ -41,11 +41,10 @@ transfer: operation.atomic({
     previousCourse: graphSchema.existingRef(Course),
     nextCourse: graphSchema.existingRef(Course),
   }),
-  run: ({ student, previousCourse, nextCourse }) =>
-    Effect.gen(function* () {
-      // Fields are already authorized and resolved. Identity remains explicit.
-      yield* students.refById(student.id).currentCourse.assign(nextCourse.ref).run();
-    }),
+  *run({ student, previousCourse, nextCourse }) {
+    // Fields are already authorized and resolved. Identity remains explicit.
+    yield* students.refById(student.id).currentCourse.assign(nextCourse.ref).run();
+  },
 });
 ```
 
@@ -64,6 +63,11 @@ Missing or graph-policy-filtered data produces the safe conventional failure:
   inputPath: 'student',
 }
 ```
+
+Classroom review also exposed unnecessary Effect authoring ceremony. Domain Operations now accept
+both `Effect.fn(function* (...) { ... })` and a direct `*run(...)` Effect generator. The direct form
+is adapted by the invoker to the same Effect execution path; it does not change Ref resolution,
+transaction, contracts, or failure semantics and does not introduce generic iterator execution.
 
 ## Scope
 
@@ -102,6 +106,8 @@ Missing or graph-policy-filtered data produces the safe conventional failure:
 - [x] Unsupported nested and durable declarations fail explicitly.
 - [x] Classroom removes its three manual existence checks without changing the remaining transfer
       semantics.
+- [x] Effectful Operation bodies can use `Effect.fn(...)` or direct `*run(...)` generators without
+      an `Effect.gen(...)` wrapper, including inside an atomic rollback boundary.
 - [x] Public packages carry a Changeset and Atlas/developer documentation records the boundary.
 - [x] Focused tests, affected suites, typecheck, lint, build, format, and artifacts pass.
 

@@ -110,15 +110,19 @@ share one in-flight or completed read inside the UnitOfWork:
 ```ts
 const inspectBook = app.operation.define({
   input: graphSchema.object({ book: field.ref(Book) }),
-  run: ({ book }) =>
-    Effect.gen(function* () {
-      const first = yield* book.resolve();
-      const same = yield* book.resolve();
+  *run({ book }) {
+    const first = yield* book.resolve();
+    const same = yield* book.resolve();
 
-      return { first, same };
-    }),
+    return { first, same };
+  },
 });
 ```
+
+Operation bodies accept direct Effect generator methods as sequencing syntax. `Effect.fn(...)`
+and ordinary functions returning an Effect, Command, Selection, or graph read remain supported.
+The invoker adapts only actual generator functions; it does not execute arbitrary iterator-shaped
+values.
 
 Different resolver declarations and execution identities (`principal` plus `cacheScope`) stay
 isolated representations of the same Ref. Operation code can explicitly evict all of them with

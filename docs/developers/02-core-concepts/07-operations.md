@@ -42,6 +42,46 @@ The input schema is the public contract. The command is the storage-neutral effe
 there is no `updateOne` or `deleteOne` ceremony to repeat. `create`, `rename`, and `delete` are
 domain vocabulary available to every host.
 
+## Compose effectful bodies without wrapper ceremony
+
+When an Operation needs sequential Effect composition, `run` may be authored directly as an
+Effect generator:
+
+```ts
+transfer: operation.atomic({
+  input: graphSchema.object({
+    student: graphSchema.existingRef(Student),
+    nextCourse: graphSchema.existingRef(Course),
+  }),
+
+  *run({ student, nextCourse }) {
+    const relationship = yield* students
+      .refById(student.id)
+      .currentCourse.assign(nextCourse.ref)
+      .run();
+
+    return relationship;
+  },
+}),
+```
+
+Ontahí recognizes the generator function itself and adapts it to an Effect when the Operation is
+invoked. Input inference, UnitOfWork, contracts, atomic execution, typed failures, and defects use
+the same runtime path as an explicitly returned Effect. Arbitrary iterators are not interpreted as
+Operation programs.
+
+`Effect.fn(...)` remains useful when the body is defined or reused as an ordinary Effect function:
+
+```ts
+run: Effect.fn(function* ({ value }) {
+  const increment = yield* Effect.succeed(1);
+  return { result: value + increment };
+}),
+```
+
+Simple Operations should continue returning a Command, Selection, graph read, or Effect directly;
+the generator form is only sequencing syntax.
+
 > [!MARGIN] **The semantic identity of `name`.** A transport API often redeclares `name` in
 > its request DTO. Even when both declarations validate the same values today, that loses the fact
 > that this input _is_ `TodoList.name`. `name: self.fields.name` keeps that relationship explicit:

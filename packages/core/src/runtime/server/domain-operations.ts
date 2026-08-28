@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Utils } from 'effect';
 
 import { normalizeGraphSchemaClientInput } from '../../data-graph/client-input.js';
 import { GraphCommand } from '../../data-graph/command.js';
@@ -277,6 +277,16 @@ type AnyDomainOperationGraphRead = { build: () => GraphReadSpec<any, any> };
 const isDomainOperationGraphRead = (value: unknown): value is AnyDomainOperationGraphRead =>
   value instanceof GraphSelection || value instanceof RelationRootSelection;
 
+type ExecutableDomainOperationRunResult<
+  TResult extends DomainOperationSuccess,
+  TFailure extends OperationFailure,
+  TInfraError extends OperationRuntimeError,
+> =
+  | Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>
+  | GraphCommand<any, any, TResult>
+  | DomainOperationGraphRead<TResult>
+  | Selection<any, any>;
+
 export type DomainOperationRun<
   TInput extends OperationInput,
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
@@ -286,10 +296,22 @@ export type DomainOperationRun<
   input: TInput,
   context?: TaskContext,
 ) =>
-  | Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>
-  | GraphCommand<any, any, TResult>
-  | DomainOperationGraphRead<TResult>
-  | Selection<any, any>;
+  | ExecutableDomainOperationRunResult<TResult, TFailure, TInfraError>
+  | Effect.fn.Return<TResult | EffectSuccessPayload<TResult>, NoInfer<TFailure> | TInfraError>;
+
+const invokeDomainOperationRun = <
+  TInput extends OperationInput,
+  TResult extends DomainOperationSuccess,
+  TFailure extends OperationFailure,
+  TInfraError extends OperationRuntimeError,
+>(
+  run: DomainOperationRun<TInput, TResult, TFailure, TInfraError>,
+  input: TInput,
+  context?: TaskContext,
+): ExecutableDomainOperationRunResult<TResult, TFailure, TInfraError> =>
+  (Utils.isGeneratorFunction(run)
+    ? Effect.fnUntraced(run)(input, context)
+    : run(input, context)) as ExecutableDomainOperationRunResult<TResult, TFailure, TInfraError>;
 
 export type DomainOperationCacheMetadata<TInput extends OperationInput> =
   OperationCacheConfig<TInput>;
@@ -525,7 +547,10 @@ export const inspectProjectedDomainOperationQuery = (
     );
   }
   const normalizedInput = normalizeDomainOperationInput(operation, input);
-  const result = operation.run(hydrateOperationInputRefs(operation, normalizedInput, undefined));
+  const result = invokeDomainOperationRun(
+    operation.run,
+    hydrateOperationInputRefs(operation, normalizedInput, undefined),
+  );
   const read =
     result instanceof Selection
       ? operationInputDataGraph.bindSelection(result)
@@ -616,7 +641,7 @@ const resolveDomainOperationRunner = <
     ).pipe(
       Effect.flatMap(materializedInput =>
         executeDomainOperationRunResult(
-          operation.run(materializedInput as never),
+          invokeDomainOperationRun(operation.run, materializedInput as never),
           projection ??
             (operation.output?.kind === 'schema.selection'
               ? { cardinality: (operation.output as GraphSelectionDefinition).cardinality }
@@ -736,7 +761,11 @@ export const createTaskDefinitionFromDurableDomainOperation = <
     ),
     run: ((input, context) =>
       executeDomainOperationRunResult(
-        operation.run(hydrateOperationInputRefs(operation, input) as never, context),
+        invokeDomainOperationRun(
+          operation.run,
+          hydrateOperationInputRefs(operation, input) as never,
+          context,
+        ),
       )) as TaskDefinition<TInput, TResult>['run'],
   };
 };
