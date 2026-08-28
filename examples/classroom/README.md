@@ -5,8 +5,9 @@ keeps two concepts separate:
 
 - `Student.currentCourse` is a direct nullable Relation. Reassignment uses an atomic `ifCurrent`
   precondition and can either fail or explicitly return `not-applied` on a stale observation.
-- `Student.transfer(...)` is a Domain Operation that coordinates that Relation transition with the
-  previous and next Course capacity changes in one PostgreSQL transaction.
+- `Student.transfer(...)` is an atomic Domain Operation that coordinates that Relation transition
+  with the previous and next Course capacity changes. Its declaration states the guarantee while
+  the active runtime decides whether it can provide the boundary.
 - `Enrollment` is an ordinary Entity because participation has its own id, status, timestamps, and
   credits. Its `enroll`, `activate`, and `cancel` Operations express that domain lifecycle.
 
@@ -39,10 +40,11 @@ await classroom.Student.transfer({
 });
 ```
 
-The Operation enters `app.graph.transaction(effect)`, resolves those schema-native Refs through
-the transaction-scoped UnitOfWork, executes the conditional Relationship Command with `.run()`,
-and updates both capacities through Entity Commands. PostgreSQL runs every read and write through
-the same checked-out connection. Equal previous and next Courses return `same_course`, and a
+The Operation is declared with `operation.atomic(...)`; its body contains no transaction wrapper
+or provider fallback. The ordinary Operation runner derives the `data-graph.atomicity` requirement
+and starts or reuses the active runtime's transaction before resolving the schema-native Refs.
+PostgreSQL runs every read and write through the same checked-out connection and the
+transaction-scoped UnitOfWork. Equal previous and next Courses return `same_course`, and a
 known-full destination is rejected before the Relationship Command. A later capacity
 compare-and-set mismatch returns a domain failure and rolls the complete transition back. A stale
 `previousCourse` is translated from the portable Relationship Command outcome into

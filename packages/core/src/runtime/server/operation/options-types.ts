@@ -1,3 +1,4 @@
+import type { DomainOperationExecutionMetadata } from '../../../data-graph/operation-execution.js';
 import type { OperationContracts } from '../concerns/contract-types.js';
 import type { EffectSuccessPayload } from '../effect-intents/types.js';
 import type { LayerConcern, LayerScopedOptions } from '../layer-types.js';
@@ -47,6 +48,7 @@ export type OperationOptions<
   requires?: ReadonlyArray<OperationRequirement<TInput>>;
   concerns?: ReadonlyArray<LayerConcern<TInput, unknown>>;
   contracts?: OperationContracts<TInput, TResult, TFailure>;
+  execution?: DomainOperationExecutionMetadata;
   cache?: OperationCacheConfig<TInput>;
   effects?: OperationEffectsConfig<TInput, TResult>;
 };
@@ -76,5 +78,6 @@ export type OperationRunner<
       OperationOptions<TInput, TData, TFailure>,
       'defectPublicMessage' | 'extra' | 'requires' | 'concerns' | 'contracts'
     > &
+    Pick<OperationOptions<TInput, TData, TFailure>, 'execution'> &
     Pick<OperationOptions<TInput, TData, TFailure>, 'cache' | 'effects'>;
 };

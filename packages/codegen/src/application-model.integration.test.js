@@ -414,7 +414,7 @@ describe('Ontahi application declaration analysis', () => {
             layer: 'notes',
           },
           operations: ({ self, operation }) => ({
-            list: operation({
+            list: operation.atomic({
               input: graphSchema.object({ notes: self.many() }),
               output: self.array(),
               bridge: { query: [() => 'all'] },
@@ -440,6 +440,7 @@ describe('Ontahi application declaration analysis', () => {
           name: 'list',
           authority: 'server',
           exposure: 'bridge',
+          execution: { atomicity: 'required' },
           inputSchemaText: 'graphSchema.object({ notes: NoteSchema.many() })',
           outputSchemaText: 'NoteSchema.array()',
         },
@@ -452,6 +453,7 @@ describe('Ontahi application declaration analysis', () => {
     });
 
     expect(source).toContain('input: graphSchema.object({ notes: NoteSchema.many() }),');
+    expect(source).toContain("execution: { atomicity: 'required' },");
     expect(source).not.toContain('output: NoteSchema.array(),');
   });
 

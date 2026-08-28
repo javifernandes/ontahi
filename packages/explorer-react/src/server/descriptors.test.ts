@@ -68,6 +68,7 @@ describe('explorer descriptor builder', () => {
           name: 'publish',
           authority: 'domain',
           exposure: 'bridge',
+          execution: { atomicity: 'required' },
           input: graphSchema.object({ book: graphSchema.ref(OperationBook) }),
           durable: {
             taskId: 'book.publish',
@@ -137,6 +138,7 @@ describe('explorer descriptor builder', () => {
     expect(snapshot.operations.find(operation => operation.id === 'Book.publish')).toEqual(
       expect.objectContaining({
         kind: 'durable',
+        execution: { atomicity: 'required' },
         durable: {
           taskId: 'book.publish',
           runtime: 'test-runtime',

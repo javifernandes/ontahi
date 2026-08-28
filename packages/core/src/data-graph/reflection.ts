@@ -8,6 +8,10 @@ import {
   type RelationConstraint,
   type RelationKind,
 } from './definitions.js';
+import type {
+  DomainOperationExecutionMetadata,
+  OperationExecutionAffordance,
+} from './operation-execution.js';
 import type { AnyEntityRef } from './ref/index.js';
 import type { EntityViewAst } from './view.js';
 
@@ -124,6 +128,7 @@ export type ReflectedOperationDescriptor<TInput = unknown, TData = unknown> = {
   kind?: 'graph' | 'domain' | 'durable';
   authority?: string;
   exposure?: string;
+  execution?: DomainOperationExecutionMetadata;
   _input?: TInput;
   _data?: TData;
 };
@@ -137,6 +142,9 @@ export type ReflectedOperationInvocation<TInput = unknown> = {
 
 export type ReflectedOperationInvoker = {
   canInvokeOperation?: (operation: ReflectedOperationDescriptor) => boolean;
+  getOperationExecutionAffordance?: (
+    operation: ReflectedOperationDescriptor,
+  ) => OperationExecutionAffordance | undefined;
   invokeOperation: <TInput = unknown, TData = unknown>(
     invocation: ReflectedOperationInvocation<TInput>,
   ) => Promise<OperationInvocationResult<TData>>;

@@ -495,9 +495,10 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    TypeScript subset against three Classroom expressions. Compare static analysis with an explicit
    builder and stop before publishing a public DSL. Delivered through
    [142b. Classroom Model Expression Language Experiment](../done/142b-classroom-model-expression-language-experiment.md).
-3. **Reflected atomic Operation requirement:** add the smallest static metadata and
+3. **Reflected atomic Operation requirement (complete):** add the smallest static metadata and
    `operation.atomic(...)` factory, make the server runner own the transaction boundary, and expose
-   local/bridge/unavailable execution planning without implementing replication.
+   local/bridge/unavailable execution planning without implementing replication. Extracted as
+   [142c. Reflected Atomic Operation Execution](../done/142c-reflected-atomic-operation-execution.md).
 4. **Existing Ref and declarative condition contracts:** evolve or explicitly replace
    `contracts.pre` / `contracts.post` according to the compatibility decision; add conventional
    `existingRef`, named portable conditions, rejection defaults, dependency reflection, and
@@ -562,12 +563,12 @@ surfaces.
       Commands, and have one semantic definition independent from virtual or materialized execution.
 - [ ] The Classroom migration backfills `capacity` from the stored available seats plus canonical
       Student membership, removes the counter, and proves both upgrade and fresh-install fixtures.
-- [ ] Static Operation execution requirements remain separate from runtime local/bridge/queued/
+- [x] Static Operation execution requirements remain separate from runtime local/bridge/queued/
       unavailable affordances.
-- [ ] Required capabilities are derived from model semantics, have explicit testable guarantees,
+- [x] Required capabilities are derived from model semantics, have explicit testable guarantees,
       and are never a manually duplicated list in Operation authoring.
-- [ ] UI invocation remains provider- and topology-transparent while availability stays inspectable.
-- [ ] The first executable slice remains small and extracts aggregate enforcement, materialization,
+- [x] UI invocation remains provider- and topology-transparent while availability stays inspectable.
+- [x] The first executable slice remains small and extracts aggregate enforcement, materialization,
       and distribution into linked follow-ups.
 
 ## Open Questions

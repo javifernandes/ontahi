@@ -6,6 +6,7 @@ import type {
   GraphSchemaLike,
   RelationKind,
 } from './definitions.js';
+import type { DomainOperationExecutionMetadata } from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import { query } from './query.js';
@@ -230,6 +231,7 @@ export type DomainOperationMetadata<TInput = unknown, TCache = unknown, TResult 
   clientCache?: DomainOperationClientCacheMetadata<TInput, TResult>;
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<TInput>>;
   graphOps?: DomainOperationGraphOpsMetadata;
+  execution?: DomainOperationExecutionMetadata;
   cache?: TCache;
   durable?: DurableOperationMetadata<TInput, TResult>;
 };
@@ -491,6 +493,7 @@ type ResolvedDomainOperationLike = {
   clientCache?: DomainOperationClientCacheMetadata<any, any>;
   ingress?: ReadonlyArray<DomainOperationIngressMetadata<any>>;
   graphOps?: DomainOperationGraphOpsMetadata;
+  execution?: DomainOperationExecutionMetadata;
   durable?: DurableOperationMetadata<any, any>;
 };
 
@@ -561,6 +564,7 @@ type GraphApiSummary = {
     description?: string;
     authority: DomainOperationAuthority;
     exposure: Exclude<GraphEntityExposure, 'browser-direct'>;
+    execution?: DomainOperationExecutionMetadata;
     hasBridgeQuery: boolean;
   }>;
   durableOperations: GraphApiDurableOperationSummary[];
@@ -1343,6 +1347,7 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         description: operation.description,
         authority: operation.authority,
         exposure: operation.exposure,
+        ...(operation.execution ? { execution: operation.execution } : {}),
         hasBridgeQuery: Boolean(operation.bridge?.query?.length),
       })),
       durableOperations: listDurableDomainOperations().map(operation => {

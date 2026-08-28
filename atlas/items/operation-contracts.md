@@ -21,8 +21,10 @@ Operation Contracts cover inputs, results, validation, schemas, operation invoca
 The current server Operation surface includes code-bearing `contracts.pre` and `contracts.post`
 callbacks. Each accepts one check or an ordered array; checks may be synchronous, Promise-valued,
 or Effect-valued and may produce `OperationFailure` values. Pre-checks run before the body.
-Post-checks receive the successful result after the body; a failure changes the Operation result but
-does not roll back effects already performed.
+Post-checks receive the successful result after the body. For an ordinary Operation, a failure
+changes the Operation result but does not roll back effects already performed. In an
+`operation.atomic(...)`, requirements, pre-checks, body, and post-checks execute inside the same
+Data Graph transaction, so a post failure rolls that boundary back.
 
 This surface predates schema-native Ref hydration, UnitOfWork, portable Relation constraints, and
 compositional Data Graph transactions. Its only repository use is focused Core tests and developer

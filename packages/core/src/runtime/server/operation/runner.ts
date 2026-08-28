@@ -8,6 +8,7 @@ import {
   operationRuntimeContextStorage,
   toContextRecord,
 } from '../context.js';
+import { withAtomicDataGraphExecution } from '../data-graph.js';
 import type { UnwrapEffectSuccess } from '../effect-intents/types.js';
 import { getCurrentInvocationContext } from '../invocation-context.js';
 import { getDefaultDefectLogMessage, getDefaultDefectPublicMessage } from '../scope.js';
@@ -56,6 +57,7 @@ export const createOperationRunner = <
     requires: options.requires,
     concerns: options.concerns,
     contracts: options.contracts,
+    execution: options.execution,
     cache: options.cache,
     effects: options.effects,
   };
@@ -77,31 +79,44 @@ export const createOperationRunner = <
     const contractConcern = toContractConcern<TInput, UnwrapEffectSuccess<TRawSuccess>, TFailure>(
       metadata.contracts,
     );
-    const concerns = combineConcerns(
-      contractConcern ? [contractConcern] : undefined,
-      metadata.concerns,
-    );
-    const bodyEffect = Effect.suspend(() =>
-      applyLayerConcerns(
-        {
-          scope: context.scope,
-          telemetrySpanName: context.telemetrySpanName,
-          input,
-          inputRecord,
-          extra,
-          resources: context.resources,
-        },
-        concerns,
-        effect(input),
-      ),
-    );
-    const guardedEffect =
+    const concernRuntime = {
+      scope: context.scope,
+      telemetrySpanName: context.telemetrySpanName,
+      input,
+      inputRecord,
+      extra,
+      resources: context.resources,
+    };
+    const requirementsEffect =
       metadata.requires && metadata.requires.length > 0
         ? Effect.forEach(metadata.requires, requirement => requirement.run(input), {
             concurrency: 1,
             discard: true,
-          }).pipe(Effect.flatMap(() => bodyEffect))
-        : bodyEffect;
+          })
+        : Effect.void;
+    const isAtomic = metadata.execution?.atomicity === 'required';
+    const guardedEffect = isAtomic
+      ? Effect.suspend(() => {
+          const bodyEffect = Effect.suspend(() => effect(input));
+          const contractedBody = contractConcern
+            ? applyLayerConcerns(concernRuntime, [contractConcern], bodyEffect)
+            : bodyEffect;
+          const operationEffect = requirementsEffect.pipe(Effect.flatMap(() => contractedBody));
+          const concerns = combineConcerns(metadata.concerns, [withAtomicDataGraphExecution()]);
+          return applyLayerConcerns(concernRuntime, concerns, operationEffect);
+        })
+      : (() => {
+          const concerns = combineConcerns(
+            contractConcern ? [contractConcern] : undefined,
+            metadata.concerns,
+          );
+          const bodyEffect = Effect.suspend(() =>
+            applyLayerConcerns(concernRuntime, concerns, effect(input)),
+          );
+          return metadata.requires && metadata.requires.length > 0
+            ? requirementsEffect.pipe(Effect.flatMap(() => bodyEffect))
+            : bodyEffect;
+        })();
 
     return operationRuntimeContextStorage.run(context, async () => {
       const runCurrentOperation = () =>

@@ -35,6 +35,7 @@ relatedPlans:
   - ontahi://plans/139d-postgres-classroom-transfer
   - ontahi://plans/139e-relations-developer-documentation
   - ontahi://plans/139f-relations-lifecycle-release-rehearsal
+  - ontahi://plans/142c-reflected-atomic-operation-execution
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -180,12 +181,14 @@ Only steps required for the primary invariant belong before edge application. Re
 an applied outcome and cannot imply rollback. A Data Graph transaction capability may coordinate
 several required reads and mutations before that outcome. Its callback receives a transaction-
 scoped runtime; using another runtime is outside the boundary. The provider callback is the
-low-level contract. Application code uses `app.graph.transaction(effect)`, which establishes an
-isolated child [[ontahi.model.unit-of-work|UnitOfWork]] and lets bound Query and Command `.run()`
-methods discover that runtime contextually. Success commits the whole effect, while failure or
-defect rolls it back and restores the parent scope. Sequencing Effects without this capability
-still does not promise one shared transaction, and adapters must not publish committed outcomes or
-run post-application Reactions before the outer transaction commits.
+low-level contract. `app.graph.transaction(effect)` remains the explicit composition primitive;
+Domain Operations that semantically guarantee this boundary use `operation.atomic({...})` and let
+the runner establish or reuse it. Both paths create an isolated child
+[[ontahi.model.unit-of-work|UnitOfWork]] and let bound Query and Command `.run()` methods discover
+that runtime contextually. Success commits the whole effect, while failure or defect rolls it back
+and restores the parent scope. Sequencing Effects without this capability still does not promise
+one shared transaction, and adapters must not publish committed outcomes or run post-application
+Reactions before the outer transaction commits.
 
 Application-bound execution enforces that boundary: it queues registered Reaction interpretation
 in the transaction child UnitOfWork, drains it after provider commit against the restored parent
@@ -279,12 +282,13 @@ by the Reaction and emits portable Student/Course Ref identities. This applicati
 deliberately separate from static Relation metadata and from any required transactional
 coordination.
 
-The PostgreSQL Classroom transfer keeps that required coordination in `Student.transfer(...)`.
-The Domain Operation resolves portable Student/Course input Refs in the transaction UnitOfWork,
-applies `currentCourse.assign(next, { ifCurrent: previous })`, and compare-and-set updates both
-capacity counters. A known-full destination fails before the Relation change; stale capacity after
-that change rolls the tentative transition back. No capacity callback or aggregate state is added
-to Relation metadata.
+The PostgreSQL Classroom transfer keeps that required coordination in an
+`operation.atomic({...})` named `Student.transfer(...)`. The Domain Operation resolves portable
+Student/Course input Refs in the runner-owned transaction UnitOfWork, applies
+`currentCourse.assign(next, { ifCurrent: previous })`, and compare-and-set updates both capacity
+counters. A known-full destination fails before the Relation change; stale capacity after that
+change rolls the tentative transition back. No capacity callback or aggregate state is added to
+Relation metadata.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally

@@ -8,7 +8,14 @@ const isDomainOperationDefineCall = expression =>
     ts.isPropertyAccessExpression(expression.expression) &&
     expression.expression.name.text === 'operation' &&
     ts.isIdentifier(expression.expression.expression) &&
-    expression.expression.expression.text === 'app');
+    expression.expression.expression.text === 'app') ||
+  (ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 'atomic' &&
+    ((ts.isIdentifier(expression.expression) && expression.expression.text === 'operation') ||
+      (ts.isPropertyAccessExpression(expression.expression) &&
+        expression.expression.name.text === 'operation' &&
+        ts.isIdentifier(expression.expression.expression) &&
+        expression.expression.expression.text === 'app')));
 
 export const resolveOperationInitializer = (initializer, declarations, visited = new Set()) => {
   if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {

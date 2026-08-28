@@ -41,6 +41,12 @@ const seedClassroom = () => {
 describe('Classroom Relations lifecycle', () => {
   beforeEach(seedClassroom);
 
+  it('declares Student transfer as an atomic Operation contract', () => {
+    expect(ClassroomApplication.graph.entities.Student.domain.transfer.execution).toEqual({
+      atomicity: 'required',
+    });
+  });
+
   it('reassigns a Student conditionally and distinguishes conflict from explicit skip', async () => {
     const applied = await reassignStudent({
       studentId: 'student-1',

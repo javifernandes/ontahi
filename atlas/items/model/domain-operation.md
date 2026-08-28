@@ -27,6 +27,7 @@ relatedPlans:
   - bookops://plans/122-ontahi-developer-book
   - bookops://plans/125-ontahi-ai-operations
   - ontahi://plans/74b-schema-native-operation-refs
+  - ontahi://plans/142c-reflected-atomic-operation-execution
 migratedFrom: bookops://atlas/model/domain-operation
 sourceCommit: 67713696
 ---
@@ -60,3 +61,17 @@ validation, transport, reflection, codegen, Explorer controls, and server hydrat
 single schema. A Ref remains at the declared field path across the bridge and gains explicit runtime
 methods only on the server-side copy. There is no parallel authored `inputRefs` bag or implementation
 `refs` namespace.
+
+An Operation that coordinates several Data Graph reads and mutations can declare
+`operation.atomic({...})`. The portable declaration contains only
+`execution.atomicity: 'required'`; Core derives the provider-neutral
+`data-graph.atomicity` requirement instead of asking authors to repeat a capability list or name a
+provider. The ordinary server runner opens or reuses the runtime's transaction around requirements,
+legacy pre-checks, the body, and legacy post-checks. If the authoritative runtime lacks that
+capability, execution returns a safe `execution_unavailable` failure before those phases are
+evaluated.
+
+Static execution guarantees remain distinct from live execution affordances. Reflection and
+generated clients preserve atomicity, while a runtime planner reports whether the current binding
+can execute locally, bridge the same Operation invocation to an authority, or cannot execute it.
+UI code may explain that result but does not choose a provider or change the invocation API.

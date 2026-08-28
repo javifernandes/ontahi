@@ -3,6 +3,7 @@
 import {
   createGraphClientCache,
   type GraphClientCache,
+  type OperationExecutionAffordance,
   type ReflectedEntityDataReader,
   type ReflectedRelatedEntityDataReader,
   type ReflectedOperationDescriptor,
@@ -271,6 +272,14 @@ export function useReflectedOperationSupport() {
       Boolean(invoker && (invoker.canInvokeOperation?.(operation) ?? true)),
     [invoker],
   );
+}
+
+export function useReflectedOperationExecutionAffordance(
+  operation: ReflectedOperationDescriptor,
+): OperationExecutionAffordance | undefined {
+  const invoker = useContext(ReflectedOperationInvokerContext);
+
+  return invoker?.getOperationExecutionAffordance?.(operation);
 }
 
 export type { GraphClientCache };

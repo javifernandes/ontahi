@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  resolveOperationExecutionAffordance,
   safeParseUnknownGraphSchema,
   type GraphOperationDeclaration,
   type ReflectedOperationInvocation,
@@ -47,6 +48,30 @@ export const createReflectedOperationInvoker = ({
     canInvokeOperation: operation =>
       (Boolean(graphExecutor) && graphOperationsById.has(operation.id)) ||
       Boolean(fallback && (fallback.canInvokeOperation?.(operation) ?? true)),
+    getOperationExecutionAffordance: operation => {
+      const fallbackAffordance = fallback?.getOperationExecutionAffordance?.(operation);
+
+      if (Boolean(graphExecutor) && graphOperationsById.has(operation.id)) {
+        return resolveOperationExecutionAffordance(operation, {
+          local: {
+            runtime: 'browser-data-graph',
+            capabilities: [],
+          },
+          ...(fallbackAffordance?.status === 'bridge'
+            ? {
+                bridge: {
+                  authority: fallbackAffordance.authority,
+                  bridge: fallbackAffordance.bridge,
+                },
+              }
+            : {}),
+        });
+      }
+
+      if (fallbackAffordance) return fallbackAffordance;
+      if (fallback && (fallback.canInvokeOperation?.(operation) ?? true)) return undefined;
+      return resolveOperationExecutionAffordance(operation, {});
+    },
     invokeOperation: async <TInput = unknown, TData = unknown>(
       invocation: ReflectedOperationInvocation<TInput>,
     ): Promise<OperationInvocationResult<TData>> => {

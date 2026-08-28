@@ -150,6 +150,9 @@ export type ExplorerOperationDescriptor = {
   description?: string;
   authority: string;
   exposure: string;
+  execution?: {
+    atomicity: 'required';
+  };
   hasBridgeQuery?: boolean;
   bridgeQueryCount?: number;
   bridgeInvalidationCount?: number;

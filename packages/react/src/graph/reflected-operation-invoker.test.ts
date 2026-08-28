@@ -54,6 +54,10 @@ describe('reflected graph operation invoker', () => {
     });
 
     expect(invoker.canInvokeOperation?.(operationDescriptor)).toBe(true);
+    expect(invoker.getOperationExecutionAffordance?.(operationDescriptor)).toEqual({
+      status: 'local',
+      runtime: 'browser-data-graph',
+    });
     await expect(
       invoker.invokeOperation({
         operation: operationDescriptor,
@@ -90,6 +94,11 @@ describe('reflected graph operation invoker', () => {
     const fallbackResult = { ok: true, kind: 'success', value: 'bridged' } as const;
     const fallback = {
       canInvokeOperation: vi.fn().mockReturnValue(true),
+      getOperationExecutionAffordance: vi.fn().mockReturnValue({
+        status: 'bridge',
+        authority: 'server',
+        bridge: 'fetch',
+      }),
       invokeOperation: vi.fn().mockResolvedValue(fallbackResult),
     };
     const invoker = createReflectedOperationInvoker({
@@ -113,5 +122,58 @@ describe('reflected graph operation invoker', () => {
       }),
     ).resolves.toEqual(fallbackResult);
     expect(fallback.invokeOperation).toHaveBeenCalledOnce();
+    expect(invoker.getOperationExecutionAffordance?.(bridgedOperation)).toEqual({
+      status: 'bridge',
+      authority: 'server',
+      bridge: 'fetch',
+    });
+  });
+
+  it('falls back to a bridge when a registered local operation lacks a required capability', () => {
+    const fallback = {
+      getOperationExecutionAffordance: vi.fn().mockReturnValue({
+        status: 'bridge',
+        authority: 'server',
+        bridge: 'fetch',
+      }),
+      invokeOperation: vi.fn(),
+    };
+    const invoker = createReflectedOperationInvoker({
+      graphExecutor: createExecutor(),
+      graphOperations: [resetReadingProgress],
+      fallback,
+    });
+    const atomicOperation = {
+      ...operationDescriptor,
+      exposure: 'bridge',
+      execution: { atomicity: 'required' as const },
+    };
+
+    expect(invoker.getOperationExecutionAffordance?.(atomicOperation)).toEqual({
+      status: 'bridge',
+      authority: 'server',
+      bridge: 'fetch',
+    });
+  });
+
+  it('reports unavailable when neither the local graph nor a fallback can execute', () => {
+    const invoker = createReflectedOperationInvoker({
+      graphExecutor: createExecutor(),
+      graphOperations: [resetReadingProgress],
+    });
+    const operation = {
+      id: 'Student.transfer',
+      entityName: 'Student',
+      name: 'transfer',
+      kind: 'domain' as const,
+      authority: 'server',
+      exposure: 'server-only',
+      execution: { atomicity: 'required' as const },
+    };
+
+    expect(invoker.getOperationExecutionAffordance?.(operation)).toEqual({
+      status: 'unavailable',
+      missingCapabilities: [{ kind: 'data-graph.atomicity' }],
+    });
   });
 });

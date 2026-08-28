@@ -284,6 +284,47 @@ describe('ExplorerOperationExecutePanel', () => {
     expect(screen.queryByRole('button', { name: /run/i })).toBeNull();
   });
 
+  it('explains when an atomic operation has no executable runtime affordance', () => {
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({ execution: { atomicity: 'required' } })}
+      />,
+      {
+        reflectedOperationInvoker: {
+          getOperationExecutionAffordance: () => ({
+            status: 'unavailable',
+            missingCapabilities: [{ kind: 'data-graph.atomicity' }],
+          }),
+          invokeOperation: invokeOperationMock,
+        },
+      },
+    );
+
+    expect(screen.getByText('Execution requires data-graph.atomicity.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /run/i })).toBeNull();
+  });
+
+  it('shows when the current runtime will bridge an atomic operation', () => {
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({ execution: { atomicity: 'required' } })}
+      />,
+      {
+        reflectedOperationInvoker: {
+          getOperationExecutionAffordance: () => ({
+            status: 'bridge',
+            authority: 'server',
+            bridge: 'fetch',
+          }),
+          invokeOperation: invokeOperationMock,
+        },
+      },
+    );
+
+    expect(screen.getByText('Execution: bridge to server via fetch.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^run$/i })).toBeTruthy();
+  });
+
   it('keeps compact scalar inputs placeholder-like and executes destructive operations after confirmation', async () => {
     const user = userEvent.setup();
     invokeOperationMock.mockResolvedValueOnce(

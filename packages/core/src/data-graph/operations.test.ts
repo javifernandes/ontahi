@@ -641,6 +641,7 @@ describe('data-graph operations', () => {
         reindex: defineDomainOperationMetadata({
           authority: 'server',
           exposure: 'server-only',
+          execution: { atomicity: 'required' },
         }),
       }),
       taskDefinitions: {
@@ -740,6 +741,7 @@ describe('data-graph operations', () => {
           description: undefined,
           authority: 'server',
           exposure: 'server-only',
+          execution: { atomicity: 'required' },
           hasBridgeQuery: false,
         },
       ],
