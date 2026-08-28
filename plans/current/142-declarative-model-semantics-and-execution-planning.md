@@ -1,6 +1,6 @@
 # 142. Declarative Model Semantics And Execution Planning
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/142-declarative-model-semantics-and-execution-planning`
 
@@ -466,10 +466,11 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
 
 ## Execution Slices
 
-1. **Existing contract characterization:** add Operation-level tests for current callback ordering,
+1. **Existing contract characterization (complete):** add Operation-level tests for current callback ordering,
    failure meaning, schema-native Ref hydration, UnitOfWork visibility, post-body mutation behavior,
    and interaction with `app.graph.transaction(...)`. Record the compatibility decision before
-   adding another authoring shape.
+   adding another authoring shape. Delivered through
+   [142a. Existing Operation Contract Compatibility Baseline](../done/142a-existing-operation-contract-compatibility-baseline.md).
 2. **Language and IR experiment:** prove a minimal arithmetic/boolean/Ref/relation-aggregate
    TypeScript subset against three Classroom expressions. Compare static analysis with an explicit
    builder and stop before publishing a public DSL.
@@ -519,7 +520,7 @@ surfaces.
 - [ ] One Classroom sketch distinguishes input constraints, Ref resolution requirements,
       preconditions, permanent invariants, postconditions, and derived Fields without manual
       counter maintenance.
-- [ ] Existing `contracts.pre` / `contracts.post` behavior and real repository adoption are covered
+- [x] Existing `contracts.pre` / `contracts.post` behavior and real repository adoption are covered
       by evidence; the plan records a compatible evolution or an explicit alpha deprecation path
       before publishing declarative condition syntax.
 - [ ] The authoring experiment permits natural arithmetic and boolean expressions or records
@@ -550,23 +551,19 @@ surfaces.
 
 ## Open Questions
 
-1. Should portable named conditions extend `contracts.pre` / `contracts.post` alongside opaque
-   callbacks, or should the anticipatory callback surface be deprecated and replaced during alpha?
-2. Which current semantics—ordered arrays, multiple returned failures, Promise/Effect callbacks,
-   raw runtime access, and postcondition `OperationFailure`—belong in the enduring model?
-3. Can the existing codegen analyzer support a useful restricted TypeScript expression subset
+1. Can the existing codegen analyzer support a useful restricted TypeScript expression subset
    without making runtime-only authoring second class?
-4. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
+2. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
    remain distinct without recreating a parallel `refs` namespace?
-5. Which preconditions can be proven to lower into one Command, and how does the compiler explain
+3. Which preconditions can be proven to lower into one Command, and how does the compiler explain
    when Operation-level atomicity is still required?
-6. What is the smallest versioned capability vocabulary that can express the selected Operation's
+4. What is the smallest versioned capability vocabulary that can express the selected Operation's
    derived requirements without turning provider implementation details into model metadata?
-7. How are conventional rejection codes named and localized without forcing boilerplate or making
+5. How are conventional rejection codes named and localized without forcing boilerplate or making
    domain failures unstable?
-8. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
+6. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
    inaccessible condition evidence?
-9. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
+7. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
    Field surface without a parallel computed-field query language?
-10. How should generated clients expose execution availability while keeping the ordinary invocation
-    spelling unchanged?
+8. How should generated clients expose execution availability while keeping the ordinary invocation
+   spelling unchanged?
