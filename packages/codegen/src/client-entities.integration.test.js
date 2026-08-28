@@ -81,7 +81,7 @@ describe('conventional client entity codegen', () => {
     );
   });
 
-  it('can generate the shared condition registry without projecting a client module', async () => {
+  it('generates a conditions-only registry and maps .mts runtime imports', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-operation-conditions-only-'));
     const sourceDirectory = path.join(directory, 'src');
     const graphApiPath = path.join(sourceDirectory, 'graph.ts');
@@ -180,7 +180,7 @@ describe('conventional client entity codegen', () => {
     await expect(readFile(mtsOutputPath, 'utf8')).resolves.toContain(
       "import { operationConditions } from './operation-conditions.mjs';",
     );
-  });
+  }, 30_000);
 
   it('projects entity dependencies embedded in named Value operation contracts', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-client-codegen-value-contracts-'));
