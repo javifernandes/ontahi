@@ -302,6 +302,26 @@ The experiment must compare this approach with a small explicit expression-build
 not commit the framework to source analysis if it cannot preserve runtime-only application
 authoring, useful type diagnostics, and generated artifact correctness.
 
+### Language Experiment Decision
+
+Plan 142b proved that the three target Classroom expressions can be parsed without executing their
+callbacks and lowered deterministically into one versioned, JSON-safe IR. A closed AST visitor can
+preserve ordinary subtraction, less-than-or-equal, boolean not, Ref identity, and Relation count
+syntax while rejecting arbitrary calls, captures, unsupported operators, block bodies, and invalid
+semantic receivers with stable source-located diagnostics.
+
+Static callbacks and an explicit builder should therefore be two frontends over one model, not two
+contract languages. Natural TypeScript is the preferred build-time authoring form. The explicit
+builder remains the honest runtime-only fallback because it creates the same IR without needing
+source text. It is more verbose and repeats model member names as strings, so it should not become
+the default merely because it is easier to implement.
+
+The experiment does not justify publication yet. Its compiler-owned symbol table was supplied as a
+fixture; current codegen still needs a real semantic bridge from Entity Fields, Relations, and
+Operation input Refs into that table. The canonical IR must also move to a technology-independent
+Core boundary before reflection or runtimes consume it. No callback is serialized or evaluated at
+runtime, and runtime-only applications must retain builder parity for every promoted node.
+
 ## Reflection And Advisory Evaluation
 
 Compiled conditions expose stable identity, safe rejection metadata, data dependencies, required
@@ -471,9 +491,10 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    and interaction with `app.graph.transaction(...)`. Record the compatibility decision before
    adding another authoring shape. Delivered through
    [142a. Existing Operation Contract Compatibility Baseline](../done/142a-existing-operation-contract-compatibility-baseline.md).
-2. **Language and IR experiment:** prove a minimal arithmetic/boolean/Ref/relation-aggregate
+2. **Language and IR experiment (complete):** prove a minimal arithmetic/boolean/Ref/relation-aggregate
    TypeScript subset against three Classroom expressions. Compare static analysis with an explicit
-   builder and stop before publishing a public DSL.
+   builder and stop before publishing a public DSL. Delivered through
+   [142b. Classroom Model Expression Language Experiment](../done/142b-classroom-model-expression-language-experiment.md).
 3. **Reflected atomic Operation requirement:** add the smallest static metadata and
    `operation.atomic(...)` factory, make the server runner own the transaction boundary, and expose
    local/bridge/unavailable execution planning without implementing replication.
@@ -523,9 +544,9 @@ surfaces.
 - [x] Existing `contracts.pre` / `contracts.post` behavior and real repository adoption are covered
       by evidence; the plan records a compatible evolution or an explicit alpha deprecation path
       before publishing declarative condition syntax.
-- [ ] The authoring experiment permits natural arithmetic and boolean expressions or records
+- [x] The authoring experiment permits natural arithmetic and boolean expressions or records
       concrete evidence that an explicit builder is required.
-- [ ] Every accepted expression lowers to stable JSON-safe IR with source-located diagnostics for
+- [x] Every accepted expression lowers to stable JSON-safe IR with source-located diagnostics for
       unsupported code.
 - [ ] `existingRef(Entity)` has a conventional safe failure and preserves portable Ref identity
       separately from authorized resolved data.
@@ -551,19 +572,17 @@ surfaces.
 
 ## Open Questions
 
-1. Can the existing codegen analyzer support a useful restricted TypeScript expression subset
-   without making runtime-only authoring second class?
-2. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
+1. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
    remain distinct without recreating a parallel `refs` namespace?
-3. Which preconditions can be proven to lower into one Command, and how does the compiler explain
+2. Which preconditions can be proven to lower into one Command, and how does the compiler explain
    when Operation-level atomicity is still required?
-4. What is the smallest versioned capability vocabulary that can express the selected Operation's
+3. What is the smallest versioned capability vocabulary that can express the selected Operation's
    derived requirements without turning provider implementation details into model metadata?
-5. How are conventional rejection codes named and localized without forcing boilerplate or making
+4. How are conventional rejection codes named and localized without forcing boilerplate or making
    domain failures unstable?
-6. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
+5. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
    inaccessible condition evidence?
-7. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
+6. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
    Field surface without a parallel computed-field query language?
-8. How should generated clients expose execution availability while keeping the ordinary invocation
+7. How should generated clients expose execution availability while keeping the ordinary invocation
    spelling unchanged?
