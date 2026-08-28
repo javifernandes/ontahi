@@ -345,7 +345,9 @@ const parseOperationConditions = ({
     };
   }
   const hasPost = contracts.properties.some(
-    property => ts.isPropertyAssignment(property) && propertyNameText(property) === 'post',
+    property =>
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+      propertyNameText(property) === 'post',
   );
   if (hasPost) {
     return {

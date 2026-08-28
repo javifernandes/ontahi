@@ -242,6 +242,31 @@ describe('model expression language experiment', () => {
     });
   });
 
+  it('rejects logical negation of a non-boolean operand', () => {
+    const sourceText = 'const invalid = ({ capacity }) => !capacity;';
+
+    expect(
+      analyzeModelExpressionSource(sourceText, {
+        declarationName: 'invalid',
+        sourcePath: '/examples/classroom/not-operand.ts',
+        symbols: courseSymbols,
+      }),
+    ).toEqual({
+      program: undefined,
+      diagnostics: [
+        {
+          code: 'model_expression_invalid_operand',
+          message: 'Operand must have boolean semantics.',
+          source: {
+            path: '/examples/classroom/not-operand.ts',
+            line: 1,
+            column: 36,
+          },
+        },
+      ],
+    });
+  });
+
   it('rejects block bodies and semantically invalid aggregate receivers', () => {
     const blockBody = 'const invalid = ({ capacity }) => { return capacity; };';
     const invalidReceiver = 'const invalid = ({ capacity }) => capacity.count();';

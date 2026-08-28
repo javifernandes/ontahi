@@ -17,6 +17,28 @@ const operationPropertyFrom = sourceText => {
 };
 
 describe('Operation declaration analysis', () => {
+  it('rejects shorthand postconditions instead of silently dropping them', () => {
+    const property = operationPropertyFrom(`
+      const operations = {
+        inspect: operation({
+          contracts: { post },
+          run: () => undefined,
+        }),
+      };
+    `);
+
+    expect(
+      parseOperationDefinition(property, new Map(), new Map(), {
+        authority: 'server',
+        exposure: 'bridge',
+      }),
+    ).toEqual({
+      diagnostics: [
+        'inspect.contracts.post is not portable in this slice; use contract(...) for an opaque server-only check.',
+      ],
+    });
+  });
+
   it('reports a diagnostic when portable conditions have no source context', () => {
     const property = operationPropertyFrom(`
       const operations = {

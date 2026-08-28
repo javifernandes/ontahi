@@ -228,7 +228,7 @@ const compileExpression = (node, context) => {
     const operand = compileExpression(expression.operand, context);
     return expressionValue('boolean', {
       kind: 'not',
-      operand: requireExpression(operand, context, expression.operand),
+      operand: requireOperandSemantic(operand, 'boolean', context, expression.operand),
     });
   }
 
