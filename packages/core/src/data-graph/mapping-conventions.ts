@@ -1,6 +1,7 @@
 import {
   type AnyEntityDefinition,
   getEntityMapping,
+  isDerivedFieldDefinition,
   isReferenceFieldDefinition,
   mapEntity,
   mapRelation,
@@ -44,17 +45,19 @@ export const applyConventionalDataGraphMappings = ({
     mapEntity(entity).toTable(
       override?.table ?? naming.table(entity.name),
       Object.fromEntries(
-        Object.keys(entity.fields).map(fieldName => [
-          fieldName,
-          override?.columns?.[fieldName] ??
-            naming.column(
-              isReferenceFieldDefinition(entity.fields[fieldName]!)
-                ? fieldName.endsWith('Id')
-                  ? fieldName
-                  : `${fieldName}Id`
-                : fieldName,
-            ),
-        ]),
+        Object.entries(entity.fields)
+          .filter(([, fieldDefinition]) => !isDerivedFieldDefinition(fieldDefinition))
+          .map(([fieldName, fieldDefinition]) => [
+            fieldName,
+            override?.columns?.[fieldName] ??
+              naming.column(
+                isReferenceFieldDefinition(fieldDefinition)
+                  ? fieldName.endsWith('Id')
+                    ? fieldName
+                    : `${fieldName}Id`
+                  : fieldName,
+              ),
+          ]),
       ),
     );
 

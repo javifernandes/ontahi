@@ -1,5 +1,11 @@
 import { isJsonValue, type JsonValue } from '../value/json.js';
 
+import {
+  assertModelExpressionProgram,
+  collectModelExpressionDependencies,
+  type ModelExpressionDependency,
+  type ModelExpressionProgram,
+} from './model-expression/program.js';
 import type { RelationNodeSpec } from './query.js';
 import {
   getEntityIdentityLocator,
@@ -16,6 +22,11 @@ import {
 import type { SemanticSelection } from './selection-ast.js';
 import { createRecursiveEntityView, isRecursiveViewShape, type EntityViewFactory } from './view.js';
 
+export type DerivedFieldMetadata = {
+  expression?: ModelExpressionProgram;
+  dependencies?: readonly ModelExpressionDependency[];
+};
+
 export type FieldDefinition<TValue> = {
   kind: 'field';
   fieldType: 'id' | 'string' | 'number' | 'boolean' | 'date' | 'json' | 'enum' | 'reference';
@@ -26,7 +37,12 @@ export type FieldDefinition<TValue> = {
   optional?: true;
   description?: string;
   presentation?: GraphSchemaPresentation;
+  derived?: DerivedFieldMetadata;
   __value?: TValue;
+};
+
+export type DerivedFieldDefinition<TValue> = FieldDefinition<TValue> & {
+  derived: DerivedFieldMetadata;
 };
 
 export type IdFieldDefinition = FieldDefinition<string> & {
@@ -105,6 +121,10 @@ export const isReferenceFieldDefinition = (
   definition: AnyFieldDefinition,
 ): definition is AnyReferenceFieldDefinition => definition.fieldType === 'reference';
 
+export const isDerivedFieldDefinition = (
+  definition: AnyFieldDefinition,
+): definition is DerivedFieldDefinition<unknown> => definition.derived !== undefined;
+
 export type InferFieldValue<TField extends AnyFieldDefinition> = TField extends {
   __value?: infer TValue;
 }
@@ -113,6 +133,14 @@ export type InferFieldValue<TField extends AnyFieldDefinition> = TField extends 
 
 export type InferEntityRecord<TFields extends FieldDefinitions> = {
   [TKey in keyof TFields]: InferFieldValue<TFields[TKey]>;
+};
+
+export type StoredFieldName<TFields extends FieldDefinitions> = {
+  [TKey in keyof TFields]: TFields[TKey] extends { derived: DerivedFieldMetadata } ? never : TKey;
+}[keyof TFields];
+
+export type InferEntityMutationRecord<TFields extends FieldDefinitions> = {
+  [TKey in StoredFieldName<TFields>]: InferFieldValue<TFields[TKey]>;
 };
 
 export type GraphSchemaLike<TValue = unknown> = {
@@ -826,6 +854,28 @@ export const field = {
     fieldType: 'reference',
     target: target as TTarget,
   }),
+  derived: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+    authoring:
+      | ModelExpressionProgram
+      | ((model: Record<string, any>) => InferFieldValue<TDefinition>),
+  ): TDefinition & { derived: DerivedFieldMetadata } => {
+    if (definition.fieldType === 'id' || definition.fieldType === 'reference') {
+      throw new TypeError('Derived Fields must use a non-identity scalar Field definition.');
+    }
+    if (typeof authoring === 'function') {
+      return { ...definition, derived: {} };
+    }
+
+    assertModelExpressionProgram(authoring);
+    return {
+      ...definition,
+      derived: {
+        expression: authoring,
+        dependencies: collectModelExpressionDependencies(authoring),
+      },
+    };
+  },
   nullable: <TDefinition extends AnyFieldDefinition>(
     definition: TDefinition,
   ): Omit<TDefinition, '__value' | 'nullable'> & {
@@ -1399,10 +1449,9 @@ export const resolveFieldNameForEntity = (
 export const getEntityMapping = (entityDefinition: AnyEntityDefinition) => ({
   tableName: entityDefinition.mapping?.tableName ?? entityDefinition.name,
   columns: Object.fromEntries(
-    Object.keys(entityDefinition.fields).map(fieldName => [
-      fieldName,
-      resolveColumnNameForEntity(entityDefinition, fieldName),
-    ]),
+    Object.entries(entityDefinition.fields)
+      .filter(([, fieldDefinition]) => !isDerivedFieldDefinition(fieldDefinition))
+      .map(([fieldName]) => [fieldName, resolveColumnNameForEntity(entityDefinition, fieldName)]),
   ),
 });
 
@@ -1451,7 +1500,7 @@ export const resolveHasManyTargetField = (
 export const resolveRelationFields = (
   sourceEntity: AnyEntityDefinition,
   relationName: string,
-  relationNode: RelationNodeSpec,
+  relationNode: Pick<RelationNodeSpec, 'entity'>,
 ) => {
   const relationDefinition = sourceEntity.relations[relationName] as
     | RelationDefinition<RelationKind, AnyEntityDefinition>

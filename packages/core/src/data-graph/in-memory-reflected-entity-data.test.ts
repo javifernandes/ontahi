@@ -6,6 +6,7 @@ import {
   createRuntimeBoundDataGraphApi,
   entity,
   field,
+  modelExpression,
   mapEntity,
   mapRelation,
   query,
@@ -157,5 +158,26 @@ describe('in-memory reflected entity data', () => {
         },
       ],
     });
+  });
+
+  it('presents virtual derived Fields without persisting them', async () => {
+    const Course = entity('ReflectedCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      availableSeats: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(modelExpression.field('capacity')),
+      ),
+    });
+    const dataset: InMemoryDataset = {
+      ReflectedCourse: [{ id: 'course-1', capacity: 4 }],
+    };
+    const storage = createInMemoryDataGraphStorage({ entities: [Course], dataset });
+
+    await expect(storage.readEntityData({ entityName: 'ReflectedCourse' })).resolves.toMatchObject({
+      columns: [{ field: 'id' }, { field: 'capacity' }, { field: 'availableSeats' }],
+      rows: [{ id: 'course-1', capacity: 4, availableSeats: 4 }],
+    });
+    expect(dataset.ReflectedCourse).toEqual([{ id: 'course-1', capacity: 4 }]);
   });
 });

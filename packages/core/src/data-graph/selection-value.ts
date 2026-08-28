@@ -1,5 +1,9 @@
 import { GraphCommand } from './command.js';
-import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
+import type {
+  AnyEntityDefinition,
+  InferEntityMutationRecord,
+  InferEntityRecord,
+} from './definitions.js';
 import { query, type EntityFieldProxy, type QueryBuilder } from './query.js';
 import type { AnyEntityRef, EntityRef } from './ref/index.js';
 import {
@@ -160,7 +164,7 @@ export class Selection<
     return this.toGraphSelection().limit(limitValue);
   }
 
-  update(payload: Partial<InferEntityRecord<TEntity['fields']>>) {
+  update(payload: Partial<InferEntityMutationRecord<TEntity['fields']>>) {
     return new GraphCommand(
       createUpdateCommandSpec(this.root, this, payload, {
         ...(this.cardinality ? { cardinality: this.cardinality } : {}),
@@ -169,11 +173,11 @@ export class Selection<
   }
 
   updateReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: Partial<InferEntityMutationRecord<TEntity['fields']>>,
     fieldNames: TFieldNames,
   ): GraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    Partial<InferEntityMutationRecord<TEntity['fields']>>,
     SelectionReturningResult<TEntity, TFieldNames, TCardinality>
   > {
     return new GraphCommand(
@@ -183,7 +187,7 @@ export class Selection<
       }),
     ) as GraphCommand<
       TEntity,
-      Partial<InferEntityRecord<TEntity['fields']>>,
+      Partial<InferEntityMutationRecord<TEntity['fields']>>,
       SelectionReturningResult<TEntity, TFieldNames, TCardinality>
     >;
   }

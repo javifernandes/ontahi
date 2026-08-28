@@ -5,7 +5,11 @@ import { booleanComputation, type BooleanComputation } from '../computation/cond
 import type { BoundGraphRead, ExecutableGraphRead } from './binding.js';
 import type { BoundGraphCommand } from './command-binding.js';
 import type { GraphCommandSpec } from './command.js';
-import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
+import type {
+  AnyEntityDefinition,
+  InferEntityMutationRecord,
+  InferEntityRecord,
+} from './definitions.js';
 import {
   query,
   type AnyRelationQueryBuilder,
@@ -38,6 +42,9 @@ import {
 } from './selection.js';
 import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
 
+type EntityMutationPayload<TEntity extends AnyEntityDefinition> = Partial<
+  InferEntityMutationRecord<TEntity['fields']>
+>;
 type Simplify<TValue> = { [TKey in keyof TValue]: TValue[TKey] } & {};
 
 type RelatedToOptions<TTarget extends AnyEntityDefinition, TSource extends AnyEntityDefinition> = {
@@ -170,58 +177,58 @@ export type BoundGraphSelectionSemanticApi<
     TCommandOptions
   >;
   update: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     void,
     TCommandError,
     TCommandOptions
   >;
   updateOne: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     void,
     TCommandError,
     TCommandOptions
   >;
   updateMany: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     void,
     TCommandError,
     TCommandOptions
   >;
   updateReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     Array<PickEntityFields<TEntity, TFieldNames>>,
     TCommandError,
     TCommandOptions
   >;
   updateOneReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     PickEntityFields<TEntity, TFieldNames>,
     TCommandError,
     TCommandOptions
   >;
   updateManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     Array<PickEntityFields<TEntity, TFieldNames>>,
     TCommandError,
     TCommandOptions
@@ -446,20 +453,20 @@ export type BoundSelectionSemanticApi<
     TCommandOptions
   >;
   update: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     void,
     TCommandError,
     TCommandOptions
   >;
   updateReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     BoundSelectionReturningResult<TEntity, TFieldNames, TCardinality>,
     TCommandError,
     TCommandOptions
@@ -554,65 +561,65 @@ export type BoundSelectionEntityBase<
     TCommandOptions
   >;
   insert: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     void,
     TCommandError,
     TCommandOptions
   >;
   insertReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     PickEntityFields<TEntity, TFieldNames>,
     TCommandError,
     TCommandOptions
   >;
   insertMany: (
-    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    payloads: Array<EntityMutationPayload<TEntity>>,
   ) => BoundGraphCommand<
     TEntity,
-    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    Array<EntityMutationPayload<TEntity>>,
     void,
     TCommandError,
     TCommandOptions
   >;
   insertManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    payloads: Array<EntityMutationPayload<TEntity>>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
-    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    Array<EntityMutationPayload<TEntity>>,
     Array<PickEntityFields<TEntity, TFieldNames>>,
     TCommandError,
     TCommandOptions
   >;
   upsert: (
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     options: {
       conflictOn: readonly EntityFieldName<TEntity>[];
       strategy: 'ignore' | 'merge';
     },
   ) => BoundGraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     void,
     TCommandError,
     TCommandOptions
   >;
   upsertMany: (
-    payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    payloads: Array<EntityMutationPayload<TEntity>>,
     options: {
       conflictOn: readonly EntityFieldName<TEntity>[];
       strategy: 'ignore' | 'merge';
     },
   ) => BoundGraphCommand<
     TEntity,
-    Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+    Array<EntityMutationPayload<TEntity>>,
     void,
     TCommandError,
     TCommandOptions
@@ -892,10 +899,9 @@ export const createGraphSelectionAssembly = <
       orderBy: (build: QueryOrderByArg<TEntity, InferEntityRecord<TEntity['fields']>>) =>
         asGraphSelection().orderBy(build),
       limit: (limitValue: number) => asGraphSelection().limit(limitValue),
-      update: (payload: Partial<InferEntityRecord<TEntity['fields']>>) =>
-        createCommand(update(payload).build()),
+      update: (payload: EntityMutationPayload<TEntity>) => createCommand(update(payload).build()),
       updateReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-        payload: Partial<InferEntityRecord<TEntity['fields']>>,
+        payload: EntityMutationPayload<TEntity>,
         fieldNames: TFieldNames,
       ) => createCommand(updateReturning(payload, fieldNames).build()),
       delete: () => createCommand(deleteSelection().build()),
@@ -942,15 +948,15 @@ export const createGraphSelectionAssembly = <
       all: () => createGraphSelection(query(entityDefinition)),
       where: (build: QueryWhereArg<TEntity, any>) =>
         createGraphSelection(query(entityDefinition).where(build)),
-      insert: (payload: Partial<InferEntityRecord<TEntity['fields']>>) =>
+      insert: (payload: EntityMutationPayload<TEntity>) =>
         createCommand(createInsertCommandSpec(entityDefinition, payload)),
       insertReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-        payload: Partial<InferEntityRecord<TEntity['fields']>>,
+        payload: EntityMutationPayload<TEntity>,
         fieldNames: TFieldNames,
       ) =>
         createCommand<
           TEntity,
-          Partial<InferEntityRecord<TEntity['fields']>>,
+          EntityMutationPayload<TEntity>,
           PickEntityFields<TEntity, TFieldNames>
         >(
           createInsertCommandSpec(entityDefinition, payload, {
@@ -958,26 +964,26 @@ export const createGraphSelectionAssembly = <
             cardinality: 'one',
           }),
         ),
-      insertMany: (payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>) =>
+      insertMany: (payloads: Array<EntityMutationPayload<TEntity>>) =>
         createCommand(createInsertManyCommandSpec(entityDefinition, payloads)),
       insertManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-        payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+        payloads: Array<EntityMutationPayload<TEntity>>,
         fieldNames: TFieldNames,
       ) =>
         createCommand<
           TEntity,
-          Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+          Array<EntityMutationPayload<TEntity>>,
           Array<PickEntityFields<TEntity, TFieldNames>>
         >(createInsertManyCommandSpec(entityDefinition, payloads, { returning: fieldNames })),
       upsert: (
-        payload: Partial<InferEntityRecord<TEntity['fields']>>,
+        payload: EntityMutationPayload<TEntity>,
         options: {
           conflictOn: readonly EntityFieldName<TEntity>[];
           strategy: 'ignore' | 'merge';
         },
       ) => createCommand(createUpsertCommandSpec(entityDefinition, payload, options)),
       upsertMany: (
-        payloads: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+        payloads: Array<EntityMutationPayload<TEntity>>,
         options: {
           conflictOn: readonly EntityFieldName<TEntity>[];
           strategy: 'ignore' | 'merge';

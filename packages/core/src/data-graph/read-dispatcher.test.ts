@@ -5,6 +5,7 @@ import {
   createEntityRef,
   entity,
   field,
+  modelExpression,
   query,
   selection,
   Selection,
@@ -388,6 +389,99 @@ describe('graph read dispatcher', () => {
       }),
     ).resolves.toMatchObject({ kind: 'graph-read-result' });
     expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('requires authorization for a derived Field and every dependency used to materialize it', async () => {
+    const defineCapacityGraph = () => {
+      const Course = entity('PolicyCourse', {
+        id: field.id(),
+        capacity: field.nonNegativeInteger(),
+        availableSeats: field.derived(
+          field.nonNegativeInteger(),
+          modelExpression.define(
+            modelExpression.subtract(
+              modelExpression.field('capacity'),
+              modelExpression.relation('students').count(),
+            ),
+          ),
+        ),
+      });
+      const Student = entity('PolicyStudent', {
+        id: field.id(),
+        course: field.ref(Course),
+      });
+      return { Course: Course.hasMany('students', Student, { via: 'course' }), Student };
+    };
+    const client = defineCapacityGraph();
+    const server = defineCapacityGraph();
+    const Capacity = client.Course.view('PolicyCourseCapacity', { availableSeats: true });
+    const execute = vi.fn(async () => [{ availableSeats: 2 }]);
+    const basePolicy = {
+      entity: server.Course,
+      modes: ['run'] as const,
+      cardinalities: ['many'] as const,
+      maxLimit: 10,
+      scope: 'all' as const,
+      fields: {
+        availableSeats: {
+          select: true as const,
+          filter: ['gt'] as const,
+          order: true as const,
+        },
+        capacity: { select: true as const },
+      },
+      relations: { students: { fields: {} } },
+    } satisfies GraphReadPolicy<typeof server.Course, undefined>;
+
+    const allowed = createGraphReadDispatcher({ policies: [basePolicy], execute });
+    await expect(
+      allowed(toGraphReadRequest(query(client.Course).as(Capacity).limit(10), 'run'), {
+        authority: undefined,
+      }),
+    ).resolves.toMatchObject({ kind: 'graph-read-result' });
+    await expect(
+      allowed(
+        toGraphReadRequest(
+          query(client.Course)
+            .where(course => course.availableSeats.gt(0))
+            .orderBy(course => course.availableSeats.desc())
+            .as(Capacity)
+            .limit(10),
+          'run',
+        ),
+        { authority: undefined },
+      ),
+    ).resolves.toMatchObject({ kind: 'graph-read-result' });
+
+    for (const deniedPolicy of [
+      { ...basePolicy, fields: { availableSeats: { select: true as const } } },
+      { ...basePolicy, relations: {} },
+    ]) {
+      const denied = createGraphReadDispatcher({ policies: [deniedPolicy], execute: vi.fn() });
+      await expect(
+        denied(toGraphReadRequest(query(client.Course).as(Capacity).limit(10), 'run'), {
+          authority: undefined,
+        }),
+      ).resolves.toMatchObject({
+        kind: 'protocol-error',
+        error: { code: 'access_denied' },
+      });
+      await expect(
+        denied(
+          toGraphReadRequest(
+            query(client.Course)
+              .where(course => course.availableSeats.gt(0))
+              .as(Capacity)
+              .limit(10),
+            'run',
+          ),
+          { authority: undefined },
+        ),
+      ).resolves.toMatchObject({
+        kind: 'protocol-error',
+        error: { code: 'access_denied' },
+      });
+    }
   });
 
   it('permits count without requiring a projection and does not apply a row limit', async () => {

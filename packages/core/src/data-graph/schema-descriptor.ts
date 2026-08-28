@@ -81,6 +81,8 @@ export type GraphSchemaScalarDescriptor = {
   };
   description?: string;
   presentation?: GraphSchemaPresentation;
+  readOnly?: true;
+  derived?: NonNullable<AnyFieldDefinition['derived']>;
 };
 
 export type GraphSchemaReferenceDescriptor = {
@@ -214,6 +216,8 @@ export type GraphJsonSchema = {
   $ref?: string;
   $defs?: Record<string, GraphJsonSchema>;
   presentation?: GraphSchemaPresentation;
+  readOnly?: boolean;
+  'x-ontahi-derived'?: NonNullable<AnyFieldDefinition['derived']>;
   'x-ontahi-string-exclusion'?: {
     values: readonly string[];
     caseInsensitive?: true;
@@ -315,6 +319,7 @@ const describeField = (
         ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
         ...(field.description ? { description: field.description } : {}),
         ...(field.presentation ? { presentation: field.presentation } : {}),
+        ...(field.derived ? { readOnly: true, derived: field.derived } : {}),
       };
 
 const describeEntity = (
@@ -570,6 +575,8 @@ const scalarJsonSchema = (descriptor: GraphSchemaScalarDescriptor): GraphJsonSch
       : {}),
     ...(descriptor.description ? { description: descriptor.description } : {}),
     ...(descriptor.presentation ? { presentation: descriptor.presentation } : {}),
+    ...(descriptor.readOnly ? { readOnly: true } : {}),
+    ...(descriptor.derived ? { 'x-ontahi-derived': descriptor.derived } : {}),
   };
 };
 

@@ -1,6 +1,7 @@
 import {
   createRelationAwareReflectedEntityDataReader,
   describeReflectedEntityDisplay,
+  isDerivedFieldDefinition,
   getEntityMapping,
   resolveColumnNameForEntity,
   resolveFieldNameForEntity,
@@ -150,6 +151,14 @@ const listEntityDataWithKnownColumns = async <TClient extends SupabaseLikeClient
   pageSizeOptions: readonly number[];
 }): Promise<ReflectedEntityDataResult> => {
   const { entity } = input;
+  const derivedField = Object.entries(entity.fields).find(([, field]) =>
+    isDerivedFieldDefinition(field),
+  )?.[0];
+  if (derivedField) {
+    throw new Error(
+      `Supabase reflected reads do not support derived Field ${entity.name}.${derivedField}.`,
+    );
+  }
   const page = clampPage(input.query.page);
   const pageSize = clampPageSize(input.query.pageSize, input.pageSizeOptions);
   const from = (page - 1) * pageSize;

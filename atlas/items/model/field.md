@@ -13,6 +13,7 @@ relatedPlans:
   - bookops://plans/76a-operation-input-constraints-and-client-validation
   - ontahi://plans/125-ontahi-reference-fields
   - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/142f-virtual-derived-fields-and-classroom-capacity
 migratedFrom: bookops://atlas/model/field
 sourceCommit: 67713696
 ---
@@ -39,3 +40,10 @@ Explorer, and future input tooling can follow the same link.
 A Reference Field such as `list: field.ref(TodoList)` carries a
 [[ontahi.model.ref|Ref]] and also supplies a named [[ontahi.model.relation|Relation]]. Storage owns
 how that reference is lowered physically.
+
+A derived Field keeps the same scalar Field contract while adding a portable
+[[ontahi.model.model-expression|Model Expression]] and exact dependency metadata. It is part of
+Entity records, Views, Queries, schemas, and reflection, but it is read-only: mutation payloads and
+physical storage mappings contain only stored Fields. The selected authorized runtime owns virtual
+evaluation. Graph-read policy must allow both the projected derived Field and its complete Field or
+Relation-aggregate evidence.

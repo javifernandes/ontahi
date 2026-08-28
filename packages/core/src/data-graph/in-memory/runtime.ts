@@ -30,17 +30,25 @@ import { selectionAnd } from '../selection-ast.js';
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
 import { executeInMemoryManyToManyRelationshipCommandEffect } from './many-to-many-relationship-command.js';
-import { materializeRecord, type InMemoryDataset } from './materialization.js';
+import {
+  materializeDerivedFields,
+  materializeRecord,
+  type InMemoryDataset,
+} from './materialization.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
 
 const selectRows = (
   spec: QuerySpec<any, any>,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
   options?: { applyLimit?: boolean },
 ) => {
+  const candidateRows = (dataset[spec.root.name] ?? []).map(row =>
+    materializeDerivedFields(row, spec.root, dataset, relationships),
+  );
   const rows = applyOrder(
-    applyEntitySelectionExpression(spec.root, dataset[spec.root.name] ?? [], spec.selection),
+    applyEntitySelectionExpression(spec.root, candidateRows, spec.selection),
     spec.orderBy,
   );
 
@@ -76,7 +84,13 @@ const executePlainRead = <TParams, TResult>(
 ) => {
   const spec = resolveQuerySpec(queryOrView, params);
 
-  const rows = materializeRows(spec, selectRows(spec, dataset), dataset, relationships, options);
+  const rows = materializeRows(
+    spec,
+    selectRows(spec, dataset, relationships),
+    dataset,
+    relationships,
+    options,
+  );
   if (spec.cardinality === 'one' && rows.length !== 1) {
     throw new InMemoryDataGraphError(
       `Expected exactly one ${spec.root.name}, received ${rows.length}.`,
@@ -143,6 +157,7 @@ const countRowsBySource = (
 const executeEntityRows = (
   read: QueryOrView<any, any>,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ): Array<Record<string, unknown>> =>
   isRelatedRootReadSpec(read)
     ? (executeRelatedRootRead(
@@ -151,14 +166,16 @@ const executeEntityRows = (
           mode: 'entityRows',
         },
         dataset,
+        relationships,
       ) as Array<Record<string, unknown>>)
-    : executePlainRead(read as PlainGraphRead<any, any>, undefined, dataset, [], {
+    : executePlainRead(read as PlainGraphRead<any, any>, undefined, dataset, relationships, {
         entityRows: true,
       });
 
 const executeRelatedRootRead = <TResult>(
   spec: RelatedRootReadSpec<any, any, TResult, any, any>,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ): TResult[] => {
   const { sourceField, targetField } = resolveRelatedRootFields(
     spec.target.root,
@@ -166,10 +183,10 @@ const executeRelatedRootRead = <TResult>(
     spec.relationName,
     spec.relationOwner,
   );
-  const sourceEntityRows = executeEntityRows(spec.source, dataset);
+  const sourceEntityRows = executeEntityRows(spec.source, dataset, relationships);
   const sourceRows =
     spec.mode === 'resolve' || spec.mode === 'countBySource'
-      ? executeRead(spec.source, undefined, dataset)
+      ? executeRead(spec.source, undefined, dataset, relationships)
       : sourceEntityRows;
   const sourceValues = uniqueNonNullValues(sourceEntityRows, spec.sourceEntity, sourceField);
 
@@ -178,10 +195,14 @@ const executeRelatedRootRead = <TResult>(
   }
 
   const targetSpec = withRelatedTargetPredicate(spec, targetField, sourceValues);
-  const targetRows = selectRows(targetSpec, dataset);
-  const entityRows = materializeRows<Record<string, unknown>>(targetSpec, targetRows, dataset, [], {
-    entityRows: true,
-  });
+  const targetRows = selectRows(targetSpec, dataset, relationships);
+  const entityRows = materializeRows<Record<string, unknown>>(
+    targetSpec,
+    targetRows,
+    dataset,
+    relationships,
+    { entityRows: true },
+  );
 
   if (spec.mode === 'entityRows') return entityRows as TResult[];
   if (spec.mode === 'countBySource') {
@@ -193,7 +214,7 @@ const executeRelatedRootRead = <TResult>(
     ] as TResult[];
   }
 
-  const rows = materializeRows<TResult>(targetSpec, targetRows, dataset);
+  const rows = materializeRows<TResult>(targetSpec, targetRows, dataset, relationships);
   return spec.mode === 'resolve' ? ([{ sourceRows, rows }] as TResult[]) : rows;
 };
 
@@ -204,7 +225,7 @@ const executeRead = <TParams, TResult>(
   relationships: readonly RelationshipFact[] = [],
 ): TResult[] =>
   isRelatedRootReadSpec(queryOrView)
-    ? (executeRelatedRootRead(queryOrView, dataset) as TResult[])
+    ? (executeRelatedRootRead(queryOrView, dataset, relationships) as TResult[])
     : executePlainRead(
         queryOrView as PlainGraphRead<TParams, TResult>,
         params,
@@ -216,10 +237,11 @@ const countRead = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
   params: TParams,
   dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[] = [],
 ) => {
   if (!isRelatedRootReadSpec(queryOrView)) {
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
-    const count = selectRows(spec, dataset, { applyLimit: false }).length;
+    const count = selectRows(spec, dataset, relationships, { applyLimit: false }).length;
     if (spec.cardinality === 'one' && count !== 1) {
       throw new InMemoryDataGraphError(
         `Expected exactly one ${spec.root.name}, received ${count}.`,
@@ -236,16 +258,21 @@ const countRead = <TParams, TResult>(
     queryOrView.relationOwner,
   );
   const sourceValues = uniqueNonNullValues(
-    executeEntityRows(queryOrView.source, dataset),
+    executeEntityRows(queryOrView.source, dataset, relationships),
     queryOrView.sourceEntity,
     sourceField,
   );
 
   if (sourceValues.length === 0) return 0;
 
-  return selectRows(withRelatedTargetPredicate(queryOrView, targetField, sourceValues), dataset, {
-    applyLimit: false,
-  }).length;
+  return selectRows(
+    withRelatedTargetPredicate(queryOrView, targetField, sourceValues),
+    dataset,
+    relationships,
+    {
+      applyLimit: false,
+    },
+  ).length;
 };
 
 export const createInMemoryDataGraphRuntime = (input: {
@@ -296,7 +323,7 @@ export const createInMemoryDataGraphRuntime = (input: {
       ).pipe(Stream.flatMap(Stream.fromIterable)),
     count: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => countRead(queryOrView, params, input.dataset),
+        try: () => countRead(queryOrView, params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause

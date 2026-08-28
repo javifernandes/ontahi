@@ -17,10 +17,12 @@ export const ExplorerFieldRow = ({
   name,
   type,
   required = null,
+  derivedDependencies,
 }: {
   name: string;
   type: string;
   required?: boolean | null;
+  derivedDependencies?: string[];
 }) => (
   <div className='flex flex-col gap-2 rounded-md bg-muted/35 px-3 py-2 text-sm md:flex-row md:items-center md:justify-between'>
     <span className='break-all font-mono text-foreground'>{name}</span>
@@ -33,6 +35,14 @@ export const ExplorerFieldRow = ({
           {required ? 'required' : 'optional'}
         </span>
       )}
+      {derivedDependencies ? (
+        <span
+          className='rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground'
+          title={`Derived from ${derivedDependencies.join(', ')}`}
+        >
+          derived · read-only
+        </span>
+      ) : null}
     </div>
   </div>
 );

@@ -1,5 +1,6 @@
 import {
   getEntityMapping,
+  isDerivedFieldDefinition,
   resolveColumnNameForEntity,
   type AnyEntityDefinition,
   RelationQueryBuilder,
@@ -49,6 +50,15 @@ export const selectColumnsForQuery = ({
 
           return [...names];
         })();
+
+  const unsupportedDerivedField = fieldNames.find(fieldName =>
+    isDerivedFieldDefinition(entityDefinition.fields[fieldName]!),
+  );
+  if (unsupportedDerivedField) {
+    throw new Error(
+      `Supabase graph reads do not support derived Field ${entityDefinition.name}.${unsupportedDerivedField}.`,
+    );
+  }
 
   const columns = new Set(
     fieldNames.map(fieldName => resolveColumnNameForEntity(entityDefinition, fieldName)),

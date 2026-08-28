@@ -61,6 +61,38 @@ const fields = {
 };
 ```
 
+## Derived Fields are ordinary read-only Fields
+
+A value calculated from authoritative graph state still belongs under `fields`. `field.derived(...)`
+keeps its scalar contract while declaring the calculation in the same model vocabulary:
+
+```ts
+const CourseFields = {
+  id: f.id(),
+  capacity: f.nonNegativeInteger(),
+  occupiedSeats: f.derived(f.nonNegativeInteger(), ({ students }) => students.count()),
+  availableSeats: f.derived(
+    f.nonNegativeInteger(),
+    ({ capacity, students }) => capacity - students.count(),
+  ),
+};
+```
+
+The callback is build-time authoring, not arbitrary runtime code. Codegen compiles its known Field
+and Relation symbols into versioned Model Expression data and reports unsupported syntax at the
+source. A runtime-only declaration can pass an explicit `modelExpression.define(...)` program as
+the second argument.
+
+Derived Fields participate in Entity values, Views, Queries, JSON Schema, and reflection like other
+Fields, but Commands cannot assign them and storage mappings do not create columns for them.
+In-memory and PostgreSQL runtimes evaluate the same expression over complete graph evidence. For a
+remote graph read, policy must allow the derived Field and every stored Field or Relation aggregate
+dependency; Ontahí does not calculate a count from a partial client cache or visible Explorer page.
+
+The first slice is virtual only. It does not create database triggers, materialized values, or
+permanent aggregate invariants, and it intentionally does not allow one derived Field to depend on
+another.
+
 ## `self` keeps Entity-shaped contracts local
 
 Inside `operations`, `self` refers to the Entity being declared:

@@ -71,7 +71,7 @@ atomic rollback for opaque contracts. Classroom generates a conditions-only arti
 the server application and advisory proof, and no longer contains an imperative same-Course
 branch.
 
-Follow-up: [142f. Virtual Derived Fields And Classroom Capacity](../next/142f-virtual-derived-fields-and-classroom-capacity.md).
+Follow-up: [142f. Virtual Derived Fields And Classroom Capacity](142f-virtual-derived-fields-and-classroom-capacity.md).
 
 ## Verification
 

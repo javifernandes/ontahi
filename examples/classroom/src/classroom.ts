@@ -41,7 +41,12 @@ const CourseFields = {
   title: field.nonEmptyString({ trim: true }),
   school: field.ref(School),
   teacher: field.ref(Teacher),
-  availableSeats: field.nonNegativeInteger(),
+  capacity: field.nonNegativeInteger(),
+  occupiedSeats: field.derived(field.nonNegativeInteger(), ({ students }) => students.count()),
+  availableSeats: field.derived(
+    field.nonNegativeInteger(),
+    ({ capacity, students }) => capacity - students.count(),
+  ),
 };
 const CourseRef = entity.ref('Course', { fields: CourseFields });
 
@@ -80,7 +85,7 @@ export const Student = entity({
   uses: {
     entities: { Course },
   },
-  operations: ({ self, operation, app, entities }) => {
+  operations: ({ self, operation, app }) => {
     const students = app.graph.defineEntity(self);
 
     return {
@@ -120,47 +125,7 @@ export const Student = entity({
             );
           }
 
-          const [releasedPreviousCourse] = yield* entities.Course.selection(course =>
-            course.id.eq(previousCourse.id),
-          )
-            .and(course => course.availableSeats.eq(previousCourse.availableSeats))
-            .updateReturning({ availableSeats: previousCourse.availableSeats + 1 }, [
-              'id',
-              'availableSeats',
-            ])
-            .run()
-            .pipe(Effect.orDie);
-          if (!releasedPreviousCourse) {
-            return yield* failOperation(
-              'course_capacity_changed',
-              'Previous Course capacity changed during transfer.',
-              { course: previousCourse.ref },
-            );
-          }
-
-          const [reservedNextCourse] = yield* entities.Course.selection(course =>
-            course.id.eq(nextCourse.id),
-          )
-            .and(course => course.availableSeats.eq(nextCourse.availableSeats))
-            .updateReturning({ availableSeats: nextCourse.availableSeats - 1 }, [
-              'id',
-              'availableSeats',
-            ])
-            .run()
-            .pipe(Effect.orDie);
-          if (!reservedNextCourse) {
-            return yield* failOperation(
-              'course_capacity_changed',
-              'Next Course capacity changed during transfer.',
-              { course: nextCourse.ref },
-            );
-          }
-
-          return {
-            relationship,
-            previousCourse: releasedPreviousCourse,
-            nextCourse: reservedNextCourse,
-          };
+          return { relationship };
         },
       }),
     };

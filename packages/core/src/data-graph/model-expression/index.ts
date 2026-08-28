@@ -1,5 +1,13 @@
 export { modelExpression } from './builder.js';
 export {
+  definePortableDerivedFieldRegistry,
+  materializeDerivedFieldDefinitions,
+} from './derived-field.js';
+export type {
+  PortableDerivedFieldRegistry,
+  PortableDerivedFieldRegistryDeclaration,
+} from './derived-field.js';
+export {
   definePortableOperationConditionRegistry,
   evaluatePortableOperationCondition,
   resolveOperationConditionContracts,

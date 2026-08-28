@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/142-declarative-model-semantics-and-execution-planning
   - ontahi://plans/142b-classroom-model-expression-language-experiment
   - ontahi://plans/142e-portable-operation-condition-bridge
+  - ontahi://plans/142f-virtual-derived-fields-and-classroom-capacity
 ---
 
 A Model Expression is portable, JSON-safe semantic data for calculations and conditions rooted in
@@ -45,7 +46,9 @@ a stable condition id, dependencies, and conventional rejection. Evaluation is t
 `satisfied`, `rejected`, or `unknown` when a dependency is unavailable. Client evaluation is only
 advisory; the selected authority evaluates the same IR again before the Operation body.
 
-The broader IR nodes for Field reads, Relation `count()`, arithmetic, and comparison are now public
-Core vocabulary but do not yet imply a read strategy. Derived Fields and permanent Relation
-invariants remain separate lifecycle consumers that must prove their own dependency discovery,
-authorization, provider lowering, and enforcement boundaries.
+Plan 142f made derived Fields the second production consumer. Natural `field.derived(...)`
+callbacks compile against real Entity Field and to-many Relation symbols into the same IR, while an
+explicit builder preserves runtime-only parity. Core reflects exact dependencies; in-memory and
+PostgreSQL graph reads evaluate virtual values; graph-read policy must authorize the projection and
+all evidence. Commands and physical mappings exclude derived Fields. Permanent Relation invariants
+remain a separate lifecycle consumer with their own enforcement boundary.

@@ -528,4 +528,41 @@ describe('explorer descriptor builder', () => {
       participants: ['Student', 'Course'],
     });
   });
+
+  it('reflects derived Fields with their exact read-only dependencies', () => {
+    const Course = entity('DerivedCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      availableSeats: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(
+          modelExpression.subtract(
+            modelExpression.field('capacity'),
+            modelExpression.relation('students').count(),
+          ),
+        ),
+      ),
+    });
+    const Student = entity('DerivedStudent', {
+      id: field.id(),
+      course: field.ref(Course),
+    });
+    const detail = getExplorerEntityDetail(
+      { entities: [Course.hasMany('students', Student, { via: 'course' }), Student] },
+      'DerivedCourse',
+    );
+
+    expect(detail?.fields).toContainEqual({
+      name: 'availableSeats',
+      type: 'number',
+      nullable: false,
+      enumValues: undefined,
+      derived: {
+        dependencies: [
+          { kind: 'field', field: 'capacity' },
+          { kind: 'relation-aggregate', relation: 'students', aggregate: 'count' },
+        ],
+      },
+    });
+  });
 });
