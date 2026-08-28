@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Utils } from 'effect';
 
 import { normalizeGraphSchemaClientInput } from '../../data-graph/client-input.js';
 import { GraphCommand } from '../../data-graph/command.js';
@@ -65,7 +65,12 @@ import type {
   OperationFailure,
 } from './operation/types.js';
 import type { ServerRuntimeValueRef } from './operation/value-ref.js';
-import { hydrateSchemaNativeOperationRefs } from './operation-ref.js';
+import {
+  assertSupportedExistingOperationRefs,
+  hasExistingOperationRefs,
+  hydrateSchemaNativeOperationRefs,
+  materializeExistingOperationRefs,
+} from './operation-ref.js';
 import { toOperationInvocationResult, type OperationInvocationResult } from './operation-result.js';
 import { unitOfWorkEntityRefInputResolutionScope } from './ref-resolution.js';
 import { bindRequirements } from './requirements.js';
@@ -206,14 +211,35 @@ export type HydratedEntityRef<
   refresh: () => SchemaNativeRefResolution<TEntity, TCustomResolution>;
 };
 
+type UnwrapSchemaNativeRefResolution<TResolution> =
+  TResolution extends Effect.Effect<infer TValue, any, any>
+    ? TValue
+    : TResolution extends PromiseLike<infer TValue>
+      ? TValue
+      : TResolution;
+
+type ExistingEntityParticipant<
+  TEntityName extends string,
+  TLocator extends EntityRefLocator,
+  TEntity,
+  TCustomResolution,
+> = NonNullable<
+  UnwrapSchemaNativeRefResolution<SchemaNativeRefResolution<TEntity, TCustomResolution>>
+> & {
+  readonly ref: EntityRef<TEntityName, TLocator>;
+};
+
 type HydratedTopLevelOperationInputValue<TInput> =
   TInput extends SchemaEntityRef<
     infer TEntityName,
     infer TLocator,
     infer TEntity,
-    infer TCustomResolution
+    infer TCustomResolution,
+    infer TRequirement
   >
-    ? HydratedEntityRef<TEntityName, TLocator, TEntity, TCustomResolution>
+    ? TRequirement extends 'existing'
+      ? ExistingEntityParticipant<TEntityName, TLocator, TEntity, TCustomResolution>
+      : HydratedEntityRef<TEntityName, TLocator, TEntity, TCustomResolution>
     : HydratedSemanticSelections<TInput>;
 
 type HydratedSemanticSelections<TInput> =
@@ -251,6 +277,16 @@ type AnyDomainOperationGraphRead = { build: () => GraphReadSpec<any, any> };
 const isDomainOperationGraphRead = (value: unknown): value is AnyDomainOperationGraphRead =>
   value instanceof GraphSelection || value instanceof RelationRootSelection;
 
+type ExecutableDomainOperationRunResult<
+  TResult extends DomainOperationSuccess,
+  TFailure extends OperationFailure,
+  TInfraError extends OperationRuntimeError,
+> =
+  | Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>
+  | GraphCommand<any, any, TResult>
+  | DomainOperationGraphRead<TResult>
+  | Selection<any, any>;
+
 export type DomainOperationRun<
   TInput extends OperationInput,
   TResult extends DomainOperationSuccess = DomainOperationSuccess,
@@ -260,10 +296,22 @@ export type DomainOperationRun<
   input: TInput,
   context?: TaskContext,
 ) =>
-  | Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>
-  | GraphCommand<any, any, TResult>
-  | DomainOperationGraphRead<TResult>
-  | Selection<any, any>;
+  | ExecutableDomainOperationRunResult<TResult, TFailure, TInfraError>
+  | Effect.fn.Return<TResult | EffectSuccessPayload<TResult>, NoInfer<TFailure> | TInfraError>;
+
+const invokeDomainOperationRun = <
+  TInput extends OperationInput,
+  TResult extends DomainOperationSuccess,
+  TFailure extends OperationFailure,
+  TInfraError extends OperationRuntimeError,
+>(
+  run: DomainOperationRun<TInput, TResult, TFailure, TInfraError>,
+  input: TInput,
+  context?: TaskContext,
+): ExecutableDomainOperationRunResult<TResult, TFailure, TInfraError> =>
+  (Utils.isGeneratorFunction(run)
+    ? Effect.fnUntraced(run)(input, context)
+    : run(input, context)) as ExecutableDomainOperationRunResult<TResult, TFailure, TInfraError>;
 
 export type DomainOperationCacheMetadata<TInput extends OperationInput> =
   OperationCacheConfig<TInput>;
@@ -413,6 +461,13 @@ type DefineDomainOperation = DefineDomainOperationCall & {
 const defineDomainOperationImplementation = (
   operation: Omit<DomainOperationDeclaration<any, any, any, any>, 'kind'>,
 ) => {
+  const input = (operation.input ?? EmptyInputSchema) as InputSchemaLike<any>;
+  assertSupportedExistingOperationRefs(input);
+  if (operation.durable && hasExistingOperationRefs(input)) {
+    throw new Error(
+      'Durable Domain Operations cannot use graphSchema.existingRef(...) until deferred resolution lifecycle semantics are defined.',
+    );
+  }
   if (operation.durable && operation.execution?.atomicity === 'required') {
     throw new Error('Durable Domain Operations cannot require one Data Graph atomic boundary.');
   }
@@ -421,9 +476,7 @@ const defineDomainOperationImplementation = (
     kind: 'domain-operation',
     authority: 'server',
     ...operation,
-    input: attachOperationInputSchema(
-      (operation.input ?? EmptyInputSchema) as InputSchemaLike<any>,
-    ),
+    input: attachOperationInputSchema(input),
   };
 };
 
@@ -488,8 +541,16 @@ export const inspectProjectedDomainOperationQuery = (
   input: OperationInput,
   view: RecursiveEntityViewDefinition<any, any, any>,
 ): GraphReadSpec<any, any> => {
+  if (hasExistingOperationRefs(operation.input)) {
+    throw new Error(
+      `Projectable operation "${operation.id}" cannot use graphSchema.existingRef(...) because query inspection does not materialize Operation participants.`,
+    );
+  }
   const normalizedInput = normalizeDomainOperationInput(operation, input);
-  const result = operation.run(hydrateOperationInputRefs(operation, normalizedInput, undefined));
+  const result = invokeDomainOperationRun(
+    operation.run,
+    hydrateOperationInputRefs(operation, normalizedInput, undefined),
+  );
   const read =
     result instanceof Selection
       ? operationInputDataGraph.bindSelection(result)
@@ -572,13 +633,22 @@ const resolveDomainOperationRunner = <
   const runOperation = (
     input: SemanticSelectionPublicInput<TInput>,
   ): Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError> =>
-    executeDomainOperationRunResult(
-      operation.run(hydrateOperationInputRefs(operation, input as object) as never),
-      projection ??
-        (operation.output?.kind === 'schema.selection'
-          ? { cardinality: (operation.output as GraphSelectionDefinition).cardinality }
-          : undefined),
-    );
+    materializeExistingOperationRefs(
+      operation.input,
+      input as object,
+      getDefaultOperationRefResolver,
+      unitOfWorkEntityRefInputResolutionScope,
+    ).pipe(
+      Effect.flatMap(materializedInput =>
+        executeDomainOperationRunResult(
+          invokeDomainOperationRun(operation.run, materializedInput as never),
+          projection ??
+            (operation.output?.kind === 'schema.selection'
+              ? { cardinality: (operation.output as GraphSelectionDefinition).cardinality }
+              : undefined),
+        ),
+      ),
+    ) as Effect.Effect<TResult | EffectSuccessPayload<TResult>, TFailure | TInfraError>;
 
   const normalizedRunner = layer(operation.layer).operation(operation.name, runOperation, {
     defectLogMessage: operation.defectLogMessage,
@@ -691,7 +761,11 @@ export const createTaskDefinitionFromDurableDomainOperation = <
     ),
     run: ((input, context) =>
       executeDomainOperationRunResult(
-        operation.run(hydrateOperationInputRefs(operation, input) as never, context),
+        invokeDomainOperationRun(
+          operation.run,
+          hydrateOperationInputRefs(operation, input) as never,
+          context,
+        ),
       )) as TaskDefinition<TInput, TResult>['run'],
   };
 };

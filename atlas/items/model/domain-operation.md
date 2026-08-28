@@ -28,6 +28,7 @@ relatedPlans:
   - bookops://plans/125-ontahi-ai-operations
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/142c-reflected-atomic-operation-execution
+  - ontahi://plans/142d-existing-operation-refs
 migratedFrom: bookops://atlas/model/domain-operation
 sourceCommit: 67713696
 ---
@@ -49,6 +50,12 @@ An operation whose implementation is entirely a graph read may return that read 
 includes ordinary selections and reads rooted through a declared relation; the selected runtime
 interprets either form as the operation result.
 
+An effectful implementation may return an Effect, use `Effect.fn(...)`, or declare `*run(...)`
+directly as an Effect generator. The direct form is authoring sugar: the server invoker adapts the
+generator function to the same Effect execution path, preserving input hydration, UnitOfWork,
+contracts, atomicity, failures, and defects. Ontahí recognizes the generator function category
+explicitly rather than executing arbitrary iterator-shaped values.
+
 Large operation families may be authored behind `operationGroup(...)`. An operation group is not a
 new domain behavior or runtime container; it is a declaration and compiler boundary that names the
 operations exported by an entity without forcing the application root to structurally expand every
@@ -61,6 +68,13 @@ validation, transport, reflection, codegen, Explorer controls, and server hydrat
 single schema. A Ref remains at the declared field path across the bridge and gains explicit runtime
 methods only on the server-side copy. There is no parallel authored `inputRefs` bag or implementation
 `refs` namespace.
+
+An input may strengthen one top-level Ref to `graphSchema.existingRef(Entity)`. The invocation shape
+does not change, but the server runner materializes that participant through an authorized Query
+before the body and returns a safe conventional failure if it is unavailable. The body sees Entity
+fields plus `.ref`; reflection and generated clients preserve the existence requirement without
+transporting data or resolver callbacks. Durable Operations reject this node until deferred
+materialization has a defined lifecycle.
 
 An Operation that coordinates several Data Graph reads and mutations can declare
 `operation.atomic({...})`. The portable declaration contains only

@@ -12,6 +12,7 @@ relatedPlans:
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/139d-postgres-classroom-transfer
   - ontahi://plans/142c-reflected-atomic-operation-execution
+  - ontahi://plans/142d-existing-operation-refs
 ---
 
 A UnitOfWork is the server runtime identity boundary shared by one top-level invocation/Operation
@@ -25,6 +26,11 @@ keeping distinct projections and authorization boundaries separate even when nes
 contexts share runtime resources. Effect-valued resolvers are memoized at execution time, including
 in-flight work. Repeated explicit `book.resolve()` calls on a schema-native Operation input in one
 scope therefore reuse one authorized Query result; separate top-level invocations do not.
+
+An `existingRef` input uses that same store automatically. Several fields carrying the same Ref and
+resolver materialize once in the UnitOfWork, while each body value preserves the original portable
+identity as `.ref`. This is a resolution requirement on an immediate Operation input, not a
+cross-request identity map or permission shortcut.
 
 The UnitOfWork does not authorize or materialize a Ref by itself. Application Ref resolvers still
 build Queries and execute them through the active Data Graph runtime and graph-read policy. The
@@ -50,8 +56,9 @@ fresh Operation-result cache so reads observed before rollback cannot leak into 
 typed failure, and defect all restore the parent scope.
 
 The provider-backed Classroom proof exercises that boundary from an atomic Domain Operation.
-`Student.transfer(...)` resolves three input Refs, conditionally changes one Relation, and updates
-two Course rows without receiving a transaction runtime parameter. A known-full destination stops
+`Student.transfer(...)` declares three `existingRef` participants, conditionally changes one
+Relation, and updates two Course rows without receiving a transaction runtime parameter or calling
+`resolve()` manually. A known-full destination stops
 before structural mutation. PostgreSQL commits all three mutations together or restores them all
 when stale capacity produces a domain failure after the Relation change.
 

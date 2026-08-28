@@ -128,11 +128,12 @@ TodoList the caller means until the runtime interprets that identity.
 > the domain. That abstraction lets Refs, records, and Selections compose without rewriting the
 > operation for each transport or way of locating its target.
 
-## Resolve a Ref only when behavior needs current state
+## Resolve current state explicitly or require an existing participant
 
 `self.one()` above is a Selection-valued operation target: it preserves a population and exact-one
-cardinality for a Query or Command. When operation behavior needs the current attributes of one
-referenced Entity, declare that value directly as a Reference Field in the input schema:
+cardinality for a Query or Command. When operation behavior may proceed without current attributes
+or needs to control refresh and invalidation itself, declare a Reference Field in the input schema
+and resolve it explicitly:
 
 ```ts
 transfer: operation({
@@ -163,10 +164,39 @@ runtime and keeps the result in the current operation's \concept{UnitOfWork}. Re
 Different projections and execution identities remain isolated. Use `student.invalidate()` to
 evict its resolutions or `student.refresh()` to evict and immediately load again.
 
+When the body cannot proceed unless the referenced Entity is visible, express that requirement in
+the same input field instead of repeating `resolve()` and an absence branch:
+
+```ts
+transfer: operation.atomic({
+  input: graphSchema.object({
+    student: graphSchema.existingRef(self),
+    previousCourse: graphSchema.existingRef(Course),
+    nextCourse: graphSchema.existingRef(Course),
+  }),
+  run: ({ student, previousCourse, nextCourse }) =>
+    students
+      .refById(student.id)
+      .currentCourse.assign(nextCourse.ref, { ifCurrent: previousCourse.ref })
+      .run(),
+}),
+```
+
+Callers still pass the same portable Refs. The body receives authorized Entity records directly;
+their non-enumerable `.ref` properties preserve the original portable identities. A missing or
+policy-filtered participant fails before the body with `entity_not_found`, plus the safe Entity
+name and input path. Resolution uses the active Data Graph Query runtime and UnitOfWork, and an
+atomic Operation performs it inside its selected transaction boundary.
+
+`existingRef` currently supports direct fields of object and Value Operation inputs, including
+optional and nullable wrappers. Nested collections and durable Operations are rejected until their
+resolution lifecycles are defined. Explorer reflects the requirement as `Existing<Entity>`; it
+does not transport the resolved record.
+
 Ontahí does not infer invalidation from arbitrary Commands yet. A separate top-level operation and
 a transaction child UnitOfWork also start with fresh Ref-resolution stores, so neither becomes a
-cross-request cache. The executable
-[`Student.transfer`](../../../examples/classroom/src/classroom.ts) operation uses this exact form.
+cross-request cache. The executable Enrollment lifecycle uses explicit resolution, while
+[`Student.transfer`](../../../examples/classroom/src/classroom.ts) demonstrates `existingRef`.
 
 ## Composite identity
 

@@ -13,6 +13,7 @@ supports:
 relatedPlans:
   - ontahi://plans/142-declarative-model-semantics-and-execution-planning
   - ontahi://plans/142b-classroom-model-expression-language-experiment
+  - ontahi://plans/142e-portable-operation-condition-bridge
 ---
 
 A Model Expression is portable, JSON-safe semantic data for calculations and conditions rooted in
@@ -38,3 +39,8 @@ table as fixture evidence. Publication requires codegen to derive that table fro
 Fields, Relations, and Operation input Refs, and requires Core to own the canonical IR independently
 from TypeScript ASTs. Reflection and runtimes consume only that IR; static analysis remains an
 optional authoring frontend.
+
+Plan 142d deliberately shipped `existingRef` without pretending that this private experiment was a
+runtime contract language. Plan 142e owns the production bridge: Core IR, symbol discovery from the
+real model, one generated semantic artifact, authoritative evaluation, and tri-state advisory
+evaluation before callback-valued top-level Operation contracts can be replaced honestly.

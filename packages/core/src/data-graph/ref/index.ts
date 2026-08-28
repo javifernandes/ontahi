@@ -15,9 +15,14 @@ export type {
   SchemaEntityRef,
 } from './model.js';
 
-export { getGraphSchemaReferenceResolver, graphSchemaReference } from './schema-reference.js';
+export {
+  getGraphSchemaReferenceResolver,
+  graphSchemaExistingReference,
+  graphSchemaReference,
+} from './schema-reference.js';
 export type {
   GraphSchemaReferenceDefinition,
+  GraphSchemaReferenceRequirement,
   GraphSchemaReferenceResolver,
 } from './schema-reference.js';
 

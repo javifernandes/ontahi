@@ -12,6 +12,8 @@ Related plans:
 4. [139a. Composable Data Graph Transactions](../done/139a-composable-data-graph-transactions.md)
 5. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
 6. [139d. PostgreSQL Classroom Transfer](../done/139d-postgres-classroom-transfer.md)
+7. [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md)
+8. [142e. Portable Operation Condition Bridge](../next/142e-portable-operation-condition-bridge.md)
 
 ## Summary
 
@@ -42,7 +44,7 @@ are equivalent.
 `Student.transfer(...)` currently demonstrates the right runtime primitives but exposes too much
 manual coordination in application code:
 
-1. three input Refs are resolved and checked for existence imperatively;
+1. before Plan 142d, three input Refs were resolved and checked for existence imperatively;
 2. an expected-current Relation mismatch is converted manually from `not-applied` into a domain
    failure;
 3. a known-full Course is checked in the Operation even though capacity should constrain every
@@ -235,6 +237,12 @@ requested observable `onMismatch: 'skip'` remains available for lower-level work
 handle that outcome themselves. Sequencing multiple Commands inside an imperative Effect remains a
 separate ergonomics question; automatic execution of the Operation's returned value does not imply
 recursive execution of arbitrary nested values.
+
+Effect sequencing itself does not require an `Effect.gen(function* () { ... })` wrapper inside
+`run`. Operations accept `Effect.fn(...)` and direct `*run(...)` Effect generators; the invoker
+adapts the latter to the ordinary Effect path while preserving contextual input typing, UnitOfWork,
+contracts, atomicity, failures, and defects. Recognition is limited to actual generator functions,
+not arbitrary objects implementing the iterator protocol.
 
 ## Contract Compatibility Decision Gate
 
@@ -499,19 +507,23 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    `operation.atomic(...)` factory, make the server runner own the transaction boundary, and expose
    local/bridge/unavailable execution planning without implementing replication. Extracted as
    [142c. Reflected Atomic Operation Execution](../done/142c-reflected-atomic-operation-execution.md).
-4. **Existing Ref and declarative condition contracts:** evolve or explicitly replace
-   `contracts.pre` / `contracts.post` according to the compatibility decision; add conventional
-   `existingRef`, named portable conditions, rejection defaults, dependency reflection, and
-   tri-state advisory evaluation. State-dependent checks must execute inside the selected
-   UnitOfWork.
-5. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
+4. **Existing Ref resolution requirement (complete):** add conventional `existingRef`, safe
+   rejection, portable identity, UnitOfWork materialization, and reflection without coupling it to
+   the not-yet-production expression compiler. Delivered through
+   [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md).
+5. **Portable condition bridge:** promote the experimental IR and real model symbol discovery,
+   then explicitly replace callback-valued top-level `contracts.pre` / `contracts.post` with named
+   portable conditions, rejection defaults, dependency reflection, and tri-state advisory
+   evaluation. Extracted as
+   [142e. Portable Operation Condition Bridge](../next/142e-portable-operation-condition-bridge.md).
+6. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
    remove the stored counter from the model and result shape, then prove virtual
    `Course.availableSeats` in memory and through one authorized provider read.
-6. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
+7. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
    `Course.students` additions atomically in memory and one provider through both the forward
    `Student.currentCourse` and inverse `Course.students` APIs. Preserve unlink repair and concurrent
    conflict semantics.
-7. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
+8. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
    offline queueing, replication, convergence evidence, and authority-serialized versus merge-safe
    invariant requirements in a separate plan.
 
@@ -549,7 +561,7 @@ surfaces.
       concrete evidence that an explicit builder is required.
 - [x] Every accepted expression lowers to stable JSON-safe IR with source-located diagnostics for
       unsupported code.
-- [ ] `existingRef(Entity)` has a conventional safe failure and preserves portable Ref identity
+- [x] `existingRef(Entity)` has a conventional safe failure and preserves portable Ref identity
       separately from authorized resolved data.
 - [ ] Client condition evaluation is reflected as satisfied, rejected, or unknown and never skips
       authoritative validation after a local success.
@@ -573,17 +585,15 @@ surfaces.
 
 ## Open Questions
 
-1. What should a resolved `existingRef` expose to an Operation body so Ref identity and Entity data
-   remain distinct without recreating a parallel `refs` namespace?
-2. Which preconditions can be proven to lower into one Command, and how does the compiler explain
+1. Which preconditions can be proven to lower into one Command, and how does the compiler explain
    when Operation-level atomicity is still required?
-3. What is the smallest versioned capability vocabulary that can express the selected Operation's
+2. What is the smallest versioned capability vocabulary that can express the selected Operation's
    derived requirements without turning provider implementation details into model metadata?
-4. How are conventional rejection codes named and localized without forcing boilerplate or making
+3. How are conventional rejection codes named and localized without forcing boilerplate or making
    domain failures unstable?
-5. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
+4. Which dependencies make a client evaluation `unknown`, and how does graph-read policy redact
    inaccessible condition evidence?
-6. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
+5. Can virtual relation aggregates compose with existing Queries and Views through the ordinary
    Field surface without a parallel computed-field query language?
-7. How should generated clients expose execution availability while keeping the ordinary invocation
+6. How should generated clients expose execution availability while keeping the ordinary invocation
    spelling unchanged?

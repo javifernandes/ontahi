@@ -117,7 +117,7 @@ export type EntityRefInputDirectRefs<TInputRefs extends EntityRefInputDeclaratio
 };
 
 export type SemanticSelectionPublicInput<TInput> =
-  TInput extends SchemaEntityRef<infer TEntityName, infer TLocator, any, any>
+  TInput extends SchemaEntityRef<infer TEntityName, infer TLocator, any, any, any>
     ? EntityRef<TEntityName, TLocator>
     : TInput extends SemanticSelection<infer TEntityName, infer TEntity>
       ? TEntity extends AnyEntityDefinition

@@ -41,12 +41,16 @@ await classroom.Student.transfer({
 ```
 
 The Operation is declared with `operation.atomic(...)`; its body contains no transaction wrapper
-or provider fallback. The ordinary Operation runner derives the `data-graph.atomicity` requirement
-and starts or reuses the active runtime's transaction before resolving the schema-native Refs.
-PostgreSQL runs every read and write through the same checked-out connection and the
-transaction-scoped UnitOfWork. Equal previous and next Courses return `same_course`, and a
-known-full destination is rejected before the Relationship Command. A later capacity
-compare-and-set mismatch returns a domain failure and rolls the complete transition back. A stale
+or provider fallback. Its direct `*run(...)` body is interpreted as an Effect program, so sequential
+Commands and typed failures keep the same transaction and UnitOfWork without an explicit
+`Effect.gen(function* () { ... })` wrapper. Its inputs use `graphSchema.existingRef(...)`: callers
+still send portable Refs, while the body receives authorized Student and Course records directly,
+each with a non-enumerable `.ref` identity. The ordinary Operation runner derives the
+`data-graph.atomicity` requirement and starts or reuses the active runtime's transaction before
+materializing those participants through the transaction-scoped UnitOfWork. PostgreSQL runs every
+read and write through the same checked-out connection. Equal previous and next Courses return
+`same_course`, and a known-full destination is rejected before the Relationship Command. A later
+capacity compare-and-set mismatch returns a domain failure and rolls the complete transition back. A stale
 `previousCourse` is translated from the portable Relationship Command outcome into
 `student_course_changed`, without leaking a provider error through the Domain Operation contract.
 

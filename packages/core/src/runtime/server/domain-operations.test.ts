@@ -2,22 +2,209 @@ import { Effect } from 'effect';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+  createInMemoryDataGraphRuntime,
   createEntityRef,
   entity,
   field,
   graphSchema,
+  value,
   type EntityRef,
 } from '../../data-graph/index.js';
 
 import {
+  createDataGraphArchitectureAdapter,
   defineDomainOperation,
   defineDomainOperationsForEntity,
+  failOperation,
   getCurrentInvocationContext,
   runServerDomainOperationRaw,
   withInvocationContext,
 } from './index.js';
 
 describe('server Domain Operation Ref resolution', () => {
+  it('materializes existing participants through the authorized Data Graph Query runtime', async () => {
+    const Book = entity('QueriedExistingOperationBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        QueriedExistingOperationBook: [{ id: 'book-1', title: 'Programming Book' }],
+      },
+    });
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      unknown,
+      undefined,
+      undefined,
+      typeof runtime
+    >({ createRuntime: () => runtime });
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: graphSchema.object({ book: graphSchema.existingRef(Book) }),
+          concerns: [graph.withRuntime()],
+          run: ({ book }) => Effect.succeed({ title: book.title, ref: book.ref }),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.existing-ref.query' },
+    ).inspect;
+    const book = createEntityRef(Book, { id: 'book-1' });
+
+    const result = await runServerDomainOperationRaw(inspect, { book });
+
+    expect(result).toEqual({
+      success: true,
+      data: { title: 'Programming Book', ref: book },
+    });
+  });
+
+  it('materializes existing Ref participants once and preserves their portable identity', async () => {
+    const Book = entity('ExistingOperationBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const row = { id: 'book-1', title: 'Programming Book' };
+    const load = vi.fn(() => Effect.promise(() => Promise.resolve(row)));
+    const existingBook = graphSchema.existingRef(Book).resolveWith(load);
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: value('ExistingOperationInput', {
+            first: existingBook,
+            second: existingBook,
+          }),
+          run: ({ first, second }) => {
+            expectTypeOf(first.id).toEqualTypeOf<string>();
+            expectTypeOf(first.title).toEqualTypeOf<string>();
+            expectTypeOf(first.ref).toEqualTypeOf<EntityRef<'ExistingOperationBook'>>();
+            expectTypeOf(first).not.toHaveProperty('resolve');
+
+            return Effect.succeed({
+              firstRef: first.ref,
+              firstKeys: Object.keys(first),
+              sameResolution: first.title === second.title,
+              secondRef: second.ref,
+            });
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.existing-ref.materialization' },
+    ).inspect;
+    const book = createEntityRef(Book, { id: 'book-1' });
+
+    const result = await runServerDomainOperationRaw(inspect, { first: book, second: book });
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        firstRef: book,
+        firstKeys: ['id', 'title'],
+        sameResolution: true,
+        secondRef: book,
+      },
+    });
+    expect(load).toHaveBeenCalledOnce();
+    expect(row).not.toHaveProperty('ref');
+    expect(book).toEqual({
+      kind: 'entity-ref',
+      entityName: 'ExistingOperationBook',
+      locator: { id: 'book-1' },
+    });
+  });
+
+  it('fails conventionally before the body when an existing Ref is not visible', async () => {
+    const Book = entity('MissingExistingOperationBook', { id: field.id() });
+    const body = vi.fn(() => Effect.succeed({ reached: true }));
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: graphSchema.object({
+            book: graphSchema.existingRef(Book).resolveWith(() => Effect.succeed(null)),
+          }),
+          run: body,
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.existing-ref.missing' },
+    ).inspect;
+
+    const result = await runServerDomainOperationRaw(inspect, {
+      book: createEntityRef(Book, { id: 'missing' }),
+    });
+
+    expect(result).toEqual({
+      success: false,
+      reason: 'entity_not_found',
+      message: 'Referenced MissingExistingOperationBook was not found.',
+      entityName: 'MissingExistingOperationBook',
+      inputPath: 'book',
+      error: 'Referenced MissingExistingOperationBook was not found.',
+      errorType: 'entity_not_found',
+    });
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it('skips absent optional and nullable existing participants', async () => {
+    const Book = entity('OptionalExistingOperationBook', { id: field.id() });
+    const load = vi.fn(() => Effect.succeed({ id: 'book-1' }));
+    const existingBook = graphSchema.existingRef(Book).resolveWith(load);
+    const inspect = defineDomainOperationsForEntity(
+      Book,
+      {
+        inspect: defineDomainOperation({
+          input: graphSchema.object({
+            nullableBook: graphSchema.nullable(existingBook),
+            optionalBook: graphSchema.optional(existingBook),
+          }),
+          run: ({ nullableBook, optionalBook }) => Effect.succeed({ nullableBook, optionalBook }),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.existing-ref.optional' },
+    ).inspect;
+
+    const result = await runServerDomainOperationRaw(inspect, { nullableBook: null });
+
+    expect(result).toEqual({ success: true, data: { nullableBook: null } });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported nested and durable existing Ref declarations', () => {
+    const Book = entity('UnsupportedExistingOperationBook', { id: field.id() });
+
+    expect(() =>
+      defineDomainOperation({
+        input: graphSchema.object({
+          nested: graphSchema.object({ book: graphSchema.existingRef(Book) }),
+        }),
+        run: () => Effect.void,
+      }),
+    ).toThrow(
+      'Operation input field "nested" nests graphSchema.existingRef(...); only direct top-level fields are supported.',
+    );
+    expect(() =>
+      defineDomainOperation({
+        input: graphSchema.object({
+          books: graphSchema.array(graphSchema.existingRef(Book)),
+        }),
+        run: () => Effect.void,
+      }),
+    ).toThrow(
+      'Operation input field "books" nests graphSchema.existingRef(...); only direct top-level fields are supported.',
+    );
+    expect(() =>
+      defineDomainOperation({
+        durable: { runtime: 'in-process' },
+        input: graphSchema.object({ book: graphSchema.existingRef(Book) }),
+        run: () => Effect.void,
+      } as never),
+    ).toThrow(
+      'Durable Domain Operations cannot use graphSchema.existingRef(...) until deferred resolution lifecycle semantics are defined.',
+    );
+  });
+
   it('shares nested resolveWith work through the UnitOfWork and honors invalidation', async () => {
     const Book = entity('UnitOfWorkBook', {
       id: field.id(),
@@ -300,5 +487,84 @@ describe('server Domain Operation Ref resolution', () => {
     const result = await runServerDomainOperationRaw(inspect, { nullableBook: null });
 
     expect(result).toEqual({ success: true, data: { nullableBook: null } });
+  });
+});
+
+describe('server Domain Operation Effect generator authoring', () => {
+  it('accepts Effect.fn bodies without an Effect.gen wrapper', async () => {
+    const calculate = defineDomainOperationsForEntity(
+      'EffectFnCalculator',
+      {
+        calculate: defineDomainOperation({
+          input: graphSchema.object({ value: field.integer() }),
+          run: Effect.fn(function* ({ value }) {
+            expectTypeOf(value).toEqualTypeOf<number>();
+            const increment = yield* Effect.succeed(1);
+            return { result: value + increment };
+          }),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.effect-fn' },
+    ).calculate;
+
+    await expect(runServerDomainOperationRaw(calculate, { value: 2 })).resolves.toEqual({
+      success: true,
+      data: { result: 3 },
+    });
+  });
+
+  it('accepts a direct Effect generator with contextually typed input', async () => {
+    const events: string[] = [];
+    const calculate = defineDomainOperationsForEntity(
+      'EffectGeneratorCalculator',
+      {
+        calculate: defineDomainOperation({
+          input: graphSchema.object({ value: field.integer() }),
+          *run({ value }) {
+            expectTypeOf(value).toEqualTypeOf<number>();
+            events.push('body');
+            const increment = yield* Effect.succeed(1);
+            return { result: value + increment };
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.effect-generator' },
+    ).calculate;
+
+    expect(events).toEqual([]);
+    await expect(runServerDomainOperationRaw(calculate, { value: 2 })).resolves.toEqual({
+      success: true,
+      data: { result: 3 },
+    });
+    expect(events).toEqual(['body']);
+  });
+
+  it('preserves failures yielded by a direct Effect generator', async () => {
+    const calculate = defineDomainOperationsForEntity(
+      'FailingEffectGeneratorCalculator',
+      {
+        calculate: defineDomainOperation({
+          input: graphSchema.object({ value: field.integer() }),
+          *run({ value }) {
+            if (value < 0) {
+              return yield* failOperation('negative_value', 'Value must not be negative.', {
+                value,
+              });
+            }
+            return { result: value };
+          },
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.operation.effect-generator-failure' },
+    ).calculate;
+
+    await expect(runServerDomainOperationRaw(calculate, { value: -1 })).resolves.toEqual({
+      success: false,
+      reason: 'negative_value',
+      message: 'Value must not be negative.',
+      value: -1,
+      error: 'Value must not be negative.',
+      errorType: 'negative_value',
+    });
   });
 });

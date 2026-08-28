@@ -141,6 +141,13 @@ resolver, and execution identity. `book.invalidate()` evicts it; `book.refresh()
 again. The lower-level `app.runtime.unitOfWork` facade exists for framework integration, but
 ordinary operation behavior uses the methods on its input Ref.
 
+Use `graphSchema.existingRef(Book)` when existence is part of the Operation input contract. The
+caller still sends one portable Ref, while the runner resolves it through the same authorized
+UnitOfWork before entering the implementation. The body receives the record and its original
+identity as `book.ref`; absence becomes the conventional `entity_not_found` failure. In an atomic
+Operation this materialization runs through the transaction runtime, so subsequent Commands and
+the read share one provider boundary.
+
 A UnitOfWork does not authorize, resolve, or persist an Entity by itself. Its resolver still uses
 the active Data Graph runtime and graph-read policy. It is not a browser cache, a cross-request
 cache, or a synonym for database transaction.

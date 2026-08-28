@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
+import type { InferGraphSchemaClientInput } from '../client-input.js';
 import { entity, field, graphSchema } from '../definitions.js';
-import { toGraphSchemaDescriptor } from '../schema-descriptor.js';
+import { toGraphJsonSchema, toGraphSchemaDescriptor } from '../schema-descriptor.js';
 
+import type { EntityRef } from './model.js';
 import { getGraphSchemaReferenceResolver } from './schema-reference.js';
 
 describe('schema-native Entity Ref input', () => {
@@ -31,5 +33,40 @@ describe('schema-native Entity Ref input', () => {
     expect(resolved).not.toBe(base);
     expect(getGraphSchemaReferenceResolver(base)).toBeUndefined();
     expect(getGraphSchemaReferenceResolver(resolved)).toEqual(expect.any(Function));
+  });
+
+  it('declares an existing participant while keeping the public input portable', () => {
+    const Book = entity('ExistingSchemaRefBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const input = graphSchema.object({ book: graphSchema.existingRef(Book) });
+    type ClientInput = InferGraphSchemaClientInput<typeof input>;
+
+    expectTypeOf<ClientInput>().toEqualTypeOf<{
+      book: EntityRef<'ExistingSchemaRefBook'>;
+    }>();
+    expect(toGraphSchemaDescriptor(input.fields.book)).toEqual({
+      kind: 'entity-ref',
+      entityName: 'ExistingSchemaRefBook',
+      identity: { name: 'refById', fields: ['id'] },
+      resolution: 'existing',
+    });
+    expect(toGraphJsonSchema(input.fields.book)['x-ontahi-entity-ref']).toEqual({
+      entityName: 'ExistingSchemaRefBook',
+      identity: { name: 'refById', fields: ['id'] },
+      resolution: 'existing',
+    });
+  });
+
+  it('rejects an existing participant whose Entity reserves the projected ref property', () => {
+    const Book = entity('ExistingSchemaRefCollisionBook', {
+      id: field.id(),
+      ref: field.string(),
+    });
+
+    expect(() => graphSchema.existingRef(Book)).toThrow(
+      'Existing Ref target ExistingSchemaRefCollisionBook cannot declare a Field named "ref"',
+    );
   });
 });

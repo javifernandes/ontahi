@@ -122,6 +122,7 @@ export type ExplorerOperationInputRefDescriptor = {
   entityName: string;
   receiver: boolean;
   optional: boolean;
+  resolution?: 'existing';
   locators: Array<{
     name: string;
     fields: string[];

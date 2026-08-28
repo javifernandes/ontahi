@@ -421,11 +421,18 @@ type ExplorerSchemaLike = {
   optional?: boolean;
   item?: unknown;
   target?: ExplorerEntityLike;
+  referenceRequirement?: 'existing';
 };
 
 const unwrapSchemaRef = (
   schema: unknown,
-): { optional: boolean; target: ExplorerEntityLike } | undefined => {
+):
+  | {
+      optional: boolean;
+      resolution?: 'existing';
+      target: ExplorerEntityLike;
+    }
+  | undefined => {
   let current = schema as ExplorerSchemaLike | undefined;
   let optional = false;
 
@@ -440,6 +447,7 @@ const unwrapSchemaRef = (
 
   return {
     optional: optional || current.optional === true,
+    ...(current.referenceRequirement ? { resolution: current.referenceRequirement } : {}),
     target: current.target,
   };
 };
@@ -462,6 +470,7 @@ const describeOperationInputRefs = (
         entityName: inputRef.target.name,
         receiver: false,
         optional: inputRef.optional,
+        ...(inputRef.resolution ? { resolution: inputRef.resolution } : {}),
         locators: describeSchemaRefLocators(path, inputRef.target, operation),
       },
     ];

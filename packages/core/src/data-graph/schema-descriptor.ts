@@ -92,6 +92,7 @@ export type GraphSchemaReferenceDescriptor = {
   };
   description?: string;
   presentation?: GraphSchemaPresentation;
+  resolution?: 'existing';
 };
 
 export type GraphSchemaObjectDescriptor = {
@@ -232,6 +233,7 @@ export type GraphJsonSchema = {
       name: string;
       fields: string[];
     };
+    resolution?: 'existing';
   };
 };
 
@@ -296,6 +298,7 @@ const describeReferenceField = (
       : {}),
     ...(field.description ? { description: field.description } : {}),
     ...(field.presentation ? { presentation: field.presentation } : {}),
+    ...(field.referenceRequirement ? { resolution: field.referenceRequirement } : {}),
   };
 };
 
@@ -601,6 +604,7 @@ const descriptorToJsonSchema = (
       'x-ontahi-entity-ref': {
         entityName: descriptor.entityName,
         ...(descriptor.identity ? { identity: descriptor.identity } : {}),
+        ...(descriptor.resolution ? { resolution: descriptor.resolution } : {}),
       },
     };
   }

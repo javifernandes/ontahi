@@ -2,8 +2,10 @@ import { Effect, Stream } from 'effect';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
+  createEntityRef,
   entity,
   field,
+  graphSchema,
   type DataGraphExecutionRuntime,
   type DataGraphTransactionCapability,
 } from '../../../data-graph/index.js';
@@ -12,6 +14,7 @@ import {
   createOperationFailure,
   defineDomainOperation,
   defineDomainOperationsForEntity,
+  getCurrentDataGraphRuntime,
   runServerDomainOperationRaw,
 } from '../index.js';
 
@@ -168,6 +171,87 @@ describe('atomic Domain Operations', () => {
     ]);
   });
 
+  it('materializes existing Ref participants after requirements and inside the transaction', async () => {
+    const events: string[] = [];
+    const transactionRuntime = createRuntime(<TResult>() => Effect.succeed(undefined as TResult));
+    const parentRuntime = Object.assign(
+      createRuntime(<TResult>() => Effect.succeed(undefined as TResult)),
+      {
+        transaction: <TValue, TError, TRequirements>(
+          work: (runtime: Runtime) => Effect.Effect<TValue, TError, TRequirements>,
+        ) =>
+          Effect.gen(function* () {
+            events.push('transaction:start');
+            const value = yield* work(transactionRuntime);
+            events.push('transaction:commit');
+            return value;
+          }),
+      },
+    ) satisfies TransactionRuntime;
+    const graph = createDataGraphArchitectureAdapter<
+      unknown,
+      never,
+      undefined,
+      undefined,
+      TransactionRuntime
+    >({ createRuntime: () => parentRuntime });
+    const existingRecord = graphSchema.existingRef(RecordDefinition).resolveWith(() =>
+      Effect.sync(() => {
+        events.push(
+          getCurrentDataGraphRuntime() === transactionRuntime
+            ? 'resolve:transaction'
+            : 'resolve:outside',
+        );
+        return { id: 'record-1', revision: 1 };
+      }),
+    );
+    const mutate = defineDomainOperationsForEntity(
+      RecordDefinition,
+      {
+        mutate: defineDomainOperation.atomic({
+          input: graphSchema.object({ record: existingRecord }),
+          requires: [
+            {
+              run: () =>
+                Effect.sync(() => {
+                  events.push('requirement');
+                }),
+            },
+          ],
+          concerns: [graph.withRuntime()],
+          contracts: {
+            pre: () => {
+              events.push('pre');
+            },
+            post: () => {
+              events.push('post');
+            },
+          },
+          run: ({ record }) =>
+            Effect.sync(() => {
+              events.push('body');
+              return { id: record.id, ref: record.ref };
+            }),
+        }),
+      },
+      { exposure: 'server-only', layer: 'tests.atomic.existing-ref' },
+    ).mutate;
+    const record = createEntityRef(RecordDefinition, { id: 'record-1' });
+
+    const result = await runServerDomainOperationRaw(mutate, { record });
+
+    expect(result).toEqual({ success: true, data: { id: 'record-1', ref: record } });
+    expect(events).toEqual([
+      'transaction:start',
+      'requirement',
+      'pre',
+      'resolve:transaction',
+      'body',
+      'post',
+      'transaction:commit',
+    ]);
+  });
+
   it('rolls body work back when a postcondition rejects inside the atomic boundary', async () => {
     const { graph, records, state } = createTransactionalRecordFixture();
     const mutate = defineDomainOperationsForEntity(
@@ -225,11 +309,10 @@ describe('atomic Domain Operations', () => {
       {
         mutate: defineDomainOperation.atomic({
           concerns: [graph.withRuntime()],
-          run: () =>
-            records
-              .insert({ id: 'record-1', revision: 1 })
-              .run()
-              .pipe(Effect.flatMap(() => failBody)),
+          *run() {
+            yield* records.insert({ id: 'record-1', revision: 1 }).run();
+            return yield* failBody;
+          },
         }),
       },
       { exposure: 'server-only', layer: 'tests.operation.atomic-body-rollback' },
