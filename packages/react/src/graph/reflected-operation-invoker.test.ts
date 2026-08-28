@@ -129,17 +129,18 @@ describe('reflected graph operation invoker', () => {
     });
   });
 
-  it('falls back to a bridge when a registered local operation lacks a required capability', () => {
+  it('falls back to a bridge when a registered local operation lacks a required capability', async () => {
+    const graphExecutor = createExecutor();
     const fallback = {
       getOperationExecutionAffordance: vi.fn().mockReturnValue({
         status: 'bridge',
         authority: 'server',
         bridge: 'fetch',
       }),
-      invokeOperation: vi.fn(),
+      invokeOperation: vi.fn().mockResolvedValue({ ok: true, kind: 'success', value: 'bridged' }),
     };
     const invoker = createReflectedOperationInvoker({
-      graphExecutor: createExecutor(),
+      graphExecutor,
       graphOperations: [resetReadingProgress],
       fallback,
     });
@@ -154,20 +155,27 @@ describe('reflected graph operation invoker', () => {
       authority: 'server',
       bridge: 'fetch',
     });
+    await expect(
+      invoker.invokeOperation({
+        operation: atomicOperation,
+        operationId: atomicOperation.id,
+        input: {},
+      }),
+    ).resolves.toEqual({ ok: true, kind: 'success', value: 'bridged' });
+    expect(fallback.invokeOperation).toHaveBeenCalledOnce();
+    expect(graphExecutor.runCommand).not.toHaveBeenCalled();
   });
 
-  it('reports unavailable when neither the local graph nor a fallback can execute', () => {
+  it('reports unavailable and rejects invocation when local atomicity has no fallback', async () => {
+    const graphExecutor = createExecutor();
     const invoker = createReflectedOperationInvoker({
-      graphExecutor: createExecutor(),
+      graphExecutor,
       graphOperations: [resetReadingProgress],
     });
     const operation = {
-      id: 'Student.transfer',
-      entityName: 'Student',
-      name: 'transfer',
-      kind: 'domain' as const,
+      ...operationDescriptor,
       authority: 'server',
-      exposure: 'server-only',
+      exposure: 'browser-direct',
       execution: { atomicity: 'required' as const },
     };
 
@@ -175,5 +183,14 @@ describe('reflected graph operation invoker', () => {
       status: 'unavailable',
       missingCapabilities: [{ kind: 'data-graph.atomicity' }],
     });
+    await expect(
+      invoker.invokeOperation({ operation, operationId: operation.id, input: {} }),
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'rejected',
+      executed: false,
+      reason: 'execution_unavailable',
+    });
+    expect(graphExecutor.runCommand).not.toHaveBeenCalled();
   });
 });
