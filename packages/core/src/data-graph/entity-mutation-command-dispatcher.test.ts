@@ -58,6 +58,40 @@ describe('Entity Mutation Command dispatcher', () => {
         executeEntityMutation,
       }),
     ).toThrow('must allow stored mutation and result Fields');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [{ ...policyFor(graph), actions: {} }],
+        executeEntityMutation,
+      }),
+    ).toThrow('requires valid actions');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          {
+            ...policyFor(graph),
+            actions: { update: { fields: ['title'] } },
+          } as never,
+        ],
+        executeEntityMutation,
+      }),
+    ).toThrow('requires a result Field allowlist');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          {
+            ...policyFor(graph),
+            actions: { update: { result: ['id'] } },
+          } as never,
+        ],
+        executeEntityMutation,
+      }),
+    ).toThrow('requires a mutation Field allowlist');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [policyFor(graph), policyFor(graph)],
+        executeEntityMutation,
+      }),
+    ).toThrow('Duplicate Entity Mutation Command policy for Entity Book');
   });
 
   it('denies missing policy, denied actions, and denied payload Fields before execution', async () => {
@@ -194,6 +228,35 @@ describe('Entity Mutation Command dispatcher', () => {
 
     await expect(
       dispatch(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
+    });
+  });
+
+  it('fails closed when execution is unavailable or returns an inexact delta', async () => {
+    const graph = defineBookGraph();
+    const command = mutateEntity(graph.Book).update(createEntityRef(graph.Book, { id: 'book-1' }), {
+      title: 'Revised',
+    });
+    const unavailable = createGraphCommandDispatcher({ policies: [policyFor(graph)] });
+    const malformed = createGraphCommandDispatcher({
+      policies: [policyFor(graph)],
+      executeEntityMutation: vi.fn(async () => ({
+        created: [],
+        updated: [{ entityName: 'Author', values: { id: 'book-1', title: 'Revised' } }],
+        deleted: [],
+      })),
+    });
+
+    await expect(
+      unavailable(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
+    });
+    await expect(
+      malformed(toGraphCommandRequest(command), { authority: undefined }),
     ).resolves.toMatchObject({
       kind: 'protocol-error',
       error: { code: 'execution_unavailable' },

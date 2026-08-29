@@ -286,6 +286,27 @@ describe('data graph Entity Mutation Command protocol', () => {
       },
       code: 'invalid_payload',
     },
+    {
+      name: 'empty update payload',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Book',
+        target: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+        values: {},
+      },
+      code: 'invalid_payload',
+    },
+    {
+      name: 'unknown Entity',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'delete',
+        entityName: 'Missing',
+        target: { kind: 'entity-ref', entityName: 'Missing', locator: { id: 'book-1' } },
+      },
+      code: 'unknown_entity',
+    },
   ])('rejects an $name while rebuilding the server Command', ({ command, code }) => {
     const Book = defineBookGraph();
     const parsed = parseGraphCommandRequest({ version: 1, kind: 'graph-command', command });
@@ -295,6 +316,23 @@ describe('data graph Entity Mutation Command protocol', () => {
     expect(resolveGraphCommandRequest(parsed.request, { entities: [Book] })).toMatchObject({
       success: false,
       error: { error: { code } },
+    });
+  });
+
+  it('rejects malformed Entity mutation intent at the protocol boundary', () => {
+    expect(
+      parseGraphCommandRequest({
+        version: 1,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'archive',
+          entityName: 'Book',
+        },
+      }),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_request' } },
     });
   });
 });

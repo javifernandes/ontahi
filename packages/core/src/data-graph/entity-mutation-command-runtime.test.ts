@@ -138,4 +138,70 @@ describe('Entity Mutation Command runtime routing', () => {
       Effect.runPromise(remote.runEntityMutationCommand(command).pipe(Effect.either)),
     ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'invalid_response' } });
   });
+
+  it('distinguishes unsupported, invalid, failed, and mismatched remote execution', async () => {
+    const graph = defineBookGraph();
+    const command = mutateEntity(graph.Book).create({
+      id: 'book-1',
+      title: 'Ontahi',
+      published: false,
+    });
+    const run = (commandTransport: (request: unknown) => Promise<unknown>) =>
+      Effect.runPromise(
+        createRemoteDataGraphRuntime({ transport: vi.fn(), commandTransport })
+          .runEntityMutationCommand(command)
+          .pipe(Effect.either),
+      );
+
+    await expect(
+      Effect.runPromise(
+        createRemoteDataGraphRuntime({ transport: vi.fn() })
+          .runEntityMutationCommand(command)
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { code: 'unsupported_capability' },
+    });
+    await expect(
+      Effect.runPromise(
+        createRemoteDataGraphRuntime({ transport: vi.fn(), commandTransport: vi.fn() })
+          .runEntityMutationCommand({
+            kind: 'entity-mutation-command',
+            action: 'create',
+            entityName: 'Book',
+            values: {
+              id: 'book-1',
+              title: 'Ontahi',
+              published: false,
+              unsafe: undefined,
+            },
+          })
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'invalid_request' } });
+    await expect(
+      run(async () => Promise.reject(new Error('network offline'))),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'transport_failure' } });
+    await expect(
+      run(async () => ({
+        kind: 'graph-command-rejection',
+        diagnostic: {
+          reason: 'relation_constraint_rejected',
+          rejection: {
+            version: 1,
+            code: 'relation_constraint_rejected',
+            message: 'Wrong rejection kind.',
+            parameters: {},
+          },
+        },
+      })),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'invalid_response' } });
+    await expect(
+      run(async () => ({
+        kind: 'protocol-error',
+        error: { code: 'access_denied', message: 'Data graph Command access denied.' },
+      })),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'access_denied' } });
+  });
 });
