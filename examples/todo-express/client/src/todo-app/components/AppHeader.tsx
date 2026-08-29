@@ -28,32 +28,36 @@ export const AppHeader = ({ runtime, authentication, signOut }: TodoAppModel['he
 
   return (
     <header>
-      <span className='eyebrow'>Ontahi portability example</span>
-      <h1>A tiny app, wired end to end.</h1>
-      <div className='runtime-stack' aria-label={`Express with ${storage ?? 'graph runtime'}`}>
-        <span>
-          <ExpressMark />
-          Express
-        </span>
-        <strong>+</strong>
-        <span>
-          {storage === 'in-memory' ? (
-            <MemoryMark />
-          ) : storage === 'postgres' ? (
-            <PostgresMark />
-          ) : null}
-          {storage === 'in-memory'
-            ? 'In-memory'
-            : storage === 'postgres'
-              ? 'PostgreSQL'
-              : runtime.status === 'error'
-                ? 'Runtime unavailable'
-                : '…'}
-        </span>
+      <div className='app-heading'>
+        <span className='eyebrow'>Ontahi example</span>
+        <h1>Todo</h1>
       </div>
-      <a className='explorer-link' href='/explorer'>
-        Open the embedded Ontahi Explorer →
-      </a>
+      <div className='app-tools'>
+        <div className='runtime-stack' aria-label={`Express with ${storage ?? 'graph runtime'}`}>
+          <span>
+            <ExpressMark />
+            Express
+          </span>
+          <strong>+</strong>
+          <span>
+            {storage === 'in-memory' ? (
+              <MemoryMark />
+            ) : storage === 'postgres' ? (
+              <PostgresMark />
+            ) : null}
+            {storage === 'in-memory'
+              ? 'In-memory'
+              : storage === 'postgres'
+                ? 'PostgreSQL'
+                : runtime.status === 'error'
+                  ? 'Runtime unavailable'
+                  : '…'}
+          </span>
+        </div>
+        <a className='explorer-link' href='/explorer'>
+          Explore data <span aria-hidden='true'>↗</span>
+        </a>
+      </div>
       <div className='auth-session'>
         {authentication.status === 'loading' ? (
           <span className='muted'>Loading authentication…</span>

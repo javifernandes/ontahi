@@ -1,7 +1,8 @@
 'use client';
 
 import { useHasReflectedEntityDataReader } from '@ontahi/react/graph';
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { Boxes, Braces, Check, ChevronsUpDown, Network, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 
 import type {
   ExplorerEntityDetail,
@@ -74,13 +75,6 @@ const describeEntityStructureSummary = (entity: ExplorerEntityDetail) =>
     ? `Relation owner for ${entity.relationOwner.source}.${entity.relationOwner.name}`
     : `${entity.fieldCount} fields, ${entity.relationCount} relations`;
 
-const describeEntityDetailSummary = (
-  entity: ExplorerEntityDetail,
-  operations: ExplorerOperationDescriptor[],
-  tasks: ExplorerTaskDescriptor[],
-) =>
-  `${describeEntityStructureSummary(entity)}, ${operations.length} operations, ${tasks.length} tasks`;
-
 const getEntitySearchText = (entity: ExplorerEntityDetail) =>
   [
     entity.name,
@@ -93,8 +87,126 @@ const getEntitySearchText = (entity: ExplorerEntityDetail) =>
     .join(' ')
     .toLowerCase();
 
+const EntityPicker = ({
+  entities,
+  selectedEntity,
+  onSelect,
+}: {
+  entities: ExplorerEntityDetail[];
+  selectedEntity: ExplorerEntityDetail;
+  onSelect: (event: MouseEvent<HTMLAnchorElement>, entityName: string) => void;
+}) => {
+  const routes = useExplorerRoutes();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const filteredEntities = useMemo(
+    () =>
+      entities.filter(entity => getEntitySearchText(entity).includes(query.toLowerCase().trim())),
+    [entities, query],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className='relative min-w-0 flex-1'>
+      <button
+        type='button'
+        role='combobox'
+        aria-expanded={open}
+        aria-haspopup='listbox'
+        aria-label={`Select entity, ${selectedEntity.name}`}
+        onClick={() => setOpen(current => !current)}
+        className='group flex w-full max-w-xl items-center gap-3 rounded-2xl border bg-card px-3 py-2 text-left shadow-sm transition hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20'
+      >
+        <span className='flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground'>
+          <Boxes className='size-5' />
+        </span>
+        <span className='grid min-w-0 flex-1'>
+          <span className='text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground'>
+            Entity
+          </span>
+          <span className='truncate font-mono text-lg font-semibold text-foreground'>
+            {selectedEntity.name}
+          </span>
+        </span>
+        <span className='hidden text-right text-xs text-muted-foreground sm:grid'>
+          <span>{selectedEntity.fieldCount} fields</span>
+          <span>{selectedEntity.relationCount} relations</span>
+        </span>
+        <ChevronsUpDown className='size-4 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
+      </button>
+
+      {open ? (
+        <div className='absolute left-0 top-[calc(100%+0.5rem)] z-50 w-full max-w-xl overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-xl'>
+          <label className='relative block border-b p-2'>
+            <Search className='pointer-events-none absolute left-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
+            <input
+              autoFocus
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder='Find an entity…'
+              aria-label='Search entities'
+              className='min-h-10 w-full rounded-xl bg-muted/50 pl-10 pr-3 text-sm outline-none focus:bg-background'
+            />
+          </label>
+          <div role='listbox' aria-label='Entities' className='max-h-80 overflow-y-auto p-2'>
+            {filteredEntities.map(entity => {
+              const selected = entity.name === selectedEntity.name;
+
+              return (
+                <a
+                  key={entity.name}
+                  href={routes.entity(entity.name)}
+                  role='option'
+                  aria-selected={selected}
+                  onClick={event => {
+                    onSelect(event, entity.name);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className='flex items-center gap-3 rounded-xl px-3 py-2.5 text-left no-underline transition hover:bg-accent'
+                >
+                  <span className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted font-mono text-xs font-semibold text-muted-foreground'>
+                    {entity.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className='grid min-w-0 flex-1 gap-0.5'>
+                    <span className='truncate font-mono text-sm font-semibold text-foreground'>
+                      {entity.name}
+                    </span>
+                    <span className='truncate text-xs text-muted-foreground'>
+                      {describeEntityStructureSummary(entity)} ·{' '}
+                      {entity.graphOperationCount + entity.domainOperationCount} actions
+                    </span>
+                  </span>
+                  {selected ? <Check className='size-4 shrink-0 text-primary' /> : null}
+                </a>
+              );
+            })}
+            {filteredEntities.length === 0 ? (
+              <p className='px-3 py-8 text-center text-sm text-muted-foreground'>
+                No entities match.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const EntityBrowserDetail = ({
   entity,
+  entityPicker,
   operations,
   renderDataPanel,
   renderDiagram,
@@ -105,6 +217,7 @@ const EntityBrowserDetail = ({
   onTabChange,
 }: {
   entity: ExplorerEntityDetail;
+  entityPicker: ReactNode;
   operations: ExplorerOperationDescriptor[];
   renderDataPanel?: ExplorerEntityDataPanelRenderer;
   renderDiagram?: ExplorerEntityStructurePanelProps['renderDiagram'];
@@ -118,42 +231,34 @@ const EntityBrowserDetail = ({
   const effectiveTab = parseExplorerEntityBrowserTab(tab, { canShowData });
 
   return (
-    <section className='grid content-start gap-5'>
-      <div className='rounded-lg border bg-card px-5 py-3'>
-        <div className='flex flex-col gap-2 md:flex-row md:items-center md:justify-between'>
-          <h2 className='font-mono text-xl font-semibold tracking-tight text-foreground'>
-            {entity.name}
-          </h2>
-          <div className='flex flex-wrap items-center gap-3 md:justify-end'>
-            <p className='text-sm text-muted-foreground'>
-              {describeEntityDetailSummary(entity, operations, tasks)}
-            </p>
-            {entity.exposure ? (
-              <span className='rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground'>
-                {entity.exposure}
-              </span>
-            ) : null}
-          </div>
+    <section className='relative grid content-start gap-5'>
+      <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+        {entityPicker}
+        <div className='flex shrink-0 flex-wrap items-center gap-2'>
+          {canShowData && effectiveTab !== 'data' ? (
+            <button
+              type='button'
+              onClick={() => onTabChange('data')}
+              className='rounded-xl border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary hover:text-primary'
+            >
+              Instances
+            </button>
+          ) : null}
+          {operations.length > 0 || tasks.length > 0 ? (
+            <button
+              type='button'
+              onClick={() => onTabChange('operations')}
+              aria-pressed={effectiveTab === 'operations'}
+              className={cx(
+                'inline-flex items-center gap-2 rounded-xl border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm hover:border-primary hover:text-primary',
+                effectiveTab === 'operations' && 'border-primary text-primary',
+              )}
+            >
+              <Braces className='size-4' />
+              Actions
+            </button>
+          ) : null}
         </div>
-      </div>
-      <div className='flex gap-2 border-b'>
-        {[
-          { id: 'structure' as const, label: 'Schema' },
-          { id: 'operations' as const, label: 'Operations' },
-          ...(canShowData ? [{ id: 'data' as const, label: 'Data' }] : []),
-        ].map(tabOption => (
-          <button
-            key={tabOption.id}
-            type='button'
-            onClick={() => onTabChange(tabOption.id)}
-            className={cx(
-              'px-3 py-2 text-sm font-medium capitalize text-muted-foreground hover:text-foreground',
-              effectiveTab === tabOption.id && 'border-b-2 border-primary text-primary',
-            )}
-          >
-            {tabOption.label}
-          </button>
-        ))}
       </div>
       {effectiveTab === 'structure' ? (
         <ExplorerEntityStructurePanel entity={entity} renderDiagram={renderDiagram} />
@@ -168,6 +273,18 @@ const EntityBrowserDetail = ({
         />
       ) : null}
       {effectiveTab === 'data' && renderDataPanel ? renderDataPanel({ entity }) : null}
+      {effectiveTab !== 'structure' ? (
+        <div className='sticky bottom-6 ml-auto pt-2'>
+          <button
+            type='button'
+            onClick={() => onTabChange('structure')}
+            className='inline-flex items-center gap-2 rounded-full border bg-foreground px-4 py-2.5 text-sm font-medium text-background shadow-lg hover:bg-foreground/90'
+          >
+            <Network className='size-4' />
+            Schema
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 };
@@ -193,20 +310,13 @@ export function ExplorerEntityBrowser({
       ? ({ entity }) => <ExplorerEntityDataPanel entity={entity} showHeader={false} />
       : undefined);
   const canShowDataTab = Boolean(resolvedRenderDataPanel);
-  const [query, setQuery] = useState('');
   const [selectedName, setSelectedName] = useState(() =>
     getSelectedEntityName(entities, selectedEntityName),
   );
   const [tab, setTab] = useState<ExplorerEntityBrowserTab>(() =>
     parseExplorerEntityBrowserTab(selectedTab, { canShowData: canShowDataTab }),
   );
-  const filteredEntities = useMemo(
-    () =>
-      entities.filter(entity => getEntitySearchText(entity).includes(query.toLowerCase().trim())),
-    [entities, query],
-  );
-  const selectedEntity =
-    entities.find(entity => entity.name === selectedName) ?? filteredEntities[0] ?? entities[0];
+  const selectedEntity = entities.find(entity => entity.name === selectedName) ?? entities[0];
   const selectedOperations = selectedEntity
     ? operations.filter(operation => operation.entityName === selectedEntity.name)
     : [];
@@ -263,7 +373,7 @@ export function ExplorerEntityBrowser({
 
     clickEvent.preventDefault();
     setSelectedName(entityName);
-    setTab('structure');
+    setTab(parseExplorerEntityBrowserTab(undefined, { canShowData: canShowDataTab }));
     globalThis.history.pushState(null, '', routes.entity(entityName));
   };
   const selectTab = (nextTab: ExplorerEntityBrowserTab) => {
@@ -277,63 +387,26 @@ export function ExplorerEntityBrowser({
 
   return (
     <div className={cx('grid gap-6', className)}>
-      <header>
-        <h1 className='text-3xl font-semibold tracking-tight'>Entity Browser</h1>
-        <p className='mt-2 max-w-3xl text-sm text-muted-foreground'>
-          Inspect entity structure, relationships, operations, tasks, and eventually read-only
-          persisted data.
-        </p>
-      </header>
-      <div className='grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]'>
-        <aside className='grid content-start gap-3'>
-          <input
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-            placeholder='Search entities'
-            aria-label='Search entities'
-            className='min-h-10 rounded-md border bg-background px-3 text-sm outline-none focus:border-primary'
-          />
-          <div className='overflow-hidden rounded-lg border bg-card'>
-            {filteredEntities.map(entity => (
-              <a
-                key={entity.name}
-                href={routes.entity(entity.name)}
-                onClick={clickEvent => selectEntity(clickEvent, entity.name)}
-                className={cx(
-                  'grid w-full gap-1 border-b px-4 py-3 text-left last:border-0 hover:bg-accent/70',
-                  selectedEntity?.name === entity.name && 'bg-primary/10',
-                )}
-              >
-                <span className='font-mono text-sm font-semibold text-foreground'>
-                  {entity.name}
-                </span>
-                <span className='text-xs text-muted-foreground'>
-                  {entity.relationOwner
-                    ? `${entity.relationOwner.source}.${entity.relationOwner.name} relation`
-                    : `${entity.fieldCount} fields · ${entity.relationCount} relations`}{' '}
-                  · {entity.graphOperationCount + entity.domainOperationCount} operations
-                </span>
-              </a>
-            ))}
-            {filteredEntities.length === 0 ? (
-              <p className='px-4 py-8 text-sm text-muted-foreground'>No entities match.</p>
-            ) : null}
-          </div>
-        </aside>
-        {selectedEntity ? (
-          <EntityBrowserDetail
-            entity={selectedEntity}
-            operations={selectedOperations}
-            renderDataPanel={resolvedRenderDataPanel}
-            renderDiagram={renderDiagram}
-            renderExecutePanel={renderExecutePanel}
-            renderRefInput={renderRefInput}
-            tab={tab}
-            tasks={selectedTasks}
-            onTabChange={selectTab}
-          />
-        ) : null}
-      </div>
+      {selectedEntity ? (
+        <EntityBrowserDetail
+          entity={selectedEntity}
+          entityPicker={
+            <EntityPicker
+              entities={entities}
+              selectedEntity={selectedEntity}
+              onSelect={selectEntity}
+            />
+          }
+          operations={selectedOperations}
+          renderDataPanel={resolvedRenderDataPanel}
+          renderDiagram={renderDiagram}
+          renderExecutePanel={renderExecutePanel}
+          renderRefInput={renderRefInput}
+          tab={tab}
+          tasks={selectedTasks}
+          onTabChange={selectTab}
+        />
+      ) : null}
     </div>
   );
 }

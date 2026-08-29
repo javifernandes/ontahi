@@ -13,6 +13,7 @@ export const TodoPanel = ({
   isCreatingTodo,
   isLoading,
   isError,
+  creationError,
   changeTitle,
   submitTodo,
   selectStatus,
@@ -31,9 +32,15 @@ export const TodoPanel = ({
         placeholder='What should happen next?'
       />
       <button type='submit' disabled={!hasSelectedList || isCreatingTodo}>
-        Add todo
+        {isCreatingTodo ? 'Adding…' : 'Add todo'}
       </button>
     </form>
+
+    {creationError ? (
+      <p className='todo-form-error' role='alert'>
+        {creationError}
+      </p>
+    ) : null}
 
     <div className='status-filter' aria-label='Filter todos by status'>
       {statuses.map(status => (

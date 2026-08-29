@@ -2,9 +2,9 @@ import type {
   ReflectedEntityDataReader,
   ReflectedRelatedEntityDataReader,
 } from '@ontahi/core/data-graph';
-import { OntahiGraphProvider } from '@ontahi/react/graph';
+import { OntahiGraphProvider, type ReactGraphExecutor } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,8 @@ import type {
   ExplorerSchemaDescriptor,
   ExplorerTaskDescriptor,
 } from '../contracts/index.js';
+
+import { ExplorerEditableEntityCell, ExplorerEntityDeleteButton } from './entity-data-mutations.js';
 
 import { ExplorerEntityBrowser, ExplorerProvider } from './index.js';
 
@@ -153,10 +155,12 @@ const withReflectedEntityDataReader = ({
     hasNextPage: false,
   }),
   readRelatedEntityData,
+  graphExecutor,
 }: {
   children: ReactNode;
   readEntityData?: ReflectedEntityDataReader['readEntityData'];
   readRelatedEntityData?: ReflectedRelatedEntityDataReader['readRelatedEntityData'];
+  graphExecutor?: ReactGraphExecutor;
 }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -170,6 +174,7 @@ const withReflectedEntityDataReader = ({
     <QueryClientProvider client={queryClient}>
       <OntahiGraphProvider
         runtime={{ name: 'test-runtime' }}
+        graphExecutor={graphExecutor}
         reflectedEntityDataReader={{ readEntityData }}
         reflectedRelatedEntityDataReader={
           readRelatedEntityData ? { readRelatedEntityData } : undefined
@@ -182,7 +187,9 @@ const withReflectedEntityDataReader = ({
 };
 
 describe('ExplorerEntityBrowser', () => {
-  it('renders entity detail with package-owned routes and host panels', () => {
+  it('renders entity detail with package-owned routes and host panels', async () => {
+    const user = userEvent.setup();
+
     render(
       <ExplorerProvider basePath='/internal/graph'>
         <ExplorerEntityBrowser
@@ -200,10 +207,11 @@ describe('ExplorerEntityBrowser', () => {
       </ExplorerProvider>,
     );
 
-    const hrefs = screen.getAllByRole('link').map(link => link.getAttribute('href'));
+    await user.click(screen.getByRole('combobox', { name: 'Select entity, Book' }));
+    const hrefs = screen.getAllByRole('option').map(option => option.getAttribute('href'));
 
-    expect(screen.getByRole('heading', { name: 'Entity Browser' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Book' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Explore your data' })).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Select entity, Book' })).toBeTruthy();
     expect(screen.getByText('Get Sharing Info')).toBeTruthy();
     expect(screen.getByText('Import Book')).toBeTruthy();
     expect(screen.getByTestId('execute-panel').textContent).toBe('execute Book.getSharingInfo');
@@ -211,7 +219,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(hrefs).toContain('/internal/graph/entities/Profile');
   });
 
-  it('uses local entity and tab navigation while preserving route-shaped URLs', async () => {
+  it('keeps instance browsing primary across local entity navigation', async () => {
     const user = userEvent.setup();
 
     render(
@@ -226,15 +234,18 @@ describe('ExplorerEntityBrowser', () => {
       </ExplorerProvider>,
     );
 
-    await user.click(screen.getAllByRole('link', { name: /Profile/ })[0]!);
+    await user.click(screen.getByRole('combobox', { name: 'Select entity, Book' }));
+    await user.click(screen.getByRole('option', { name: /Profile/ }));
 
-    expect(screen.getByRole('heading', { name: 'Profile' })).toBeTruthy();
-    expect(globalThis.location.pathname).toBe('/internal/graph/entities/Profile');
-
-    await user.click(screen.getByRole('button', { name: 'Data' }));
-
+    expect(screen.getByRole('combobox', { name: 'Select entity, Profile' })).toBeTruthy();
     expect(screen.getByTestId('data-panel').textContent).toBe('data Profile');
-    expect(globalThis.location.search).toBe('?tab=data');
+    expect(globalThis.location.pathname).toBe('/internal/graph/entities/Profile');
+    expect(globalThis.location.search).toBe('');
+
+    await user.click(screen.getByRole('button', { name: 'Schema' }));
+
+    expect(screen.getByText('Fields')).toBeTruthy();
+    expect(globalThis.location.search).toBe('?tab=structure');
   });
 
   it('hides data when no host data panel is supplied or the entity is a relation owner', () => {
@@ -267,7 +278,6 @@ describe('ExplorerEntityBrowser', () => {
   });
 
   it('renders the default data panel when a reflected entity data reader is registered', async () => {
-    const user = userEvent.setup();
     const readEntityData = vi.fn().mockResolvedValue({
       entityName: 'Book',
       columns: [
@@ -303,9 +313,9 @@ describe('ExplorerEntityBrowser', () => {
       }),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Data' }));
-
     expect(await screen.findByText('Ontahi')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit title' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete row' })).toBeNull();
     expect(readEntityData).toHaveBeenCalledWith(
       expect.objectContaining({
         entityName: 'Book',
@@ -313,6 +323,159 @@ describe('ExplorerEntityBrowser', () => {
         pageSize: 25,
       }),
     );
+  });
+
+  it('edits authorized scalar fields and deletes exact rows through Entity mutation Commands', async () => {
+    const user = userEvent.setup();
+    const editableTag: ExplorerEntityDetail = {
+      ...entities[1]!,
+      name: 'Tag',
+      fieldCount: 3,
+      identity: { name: 'id', fields: ['id'] },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+        { name: 'color', type: 'string', nullable: false },
+      ],
+      mutations: {
+        update: { fields: ['name', 'color'] },
+        delete: true,
+      },
+    };
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Tag',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'name', type: 'string', nullable: false },
+        { field: 'color', type: 'string', nullable: false },
+      ],
+      rows: [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    const runEntityMutationCommand = vi.fn().mockResolvedValue({
+      created: [],
+      updated: [],
+      deleted: [],
+    });
+    const graphExecutor = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      runCommand: vi.fn(),
+      runEntityMutationCommand,
+    } as unknown as ReactGraphExecutor;
+
+    render(
+      withReflectedEntityDataReader({
+        graphExecutor,
+        readEntityData,
+        children: (
+          <ExplorerEntityBrowser
+            entities={[editableTag]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Tag'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Edit name' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
+    await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Important');
+    await user.click(screen.getByRole('button', { name: 'Save name' }));
+
+    await waitFor(() =>
+      expect(runEntityMutationCommand).toHaveBeenCalledWith({
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Tag',
+        target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+        values: { name: 'Important' },
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(runEntityMutationCommand).toHaveBeenLastCalledWith({
+        kind: 'entity-mutation-command',
+        action: 'delete',
+        entityName: 'Tag',
+        target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+      }),
+    );
+    expect(readEntityData.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('restores cancelled edits and reports remote update failures', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockRejectedValue(new Error('Update unavailable.'));
+    const onApplied = vi.fn();
+
+    render(
+      <ExplorerEditableEntityCell
+        entityName='Tag'
+        field={{ name: 'name', type: 'string', nullable: false }}
+        onApplied={onApplied}
+        runMutation={runMutation}
+        target={{ kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } }}
+        value='Urgent'
+      >
+        Urgent
+      </ExplorerEditableEntityCell>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit name' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
+    await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Draft');
+    await user.click(screen.getByRole('button', { name: 'Cancel name' }));
+    expect(screen.getByRole('button', { name: 'Edit name' }).textContent).toContain('Urgent');
+
+    await user.click(screen.getByRole('button', { name: 'Edit name' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
+    await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Important{Enter}');
+
+    expect(await screen.findByText('Update unavailable.')).toBeTruthy();
+    expect(runMutation).toHaveBeenCalledWith({
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName: 'Tag',
+      target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+      values: { name: 'Important' },
+    });
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it('cancels delete confirmation and reports non-Error mutation failures', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockRejectedValue('offline');
+    const onApplied = vi.fn();
+
+    render(
+      <ExplorerEntityDeleteButton
+        entityName='Tag'
+        onApplied={onApplied}
+        runMutation={runMutation}
+        target={{ kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Delete row' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByText('The mutation could not be applied.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete row' })).toBeTruthy();
+    expect(onApplied).not.toHaveBeenCalled();
   });
 
   it('spans loading rows across the conditional Related column', () => {
@@ -403,8 +566,6 @@ describe('ExplorerEntityBrowser', () => {
         })}
       </ExplorerProvider>,
     );
-
-    await user.click(screen.getByRole('button', { name: 'Data' }));
 
     const owner = await screen.findByRole('link', { name: 'Profile · profile-1' });
     expect(owner.getAttribute('href')).toBe(
@@ -558,7 +719,6 @@ describe('ExplorerEntityBrowser', () => {
       </ExplorerProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Data' }));
     await user.click(await screen.findByRole('button', { name: 'collaborators' }));
 
     expect((await screen.findByRole('link', { name: 'Ada' })).getAttribute('href')).toBe(
@@ -597,9 +757,10 @@ describe('ExplorerEntityBrowser', () => {
 
     render(<ExplorerEntityBrowser entities={entities} operations={[]} tasks={[]} />);
 
+    await user.click(screen.getByRole('combobox', { name: 'Select entity, Book' }));
     await user.type(screen.getByLabelText('Search entities'), 'Profile');
 
-    expect(screen.queryByRole('link', { name: /Book/ })).toBeNull();
-    expect(screen.getAllByRole('link', { name: /Profile/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('option', { name: /Book/ })).toBeNull();
+    expect(screen.getByRole('option', { name: /Profile/ })).toBeTruthy();
   });
 });

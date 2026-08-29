@@ -36,6 +36,12 @@ export type ExplorerEntityDescriptor = {
 
 export type ExplorerEntityDisplayDescriptor = ReflectedEntityDisplayDescriptor;
 
+export type ExplorerEntityMutationDescriptor = {
+  create?: { fields: string[] };
+  update?: { fields: string[] };
+  delete?: true;
+};
+
 export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
   diagram: string;
   identity?: {
@@ -43,6 +49,7 @@ export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
     fields: string[];
   };
   entityRole?: { kind: 'association'; participants: string[] } | { kind: 'unknown' };
+  mutations?: ExplorerEntityMutationDescriptor;
   fields: Array<{
     name: string;
     type: string;

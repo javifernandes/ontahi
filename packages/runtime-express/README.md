@@ -27,8 +27,8 @@ server.use(
 - `POST /runtime/ontahi/operations` for invocation and permission checks.
 - `POST /runtime/ontahi/graph/reads` when graph-read policies or a lower-level dispatcher are
   configured.
-- `POST /runtime/ontahi/graph/commands` when Relationship Command policies or a lower-level
-  dispatcher are configured.
+- `POST /runtime/ontahi/graph/commands` when Relationship or Entity Mutation Command policies, or a
+  lower-level dispatcher, are configured.
 - `GET /runtime/ontahi/operations/tasks/:taskId/:runId` for durable task snapshots.
 - `GET /runtime/ontahi/application` for reflected application metadata.
 - `/runtime/ontahi/explorer/*` when Explorer is enabled.
@@ -103,6 +103,12 @@ graphRead: {
 `graphRead.dispatcher` and `graphRead.context` remain available as a lower-level transport
 composition seam. Ordinary applications should pass policies and let Ontahi build the dispatcher
 from the application storage runtime.
+
+Graph Commands are likewise opt-in and default-deny. An Entity mutation policy names the exact
+actions, writable Fields, and result Fields. When Explorer is mounted beside that policy, its
+snapshot reflects those static affordances so the instance canvas can expose inline editing and
+exact-row delete. The snapshot is advisory UI metadata; every submitted Command is rebuilt and
+authorized again by the dispatcher.
 
 Operation-declared HTTP ingress can be mounted from the same middleware:
 

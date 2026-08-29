@@ -161,6 +161,9 @@ export function useExplorerEntityDataBrowser({
     totalPages,
     goToNextPage: () => setPage(previousPage => previousPage + 1),
     goToPreviousPage: () => setPage(previousPage => Math.max(1, previousPage - 1)),
+    refresh: async () => {
+      await dataQuery.refetch();
+    },
     setFilterField: (nextFilterField: string) => {
       setFilterFieldState(nextFilterField);
       resetPage();

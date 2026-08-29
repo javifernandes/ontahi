@@ -31,7 +31,12 @@ import type { ExpressInvocationContextFactory } from './request-context.js';
 import { createExpressTaskSnapshotHandler } from './task-snapshot/handler.js';
 
 export type OntahiExpressExplorerOptions = {
-  buildSnapshot(application: OntahiApplication): unknown;
+  buildSnapshot(
+    application: OntahiApplication,
+    context?: {
+      graphCommandPolicies: OntahiExpressGraphCommandOptions['policies'];
+    },
+  ): unknown;
   path?: string;
   indexFile?: string;
 };
@@ -217,7 +222,11 @@ export const ontahiExpress = <
     const explorerPath = routePath(explorer.path ?? '/explorer');
 
     router.get(`${explorerPath}/snapshot`, (_request, response) =>
-      response.json(explorer.buildSnapshot(application)),
+      response.json(
+        explorer.buildSnapshot(application, {
+          graphCommandPolicies: options.graphCommand?.policies ?? [],
+        }),
+      ),
     );
     router.post(`${explorerPath}/entities`, express.json(), (request, response, next) => {
       if (!application.reflectedEntityDataReader) {

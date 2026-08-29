@@ -155,6 +155,15 @@ export function useGraphExecutor<TReadOptions = unknown, TCommandOptions = TRead
   return graphExecutor as ReactGraphExecutor<TReadOptions, TCommandOptions>;
 }
 
+export function useGraphExecutorCapability<
+  TReadOptions = unknown,
+  TCommandOptions = TReadOptions,
+>() {
+  return (useContext(GraphExecutorContext) ?? undefined) as
+    | ReactGraphExecutor<TReadOptions, TCommandOptions>
+    | undefined;
+}
+
 export function useGraphClientCache() {
   const clientCache = useContext(GraphClientCacheContext);
 

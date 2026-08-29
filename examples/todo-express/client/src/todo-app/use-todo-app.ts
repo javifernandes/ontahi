@@ -38,6 +38,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [selectedTagId, setSelectedTagId] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<TodoStatusFilter>('all');
+  const [todoCreationError, setTodoCreationError] = useState<string>();
   const [runtime, setRuntime] = useState<BootstrapState<TodoRuntime>>({ status: 'loading' });
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
@@ -83,7 +84,13 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   }, []);
 
   useEffect(() => {
-    if (!selectedListId && lists.data?.[0]) setSelectedListId(lists.data[0].id);
+    if (!lists.data) return;
+
+    const selectedListStillExists = lists.data.some(list => list.id === selectedListId);
+    if (selectedListStillExists) return;
+
+    setSelectedListId(lists.data[0]?.id ?? '');
+    setSelectedIds([]);
   }, [lists.data, selectedListId]);
 
   useEffect(() => {
@@ -95,12 +102,41 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     const normalizedTitle = title.trim();
     if (!normalizedTitle || !selectedListId) return;
 
-    const result = await createTodo.executeAsync({
-      id: globalThis.crypto.randomUUID(),
-      list: TodoList.refById(selectedListId),
-      title: normalizedTitle,
-    });
-    if (result.ok) setTitle('');
+    setTodoCreationError(undefined);
+    try {
+      const result = await createTodo.executeAsync({
+        id: globalThis.crypto.randomUUID(),
+        list: TodoList.refById(selectedListId),
+        title: normalizedTitle,
+      });
+      if (result.ok) {
+        setTitle('');
+        return;
+      }
+
+      const failureReason =
+        result.kind === 'failed' &&
+        typeof result.failure === 'object' &&
+        result.failure !== null &&
+        'reason' in result.failure &&
+        typeof result.failure.reason === 'string'
+          ? result.failure.reason
+          : undefined;
+
+      if (failureReason === 'todo_list_not_found') {
+        const refreshedLists = await lists.refetch();
+        setSelectedListId(refreshedLists.data?.[0]?.id ?? '');
+        setSelectedIds([]);
+        setTodoCreationError(
+          'That list no longer exists. Lists were refreshed; choose or create one and try again.',
+        );
+        return;
+      }
+
+      setTodoCreationError(result.message || 'The todo could not be added.');
+    } catch (error) {
+      setTodoCreationError(error instanceof Error ? error.message : 'The todo could not be added.');
+    }
   };
 
   const submitList = async (event: FormEvent) => {
@@ -113,6 +149,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       setListName('');
       setSelectedListId(id);
       setSelectedIds([]);
+      setTodoCreationError(undefined);
     }
   };
 
@@ -214,6 +251,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       selectList: (id: string) => {
         setSelectedListId(id);
         setSelectedIds([]);
+        setTodoCreationError(undefined);
       },
       selectTag: setSelectedTagId,
       submitList,
@@ -229,7 +267,11 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       isCreatingTodo: createTodo.isExecuting,
       isLoading: todos.isLoading,
       isError: todos.isError,
-      changeTitle: setTitle,
+      creationError: todoCreationError,
+      changeTitle: (nextTitle: string) => {
+        setTitle(nextTitle);
+        if (todoCreationError) setTodoCreationError(undefined);
+      },
       submitTodo,
       selectStatus: (status: TodoStatusFilter) => {
         setStatusFilter(status);
