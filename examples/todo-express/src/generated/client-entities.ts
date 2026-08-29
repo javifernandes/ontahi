@@ -23,6 +23,7 @@ export const TodoListSchema = defineEntitySchema('TodoList', {
       exclude: 'Archive is reserved for system use.',
     },
   }),
+  color: field.nonEmptyString({ trim: true }),
 });
 export const TagSchema = defineEntitySchema('Tag', {
   id: field.id(),
@@ -48,7 +49,7 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       bridge: {
         invalidate: [['TodoList']],
       },
-      input: graphSchema.pick(TodoListSchema, ['id', 'name']).named('CreateTodoListInput'),
+      input: graphSchema.pick(TodoListSchema, ['id', 'name', 'color']).named('CreateTodoListInput'),
       output: TodoListSchema,
     }),
     rename: defineClientDomainOperation({
@@ -60,6 +61,18 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       input: graphSchema.object({
         list: TodoListSchema.one(),
         name: TodoListSchema.fields.name,
+      }),
+      output: TodoListSchema,
+    }),
+    recolor: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList']],
+      },
+      input: graphSchema.object({
+        list: TodoListSchema.one(),
+        color: TodoListSchema.fields.color,
       }),
       output: TodoListSchema,
     }),
@@ -109,6 +122,26 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       },
       input: graphSchema.object({
         todos: TodoItemSchema.many(),
+      }),
+    }),
+    delete: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoItem']],
+      },
+      input: graphSchema.object({
+        todo: graphSchema.existingRef(TodoItemSchema),
+      }),
+    }),
+    deleteTag: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['Tag'], ['TodoItem']],
+      },
+      input: graphSchema.object({
+        tag: graphSchema.existingRef(TagSchema),
       }),
     }),
     deleteAll: defineClientDomainOperation({

@@ -18,6 +18,15 @@ import { canDeleteTodoList, groupTodoLists } from './todo-list-state.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
+export const listPastelColors = [
+  '#f5ddd5',
+  '#f4e5b8',
+  '#dcebdc',
+  '#dbe8f4',
+  '#e8dcf2',
+  '#f2dce6',
+] as const;
+
 type TodoTagMutation = { todoId: string; tagId: string };
 
 const createTodoTagCommand = (action: 'add' | 'remove', { todoId, tagId }: TodoTagMutation) => {
@@ -54,19 +63,25 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [actionError, setActionError] = useState<string>();
   const [creatingTodoFor, setCreatingTodoFor] = useState<string>();
   const [renamingListId, setRenamingListId] = useState<string>();
+  const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();
   const [completingTodoId, setCompletingTodoId] = useState<string>();
+  const [deletingTodoId, setDeletingTodoId] = useState<string>();
   const [taggingTodoId, setTaggingTodoId] = useState<string>();
+  const [deletingTagId, setDeletingTagId] = useState<string>();
 
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
   const todos = useGraphQuery(allTodoItemsQuery);
   const createListOperation = useOperation(TodoList.domain.create);
   const renameListOperation = useOperation(TodoList.domain.rename);
+  const recolorListOperation = useOperation(TodoList.domain.recolor);
   const deleteListOperation = useOperation(TodoList.domain.delete);
   const createTagOperation = useOperation(Tag.domain.create);
+  const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
   const createTodoOperation = useOperation(TodoItem.domain.create);
   const completeTodoOperation = useOperation(TodoItem.domain.complete);
+  const deleteTodoOperation = useOperation(TodoItem.domain.delete);
   const linkTags = useManyToManyRelationshipCommand(
     (input: TodoTagMutation) => createTodoTagCommand('add', input),
     { onSuccess: () => todos.refetch() },
@@ -94,6 +109,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       const result = await createListOperation.executeAsync({
         id: globalThis.crypto.randomUUID(),
         name,
+        color: listPastelColors[(lists.data?.length ?? 0) % listPastelColors.length]!,
       });
       const message = operationMessage(result, 'The list could not be created.');
       setActionError(message);
@@ -101,6 +117,25 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be created.'));
       return false;
+    }
+  };
+
+  const recolorList = async (listId: string, color: string) => {
+    setActionError(undefined);
+    setRecoloringListId(listId);
+    try {
+      const result = await recolorListOperation.executeAsync({
+        list: TodoList.refById(listId),
+        color,
+      });
+      const message = operationMessage(result, 'The list color could not be changed.');
+      setActionError(message);
+      return !message;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The list color could not be changed.'));
+      return false;
+    } finally {
+      setRecoloringListId(undefined);
     }
   };
 
@@ -194,6 +229,22 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
+  const deleteTodo = async (todoId: string) => {
+    setActionError(undefined);
+    setDeletingTodoId(todoId);
+    try {
+      const result = await deleteTodoOperation.executeAsync({ todo: TodoItem.refById(todoId) });
+      const message = operationMessage(result, 'The todo could not be deleted.');
+      setActionError(message);
+      return !message;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The todo could not be deleted.'));
+      return false;
+    } finally {
+      setDeletingTodoId(undefined);
+    }
+  };
+
   const toggleTodoTag = async (todoId: string, tagId: string, isAssigned: boolean) => {
     setActionError(undefined);
     setTaggingTodoId(todoId);
@@ -238,6 +289,22 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
+  const deleteTag = async (tagId: string) => {
+    setActionError(undefined);
+    setDeletingTagId(tagId);
+    try {
+      const result = await deleteTagOperation.executeAsync({ tag: Tag.refById(tagId) });
+      const message = operationMessage(result, 'The tag could not be deleted.');
+      setActionError(message);
+      return !message;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The tag could not be deleted.'));
+      return false;
+    } finally {
+      setDeletingTagId(undefined);
+    }
+  };
+
   const signOut = async () => {
     const response = await fetch('/auth/logout', { method: 'POST' });
     if (!response.ok) return;
@@ -279,17 +346,23 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       isCreatingList: createListOperation.isExecuting,
       creatingTodoFor,
       renamingListId,
+      recoloringListId,
       deletingListId,
       completingTodoId,
+      deletingTodoId,
       taggingTodoId,
+      deletingTagId,
       clearActionError: () => setActionError(undefined),
       createList,
       renameList,
+      recolorList,
       deleteList,
       createTodo,
       completeTodo,
+      deleteTodo,
       toggleTodoTag,
       createTagForTodo,
+      deleteTag,
     },
   };
 };

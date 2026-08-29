@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TodoItem, TodoList } from '../../src/generated/client-entities.js';
 
-import { allTodoItemsQuery, todoItemsQuery } from './todo-queries.js';
+import { allTodoItemsQuery, todoItemsQuery, todoListsQuery } from './todo-queries.js';
 
 describe('Todo client Queries', () => {
   it('keeps the Todo item list Query transport-safe when it projects tags', () => {
@@ -28,6 +28,18 @@ describe('Todo client Queries', () => {
         fields: {
           list: expect.objectContaining({ kind: 'field-view' }),
           tags: expect.objectContaining({ kind: 'relation-view' }),
+        },
+      },
+    });
+  });
+
+  it('projects the persisted list color for the desk cards', () => {
+    expect(toGraphReadRequest(todoListsQuery.build(), 'run')).toMatchObject({
+      kind: 'graph-read',
+      view: {
+        name: 'TodoListItem',
+        fields: {
+          color: expect.objectContaining({ kind: 'field-view' }),
         },
       },
     });

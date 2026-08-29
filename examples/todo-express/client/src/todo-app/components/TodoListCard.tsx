@@ -1,17 +1,14 @@
-import {
-  Check,
-  ChevronDown,
-  GripVertical,
-  LoaderCircle,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { DragEvent, FormEvent, KeyboardEvent, PointerEvent } from 'react';
+import { Check, ChevronDown, LoaderCircle, Palette, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  CSSProperties,
+  DragEvent,
+  FormEvent,
+  KeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
 
-import type { TodoAppModel } from '../use-todo-app.js';
+import { listPastelColors, type TodoAppModel } from '../use-todo-app.js';
 
 import { TodoItemCard } from './TodoItemCard.js';
 
@@ -22,29 +19,31 @@ type TodoListCardProps = {
   canComplete: boolean;
   isCreatingTodo: boolean;
   isRenaming: boolean;
+  isRecoloring: boolean;
   isDeleting: boolean;
   isDragging: boolean;
-  isDropTarget: boolean;
   completingTodoId?: string;
+  deletingTodoId?: string;
   taggingTodoId?: string;
+  deletingTagId?: string;
   openTagPickerTodoId?: string;
-  startDragging: (event: PointerEvent) => void;
-  startNativeDragging: (event: DragEvent) => void;
-  moveDragging: (event: PointerEvent) => void;
-  drop: (event: PointerEvent) => void;
-  nativeDragOver: (event: DragEvent) => void;
-  nativeDrop: (event: DragEvent) => void;
-  moveListBy: (direction: -1 | 1) => void;
-  finishDragging: () => void;
-  closeTagPicker: () => void;
+  isColorPickerOpen: boolean;
+  closePopovers: () => void;
   toggleTagPicker: (todoId: string) => void;
+  toggleColorPicker: () => void;
+  moveTodo: (movingTodoId: string, beforeTodoId?: string) => void;
   renameList: Dashboard['renameList'];
+  recolorList: Dashboard['recolorList'];
   deleteList: Dashboard['deleteList'];
   createTodo: Dashboard['createTodo'];
   completeTodo: Dashboard['completeTodo'];
+  deleteTodo: Dashboard['deleteTodo'];
   toggleTodoTag: Dashboard['toggleTodoTag'];
   createTagForTodo: Dashboard['createTagForTodo'];
+  deleteTag: Dashboard['deleteTag'];
 };
+
+const listStyle = (color: string) => ({ '--list-color': color }) as CSSProperties;
 
 export const TodoListCard = ({
   list,
@@ -52,36 +51,59 @@ export const TodoListCard = ({
   canComplete,
   isCreatingTodo,
   isRenaming,
+  isRecoloring,
   isDeleting,
   isDragging,
-  isDropTarget,
   completingTodoId,
+  deletingTodoId,
   taggingTodoId,
+  deletingTagId,
   openTagPickerTodoId,
-  startDragging,
-  startNativeDragging,
-  moveDragging,
-  drop,
-  nativeDragOver,
-  nativeDrop,
-  moveListBy,
-  finishDragging,
-  closeTagPicker,
+  isColorPickerOpen,
+  closePopovers,
   toggleTagPicker,
+  toggleColorPicker,
+  moveTodo,
   renameList,
+  recolorList,
   deleteList,
   createTodo,
   completeTodo,
+  deleteTodo,
   toggleTodoTag,
   createTagForTodo,
+  deleteTag,
 }: TodoListCardProps) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(list.name);
   const [todoTitle, setTodoTitle] = useState('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [draggingTodoId, setDraggingTodoId] = useState<string>();
+  const [dropTargetTodoId, setDropTargetTodoId] = useState<string>();
+  const draggingTodoIdRef = useRef<string>();
+  const colorControl = useRef<HTMLDivElement>(null);
 
   useEffect(() => setNameDraft(list.name), [list.name]);
+
+  useEffect(() => {
+    if (!isColorPickerOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !colorControl.current?.contains(event.target)) {
+        closePopovers();
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') closePopovers();
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [closePopovers, isColorPickerOpen]);
 
   const cancelRename = () => {
     setNameDraft(list.name);
@@ -107,14 +129,94 @@ export const TodoListCard = ({
     if (await createTodo(list.id, todoTitle)) setTodoTitle('');
   };
 
+  const startTodoDrag = (event: DragEvent<HTMLDivElement>, todoId: string) => {
+    if (
+      event.target instanceof Element &&
+      event.target.closest('button, input, form, a, [data-no-item-drag]')
+    ) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', todoId);
+    draggingTodoIdRef.current = todoId;
+    setDraggingTodoId(todoId);
+    closePopovers();
+  };
+
+  const dropTodo = (event: DragEvent, beforeTodoId?: string) => {
+    const movingTodoId = draggingTodoIdRef.current;
+    if (!movingTodoId || movingTodoId === beforeTodoId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moveTodo(movingTodoId, beforeTodoId);
+    draggingTodoIdRef.current = undefined;
+    setDraggingTodoId(undefined);
+    setDropTargetTodoId(undefined);
+  };
+
+  const finishTodoDrag = () => {
+    draggingTodoIdRef.current = undefined;
+    setDraggingTodoId(undefined);
+    setDropTargetTodoId(undefined);
+  };
+
+  const startTodoPointerDrag = (event: ReactPointerEvent<HTMLDivElement>, todoId: string) => {
+    if (
+      event.pointerType === 'mouse' ||
+      event.button !== 0 ||
+      (event.target instanceof Element &&
+        event.target.closest('button, input, form, a, [data-no-item-drag]'))
+    ) {
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draggingTodoIdRef.current = todoId;
+    setDraggingTodoId(todoId);
+    closePopovers();
+  };
+
+  const moveTodoPointerDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const movingTodoId = draggingTodoIdRef.current;
+    if (!movingTodoId || event.pointerType === 'mouse') return;
+    event.preventDefault();
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-todo-id]');
+    setDropTargetTodoId(
+      target?.dataset.todoId === movingTodoId ? undefined : target?.dataset.todoId,
+    );
+  };
+
+  const dropTodoPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const movingTodoId = draggingTodoIdRef.current;
+    if (!movingTodoId || event.pointerType === 'mouse') return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-todo-id]');
+    const beforeTodoId = target?.dataset.todoId;
+    if (beforeTodoId !== movingTodoId) moveTodo(movingTodoId, beforeTodoId);
+    finishTodoDrag();
+  };
+
+  const moveTodoBy = (todoId: string, direction: -1 | 1) => {
+    const currentIndex = list.items.findIndex(todo => todo.id === todoId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= list.items.length) return;
+    moveTodo(todoId, direction < 0 ? list.items[nextIndex]?.id : list.items[nextIndex + 1]?.id);
+  };
+
   const completedCount = list.items.filter(todo => todo.completed).length;
 
   return (
     <article
-      className={`list-card${isCollapsed ? ' collapsed' : ''}${isDragging ? ' dragging' : ''}${isDropTarget ? ' drop-target' : ''}`}
+      className={`list-card${isCollapsed ? ' collapsed' : ''}${isDragging ? ' dragging' : ''}`}
       data-list-id={list.id}
-      onDragOver={nativeDragOver}
-      onDrop={nativeDrop}
+      style={listStyle(list.color)}
     >
       <header className='list-card-header'>
         <div className='list-title-block'>
@@ -175,38 +277,46 @@ export const TodoListCard = ({
         </div>
 
         <div className='list-card-controls'>
-          <span
-            className='icon-button drag-handle'
-            draggable
-            role='button'
-            tabIndex={0}
-            onDragStart={startNativeDragging}
-            onDragEnd={finishDragging}
-            onPointerDown={startDragging}
-            onPointerMove={moveDragging}
-            onPointerUp={drop}
-            onPointerCancel={event => {
-              if (event.pointerType !== 'mouse') finishDragging();
-            }}
-            onKeyDown={event => {
-              if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-                event.preventDefault();
-                moveListBy(-1);
-              } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-                event.preventDefault();
-                moveListBy(1);
-              }
-            }}
-            aria-label={`Move ${list.name}`}
-            title='Drag to reorder; arrow keys also work'
-          >
-            <GripVertical aria-hidden='true' />
-          </span>
+          <div className='color-control' ref={colorControl}>
+            <button
+              type='button'
+              className='icon-button color-list'
+              onClick={toggleColorPicker}
+              aria-label={`Change ${list.name} color`}
+              aria-expanded={isColorPickerOpen}
+            >
+              {isRecoloring ? (
+                <LoaderCircle className='spin' aria-hidden='true' />
+              ) : (
+                <Palette aria-hidden='true' />
+              )}
+            </button>
+            {isColorPickerOpen ? (
+              <div className='color-popover' aria-label={`Colors for ${list.name}`}>
+                {listPastelColors.map(color => (
+                  <button
+                    key={color}
+                    type='button'
+                    className={`color-swatch${list.color === color ? ' selected' : ''}`}
+                    style={{ backgroundColor: color }}
+                    onClick={async () => {
+                      if (await recolorList(list.id, color)) closePopovers();
+                    }}
+                    aria-label={`Use ${color}`}
+                    aria-pressed={list.color === color}
+                  >
+                    {list.color === color ? <Check aria-hidden='true' /> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <button
             type='button'
             className='icon-button collapse-list'
             onClick={() => {
-              closeTagPicker();
+              closePopovers();
               setIsCollapsed(current => !current);
             }}
             aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${list.name}`}
@@ -259,7 +369,16 @@ export const TodoListCard = ({
 
       {!isCollapsed ? (
         <>
-          <div className='todo-stack'>
+          <div
+            className='todo-stack'
+            onDragOver={event => {
+              if (draggingTodoIdRef.current && event.target === event.currentTarget) {
+                event.preventDefault();
+                setDropTargetTodoId('end');
+              }
+            }}
+            onDrop={event => dropTodo(event)}
+          >
             {list.items.map(todo => (
               <TodoItemCard
                 key={todo.id}
@@ -267,13 +386,33 @@ export const TodoListCard = ({
                 tags={tags}
                 canComplete={canComplete}
                 isCompleting={completingTodoId === todo.id}
+                isDeleting={deletingTodoId === todo.id}
+                isDragging={draggingTodoId === todo.id}
+                isDropTarget={dropTargetTodoId === todo.id}
                 isTagging={taggingTodoId === todo.id}
+                deletingTagId={deletingTagId}
                 isTagPickerOpen={openTagPickerTodoId === todo.id}
-                closeTagPicker={closeTagPicker}
+                closeTagPicker={closePopovers}
                 toggleTagPicker={() => toggleTagPicker(todo.id)}
+                startDragging={event => startTodoDrag(event, todo.id)}
+                dragOver={event => {
+                  if (draggingTodoIdRef.current && draggingTodoIdRef.current !== todo.id) {
+                    event.preventDefault();
+                    setDropTargetTodoId(todo.id);
+                  }
+                }}
+                drop={event => dropTodo(event, todo.id)}
+                finishDragging={finishTodoDrag}
+                startPointerDragging={event => startTodoPointerDrag(event, todo.id)}
+                movePointerDragging={moveTodoPointerDrag}
+                dropPointer={dropTodoPointer}
+                cancelPointerDragging={finishTodoDrag}
+                moveBy={direction => moveTodoBy(todo.id, direction)}
                 completeTodo={completeTodo}
+                deleteTodo={deleteTodo}
                 toggleTodoTag={toggleTodoTag}
                 createTagForTodo={createTagForTodo}
+                deleteTag={deleteTag}
               />
             ))}
 

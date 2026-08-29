@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
 import {
+  bringDeskCardToFront,
   canDeleteTodoList,
+  defaultDeskCardPosition,
   groupTodoLists,
+  moveTodoItem,
   moveTodoList,
+  reconcileDeskLayout,
+  reconcileTodoItemOrder,
   reconcileTodoListOrder,
 } from './todo-list-state.js';
 
@@ -43,6 +48,32 @@ describe('Todo client bootstrap state', () => {
       'later',
     ]);
     expect(moveTodoList(['ideas', 'inbox', 'later'], 'ideas')).toEqual(['inbox', 'later', 'ideas']);
+  });
+
+  it('persists item ordering independently inside each list', () => {
+    expect(reconcileTodoItemOrder(['todo-2'], ['todo-1', 'todo-2', 'todo-3'])).toEqual([
+      'todo-2',
+      'todo-1',
+      'todo-3',
+    ]);
+    expect(moveTodoItem(['todo-1', 'todo-2', 'todo-3'], 'todo-3', 'todo-1')).toEqual([
+      'todo-3',
+      'todo-1',
+      'todo-2',
+    ]);
+  });
+
+  it('places new desk cards and brings a grabbed card above overlapping cards', () => {
+    const initial = reconcileDeskLayout({}, ['inbox', 'later'], 800);
+    expect(initial).toEqual({
+      inbox: defaultDeskCardPosition(0, 800),
+      later: defaultDeskCardPosition(1, 800),
+    });
+    expect(bringDeskCardToFront(initial, 'inbox').inbox?.z).toBeGreaterThan(initial.later?.z ?? 0);
+    expect(reconcileDeskLayout(initial, ['later', 'ideas'], 800)).toEqual({
+      later: initial.later,
+      ideas: defaultDeskCardPosition(1, 800),
+    });
   });
 
   it('turns failed runtime and authentication requests into explicit error state', async () => {

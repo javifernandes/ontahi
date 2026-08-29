@@ -59,7 +59,7 @@ describe('Ontahi todo portability example', () => {
   let origin = '';
 
   beforeEach(async () => {
-    getTodoDataset().TodoList = [{ id: 'list-1', name: 'Inbox' }];
+    getTodoDataset().TodoList = [{ id: 'list-1', name: 'Inbox', color: '#f5ddd5' }];
     getTodoDataset().Tag = [];
     getTodoRelationships().length = 0;
     getTodoDataset().TodoItem = [];
@@ -108,13 +108,21 @@ describe('Ontahi todo portability example', () => {
     locator: { id },
   });
 
+  const entityRef = (entityName: 'TodoItem' | 'Tag', id: string) => ({
+    kind: 'entity-ref',
+    entityName,
+    locator: { id },
+  });
+
   it('uses the bound TodoList command directly from Node', async () => {
     const list = TodoList.refById('list-1');
     await expect(TodoList.rename({ list, name: 'Research backlog' })).resolves.toMatchObject({
       ok: true,
-      value: { id: 'list-1', name: 'Research backlog' },
+      value: { id: 'list-1', name: 'Research backlog', color: '#f5ddd5' },
     });
-    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Research backlog' }]);
+    expect(getTodoDataset().TodoList).toEqual([
+      { id: 'list-1', name: 'Research backlog', color: '#f5ddd5' },
+    ]);
   });
 
   it('runs one caller-authored projected Query directly and through Express HTTP', async () => {
@@ -175,9 +183,11 @@ describe('Ontahi todo portability example', () => {
       .spyOn(todoNotifications, 'todoListCreated')
       .mockImplementation(() => Effect.succeed(undefined));
 
-    await expect(TodoList.create({ id: 'list-2', name: 'Reading queue' })).resolves.toMatchObject({
+    await expect(
+      TodoList.create({ id: 'list-2', name: 'Reading queue', color: '#dcebdc' }),
+    ).resolves.toMatchObject({
       ok: true,
-      value: { id: 'list-2', name: 'Reading queue' },
+      value: { id: 'list-2', name: 'Reading queue', color: '#dcebdc' },
     });
     expect(notified).toHaveBeenCalledWith({
       listId: 'list-2',
@@ -223,10 +233,12 @@ describe('Ontahi todo portability example', () => {
       result: {
         ok: true,
         kind: 'success',
-        value: { id: 'list-1', name: 'Reading' },
+        value: { id: 'list-1', name: 'Reading', color: '#f5ddd5' },
       },
     });
-    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Reading' }]);
+    expect(getTodoDataset().TodoList).toEqual([
+      { id: 'list-1', name: 'Reading', color: '#f5ddd5' },
+    ]);
   });
 
   it('deletes an empty TodoList by identity', async () => {
@@ -238,6 +250,83 @@ describe('Ontahi todo portability example', () => {
       result: { ok: true, kind: 'success' },
     });
     expect(getTodoDataset().TodoList).toEqual([]);
+  });
+
+  it('assigns a persisted pastel color to a TodoList', async () => {
+    const response = await invoke('TodoList.recolor', {
+      list: selectTodoList('list-1'),
+      color: '#dbe8f4',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: {
+        ok: true,
+        kind: 'success',
+        value: { id: 'list-1', name: 'Inbox', color: '#dbe8f4' },
+      },
+    });
+    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Inbox', color: '#dbe8f4' }]);
+  });
+
+  it('deletes one TodoItem by identity', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Remove me', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Keep me', completed: false },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Attached', color: '#dd6658' }];
+    const relation = relationshipSet(
+      TodoItem,
+      'tags',
+      createEntityRef(TodoItem, { id: 'todo-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' })).relation;
+    getTodoRelationships().push({
+      relation,
+      source: createEntityRef(TodoItem, { id: 'todo-1' }),
+      target: createEntityRef(Tag, { id: 'tag-1' }),
+    });
+
+    const response = await invoke('TodoItem.delete', {
+      todo: entityRef('TodoItem', 'todo-1'),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, kind: 'success' },
+    });
+    expect(getTodoDataset().TodoItem).toEqual([
+      { id: 'todo-2', list: 'list-1', title: 'Keep me', completed: false },
+    ]);
+    expect(getTodoRelationships()).toEqual([]);
+  });
+
+  it('deletes a Tag and unlinks it from every TodoItem', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Tagged', completed: false },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Temporary', color: '#dd6658' }];
+    const relation = relationshipSet(
+      TodoItem,
+      'tags',
+      createEntityRef(TodoItem, { id: 'todo-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' })).relation;
+    getTodoRelationships().push({
+      relation,
+      source: createEntityRef(TodoItem, { id: 'todo-1' }),
+      target: createEntityRef(Tag, { id: 'tag-1' }),
+    });
+
+    const response = await invoke('TodoItem.deleteTag', { tag: entityRef('Tag', 'tag-1') });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'invocation-result',
+      result: { ok: true, kind: 'success' },
+    });
+    expect(getTodoDataset().Tag).toEqual([]);
+    expect(getTodoRelationships()).toEqual([]);
   });
 
   it('returns the canonical validation result for invalid input', async () => {
@@ -276,7 +365,7 @@ describe('Ontahi todo portability example', () => {
         issues: [{ path: 'name', message: 'Archive is reserved for system use.' }],
       },
     });
-    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Inbox' }]);
+    expect(getTodoDataset().TodoList).toEqual([{ id: 'list-1', name: 'Inbox', color: '#f5ddd5' }]);
   });
 
   it('rejects creating a TodoItem in an unknown list', async () => {

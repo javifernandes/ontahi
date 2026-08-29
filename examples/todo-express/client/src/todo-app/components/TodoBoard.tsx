@@ -1,25 +1,78 @@
 import { AlertCircle, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent, FormEvent, PointerEvent } from 'react';
+import type { CSSProperties, FormEvent, PointerEvent } from 'react';
 
-import { moveTodoList, reconcileTodoListOrder } from '../todo-list-state.js';
+import {
+  bringDeskCardToFront,
+  defaultDeskCardPosition,
+  moveTodoItem,
+  reconcileDeskLayout,
+  reconcileTodoItemOrder,
+  reconcileTodoListOrder,
+  type DeskLayout,
+} from '../todo-list-state.js';
 import type { TodoAppModel } from '../use-todo-app.js';
 
 import { TodoListCard } from './TodoListCard.js';
 
 const listOrderStorageKey = 'ontahi.todo.list-order';
+const itemOrderStorageKey = 'ontahi.todo.item-order';
+const deskLayoutStorageKey = 'ontahi.todo.desk-layout';
 
-const storedListOrder = () => {
+const storedStringArray = (key: string) => {
   try {
-    const stored = JSON.parse(globalThis.localStorage.getItem(listOrderStorageKey) ?? '[]');
+    const stored = JSON.parse(globalThis.localStorage.getItem(key) ?? '[]');
     return Array.isArray(stored) ? stored.filter(id => typeof id === 'string') : [];
   } catch {
     return [];
   }
 };
 
-const sameOrder = (left: readonly string[], right: readonly string[]) =>
-  left.length === right.length && left.every((id, index) => id === right[index]);
+const storedItemOrder = () => {
+  try {
+    const stored = JSON.parse(globalThis.localStorage.getItem(itemOrderStorageKey) ?? '{}');
+    if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
+
+    return Object.fromEntries(
+      Object.entries(stored).flatMap(([listId, itemIds]) =>
+        Array.isArray(itemIds)
+          ? [[listId, itemIds.filter(itemId => typeof itemId === 'string')]]
+          : [],
+      ),
+    ) as Record<string, string[]>;
+  } catch {
+    return {};
+  }
+};
+
+const storedDeskLayout = () => {
+  try {
+    const stored = JSON.parse(globalThis.localStorage.getItem(deskLayoutStorageKey) ?? '{}');
+    return typeof stored === 'object' && stored !== null && !Array.isArray(stored)
+      ? (stored as DeskLayout)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const sameValue = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+
+const cardPositionStyle = (position: { x: number; y: number; z: number }): CSSProperties => ({
+  left: position.x,
+  top: position.y,
+  zIndex: position.z,
+});
+
+type CardDrag = {
+  id: string;
+  pointerId: number;
+  pointerX: number;
+  pointerY: number;
+  originX: number;
+  originY: number;
+  moved: boolean;
+};
 
 export const TodoBoard = ({
   lists,
@@ -31,25 +84,38 @@ export const TodoBoard = ({
   isCreatingList,
   creatingTodoFor,
   renamingListId,
+  recoloringListId,
   deletingListId,
   completingTodoId,
+  deletingTodoId,
   taggingTodoId,
+  deletingTagId,
   clearActionError,
   createList,
   renameList,
+  recolorList,
   deleteList,
   createTodo,
   completeTodo,
+  deleteTodo,
   toggleTodoTag,
   createTagForTodo,
+  deleteTag,
 }: TodoAppModel['dashboard']) => {
   const [isAddingList, setIsAddingList] = useState(false);
   const [listName, setListName] = useState('');
-  const [orderedListIds, setOrderedListIds] = useState(storedListOrder);
+  const [orderedListIds, setOrderedListIds] = useState(() =>
+    storedStringArray(listOrderStorageKey),
+  );
+  const [itemOrderByList, setItemOrderByList] = useState(storedItemOrder);
+  const [deskLayout, setDeskLayout] = useState(storedDeskLayout);
+  const [canvasWidth, setCanvasWidth] = useState(1380);
+  const [canvasHeight, setCanvasHeight] = useState(600);
   const [draggingListId, setDraggingListId] = useState<string>();
-  const draggingListIdRef = useRef<string>();
-  const [dropTargetListId, setDropTargetListId] = useState<string>();
   const [openTagPickerTodoId, setOpenTagPickerTodoId] = useState<string>();
+  const [openColorPickerListId, setOpenColorPickerListId] = useState<string>();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const cardDrag = useRef<CardDrag>();
   const availableListIds = useMemo(() => lists.map(list => list.id), [lists]);
   const reconciledListIds = useMemo(
     () => reconcileTodoListOrder(orderedListIds, availableListIds),
@@ -59,22 +125,84 @@ export const TodoBoard = ({
     () =>
       reconciledListIds.flatMap(id => {
         const list = lists.find(candidate => candidate.id === id);
-        return list ? [list] : [];
+        if (!list) return [];
+        const availableItemIds = list.items.map(todo => todo.id);
+        const itemIds = reconcileTodoItemOrder(itemOrderByList[id] ?? [], availableItemIds);
+        return [
+          {
+            ...list,
+            items: itemIds.flatMap(itemId => {
+              const todo = list.items.find(candidate => candidate.id === itemId);
+              return todo ? [todo] : [];
+            }),
+          },
+        ];
       }),
-    [lists, reconciledListIds],
+    [itemOrderByList, lists, reconciledListIds],
   );
+  const reconciledDeskLayout = useMemo(
+    () => reconcileDeskLayout(deskLayout, reconciledListIds, canvasWidth),
+    [canvasWidth, deskLayout, reconciledListIds],
+  );
+  const addListPosition = defaultDeskCardPosition(orderedLists.length, canvasWidth);
 
   useEffect(() => {
-    if (!isLoading && !sameOrder(orderedListIds, reconciledListIds)) {
+    if (!isLoading && !sameValue(orderedListIds, reconciledListIds)) {
       setOrderedListIds(reconciledListIds);
     }
   }, [isLoading, orderedListIds, reconciledListIds]);
 
   useEffect(() => {
-    if (!isLoading) {
-      globalThis.localStorage.setItem(listOrderStorageKey, JSON.stringify(orderedListIds));
+    if (!isLoading && !sameValue(deskLayout, reconciledDeskLayout)) {
+      setDeskLayout(reconciledDeskLayout);
     }
-  }, [isLoading, orderedListIds]);
+  }, [deskLayout, isLoading, reconciledDeskLayout]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const reconciledItemOrder = Object.fromEntries(
+      lists.map(list => [
+        list.id,
+        reconcileTodoItemOrder(
+          itemOrderByList[list.id] ?? [],
+          list.items.map(todo => todo.id),
+        ),
+      ]),
+    );
+    if (!sameValue(itemOrderByList, reconciledItemOrder)) {
+      setItemOrderByList(reconciledItemOrder);
+    }
+  }, [isLoading, itemOrderByList, lists]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    globalThis.localStorage.setItem(listOrderStorageKey, JSON.stringify(orderedListIds));
+    globalThis.localStorage.setItem(itemOrderStorageKey, JSON.stringify(itemOrderByList));
+    globalThis.localStorage.setItem(deskLayoutStorageKey, JSON.stringify(deskLayout));
+  }, [deskLayout, isLoading, itemOrderByList, orderedListIds]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const measure = () => {
+      setCanvasWidth(canvas.clientWidth);
+      if (globalThis.matchMedia('(max-width: 700px)').matches) return;
+      const cards = Array.from(canvas.querySelectorAll<HTMLElement>('[data-desk-card]'));
+      setCanvasHeight(Math.max(600, ...cards.map(card => card.offsetTop + card.offsetHeight + 36)));
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+    canvas.querySelectorAll('[data-desk-card]').forEach(card => observer.observe(card));
+    measure();
+    return () => observer.disconnect();
+  }, [deskLayout, isAddingList, orderedLists]);
+
+  const closePopovers = () => {
+    setOpenTagPickerTodoId(undefined);
+    setOpenColorPickerListId(undefined);
+  };
 
   const submitList = async (event: FormEvent) => {
     event.preventDefault();
@@ -84,93 +212,106 @@ export const TodoBoard = ({
     setIsAddingList(false);
   };
 
-  const finishDragging = () => {
-    draggingListIdRef.current = undefined;
-    setDraggingListId(undefined);
-    setDropTargetListId(undefined);
-  };
+  const beginCardDrag = (event: PointerEvent<HTMLDivElement>, listId: string) => {
+    if (
+      event.button !== 0 ||
+      globalThis.matchMedia('(max-width: 700px)').matches ||
+      (event.target instanceof Element &&
+        event.target.closest('button, input, form, a, .todo-item-card, [data-no-card-drag]'))
+    ) {
+      return;
+    }
 
-  const listDropTargetAt = (clientX: number, clientY: number) => {
-    const target = document.elementFromPoint(clientX, clientY);
-    const listCard = target?.closest<HTMLElement>('[data-list-id]');
-    if (listCard?.dataset.listId) return listCard.dataset.listId;
-    return target?.closest('[data-list-drop="end"]') ? 'end' : undefined;
-  };
-
-  const startDragging = (event: PointerEvent, listId: string) => {
-    if (event.button !== 0 || event.pointerType === 'mouse') return;
+    const position = reconciledDeskLayout[listId];
+    if (!position) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    draggingListIdRef.current = listId;
-    setDraggingListId(listId);
-    setOpenTagPickerTodoId(undefined);
+    cardDrag.current = {
+      id: listId,
+      pointerId: event.pointerId,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      originX: position.x,
+      originY: position.y,
+      moved: false,
+    };
+    setDeskLayout(current => bringDeskCardToFront(current, listId));
+    closePopovers();
   };
 
-  const moveDragging = (event: PointerEvent) => {
-    const movingListId = draggingListIdRef.current;
-    if (!movingListId) return;
+  const moveCard = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = cardDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.pointerX;
+    const deltaY = event.clientY - drag.pointerY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 5) return;
+
+    drag.moved = true;
     event.preventDefault();
-    const targetListId = listDropTargetAt(event.clientX, event.clientY);
-    setDropTargetListId(targetListId === movingListId ? undefined : targetListId);
+    setDraggingListId(drag.id);
+    setDeskLayout(current => {
+      const position = current[drag.id];
+      if (!position) return current;
+      return {
+        ...current,
+        [drag.id]: {
+          x: Math.max(0, Math.min(drag.originX + deltaX, Math.max(0, canvasWidth - 250))),
+          y: Math.max(0, drag.originY + deltaY),
+          z: position.z,
+        },
+      };
+    });
   };
 
-  const dropList = (event: PointerEvent) => {
-    event.preventDefault();
+  const finishCardDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = cardDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const targetListId = listDropTargetAt(event.clientX, event.clientY);
-    const movingListId = draggingListIdRef.current;
-    if (movingListId && targetListId && targetListId !== movingListId) {
-      setOrderedListIds(current =>
-        moveTodoList(
-          reconcileTodoListOrder(current, availableListIds),
-          movingListId,
-          targetListId === 'end' ? undefined : targetListId,
+    cardDrag.current = undefined;
+    setDraggingListId(undefined);
+  };
+
+  const moveTodo = (listId: string, movingTodoId: string, beforeTodoId?: string) => {
+    const list = lists.find(candidate => candidate.id === listId);
+    if (!list) return;
+    setItemOrderByList(current => ({
+      ...current,
+      [listId]: moveTodoItem(
+        reconcileTodoItemOrder(
+          current[listId] ?? [],
+          list.items.map(todo => todo.id),
         ),
-      );
-    }
-    finishDragging();
+        movingTodoId,
+        beforeTodoId,
+      ),
+    }));
   };
 
-  const startNativeDragging = (event: DragEvent, listId: string) => {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', listId);
-    draggingListIdRef.current = listId;
-    setDraggingListId(listId);
-    setOpenTagPickerTodoId(undefined);
-  };
-
-  const nativeDragOver = (event: DragEvent, targetListId?: string) => {
-    const movingListId = draggingListIdRef.current;
-    if (!movingListId || movingListId === targetListId) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTargetListId(targetListId ?? 'end');
-  };
-
-  const nativeDrop = (event: DragEvent, beforeListId?: string) => {
-    event.preventDefault();
-    const movingListId = draggingListIdRef.current;
-    if (movingListId && movingListId !== beforeListId) {
-      setOrderedListIds(current =>
-        moveTodoList(reconcileTodoListOrder(current, availableListIds), movingListId, beforeListId),
-      );
-    }
-    finishDragging();
-  };
-
-  const moveListBy = (listId: string, direction: -1 | 1) => {
-    setOrderedListIds(current => {
-      const orderedIds = reconcileTodoListOrder(current, availableListIds);
-      const currentIndex = orderedIds.indexOf(listId);
-      const nextIndex = currentIndex + direction;
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedIds.length) return orderedIds;
-
-      return moveTodoList(
-        orderedIds,
-        listId,
-        direction < 0 ? orderedIds[nextIndex] : orderedIds[nextIndex + 1],
-      );
+  const moveCardByKeyboard = (
+    listId: string,
+    direction: 'up' | 'right' | 'down' | 'left',
+    distance: number,
+  ) => {
+    setDeskLayout(current => {
+      const position = current[listId];
+      if (!position) return current;
+      const moved = {
+        ...position,
+        x:
+          direction === 'left'
+            ? Math.max(0, position.x - distance)
+            : direction === 'right'
+              ? Math.min(Math.max(0, canvasWidth - 250), position.x + distance)
+              : position.x,
+        y:
+          direction === 'up'
+            ? Math.max(0, position.y - distance)
+            : direction === 'down'
+              ? position.y + distance
+              : position.y,
+      };
+      return bringDeskCardToFront({ ...current, [listId]: moved }, listId);
     });
   };
 
@@ -189,103 +330,128 @@ export const TodoBoard = ({
       {isError ? <p className='board-message error'>The board could not be loaded.</p> : null}
       {isLoading ? <p className='board-message muted'>Loading your lists…</p> : null}
 
-      <div className='list-grid'>
-        {orderedLists.map(list => (
-          <TodoListCard
-            key={list.id}
-            list={list}
-            tags={tags}
-            canComplete={canComplete}
-            isCreatingTodo={creatingTodoFor === list.id}
-            isRenaming={renamingListId === list.id}
-            isDeleting={deletingListId === list.id}
-            isDragging={draggingListId === list.id}
-            isDropTarget={dropTargetListId === list.id}
-            completingTodoId={completingTodoId}
-            taggingTodoId={taggingTodoId}
-            openTagPickerTodoId={openTagPickerTodoId}
-            startDragging={event => startDragging(event, list.id)}
-            startNativeDragging={event => startNativeDragging(event, list.id)}
-            moveDragging={moveDragging}
-            drop={dropList}
-            nativeDragOver={event => nativeDragOver(event, list.id)}
-            nativeDrop={event => nativeDrop(event, list.id)}
-            moveListBy={direction => moveListBy(list.id, direction)}
-            finishDragging={finishDragging}
-            closeTagPicker={() => setOpenTagPickerTodoId(undefined)}
-            toggleTagPicker={todoId =>
-              setOpenTagPickerTodoId(current => (current === todoId ? undefined : todoId))
-            }
-            renameList={renameList}
-            deleteList={deleteList}
-            createTodo={createTodo}
-            completeTodo={completeTodo}
-            toggleTodoTag={toggleTodoTag}
-            createTagForTodo={createTagForTodo}
-          />
-        ))}
-
-        {isAddingList ? (
-          <form
-            className={`new-list-card${dropTargetListId === 'end' ? ' drop-target' : ''}`}
-            onSubmit={submitList}
-            data-list-drop='end'
-            onDragOver={event => nativeDragOver(event)}
-            onDrop={event => nativeDrop(event)}
-          >
-            <div className='new-list-card-icon'>
-              <Plus aria-hidden='true' />
-            </div>
-            <input
-              autoFocus
-              aria-label='New list name'
-              value={listName}
-              onChange={event => setListName(event.target.value)}
-              placeholder='Name this list'
+      <div ref={canvasRef} className='list-desk' style={{ height: canvasHeight }}>
+        {orderedLists.map(list => {
+          const position = reconciledDeskLayout[list.id] ?? defaultDeskCardPosition(0, canvasWidth);
+          return (
+            <div
+              key={list.id}
+              className='desk-card-shell'
+              style={cardPositionStyle(position)}
+              data-desk-card
+              tabIndex={0}
+              aria-label={`Move ${list.name} card. Drag it or use arrow keys.`}
+              onPointerDown={event => beginCardDrag(event, list.id)}
+              onPointerMove={moveCard}
+              onPointerUp={finishCardDrag}
+              onPointerCancel={finishCardDrag}
               onKeyDown={event => {
-                if (event.key === 'Escape') {
-                  setListName('');
-                  setIsAddingList(false);
-                } else if (event.key === 'Enter') {
-                  event.preventDefault();
-                  event.currentTarget.form?.requestSubmit();
-                }
+                if (event.target !== event.currentTarget || !event.key.startsWith('Arrow')) return;
+                event.preventDefault();
+                const direction = event.key.slice(5).toLowerCase() as
+                  | 'up'
+                  | 'right'
+                  | 'down'
+                  | 'left';
+                moveCardByKeyboard(list.id, direction, event.shiftKey ? 60 : 18);
               }}
-            />
-            <div className='inline-actions'>
-              <button
-                type='button'
-                className='text-button'
-                onClick={() => {
-                  setListName('');
-                  setIsAddingList(false);
+            >
+              <TodoListCard
+                list={list}
+                tags={tags}
+                canComplete={canComplete}
+                isCreatingTodo={creatingTodoFor === list.id}
+                isRenaming={renamingListId === list.id}
+                isRecoloring={recoloringListId === list.id}
+                isDeleting={deletingListId === list.id}
+                isDragging={draggingListId === list.id}
+                completingTodoId={completingTodoId}
+                deletingTodoId={deletingTodoId}
+                taggingTodoId={taggingTodoId}
+                deletingTagId={deletingTagId}
+                openTagPickerTodoId={openTagPickerTodoId}
+                isColorPickerOpen={openColorPickerListId === list.id}
+                closePopovers={closePopovers}
+                toggleTagPicker={todoId => {
+                  setOpenColorPickerListId(undefined);
+                  setOpenTagPickerTodoId(current => (current === todoId ? undefined : todoId));
                 }}
-              >
-                Cancel
-              </button>
-              <button type='submit' className='primary-action' disabled={!listName.trim()}>
-                {isCreatingList ? 'Creating…' : 'Create list'}
-              </button>
+                toggleColorPicker={() => {
+                  setOpenTagPickerTodoId(undefined);
+                  setOpenColorPickerListId(current => (current === list.id ? undefined : list.id));
+                }}
+                moveTodo={(movingTodoId, beforeTodoId) =>
+                  moveTodo(list.id, movingTodoId, beforeTodoId)
+                }
+                renameList={renameList}
+                recolorList={recolorList}
+                deleteList={deleteList}
+                createTodo={createTodo}
+                completeTodo={completeTodo}
+                deleteTodo={deleteTodo}
+                toggleTodoTag={toggleTodoTag}
+                createTagForTodo={createTagForTodo}
+                deleteTag={deleteTag}
+              />
             </div>
-          </form>
-        ) : (
-          <button
-            type='button'
-            className={`add-list-card${dropTargetListId === 'end' ? ' drop-target' : ''}`}
-            onClick={() => {
-              setOpenTagPickerTodoId(undefined);
-              setIsAddingList(true);
-            }}
-            data-list-drop='end'
-            onDragOver={event => nativeDragOver(event)}
-            onDrop={event => nativeDrop(event)}
-          >
-            <span>
-              <Plus aria-hidden='true' />
-            </span>
-            Add another list
-          </button>
-        )}
+          );
+        })}
+
+        <div
+          className='desk-new-list'
+          style={cardPositionStyle({ ...addListPosition, z: 0 })}
+          data-desk-card
+        >
+          {isAddingList ? (
+            <form className='new-list-card' onSubmit={submitList}>
+              <div className='new-list-card-icon'>
+                <Plus aria-hidden='true' />
+              </div>
+              <input
+                autoFocus
+                aria-label='New list name'
+                value={listName}
+                onChange={event => setListName(event.target.value)}
+                placeholder='Name this list'
+                onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    setListName('');
+                    setIsAddingList(false);
+                  }
+                }}
+              />
+              <div className='inline-actions'>
+                <button
+                  type='button'
+                  className='text-button'
+                  onClick={() => {
+                    setListName('');
+                    setIsAddingList(false);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type='submit' className='primary-action' disabled={!listName.trim()}>
+                  {isCreatingList ? 'Creating…' : 'Create list'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              type='button'
+              className='add-list-card'
+              onClick={() => {
+                closePopovers();
+                setIsAddingList(true);
+              }}
+            >
+              <span>
+                <Plus aria-hidden='true' />
+              </span>
+              Add another list
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );

@@ -42,3 +42,73 @@ export const moveTodoList = (
   nextIds.splice(targetIndex < 0 ? nextIds.length : targetIndex, 0, movingId);
   return nextIds;
 };
+
+export const reconcileTodoItemOrder = (
+  currentIds: readonly string[],
+  availableIds: readonly string[],
+) => reconcileTodoListOrder(currentIds, availableIds);
+
+export const moveTodoItem = (currentIds: readonly string[], movingId: string, beforeId?: string) =>
+  moveTodoList(currentIds, movingId, beforeId);
+
+export type DeskCardPosition = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type DeskLayout = Record<string, DeskCardPosition>;
+
+const deskCardWidth = 360;
+const deskCardGap = 22;
+
+export const defaultDeskCardPosition = (index: number, canvasWidth: number): DeskCardPosition => {
+  const columns = Math.max(
+    1,
+    Math.floor((canvasWidth + deskCardGap) / (deskCardWidth + deskCardGap)),
+  );
+  const column = index % columns;
+  const row = Math.floor(index / columns);
+
+  return {
+    x: column * (deskCardWidth + deskCardGap) + (row % 2) * 9,
+    y: row * 330 + (column % 2) * 14,
+    z: index + 1,
+  };
+};
+
+export const reconcileDeskLayout = (
+  current: DeskLayout,
+  orderedIds: readonly string[],
+  canvasWidth: number,
+): DeskLayout => {
+  const available = new Set(orderedIds);
+  const next = Object.fromEntries(
+    Object.entries(current).filter(
+      ([id, position]) =>
+        available.has(id) &&
+        Number.isFinite(position.x) &&
+        Number.isFinite(position.y) &&
+        Number.isFinite(position.z),
+    ),
+  );
+
+  orderedIds.forEach((id, index) => {
+    next[id] ??= defaultDeskCardPosition(index, canvasWidth);
+  });
+
+  return next;
+};
+
+export const bringDeskCardToFront = (layout: DeskLayout, id: string): DeskLayout => {
+  const current = layout[id];
+  if (!current) return layout;
+
+  return {
+    ...layout,
+    [id]: {
+      ...current,
+      z: Math.max(0, ...Object.values(layout).map(position => position.z)) + 1,
+    },
+  };
+};
