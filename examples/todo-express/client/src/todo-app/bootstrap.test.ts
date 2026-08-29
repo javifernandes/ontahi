@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
-import { canDeleteTodoList, groupTodoLists } from './todo-list-state.js';
+import {
+  canDeleteTodoList,
+  groupTodoLists,
+  moveTodoList,
+  reconcileTodoListOrder,
+} from './todo-list-state.js';
 
 describe('Todo client bootstrap state', () => {
   it('keeps list deletion disabled until todos are known to be empty', () => {
@@ -24,6 +29,20 @@ describe('Todo client bootstrap state', () => {
       { ...lists[0], items: [todos[1]] },
       { ...lists[1], items: [todos[0]] },
     ]);
+  });
+
+  it('appends newly discovered lists and preserves manual list ordering', () => {
+    expect(reconcileTodoListOrder(['inbox', 'later'], ['ideas', 'inbox', 'later'])).toEqual([
+      'inbox',
+      'later',
+      'ideas',
+    ]);
+    expect(moveTodoList(['inbox', 'later', 'ideas'], 'ideas', 'inbox')).toEqual([
+      'ideas',
+      'inbox',
+      'later',
+    ]);
+    expect(moveTodoList(['ideas', 'inbox', 'later'], 'ideas')).toEqual(['inbox', 'later', 'ideas']);
   });
 
   it('turns failed runtime and authentication requests into explicit error state', async () => {

@@ -1,5 +1,5 @@
 import { Check, LoaderCircle, Plus, Tag as TagIcon, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 
 import type { TodoAppModel } from '../use-todo-app.js';
@@ -11,6 +11,9 @@ type TodoItemCardProps = {
   canComplete: boolean;
   isCompleting: boolean;
   isTagging: boolean;
+  isTagPickerOpen: boolean;
+  closeTagPicker: () => void;
+  toggleTagPicker: () => void;
   completeTodo: Dashboard['completeTodo'];
   toggleTodoTag: Dashboard['toggleTodoTag'];
   createTagForTodo: Dashboard['createTagForTodo'];
@@ -24,12 +27,35 @@ export const TodoItemCard = ({
   canComplete,
   isCompleting,
   isTagging,
+  isTagPickerOpen,
+  closeTagPicker,
+  toggleTagPicker,
   completeTodo,
   toggleTodoTag,
   createTagForTodo,
 }: TodoItemCardProps) => {
-  const [isTagPickerOpen, setIsTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
+  const tagControl = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isTagPickerOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !tagControl.current?.contains(event.target)) {
+        closeTagPicker();
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeTagPicker();
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [closeTagPicker, isTagPickerOpen]);
 
   const submitNewTag = async (event: FormEvent) => {
     event.preventDefault();
@@ -66,11 +92,11 @@ export const TodoItemCard = ({
         ) : null}
       </div>
 
-      <div className='tag-control'>
+      <div className='tag-control' ref={tagControl}>
         <button
           type='button'
           className='icon-button tag-button'
-          onClick={() => setIsTagPickerOpen(current => !current)}
+          onClick={toggleTagPicker}
           disabled={todo.completed}
           aria-label={`Edit tags for ${todo.title}`}
           aria-expanded={isTagPickerOpen}
@@ -85,7 +111,7 @@ export const TodoItemCard = ({
               <button
                 type='button'
                 className='icon-button'
-                onClick={() => setIsTagPickerOpen(false)}
+                onClick={closeTagPicker}
                 aria-label='Close tag selector'
               >
                 <X aria-hidden='true' />
