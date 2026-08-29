@@ -1,10 +1,15 @@
-import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
+import type { AnyEntityDefinition, InferEntityMutationRecord } from './definitions.js';
 import type { SelectionExpression } from './selection-ast.js';
+
+type EntityMutationFieldName<TEntity extends AnyEntityDefinition> = keyof InferEntityMutationRecord<
+  TEntity['fields']
+> &
+  string;
 
 export type GraphCommandOperation = 'insert' | 'insert_many' | 'upsert' | 'update' | 'delete';
 
 export type GraphUpsertOptions<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
-  conflictOn: readonly (keyof InferEntityRecord<TEntity['fields']> & string)[];
+  conflictOn: readonly EntityMutationFieldName<TEntity>[];
   strategy: 'ignore' | 'merge';
 };
 
@@ -20,7 +25,7 @@ export type GraphCommandSpec<
   selection: SelectionExpression;
   payload?: TPayload;
   upsert?: GraphUpsertOptions<TEntity>;
-  returning?: readonly (keyof InferEntityRecord<TEntity['fields']> & string)[];
+  returning?: readonly EntityMutationFieldName<TEntity>[];
   cardinality?: 'one' | 'many';
 };
 

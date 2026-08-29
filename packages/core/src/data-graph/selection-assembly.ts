@@ -32,7 +32,7 @@ import {
   createInsertManyCommandSpec,
   createUpsertCommandSpec,
   createUpsertManyCommandSpec,
-  type EntityFieldName,
+  type EntityMutationFieldName,
   type GraphSelectionFactories,
   type QueryIncludeArg,
   type QueryOrderByArg,
@@ -203,7 +203,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  updateReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -213,7 +213,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateOneReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  updateOneReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -223,7 +223,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  updateManyReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -236,7 +236,7 @@ export type BoundGraphSelectionSemanticApi<
   delete: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
   deleteOne: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
   deleteMany: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
-  deleteOneReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  deleteOneReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
@@ -245,7 +245,7 @@ export type BoundGraphSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  deleteManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  deleteManyReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
@@ -334,7 +334,7 @@ type BoundSelectionCardinality = 'one' | 'many' | undefined;
 
 type BoundSelectionReturningResult<
   TEntity extends AnyEntityDefinition,
-  TFieldNames extends readonly EntityFieldName<TEntity>[],
+  TFieldNames extends readonly EntityMutationFieldName<TEntity>[],
   TCardinality extends BoundSelectionCardinality,
 > = TCardinality extends 'one'
   ? PickEntityFields<TEntity, TFieldNames>
@@ -461,7 +461,7 @@ export type BoundSelectionSemanticApi<
     TCommandError,
     TCommandOptions
   >;
-  updateReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  updateReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -472,7 +472,7 @@ export type BoundSelectionSemanticApi<
     TCommandOptions
   >;
   delete: () => BoundGraphCommand<TEntity, never, void, TCommandError, TCommandOptions>;
-  deleteReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  deleteReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
     TEntity,
@@ -569,7 +569,7 @@ export type BoundSelectionEntityBase<
     TCommandError,
     TCommandOptions
   >;
-  insertReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  insertReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -588,7 +588,7 @@ export type BoundSelectionEntityBase<
     TCommandError,
     TCommandOptions
   >;
-  insertManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  insertManyReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     payloads: Array<EntityMutationPayload<TEntity>>,
     fieldNames: TFieldNames,
   ) => BoundGraphCommand<
@@ -601,7 +601,7 @@ export type BoundSelectionEntityBase<
   upsert: (
     payload: EntityMutationPayload<TEntity>,
     options: {
-      conflictOn: readonly EntityFieldName<TEntity>[];
+      conflictOn: readonly EntityMutationFieldName<TEntity>[];
       strategy: 'ignore' | 'merge';
     },
   ) => BoundGraphCommand<
@@ -614,7 +614,7 @@ export type BoundSelectionEntityBase<
   upsertMany: (
     payloads: Array<EntityMutationPayload<TEntity>>,
     options: {
-      conflictOn: readonly EntityFieldName<TEntity>[];
+      conflictOn: readonly EntityMutationFieldName<TEntity>[];
       strategy: 'ignore' | 'merge';
     },
   ) => BoundGraphCommand<
@@ -900,12 +900,12 @@ export const createGraphSelectionAssembly = <
         asGraphSelection().orderBy(build),
       limit: (limitValue: number) => asGraphSelection().limit(limitValue),
       update: (payload: EntityMutationPayload<TEntity>) => createCommand(update(payload).build()),
-      updateReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+      updateReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
         payload: EntityMutationPayload<TEntity>,
         fieldNames: TFieldNames,
       ) => createCommand(updateReturning(payload, fieldNames).build()),
       delete: () => createCommand(deleteSelection().build()),
-      deleteReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+      deleteReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
         fieldNames: TFieldNames,
       ) => createCommand(deleteReturning(fieldNames).build()),
       exec: () => asGraphSelection().exec(),
@@ -950,7 +950,7 @@ export const createGraphSelectionAssembly = <
         createGraphSelection(query(entityDefinition).where(build)),
       insert: (payload: EntityMutationPayload<TEntity>) =>
         createCommand(createInsertCommandSpec(entityDefinition, payload)),
-      insertReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+      insertReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
         payload: EntityMutationPayload<TEntity>,
         fieldNames: TFieldNames,
       ) =>
@@ -966,7 +966,7 @@ export const createGraphSelectionAssembly = <
         ),
       insertMany: (payloads: Array<EntityMutationPayload<TEntity>>) =>
         createCommand(createInsertManyCommandSpec(entityDefinition, payloads)),
-      insertManyReturning: <TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+      insertManyReturning: <TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
         payloads: Array<EntityMutationPayload<TEntity>>,
         fieldNames: TFieldNames,
       ) =>
@@ -978,14 +978,14 @@ export const createGraphSelectionAssembly = <
       upsert: (
         payload: EntityMutationPayload<TEntity>,
         options: {
-          conflictOn: readonly EntityFieldName<TEntity>[];
+          conflictOn: readonly EntityMutationFieldName<TEntity>[];
           strategy: 'ignore' | 'merge';
         },
       ) => createCommand(createUpsertCommandSpec(entityDefinition, payload, options)),
       upsertMany: (
         payloads: Array<EntityMutationPayload<TEntity>>,
         options: {
-          conflictOn: readonly EntityFieldName<TEntity>[];
+          conflictOn: readonly EntityMutationFieldName<TEntity>[];
           strategy: 'ignore' | 'merge';
         },
       ) => createCommand(createUpsertManyCommandSpec(entityDefinition, payloads, options)),

@@ -1,8 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import type { GraphCommandSpec, GraphUpsertOptions } from '../command.js';
 import { entity, field, type InferEntityRecord } from '../definitions.js';
 import { toGraphJsonSchema, toGraphSchemaDescriptor } from '../schema-descriptor.js';
 import { selection } from '../selection-value.js';
+import { createUpsertCommandSpec } from '../selection.js';
 
 import { modelExpression } from './builder.js';
 import {
@@ -62,8 +64,59 @@ describe('portable derived Fields', () => {
 
     const selected = selection(Course, course => course.id.eq('course-1'));
     selected.update({ capacity: 4 });
+    selected.updateReturning({ capacity: 4 }, ['capacity']);
+    selected.deleteReturning(['capacity']);
+    createUpsertCommandSpec(
+      Course,
+      { id: 'course-1', capacity: 4 },
+      {
+        conflictOn: ['id'],
+        strategy: 'merge',
+      },
+    );
+    const commandSpec: GraphCommandSpec<typeof Course> = {
+      kind: 'command',
+      operation: 'delete',
+      root: Course,
+      selection: { kind: 'all' },
+      returning: ['capacity'],
+    };
+    const upsertOptions: GraphUpsertOptions<typeof Course> = {
+      conflictOn: ['id'],
+      strategy: 'merge',
+    };
+    expect(commandSpec.returning).toEqual(['capacity']);
+    expect(upsertOptions.conflictOn).toEqual(['id']);
     // @ts-expect-error virtual derived Fields are not mutation payload members
     selected.update({ availableSeats: 4 });
+    // @ts-expect-error Commands cannot return virtual derived Fields
+    selected.updateReturning({ capacity: 4 }, ['availableSeats']);
+    // @ts-expect-error delete-returning cannot return virtual derived Fields
+    selected.deleteReturning(['availableSeats']);
+    createUpsertCommandSpec(
+      Course,
+      { id: 'course-1', capacity: 4 },
+      {
+        // @ts-expect-error virtual derived Fields cannot identify a storage conflict
+        conflictOn: ['availableSeats'],
+        strategy: 'merge',
+      },
+    );
+    const invalidCommandSpec: GraphCommandSpec<typeof Course> = {
+      kind: 'command',
+      operation: 'delete',
+      root: Course,
+      selection: { kind: 'all' },
+      // @ts-expect-error exported Command specs cannot return virtual derived Fields
+      returning: ['availableSeats'],
+    };
+    const invalidUpsertOptions: GraphUpsertOptions<typeof Course> = {
+      // @ts-expect-error exported upsert options require stored conflict Fields
+      conflictOn: ['availableSeats'],
+      strategy: 'merge',
+    };
+    expect(invalidCommandSpec.returning).toEqual(['availableSeats']);
+    expect(invalidUpsertOptions.conflictOn).toEqual(['availableSeats']);
   });
 
   it('materializes generated expressions for natural callback authoring', () => {

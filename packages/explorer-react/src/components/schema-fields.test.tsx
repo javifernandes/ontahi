@@ -17,6 +17,12 @@ describe('Explorer schema fields', () => {
     expect(screen.getByText('required')).toBeTruthy();
   });
 
+  it('keeps an empty-dependency derived badge without an empty tooltip', () => {
+    render(<ExplorerFieldRow name='constant' type='number' required derivedDependencies={[]} />);
+
+    expect(screen.getByText('derived · read-only').hasAttribute('title')).toBe(false);
+  });
+
   it('renders schema fields as a hierarchical field tree', () => {
     const schema: ExplorerSchemaDescriptor = {
       source: 'ontahi',

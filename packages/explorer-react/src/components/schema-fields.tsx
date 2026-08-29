@@ -38,7 +38,11 @@ export const ExplorerFieldRow = ({
       {derivedDependencies ? (
         <span
           className='rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground'
-          title={`Derived from ${derivedDependencies.join(', ')}`}
+          title={
+            derivedDependencies.length > 0
+              ? `Derived from ${derivedDependencies.join(', ')}`
+              : undefined
+          }
         >
           derived · read-only
         </span>

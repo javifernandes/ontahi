@@ -3,6 +3,7 @@
 '@ontahi/core': minor
 '@ontahi/explorer-react': minor
 '@ontahi/postgres': minor
+'@ontahi/supabase': minor
 ---
 
 Add virtual read-only derived Fields backed by portable Model Expressions. Codegen compiles natural
