@@ -9,7 +9,13 @@ import {
 } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { TodoEntity, TodoMapping } from './fixtures.test-support.js';
+import {
+  DerivedCourse,
+  DerivedCourseCapacity,
+  DerivedCourseMapping,
+  TodoEntity,
+  TodoMapping,
+} from './fixtures.test-support.js';
 
 import {
   compilePostgresCommand,
@@ -59,37 +65,12 @@ describe('PostgreSQL SQL compiler', () => {
   });
 
   it('compiles virtual derived Fields from stored Fields and correlated Relation counts', () => {
-    const Course = entity('DerivedCourse', {
-      id: field.id(),
-      capacity: field.nonNegativeInteger(),
-      availableSeats: field.derived(
-        field.nonNegativeInteger(),
-        modelExpression.define(
-          modelExpression.subtract(
-            modelExpression.field('capacity'),
-            modelExpression.relation('students').count(),
-          ),
-        ),
-      ),
-    });
-    const Student = entity('DerivedStudent', {
-      id: field.id(),
-      course: field.ref(Course),
-    });
-    const CourseWithStudents = Course.hasMany('students', Student, { via: 'course' });
-    const [courseMapping] = inferPostgresMappings([CourseWithStudents, Student]);
-    mapRelation(CourseWithStudents, 'students', {
-      type: 'one-to-many',
-      from: 'derived_courses.id',
-      to: 'derived_students.course_id',
-    });
-    const Capacity = CourseWithStudents.view('DerivedCourseCapacity', {
-      id: true,
-      availableSeats: true,
-    });
-
     expect(
-      compilePostgresQuery(query(CourseWithStudents).as(Capacity), undefined, courseMapping!),
+      compilePostgresQuery(
+        query(DerivedCourse).as(DerivedCourseCapacity),
+        undefined,
+        DerivedCourseMapping,
+      ),
     ).toEqual({
       text:
         'SELECT "id" AS "id", "capacity" AS "capacity", ' +
@@ -99,12 +80,12 @@ describe('PostgreSQL SQL compiler', () => {
       values: [],
     });
     const filtered = compilePostgresQuery(
-      query(CourseWithStudents)
+      query(DerivedCourse)
         .where(course => course.availableSeats.gt(0))
-        .as(Capacity)
+        .as(DerivedCourseCapacity)
         .orderBy(course => course.availableSeats.desc()),
       undefined,
-      courseMapping!,
+      DerivedCourseMapping,
     );
     expect(filtered.values).toEqual([0]);
     expect(filtered.text).toContain(
@@ -117,11 +98,11 @@ describe('PostgreSQL SQL compiler', () => {
         {
           kind: 'command',
           operation: 'update',
-          root: CourseWithStudents,
+          root: DerivedCourse,
           selection: { kind: 'all' },
           payload: { availableSeats: 100 },
         },
-        courseMapping!,
+        DerivedCourseMapping,
       ),
     ).toThrow('Cannot assign derived Fields on DerivedCourse: availableSeats.');
     expect(() =>
@@ -129,12 +110,12 @@ describe('PostgreSQL SQL compiler', () => {
         {
           kind: 'command',
           operation: 'update',
-          root: CourseWithStudents,
+          root: DerivedCourse,
           selection: { kind: 'all' },
           payload: { capacity: 4 },
           returning: ['availableSeats'],
         },
-        courseMapping!,
+        DerivedCourseMapping,
       ),
     ).toThrow(
       'PostgreSQL Commands cannot return virtual derived Fields on DerivedCourse: availableSeats.',
