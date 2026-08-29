@@ -301,6 +301,9 @@ export const createDataGraphArchitectureAdapter = <
     [DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR]: relationshipCommandExecutor,
     createRuntime,
     ...(options.defaultStorage ? { readEntityData: options.defaultStorage.readEntityData } : {}),
+    ...(options.defaultStorage?.readRelatedEntityData
+      ? { readRelatedEntityData: options.defaultStorage.readRelatedEntityData }
+      : {}),
     defineEntity,
     defineGraphEntity: defineEntity,
     defineRelation: defineGraphRelation,

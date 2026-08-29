@@ -1,5 +1,5 @@
 import type { AnyEntityDefinition } from './definitions.js';
-import type { ReflectedEntityDataReader } from './reflection.js';
+import type { ReflectedEntityDataReader, ReflectedRelatedEntityDataReader } from './reflection.js';
 import type { DataGraphExecutionRuntime } from './runtime.js';
 
 export type DataGraphDefaultStorage<
@@ -13,4 +13,5 @@ export type DataGraphDefaultStorage<
   bindEntities?: (entities: readonly AnyEntityDefinition[]) => void;
   createRuntime: () => TRuntime;
   readEntityData: ReflectedEntityDataReader['readEntityData'];
+  readRelatedEntityData?: ReflectedRelatedEntityDataReader['readRelatedEntityData'];
 };

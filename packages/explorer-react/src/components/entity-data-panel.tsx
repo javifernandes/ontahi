@@ -6,7 +6,7 @@ import {
   useHasReflectedRelatedEntityDataReader,
   useReflectedRelatedEntityDataQuery,
 } from '@ontahi/react/graph';
-import { ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
@@ -19,6 +19,7 @@ import {
 } from './entity-data-browser.js';
 import {
   ExplorerEditableEntityCell,
+  ExplorerEntityCreateButton,
   ExplorerEntityDeleteButton,
   type ExplorerEntityMutationRunner,
 } from './entity-data-mutations.js';
@@ -156,6 +157,39 @@ const ExplorerRelatedInstances = ({
   );
 };
 
+const ExplorerRelatedInstancesButton = ({
+  onSelect,
+  relation,
+  source,
+}: {
+  onSelect: () => void;
+  relation: RelatedSelection['relation'];
+  source: AnyEntityRef;
+}) => {
+  const query = useReflectedRelatedEntityDataQuery({
+    source,
+    relationName: relation.name,
+    sourceEntityName: source.entityName,
+    targetEntityName: relation.target,
+    page: 1,
+    pageSize: 25,
+  });
+
+  return (
+    <button
+      type='button'
+      onClick={onSelect}
+      aria-label={relation.name}
+      className='inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition hover:border-primary hover:text-primary'
+    >
+      <span>{relation.name}</span>
+      <span className='min-w-4 rounded-full bg-muted px-1 text-center text-[10px] text-muted-foreground'>
+        {query.isLoading ? '…' : (query.data?.totalCount ?? 0)}
+      </span>
+    </button>
+  );
+};
+
 export function ExplorerEntityDataPanel({
   entity,
   showHeader = true,
@@ -179,15 +213,14 @@ export function ExplorerEntityDataPanel({
   const graphExecutor = useGraphExecutorCapability();
   const hasRelatedReader = useHasReflectedRelatedEntityDataReader();
   const [relatedSelection, setRelatedSelection] = useState<RelatedSelection>();
-  const toManyRelations = entity.relations.filter(
-    relation => relation.cardinality === 'many' && relation.provenance !== 'derived-inverse',
-  );
+  const toManyRelations = entity.relations.filter(relation => relation.cardinality === 'many');
   const showRelatedColumn = hasRelatedReader && toManyRelations.length > 0;
   const runMutation: ExplorerEntityMutationRunner | undefined =
     graphExecutor?.runEntityMutationCommand
       ? command => graphExecutor.runEntityMutationCommand!(command)
       : undefined;
   const canDelete = Boolean(runMutation && entity.mutations?.delete);
+  const canCreate = Boolean(runMutation && entity.mutations?.create);
   const bodyColSpan = browser.columns.length + (showRelatedColumn ? 1 : 0) + (canDelete ? 1 : 0);
   const fieldOptions = entity.fields.map(field => ({ value: field.name, label: field.name }));
   const operatorOptions = browser.availableFilterOperators.map(operator => ({
@@ -225,24 +258,22 @@ export function ExplorerEntityDataPanel({
     <section className='grid content-start gap-4'>
       <div className='rounded-lg border bg-card p-5'>
         <div className='flex flex-col gap-4'>
-          <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
-            {showHeader ? (
-              <div>
-                <h3 className='font-semibold text-foreground'>Data</h3>
-                <p className='mt-1 text-sm text-muted-foreground'>
-                  Read-only rows from the graph runtime reflection.
-                </p>
-              </div>
-            ) : (
-              <div />
-            )}
-            <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-              <RefreshCw
-                className={cx('size-4', browser.isLoading && 'animate-spin text-primary')}
-              />
-              {browser.result ? `${browser.result.totalCount} rows` : 'Loading rows'}
+          {showHeader || (canCreate && runMutation) ? (
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+              {showHeader ? (
+                <div>
+                  <h3 className='font-semibold text-foreground'>Data</h3>
+                </div>
+              ) : null}
+              {canCreate && runMutation ? (
+                <ExplorerEntityCreateButton
+                  entity={entity}
+                  runMutation={runMutation}
+                  onApplied={browser.refresh}
+                />
+              ) : null}
             </div>
-          </div>
+          ) : null}
 
           <div className='grid gap-3 xl:grid-cols-[minmax(220px,1fr)_minmax(360px,1.5fr)_minmax(260px,0.9fr)]'>
             <label className='relative block'>
@@ -402,14 +433,12 @@ export function ExplorerEntityDataPanel({
                         <div className='flex flex-wrap gap-2'>
                           {source
                             ? toManyRelations.map(relation => (
-                                <button
+                                <ExplorerRelatedInstancesButton
                                   key={relation.name}
-                                  type='button'
-                                  onClick={() => setRelatedSelection({ source, relation })}
-                                  className='rounded-md border px-2 py-1 text-xs hover:border-primary hover:text-primary'
-                                >
-                                  {relation.name}
-                                </button>
+                                  source={source}
+                                  relation={relation}
+                                  onSelect={() => setRelatedSelection({ source, relation })}
+                                />
                               ))
                             : null}
                         </div>

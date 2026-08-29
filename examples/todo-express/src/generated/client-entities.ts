@@ -24,18 +24,20 @@ export const TodoListSchema = defineEntitySchema('TodoList', {
     },
   }),
   color: field.nonEmptyString({ trim: true }),
-});
+}).display({ primary: 'name', search: ['name'] });
 export const TagSchema = defineEntitySchema('Tag', {
   id: field.id(),
   name: field.nonEmptyString({ trim: true }),
   color: field.nonEmptyString({ trim: true }),
-});
+}).display({ primary: 'name', search: ['name'] });
 export const TodoItemSchema = defineEntitySchema('TodoItem', {
   id: field.id(),
   list: field.ref(TodoListSchema),
   title: field.nonEmptyString({ trim: true }),
   completed: field.boolean(),
-}).manyToMany('tags', TagSchema);
+})
+  .display({ primary: 'title', search: ['title'] })
+  .manyToMany('tags', TagSchema);
 
 const CompleteAllOutputValue = value('CompleteAllOutput', {
   completed: field.nonNegativeInteger(),
@@ -90,17 +92,7 @@ export const TodoList = defineClientEntity(TodoListSchema, {
 });
 
 export const Tag = defineClientEntity(TagSchema, {
-  domainOperations: {
-    create: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['Tag']],
-      },
-      input: graphSchema.pick(TagSchema, ['id', 'name', 'color']).named('CreateTagInput'),
-      output: TagSchema,
-    }),
-  },
+  domainOperations: {},
 });
 
 export const TodoItem = defineClientEntity(TodoItemSchema, {
@@ -114,7 +106,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       input: graphSchema.pick(TodoItemSchema, ['id', 'list', 'title']).named('CreateTodoItemInput'),
       output: TodoItemSchema,
     }),
-    complete: defineClientDomainOperation({
+    setCompleted: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {
@@ -122,6 +114,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       },
       input: graphSchema.object({
         todos: TodoItemSchema.many(),
+        completed: TodoItemSchema.fields.completed,
       }),
     }),
     delete: defineClientDomainOperation({

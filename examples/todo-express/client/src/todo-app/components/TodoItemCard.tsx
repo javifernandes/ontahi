@@ -33,7 +33,7 @@ type TodoItemCardProps = {
   dropPointer: (event: ReactPointerEvent<HTMLDivElement>) => void;
   cancelPointerDragging: () => void;
   moveBy: (direction: -1 | 1) => void;
-  completeTodo: Dashboard['completeTodo'];
+  setTodoCompleted: Dashboard['setTodoCompleted'];
   deleteTodo: Dashboard['deleteTodo'];
   toggleTodoTag: Dashboard['toggleTodoTag'];
   createTagForTodo: Dashboard['createTagForTodo'];
@@ -64,7 +64,7 @@ export const TodoItemCard = ({
   dropPointer,
   cancelPointerDragging,
   moveBy,
-  completeTodo,
+  setTodoCompleted,
   deleteTodo,
   toggleTodoTag,
   createTagForTodo,
@@ -134,10 +134,18 @@ export const TodoItemCard = ({
       <button
         type='button'
         className='complete-button'
-        onClick={() => completeTodo(todo.id)}
-        disabled={todo.completed || isCompleting || !canComplete}
-        aria-label={todo.completed ? `${todo.title} is complete` : `Mark ${todo.title} complete`}
-        title={canComplete ? 'Mark complete' : 'Sign in with GitHub to complete todos'}
+        onClick={() => setTodoCompleted(todo.id, !todo.completed)}
+        disabled={isCompleting || !canComplete}
+        aria-label={
+          todo.completed ? `Mark ${todo.title} incomplete` : `Mark ${todo.title} complete`
+        }
+        title={
+          canComplete
+            ? todo.completed
+              ? 'Mark incomplete'
+              : 'Mark complete'
+            : 'Sign in with GitHub to change todos'
+        }
       >
         {isCompleting ? (
           <LoaderCircle className='spin' aria-hidden='true' />

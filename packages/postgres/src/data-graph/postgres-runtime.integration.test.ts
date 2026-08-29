@@ -480,6 +480,61 @@ describe('PostgreSQL data graph runtime', () => {
         delta: { added: [], removed: [] },
       },
     );
+    const graph = createRuntimeBoundDataGraphApi(() => runtime);
+    const Todos = graph.bindSelectionEntity(RelationshipTodo);
+    const Tags = graph.bindSelectionEntity(RelationshipTag);
+    await expect(
+      Effect.runPromise(
+        Tags.relatedTo(
+          Todos.selection(todo => todo.id.eq('todo-1')),
+          {
+            through: 'tags',
+          },
+        ).resolveEntityRows(),
+      ),
+    ).resolves.toEqual([{ id: 'tag-1', label: 'Core', assignable: true }]);
+    await expect(
+      Effect.runPromise(
+        Todos.relatedTo(
+          Tags.selection(tag => tag.id.eq('tag-1')),
+          {
+            through: 'tags',
+          },
+        ).resolveEntityRows(),
+      ),
+    ).resolves.toEqual([
+      { id: 'todo-1', title: 'Selected', completed: false },
+      { id: 'todo-2', title: 'Selected', completed: false },
+    ]);
+    await expect(
+      Effect.runPromise(
+        Todos.relatedTo(
+          Tags.selection(tag => tag.id.eq('tag-1')),
+          {
+            through: 'tags',
+          },
+        ).count(),
+      ),
+    ).resolves.toBe(2);
+    const reflectedStorage = createPostgresDataGraphStorage({
+      pool,
+      mappings: [RelationshipTodoMapping, RelationshipTagMapping],
+    });
+    reflectedStorage.bindEntities?.([RelationshipTodo, RelationshipTag]);
+    await expect(
+      reflectedStorage.readRelatedEntityData!({
+        source: createEntityRef(RelationshipTag, { id: 'tag-1' }),
+        relationName: 'RelationshipTodo.tags',
+        sourceEntityName: RelationshipTag.name,
+        targetEntityName: RelationshipTodo.name,
+      }),
+    ).resolves.toMatchObject({
+      rows: [
+        { id: 'todo-1', title: 'Selected' },
+        { id: 'todo-2', title: 'Selected' },
+      ],
+      totalCount: 2,
+    });
     await pool.query(`UPDATE relationship_todos SET is_completed = true WHERE id = 'todo-2'`);
     try {
       await expect(

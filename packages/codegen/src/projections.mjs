@@ -392,7 +392,9 @@ export const renderGeneratedClientEntityModule = ({
   const coreImports = [
     ...(usesCacheRef ? ['cacheRef'] : []),
     ...(usesCreateEntityRef ? ['createEntityRef'] : []),
-    'defineClientDomainOperation',
+    ...(entities.some(entity => entity.operations.length > 0)
+      ? ['defineClientDomainOperation']
+      : []),
     'defineClientEntity',
     ...schemaCoreImports,
     ...(usesField && !schemaImportsField ? ['field'] : []),

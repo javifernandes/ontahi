@@ -96,7 +96,7 @@ export const TodoBoard = ({
   recolorList,
   deleteList,
   createTodo,
-  completeTodo,
+  setTodoCompleted,
   deleteTodo,
   toggleTodoTag,
   createTagForTodo,
@@ -387,7 +387,7 @@ export const TodoBoard = ({
                 recolorList={recolorList}
                 deleteList={deleteList}
                 createTodo={createTodo}
-                completeTodo={completeTodo}
+                setTodoCompleted={setTodoCompleted}
                 deleteTodo={deleteTodo}
                 toggleTodoTag={toggleTodoTag}
                 createTagForTodo={createTagForTodo}

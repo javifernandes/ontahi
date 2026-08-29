@@ -25,6 +25,49 @@ afterEach(async () => {
 });
 
 describe('Ontahi application declaration analysis', () => {
+  it('generates a browser Entity for a schema-only Entity with no domain Operations', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-schema-only-client-'));
+    const graphApiPath = path.join(directory, 'graph.ts');
+    tempDirectories.push(directory);
+
+    await writeFile(
+      graphApiPath,
+      `
+        import { defineGraphApi } from '@ontahi/core/data-graph';
+        import { Tag } from './tag';
+
+        export const TagsGraph = defineGraphApi({ entities: { Tag } });
+      `,
+      'utf8',
+    );
+    await writeFile(
+      path.join(directory, 'tag.ts'),
+      `
+        import { entity, field } from '@ontahi/core/entity';
+
+        export const Tag = entity({
+          name: 'Tag',
+          fields: { id: field.id(), name: field.string() },
+        });
+      `,
+      'utf8',
+    );
+
+    const analysis = analyzeOntahiApplication({
+      graphApiPath,
+      sourceLoader: createFileSystemSourceLoader({ rootDir: directory }),
+    });
+
+    expect(analysis.diagnostics).toEqual([]);
+    expect(analysis.clientEntities).toMatchObject([{ entityName: 'Tag', operations: [] }]);
+    expect(
+      renderGeneratedClientEntityModule({
+        entities: analysis.clientEntities,
+        schemaEntities: analysis.entities,
+      }),
+    ).toContain('export const Tag = defineClientEntity(TagSchema');
+  });
+
   it('inventories one imported Value declaration reused by multiple Operations', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-nominal-reuse-'));
     const graphApiPath = path.join(directory, 'graph.ts');

@@ -54,7 +54,6 @@ export type OntahiGraphProviderProps<
   client?: OntahiGraphClient<TReadOptions, TCommandOptions> | false;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
-  /** Explicit host capability; unlike entity reads, this has no OntahiGraphClient fallback. */
   reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
   reflectedGraphOperations?: readonly ReflectedGraphOperationLike[];
@@ -87,6 +86,8 @@ export function OntahiGraphProvider<
     operationBridgeAdapters ?? graphClient?.operationBridgeAdapters ?? [];
   const resolvedReflectedEntityDataReader =
     reflectedEntityDataReader ?? graphClient?.reflectedEntityDataReader;
+  const resolvedReflectedRelatedEntityDataReader =
+    reflectedRelatedEntityDataReader ?? graphClient?.reflectedRelatedEntityDataReader;
   const configuredReflectedOperationInvoker =
     reflectedOperationInvoker ?? graphClient?.reflectedOperationInvoker;
   const graphClientCache = clientCache ?? defaultClientCache;
@@ -110,7 +111,7 @@ export function OntahiGraphProvider<
     <ExecutionIdentityContext.Provider value={identity}>
       <ReflectedOperationInvokerContext.Provider value={resolvedReflectedOperationInvoker}>
         <ReflectedRelatedEntityDataReaderContext.Provider
-          value={reflectedRelatedEntityDataReader ?? null}
+          value={resolvedReflectedRelatedEntityDataReader ?? null}
         >
           <ReflectedEntityDataReaderContext.Provider
             value={resolvedReflectedEntityDataReader ?? null}

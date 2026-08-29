@@ -40,6 +40,7 @@ export const TodoList = entity({
     }),
     color: field.nonEmptyString({ trim: true }),
   },
+  display: { primary: 'name', search: ['name'] },
   domainOperationDefaults: entityDefaults,
   uses: {
     capabilities: {} as TodoCapabilities,
@@ -103,20 +104,13 @@ export const Tag = entity({
     name: field.nonEmptyString({ trim: true }),
     color: field.nonEmptyString({ trim: true }),
   },
-  domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation }) => ({
-    create: operation({
-      input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTagInput'),
-      output: self,
-      bridge: { invalidate: [['Tag']] },
-      run: input => commands.insertReturning(input, ['id', 'name', 'color']),
-    }),
-  }),
+  display: { primary: 'name', search: ['name'] },
 });
 
 export const TodoItem = entity({
   name: 'TodoItem',
   fields: todoItemFields,
+  display: { primary: 'title', search: ['title'] },
   relations: {
     tags: relation.manyToMany(Tag, {
       constraints: (): readonly RelationConstraint[] => [
@@ -171,13 +165,14 @@ export const TodoItem = entity({
               .run();
           }),
       }),
-      complete: operation({
+      setCompleted: operation({
         input: graphSchema.object({
           todos: self.many(),
+          completed: self.fields.completed,
         }),
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         bridge: { invalidate: [['TodoItem']] },
-        run: ({ todos }) => todos.update({ completed: true }),
+        run: ({ todos, completed }) => todos.update({ completed }),
       }),
       delete: operation({
         input: graphSchema.object({

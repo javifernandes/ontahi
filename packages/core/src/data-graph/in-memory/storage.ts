@@ -1,4 +1,5 @@
 import type { AnyEntityDefinition } from '../definitions.js';
+import { createRuntimeReflectedRelatedEntityDataReader } from '../reflected-related-entity-data.js';
 import type { RelationshipFact } from '../relationship-command.js';
 import type { DataGraphDefaultStorage } from '../storage.js';
 
@@ -53,5 +54,15 @@ export const createInMemoryDataGraphStorage = (
         relationships,
         pageSizeOptions: options.pageSizeOptions,
       }).readEntityData(query),
+    readRelatedEntityData: query =>
+      createRuntimeReflectedRelatedEntityDataReader({
+        createRuntime: () =>
+          createInMemoryDataGraphRuntime({
+            dataset,
+            entities: getEntities(),
+            relationships,
+          }),
+        getEntities,
+      }).readRelatedEntityData(query),
   };
 };

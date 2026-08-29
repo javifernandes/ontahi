@@ -4,6 +4,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   compileQueryPlan,
   createInMemoryDataGraphStorage,
+  createRuntimeBoundDataGraphApi,
   defineGraphOperation,
   entity as defineEntitySchema,
   field,
@@ -13,6 +14,7 @@ import {
   toGraphReadRequest,
   type GraphReadPolicy,
   type InMemoryDataset,
+  type RelationshipFact,
 } from '../../data-graph/index.js';
 
 import type { OntahiApplicationBuilder } from './ontahi.js';
@@ -32,6 +34,70 @@ import {
 } from './index.js';
 
 describe('ontahi application composition root', () => {
+  it('reflects inverse related Entity rows through the bound graph runtime', async () => {
+    const Tag = entity({
+      name: 'ReflectedTag',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const Todo = entity({
+      name: 'ReflectedTodo',
+      fields: { id: field.id(), title: field.string() },
+      relations: { tags: relation.manyToMany(Tag) },
+    });
+    const relationships: RelationshipFact[] = [];
+    const storage = createInMemoryDataGraphStorage({
+      dataset: {
+        ReflectedTodo: [{ id: 'todo-1', title: 'Explore relations' }],
+        ReflectedTag: [{ id: 'tag-1', name: 'Framework' }],
+      },
+      relationships,
+    });
+    const application = ontahi({
+      storage,
+      entities: [Todo, Tag],
+    });
+    const todo = Todo.refById('todo-1');
+    const tag = Tag.refById('tag-1');
+    relationships.push({
+      relation: {
+        sourceEntityName: 'ReflectedTodo',
+        relationName: 'tags',
+        targetEntityName: 'ReflectedTag',
+        cardinality: 'many-to-many',
+      },
+      source: todo,
+      target: tag,
+    });
+
+    await expect(
+      application.reflectedRelatedEntityDataReader?.readRelatedEntityData({
+        source: tag,
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'ReflectedTag',
+        targetEntityName: 'ReflectedTodo',
+        page: 1,
+        pageSize: 25,
+      }),
+    ).resolves.toMatchObject({
+      entityName: 'ReflectedTodo',
+      rows: [{ id: 'todo-1', title: 'Explore relations' }],
+      totalCount: 1,
+    });
+    const graph = createRuntimeBoundDataGraphApi(() => storage.createRuntime());
+    const Todos = graph.bindSelectionEntity(Todo);
+    const Tags = graph.bindSelectionEntity(Tag);
+    await expect(
+      Effect.runPromise(
+        Todos.relatedTo(
+          Tags.selection(candidate => candidate.id.eq('tag-1')),
+          {
+            through: 'tags',
+          },
+        ).count(),
+      ),
+    ).resolves.toBe(1);
+  });
+
   it('creates policy dispatchers from the application storage runtime', async () => {
     const Todo = defineEntitySchema('RemoteTodo', {
       id: field.id(),

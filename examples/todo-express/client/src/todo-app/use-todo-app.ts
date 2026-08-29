@@ -1,5 +1,10 @@
-import { createEntityRef, relationshipSet, Selection } from '@ontahi/core/data-graph';
-import { useGraphQuery, useManyToManyRelationshipCommand, useOperation } from '@ontahi/react/graph';
+import { createEntityRef, mutateEntity, relationshipSet, Selection } from '@ontahi/core/data-graph';
+import {
+  useGraphExecutorCapability,
+  useGraphQuery,
+  useManyToManyRelationshipCommand,
+  useOperation,
+} from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
@@ -73,14 +78,14 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
   const todos = useGraphQuery(allTodoItemsQuery);
+  const graphExecutor = useGraphExecutorCapability();
   const createListOperation = useOperation(TodoList.domain.create);
   const renameListOperation = useOperation(TodoList.domain.rename);
   const recolorListOperation = useOperation(TodoList.domain.recolor);
   const deleteListOperation = useOperation(TodoList.domain.delete);
-  const createTagOperation = useOperation(Tag.domain.create);
   const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
   const createTodoOperation = useOperation(TodoItem.domain.create);
-  const completeTodoOperation = useOperation(TodoItem.domain.complete);
+  const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
   const deleteTodoOperation = useOperation(TodoItem.domain.delete);
   const linkTags = useManyToManyRelationshipCommand(
     (input: TodoTagMutation) => createTodoTagCommand('add', input),
@@ -213,16 +218,16 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
-  const completeTodo = async (todoId: string) => {
+  const setTodoCompleted = async (todoId: string, completed: boolean) => {
     setActionError(undefined);
     setCompletingTodoId(todoId);
     try {
-      const result = await completeTodoOperation.executeAsync({ todos: [todoId] });
-      const message = operationMessage(result, 'The todo could not be completed.');
+      const result = await setTodoCompletedOperation.executeAsync({ todos: [todoId], completed });
+      const message = operationMessage(result, 'The todo completion could not be changed.');
       setActionError(message);
       return !message;
     } catch (error) {
-      setActionError(thrownMessage(error, 'The todo could not be completed.'));
+      setActionError(thrownMessage(error, 'The todo completion could not be changed.'));
       return false;
     } finally {
       setCompletingTodoId(undefined);
@@ -268,16 +273,18 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setTaggingTodoId(todoId);
     try {
       const tagId = globalThis.crypto.randomUUID();
-      const result = await createTagOperation.executeAsync({
-        id: tagId,
-        name,
-        color: tagColors[(tags.data?.length ?? 0) % tagColors.length]!,
-      });
-      const message = operationMessage(result, 'The tag could not be created.');
-      if (message) {
-        setActionError(message);
+      if (!graphExecutor?.runEntityMutationCommand) {
+        setActionError('This runtime cannot create tags.');
         return false;
       }
+      await graphExecutor.runEntityMutationCommand(
+        mutateEntity(TagSchema).create({
+          id: tagId,
+          name,
+          color: tagColors[(tags.data?.length ?? 0) % tagColors.length]!,
+        }),
+      );
+      await tags.refetch();
 
       await linkTags.mutateAsync({ todoId, tagId });
       return true;
@@ -358,7 +365,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       recolorList,
       deleteList,
       createTodo,
-      completeTodo,
+      setTodoCompleted,
       deleteTodo,
       toggleTodoTag,
       createTagForTodo,

@@ -109,7 +109,7 @@ describe('Ontahi todo portability example', () => {
   });
 
   const entityRef = (entityName: 'TodoItem' | 'Tag', id: string) => ({
-    kind: 'entity-ref',
+    kind: 'entity-ref' as const,
     entityName,
     locator: { id },
   });
@@ -396,17 +396,26 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
     ];
 
-    await expect(TodoItem.complete({ todos: ['todo-1'] })).resolves.toMatchObject({
+    await expect(
+      TodoItem.setCompleted({ todos: ['todo-1'], completed: true }),
+    ).resolves.toMatchObject({
       ok: false,
       kind: 'failed',
       failure: { reason: 'not_authenticated' },
     });
     await expect(
       TodoApplication.app.runtime.withInvocationContext({ principal: testPrincipal }, () =>
-        TodoItem.complete({ todos: ['todo-1'] }),
+        TodoItem.setCompleted({ todos: ['todo-1'], completed: true }),
       ),
     ).resolves.toMatchObject({ ok: true, kind: 'success' });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
+
+    await expect(
+      TodoApplication.app.runtime.withInvocationContext({ principal: testPrincipal }, () =>
+        TodoItem.setCompleted({ todos: ['todo-1'], completed: false }),
+      ),
+    ).resolves.toMatchObject({ ok: true, kind: 'success' });
+    expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
   });
 
   it('rejects a protected operation over Express without a Principal', async () => {
@@ -414,7 +423,7 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
     ];
 
-    const response = await invoke('TodoItem.complete', {
+    const response = await invoke('TodoItem.setCompleted', {
       todos: {
         kind: 'selection',
         entityName: 'TodoItem',
@@ -423,6 +432,7 @@ describe('Ontahi todo portability example', () => {
           refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
         },
       },
+      completed: true,
     });
 
     expect(response.status).toBe(200);
@@ -459,9 +469,20 @@ describe('Ontahi todo portability example', () => {
 
   it('serves the embedded Explorer snapshot and active runtime metadata', async () => {
     const origin = endpoint.replace(/\/operations$/, '');
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Framework', color: '#6f8d72' }];
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Visible in Explorer', completed: false },
     ];
+    getTodoRelationships().push({
+      relation: {
+        sourceEntityName: 'TodoItem',
+        relationName: 'tags',
+        targetEntityName: 'Tag',
+        cardinality: 'many-to-many',
+      },
+      source: entityRef('TodoItem', 'todo-1'),
+      target: entityRef('Tag', 'tag-1'),
+    });
 
     await expect(fetch(`${origin}/runtime`).then(response => response.json())).resolves.toEqual({
       storage: 'in-memory',
@@ -500,6 +521,24 @@ describe('Ontahi todo portability example', () => {
       rows: [{ id: 'todo-1', list: 'list-1', title: 'Visible in Explorer', completed: false }],
       totalCount: 1,
     });
+    await expect(
+      fetch(`${origin}/explorer/related-entities`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: entityRef('Tag', 'tag-1'),
+          relationName: 'TodoItem.tags',
+          sourceEntityName: 'Tag',
+          targetEntityName: 'TodoItem',
+          page: 1,
+          pageSize: 25,
+        }),
+      }).then(response => response.json()),
+    ).resolves.toMatchObject({
+      entityName: 'TodoItem',
+      rows: [{ id: 'todo-1', title: 'Visible in Explorer' }],
+      totalCount: 1,
+    });
   });
 
   it.each([
@@ -528,9 +567,10 @@ describe('Ontahi todo portability example', () => {
     ];
 
     const response = await invoke(
-      'TodoItem.complete',
+      'TodoItem.setCompleted',
       {
         todos: { kind: 'selection', entityName: 'TodoItem', expression },
+        completed: true,
       },
       true,
     );

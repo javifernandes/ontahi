@@ -217,6 +217,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByTestId('execute-panel').textContent).toBe('execute Book.getSharingInfo');
     expect(hrefs).toContain('/internal/graph/entities/Book');
     expect(hrefs).toContain('/internal/graph/entities/Profile');
+    expect(screen.queryByText('2 fields')).toBeNull();
   });
 
   it('keeps instance browsing primary across local entity navigation', async () => {
@@ -338,6 +339,7 @@ describe('ExplorerEntityBrowser', () => {
         { name: 'color', type: 'string', nullable: false },
       ],
       mutations: {
+        create: { fields: ['id', 'name', 'color'] },
         update: { fields: ['name', 'color'] },
         delete: true,
       },
@@ -381,6 +383,20 @@ describe('ExplorerEntityBrowser', () => {
             selectedEntityName='Tag'
           />
         ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'New Tag' }));
+    await user.type(screen.getByRole('textbox', { name: 'Create name' }), 'Later');
+    await user.type(screen.getByRole('textbox', { name: 'Create color' }), '#abc123');
+    await user.click(screen.getByRole('button', { name: 'Create Tag' }));
+
+    await waitFor(() =>
+      expect(runEntityMutationCommand).toHaveBeenCalledWith({
+        kind: 'entity-mutation-command',
+        action: 'create',
+        entityName: 'Tag',
+        values: { id: expect.any(String), name: 'Later', color: '#abc123' },
       }),
     );
 
@@ -496,7 +512,16 @@ describe('ExplorerEntityBrowser', () => {
     render(
       withReflectedEntityDataReader({
         readEntityData: vi.fn(pendingRead),
-        readRelatedEntityData: vi.fn(),
+        readRelatedEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Profile',
+          columns: [],
+          rows: [],
+          page: 1,
+          pageSize: 25,
+          totalCount: 0,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
         children: (
           <ExplorerEntityBrowser
             entities={[relatedBook, entities[1]!]}
@@ -668,6 +693,7 @@ describe('ExplorerEntityBrowser', () => {
       relations: [
         {
           name: 'collaborators',
+          provenance: 'derived-inverse',
           kind: 'hasMany',
           target: 'Profile',
           targetIdentity: { name: 'refById', fields: ['id'] },
@@ -727,7 +753,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByRole('link', { name: 'profile-2' }).getAttribute('href')).toBe(
       '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
     );
-    expect(readRelatedEntityData).toHaveBeenLastCalledWith({
+    expect(readRelatedEntityData).toHaveBeenCalledWith({
       source: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
       relationName: 'collaborators',
       sourceEntityName: 'Book',

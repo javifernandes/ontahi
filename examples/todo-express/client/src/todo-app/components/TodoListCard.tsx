@@ -36,7 +36,7 @@ type TodoListCardProps = {
   recolorList: Dashboard['recolorList'];
   deleteList: Dashboard['deleteList'];
   createTodo: Dashboard['createTodo'];
-  completeTodo: Dashboard['completeTodo'];
+  setTodoCompleted: Dashboard['setTodoCompleted'];
   deleteTodo: Dashboard['deleteTodo'];
   toggleTodoTag: Dashboard['toggleTodoTag'];
   createTagForTodo: Dashboard['createTagForTodo'];
@@ -68,7 +68,7 @@ export const TodoListCard = ({
   recolorList,
   deleteList,
   createTodo,
-  completeTodo,
+  setTodoCompleted,
   deleteTodo,
   toggleTodoTag,
   createTagForTodo,
@@ -218,7 +218,16 @@ export const TodoListCard = ({
       data-list-id={list.id}
       style={listStyle(list.color)}
     >
-      <header className='list-card-header'>
+      <header
+        className='list-card-header'
+        onDoubleClick={event => {
+          if (event.target instanceof Element && event.target.closest('button, input, form'))
+            return;
+          closePopovers();
+          setIsCollapsed(current => !current);
+        }}
+        title='Double-click to collapse or expand'
+      >
         <div className='list-title-block'>
           {isEditingName ? (
             <form className='rename-list-form' onSubmit={submitRename}>
@@ -250,12 +259,11 @@ export const TodoListCard = ({
             <div className='list-name-row'>
               <h3
                 className='list-name'
-                onDoubleClick={() => setIsEditingName(true)}
                 onKeyDown={event => {
                   if (event.key === 'Enter') setIsEditingName(true);
                 }}
                 tabIndex={0}
-                title='Double-click to rename'
+                title='Double-click to collapse or expand'
               >
                 {list.name}
               </h3>
@@ -408,7 +416,7 @@ export const TodoListCard = ({
                 dropPointer={dropTodoPointer}
                 cancelPointerDragging={finishTodoDrag}
                 moveBy={direction => moveTodoBy(todo.id, direction)}
-                completeTodo={completeTodo}
+                setTodoCompleted={setTodoCompleted}
                 deleteTodo={deleteTodo}
                 toggleTodoTag={toggleTodoTag}
                 createTagForTodo={createTagForTodo}
