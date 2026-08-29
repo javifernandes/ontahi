@@ -6,6 +6,7 @@ import {
   isGraphCommandProtocolError,
   isGraphReadProtocolError,
   type DataGraphExecutionRuntime,
+  type EntityMutationCommandExecutionRuntime,
   type RemoteDataGraphError,
   type RemoteGraphCommandTransport,
   type RemoteGraphReadTransport,
@@ -34,9 +35,13 @@ export type FetchRelationshipRuntime<TOptions = undefined> = RelationshipCommand
   TOptions
 > &
   ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions>;
+export type FetchEntityMutationRuntime<TOptions = undefined> =
+  EntityMutationCommandExecutionRuntime<RemoteDataGraphError, TOptions>;
 
 export type FetchGraphReadCapability<TOptions = undefined> = {
-  runtime: FetchGraphRuntime<TOptions> & FetchRelationshipRuntime<TOptions>;
+  runtime: FetchGraphRuntime<TOptions> &
+    FetchRelationshipRuntime<TOptions> &
+    FetchEntityMutationRuntime<TOptions>;
   graphExecutor: ReactGraphExecutor<TOptions, TOptions>;
 };
 
@@ -106,6 +111,8 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
         runBrowserEffect(runtime.runRelationshipCommand(command, options)),
       runManyToManyRelationshipCommand: (command, options) =>
         runBrowserEffect(runtime.runManyToManyRelationshipCommand(command, options)),
+      runEntityMutationCommand: (command, options) =>
+        runBrowserEffect(runtime.runEntityMutationCommand(command, options)),
     },
   };
 };

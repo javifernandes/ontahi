@@ -7,6 +7,7 @@ import {
   createMutationReactionRunner,
   entity,
   field,
+  isRelationshipCommandResult,
   mutateEntity,
   notAppliedRelationshipCommand,
   relationship,
@@ -126,6 +127,9 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       if (response.kind === 'protocol-error') throw new Error(response.error.code);
       if (response.kind === 'graph-command-rejection') {
         throw new Error(response.diagnostic.rejection.code);
+      }
+      if (!isRelationshipCommandResult(response.value)) {
+        throw new Error('Expected a Relationship Command result.');
       }
       return response.value;
     });

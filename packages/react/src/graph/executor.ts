@@ -10,6 +10,8 @@ import type {
   ManyToManyRelationshipCommand,
   RelationshipCommand,
   RelationshipCommandResult,
+  EntityMutationCommand,
+  EntityMutationDelta,
 } from '@ontahi/core/data-graph';
 import type { QueryKey, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 
@@ -41,6 +43,10 @@ export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TR
     command: ManyToManyRelationshipCommand,
     options?: TCommandOptions,
   ): Promise<RelationshipCommandResult>;
+  runEntityMutationCommand?(
+    command: EntityMutationCommand,
+    options?: TCommandOptions,
+  ): Promise<EntityMutationDelta>;
 }
 
 export type BuildableRead<TResult> = {

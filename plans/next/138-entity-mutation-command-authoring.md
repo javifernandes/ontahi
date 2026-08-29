@@ -33,7 +33,9 @@ identity.
    canonical Entity Mutation Commands.
 3. Preserve required participant Ref inference for Association Entity construction.
 4. Preserve exact Entity Mutation Deltas and Applied Mutation Outcomes.
-5. Define direct/server and generated-client types before extending the remote bridge in Plan 128.
+5. Build Entity- and Ref-bound authoring over the canonical direct/server types proven by
+   [Plan 128f](../done/128f-remote-identity-scoped-entity-mutation-commands.md), without creating
+   another wire representation.
 6. Keep structural Association Entity lifecycle framework-provided without introducing an
    `AssociationEntity` superclass.
 7. Define optional revision or conditional preconditions for update/delete, including stale target,

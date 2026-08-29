@@ -14,6 +14,7 @@ import {
   type AnyRelationQueryBuilder,
   type DataGraphExecutionRuntime,
   type DataGraphTransactionCapability,
+  type EntityMutationCommandExecutionRuntime,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
@@ -28,6 +29,7 @@ import type { Pool, QueryResultRow } from 'pg';
 
 import {
   executePostgresCommand,
+  executePostgresEntityMutationCommand,
   executePostgresManyToManyCommand,
   executePostgresRelationshipCommand,
 } from './command-runtime.js';
@@ -58,7 +60,8 @@ type PostgresDataGraphRuntime = DataGraphExecutionRuntime<
   PostgresDataGraphError
 > &
   ManyToManyRelationshipCommandExecutionRuntime<PostgresDataGraphError> &
-  RelationshipCommandExecutionRuntime<PostgresDataGraphError>;
+  RelationshipCommandExecutionRuntime<PostgresDataGraphError> &
+  EntityMutationCommandExecutionRuntime<PostgresDataGraphError>;
 
 export type PostgresTransactionDataGraphRuntime = PostgresDataGraphRuntime &
   DataGraphTransactionCapability<PostgresDataGraphRuntime, PostgresDataGraphError>;
@@ -393,6 +396,19 @@ const createPostgresBaseDataGraphRuntime = (
         executeQuery,
         mapping: mappingFor(registry, command.root),
       }),
+    runEntityMutationCommand: command => {
+      const mapping = input.mappings.find(
+        candidate => candidate.entity.name === command.entityName,
+      );
+      return mapping
+        ? executePostgresEntityMutationCommand({ command, executeQuery, mapping })
+        : Effect.fail(
+            new PostgresDataGraphError(
+              `PostgreSQL Entity Mutation Command references unmapped Entity ${command.entityName}.`,
+              'invalid_command',
+            ),
+          );
+    },
     runManyToManyRelationshipCommand: command =>
       executePostgresManyToManyCommand({ command, executeQuery, mappings: input.mappings }),
     runRelationshipCommand: command =>

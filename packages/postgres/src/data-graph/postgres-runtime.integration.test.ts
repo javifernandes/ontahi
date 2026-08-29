@@ -9,6 +9,7 @@ import {
   field,
   isDataGraphTransactionCapability,
   mapRelation,
+  mutateEntity,
   relationConstraint,
   relationship,
   relationshipSet,
@@ -283,6 +284,55 @@ describe('PostgreSQL data graph runtime', () => {
     await expect(Effect.runPromise(runtime().run(query(TodoEntity), undefined))).resolves.toEqual([
       { id: 'todo-1', title: 'Persistent', completed: false },
     ]);
+  });
+
+  it('executes exact Entity Mutation Commands with portable deltas', async () => {
+    await pool.query('TRUNCATE TABLE todos');
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings: [TodoMapping] });
+    const mutation = mutateEntity(TodoEntity);
+    const todo = createEntityRef(TodoEntity, { id: 'todo-entity-command' });
+
+    await expect(
+      Effect.runPromise(
+        runtime.runEntityMutationCommand(
+          mutation.create({ id: 'todo-entity-command', title: 'Draft', completed: false }),
+        ),
+      ),
+    ).resolves.toEqual({
+      created: [
+        {
+          entityName: 'Todo',
+          ref: todo,
+          values: { id: 'todo-entity-command', title: 'Draft', completed: false },
+        },
+      ],
+      updated: [],
+      deleted: [],
+    });
+    await expect(
+      Effect.runPromise(
+        runtime.runEntityMutationCommand(mutation.update(todo, { completed: true })),
+      ),
+    ).resolves.toMatchObject({
+      created: [],
+      updated: [{ entityName: 'Todo', ref: todo, values: { completed: true } }],
+      deleted: [],
+    });
+    await expect(
+      Effect.runPromise(runtime.runEntityMutationCommand(mutation.delete(todo))),
+    ).resolves.toMatchObject({
+      created: [],
+      updated: [],
+      deleted: [{ entityName: 'Todo', ref: todo, values: { completed: true } }],
+    });
+    await expect(
+      Effect.runPromise(
+        runtime.runEntityMutationCommand(mutation.delete(todo)).pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
   });
 
   it('commits required mutations composed through one transaction runtime', async () => {

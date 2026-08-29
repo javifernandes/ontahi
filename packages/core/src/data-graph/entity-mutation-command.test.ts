@@ -47,7 +47,12 @@ describe('Entity Mutation Command', () => {
   });
 
   it('returns exact applied deltas through the in-memory runtime', async () => {
-    const Book = entity('Book', { id: field.id(), title: field.string() });
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+      note: field.optional(field.string()),
+      label: field.derived(field.string(), () => ''),
+    });
     const dataset = { Book: [] as Array<Record<string, unknown>> };
     const runtime = createInMemoryDataGraphRuntime({ dataset, entities: [Book] });
     const mutation = mutateEntity(Book);

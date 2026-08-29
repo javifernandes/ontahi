@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/116-ontahi-selection-model
   - bookops://plans/121-ontahi-direct-postgres-adapter
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
+  - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - bookops://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/command
 sourceCommit: 67713696
@@ -38,3 +39,10 @@ operation implementations.
 A Command is not automatically a [[ontahi.model.domain-operation|Domain Operation]]. Operations
 add named intention, contracts, policy, invariants, coordination, effects, or lifecycle. A plain
 data change remains a Command even when runtime topology eventually transports it to a server.
+
+The first generic remote write uses the narrower portable Entity Mutation Command rather than
+transporting arbitrary Selection Commands. It expresses create or an exact Ref-targeted
+update/delete and returns one exact Entity Mutation Delta. At the server boundary, policy must opt
+in the Entity, action, mutable Fields, returned Fields, and row scope; registration alone grants
+nothing. Bulk affected sets, upsert, authority-derived atomic scopes, and the final Entity/Ref-bound
+authoring facade remain later work.

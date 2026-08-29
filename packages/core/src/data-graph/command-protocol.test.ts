@@ -4,6 +4,7 @@ import {
   createEntityRef,
   entity,
   field,
+  mutateEntity,
   parseGraphCommandRequest,
   relationship,
   resolveGraphCommandRequest,
@@ -192,5 +193,108 @@ describe('data graph Relationship Command protocol', () => {
     expect(
       resolveGraphCommandRequest(toGraphCommandRequest(command), { entities: [Student, Course] }),
     ).toMatchObject({ success: false, error: { error: { code: 'invalid_relation' } } });
+  });
+});
+
+describe('data graph Entity Mutation Command protocol', () => {
+  const defineBookGraph = () =>
+    entity('Book', {
+      id: field.id(),
+      title: field.nonEmptyString({ trim: true }),
+      published: field.boolean(),
+      label: field.derived(field.string(), () => ''),
+    });
+
+  it('round-trips create and exact-identity mutations and rebuilds normalized values', () => {
+    const client = defineBookGraph();
+    const server = defineBookGraph();
+    const mutation = mutateEntity(client);
+    const book = createEntityRef(client, { id: 'book-1' });
+    const commands = [
+      mutation.create({ id: 'book-1', title: '  Ontahi  ', published: false }),
+      mutation.update(book, { title: '  Revised  ' }),
+      mutation.delete(book),
+    ];
+
+    const resolved = commands.map(command => {
+      const transported = JSON.parse(JSON.stringify(toGraphCommandRequest(command)));
+      const parsed = parseGraphCommandRequest(transported);
+      expect(parsed).toMatchObject({ success: true });
+      if (!parsed.success) throw new Error(parsed.error.error.message);
+      return resolveGraphCommandRequest(parsed.request, { entities: [server] });
+    });
+
+    expect(resolved).toEqual([
+      {
+        success: true,
+        request: expect.any(Object),
+        command: mutation.create({ id: 'book-1', title: 'Ontahi', published: false }),
+      },
+      {
+        success: true,
+        request: expect.any(Object),
+        command: mutation.update(book, { title: 'Revised' }),
+      },
+      {
+        success: true,
+        request: expect.any(Object),
+        command: mutation.delete(book),
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      name: 'invalid locator value',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'delete',
+        entityName: 'Book',
+        target: { kind: 'entity-ref', entityName: 'Book', locator: { id: 42 } },
+      },
+      code: 'invalid_reference',
+    },
+    {
+      name: 'incomplete create payload',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'create',
+        entityName: 'Book',
+        values: { id: 'book-1', published: false },
+      },
+      code: 'invalid_payload',
+    },
+    {
+      name: 'derived Field payload',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Book',
+        target: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+        values: { label: 'computed' },
+      },
+      code: 'invalid_payload',
+    },
+    {
+      name: 'unknown Field payload',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Book',
+        target: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+        values: { sql: 'drop table books' },
+      },
+      code: 'invalid_payload',
+    },
+  ])('rejects an $name while rebuilding the server Command', ({ command, code }) => {
+    const Book = defineBookGraph();
+    const parsed = parseGraphCommandRequest({ version: 1, kind: 'graph-command', command });
+    expect(parsed).toMatchObject({ success: true });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(resolveGraphCommandRequest(parsed.request, { entities: [Book] })).toMatchObject({
+      success: false,
+      error: { error: { code } },
+    });
   });
 });

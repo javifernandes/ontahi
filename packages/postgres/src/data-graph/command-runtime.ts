@@ -1,7 +1,11 @@
 import {
   appliedRelationshipCommand,
   liftEntityReferenceRecord,
+  materializeEntityMutationDelta,
   notAppliedRelationshipCommand,
+  toEntityMutationGraphCommand,
+  type EntityMutationCommand,
+  type EntityMutationDelta,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommand,
   type RelationConstraintRejection,
@@ -70,6 +74,32 @@ export const executePostgresCommand = <TResult>(input: {
       }
       return Effect.succeed(materializeCommandResult(input.command, result.rows));
     }),
+  );
+
+export const executePostgresEntityMutationCommand = (input: {
+  command: EntityMutationCommand;
+  executeQuery: ExecuteQuery;
+  mapping: PostgresEntityMapping;
+}): Effect.Effect<EntityMutationDelta, PostgresDataGraphError> =>
+  Effect.try({
+    try: () => toEntityMutationGraphCommand(input.mapping.entity, input.command),
+    catch: cause =>
+      new PostgresDataGraphError(
+        'PostgreSQL Entity Mutation Command is invalid.',
+        'invalid_command',
+        cause,
+      ),
+  }).pipe(
+    Effect.flatMap(command =>
+      executePostgresCommand({
+        command,
+        executeQuery: input.executeQuery,
+        mapping: input.mapping,
+      }),
+    ),
+    Effect.map(values =>
+      materializeEntityMutationDelta(input.mapping.entity, input.command, values),
+    ),
   );
 
 export const executePostgresManyToManyCommand = (input: {
