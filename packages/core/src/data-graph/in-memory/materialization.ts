@@ -2,6 +2,7 @@ import {
   isDerivedFieldDefinition,
   resolveRelationFields,
   type AnyEntityDefinition,
+  type DerivedFieldDefinition,
   type RelationDefinition,
 } from '../definitions.js';
 import { evaluateModelExpression } from '../model-expression/index.js';
@@ -109,6 +110,48 @@ const resolveRelatedRows = (
   );
 };
 
+const evaluateDerivedField = (
+  row: Record<string, unknown>,
+  entity: AnyEntityDefinition,
+  fieldName: string,
+  field: DerivedFieldDefinition<unknown>,
+  dataset: InMemoryDataset,
+  relationships: readonly RelationshipFact[],
+) => {
+  const program = field.derived.expression;
+  if (!program) {
+    throw new TypeError(
+      `Derived Field ${entity.name}.${fieldName} has no compiled Model Expression. Run Ontahi codegen or use modelExpression.define(...).`,
+    );
+  }
+
+  const fields: Record<string, unknown> = {};
+  const relationAggregates: Record<string, { count: number }> = {};
+  for (const dependency of field.derived.dependencies ?? []) {
+    if (dependency.kind === 'field') {
+      if (Object.prototype.hasOwnProperty.call(row, dependency.field)) {
+        fields[dependency.field] = row[dependency.field];
+      }
+    } else if (dependency.kind === 'relation-aggregate') {
+      const relation = entity.relations[dependency.relation];
+      if (relation && Object.prototype.hasOwnProperty.call(dataset, relation.target.name)) {
+        relationAggregates[dependency.relation] = {
+          count: resolveRelatedRows(
+            row,
+            entity,
+            dependency.relation,
+            relation,
+            dataset,
+            relationships,
+          ).length,
+        };
+      }
+    }
+  }
+
+  return evaluateModelExpression(program, { fields, relationAggregates });
+};
+
 export const materializeDerivedFields = (
   row: Record<string, unknown>,
   entity: AnyEntityDefinition,
@@ -119,38 +162,7 @@ export const materializeDerivedFields = (
 
   for (const [fieldName, field] of Object.entries(entity.fields)) {
     if (!isDerivedFieldDefinition(field)) continue;
-    const program = field.derived.expression;
-    if (!program) {
-      throw new TypeError(
-        `Derived Field ${entity.name}.${fieldName} has no compiled Model Expression. Run Ontahi codegen or use modelExpression.define(...).`,
-      );
-    }
-
-    const fields: Record<string, unknown> = {};
-    const relationAggregates: Record<string, { count: number }> = {};
-    for (const dependency of field.derived.dependencies ?? []) {
-      if (dependency.kind === 'field') {
-        if (Object.prototype.hasOwnProperty.call(row, dependency.field)) {
-          fields[dependency.field] = row[dependency.field];
-        }
-      } else if (dependency.kind === 'relation-aggregate') {
-        const relation = entity.relations[dependency.relation];
-        if (relation && Object.prototype.hasOwnProperty.call(dataset, relation.target.name)) {
-          relationAggregates[dependency.relation] = {
-            count: resolveRelatedRows(
-              row,
-              entity,
-              dependency.relation,
-              relation,
-              dataset,
-              relationships,
-            ).length,
-          };
-        }
-      }
-    }
-
-    const evaluation = evaluateModelExpression(program, { fields, relationAggregates });
+    const evaluation = evaluateDerivedField(row, entity, fieldName, field, dataset, relationships);
     if (evaluation.status === 'value') materialized[fieldName] = evaluation.value;
   }
 

@@ -10,7 +10,7 @@ import {
   type ModelExpressionProgram,
 } from './program.js';
 
-export type PortableDerivedFieldRegistryDeclaration = {
+export type PortableDerivedFieldRegistry = {
   version: 1;
   entities: Record<
     string,
@@ -20,10 +20,8 @@ export type PortableDerivedFieldRegistryDeclaration = {
   >;
 };
 
-export type PortableDerivedFieldRegistry = PortableDerivedFieldRegistryDeclaration;
-
 export const definePortableDerivedFieldRegistry = (
-  declaration: PortableDerivedFieldRegistryDeclaration,
+  declaration: PortableDerivedFieldRegistry,
 ): PortableDerivedFieldRegistry => {
   if (declaration.version !== 1) {
     throw new TypeError(
@@ -74,12 +72,10 @@ const assertDerivedFieldDependencies = (
   }
 };
 
-export const materializeDerivedFieldDefinitions = (
-  entities: readonly AnyEntityDefinition[],
+const assertRegistryTargets = (
+  entitiesByName: ReadonlyMap<string, AnyEntityDefinition>,
   registry?: PortableDerivedFieldRegistry,
 ) => {
-  const entitiesByName = new Map(entities.map(entity => [entity.name, entity]));
-
   for (const [entityName, declaration] of Object.entries(registry?.entities ?? {})) {
     const entity = entitiesByName.get(entityName);
     if (!entity) throw new TypeError(`Unknown derived Field Entity ${entityName}.`);
@@ -90,23 +86,35 @@ export const materializeDerivedFieldDefinitions = (
       }
     }
   }
+};
 
-  for (const entity of entities) {
-    for (const [fieldName, field] of Object.entries(entity.fields)) {
-      if (!isDerivedFieldDefinition(field)) continue;
-      const generated = registry?.entities[entity.name]?.fields[fieldName];
-      const expression = field.derived.expression ?? generated;
-      if (!expression) {
-        throw new TypeError(
-          `Derived Field ${entity.name}.${fieldName} has no compiled Model Expression. Run Ontahi codegen or use modelExpression.define(...).`,
-        );
-      }
-      assertModelExpressionProgram(expression);
-      field.derived = {
-        expression,
-        dependencies: collectModelExpressionDependencies(expression),
-      };
-      assertDerivedFieldDependencies(entity, fieldName, field);
+const materializeEntityDerivedFields = (
+  entity: AnyEntityDefinition,
+  registry?: PortableDerivedFieldRegistry,
+) => {
+  for (const [fieldName, field] of Object.entries(entity.fields)) {
+    if (!isDerivedFieldDefinition(field)) continue;
+    const generated = registry?.entities[entity.name]?.fields[fieldName];
+    const expression = field.derived.expression ?? generated;
+    if (!expression) {
+      throw new TypeError(
+        `Derived Field ${entity.name}.${fieldName} has no compiled Model Expression. Run Ontahi codegen or use modelExpression.define(...).`,
+      );
     }
+    assertModelExpressionProgram(expression);
+    field.derived = {
+      expression,
+      dependencies: collectModelExpressionDependencies(expression),
+    };
+    assertDerivedFieldDependencies(entity, fieldName, field);
   }
+};
+
+export const materializeDerivedFieldDefinitions = (
+  entities: readonly AnyEntityDefinition[],
+  registry?: PortableDerivedFieldRegistry,
+) => {
+  const entitiesByName = new Map(entities.map(entity => [entity.name, entity]));
+  assertRegistryTargets(entitiesByName, registry);
+  entities.forEach(entity => materializeEntityDerivedFields(entity, registry));
 };

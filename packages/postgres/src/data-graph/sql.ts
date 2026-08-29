@@ -24,6 +24,17 @@ export const quotePostgresIdentifier = (identifier: string) =>
 
 const quoteIdentifier = quotePostgresIdentifier;
 
+const resolvePostgresFieldSql = (mapping: PostgresEntityMapping, fieldName: string) => {
+  const column = mapping.columns[fieldName];
+  if (column) return quoteIdentifier(column);
+
+  const field = mapping.entity.fields[fieldName];
+  if (field && isDerivedFieldDefinition(field) && field.derived.expression) {
+    return compilePostgresDerivedField(mapping.entity, mapping, field.derived.expression);
+  }
+  return undefined;
+};
+
 export type PostgresSelectionLeafCompiler = (
   predicate: SelectionPredicate,
   quotedColumn: string,
@@ -65,13 +76,7 @@ const compilePostgresSelectionTree = (
   if (predicate.kind !== 'predicate') {
     throw new Error(`PostgreSQL ${description} predicate could not be lowered.`);
   }
-  const column = mapping.columns[predicate.fieldName];
-  const field = mapping.entity.fields[predicate.fieldName];
-  const fieldSql = column
-    ? quoteIdentifier(column)
-    : field && isDerivedFieldDefinition(field) && field.derived.expression
-      ? compilePostgresDerivedField(mapping.entity, mapping, field.derived.expression)
-      : undefined;
+  const fieldSql = resolvePostgresFieldSql(mapping, predicate.fieldName);
   if (!fieldSql)
     throw new Error(`Field ${mapping.entity.name}.${predicate.fieldName} is not mapped.`);
   return compileLeaf(predicate, fieldSql, values);
@@ -177,13 +182,7 @@ export const compilePostgresQuery = <TParams, TResult>(
     ? ''
     : spec.orderBy
         .map(orderSpec => {
-          const column = mapping.columns[orderSpec.fieldName];
-          const field = mapping.entity.fields[orderSpec.fieldName];
-          const fieldSql = column
-            ? quoteIdentifier(column)
-            : field && isDerivedFieldDefinition(field) && field.derived.expression
-              ? compilePostgresDerivedField(mapping.entity, mapping, field.derived.expression)
-              : undefined;
+          const fieldSql = resolvePostgresFieldSql(mapping, orderSpec.fieldName);
           if (!fieldSql) {
             throw new Error(`Field ${mapping.entity.name}.${orderSpec.fieldName} is not mapped.`);
           }

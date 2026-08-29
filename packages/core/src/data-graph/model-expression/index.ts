@@ -3,10 +3,7 @@ export {
   definePortableDerivedFieldRegistry,
   materializeDerivedFieldDefinitions,
 } from './derived-field.js';
-export type {
-  PortableDerivedFieldRegistry,
-  PortableDerivedFieldRegistryDeclaration,
-} from './derived-field.js';
+export type { PortableDerivedFieldRegistry } from './derived-field.js';
 export {
   definePortableOperationConditionRegistry,
   evaluatePortableOperationCondition,

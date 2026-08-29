@@ -125,14 +125,19 @@ export const createInsertManyCommandSpec = <TEntity extends AnyEntityDefinition>
   ...(options?.returning ? { returning: [...options.returning] } : {}),
 });
 
-export const createUpsertCommandSpec = <TEntity extends AnyEntityDefinition>(
+type UpsertCommandOptions<TEntity extends AnyEntityDefinition> = {
+  conflictOn: readonly EntityFieldName<TEntity>[];
+  strategy: 'ignore' | 'merge';
+};
+
+const createUpsertCommandSpecForPayload = <
+  TEntity extends AnyEntityDefinition,
+  TPayload extends EntityMutationPayload<TEntity> | Array<EntityMutationPayload<TEntity>>,
+>(
   root: TEntity,
-  payload: EntityMutationPayload<TEntity>,
-  options: {
-    conflictOn: readonly EntityFieldName<TEntity>[];
-    strategy: 'ignore' | 'merge';
-  },
-): GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> => ({
+  payload: TPayload,
+  options: UpsertCommandOptions<TEntity>,
+): GraphCommandSpec<TEntity, TPayload> => ({
   kind: 'command',
   operation: 'upsert',
   root,
@@ -144,24 +149,18 @@ export const createUpsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   },
 });
 
-export const createUpsertManyCommandSpec = <TEntity extends AnyEntityDefinition>(
+export const createUpsertCommandSpec: <TEntity extends AnyEntityDefinition>(
+  root: TEntity,
+  payload: EntityMutationPayload<TEntity>,
+  options: UpsertCommandOptions<TEntity>,
+) => GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> = createUpsertCommandSpecForPayload;
+
+export const createUpsertManyCommandSpec: <TEntity extends AnyEntityDefinition>(
   root: TEntity,
   payload: Array<EntityMutationPayload<TEntity>>,
-  options: {
-    conflictOn: readonly EntityFieldName<TEntity>[];
-    strategy: 'ignore' | 'merge';
-  },
-): GraphCommandSpec<TEntity, Array<EntityMutationPayload<TEntity>>> => ({
-  kind: 'command',
-  operation: 'upsert',
-  root,
-  selection: selectionNone(),
-  payload,
-  upsert: {
-    conflictOn: [...options.conflictOn],
-    strategy: options.strategy,
-  },
-});
+  options: UpsertCommandOptions<TEntity>,
+) => GraphCommandSpec<TEntity, Array<EntityMutationPayload<TEntity>>> =
+  createUpsertCommandSpecForPayload;
 
 export interface GraphSelectionFactories {
   createSelection<TEntity extends AnyEntityDefinition, TResult>(
