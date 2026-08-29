@@ -16,6 +16,8 @@ import type {
   ExplorerTaskDescriptor,
 } from '../contracts/index.js';
 
+import { ExplorerEditableEntityCell, ExplorerEntityDeleteButton } from './entity-data-mutations.js';
+
 import { ExplorerEntityBrowser, ExplorerProvider } from './index.js';
 
 const emptySchema: ExplorerSchemaDescriptor = {
@@ -409,6 +411,71 @@ describe('ExplorerEntityBrowser', () => {
       }),
     );
     expect(readEntityData.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('restores cancelled edits and reports remote update failures', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockRejectedValue(new Error('Update unavailable.'));
+    const onApplied = vi.fn();
+
+    render(
+      <ExplorerEditableEntityCell
+        entityName='Tag'
+        field={{ name: 'name', type: 'string', nullable: false }}
+        onApplied={onApplied}
+        runMutation={runMutation}
+        target={{ kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } }}
+        value='Urgent'
+      >
+        Urgent
+      </ExplorerEditableEntityCell>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit name' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
+    await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Draft');
+    await user.click(screen.getByRole('button', { name: 'Cancel name' }));
+    expect(screen.getByRole('button', { name: 'Edit name' }).textContent).toContain('Urgent');
+
+    await user.click(screen.getByRole('button', { name: 'Edit name' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
+    await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Important{Enter}');
+
+    expect(await screen.findByText('Update unavailable.')).toBeTruthy();
+    expect(runMutation).toHaveBeenCalledWith({
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName: 'Tag',
+      target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+      values: { name: 'Important' },
+    });
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it('cancels delete confirmation and reports non-Error mutation failures', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockRejectedValue('offline');
+    const onApplied = vi.fn();
+
+    render(
+      <ExplorerEntityDeleteButton
+        entityName='Tag'
+        onApplied={onApplied}
+        runMutation={runMutation}
+        target={{ kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Delete row' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByText('The mutation could not be applied.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete row' })).toBeTruthy();
+    expect(onApplied).not.toHaveBeenCalled();
   });
 
   it('spans loading rows across the conditional Related column', () => {
