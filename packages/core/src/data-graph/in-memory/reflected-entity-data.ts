@@ -9,7 +9,7 @@ import {
 } from '../reflection.js';
 import type { RelationshipFact } from '../relationship-command.js';
 
-import { materializeRecord, type InMemoryDataset } from './materialization.js';
+import { materializeDerivedFields, type InMemoryDataset } from './materialization.js';
 
 type FieldShape = {
   fieldType?: string;
@@ -117,7 +117,7 @@ export const listInMemoryReflectedEntityData = (
   const search = normalizeSearch(query.search);
   const rows = (options.dataset[entity.name] ?? [])
     .map(row =>
-      materializeRecord(row, entity, undefined, undefined, options.dataset, options.relationships),
+      materializeDerivedFields(row, entity, options.dataset, options.relationships ?? []),
     )
     .filter(row =>
       search
