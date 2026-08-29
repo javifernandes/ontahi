@@ -1,19 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
-import { canDeleteTodoList } from './todo-list-state.js';
+import { canDeleteTodoList, groupTodoLists } from './todo-list-state.js';
 
 describe('Todo client bootstrap state', () => {
   it('keeps list deletion disabled until todos are known to be empty', () => {
-    expect(canDeleteTodoList({ hasSelectedList: true, isLoading: true, visibleTodoCount: 0 })).toBe(
-      false,
-    );
-    expect(
-      canDeleteTodoList({ hasSelectedList: true, isLoading: false, visibleTodoCount: 1 }),
-    ).toBe(false);
-    expect(
-      canDeleteTodoList({ hasSelectedList: true, isLoading: false, visibleTodoCount: 0 }),
-    ).toBe(true);
+    expect(canDeleteTodoList({ isLoading: true, itemCount: 0 })).toBe(false);
+    expect(canDeleteTodoList({ isLoading: false, itemCount: 1 })).toBe(false);
+    expect(canDeleteTodoList({ isLoading: false, itemCount: 0 })).toBe(true);
+  });
+
+  it('groups every todo under its list for the dashboard', () => {
+    const lists = [
+      { id: 'inbox', name: 'Inbox' },
+      { id: 'later', name: 'Later' },
+    ];
+    const todos = [
+      { id: 'todo-2', list: { locator: { id: 'later' } } },
+      { id: 'todo-1', list: { locator: { id: 'inbox' } } },
+    ];
+
+    expect(groupTodoLists(lists, todos, todo => todo.list.locator.id)).toEqual([
+      { ...lists[0], items: [todos[1]] },
+      { ...lists[1], items: [todos[0]] },
+    ]);
   });
 
   it('turns failed runtime and authentication requests into explicit error state', async () => {

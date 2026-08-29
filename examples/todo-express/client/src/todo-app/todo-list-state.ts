@@ -1,9 +1,19 @@
 export const canDeleteTodoList = ({
-  hasSelectedList,
   isLoading,
-  visibleTodoCount,
+  itemCount,
 }: {
-  hasSelectedList: boolean;
   isLoading: boolean;
-  visibleTodoCount: number;
-}) => hasSelectedList && !isLoading && visibleTodoCount === 0;
+  itemCount: number;
+}) => !isLoading && itemCount === 0;
+
+type Identified = { id: unknown };
+
+export const groupTodoLists = <List extends Identified, Todo>(
+  lists: readonly List[],
+  todos: readonly Todo[],
+  listIdForTodo: (todo: Todo) => unknown,
+) =>
+  lists.map(list => ({
+    ...list,
+    items: todos.filter(todo => listIdForTodo(todo) === list.id),
+  }));

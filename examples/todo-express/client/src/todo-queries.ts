@@ -20,6 +20,10 @@ export const tagsQuery = Tag.all()
   .as(TagItem)
   .orderBy(tag => tag.name);
 
+export const allTodoItemsQuery = TodoItem.all()
+  .as(TodoItemListItem)
+  .orderBy(todo => todo.title);
+
 export const todoItemsQuery = (todos: Selection<typeof TodoItemSchema>) =>
   TodoItem.all()
     .where(todos)
