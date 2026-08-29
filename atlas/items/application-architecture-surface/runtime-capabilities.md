@@ -20,6 +20,7 @@ relatedPlans:
   - bookops://plans/126-ontahi-runtime-data-reflection
   - bookops://plans/130-ontahi-authentication-principal-and-invocation-context
   - ontahi://plans/142c-reflected-atomic-operation-execution
+  - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
 sourceCommit: 67713696
 ---
@@ -56,6 +57,12 @@ the complete execution port. It owns live seeded state, plain and relation-root 
 commands, and reflected Explorer data. Supabase provides external durability, while
 `@ontahi/postgres` now provides provider-executed SQL, host-owned physical mappings, graph runtime
 conformance, and reflected Entity data over direct PostgreSQL connections.
+
+Entity Mutation Command execution is a focused capability beside generic provider Commands and
+Relationship Commands. In-memory and PostgreSQL runtimes implement exact create/update/delete;
+the remote runtime implements the same capability only when a Command transport is configured.
+React's Fetch executor exposes it without claiming that every local provider supports it. A
+missing capability is explicit rather than a silent remote or provider fallback.
 
 Operation declarations may require a semantic guarantee without naming the adapter that supplies
 it. `operation.atomic(...)` reflects `execution.atomicity: 'required'`, from which Core derives the

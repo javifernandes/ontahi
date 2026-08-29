@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 import {
   createEntityRef,
+  mutateEntity,
   query,
   relationshipSet,
   Selection,
@@ -19,6 +20,7 @@ import {
   TodoItem as ClientTodoItem,
   TodoItemSchema as ClientTodoItemSchema,
   TodoList as ClientTodoList,
+  TagSchema as ClientTagSchema,
 } from './generated/client-entities.js';
 import { Tag, TodoItem, TodoApplication, TodoList, todoNotifications } from './graph.js';
 import { createTodoDataGraphRuntime } from './storage.js';
@@ -476,6 +478,52 @@ describe('Ontahi todo portability example', () => {
       },
     });
     expect(getTodoRelationships()).toHaveLength(2);
+  });
+
+  it('creates a Tag through the generic remote Entity mutation capability', async () => {
+    const remoteExecutor = createFetchGraphReadExecutor({
+      endpoint: `${origin}/graph/reads`,
+      commandEndpoint: `${origin}/graph/commands`,
+    });
+    const command = mutateEntity(ClientTagSchema).create({
+      id: 'tag-remote',
+      name: '  Remote  ',
+      color: '  #4263eb  ',
+    });
+
+    await expect(remoteExecutor.runEntityMutationCommand!(command)).resolves.toEqual({
+      created: [
+        {
+          entityName: 'Tag',
+          ref: createEntityRef(ClientTagSchema, { id: 'tag-remote' }),
+          values: { id: 'tag-remote', name: 'Remote', color: '#4263eb' },
+        },
+      ],
+      updated: [],
+      deleted: [],
+    });
+    expect(getTodoDataset().Tag).toContainEqual({
+      id: 'tag-remote',
+      name: 'Remote',
+      color: '#4263eb',
+    });
+  });
+
+  it('denies a remotely mutable Tag Field that is absent from policy', async () => {
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }];
+    const remoteExecutor = createFetchGraphReadExecutor({
+      endpoint: `${origin}/graph/reads`,
+      commandEndpoint: `${origin}/graph/commands`,
+    });
+    const command = mutateEntity(ClientTagSchema).update(
+      createEntityRef(ClientTagSchema, { id: 'tag-1' }),
+      { id: 'tag-replaced' },
+    );
+
+    await expect(remoteExecutor.runEntityMutationCommand!(command)).rejects.toMatchObject({
+      code: 'access_denied',
+    });
+    expect(getTodoDataset().Tag).toEqual([{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }]);
   });
 
   it('rejects unknown explicit tag Refs without creating partial associations', async () => {

@@ -139,9 +139,22 @@ export type StoredFieldName<TFields extends FieldDefinitions> = {
   [TKey in keyof TFields]: TFields[TKey] extends { derived: DerivedFieldMetadata } ? never : TKey;
 }[keyof TFields];
 
-export type InferEntityMutationRecord<TFields extends FieldDefinitions> = {
-  [TKey in StoredFieldName<TFields>]: InferFieldValue<TFields[TKey]>;
-};
+type OptionalStoredFieldName<TFields extends FieldDefinitions> = {
+  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends { optional: true } ? TKey : never;
+}[StoredFieldName<TFields>];
+
+type RequiredStoredFieldName<TFields extends FieldDefinitions> = Exclude<
+  StoredFieldName<TFields>,
+  OptionalStoredFieldName<TFields>
+>;
+
+export type InferEntityMutationRecord<TFields extends FieldDefinitions> = Simplify<
+  {
+    [TKey in RequiredStoredFieldName<TFields>]: InferFieldValue<TFields[TKey]>;
+  } & {
+    [TKey in OptionalStoredFieldName<TFields>]?: Exclude<InferFieldValue<TFields[TKey]>, undefined>;
+  }
+>;
 
 export type GraphSchemaLike<TValue = unknown> = {
   kind: string;

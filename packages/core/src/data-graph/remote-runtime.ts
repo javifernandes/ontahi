@@ -11,6 +11,14 @@ import {
   type GraphCommandRequestV1,
 } from './command-protocol.js';
 import type { GraphCommandSpec } from './command.js';
+import {
+  isEntityMutationCommandDiagnostic,
+  isExactEntityMutationDelta,
+  type EntityMutationCommand,
+  type EntityMutationCommandDiagnostic,
+  type EntityMutationCommandExecutionRuntime,
+  type EntityMutationDelta,
+} from './entity-mutation-command.js';
 import { resolveQuerySpec, type QueryOrView } from './query.js';
 import {
   isGraphReadProtocolError,
@@ -36,6 +44,7 @@ export type RemoteDataGraphErrorCode =
   | GraphReadProtocolErrorCode
   | GraphCommandProtocolErrorCode
   | RelationshipCommandDiagnostic['reason']
+  | EntityMutationCommandDiagnostic['reason']
   | 'invalid_response'
   | 'transport_failure'
   | 'unsupported_capability';
@@ -47,7 +56,7 @@ export class RemoteDataGraphError extends Error {
     readonly code: RemoteDataGraphErrorCode,
     message: string,
     readonly cause?: unknown,
-    readonly diagnostic?: RelationshipCommandDiagnostic,
+    readonly diagnostic?: RelationshipCommandDiagnostic | EntityMutationCommandDiagnostic,
   ) {
     super(message);
     this.name = 'RemoteDataGraphError';
@@ -132,6 +141,38 @@ const readCommandResponseValue = (response: unknown): RelationshipCommandResult 
   return response.value as RelationshipCommandResult;
 };
 
+const readEntityMutationResponseValue = (
+  response: unknown,
+  command: EntityMutationCommand,
+): EntityMutationDelta => {
+  if (!isRecord(response)) throw invalidResponse('Entity Mutation Command');
+  if (response.kind === 'protocol-error') {
+    if (!isGraphCommandProtocolError(response)) {
+      throw invalidResponse('Entity Mutation Command');
+    }
+    throw new RemoteDataGraphError(response.error.code, response.error.message);
+  }
+  if (isGraphCommandRejection(response)) {
+    if (!isEntityMutationCommandDiagnostic(response.diagnostic)) {
+      throw invalidResponse('Entity Mutation Command');
+    }
+    throw new RemoteDataGraphError(
+      response.diagnostic.reason,
+      response.diagnostic.rejection.message,
+      undefined,
+      response.diagnostic,
+    );
+  }
+  if (
+    response.kind !== 'graph-command-result' ||
+    !isExactEntityMutationDelta(response.value, command) ||
+    !isJsonValue(response.value)
+  ) {
+    throw invalidResponse('Entity Mutation Command');
+  }
+  return response.value;
+};
+
 export const createRemoteDataGraphRuntime = <TOptions = undefined>({
   transport,
   commandTransport,
@@ -142,7 +183,8 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
   RemoteDataGraphError
 > &
   ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
-  RelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> => {
+  RelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
+  EntityMutationCommandExecutionRuntime<RemoteDataGraphError, TOptions> => {
   const executeRead = <TParams, TResult>(
     read: QueryOrView<TParams, TResult>,
     params: TParams,
@@ -210,6 +252,36 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
     });
   };
 
+  const executeEntityMutationCommand = (command: EntityMutationCommand, options?: TOptions) => {
+    if (!commandTransport) return Effect.fail(unsupportedCapability('Entity Mutation Command'));
+    return Effect.tryPromise({
+      try: async () => {
+        let request: GraphCommandRequestV1;
+        try {
+          request = toGraphCommandRequest(command);
+        } catch (cause) {
+          throw new RemoteDataGraphError(
+            'invalid_request',
+            'Failed to encode the remote Entity Mutation Command.',
+            cause,
+          );
+        }
+        let response: unknown;
+        try {
+          response = await commandTransport(request, options);
+        } catch (cause) {
+          throw new RemoteDataGraphError(
+            'transport_failure',
+            'Remote data graph transport failed.',
+            cause,
+          );
+        }
+        return readEntityMutationResponseValue(response, command);
+      },
+      catch: toRemoteDataGraphError,
+    });
+  };
+
   return {
     get: <TParams, TResult>(
       read: QueryOrView<TParams, TResult>,
@@ -236,5 +308,6 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
       Effect.fail(unsupportedCapability('Command')),
     runRelationshipCommand: executeRelationshipCommand,
     runManyToManyRelationshipCommand: executeRelationshipCommand,
+    runEntityMutationCommand: executeEntityMutationCommand,
   };
 };

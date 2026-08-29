@@ -2,6 +2,7 @@ import {
   createEntityRef,
   entity,
   field,
+  mutateEntity,
   query,
   relationshipSet,
   type GraphCommandSpec,
@@ -218,6 +219,43 @@ describe('Fetch graph read executor', () => {
       version: 1,
       kind: 'graph-command',
       command: { kind: 'many-to-many-relationship-command', action: 'link' },
+    });
+  });
+
+  it('executes an exact Entity Mutation Command through the graph Command endpoint', async () => {
+    const command = mutateEntity(Todo).update(createEntityRef(Todo, { id: 'todo-1' }), {
+      title: 'Remote',
+    });
+    const delta = {
+      created: [],
+      updated: [
+        {
+          entityName: 'Todo',
+          ref: createEntityRef(Todo, { id: 'todo-1' }),
+          values: { id: 'todo-1', title: 'Remote', completed: false },
+        },
+      ],
+      deleted: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ kind: 'graph-command-result', value: delta }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const executor = createFetchGraphReadExecutor({ commandEndpoint: '/graph/commands' });
+
+    await expect(executor.runEntityMutationCommand!(command)).resolves.toEqual(delta);
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({
+      version: 1,
+      kind: 'graph-command',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Todo',
+        target: { entityName: 'Todo', locator: { id: 'todo-1' } },
+        values: { title: 'Remote' },
+      },
     });
   });
 

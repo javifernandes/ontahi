@@ -13,6 +13,8 @@ import {
   type GraphReadDispatcher,
   type GraphReadPolicy,
   type GraphCommandDispatcher,
+  type EntityMutationCommandExecutionRuntime,
+  type EntityMutationCommandPolicy,
   type RelationshipCommandPolicy,
   type ManyToManyRelationshipCommandPolicy,
   type ManyToManyRelationshipCommandExecutionRuntime,
@@ -58,7 +60,11 @@ export type ApplicationGraphReadDispatcherFactory = <TAuthority>(
 ) => GraphReadDispatcher<TAuthority>;
 
 export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
-  policies: readonly (RelationshipCommandPolicy | ManyToManyRelationshipCommandPolicy)[],
+  policies: readonly (
+    | RelationshipCommandPolicy
+    | ManyToManyRelationshipCommandPolicy
+    | EntityMutationCommandPolicy<any>
+  )[],
 ) => GraphCommandDispatcher<TAuthority>;
 
 export type GraphReadableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
@@ -416,6 +422,17 @@ export const ontahi = <
           (
             runtime as unknown as ManyToManyRelationshipCommandExecutionRuntime<unknown>
           ).runManyToManyRelationshipCommand(command),
+        );
+      },
+      executeEntityMutation: command => {
+        const runtime = options.storage.createRuntime();
+        if (!('runEntityMutationCommand' in runtime)) {
+          throw new Error('Storage runtime does not support Entity Mutation Commands.');
+        }
+        return Effect.runPromise(
+          (
+            runtime as unknown as EntityMutationCommandExecutionRuntime<unknown>
+          ).runEntityMutationCommand(command),
         );
       },
     });

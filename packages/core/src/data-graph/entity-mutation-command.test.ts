@@ -7,6 +7,7 @@ import {
   entity,
   field,
   mutateEntity,
+  toEntityMutationGraphCommand,
 } from './index.js';
 
 describe('Entity Mutation Command', () => {
@@ -44,10 +45,27 @@ describe('Entity Mutation Command', () => {
     expect(() => mutateEntity(Book).delete(createEntityRef(Author, { id: 'author-1' }))).toThrow(
       'Expected Entity mutation target Ref for Book, got Author.',
     );
+    expect(() =>
+      toEntityMutationGraphCommand(Book, mutateEntity(Author).create({ id: 'author-1' })),
+    ).toThrow('Expected Entity mutation command for Book, got Author.');
+    expect(() =>
+      toEntityMutationGraphCommand(Book, {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Book',
+        target: createEntityRef(Author, { id: 'author-1' }),
+        values: {},
+      }),
+    ).toThrow('Expected Entity mutation target Ref for Book, got Author.');
   });
 
   it('returns exact applied deltas through the in-memory runtime', async () => {
-    const Book = entity('Book', { id: field.id(), title: field.string() });
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+      note: field.optional(field.string()),
+      label: field.derived(field.string(), () => ''),
+    });
     const dataset = { Book: [] as Array<Record<string, unknown>> };
     const runtime = createInMemoryDataGraphRuntime({ dataset, entities: [Book] });
     const mutation = mutateEntity(Book);

@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
   - ontahi://plans/128a-ontahi-recursive-views-and-projectable-operation-results
   - ontahi://plans/128b-ontahi-projectable-operation-client-bridge
+  - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - bookops://plans/57-client-runtime-bridge-and-server-dispatch
@@ -62,9 +63,17 @@ The React provider supplies a conventional lazy same-origin client but does not 
 Server routes and policy remain explicit, and the host derives the authoritative Principal from its
 native request. Client `ExecutionIdentity` only partitions distributed cache state.
 
-Remote Commands follow after read topology evidence and the write-policy boundary are credible.
-Generated client Entities are not yet directly runtime-bound for fluent `.run()` outside the React
-executor, and telemetry plus reflected policy diagnostics remain future routing work.
+The first generic remote Entity write now transports the canonical `EntityMutationCommand` rather
+than arbitrary provider or `GraphCommandSpec` programs. Create and exact-Ref update/delete are
+rebuilt against server-owned Entities, checked by explicit per-action mutation and result Field
+allowlists plus deliberately public `scope: 'all'`, and lowered by PostgreSQL. Missing targets are
+structured cardinality rejections, while returned facts are projected before transport so newly
+added stored Fields remain denied by default.
+
+Authority-derived row scope is intentionally not simulated with a pre-read. It requires an atomic
+intersection with the mutation target and remains follow-up work. Generated client Entities are
+also not yet directly runtime-bound for fluent `.run()` outside the React executor, and telemetry,
+reflected policy diagnostics, bulk writes, and upsert remain future routing work.
 
 Recursive caller-authored Views and projectable Selection-shaped Operation results now work in Core
 and through generated React clients. The caller supplies the materialization View, the Operation

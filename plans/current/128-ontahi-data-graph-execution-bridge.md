@@ -14,8 +14,9 @@ Let the same Ontahi Selection, Query, Entity Command, or Relationship Command ex
 runtime at the call site advertises the required capability. A browser runtime with safe storage
 access may lower the graph program directly. A browser whose storage is server-only may transport
 supported graph programs to a server runtime without requiring a wrapper Domain Operation.
-Relationship Commands are the first supported remote write; generic Entity Commands remain
-local/direct until their authority, affected-set, and outcome contracts are defined.
+Relationship Commands remain the first structural remote write. Exact-identity Entity create,
+update, and delete now have a default-deny remote bridge; bulk affected sets, upsert, and
+authority-derived row scopes remain future contracts.
 
 A Domain Operation remains the language for named domain behavior, invariants, side effects,
 contracts, durable execution, and intent. It should not be a mandatory transport envelope around
@@ -36,9 +37,9 @@ await visibleTodos.update({ completed: true }).run();
 
 Those statements already describe complete data-graph programs. Whether they lower to Supabase in
 the browser or cross a server boundary before lowering to PostgreSQL is an execution-topology
-decision, not additional domain meaning. The Query may currently take either path. The Entity update
-requires a direct mutation capability; it must fail explicitly rather than imply an unsupported
-remote fallback.
+decision, not additional domain meaning. The Query may currently take either path. Selection-targeted
+or bulk Entity updates still require a direct mutation capability; unsupported variants must fail
+explicitly rather than imply a remote fallback.
 
 Related work:
 
@@ -53,6 +54,7 @@ Related work:
 9. [128c. Relationship Command Wire Protocol](../done/128c-relationship-command-wire-protocol.md)
 10. [128d. Relationship Command Policy And Dispatcher](../done/128d-relationship-command-policy-dispatcher.md)
 11. [128e. Relationship Command Runtime Routing](../done/128e-relationship-command-runtime-routing.md)
+12. [128f. Remote Identity-Scoped Entity Mutation Commands](../done/128f-remote-identity-scoped-entity-mutation-commands.md)
 
 ## Architectural Thesis
 
@@ -60,7 +62,7 @@ Related work:
 flowchart LR
   Code["Ubiquitous graph code\nSelection / Query / Entity Command / Relationship Command"] --> Runtime{"Bound graph runtime"}
   Runtime -->|direct capability| Direct["Storage adapter\nSupabase / local / embedded"]
-  Runtime -->|supported remote capability| Bridge["Data Graph bridge\nQueries + Relationship Commands"]
+  Runtime -->|supported remote capability| Bridge["Data Graph bridge\nQueries + Relationship / Entity Commands"]
   Bridge --> Boundary["Server graph boundary\nvalidation + policy + authority"]
   Boundary --> ServerAdapter["Server storage adapter\nPostgreSQL / MySQL / other"]
 ```
@@ -79,7 +81,8 @@ merely because it crosses a process boundary.
 ## Scope
 
 1. Define canonical transport-safe request forms incrementally: Queries and Relationship Commands
-   first, then generic Entity Commands after their authority and outcome contracts exist.
+   first, then exact-identity Entity Commands, followed later by bulk/upsert only after their
+   authority and outcome contracts exist.
 2. Bind `Selection.run()`, shaped reads, Entity Commands, and Relationship Commands to runtimes that
    advertise the matching direct or remote capability. Generic Entity Commands currently require a
    direct capability.
@@ -244,6 +247,9 @@ languages.
         Commands without inventing Relation-specific domain hooks.
   - [ ] Specify generic remote Entity insert, update, upsert, and delete Commands with their own
         authority, affected-set, and outcome semantics.
+    - [x] Plan 128f transports create plus exact-identity update/delete with explicit per-action
+          Field policy and deliberately public `scope: 'all'`; bulk/upsert and authority-derived
+          atomic row scopes remain later slices.
 - [ ] Evaluate hybrid routing as an input to future graph segmentation.
 
 ### First Proof: Runtime-Bound Selections
@@ -387,8 +393,9 @@ The developer guide now presents caller-authored Queries as the ordinary applica
 rather than as an optional remote-read feature. It keeps Operations distinct as named domain
 behavior, documents `include` as lower level than caller-owned Views, and makes the current alpha
 boundaries explicit: remote policy authoring and distributed execution identity may evolve,
-Relationship Commands have a focused default-deny remote bridge, generic Entity Commands remain
-unsupported remotely, and client defaults never replace server authentication or policy.
+Relationship Commands and exact-identity Entity Mutation Commands have focused default-deny remote
+bridges; bulk/upsert remain unsupported remotely, and client defaults never replace server
+authentication or policy.
 
 The runtime-binding and topology evidence are now complete. Telemetry and reflection remain a
 separate read-path slice before remote Commands, keeping diagnostics independent from write
@@ -453,11 +460,12 @@ left to the next slice.
 - [x] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
       end-to-end Todo proof.
 - [x] Remote graph mutation remains unavailable by default; explicitly permitted Relationship
-      Commands are the first bounded write variant.
+      Commands were the first bounded write variant, and exact-identity Entity Mutation Commands
+      now use a separate default-deny remote contract.
 - [x] Forward and inverse Relationship authoring preserve one canonical command through direct and
       remote execution.
-- [ ] Generic Entity Commands have a versioned, default-deny remote contract distinct from the
-      completed Relationship Command variant.
+- [x] Exact-identity Entity Mutation Commands have a versioned, default-deny remote contract
+      distinct from the completed Relationship Command variant; bulk/upsert remain open.
 
 ## Open Questions
 
@@ -476,7 +484,7 @@ left to the next slice.
 1. A Domain Operation is domain behavior, not a required transport wrapper.
 2. Selection, Query, and Command are provider-neutral programs before they are execution requests.
 3. Runtime binding chooses among advertised direct and remote capabilities without changing
-   call-site semantics; unsupported generic remote Entity Commands fail explicitly.
+   call-site semantics; unsupported Command variants fail explicitly.
 4. Remote graph access is policy-controlled and default-deny; it is not an arbitrary RPC or SQL
    endpoint.
 5. Authority and policy are independent from transport, while enforcement occurs at the
@@ -498,6 +506,9 @@ left to the next slice.
 13. Relationship Commands are a semantic Graph Command specialization, not Entity patches or
     generated Domain Operations; they share the bridge architecture while retaining Relation
     topology, structural policy, and exact-delta semantics.
+14. The first generic remote Entity write transports the bounded `EntityMutationCommand`, not an
+    arbitrary `GraphCommandSpec`. Its policy allowlists mutation and result Fields separately and
+    requires explicit row scope; authority-derived scope must later intersect the target atomically.
 
 ## Completion Signal
 
