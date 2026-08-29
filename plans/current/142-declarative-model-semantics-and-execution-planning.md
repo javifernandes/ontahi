@@ -15,6 +15,7 @@ Related plans:
 7. [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md)
 8. [142e. Portable Operation Condition Bridge](../done/142e-portable-operation-condition-bridge.md)
 9. [142f. Virtual Derived Fields And Classroom Capacity](../done/142f-virtual-derived-fields-and-classroom-capacity.md)
+10. [136h. Authority-Serialized Relation Count Constraints](../done/136h-authority-serialized-relation-count-constraints.md)
 
 ## Summary
 
@@ -516,10 +517,11 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    remove the stored counter from the model and result shape, then prove virtual
    `Course.availableSeats` in memory and through one authorized provider read. Delivered through
    [142f. Virtual Derived Fields And Classroom Capacity](../done/142f-virtual-derived-fields-and-classroom-capacity.md).
-7. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
+7. **Aggregate Relation invariant (complete):** extract a linked Plan 136 child that rejects prospective
    `Course.students` additions atomically in memory and one provider through both the forward
    `Student.currentCourse` and inverse `Course.students` APIs. Preserve unlink repair and concurrent
-   conflict semantics.
+   conflict semantics. Extracted as
+   [136h. Authority-Serialized Relation Count Constraints](../done/136h-authority-serialized-relation-count-constraints.md).
 8. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
    offline queueing, replication, convergence evidence, and authority-serialized versus merge-safe
    invariant requirements in a separate plan.
@@ -566,7 +568,7 @@ surfaces.
       atomic Operation boundary is explicit.
 - [ ] Permanent invariants apply to every relevant mutation path and distinguish
       authority-serialized requirements from future merge-safe execution.
-- [ ] Forward assignment and inverse has-many mutation produce one canonical prospective delta and
+- [x] Forward assignment and inverse has-many mutation produce one canonical prospective delta and
       enforce the same aggregate invariant, rejection, rollback, and Applied Mutation Outcome rules.
 - [x] Derived Fields share the ordinary Field reflection/query surface, remain read-only to
       Commands, and have one semantic definition independent from virtual or materialized execution.

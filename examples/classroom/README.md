@@ -7,6 +7,8 @@ keeps two concepts separate:
   precondition and can either fail or explicitly return `not-applied` on a stale observation.
 - `Course.capacity` is stored, while `occupiedSeats` and `availableSeats` are virtual derived Fields
   over `Course.students`. The same Model Expression metadata runs in memory and PostgreSQL.
+- `Course.students` declares `countAtMost('capacity')`; direct membership additions are checked
+  against prospective state and PostgreSQL serializes contenders for the same Course.
 - `Student.transfer(...)` is an atomic Domain Operation that coordinates the conditional Relation
   transition. Its declaration states the guarantee while the active runtime decides whether it can
   provide the boundary.
@@ -53,16 +55,18 @@ materializing those participants through the transaction-scoped UnitOfWork. Post
 read and write through the same checked-out connection. The named `differentCourses` precondition
 is compiled into portable Model Expression metadata shared by server and generated clients; equal
 previous and next Courses therefore return `operation_condition_rejected` before the body runs. A
-known-full destination remains an authoritative stateful check before the Relationship Command. A stale
-`previousCourse` is translated from the portable Relationship Command outcome into
-`student_course_changed`, without leaking a provider error through the Domain Operation contract.
+A full destination is rejected by the Relationship Command itself with the reflected
+`course_full` descriptor. A stale `previousCourse` is translated from the portable Relationship
+Command outcome into `student_course_changed`.
 
 There is no manually synchronized capacity counter. Migration `002` reconstructs stored `capacity`
 from legacy `available_seats + current students`, validates it, and drops `available_seats`.
 `occupiedSeats = students.count()` and `availableSeats = capacity - students.count()` are declared
-once on Course. This is virtual read behavior, not yet a permanent aggregate Relation invariant:
-concurrent membership can still make the business precheck stale, and this slice adds no implicit
-retry policy.
+once on Course. The same Relation count drives `countAtMost('capacity')`. PostgreSQL checks it after
+locking the destination Course and from a fresh statement snapshot, so concurrent last-seat
+admissions cannot both commit. The slice adds no implicit retry policy, Supabase support, or
+permanent Entity invariant: a generic write that lowers `capacity` is still outside this structural
+Relationship Command boundary.
 
 The package still has no UI, HTTP transport, or remote Command bridge. Enrollment is not
 automatically reflected as an Association Entity merely because it has required participant Refs;

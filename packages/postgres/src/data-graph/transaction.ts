@@ -17,7 +17,7 @@ const transactionError = (message: string, cause: unknown) =>
 
 const executeTransactionStatement = (
   client: PostgresTransactionClient,
-  statement: 'BEGIN' | 'COMMIT' | 'ROLLBACK',
+  statement: 'BEGIN ISOLATION LEVEL READ COMMITTED' | 'COMMIT' | 'ROLLBACK',
 ) =>
   Effect.tryPromise({
     try: () => client.query(statement),
@@ -36,7 +36,7 @@ export const createPostgresTransactionCapability = <TRuntime>(
         catch: cause => transactionError('PostgreSQL transaction connection failed.', cause),
       }),
       client =>
-        executeTransactionStatement(client, 'BEGIN').pipe(
+        executeTransactionStatement(client, 'BEGIN ISOLATION LEVEL READ COMMITTED').pipe(
           Effect.zipRight(
             Effect.suspend(() => work(createRuntime(client))).pipe(
               Effect.matchCauseEffect({

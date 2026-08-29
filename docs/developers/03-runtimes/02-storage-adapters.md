@@ -68,6 +68,15 @@ Selections become source and target subqueries, the join table mutation happens 
 `RETURNING` supplies the exact links that changed. Repeated `add` or `remove` calls are no-ops; an
 unresolved explicit Ref prevents the mutation instead of leaving a partial Cartesian product.
 
+Direct Relations with `relationConstraint.countAtMost(...)` require a wider serialization
+boundary. Ontahí's PostgreSQL transaction capability declares `READ COMMITTED` explicitly rather
+than inheriting a session default. The runtime checks out a connection automatically when the caller
+is not already inside an Ontahí transaction, locks the destination endpoint, then evaluates and
+applies the prospective membership in a second statement. That second statement is intentional: a
+statement that waits for a row lock may still hold an older snapshot. Competing additions to the
+same endpoint are therefore ordered before the fresh aggregate read. A runtime constructed from a
+query-only client fails explicitly because it cannot provide this guarantee.
+
 > [!MARGIN] **The host still owns schema history.** Ontahí can map the current semantic model to
 > physical names. It does not infer the deployment history required to reach that schema. SQL
 > migrations, indexes, constraints, connections, and transaction boundaries remain host choices.
@@ -89,6 +98,10 @@ Each RPC is atomic for its own Relationship Command. The Supabase/PostgREST runt
 the compositional transaction capability, because several client requests cannot share rollback;
 an Operation needing that coordination must run behind a server-owned database transaction or
 purpose-built RPC.
+
+The current Supabase RPC vocabulary supports participant eligibility but not
+authority-serialized Relation counts. A Relation carrying `countAtMost(...)` fails closed before
+RPC execution; Ontahí does not translate it into a race-prone PostgREST read followed by a write.
 
 The invariant is the useful part: changing where state lives must not redefine the Selection,
 Query, Command, or operation that acts on it.

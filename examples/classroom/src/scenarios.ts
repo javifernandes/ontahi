@@ -35,3 +35,9 @@ export const removeStudentFromCourse = classroomScenarios.effect(
   ({ courseId, studentId }: RemoveStudentFromCourseInput) =>
     classroom.Course.refById(courseId).students.remove(classroom.Student.refById(studentId)).run(),
 );
+
+export const addStudentToCourse = classroomScenarios.effect(
+  'addStudentToCourse',
+  ({ courseId, studentId }: RemoveStudentFromCourseInput) =>
+    classroom.Course.refById(courseId).students.add(classroom.Student.refById(studentId)).run(),
+);

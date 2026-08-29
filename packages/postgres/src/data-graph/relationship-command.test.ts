@@ -12,6 +12,7 @@ import { executePostgresRelationshipCommand } from './command-runtime.js';
 
 import {
   compilePostgresRelationshipCommand,
+  createPostgresDataGraphRuntime,
   materializePostgresRelationshipDelta,
   postgresMapping,
 } from './index.js';
@@ -186,6 +187,158 @@ describe('PostgreSQL direct Relationship Commands', () => {
         parameters: { requiredStatus: 'active' },
       },
     });
+  });
+
+  it('compiles an inverse count constraint into endpoint serialization and prospective state', () => {
+    const LimitedCourse = entity('LimitedCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const LimitedStudent = entity('LimitedStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(LimitedCourse)),
+    });
+    LimitedCourse.hasMany('students', LimitedStudent, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        }),
+      ],
+    });
+    const limitedCourseMapping = postgresMapping({
+      entity: LimitedCourse,
+      table: 'limited_courses',
+      columns: { id: 'id', capacity: 'capacity' },
+    });
+    const limitedStudentMapping = postgresMapping({
+      entity: LimitedStudent,
+      table: 'limited_students',
+      columns: { id: 'id', course: 'course_id' },
+    });
+    const command = relationship(
+      LimitedCourse,
+      'students',
+      createEntityRef(LimitedCourse, { id: 'course-1' }),
+    ).add(createEntityRef(LimitedStudent, { id: 'student-1' }));
+    const compiled = compilePostgresRelationshipCommand(
+      command,
+      limitedStudentMapping,
+      limitedCourseMapping,
+    );
+
+    expect(compiled.serializationLock).toEqual({
+      text: 'SELECT 1 FROM "limited_courses" WHERE "id" = $1 FOR UPDATE',
+      values: ['course-1'],
+    });
+    expect(compiled.sql.text).toContain('"capacity" AS "ontahi_relation_count_limit_0"');
+    expect(compiled.sql.text).toContain(
+      'SELECT COUNT(*)::int FROM "limited_students" AS relation_members WHERE relation_members."course_id" IS NOT DISTINCT FROM',
+    );
+    expect(compiled.sql.text).toContain('+ 1 <= "ontahi_relation_count_limit_0"');
+    expect(compiled.sql.values).toContainEqual({
+      version: 1,
+      code: 'course_full',
+      message: 'Course has no available seats.',
+    });
+    expect(() =>
+      compilePostgresRelationshipCommand(command, limitedStudentMapping, {
+        ...limitedCourseMapping,
+        columns: { id: 'id' },
+      } as never),
+    ).toThrow('Relation count constraint Field LimitedCourse.capacity is not mapped');
+  });
+
+  it('automatically runs a serialized count constraint through one checked-out transaction', async () => {
+    const LimitedCourse = entity('RuntimeLimitedCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const LimitedStudent = entity('RuntimeLimitedStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(LimitedCourse)),
+    });
+    LimitedCourse.hasMany('students', LimitedStudent, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        }),
+      ],
+    });
+    const mappings = [
+      postgresMapping({
+        entity: LimitedCourse,
+        table: 'runtime_limited_courses',
+        columns: { id: 'id', capacity: 'capacity' },
+      }),
+      postgresMapping({
+        entity: LimitedStudent,
+        table: 'runtime_limited_students',
+        columns: { id: 'id', course: 'course_id' },
+      }),
+    ];
+    const statements: string[] = [];
+    const client = {
+      query: vi.fn(async (text: string) => {
+        statements.push(text);
+        if (text.startsWith('WITH source_rows')) {
+          return {
+            rows: [
+              {
+                source_count: 1,
+                target_count: 1,
+                updated_count: 1,
+                old_target: null,
+                precondition_matched: true,
+                constraint_rejection: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [{ endpoint: 1 }], rowCount: 1 };
+      }),
+      release: vi.fn(),
+    };
+    const pool = {
+      query: vi.fn(async () => {
+        throw new Error('Serialized commands must use a checked-out client.');
+      }),
+      connect: vi.fn(async () => client),
+    };
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings });
+
+    const command = relationship(
+      LimitedStudent,
+      'course',
+      createEntityRef(LimitedStudent, { id: 'student-1' }),
+    ).assign(createEntityRef(LimitedCourse, { id: 'course-1' }));
+
+    await expect(Effect.runPromise(runtime.runRelationshipCommand(command))).resolves.toMatchObject(
+      { status: 'applied' },
+    );
+    expect(statements[0]).toBe('BEGIN ISOLATION LEVEL READ COMMITTED');
+    expect(statements[1]).toContain('FOR UPDATE');
+    expect(statements[2]).toContain('WITH source_rows');
+    expect(statements[3]).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalledOnce();
+    expect(pool.query).not.toHaveBeenCalled();
+
+    const query = vi.fn();
+    const queryOnlyRuntime = createPostgresDataGraphRuntime({ pool: { query }, mappings });
+    await expect(
+      Effect.runPromise(queryOnlyRuntime.runRelationshipCommand(command).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'execution_failed',
+        message: expect.stringContaining('requires an authority-serialized transaction'),
+      },
+    });
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('fails closed when a constrained inverse Relation has ambiguous target fields', () => {

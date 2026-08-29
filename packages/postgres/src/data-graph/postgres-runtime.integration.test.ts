@@ -86,6 +86,33 @@ const RelationshipStudentMapping = postgresMapping({
   table: 'relationship_students',
   columns: { id: 'id', active: 'is_active', course: 'course_id' },
 });
+const CapacityCourse = entity('CapacityCourse', {
+  id: field.id(),
+  capacity: field.nonNegativeInteger(),
+});
+const CapacityStudent = entity('CapacityStudent', {
+  id: field.id(),
+  course: field.nullable(field.ref(CapacityCourse)),
+});
+CapacityCourse.hasMany('students', CapacityStudent, {
+  via: 'course',
+  constraints: [
+    relationConstraint.countAtMost('capacity', {
+      code: 'course_full',
+      message: 'Course has no available seats.',
+    }),
+  ],
+});
+const CapacityCourseMapping = postgresMapping({
+  entity: CapacityCourse,
+  table: 'capacity_courses',
+  columns: { id: 'id', capacity: 'capacity' },
+});
+const CapacityStudentMapping = postgresMapping({
+  entity: CapacityStudent,
+  table: 'capacity_students',
+  columns: { id: 'id', course: 'course_id' },
+});
 const RelationshipTodoDefinition = entity('RelationshipTodo', {
   id: field.id(),
   title: field.string(),
@@ -185,6 +212,14 @@ describe('PostgreSQL data graph runtime', () => {
         id text PRIMARY KEY,
         is_active boolean,
         course_id text REFERENCES relationship_courses(id)
+      );
+      CREATE TABLE capacity_courses (
+        id text PRIMARY KEY,
+        capacity integer NOT NULL CHECK (capacity >= 0)
+      );
+      CREATE TABLE capacity_students (
+        id text PRIMARY KEY,
+        course_id text REFERENCES capacity_courses(id)
       )
     `);
   }, 180_000);
@@ -674,6 +709,44 @@ describe('PostgreSQL data graph runtime', () => {
       status: 'applied',
       delta: { added: [], removed: [{ target: next }] },
     });
+  });
+
+  it('serializes concurrent admissions competing for the last Relation slot', async () => {
+    await pool.query('TRUNCATE TABLE capacity_students, capacity_courses CASCADE');
+    await pool.query(
+      `INSERT INTO capacity_courses (id, capacity) VALUES ('course-1', 1);
+       INSERT INTO capacity_students (id, course_id)
+       VALUES ('student-1', null), ('student-2', null)`,
+    );
+    const runtime = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [CapacityCourseMapping, CapacityStudentMapping],
+    });
+    const course = createEntityRef(CapacityCourse, { id: 'course-1' });
+    const commands = ['student-1', 'student-2'].map(id =>
+      runtime
+        .runRelationshipCommand(
+          relationship(CapacityStudent, 'course', createEntityRef(CapacityStudent, { id })).assign(
+            course,
+          ),
+        )
+        .pipe(Effect.either, Effect.runPromise),
+    );
+
+    const results = await Promise.all(commands);
+    expect(results.filter(Either.isRight)).toHaveLength(1);
+    const rejected = results.filter(Either.isLeft);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'course_full' },
+      },
+    });
+    await expect(
+      pool.query(`SELECT id FROM capacity_students WHERE course_id = 'course-1'`),
+    ).resolves.toMatchObject({ rowCount: 1 });
   });
 
   it('runs one fluent client Entity read directly and through Express over PostgreSQL', async () => {

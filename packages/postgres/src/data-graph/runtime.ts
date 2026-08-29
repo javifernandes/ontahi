@@ -32,6 +32,7 @@ import {
   executePostgresRelationshipCommand,
 } from './command-runtime.js';
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
+import { requiresPostgresRelationshipCommandSerialization } from './relation-count-constraint.js';
 import { PostgresDataGraphError } from './runtime-error.js';
 import { compilePostgresQuery, quotePostgresIdentifier } from './sql.js';
 import {
@@ -78,6 +79,13 @@ type CreatePostgresDataGraphRuntime = {
 
 const createPostgresBaseDataGraphRuntime = (
   input: PostgresRuntimeInput,
+  execution: {
+    transactionScoped?: boolean;
+    transactionCapability?: DataGraphTransactionCapability<
+      PostgresDataGraphRuntime,
+      PostgresDataGraphError
+    >;
+  } = {},
 ): PostgresDataGraphRuntime => {
   const registry = createPostgresMappingRegistry(input.mappings);
   const executeQuery = <TRow extends QueryResultRow>(sql: { text: string; values: unknown[] }) =>
@@ -388,23 +396,52 @@ const createPostgresBaseDataGraphRuntime = (
     runManyToManyRelationshipCommand: command =>
       executePostgresManyToManyCommand({ command, executeQuery, mappings: input.mappings }),
     runRelationshipCommand: command =>
-      executePostgresRelationshipCommand({ command, executeQuery, mappings: input.mappings }),
+      Effect.suspend(() => {
+        const source = input.mappings.find(
+          mapping => mapping.entity.name === command.relation.sourceEntityName,
+        );
+        const target = input.mappings.find(
+          mapping => mapping.entity.name === command.relation.targetEntityName,
+        );
+        const requiresSerialization =
+          source &&
+          target &&
+          requiresPostgresRelationshipCommandSerialization(command, source, target);
+        if (requiresSerialization && !execution.transactionScoped) {
+          if (execution.transactionCapability) {
+            return execution.transactionCapability.transaction(runtime =>
+              runtime.runRelationshipCommand(command),
+            );
+          }
+        }
+        return executePostgresRelationshipCommand({
+          command,
+          executeQuery,
+          mappings: input.mappings,
+          authoritySerialized: execution.transactionScoped,
+        });
+      }),
   };
 };
 
 export const createPostgresDataGraphRuntime = ((input: PostgresRuntimeInput) => {
-  const runtime = createPostgresBaseDataGraphRuntime(input);
   const pool = input.pool as Pick<Pool, 'query'> & Partial<Pick<Pool, 'connect'>>;
 
-  return typeof pool.connect === 'function'
-    ? Object.assign(
-        runtime,
-        createPostgresTransactionCapability(pool as PostgresTransactionPool, client =>
-          createPostgresBaseDataGraphRuntime({
-            pool: client as PostgresTransactionClient & Pick<Pool, 'query'>,
-            mappings: input.mappings,
-          }),
-        ),
-      )
-    : runtime;
+  if (typeof pool.connect !== 'function') return createPostgresBaseDataGraphRuntime(input);
+
+  const transactionCapability = createPostgresTransactionCapability(
+    pool as PostgresTransactionPool,
+    client =>
+      createPostgresBaseDataGraphRuntime(
+        {
+          pool: client as PostgresTransactionClient & Pick<Pool, 'query'>,
+          mappings: input.mappings,
+        },
+        { transactionScoped: true },
+      ),
+  );
+  return Object.assign(
+    createPostgresBaseDataGraphRuntime(input, { transactionCapability }),
+    transactionCapability,
+  );
 }) as CreatePostgresDataGraphRuntime;

@@ -26,6 +26,7 @@ relatedPlans:
   - ontahi://plans/136e-postgres-relation-participant-eligibility
   - ontahi://plans/136f-supabase-relation-participant-eligibility
   - ontahi://plans/136g-portable-relationship-command-outcomes
+  - ontahi://plans/136h-authority-serialized-relation-count-constraints
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137a-read-only-relation-explorer
   - ontahi://plans/139-relations-lifecycle-release-proof
@@ -208,8 +209,26 @@ declared Relation and pairs it with a versioned rejection descriptor containing 
 message, and JSON-safe scalar parameters. Static reflection preserves that contract. Authoritative
 in-memory Relationship Command execution evaluates it before `link`; forward and inverse authoring
 therefore enforce the same rule after normalization. Policy remains an independent authorization
-boundary. Aggregate limits, current-population constraints, conflict retry policy, and advisory
-preflight remain later Plan 136 work.
+boundary.
+
+The first current-population form is
+`relationConstraint.countAtMost(fieldName, rejection)`. It belongs to a direct to-many declaration,
+uses a stored numeric Field on the declaring endpoint as its limit, and reflects
+`enforcement: authority-serialized`. The canonical resolver maps an inverse `Course.students`
+declaration onto the direct `Student.currentCourse` command, so forward assignment and inverse add
+evaluate the same prospective count and rejection. Idempotent links do not revalidate; unlink stays
+repair-safe for legacy-invalid data.
+
+PostgreSQL automatically starts or reuses a transaction, locks the destination endpoint, and only
+then evaluates and applies the command in a fresh statement snapshot. This prevents concurrent
+last-slot additions on distinct source rows from both committing under `READ COMMITTED`. There is
+no implicit retry policy. Supabase fails closed because its current RPC does not claim this
+serialization capability; in-memory enforces prospective state without claiming concurrency.
+
+This contract governs membership changed by Relationship Commands. It is not yet the permanent
+Entity invariant proposed by Plan 142: generic writes that change the limit Field or a Reference
+Field still require a unified invariant planner before `Entity.invariants` can honestly promise all
+relevant mutation paths.
 
 Application code authors that contract through the typed `relationConstraint.source(...)` and
 `relationConstraint.target(...)` factories. The callback runs only while constructing the schema
@@ -282,13 +301,12 @@ by the Reaction and emits portable Student/Course Ref identities. This applicati
 deliberately separate from static Relation metadata and from any required transactional
 coordination.
 
-The PostgreSQL Classroom transfer keeps that required coordination in an
-`operation.atomic({...})` named `Student.transfer(...)`. The Domain Operation resolves portable
-Student/Course input Refs in the runner-owned transaction UnitOfWork, applies
-`currentCourse.assign(next, { ifCurrent: previous })`, and compare-and-set updates both capacity
-counters. A known-full destination fails before the Relation change; stale capacity after that
-change rolls the tentative transition back. No capacity callback or aggregate state is added to
-Relation metadata.
+The PostgreSQL Classroom transfer keeps its participant resolution and conditional transition in
+an `operation.atomic({...})` named `Student.transfer(...)`. The Domain Operation resolves portable
+Student/Course input Refs in the runner-owned transaction UnitOfWork and applies
+`currentCourse.assign(next, { ifCurrent: previous })`. `Course.students` owns the portable count
+constraint, while `occupiedSeats` and `availableSeats` read the same canonical Relation aggregate.
+No manual counter or Operation-local capacity preflight remains.
 
 An attribute-free binary many-to-many link is still a direct Relation even when relational storage
 uses a join table. Both endpoints may be semantic Selections, so one Relationship Command naturally
@@ -339,8 +357,8 @@ association role only when metadata says so and otherwise classifies the role as
 The canonical developer narrative for this complete lifecycle now lives in
 [`docs/developers/02-core-concepts/03-relations.md`](../../../docs/developers/02-core-concepts/03-relations.md).
 Todo remains the small direct-many-to-many proof; Classroom keeps conditional direct placement,
-coordinated capacity updates, post-commit removal behavior, and stateful Enrollment lifecycle in a
-separate focused example.
+authority-serialized capacity enforcement, virtual capacity Fields, post-commit removal behavior,
+and stateful Enrollment lifecycle in a separate focused example.
 
 The generated `1.0.0-alpha.8` release candidate was rehearsed at its exact commit with all ten
 package tarballs, a tarball-only Todo consumer, and Classroom's real PostgreSQL commit/rollback

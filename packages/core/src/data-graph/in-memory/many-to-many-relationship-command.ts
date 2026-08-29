@@ -100,6 +100,7 @@ const assertParticipantConstraints = (
   participant: 'source' | 'target',
 ) => {
   for (const constraint of relation.constraints ?? []) {
+    if (constraint.kind !== 'participant-selection') continue;
     if (constraint.participant !== participant) continue;
     const eligibleCount = applyEntitySelectionExpression(entity, rows, constraint.selection).length;
     if (eligibleCount === rows.length) continue;
@@ -125,6 +126,14 @@ const execute = (
   if (relation?.relationKind !== 'manyToMany' || relation.target.name !== targetEntity.name) {
     throw new InMemoryDataGraphError(
       `Unknown many-to-many Relation ${sourceEntity.name}.${command.relation.relationName}.`,
+      'invalid_command',
+    );
+  }
+  if (
+    relation.constraints?.some(constraint => constraint.kind === 'relation-count-at-most-field')
+  ) {
+    throw new InMemoryDataGraphError(
+      'Many-to-many Relation count constraints are not supported.',
       'invalid_command',
     );
   }

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ClassroomApplication, classroomEvents } from './application.js';
 import { Course, Enrollment, Student } from './classroom.js';
 import { operationConditions } from './generated/operation-conditions.js';
-import { reassignStudent, removeStudentFromCourse } from './scenarios.js';
+import { addStudentToCourse, reassignStudent, removeStudentFromCourse } from './scenarios.js';
 
 const seedClassroom = () => {
   const dataset = ClassroomApplication.storage.dataset;
@@ -57,6 +57,41 @@ describe('Classroom Relations lifecycle', () => {
     expect(ClassroomApplication.graph.entities.Student.domain.transfer.conditions).toEqual(
       operationConditions.operations['Student.transfer'],
     );
+  });
+
+  it('declares Course capacity as reflected structural Relation metadata', () => {
+    expect(Course.relations.students.constraints).toEqual([
+      {
+        kind: 'relation-count-at-most-field',
+        fieldName: 'capacity',
+        enforcement: 'authority-serialized',
+        rejection: {
+          version: 1,
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        },
+      },
+    ]);
+  });
+
+  it('rejects capacity through the Relation boundary without an Operation preflight', async () => {
+    ClassroomApplication.storage.dataset.Student = [
+      ...(ClassroomApplication.storage.dataset.Student ?? []),
+      {
+        id: 'student-2',
+        name: 'Katherine',
+        school: 'school-1',
+        currentCourse: null,
+      },
+    ];
+
+    await expect(
+      addStudentToCourse({ courseId: 'course-1', studentId: 'student-2' }),
+    ).rejects.toMatchObject({
+      reason: 'relation_constraint_rejected',
+      rejection: { code: 'course_full' },
+    });
+    expect(ClassroomApplication.storage.dataset.Student?.[1]?.currentCourse).toBeNull();
   });
 
   it('evaluates the portable same-Course condition without resolving either Ref', () => {

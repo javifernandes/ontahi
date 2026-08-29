@@ -273,9 +273,40 @@ same canonical participants.
 In-memory, PostgreSQL, and Supabase enforce participant constraints authoritatively at mutation
 time. Selection-valued many-to-many `link` is all-or-nothing: one ineligible participant rejects
 the whole affected set. `unlink` bypasses link eligibility so an application can repair a fact
-whose participants no longer qualify. Aggregate limits and rules about the current related
-population are not yet in this constraint model. Client evaluation, when added, will remain UX
-guidance rather than authorization.
+whose participants no longer qualify.
+
+A direct to-many Relation can also bound its current population with a stored numeric Field on the
+declaring endpoint:
+
+```ts
+students: relation.hasMany(StudentRef, {
+  via: 'currentCourse',
+  constraints: [
+    relationConstraint.countAtMost('capacity', {
+      code: 'course_full',
+      message: 'Course has no available seats.',
+    }),
+  ],
+}),
+```
+
+The reflected contract says `enforcement: 'authority-serialized'`. An addition is checked against
+the prospective count, while an idempotent link is an empty delta and removal remains available to
+repair already-invalid data. Forward `student.currentCourse.assign(course)` and inverse
+`course.students.add(student)` normalize to the same canonical command and receive the same
+rejection.
+
+PostgreSQL automatically executes this constrained command in a transaction, locks the destination
+endpoint, and evaluates the count from a fresh statement snapshot before applying the edge. This
+prevents two concurrent callers from both taking the last slot. Supabase currently fails closed for
+this requirement rather than weakening it to a PostgREST preflight. In-memory enforces the same
+prospective rule but makes no concurrency claim. Client evaluation, when added, remains UX guidance
+rather than authorization.
+
+This is a structural Relation constraint, not yet a permanent Entity invariant: a generic Command
+that lowers `Course.capacity` is not intercepted by this slice. A future `Entity.invariants`
+surface must route every relevant mutation path through the same planner before making that broader
+promise.
 
 The command is structural behavior supplied by Ontahí. An application should not reimplement
 referential checks, nullability, inverse normalization, or delta calculation in every Operation.
@@ -285,11 +316,9 @@ invariant, coordinating other mutations, requiring authority, or starting durabl
 ## Coordinate required work; react after application
 
 A structural command owns one edge mutation. Required multi-step consistency belongs in a Domain
-Operation and an honest provider transaction. The Classroom example reassigns a Student and
-compare-and-set updates both Course capacities inside one PostgreSQL transaction. This abbreviated
-excerpt focuses on the Relation transition; the
-[executable Classroom Operation](../../../examples/classroom/src/classroom.ts) contains both Course
-capacity updates:
+Operation and an honest provider transaction. The Classroom example uses one atomic Operation for
+its input participants and conditional transition, while `Course.students` owns the structural
+capacity rule for every Relationship Command path:
 
 ```ts
 const students = app.graph.defineEntity(self);
@@ -309,7 +338,6 @@ transfer: operation.atomic({
       })
       .run();
 
-    // Abbreviated: both capacity compare-and-set Commands follow in Classroom.
     return relationship;
   },
 }),
@@ -320,7 +348,8 @@ it materializes the required participants. Bound Queries and explicit Command `.
 discover its connection-scoped runtime; application code receives no `tx` parameter. A typed
 failure or defect rolls the whole effect back. PostgreSQL currently supplies this compositional
 capability. Supabase/PostgREST keeps each Relationship Command RPC atomic but does not pretend that
-several HTTP requests share rollback.
+several HTTP requests share rollback. It also does not advertise the authority-serialized aggregate
+capability required by `countAtMost`; that command fails before RPC execution.
 
 Follow-up behavior that is not required to validate the primary mutation is a \concept{Reaction},
 registered on the application rather than attached as a Relation callback:

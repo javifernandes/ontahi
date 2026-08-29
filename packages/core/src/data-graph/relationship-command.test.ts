@@ -8,6 +8,7 @@ import {
   entity,
   field,
   query,
+  relationConstraint,
   relationship,
   type InMemoryDataset,
 } from './index.js';
@@ -365,6 +366,127 @@ describe('relationship commands', () => {
     expect(dataset.InferredGuardedStudent).toEqual([
       { id: 'student-1', active: false, course: null },
     ]);
+  });
+
+  it('enforces prospective inverse Relation counts through both authoring directions', async () => {
+    const CapacityCourse = entity('CapacityCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const CapacityStudent = entity('CapacityStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(CapacityCourse)),
+    });
+    CapacityCourse.hasMany('students', CapacityStudent, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        }),
+      ],
+    });
+    const course = createEntityRef(CapacityCourse, { id: 'course-1' });
+    const enrolled = createEntityRef(CapacityStudent, { id: 'student-1' });
+    const candidate = createEntityRef(CapacityStudent, { id: 'student-2' });
+    const createDataset = (): InMemoryDataset => ({
+      CapacityCourse: [{ id: 'course-1', capacity: 1 }],
+      CapacityStudent: [
+        { id: 'student-1', course: 'course-1' },
+        { id: 'student-2', course: null },
+      ],
+    });
+    const executeRejected = async (
+      dataset: InMemoryDataset,
+      command: ReturnType<ReturnType<typeof relationship>['assign']>,
+    ) =>
+      Effect.runPromise(
+        executeInMemoryRelationshipCommandEffect(
+          dataset,
+          [CapacityCourse, CapacityStudent],
+          command,
+        ).pipe(Effect.either),
+      );
+
+    const forwardDataset = createDataset();
+    await expect(
+      executeRejected(
+        forwardDataset,
+        relationship(CapacityStudent, 'course', candidate).assign(course),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'course_full' },
+      },
+    });
+    expect(forwardDataset.CapacityStudent?.[1]?.course).toBeNull();
+
+    const inverseDataset = createDataset();
+    await expect(
+      executeRejected(
+        inverseDataset,
+        relationship(CapacityCourse, 'students', course).add(candidate),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'relation_constraint_rejected',
+        rejection: { code: 'course_full' },
+      },
+    });
+    expect(inverseDataset.CapacityStudent?.[1]?.course).toBeNull();
+
+    await expect(
+      Effect.runPromise(
+        executeInMemoryRelationshipCommandEffect(
+          inverseDataset,
+          [CapacityCourse, CapacityStudent],
+          relationship(CapacityCourse, 'students', course).add(enrolled),
+        ),
+      ),
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [] } });
+  });
+
+  it('allows Relation removals that repair an already-invalid aggregate', async () => {
+    const CapacityCourse = entity('RepairCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const CapacityStudent = entity('RepairStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(CapacityCourse)),
+    });
+    CapacityCourse.hasMany('students', CapacityStudent, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        }),
+      ],
+    });
+    const course = createEntityRef(CapacityCourse, { id: 'course-1' });
+    const student = createEntityRef(CapacityStudent, { id: 'student-1' });
+    const dataset: InMemoryDataset = {
+      RepairCourse: [{ id: 'course-1', capacity: 0 }],
+      RepairStudent: [{ id: 'student-1', course: 'course-1' }],
+    };
+
+    await expect(
+      Effect.runPromise(
+        executeInMemoryRelationshipCommandEffect(
+          dataset,
+          [CapacityCourse, CapacityStudent],
+          relationship(CapacityCourse, 'students', course).remove(student),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      status: 'applied',
+      delta: { added: [], removed: [{ target: course }] },
+    });
+    expect(dataset.RepairStudent).toEqual([{ id: 'student-1', course: null }]);
   });
 
   it('fails closed when a constrained inverse Relation has no unique target field', async () => {
