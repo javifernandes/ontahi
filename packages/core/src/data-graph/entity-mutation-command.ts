@@ -89,6 +89,23 @@ export const entityMutationCardinalityDiagnostic = (
   },
 });
 
+const ownDataProperty = (record: object, key: PropertyKey): unknown => {
+  try {
+    const descriptor = Reflect.getOwnPropertyDescriptor(record, key);
+    return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const ownPropertyKeys = (record: object): PropertyKey[] => {
+  try {
+    return Reflect.ownKeys(record);
+  } catch {
+    return [];
+  }
+};
+
 export const entityMutationCommandDiagnosticFromError = (
   error: unknown,
   command: EntityMutationCommand,
@@ -99,12 +116,16 @@ export const entityMutationCommandDiagnosticFromError = (
     const current = pending.shift();
     if (!isRecord(current) || seen.has(current)) continue;
     seen.add(current);
-    if (isEntityMutationCommandDiagnostic(current.diagnostic)) return current.diagnostic;
-    if (current.reason === 'cardinality_mismatch' && command.action !== 'create') {
+    const diagnostic = ownDataProperty(current, 'diagnostic');
+    if (isEntityMutationCommandDiagnostic(diagnostic)) return diagnostic;
+    if (
+      ownDataProperty(current, 'reason') === 'cardinality_mismatch' &&
+      command.action !== 'create'
+    ) {
       return entityMutationCardinalityDiagnostic(command);
     }
-    for (const key of Reflect.ownKeys(current)) {
-      const nested = current[key as keyof typeof current];
+    for (const key of ownPropertyKeys(current)) {
+      const nested = ownDataProperty(current, key);
       if (isRecord(nested) && !seen.has(nested)) pending.push(nested);
     }
   }

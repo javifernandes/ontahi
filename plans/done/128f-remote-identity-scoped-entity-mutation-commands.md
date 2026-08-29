@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](./128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
 
 Source plan: [138. Entity Mutation Command Authoring And Lifecycle Ergonomics](../next/138-entity-mutation-command-authoring.md)
 

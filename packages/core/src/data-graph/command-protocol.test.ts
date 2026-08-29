@@ -335,4 +335,29 @@ describe('data graph Entity Mutation Command protocol', () => {
       error: { error: { code: 'invalid_request' } },
     });
   });
+
+  it('uses command-neutral diagnostics for invalid Entity mutation Refs', () => {
+    const Book = defineBookGraph();
+    const parsed = parseGraphCommandRequest({
+      version: 1,
+      kind: 'graph-command',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'delete',
+        entityName: 'Book',
+        target: { kind: 'entity-ref', entityName: 'Author', locator: { id: 'author-1' } },
+      },
+    });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(resolveGraphCommandRequest(parsed.request, { entities: [Book] })).toMatchObject({
+      success: false,
+      error: {
+        error: {
+          code: 'invalid_reference',
+          message: 'Data graph Command target Ref must target Book.',
+        },
+      },
+    });
+  });
 });

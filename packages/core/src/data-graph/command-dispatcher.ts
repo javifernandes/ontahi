@@ -143,6 +143,44 @@ const validatePolicy = (policy: RelationshipCommandPolicy) => {
   return field;
 };
 
+const validateEntityMutationActionDeclaration = (
+  policy: AnyEntityMutationCommandPolicy,
+  action: string,
+  declaration: unknown,
+) => {
+  if (!isRecord(declaration) || !Array.isArray(declaration.result)) {
+    throw new Error(
+      `Entity Mutation Command policy ${policy.entity.name}.${action} requires a result Field allowlist.`,
+    );
+  }
+
+  let mutationFields: unknown[] = [];
+  if (action !== 'delete') {
+    if (!Array.isArray(declaration.fields)) {
+      throw new Error(
+        `Entity Mutation Command policy ${policy.entity.name}.${action} requires a mutation Field allowlist.`,
+      );
+    }
+    mutationFields = declaration.fields;
+  }
+
+  const resultFields = declaration.result;
+  const fields = [...mutationFields, ...resultFields];
+  if (
+    (action !== 'delete' && mutationFields.length === 0) ||
+    new Set(mutationFields).size !== mutationFields.length ||
+    new Set(resultFields).size !== resultFields.length ||
+    fields.some(fieldName => {
+      const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
+      return !field || isDerivedFieldDefinition(field);
+    })
+  ) {
+    throw new Error(
+      `Entity Mutation Command policy ${policy.entity.name}.${action} must allow stored mutation and result Fields exactly once per allowlist.`,
+    );
+  }
+};
+
 const validateEntityMutationPolicy = (policy: AnyEntityMutationCommandPolicy) => {
   if (policy.scope !== 'all') {
     throw new Error(
@@ -157,33 +195,7 @@ const validateEntityMutationPolicy = (policy: AnyEntityMutationCommandPolicy) =>
     throw new Error(`Entity Mutation Command policy ${policy.entity.name} requires valid actions.`);
   }
   for (const [action, declaration] of actions) {
-    if (!isRecord(declaration) || !Array.isArray(declaration.result)) {
-      throw new Error(
-        `Entity Mutation Command policy ${policy.entity.name}.${action} requires a result Field allowlist.`,
-      );
-    }
-    const mutationFields =
-      action === 'delete' ? [] : 'fields' in declaration ? declaration.fields : undefined;
-    if (action !== 'delete' && !Array.isArray(mutationFields)) {
-      throw new Error(
-        `Entity Mutation Command policy ${policy.entity.name}.${action} requires a mutation Field allowlist.`,
-      );
-    }
-    const normalizedMutationFields = Array.isArray(mutationFields) ? mutationFields : [];
-    const fields = [...normalizedMutationFields, ...declaration.result];
-    if (
-      (action !== 'delete' && normalizedMutationFields.length === 0) ||
-      new Set(normalizedMutationFields).size !== normalizedMutationFields.length ||
-      new Set(declaration.result).size !== declaration.result.length ||
-      fields.some(fieldName => {
-        const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
-        return !field || isDerivedFieldDefinition(field);
-      })
-    ) {
-      throw new Error(
-        `Entity Mutation Command policy ${policy.entity.name}.${action} must allow stored mutation and result Fields exactly once per allowlist.`,
-      );
-    }
+    validateEntityMutationActionDeclaration(policy, action, declaration);
   }
 };
 

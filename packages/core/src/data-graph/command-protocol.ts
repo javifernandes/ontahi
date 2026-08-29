@@ -420,20 +420,20 @@ const validateRef = (
   if (ref.entityName !== entity.name) {
     return graphCommandProtocolError(
       'invalid_reference',
-      `Relationship Command ${role} Ref must target ${entity.name}.`,
+      `Data graph Command ${role} Ref must target ${entity.name}.`,
     );
   }
   if (!hasDeclaredLocator(entity, ref)) {
     return graphCommandProtocolError(
       'invalid_reference',
-      `Relationship Command ${role} Ref does not use a declared ${entity.name} locator.`,
+      `Data graph Command ${role} Ref does not use a declared ${entity.name} locator.`,
     );
   }
   const selectionError = validateGraphReadSelection({ kind: 'references', refs: [ref] }, entity);
   if (selectionError) {
     return graphCommandProtocolError(
       'invalid_reference',
-      `Relationship Command ${role} Ref is invalid for ${entity.name}.`,
+      `Data graph Command ${role} Ref is invalid for ${entity.name}.`,
     );
   }
   const invalidLocatorValue = Object.entries(ref.locator).find(([fieldName, value]) => {
@@ -443,7 +443,7 @@ const validateRef = (
   if (invalidLocatorValue) {
     return graphCommandProtocolError(
       'invalid_reference',
-      `Relationship Command ${role} Ref has an invalid ${entity.name}.${invalidLocatorValue[0]} value.`,
+      `Data graph Command ${role} Ref has an invalid ${entity.name}.${invalidLocatorValue[0]} value.`,
     );
   }
   return undefined;

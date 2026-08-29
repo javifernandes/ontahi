@@ -37,9 +37,9 @@ await visibleTodos.update({ completed: true }).run();
 
 Those statements already describe complete data-graph programs. Whether they lower to Supabase in
 the browser or cross a server boundary before lowering to PostgreSQL is an execution-topology
-decision, not additional domain meaning. The Query may currently take either path. The Entity update
-requires a direct mutation capability; it must fail explicitly rather than imply an unsupported
-remote fallback.
+decision, not additional domain meaning. The Query may currently take either path. Selection-targeted
+or bulk Entity updates still require a direct mutation capability; unsupported variants must fail
+explicitly rather than imply a remote fallback.
 
 Related work:
 
@@ -460,7 +460,8 @@ left to the next slice.
 - [x] Tests cover protocol versioning, AST validation, policy enforcement, runtime routing, and the
       end-to-end Todo proof.
 - [x] Remote graph mutation remains unavailable by default; explicitly permitted Relationship
-      Commands are the first bounded write variant.
+      Commands were the first bounded write variant, and exact-identity Entity Mutation Commands
+      now use a separate default-deny remote contract.
 - [x] Forward and inverse Relationship authoring preserve one canonical command through direct and
       remote execution.
 - [x] Exact-identity Entity Mutation Commands have a versioned, default-deny remote contract

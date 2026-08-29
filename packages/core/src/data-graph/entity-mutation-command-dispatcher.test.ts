@@ -234,6 +234,42 @@ describe('Entity Mutation Command dispatcher', () => {
     });
   });
 
+  it.each([
+    {
+      name: 'accessor properties',
+      providerError: Object.defineProperty(new Error('provider detail'), 'cause', {
+        get: () => {
+          throw new Error('throwing accessor');
+        },
+      }),
+    },
+    {
+      name: 'throwing reflection traps',
+      providerError: new Proxy(new Error('provider detail'), {
+        getOwnPropertyDescriptor: () => {
+          throw new Error('throwing descriptor trap');
+        },
+        ownKeys: () => {
+          throw new Error('throwing ownKeys trap');
+        },
+      }),
+    },
+  ])('keeps $name inside the safe execution boundary', async ({ providerError }) => {
+    const graph = defineBookGraph();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [policyFor(graph)],
+      executeEntityMutation: vi.fn(async () => Promise.reject(providerError)),
+    });
+    const command = mutateEntity(graph.Book).delete(createEntityRef(graph.Book, { id: 'book-1' }));
+
+    await expect(
+      dispatch(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
+    });
+  });
+
   it('fails closed when execution is unavailable or returns an inexact delta', async () => {
     const graph = defineBookGraph();
     const command = mutateEntity(graph.Book).update(createEntityRef(graph.Book, { id: 'book-1' }), {
