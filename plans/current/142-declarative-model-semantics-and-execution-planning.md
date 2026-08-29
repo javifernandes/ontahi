@@ -46,8 +46,8 @@ are equivalent.
 manual coordination in application code:
 
 1. before Plan 142d, three input Refs were resolved and checked for existence imperatively;
-2. an expected-current Relation mismatch is converted manually from `not-applied` into a domain
-   failure;
+2. the expected-current Relation rule remains authored directly as `ifCurrent`; its structural
+   failure now propagates unchanged rather than being converted through `onMismatch: 'skip'`;
 3. a known-full Course is checked in the Operation even though capacity should constrain every
    mutation path;
 4. `availableSeats` is maintained as a stored counter even though it can be derived from Course

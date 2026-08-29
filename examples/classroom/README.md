@@ -55,9 +55,10 @@ materializing those participants through the transaction-scoped UnitOfWork. Post
 read and write through the same checked-out connection. The named `differentCourses` precondition
 is compiled into portable Model Expression metadata shared by server and generated clients; equal
 previous and next Courses therefore return `operation_condition_rejected` before the body runs. A
-A full destination is rejected by the Relationship Command itself with the reflected
-`course_full` descriptor. A stale `previousCourse` is translated from the portable Relationship
-Command outcome into `student_course_changed`.
+full destination is rejected by the Relationship Command itself with the reflected `course_full`
+descriptor. A stale `previousCourse` preserves the Relationship Command's structural
+`relationship_precondition_failed` failure; `onMismatch: 'skip'` is reserved for callers that
+actually want to observe and continue from a `not-applied` result.
 
 There is no manually synchronized capacity counter. Migration `002` reconstructs stored `capacity`
 from legacy `available_seats + current students`, validates it, and drops `available_seats`.
