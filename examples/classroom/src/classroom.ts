@@ -113,17 +113,8 @@ export const Student = entity({
             .refById(student.id)
             .currentCourse.assign(nextCourse.ref, {
               ifCurrent: previousCourse.ref,
-              onMismatch: 'skip',
             })
             .run();
-
-          if (relationship.status === 'not-applied') {
-            return yield* failOperation(
-              'student_course_changed',
-              'Student is no longer assigned to the expected Course.',
-              { student: student.ref, expectedCourse: previousCourse.ref },
-            );
-          }
 
           return { relationship };
         },

@@ -223,7 +223,7 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
     ]);
   });
 
-  it('reports a stale current Course as a domain failure without changing state', async () => {
+  it('preserves the structural precondition failure for a stale current Course', async () => {
     await pool.query(`UPDATE courses SET capacity = 2 WHERE id = 'course-1'`);
 
     await expect(
@@ -235,9 +235,7 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
     ).resolves.toMatchObject({
       ok: false,
       failure: {
-        reason: 'student_course_changed',
-        student: Student.refById('student-1'),
-        expectedCourse: Course.refById('course-2'),
+        reason: 'relationship_precondition_failed',
       },
     });
 
