@@ -39,6 +39,24 @@ describe('data-graph mapping', () => {
     expect(resolveFieldNameForEntity(Book, 'owner_id')).toBe('ownerId');
   });
 
+  it('keeps virtual derived Fields out of physical storage mappings', () => {
+    const Course = entity('CourseCapacity', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      availableSeats: field.derived(field.nonNegativeInteger(), ({ capacity }) => capacity),
+    });
+
+    applyConventionalDataGraphMappings({
+      entities: [Course],
+      naming: { table: name => name, column: name => name },
+    });
+
+    expect(getEntityMapping(Course)).toEqual({
+      tableName: 'CourseCapacity',
+      columns: { id: 'id', capacity: 'capacity' },
+    });
+  });
+
   it('keeps local foreign-key evidence on schema-level belongs-to relations', () => {
     const TodoList = entity('TodoList', { id: field.id() });
     const Todo = entity('Todo', {

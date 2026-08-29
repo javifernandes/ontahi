@@ -1,4 +1,4 @@
-import { entity, field, mapEntity, mapRelation } from '@ontahi/core/data-graph';
+import { entity, field, mapEntity, mapRelation, modelExpression } from '@ontahi/core/data-graph';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createSupabaseReflectedEntityDataReader } from './index.js';
@@ -215,6 +215,26 @@ describe('Supabase reflected entity data reader', () => {
     expect(supabaseMock.attempts[0]?.filters).toEqual([
       { column: 'id', operator: 'in', values: ['book-1', 'book-2'] },
     ]);
+  });
+
+  it('reports virtual derived Fields as unsupported before issuing a storage read', async () => {
+    const Course = entity('Course', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      availableSeats: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(modelExpression.field('capacity')),
+      ),
+    });
+    const reader = createSupabaseReflectedEntityDataReader({
+      entities: [Course],
+      getClient: createSupabaseClient,
+    });
+
+    await expect(reader.readEntityData({ entityName: 'Course' })).rejects.toThrow(
+      'Supabase reflected reads do not support derived Field Course.availableSeats.',
+    );
+    expect(supabaseMock.attempts).toEqual([]);
   });
 
   it('hydrates relation display paths with batched target reads', async () => {

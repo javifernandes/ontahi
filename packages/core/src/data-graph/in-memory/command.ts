@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { hasOwn } from '../../value/object.js';
 import type { GraphCommandSpec } from '../command.js';
-import type { RelationConstraintRejection } from '../definitions.js';
+import { isDerivedFieldDefinition, type RelationConstraintRejection } from '../definitions.js';
 import {
   liftEntityReferenceRecord,
   lowerEntityReferenceRecord,
@@ -78,13 +78,38 @@ const assertRequiredConstructionFields = (
   row: Record<string, unknown>,
 ) => {
   const missing = Object.entries(entity.fields)
-    .filter(([, field]) => !field.optional)
+    .filter(([, field]) => !field.optional && !isDerivedFieldDefinition(field))
     .map(([fieldName]) => fieldName)
     .filter(fieldName => !hasOwn(row, fieldName));
 
   if (missing.length > 0) {
     throw new InMemoryDataGraphError(
       `Cannot construct ${entity.name}; missing required fields: ${missing.join(', ')}.`,
+      'invalid_command',
+    );
+  }
+};
+
+const assertWritableFields = (entity: GraphCommandSpec['root'], row: Record<string, unknown>) => {
+  const derived = Object.keys(row).filter(fieldName => {
+    const field = entity.fields[fieldName];
+    return field && isDerivedFieldDefinition(field);
+  });
+  if (derived.length > 0) {
+    throw new InMemoryDataGraphError(
+      `Cannot assign derived Fields on ${entity.name}: ${derived.join(', ')}.`,
+      'invalid_command',
+    );
+  }
+};
+
+const assertReturnableFields = (command: GraphCommandSpec) => {
+  const derived = (command.returning ?? []).filter(fieldName =>
+    isDerivedFieldDefinition(command.root.fields[fieldName]!),
+  );
+  if (derived.length > 0) {
+    throw new InMemoryDataGraphError(
+      `Commands cannot return virtual derived Fields on ${command.root.name}: ${derived.join(', ')}. Read them through a Query instead.`,
       'invalid_command',
     );
   }
@@ -103,6 +128,7 @@ const assertOneAffectedRow = (
 };
 
 const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any, any, any>) => {
+  assertReturnableFields(command);
   const entityName = command.root.name;
   const currentRows = [...(dataset[entityName] ?? [])];
   let nextRows = currentRows;
@@ -110,7 +136,10 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
 
   if (command.operation === 'insert' || command.operation === 'insert_many') {
     affectedRows = payloadRows(command);
-    affectedRows.forEach(row => assertRequiredConstructionFields(command.root, row));
+    affectedRows.forEach(row => {
+      assertWritableFields(command.root, row);
+      assertRequiredConstructionFields(command.root, row);
+    });
     nextRows = [...currentRows, ...affectedRows];
   } else if (command.operation === 'upsert') {
     const payloads = payloadRows(command);
@@ -129,6 +158,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
     }
 
     for (const payload of payloads) {
+      assertWritableFields(command.root, payload);
       const existingIndex = nextRows.findIndex(row =>
         conflictFields.every(field => row[field] === payload[field]),
       );
@@ -145,6 +175,7 @@ const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any
     }
   } else if (command.operation === 'update') {
     const [payload] = payloadRows(command);
+    assertWritableFields(command.root, payload);
     const matches = new Set(
       applySelectionExpression(
         currentRows,

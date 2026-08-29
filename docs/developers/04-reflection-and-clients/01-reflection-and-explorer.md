@@ -143,6 +143,12 @@ Those verbs are static read-only metadata, not an authority decision or an Execu
 only one endpoint was declared, schema reflection may add a `derived-inverse` descriptor with no
 verbs so the graph is visible without inventing an application member.
 
+Derived Fields remain visible as ordinary Entity Fields and are labeled `derived · read-only` with
+their exact stored-Field and Relation-aggregate dependencies. Entity data readers return their
+authorized runtime value rather than looking for a physical column. Explorer does not evaluate the
+expression itself and never treats the rows currently displayed in a panel as complete aggregate
+evidence.
+
 For declared `hasMany` and `manyToMany` Relations, the data browser can open a related-instances
 panel. Loading that panel uses the host-provided related-data reader, which must execute a
 Relation-root Query through the configured runtime and graph-read policy. Explorer neither reads a

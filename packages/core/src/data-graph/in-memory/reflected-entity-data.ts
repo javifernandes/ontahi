@@ -7,8 +7,9 @@ import {
   type ReflectedEntityDataReader,
   type ReflectedEntityDataResult,
 } from '../reflection.js';
+import type { RelationshipFact } from '../relationship-command.js';
 
-import type { InMemoryDataset } from './materialization.js';
+import { materializeDerivedFields, type InMemoryDataset } from './materialization.js';
 
 type FieldShape = {
   fieldType?: string;
@@ -19,6 +20,7 @@ export type InMemoryReflectedEntityDataReaderOptions = {
   entities: readonly AnyEntityDefinition[];
   dataset: InMemoryDataset;
   pageSizeOptions?: readonly number[];
+  relationships?: readonly RelationshipFact[];
 };
 
 const defaultPageSizeOptions = [10, 25, 50, 100] as const;
@@ -114,6 +116,7 @@ export const listInMemoryReflectedEntityData = (
       : fieldNames.filter(field => isSearchableField(entity.fields[field] as FieldShape));
   const search = normalizeSearch(query.search);
   const rows = (options.dataset[entity.name] ?? [])
+    .map(row => materializeDerivedFields(row, entity, options.dataset, options.relationships ?? []))
     .filter(row =>
       search
         ? searchFields.some(field =>

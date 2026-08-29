@@ -54,7 +54,9 @@ not edit it. The command owns analysis, diagnostics, rendering, writes, and depe
 lifecycle. The lower-level `@ontahi/codegen` API remains available for build systems that need
 multiple or custom projections.
 
-Portable Operation conditions need one generated registry shared by authority and clients:
+Portable Model Expressions need one generated registry shared by the relevant runtimes. The
+historical option name remains `--operation-conditions-output`; the emitted module now carries both
+Operation conditions and derived Field programs:
 
 ```json
 {
@@ -69,19 +71,20 @@ Codegen makes the generated client import that registry automatically. The serve
 imports it too and passes it once:
 
 ```ts
-import { operationConditions } from './generated/operation-conditions.js';
+import { derivedFields, operationConditions } from './generated/operation-conditions.js';
 
 export const Application = ontahi({
   storage,
   entities,
+  derivedFields,
   operationConditions,
 });
 ```
 
 A headless application such as Classroom can add `--operation-conditions-only` when it needs the
-authority/advisory artifact but has no browser projection. Natural condition callbacks are source
-syntax only: codegen never executes them, and the server refuses missing or stale compiled
-conditions instead of silently running arbitrary code.
+authority/advisory artifact but has no browser projection. Natural condition and derived Field
+callbacks are source syntax only: codegen never executes them, and the server refuses missing or
+stale compiled programs instead of silently running arbitrary code.
 
 > [!MARGIN] **Projection is not a shared server bundle.** A conventional shared-types package may
 > reproduce request and response shapes while losing identity, Selection semantics, and Operation

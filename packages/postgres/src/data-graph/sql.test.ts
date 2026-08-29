@@ -3,11 +3,19 @@ import {
   entity,
   field,
   query,
+  mapRelation,
+  modelExpression,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { TodoEntity, TodoMapping } from './fixtures.test-support.js';
+import {
+  DerivedCourse,
+  DerivedCourseCapacity,
+  DerivedCourseMapping,
+  TodoEntity,
+  TodoMapping,
+} from './fixtures.test-support.js';
 
 import {
   compilePostgresCommand,
@@ -54,6 +62,94 @@ describe('PostgreSQL SQL compiler', () => {
         ' WHERE "todo_id" IN ($1, $2) RETURNING "todo_id" AS "id"',
       values: ['todo-1', 'todo-2', true],
     });
+  });
+
+  it('compiles virtual derived Fields from stored Fields and correlated Relation counts', () => {
+    expect(
+      compilePostgresQuery(
+        query(DerivedCourse).as(DerivedCourseCapacity),
+        undefined,
+        DerivedCourseMapping,
+      ),
+    ).toEqual({
+      text:
+        'SELECT "id" AS "id", "capacity" AS "capacity", ' +
+        '("derived_courses"."capacity" - (SELECT COUNT(*)::int FROM "derived_students" AS "__ontahi_students_rows"' +
+        ' WHERE "__ontahi_students_rows"."course_id" = "derived_courses"."id")) AS "availableSeats"' +
+        ' FROM "derived_courses" WHERE TRUE',
+      values: [],
+    });
+    const filtered = compilePostgresQuery(
+      query(DerivedCourse)
+        .where(course => course.availableSeats.gt(0))
+        .as(DerivedCourseCapacity)
+        .orderBy(course => course.availableSeats.desc()),
+      undefined,
+      DerivedCourseMapping,
+    );
+    expect(filtered.values).toEqual([0]);
+    expect(filtered.text).toContain(
+      'WHERE ("derived_courses"."capacity" - (SELECT COUNT(*)::int FROM "derived_students"',
+    );
+    expect(filtered.text).toContain(') > $1 ORDER BY ("derived_courses"."capacity" -');
+    expect(filtered.text).toContain(' DESC NULLS LAST');
+    expect(() =>
+      compilePostgresCommand(
+        {
+          kind: 'command',
+          operation: 'update',
+          root: DerivedCourse,
+          selection: { kind: 'all' },
+          payload: { availableSeats: 100 },
+        },
+        DerivedCourseMapping,
+      ),
+    ).toThrow('Cannot assign derived Fields on DerivedCourse: availableSeats.');
+    expect(() =>
+      compilePostgresCommand(
+        {
+          kind: 'command',
+          operation: 'update',
+          root: DerivedCourse,
+          selection: { kind: 'all' },
+          payload: { capacity: 4 },
+          returning: ['availableSeats'],
+        },
+        DerivedCourseMapping,
+      ),
+    ).toThrow(
+      'PostgreSQL Commands cannot return virtual derived Fields on DerivedCourse: availableSeats.',
+    );
+  });
+
+  it('compiles many-to-many Relation counts through the edge table', () => {
+    const Tag = entity('DerivedTag', { id: field.id() });
+    const Article = entity('DerivedArticle', {
+      id: field.id(),
+      tagCount: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(modelExpression.relation('tags').count()),
+      ),
+    }).manyToMany('tags', Tag);
+    const [articleMapping] = inferPostgresMappings([Article, Tag]);
+    mapRelation(Article, 'tags', {
+      type: 'many-to-many',
+      from: 'derived_articles.id',
+      through: {
+        table: 'derived_article_tags',
+        fromColumn: 'article_id',
+        toColumn: 'tag_id',
+      },
+      to: 'derived_tags.id',
+    });
+    const TagCount = Article.view('DerivedArticleTagCount', { id: true, tagCount: true });
+
+    expect(
+      compilePostgresQuery(query(Article).as(TagCount), undefined, articleMapping!).text,
+    ).toContain(
+      '(SELECT COUNT(*)::int FROM "derived_article_tags" AS "__ontahi_tags_edges"' +
+        ' WHERE "__ontahi_tags_edges"."article_id" = "derived_articles"."id") AS "tagCount"',
+    );
   });
 
   it('lowers reference fields into PostgreSQL parameters', () => {

@@ -4,6 +4,7 @@ import {
   createGraphReadDispatcher as createDataGraphReadDispatcher,
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   assertMutationReactionConfiguration,
+  materializeDerivedFieldDefinitions,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
@@ -16,6 +17,7 @@ import {
   type ManyToManyRelationshipCommandPolicy,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type MutationReaction,
+  type PortableDerivedFieldRegistry,
   type PortableOperationConditionRegistry,
   type RelationshipCommandExecutionRuntime,
 } from '../../data-graph/index.js';
@@ -122,6 +124,7 @@ export type OntahiOptions<
     | ((app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>) => TEntities);
   reactions?: readonly MutationReaction[] | (() => readonly MutationReaction[]);
   operationConditions?: PortableOperationConditionRegistry;
+  derivedFields?: PortableDerivedFieldRegistry;
 };
 
 type BoundEntityRecord<
@@ -248,6 +251,7 @@ export const ontahi = <
     declaredEntities.forEach(declaration =>
       resolveOntahiEntityReferences(declaration, semanticEntitiesByName),
     );
+    materializeDerivedFieldDefinitions(semanticDeclarations, options.derivedFields);
     options.storage.bindEntities?.(semanticDeclarations);
   }
   const declaredReactions =
@@ -308,6 +312,7 @@ export const ontahi = <
       semanticEntitiesByName.set(entity.name, entity);
     });
     resolveOntahiEntityReferences(declaration, semanticEntitiesByName);
+    materializeDerivedFieldDefinitions(nextSemanticEntities);
     semanticEntities.push(...nextSemanticEntities);
     options.storage.bindEntities?.(semanticEntities);
     getOntahiSemanticEntities(declaration).forEach(entity => {
@@ -332,6 +337,7 @@ export const ontahi = <
     if (entityRegistry[entity.name]) {
       throw new Error(`Entity ${entity.name} is already registered.`);
     }
+    materializeDerivedFieldDefinitions([entity]);
     semanticEntities.push(entity);
     options.storage.bindEntities?.(semanticEntities);
     entityRegistry[entity.name] = boundEntity;
@@ -365,6 +371,7 @@ export const ontahi = <
     });
 
     if (nextSemanticEntities.length > 0) {
+      materializeDerivedFieldDefinitions(nextSemanticEntities);
       semanticEntities.push(...nextSemanticEntities);
       options.storage.bindEntities?.(semanticEntities);
     }

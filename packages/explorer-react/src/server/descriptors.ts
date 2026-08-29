@@ -80,6 +80,13 @@ export type ExplorerEntityFieldLike = {
   fieldType?: string;
   nullable?: boolean;
   enumValues?: readonly string[];
+  derived?: {
+    dependencies?: readonly (
+      | { kind: 'field'; field: string }
+      | { kind: 'relation-aggregate'; relation: string; aggregate: 'count' }
+      | { kind: 'input-ref'; input: string }
+    )[];
+  };
   target?: ExplorerEntityLike;
 };
 
@@ -602,6 +609,15 @@ export const getExplorerEntityDetail = (
         type: fieldShape.fieldType ?? 'unknown',
         nullable: Boolean(fieldShape.nullable),
         enumValues: fieldShape.enumValues ? [...fieldShape.enumValues] : undefined,
+        ...(fieldShape.derived
+          ? {
+              derived: {
+                dependencies: (fieldShape.derived.dependencies ?? []).flatMap(dependency =>
+                  dependency.kind === 'input-ref' ? [] : [dependency],
+                ),
+              },
+            }
+          : {}),
         ...(referenceTarget?.name
           ? {
               reference: {

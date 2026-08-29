@@ -48,6 +48,12 @@ export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
     type: string;
     nullable: boolean;
     enumValues?: string[];
+    derived?: {
+      dependencies: Array<
+        | { kind: 'field'; field: string }
+        | { kind: 'relation-aggregate'; relation: string; aggregate: 'count' }
+      >;
+    };
     reference?: {
       entityName: string;
       identity?: { name: string; fields: string[] };

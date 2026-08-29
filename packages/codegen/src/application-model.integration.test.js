@@ -614,6 +614,105 @@ describe('Ontahi application declaration analysis', () => {
     );
   }, 30_000);
 
+  it('compiles natural derived Fields against Entity Fields and to-many Relations', async () => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity, relation } from '@ontahi/core/entity';
+
+        const CourseFields = {
+          id: field.id(),
+          capacity: field.nonNegativeInteger(),
+          occupiedSeats: field.derived(field.nonNegativeInteger(), ({ students }) => students.count()),
+          availableSeats: field.derived(
+            field.nonNegativeInteger(),
+            ({ capacity, students }) => capacity - students.count(),
+          ),
+        };
+        const Student = entity.ref('Student', { fields: { id: field.id() } });
+
+        export const Course = entity({
+          name: 'Course',
+          fields: CourseFields,
+          relations: { students: relation.hasMany(Student) },
+        });
+      `,
+      'Course',
+      { sourcePath: '/examples/classroom/src/classroom.ts' },
+    );
+
+    expect(analysis?.diagnostics).toEqual([]);
+    expect(analysis?.definition?.entitySchemaProjection).toMatchObject({
+      derivedFields: [
+        {
+          name: 'occupiedSeats',
+          expression: {
+            version: 1,
+            expression: { kind: 'relation-aggregate', relation: 'students', aggregate: 'count' },
+          },
+        },
+        {
+          name: 'availableSeats',
+          expression: {
+            version: 1,
+            expression: {
+              kind: 'arithmetic',
+              operator: 'subtract',
+              left: { kind: 'field', field: 'capacity' },
+              right: { kind: 'relation-aggregate', relation: 'students', aggregate: 'count' },
+            },
+          },
+        },
+      ],
+    });
+    expect(analysis?.definition?.entitySchemaProjection.fieldsText).toContain(
+      'availableSeats: field.derived(field.nonNegativeInteger(), {"version":1',
+    );
+
+    const registrySource = renderGeneratedOperationConditionRegistryModule({
+      operations: [],
+      entities: [analysis.definition],
+    });
+    const directory = await mkdtemp(path.join(tmpdir(), 'ontahi-codegen-derived-fields-'));
+    tempDirectories.push(directory);
+    const generatedRegistry = await importGeneratedModule({ directory, source: registrySource });
+    expect(generatedRegistry.derivedFields.entities.Course.fields.availableSeats).toEqual(
+      analysis.definition.entitySchemaProjection.derivedFields[1].expression,
+    );
+  }, 30_000);
+
+  it('locates unsupported derived Field syntax in the author source', () => {
+    const sourcePath = '/examples/classroom/src/classroom.ts';
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+        import { entity, relation } from '@ontahi/core/entity';
+
+        export const Course = entity({
+          name: 'Course',
+          fields: {
+            id: field.id(),
+            availableSeats: field.derived(
+              field.nonNegativeInteger(),
+              ({ students }) => students.size(),
+            ),
+          },
+          relations: {
+            students: relation.hasMany(entity.ref('Student', { fields: { id: field.id() } })),
+          },
+        });
+      `,
+      'Course',
+      { sourcePath },
+    );
+
+    expect(analysis?.diagnostics).toEqual([
+      expect.stringMatching(
+        new RegExp(
+          `^${sourcePath.replaceAll('/', '\\/')}:\\d+:\\d+ \\[model_expression_unsupported_call\\]`,
+        ),
+      ),
+    ]);
+  });
+
   it('locates unsupported portable condition syntax in the author source', () => {
     const sourcePath = '/examples/classroom/src/classroom.ts';
     const analysis = analyzeSpecificDomainEntityExport(

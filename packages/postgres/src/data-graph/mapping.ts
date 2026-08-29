@@ -1,6 +1,7 @@
 import {
   applyConventionalDataGraphMappings,
   getEntityMapping,
+  isDerivedFieldDefinition,
   type AnyEntityDefinition,
   type DataGraphMappingNaming,
   type DataGraphMappingOverrides,
@@ -9,7 +10,13 @@ import {
 export type PostgresEntityMapping<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   entity: TEntity;
   table: string;
-  columns: { [TField in keyof TEntity['fields'] & string]: string };
+  columns: {
+    [TField in keyof TEntity['fields'] & string as TEntity['fields'][TField] extends {
+      derived: object;
+    }
+      ? never
+      : TField]: string;
+  };
 };
 
 export const postgresMapping = <TEntity extends AnyEntityDefinition>(
@@ -68,7 +75,9 @@ export const createPostgresMappingRegistry = (
   const registry = new Map<AnyEntityDefinition, PostgresEntityMapping>();
 
   for (const mapping of mappings) {
-    const fields = Object.keys(mapping.entity.fields);
+    const fields = Object.entries(mapping.entity.fields)
+      .filter(([, field]) => !isDerivedFieldDefinition(field))
+      .map(([field]) => field);
     const mappedFields = Object.keys(mapping.columns);
     const missing = fields.filter(field => !mappedFields.includes(field));
     const unknown = mappedFields.filter(field => !fields.includes(field));

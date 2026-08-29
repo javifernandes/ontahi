@@ -1,6 +1,6 @@
 # 142f. Virtual Derived Fields And Classroom Capacity
 
-Status: next
+Status: done
 
 Canonical ID: `ontahi://plans/142f-virtual-derived-fields-and-classroom-capacity`
 
@@ -50,15 +50,29 @@ invariant enforcement yet.
 
 ## Acceptance Checklist
 
-- [ ] Derived values are declared under `fields` and Commands cannot assign them.
-- [ ] Natural authoring and the explicit builder produce the same canonical IR with source-located
+- [x] Derived values are declared under `fields` and Commands cannot assign them.
+- [x] Natural authoring and the explicit builder produce the same canonical IR with source-located
       diagnostics.
-- [ ] Reflection exposes the Field definition and exact dependencies without a provider strategy.
-- [ ] Authorized in-memory and PostgreSQL Views return identical virtual values.
-- [ ] Missing or unauthorized aggregate evidence is unavailable/unknown rather than a partial
+- [x] Reflection exposes the Field definition and exact dependencies without a provider strategy.
+- [x] Authorized in-memory and PostgreSQL Views return identical virtual values.
+- [x] Missing or unauthorized aggregate evidence is unavailable/unknown rather than a partial
       count.
-- [ ] Classroom upgrade and fresh-install fixtures prove the `capacity` migration.
-- [ ] `Student.transfer` contains no manual available-seat update while preserving its current
+- [x] Classroom upgrade and fresh-install fixtures prove the `capacity` migration.
+- [x] `Student.transfer` contains no manual available-seat update while preserving its current
       transactional behavior.
-- [ ] Focused tests, typecheck, lint, build, generated-artifact checks, Changeset, Plan, Atlas, and
+- [x] Focused tests, typecheck, lint, build, generated-artifact checks, Changeset, Plan, Atlas, and
       developer documentation are complete.
+
+## Delivery Evidence
+
+1. Core owns the versioned derived-Field registry, dependency validation, reflection metadata,
+   read-only mutation contract, graph-read policy checks, and in-memory virtual evaluation.
+2. Codegen compiles natural Field arithmetic and Relation `count()` callbacks into the same Model
+   Expression IR accepted by the explicit builder, with author-source diagnostics.
+3. PostgreSQL lowers stored dependencies and direct or many-to-many Relation counts into correlated
+   expressions for projection, filtering, ordering, counts, and reflected Entity data.
+4. Classroom migration `002` reconstructs and validates capacity before dropping the legacy
+   counter; both in-memory and PostgreSQL tests prove the derived values and unchanged stored
+   capacity across transfers.
+5. Supabase reports derived reads as unsupported instead of silently treating a virtual Field as a
+   physical column, while stored-only projections remain usable.

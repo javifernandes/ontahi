@@ -76,6 +76,7 @@ export const findDomainEntityDefinition = (sourceFile, expectedExportName, optio
         : resolveEntitySchemaProjection(entityDefinitionName, schemaContext);
 
       const parsedTasks = parseTaskDefinitions(configArg, importMap);
+      const projectionDiagnostics = entitySchemaProjection?.diagnostics ?? [];
 
       const domainOperationsProperty = configArg.properties.find(
         item =>
@@ -102,7 +103,7 @@ export const findDomainEntityDefinition = (sourceFile, expectedExportName, optio
           (unifiedDeclaration && entitySchemaProjection)
         ) {
           return {
-            diagnostics: parsedTasks.diagnostics,
+            diagnostics: [...projectionDiagnostics, ...parsedTasks.diagnostics],
             definition: {
               collectionName: `${entityExportName}DomainOperations`,
               clientCollectionName: `${entityExportName}ClientDomainOperations`,
@@ -136,7 +137,7 @@ export const findDomainEntityDefinition = (sourceFile, expectedExportName, optio
       const clientOperations = [];
       const durableTasks = [];
       const ingress = [];
-      const diagnostics = [...parsedTasks.diagnostics];
+      const diagnostics = [...projectionDiagnostics, ...parsedTasks.diagnostics];
 
       for (const property of operationsInitializer.properties) {
         const parsed = parseOperationDefinition(

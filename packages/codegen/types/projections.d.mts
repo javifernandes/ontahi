@@ -11,6 +11,7 @@ export const renderGeneratedClientEntityModule: (input: {
 
 export const renderGeneratedOperationConditionRegistryModule: (input: {
   operations: readonly import('./contracts.mjs').AnalyzedOperation[];
+  entities?: readonly AnalyzedEntity[];
 }) => string;
 
 export const renderGeneratedTaskDefinitionRegistryModule: (input: {

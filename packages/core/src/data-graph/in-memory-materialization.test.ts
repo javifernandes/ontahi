@@ -12,9 +12,64 @@ import {
   type InMemoryDataset,
 } from './in-memory/materialization.js';
 
-import { entity, field, mapEntity, mapRelation, query } from './index.js';
+import { entity, field, mapEntity, mapRelation, modelExpression, query } from './index.js';
 
 describe('data-graph in-memory materialization', () => {
+  it('evaluates virtual derived Fields from stored Fields and complete Relation aggregates', () => {
+    const Course = entity('DerivedCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      occupiedSeats: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(modelExpression.relation('students').count()),
+      ),
+      availableSeats: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(
+          modelExpression.subtract(
+            modelExpression.field('capacity'),
+            modelExpression.relation('students').count(),
+          ),
+        ),
+      ),
+    });
+    const Student = entity('DerivedStudent', {
+      id: field.id(),
+      course: field.ref(Course),
+    });
+    Course.hasMany('students', Student, { via: 'course' });
+    const summary = query(Course)
+      .select(course => ({
+        id: course.id,
+        occupiedSeats: course.occupiedSeats,
+        availableSeats: course.availableSeats,
+      }))
+      .build();
+    const dataset: InMemoryDataset = {
+      DerivedCourse: [{ id: 'course-1', capacity: 3 }],
+      DerivedStudent: [
+        { id: 'student-1', course: 'course-1' },
+        { id: 'student-2', course: 'course-1' },
+      ],
+    };
+
+    expect(
+      materializeRecord(
+        dataset.DerivedCourse[0]!,
+        Course,
+        summary.select,
+        summary.includes,
+        dataset,
+      ),
+    ).toEqual({ id: 'course-1', occupiedSeats: 2, availableSeats: 1 });
+    expect(dataset.DerivedCourse).toEqual([{ id: 'course-1', capacity: 3 }]);
+    expect(
+      materializeRecord(dataset.DerivedCourse[0]!, Course, summary.select, summary.includes, {
+        DerivedCourse: dataset.DerivedCourse,
+      }),
+    ).toEqual({ id: 'course-1', occupiedSeats: undefined, availableSeats: undefined });
+  });
+
   it('hydrates nested hasMany relations with ordering and nested includes', () => {
     const { BookWithChapters } = defineReaderGraph();
 

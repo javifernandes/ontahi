@@ -270,8 +270,7 @@ export const applySupabaseLimit = <TQuery extends SupabaseOrderQuery<TQuery>>(
 ) => (limit == null ? query : query.limit(limit));
 
 export const getProbeColumnForEntity = (entityDefinition: AnyEntityDefinition) =>
-  getEntityMapping(entityDefinition).columns[Object.keys(entityDefinition.fields)[0] ?? 'id'] ??
-  'id';
+  Object.values(getEntityMapping(entityDefinition).columns)[0] ?? 'id';
 
 export * from './command.js';
 export * from './materialization.js';

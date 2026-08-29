@@ -14,7 +14,7 @@ Related plans:
 6. [139d. PostgreSQL Classroom Transfer](../done/139d-postgres-classroom-transfer.md)
 7. [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md)
 8. [142e. Portable Operation Condition Bridge](../done/142e-portable-operation-condition-bridge.md)
-9. [142f. Virtual Derived Fields And Classroom Capacity](../next/142f-virtual-derived-fields-and-classroom-capacity.md)
+9. [142f. Virtual Derived Fields And Classroom Capacity](../done/142f-virtual-derived-fields-and-classroom-capacity.md)
 
 ## Summary
 
@@ -512,9 +512,10 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    portable conditions, rejection defaults, dependency reflection, and tri-state advisory
    evaluation. Extracted as
    [142e. Portable Operation Condition Bridge](../done/142e-portable-operation-condition-bridge.md).
-6. **Derived graph Fields and Classroom migration:** append and verify the `capacity` migration,
+6. **Derived graph Fields and Classroom migration (complete):** append and verify the `capacity` migration,
    remove the stored counter from the model and result shape, then prove virtual
-   `Course.availableSeats` in memory and through one authorized provider read.
+   `Course.availableSeats` in memory and through one authorized provider read. Delivered through
+   [142f. Virtual Derived Fields And Classroom Capacity](../done/142f-virtual-derived-fields-and-classroom-capacity.md).
 7. **Aggregate Relation invariant:** extract a linked Plan 136 child that rejects prospective
    `Course.students` additions atomically in memory and one provider through both the forward
    `Student.currentCourse` and inverse `Course.students` APIs. Preserve unlink repair and concurrent
@@ -567,9 +568,9 @@ surfaces.
       authority-serialized requirements from future merge-safe execution.
 - [ ] Forward assignment and inverse has-many mutation produce one canonical prospective delta and
       enforce the same aggregate invariant, rejection, rollback, and Applied Mutation Outcome rules.
-- [ ] Derived Fields share the ordinary Field reflection/query surface, remain read-only to
+- [x] Derived Fields share the ordinary Field reflection/query surface, remain read-only to
       Commands, and have one semantic definition independent from virtual or materialized execution.
-- [ ] The Classroom migration backfills `capacity` from the stored available seats plus canonical
+- [x] The Classroom migration backfills `capacity` from the stored available seats plus canonical
       Student membership, removes the counter, and proves both upgrade and fresh-install fixtures.
 - [x] Static Operation execution requirements remain separate from runtime local/bridge/queued/
       unavailable affordances.

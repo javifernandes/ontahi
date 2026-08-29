@@ -251,4 +251,60 @@ describe('in-memory graph commands', () => {
     });
     expect(dataset.Book).toEqual(before);
   });
+
+  it('does not require or allow virtual derived Fields in mutation payloads', async () => {
+    const Course = entity('CommandCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      availableSeats: field.derived(field.nonNegativeInteger(), ({ capacity }) => capacity),
+    });
+    const dataset: InMemoryDataset = { CommandCourse: [] };
+    const runtime = createInMemoryDataGraphRuntime({ dataset });
+
+    await expect(
+      Effect.runPromise(
+        runtime.runCommand({
+          kind: 'command',
+          operation: 'insert',
+          root: Course,
+          selection: { kind: 'none' },
+          payload: { id: 'course-1', capacity: 4 },
+        }),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runCommand({
+            kind: 'command',
+            operation: 'update',
+            root: Course,
+            selection: query(Course).build().selection,
+            payload: { availableSeats: 10 },
+          })
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'invalid_command' },
+    });
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runCommand({
+            kind: 'command',
+            operation: 'update',
+            root: Course,
+            selection: query(Course).build().selection,
+            payload: { capacity: 5 },
+            returning: ['availableSeats'],
+          })
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'invalid_command' },
+    });
+    expect(dataset.CommandCourse).toEqual([{ id: 'course-1', capacity: 4 }]);
+  });
 });

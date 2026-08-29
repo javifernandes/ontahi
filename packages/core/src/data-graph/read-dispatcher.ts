@@ -1,6 +1,11 @@
 import { hasOwn } from '../value/object.js';
 
-import type { AnyEntityDefinition, RelationDefinition, RelationKind } from './definitions.js';
+import {
+  isDerivedFieldDefinition,
+  type AnyEntityDefinition,
+  type RelationDefinition,
+  type RelationKind,
+} from './definitions.js';
 import type { QuerySpec } from './query.js';
 import {
   graphReadProtocolError,
@@ -155,7 +160,34 @@ const readFieldPolicy = (
 ): GraphReadFieldPolicy | undefined =>
   (policy.fields as Readonly<Record<string, GraphReadFieldPolicy | undefined>>)[fieldName];
 
-const allowsSelection = (expression: SelectionExpression, policy: GraphReadPolicyNode): boolean => {
+const allowsDerivedFieldDependencies = (
+  entity: AnyEntityDefinition,
+  fieldName: string,
+  policy: GraphReadPolicyNode,
+) => {
+  const field = entity.fields[fieldName];
+  if (!field || !isDerivedFieldDefinition(field)) return true;
+
+  return (field.derived.dependencies ?? []).every(dependency => {
+    if (dependency.kind === 'field') {
+      return readFieldPolicy(policy, dependency.field)?.select === true;
+    }
+    if (dependency.kind === 'relation-aggregate') {
+      return Boolean(
+        (
+          policy.relations as Readonly<Record<string, GraphReadPolicyNode | undefined>> | undefined
+        )?.[dependency.relation],
+      );
+    }
+    return false;
+  });
+};
+
+const allowsSelection = (
+  expression: SelectionExpression,
+  policy: GraphReadPolicyNode,
+  entity: AnyEntityDefinition,
+): boolean => {
   if (expression.kind === 'all' || expression.kind === 'none') return true;
   if (expression.kind === 'references') {
     return expression.refs.every(ref =>
@@ -165,12 +197,13 @@ const allowsSelection = (expression: SelectionExpression, policy: GraphReadPolic
     );
   }
   if (expression.kind === 'and' || expression.kind === 'or') {
-    return expression.operands.every(operand => allowsSelection(operand, policy));
+    return expression.operands.every(operand => allowsSelection(operand, policy, entity));
   }
-  if (expression.kind === 'not') return allowsSelection(expression.operand, policy);
+  if (expression.kind === 'not') return allowsSelection(expression.operand, policy, entity);
 
   return Boolean(
-    readFieldPolicy(policy, expression.fieldName)?.filter?.includes(expression.operator),
+    readFieldPolicy(policy, expression.fieldName)?.filter?.includes(expression.operator) &&
+    allowsDerivedFieldDependencies(entity, expression.fieldName, policy),
   );
 };
 
@@ -181,7 +214,8 @@ const allowsViewNode = (
 ): boolean =>
   Object.entries(view.fields).every(([name, node]) => {
     if (node.kind === 'field-view') {
-      return readFieldPolicy(policy, name)?.select === true;
+      if (readFieldPolicy(policy, name)?.select !== true) return false;
+      return allowsDerivedFieldDependencies(entity, name, policy);
     }
 
     const relation = entity.relations[name];
@@ -211,8 +245,19 @@ const allowsProjection = (
     );
   }
 
-  return Object.keys(query.root.fields).every(
-    fieldName => readFieldPolicy(policy, fieldName)?.select === true,
+  return allowsViewNode(
+    query.root,
+    {
+      kind: 'view-node',
+      entity: query.root.name,
+      fields: Object.fromEntries(
+        Object.keys(query.root.fields).map(fieldName => [
+          fieldName,
+          { kind: 'field-view', field: fieldName },
+        ]),
+      ),
+    },
+    policy,
   );
 };
 
@@ -225,8 +270,12 @@ const allowsQuery = (
   (mode === 'count' ||
     policy.cardinalities.includes(query.cardinality ?? (mode === 'get' ? 'one' : 'many'))) &&
   (query.limit === undefined || query.limit <= policy.maxLimit) &&
-  allowsSelection(query.selection, policy) &&
-  query.orderBy.every(order => readFieldPolicy(policy, order.fieldName)?.order === true) &&
+  allowsSelection(query.selection, policy, query.root) &&
+  query.orderBy.every(
+    order =>
+      readFieldPolicy(policy, order.fieldName)?.order === true &&
+      allowsDerivedFieldDependencies(query.root, order.fieldName, policy),
+  ) &&
   allowsProjection(query, policy, mode);
 
 const resolveScope = <TAuthority>(

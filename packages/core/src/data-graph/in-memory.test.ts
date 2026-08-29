@@ -8,12 +8,56 @@ import {
   entity,
   field,
   mapEntity,
+  modelExpression,
   query,
   Selection,
   view,
 } from './index.js';
 
 describe('data-graph in-memory runtime', () => {
+  it('filters and orders with virtual derived Field values before projection', async () => {
+    const Course = entity('QueryableCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+      availableSeats: field.derived(
+        field.nonNegativeInteger(),
+        modelExpression.define(
+          modelExpression.subtract(
+            modelExpression.field('capacity'),
+            modelExpression.relation('students').count(),
+          ),
+        ),
+      ),
+    });
+    const Student = entity('QueryableStudent', {
+      id: field.id(),
+      course: field.ref(Course),
+    });
+    Course.hasMany('students', Student, { via: 'course' });
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        QueryableCourse: [
+          { id: 'course-1', capacity: 2 },
+          { id: 'course-2', capacity: 4 },
+        ],
+        QueryableStudent: [
+          { id: 'student-1', course: 'course-1' },
+          { id: 'student-2', course: 'course-2' },
+        ],
+      },
+    });
+    const read = query(Course)
+      .where(course => course.availableSeats.gt(0))
+      .orderBy(course => course.availableSeats.desc())
+      .select(course => ({ id: course.id, availableSeats: course.availableSeats }));
+
+    await expect(Effect.runPromise(runtime.run(read, undefined))).resolves.toEqual([
+      { id: 'course-2', availableSeats: 3 },
+      { id: 'course-1', availableSeats: 1 },
+    ]);
+    await expect(Effect.runPromise(runtime.count(read, undefined))).resolves.toBe(2);
+  });
+
   it('enforces exact-one selection cardinality after materialization', async () => {
     const Book = entity('CardinalityBook', {
       id: field.id(),

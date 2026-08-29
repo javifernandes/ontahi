@@ -17,9 +17,9 @@ Options:
   --output <path>         Generated module (default: src/generated/client-entities.ts)
   --schema-import <path>  Fallback import for external entity schemas
   --operation-conditions-output <path>
-                          Shared portable condition registry module
+                          Shared portable Model Expression registry module
   --operation-conditions-only
-                          Generate only the portable condition registry
+                          Generate only the portable Model Expression registry
   --format oxfmt          Format through the host project's oxfmt binary
   --check                 Fail when generated output is stale
   --watch                 Regenerate when application sources change
@@ -82,10 +82,13 @@ export const createClientEntityCodegenRunner = ({
       const hasOperationConditions = application.operations.some(
         operation => operation.conditions?.pre?.length,
       );
-      if (hasOperationConditions && !resolvedOperationConditionsOutputPath) {
+      const hasDerivedFields = application.entities.some(
+        entity => entity.entitySchemaProjection?.derivedFields?.length,
+      );
+      if ((hasOperationConditions || hasDerivedFields) && !resolvedOperationConditionsOutputPath) {
         return {
           diagnostics: [
-            'Portable Operation conditions require --operation-conditions-output so server and generated clients consume one artifact.',
+            'Portable Model Expressions require --operation-conditions-output so the server consumes one generated artifact.',
           ],
           outputs: [],
         };
@@ -125,6 +128,7 @@ export const createClientEntityCodegenRunner = ({
                   outputPath: resolvedOperationConditionsOutputPath,
                   source: renderGeneratedOperationConditionRegistryModule({
                     operations: application.operations,
+                    entities: application.entities,
                   }),
                 },
               ]

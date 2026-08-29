@@ -72,6 +72,11 @@ export const ExplorerEntityStructurePanel = ({
             name={field.name}
             type={field.type}
             required={!field.nullable}
+            derivedDependencies={field.derived?.dependencies.map(dependency =>
+              dependency.kind === 'field'
+                ? dependency.field
+                : `${dependency.relation}.${dependency.aggregate}`,
+            )}
           />
         ))}
       </div>

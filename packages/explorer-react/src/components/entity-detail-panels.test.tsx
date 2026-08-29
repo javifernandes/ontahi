@@ -31,6 +31,12 @@ const entity: ExplorerEntityDetail = {
       name: 'title',
       type: 'text',
       nullable: true,
+      derived: {
+        dependencies: [
+          { kind: 'field', field: 'capacity' },
+          { kind: 'relation-aggregate', relation: 'students', aggregate: 'count' },
+        ],
+      },
     },
   ],
   relations: [
@@ -80,6 +86,8 @@ describe('Explorer entity detail panels', () => {
     expect(screen.getByText('Relation Owner')).toBeTruthy();
     expect(screen.getByText('title')).toBeTruthy();
     expect(screen.getByText('optional')).toBeTruthy();
+    expect(screen.getByText('derived · read-only')).toBeTruthy();
+    expect(screen.getByTitle('Derived from capacity, students.count')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Profile' }).getAttribute('href')).toBe(
       '/entities/Profile',
     );

@@ -1,5 +1,9 @@
 import { GraphCommand } from './command.js';
-import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
+import type {
+  AnyEntityDefinition,
+  InferEntityMutationRecord,
+  InferEntityRecord,
+} from './definitions.js';
 import { query, type EntityFieldProxy, type QueryBuilder } from './query.js';
 import type { AnyEntityRef, EntityRef } from './ref/index.js';
 import {
@@ -19,7 +23,7 @@ import {
   GraphSelection,
   createDeleteCommandSpec,
   createUpdateCommandSpec,
-  type EntityFieldName,
+  type EntityMutationFieldName,
   type PickEntityFields,
   type QueryIncludeArg,
   type QueryOrderByArg,
@@ -48,7 +52,7 @@ type SelectionOperand<TEntity extends AnyEntityDefinition> =
 
 type SelectionReturningResult<
   TEntity extends AnyEntityDefinition,
-  TFieldNames extends readonly EntityFieldName<TEntity>[],
+  TFieldNames extends readonly EntityMutationFieldName<TEntity>[],
   TCardinality extends SelectionCardinality,
 > = TCardinality extends 'one'
   ? PickEntityFields<TEntity, TFieldNames>
@@ -160,7 +164,7 @@ export class Selection<
     return this.toGraphSelection().limit(limitValue);
   }
 
-  update(payload: Partial<InferEntityRecord<TEntity['fields']>>) {
+  update(payload: Partial<InferEntityMutationRecord<TEntity['fields']>>) {
     return new GraphCommand(
       createUpdateCommandSpec(this.root, this, payload, {
         ...(this.cardinality ? { cardinality: this.cardinality } : {}),
@@ -168,12 +172,12 @@ export class Selection<
     );
   }
 
-  updateReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+  updateReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+    payload: Partial<InferEntityMutationRecord<TEntity['fields']>>,
     fieldNames: TFieldNames,
   ): GraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    Partial<InferEntityMutationRecord<TEntity['fields']>>,
     SelectionReturningResult<TEntity, TFieldNames, TCardinality>
   > {
     return new GraphCommand(
@@ -183,7 +187,7 @@ export class Selection<
       }),
     ) as GraphCommand<
       TEntity,
-      Partial<InferEntityRecord<TEntity['fields']>>,
+      Partial<InferEntityMutationRecord<TEntity['fields']>>,
       SelectionReturningResult<TEntity, TFieldNames, TCardinality>
     >;
   }
@@ -196,7 +200,7 @@ export class Selection<
     );
   }
 
-  deleteReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  deleteReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, never, SelectionReturningResult<TEntity, TFieldNames, TCardinality>> {
     return new GraphCommand(

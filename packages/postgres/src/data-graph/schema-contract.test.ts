@@ -1,4 +1,4 @@
-import { field, mapEntity } from '@ontahi/core/data-graph';
+import { field, mapEntity, modelExpression } from '@ontahi/core/data-graph';
 import { entity } from '@ontahi/core/entity';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
@@ -44,6 +44,47 @@ describe('PostgreSQL data graph schema contract', () => {
           entity: 'Project',
           schema: 'public',
           table: 'projects',
+        },
+      ],
+    });
+  });
+
+  it('requires stored dependencies but never expects physical columns for derived Fields', async () => {
+    const Course = entity({
+      name: 'Course',
+      fields: {
+        id: field.id(),
+        capacity: field.nonNegativeInteger(),
+        availableSeats: field.derived(
+          field.nonNegativeInteger(),
+          modelExpression.define(modelExpression.field('capacity')),
+        ),
+      },
+    });
+    mapEntity(Course).toTable('courses', { id: 'id', capacity: 'capacity' });
+
+    await expect(
+      inspectPostgresDataGraphSchema({
+        entities: [Course],
+        pool: {
+          query: async () => ({
+            rows: [
+              { table_name: 'courses', column_name: 'id' },
+              { table_name: 'courses', column_name: 'available_seats' },
+            ],
+          }),
+        } as unknown as Pick<Pool, 'query'>,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: 'column-not-found',
+          column: 'capacity',
+          entity: 'Course',
+          field: 'capacity',
+          schema: 'public',
+          table: 'courses',
         },
       ],
     });

@@ -1,5 +1,6 @@
 import {
   describeReflectedEntityDisplay,
+  isDerivedFieldDefinition,
   type AnyEntityDefinition,
   type ReflectedEntityDataFilter,
   type ReflectedEntityDataOmittedColumn,
@@ -9,6 +10,7 @@ import {
 } from '@ontahi/core/data-graph';
 import type { Pool, QueryResultRow } from 'pg';
 
+import { compilePostgresDerivedField } from './derived-field.js';
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
 
 type FieldShape = {
@@ -47,24 +49,22 @@ const parseFilterValue = (field: FieldShape | undefined, value: string | undefin
 
 const compileFilter = (
   entity: AnyEntityDefinition,
-  mapping: PostgresEntityMapping,
   filter: ReflectedEntityDataFilter,
-  availableColumns: Set<string>,
+  columns: readonly { field: string; sql: string }[],
   values: unknown[],
 ) => {
   const field = entity.fields[filter.field] as FieldShape | undefined;
-  const column = mapping.columns[filter.field];
-  if (!field || !column || !availableColumns.has(column)) return undefined;
-  const quoted = quoteIdentifier(column);
-  if (filter.operator === 'isNull') return `${quoted} IS NULL`;
+  const column = columns.find(candidate => candidate.field === filter.field);
+  if (!field || !column) return undefined;
+  if (filter.operator === 'isNull') return `${column.sql} IS NULL`;
 
   const value = parseFilterValue(field, filter.value);
   if (value === undefined) return undefined;
   values.push(value);
   if (filter.operator === 'contains' && searchableTypes.has(field.fieldType ?? '')) {
-    return `${quoted} ILIKE '%' || $${values.length} || '%'`;
+    return `${column.sql} ILIKE '%' || $${values.length} || '%'`;
   }
-  return `${quoted} = $${values.length}`;
+  return `${column.sql} = $${values.length}`;
 };
 
 export const listPostgresReflectedEntityData = async (
@@ -85,14 +85,29 @@ export const listPostgresReflectedEntityData = async (
     [mapping.table],
   );
   const availableColumns = new Set(physicalColumns.rows.map(row => row.column_name));
-  const allColumns = Object.entries(entity.fields).map(([field, definition]) => ({
+  const storedColumns = Object.entries(mapping.columns).map(([field, column]) => ({
     field,
-    column: mapping.columns[field]!,
-    type: (definition as FieldShape).fieldType ?? 'unknown',
-    nullable: Boolean((definition as FieldShape).nullable),
+    column,
+    sql: quoteIdentifier(column),
+    type: (entity.fields[field] as FieldShape | undefined)?.fieldType ?? 'unknown',
+    nullable: Boolean((entity.fields[field] as FieldShape | undefined)?.nullable),
   }));
-  const columns = allColumns.filter(column => availableColumns.has(column.column));
-  const omittedColumns: ReflectedEntityDataOmittedColumn[] = allColumns
+  const derivedColumns = Object.entries(entity.fields).flatMap(([field, definition]) => {
+    if (!isDerivedFieldDefinition(definition) || !definition.derived.expression) return [];
+    return [
+      {
+        field,
+        sql: compilePostgresDerivedField(entity, mapping, definition.derived.expression),
+        type: (definition as FieldShape).fieldType ?? 'unknown',
+        nullable: Boolean((definition as FieldShape).nullable),
+      },
+    ];
+  });
+  const columns = [
+    ...storedColumns.filter(column => availableColumns.has(column.column)),
+    ...derivedColumns,
+  ];
+  const omittedColumns: ReflectedEntityDataOmittedColumn[] = storedColumns
     .filter(column => !availableColumns.has(column.column))
     .map(column => ({
       field: column.field,
@@ -114,12 +129,12 @@ export const listPostgresReflectedEntityData = async (
     values.push(search);
     predicates.push(
       `(${searchColumns
-        .map(column => `${quoteIdentifier(column.column)} ILIKE '%' || $${values.length} || '%'`)
+        .map(column => `${column.sql} ILIKE '%' || $${values.length} || '%'`)
         .join(' OR ')})`,
     );
   }
   for (const filter of query.filters ?? []) {
-    const predicate = compileFilter(entity, mapping, filter, availableColumns, values);
+    const predicate = compileFilter(entity, filter, columns, values);
     if (predicate) predicates.push(predicate);
   }
 
@@ -138,7 +153,7 @@ export const listPostgresReflectedEntityData = async (
   const defaultDirection = defaultSortField === 'id' ? 'asc' : 'desc';
   const direction = requestedSort ? query.sort?.direction : defaultDirection;
   const order = sort
-    ? ` ORDER BY ${quoteIdentifier(sort.column)} ${direction?.toUpperCase()}` +
+    ? ` ORDER BY ${sort.sql} ${direction?.toUpperCase()}` +
       (direction === 'asc' ? ' NULLS FIRST' : ' NULLS LAST')
     : '';
   const pageSizeOptions = options.pageSizeOptions ?? defaultPageSizeOptions;
@@ -146,7 +161,7 @@ export const listPostgresReflectedEntityData = async (
   const pageSize = clampPageSize(query.pageSize, pageSizeOptions);
   const offset = (page - 1) * pageSize;
   const selected = columns
-    .map(column => `${quoteIdentifier(column.column)} AS ${quoteIdentifier(column.field)}`)
+    .map(column => `${column.sql} AS ${quoteIdentifier(column.field)}`)
     .join(', ');
   const countResult = await options.pool.query<{ count: number } & QueryResultRow>(
     `SELECT COUNT(*)::int AS "count" FROM ${quoteIdentifier(mapping.table)}${where}`,

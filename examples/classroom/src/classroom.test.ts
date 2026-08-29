@@ -16,21 +16,21 @@ const seedClassroom = () => {
       title: 'Algebra',
       school: 'school-1',
       teacher: 'teacher-1',
-      availableSeats: 0,
+      capacity: 1,
     },
     {
       id: 'course-2',
       title: 'Geometry',
       school: 'school-1',
       teacher: 'teacher-1',
-      availableSeats: 2,
+      capacity: 2,
     },
     {
       id: 'course-3',
       title: 'History',
       school: 'school-1',
       teacher: 'teacher-1',
-      availableSeats: 4,
+      capacity: 4,
     },
   ];
   dataset.Student = [
@@ -111,6 +111,18 @@ describe('Classroom Relations lifecycle', () => {
     expect(ClassroomApplication.storage.dataset.Student).toEqual([
       { id: 'student-1', name: 'Grace', school: 'school-1', currentCourse: 'course-2' },
     ]);
+    await expect(
+      ClassroomApplication.storage.readEntityData({ entityName: 'Course' }),
+    ).resolves.toMatchObject({
+      rows: [
+        { id: 'course-1', capacity: 1, occupiedSeats: 0, availableSeats: 1 },
+        { id: 'course-2', capacity: 2, occupiedSeats: 1, availableSeats: 1 },
+        { id: 'course-3', capacity: 4, occupiedSeats: 0, availableSeats: 4 },
+      ],
+    });
+    expect(ClassroomApplication.storage.dataset.Course).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ availableSeats: expect.anything() })]),
+    );
 
     await expect(
       reassignStudent({

@@ -50,6 +50,7 @@ export const createInMemoryDataGraphStorage = (
       createInMemoryReflectedEntityDataReader({
         dataset,
         entities: getEntities(),
+        relationships,
         pageSizeOptions: options.pageSizeOptions,
       }).readEntityData(query),
   };

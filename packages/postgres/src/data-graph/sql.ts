@@ -2,6 +2,7 @@ import {
   lowerSelectionReferences,
   lowerEntityReferenceRecord,
   lowerEntityReferenceSelection,
+  isDerivedFieldDefinition,
   resolveQuerySpec,
   type GraphCommandSpec,
   type QueryOrView,
@@ -10,6 +11,7 @@ import {
   type SelectionPredicate,
 } from '@ontahi/core/data-graph';
 
+import { compilePostgresDerivedField } from './derived-field.js';
 import type { PostgresEntityMapping } from './mapping.js';
 
 export type ParameterizedSql = {
@@ -21,6 +23,17 @@ export const quotePostgresIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
 
 const quoteIdentifier = quotePostgresIdentifier;
+
+const resolvePostgresFieldSql = (mapping: PostgresEntityMapping, fieldName: string) => {
+  const column = mapping.columns[fieldName];
+  if (column) return quoteIdentifier(column);
+
+  const field = mapping.entity.fields[fieldName];
+  if (field && isDerivedFieldDefinition(field) && field.derived.expression) {
+    return compilePostgresDerivedField(mapping.entity, mapping, field.derived.expression);
+  }
+  return undefined;
+};
 
 export type PostgresSelectionLeafCompiler = (
   predicate: SelectionPredicate,
@@ -63,11 +76,10 @@ const compilePostgresSelectionTree = (
   if (predicate.kind !== 'predicate') {
     throw new Error(`PostgreSQL ${description} predicate could not be lowered.`);
   }
-  const column = mapping.columns[predicate.fieldName];
-  if (!column) {
+  const fieldSql = resolvePostgresFieldSql(mapping, predicate.fieldName);
+  if (!fieldSql)
     throw new Error(`Field ${mapping.entity.name}.${predicate.fieldName} is not mapped.`);
-  }
-  return compileLeaf(predicate, quoteIdentifier(column), values);
+  return compileLeaf(predicate, fieldSql, values);
 };
 
 export const compilePostgresSelectionWith = (
@@ -118,10 +130,40 @@ export const compilePostgresSelection = (
 ): string =>
   compilePostgresSelectionWith(expression, mapping, values, compilePostgresSelectionLeaf);
 
-const columnsFor = (mapping: PostgresEntityMapping) =>
-  Object.entries(mapping.columns).map(
+const selectedDerivedFieldNames = (spec: QuerySpec) => {
+  if (!spec.select) {
+    return Object.entries(spec.root.fields)
+      .filter(([, field]) => isDerivedFieldDefinition(field))
+      .map(([fieldName]) => fieldName);
+  }
+
+  const selected = new Set<string>();
+  const visit = (selection: Record<string, unknown>) => {
+    for (const value of Object.values(selection)) {
+      if (value && typeof value === 'object' && (value as { kind?: string }).kind === 'field-ref') {
+        const fieldName = (value as { fieldName: string }).fieldName;
+        if (isDerivedFieldDefinition(spec.root.fields[fieldName]!)) selected.add(fieldName);
+      } else if (value && typeof value === 'object') {
+        visit(value as Record<string, unknown>);
+      }
+    }
+  };
+  visit(spec.select);
+  return [...selected];
+};
+
+const columnsFor = (mapping: PostgresEntityMapping, spec: QuerySpec) => [
+  ...Object.entries(mapping.columns).map(
     ([field, column]) => `${quoteIdentifier(column)} AS ${quoteIdentifier(field)}`,
-  );
+  ),
+  ...selectedDerivedFieldNames(spec).map(fieldName => {
+    const field = spec.root.fields[fieldName]!;
+    if (!isDerivedFieldDefinition(field) || !field.derived.expression) {
+      throw new Error(`Derived Field ${spec.root.name}.${fieldName} has no Model Expression.`);
+    }
+    return `${compilePostgresDerivedField(spec.root, mapping, field.derived.expression)} AS ${quoteIdentifier(fieldName)}`;
+  }),
+];
 
 export const compilePostgresQuery = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
@@ -140,12 +182,12 @@ export const compilePostgresQuery = <TParams, TResult>(
     ? ''
     : spec.orderBy
         .map(orderSpec => {
-          const column = mapping.columns[orderSpec.fieldName];
-          if (!column) {
+          const fieldSql = resolvePostgresFieldSql(mapping, orderSpec.fieldName);
+          if (!fieldSql) {
             throw new Error(`Field ${mapping.entity.name}.${orderSpec.fieldName} is not mapped.`);
           }
           return (
-            `${quoteIdentifier(column)} ${orderSpec.direction.toUpperCase()}` +
+            `${fieldSql} ${orderSpec.direction.toUpperCase()}` +
             (orderSpec.direction === 'asc' ? ' NULLS FIRST' : ' NULLS LAST')
           );
         })
@@ -154,7 +196,7 @@ export const compilePostgresQuery = <TParams, TResult>(
 
   return {
     text:
-      `SELECT ${options.count ? 'COUNT(*)::int AS "count"' : columnsFor(mapping).join(', ')}` +
+      `SELECT ${options.count ? 'COUNT(*)::int AS "count"' : columnsFor(mapping, spec).join(', ')}` +
       ` FROM ${quoteIdentifier(mapping.table)} WHERE ${selection}` +
       `${order ? ` ORDER BY ${order}` : ''}${limit}`,
     values,
@@ -171,6 +213,14 @@ const returningClause = (
     : forceProbe
       ? [Object.keys(mapping.columns)[0]!]
       : [];
+  const derivedFields = fields.filter(fieldName =>
+    isDerivedFieldDefinition(command.root.fields[fieldName]!),
+  );
+  if (derivedFields.length > 0) {
+    throw new Error(
+      `PostgreSQL Commands cannot return virtual derived Fields on ${command.root.name}: ${derivedFields.join(', ')}. Read them through a Query instead.`,
+    );
+  }
   return fields.length
     ? ` RETURNING ${fields
         .map(field => `${quoteIdentifier(mapping.columns[field]!)} AS ${quoteIdentifier(field)}`)
@@ -188,6 +238,18 @@ export const compilePostgresCommand = (
 
   const values: unknown[] = [];
   const payloads = Array.isArray(command.payload) ? command.payload : [command.payload];
+  for (const payload of payloads) {
+    if (!payload || typeof payload !== 'object') continue;
+    const derivedFields = Object.keys(payload).filter(fieldName => {
+      const field = command.root.fields[fieldName];
+      return field ? isDerivedFieldDefinition(field) : false;
+    });
+    if (derivedFields.length > 0) {
+      throw new Error(
+        `Cannot assign derived Fields on ${command.root.name}: ${derivedFields.join(', ')}.`,
+      );
+    }
+  }
   const returning = returningClause(command, mapping, command.cardinality === 'one');
 
   if (

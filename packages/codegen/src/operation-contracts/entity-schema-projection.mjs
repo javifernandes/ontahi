@@ -1,5 +1,7 @@
 import ts from 'typescript';
 
+import { compileModelExpressionCallback } from '../model-expression/compiler.mjs';
+
 import { isOntahiEntityDeclarationCall } from './entity-discovery.mjs';
 import { resolveImportedSchemaContext } from './source-resolution.mjs';
 import {
@@ -88,6 +90,108 @@ const projectReferenceFields = (fieldsNode, context) => {
   });
 };
 
+const fieldCallName = node => {
+  const expression = unwrapExpression(node);
+  if (
+    !ts.isCallExpression(expression) ||
+    !ts.isPropertyAccessExpression(expression.expression) ||
+    !ts.isIdentifier(expression.expression.expression) ||
+    expression.expression.expression.text !== 'field'
+  ) {
+    return undefined;
+  }
+  return expression.expression.name.text;
+};
+
+const modelFieldSemantic = node => {
+  const expression = unwrapExpression(node);
+  const callName = fieldCallName(expression);
+  if (['number', 'integer', 'nonNegativeInteger', 'positiveInteger'].includes(callName)) {
+    return 'number';
+  }
+  if (callName === 'boolean') return 'boolean';
+  if (
+    ts.isCallExpression(expression) &&
+    ['nullable', 'optional', 'derived'].includes(callName) &&
+    expression.arguments[0]
+  ) {
+    return modelFieldSemantic(expression.arguments[0]);
+  }
+  return 'field';
+};
+
+const propertyName = property =>
+  ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
+    ? property.name.text
+    : undefined;
+
+const formatModelExpressionDiagnostic = diagnostic =>
+  `${diagnostic.source.path}:${diagnostic.source.line}:${diagnostic.source.column} [${diagnostic.code}] ${diagnostic.message}`;
+
+const projectDerivedFields = (fieldsNode, context, relations) => {
+  const resolved = resolveProjectionValueNode(fieldsNode, context);
+  if (!resolved.expression || !ts.isObjectLiteralExpression(resolved.expression)) {
+    return {
+      fieldsText: resolveProjectionValueText(fieldsNode, context),
+      derivedFields: [],
+      diagnostics: [],
+    };
+  }
+
+  const symbols = Object.fromEntries([
+    ...resolved.expression.properties.flatMap(property => {
+      if (!ts.isPropertyAssignment(property)) return [];
+      const name = propertyName(property);
+      return name
+        ? [
+            [
+              name,
+              { kind: 'field', field: name, semantic: modelFieldSemantic(property.initializer) },
+            ],
+          ]
+        : [];
+    }),
+    ...relations
+      .filter(relation => relation.kind === 'hasMany' || relation.kind === 'manyToMany')
+      .map(relation => [relation.name, { kind: 'relation', relation: relation.name }]),
+  ]);
+  const diagnostics = [];
+  const derivedFields = [];
+  const properties = resolved.expression.properties.map(property => {
+    if (!ts.isPropertyAssignment(property)) return property.getText();
+    const expression = unwrapExpression(property.initializer);
+    if (fieldCallName(expression) !== 'derived' || !ts.isCallExpression(expression)) {
+      return property.getText();
+    }
+    const name = propertyName(property);
+    const [baseField, callback] = expression.arguments;
+    if (!name || !baseField || !callback) return property.getText();
+    const compiled = compileModelExpressionCallback(callback, {
+      sourceFile: resolved.context.sourceFile,
+      sourcePath: resolved.context.sourcePath,
+      symbols,
+    });
+    diagnostics.push(...compiled.diagnostics.map(formatModelExpressionDiagnostic));
+    if (!compiled.program) return property.getText();
+    derivedFields.push({ name, expression: compiled.program });
+    return `${property.name.getText()}: field.derived(${baseField.getText()}, ${JSON.stringify(compiled.program)})`;
+  });
+
+  if (derivedFields.length === 0 && diagnostics.length === 0) {
+    return {
+      fieldsText: resolveProjectionValueText(fieldsNode, context),
+      derivedFields,
+      diagnostics,
+    };
+  }
+
+  return {
+    fieldsText: `{ ${properties.join(', ')} }`,
+    derivedFields,
+    diagnostics,
+  };
+};
+
 export const projectEntitySchemaConfig = (configArg, context) => {
   const propertyText = name => {
     const property = readObjectLiteralProperty(configArg, name);
@@ -164,15 +268,26 @@ export const projectEntitySchemaConfig = (configArg, context) => {
         })
       : [];
 
+  const derivedProjection =
+    fieldsProperty && ts.isPropertyAssignment(fieldsProperty)
+      ? projectDerivedFields(fieldsProperty.initializer, context, relations)
+      : { fieldsText, derivedFields: [], diagnostics: [] };
+
   return {
     name,
-    fieldsText,
+    fieldsText: derivedProjection.fieldsText,
     ...(propertyText('display') ? { displayText: propertyText('display') } : {}),
     ...(propertyText('freshness') ? { freshnessText: propertyText('freshness') } : {}),
     ...(propertyText('locators') ? { locatorsText: propertyText('locators') } : {}),
     ...(propertyText('identity') ? { identityText: propertyText('identity') } : {}),
     ...(referenceFields.length > 0 ? { referenceFields } : {}),
     ...(relations.length > 0 ? { relations } : {}),
+    ...(derivedProjection.derivedFields.length > 0
+      ? { derivedFields: derivedProjection.derivedFields }
+      : {}),
+    ...(derivedProjection.diagnostics.length > 0
+      ? { diagnostics: derivedProjection.diagnostics }
+      : {}),
   };
 };
 

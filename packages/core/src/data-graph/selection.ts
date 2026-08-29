@@ -1,5 +1,9 @@
 import { GraphCommand, type GraphCommandSpec } from './command.js';
-import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
+import type {
+  AnyEntityDefinition,
+  InferEntityMutationRecord,
+  InferEntityRecord,
+} from './definitions.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
 import {
   selectionNone,
@@ -8,6 +12,10 @@ import {
   type SelectionExpression,
 } from './selection-ast.js';
 import type { RecursiveEntityViewDefinition } from './view.js';
+
+type EntityMutationPayload<TEntity extends AnyEntityDefinition> = Partial<
+  InferEntityMutationRecord<TEntity['fields']>
+>;
 
 export type QueryWhereArg<TEntity extends AnyEntityDefinition, TResult> = Parameters<
   QueryBuilder<TEntity, TResult>['where']
@@ -30,9 +38,12 @@ export type EntityFieldName<TEntity extends AnyEntityDefinition> = keyof InferEn
 > &
   string;
 
+export type EntityMutationFieldName<TEntity extends AnyEntityDefinition> =
+  keyof InferEntityMutationRecord<TEntity['fields']> & string;
+
 export type PickEntityFields<
   TEntity extends AnyEntityDefinition,
-  TFieldNames extends readonly EntityFieldName<TEntity>[],
+  TFieldNames extends readonly EntityMutationFieldName<TEntity>[],
 > = Pick<InferEntityRecord<TEntity['fields']>, TFieldNames[number]>;
 
 type EntitySelection<TEntity extends AnyEntityDefinition> =
@@ -54,12 +65,12 @@ const resolveEntitySelection = <TEntity extends AnyEntityDefinition>(
 export const createUpdateCommandSpec = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
   selection: EntitySelection<TEntity>,
-  payload: Partial<InferEntityRecord<TEntity['fields']>>,
+  payload: EntityMutationPayload<TEntity>,
   options?: {
-    returning?: readonly EntityFieldName<TEntity>[];
+    returning?: readonly EntityMutationFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
   },
-): GraphCommandSpec<TEntity, Partial<InferEntityRecord<TEntity['fields']>>> => ({
+): GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> => ({
   kind: 'command',
   operation: 'update',
   root,
@@ -73,7 +84,7 @@ export const createDeleteCommandSpec = <TEntity extends AnyEntityDefinition, TRe
   root: TEntity,
   selection: EntitySelection<TEntity>,
   options?: {
-    returning?: readonly EntityFieldName<TEntity>[];
+    returning?: readonly EntityMutationFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
   },
 ): GraphCommandSpec<TEntity, never, TResult> => ({
@@ -87,12 +98,12 @@ export const createDeleteCommandSpec = <TEntity extends AnyEntityDefinition, TRe
 
 export const createInsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
-  payload: Partial<InferEntityRecord<TEntity['fields']>>,
+  payload: EntityMutationPayload<TEntity>,
   options?: {
-    returning?: readonly EntityFieldName<TEntity>[];
+    returning?: readonly EntityMutationFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
   },
-): GraphCommandSpec<TEntity, Partial<InferEntityRecord<TEntity['fields']>>> => ({
+): GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> => ({
   kind: 'command',
   operation: 'insert',
   root,
@@ -104,11 +115,11 @@ export const createInsertCommandSpec = <TEntity extends AnyEntityDefinition>(
 
 export const createInsertManyCommandSpec = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
-  payload: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
+  payload: Array<EntityMutationPayload<TEntity>>,
   options?: {
-    returning?: readonly EntityFieldName<TEntity>[];
+    returning?: readonly EntityMutationFieldName<TEntity>[];
   },
-): GraphCommandSpec<TEntity, Array<Partial<InferEntityRecord<TEntity['fields']>>>> => ({
+): GraphCommandSpec<TEntity, Array<EntityMutationPayload<TEntity>>> => ({
   kind: 'command',
   operation: 'insert_many',
   root,
@@ -117,14 +128,19 @@ export const createInsertManyCommandSpec = <TEntity extends AnyEntityDefinition>
   ...(options?.returning ? { returning: [...options.returning] } : {}),
 });
 
-export const createUpsertCommandSpec = <TEntity extends AnyEntityDefinition>(
+type UpsertCommandOptions<TEntity extends AnyEntityDefinition> = {
+  conflictOn: readonly EntityMutationFieldName<TEntity>[];
+  strategy: 'ignore' | 'merge';
+};
+
+const createUpsertCommandSpecForPayload = <
+  TEntity extends AnyEntityDefinition,
+  TPayload extends EntityMutationPayload<TEntity> | Array<EntityMutationPayload<TEntity>>,
+>(
   root: TEntity,
-  payload: Partial<InferEntityRecord<TEntity['fields']>>,
-  options: {
-    conflictOn: readonly EntityFieldName<TEntity>[];
-    strategy: 'ignore' | 'merge';
-  },
-): GraphCommandSpec<TEntity, Partial<InferEntityRecord<TEntity['fields']>>> => ({
+  payload: TPayload,
+  options: UpsertCommandOptions<TEntity>,
+): GraphCommandSpec<TEntity, TPayload> => ({
   kind: 'command',
   operation: 'upsert',
   root,
@@ -136,24 +152,18 @@ export const createUpsertCommandSpec = <TEntity extends AnyEntityDefinition>(
   },
 });
 
-export const createUpsertManyCommandSpec = <TEntity extends AnyEntityDefinition>(
+export const createUpsertCommandSpec: <TEntity extends AnyEntityDefinition>(
   root: TEntity,
-  payload: Array<Partial<InferEntityRecord<TEntity['fields']>>>,
-  options: {
-    conflictOn: readonly EntityFieldName<TEntity>[];
-    strategy: 'ignore' | 'merge';
-  },
-): GraphCommandSpec<TEntity, Array<Partial<InferEntityRecord<TEntity['fields']>>>> => ({
-  kind: 'command',
-  operation: 'upsert',
-  root,
-  selection: selectionNone(),
-  payload,
-  upsert: {
-    conflictOn: [...options.conflictOn],
-    strategy: options.strategy,
-  },
-});
+  payload: EntityMutationPayload<TEntity>,
+  options: UpsertCommandOptions<TEntity>,
+) => GraphCommandSpec<TEntity, EntityMutationPayload<TEntity>> = createUpsertCommandSpecForPayload;
+
+export const createUpsertManyCommandSpec: <TEntity extends AnyEntityDefinition>(
+  root: TEntity,
+  payload: Array<EntityMutationPayload<TEntity>>,
+  options: UpsertCommandOptions<TEntity>,
+) => GraphCommandSpec<TEntity, Array<EntityMutationPayload<TEntity>>> =
+  createUpsertCommandSpecForPayload;
 
 export interface GraphSelectionFactories {
   createSelection<TEntity extends AnyEntityDefinition, TResult>(
@@ -219,62 +229,58 @@ export class GraphSelection<
   }
 
   update(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
-  ): GraphCommand<TEntity, Partial<InferEntityRecord<TEntity['fields']>>> {
+    payload: EntityMutationPayload<TEntity>,
+  ): GraphCommand<TEntity, EntityMutationPayload<TEntity>> {
     return this.updateCommand(payload);
   }
 
   updateOne(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
-  ): GraphCommand<TEntity, Partial<InferEntityRecord<TEntity['fields']>>> {
+    payload: EntityMutationPayload<TEntity>,
+  ): GraphCommand<TEntity, EntityMutationPayload<TEntity>> {
     return this.updateCommand(payload, { cardinality: 'one' });
   }
 
   updateMany(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
-  ): GraphCommand<TEntity, Partial<InferEntityRecord<TEntity['fields']>>> {
+    payload: EntityMutationPayload<TEntity>,
+  ): GraphCommand<TEntity, EntityMutationPayload<TEntity>> {
     return this.update(payload);
   }
 
-  updateReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+  updateReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ): GraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     Array<PickEntityFields<TEntity, TFieldNames>>
   > {
     return this.updateCommand(payload, { returning: fieldNames }) as GraphCommand<
       TEntity,
-      Partial<InferEntityRecord<TEntity['fields']>>,
+      EntityMutationPayload<TEntity>,
       Array<PickEntityFields<TEntity, TFieldNames>>
     >;
   }
 
-  updateOneReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+  updateOneReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
-  ): GraphCommand<
-    TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
-    PickEntityFields<TEntity, TFieldNames>
-  > {
+  ): GraphCommand<TEntity, EntityMutationPayload<TEntity>, PickEntityFields<TEntity, TFieldNames>> {
     return this.updateCommand(payload, {
       returning: fieldNames,
       cardinality: 'one',
     }) as GraphCommand<
       TEntity,
-      Partial<InferEntityRecord<TEntity['fields']>>,
+      EntityMutationPayload<TEntity>,
       PickEntityFields<TEntity, TFieldNames>
     >;
   }
 
-  updateManyReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+  updateManyReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
+    payload: EntityMutationPayload<TEntity>,
     fieldNames: TFieldNames,
   ): GraphCommand<
     TEntity,
-    Partial<InferEntityRecord<TEntity['fields']>>,
+    EntityMutationPayload<TEntity>,
     Array<PickEntityFields<TEntity, TFieldNames>>
   > {
     return this.updateReturning(payload, fieldNames);
@@ -292,7 +298,7 @@ export class GraphSelection<
     return this.delete();
   }
 
-  deleteOneReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  deleteOneReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, never, PickEntityFields<TEntity, TFieldNames>> {
     return this.deleteCommand<PickEntityFields<TEntity, TFieldNames>>({
@@ -301,7 +307,7 @@ export class GraphSelection<
     });
   }
 
-  deleteManyReturning<TFieldNames extends readonly EntityFieldName<TEntity>[]>(
+  deleteManyReturning<TFieldNames extends readonly EntityMutationFieldName<TEntity>[]>(
     fieldNames: TFieldNames,
   ): GraphCommand<TEntity, never, Array<PickEntityFields<TEntity, TFieldNames>>> {
     return this.deleteCommand<Array<PickEntityFields<TEntity, TFieldNames>>>({
@@ -330,9 +336,9 @@ export class GraphSelection<
   }
 
   protected updateCommand(
-    payload: Partial<InferEntityRecord<TEntity['fields']>>,
+    payload: EntityMutationPayload<TEntity>,
     options?: {
-      returning?: readonly EntityFieldName<TEntity>[];
+      returning?: readonly EntityMutationFieldName<TEntity>[];
       cardinality?: 'one' | 'many';
     },
   ) {
@@ -345,7 +351,7 @@ export class GraphSelection<
   }
 
   protected deleteCommand<TResultCommand = void>(options?: {
-    returning?: readonly EntityFieldName<TEntity>[];
+    returning?: readonly EntityMutationFieldName<TEntity>[];
     cardinality?: 'one' | 'many';
   }) {
     return this.factories.createCommand<TEntity, never, TResultCommand>(
