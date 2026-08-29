@@ -141,7 +141,7 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
     });
   });
 
-  it('rejects a full destination before attempting the Relation transition', async () => {
+  it('rejects a full destination inside the serialized Relation transition', async () => {
     await pool.query(`UPDATE courses SET capacity = 0 WHERE id = 'course-2'`);
     await pool.query(`
       CREATE OR REPLACE FUNCTION classroom_test_reject_student_update() RETURNS trigger AS $$
@@ -164,7 +164,10 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
         }),
       ).resolves.toMatchObject({
         ok: false,
-        failure: { reason: 'course_full', course: Course.refById('course-2') },
+        failure: {
+          reason: 'relation_constraint_rejected',
+          rejection: { code: 'course_full' },
+        },
       });
 
       await expect(
@@ -276,7 +279,7 @@ describePostgres('Classroom PostgreSQL-backed transfer', () => {
         }),
       ).resolves.toMatchObject({
         ok: false,
-        failure: { reason: 'internal_error' },
+        failure: { reason: 'execution_failed' },
       });
 
       await expect(

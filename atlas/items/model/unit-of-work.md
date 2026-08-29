@@ -57,10 +57,11 @@ typed failure, and defect all restore the parent scope.
 
 The provider-backed Classroom proof exercises that boundary from an atomic Domain Operation.
 `Student.transfer(...)` declares three `existingRef` participants, conditionally changes one
-Relation, and updates two Course rows without receiving a transaction runtime parameter or calling
-`resolve()` manually. A known-full destination stops
-before structural mutation. PostgreSQL commits all three mutations together or restores them all
-when stale capacity produces a domain failure after the Relation change.
+Relation, and receives no transaction runtime parameter or manual `resolve()` calls. Its
+`Course.students` count constraint reuses that transaction context, serializes contenders on the
+destination Course, and rejects prospective membership before changing the edge. The virtual
+capacity Fields then observe the committed Relation state; no counter rows are coordinated by the
+Operation body.
 
 Command construction remains pure and portable. Entering a UnitOfWork or transaction never makes
 construction execute a Command implicitly. The explicit execution marker is `.run()`; context only

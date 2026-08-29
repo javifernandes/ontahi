@@ -1,7 +1,6 @@
 import { field, graphSchema } from '@ontahi/core/data-graph';
-import { entity, relation } from '@ontahi/core/entity';
+import { entity, relation, relationConstraint } from '@ontahi/core/entity';
 import { failOperation } from '@ontahi/core/runtime/server';
-import { Effect } from 'effect';
 
 const entityDefaults = {
   authority: 'server',
@@ -73,7 +72,15 @@ export const Course = entity({
   name: 'Course',
   fields: CourseFields,
   relations: {
-    students: relation.hasMany(StudentRef, { via: 'currentCourse' }),
+    students: relation.hasMany(StudentRef, {
+      via: 'currentCourse',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        }),
+      ],
+    }),
     enrollments: relation.hasMany(EnrollmentRef, { via: 'course' }),
   },
 });
@@ -102,20 +109,13 @@ export const Student = entity({
           },
         },
         *run({ student, previousCourse, nextCourse }) {
-          if (nextCourse.availableSeats === 0) {
-            return yield* failOperation('course_full', 'Next Course has no available seats.', {
-              course: nextCourse.ref,
-            });
-          }
-
           const relationship = yield* students
             .refById(student.id)
             .currentCourse.assign(nextCourse.ref, {
               ifCurrent: previousCourse.ref,
               onMismatch: 'skip',
             })
-            .run()
-            .pipe(Effect.orDie);
+            .run();
 
           if (relationship.status === 'not-applied') {
             return yield* failOperation(

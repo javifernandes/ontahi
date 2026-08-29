@@ -3,7 +3,10 @@ import { Effect } from 'effect';
 import type { AnyEntityDefinition, AnyReferenceFieldDefinition } from '../definitions.js';
 import { isReferenceFieldDefinition } from '../definitions.js';
 import { liftEntityReferenceValue, lowerEntityReferenceValue } from '../reference-field.js';
-import { resolveDirectRelationConstraints } from '../relation-constraint.js';
+import {
+  resolveDirectRelationConstraints,
+  resolveDirectRelationCountConstraints,
+} from '../relation-constraint.js';
 import {
   appliedRelationshipCommand,
   notAppliedRelationshipCommand,
@@ -86,6 +89,54 @@ const assertRelationConstraints = (
   }
 };
 
+const assertRelationCountConstraints = (
+  dataset: InMemoryDataset,
+  sourceEntity: AnyEntityDefinition,
+  targetEntity: AnyEntityDefinition,
+  sourceField: AnyReferenceFieldDefinition,
+  command: RelationshipCommand & { target: NonNullable<RelationshipCommand['target']> },
+) => {
+  let constraints: ReturnType<typeof resolveDirectRelationCountConstraints>;
+  try {
+    constraints = resolveDirectRelationCountConstraints(
+      command.relation,
+      sourceEntity,
+      targetEntity,
+    );
+  } catch (cause) {
+    throw new InMemoryDataGraphError(
+      cause instanceof Error ? cause.message : 'Cannot resolve direct Relation count constraints.',
+      'invalid_command',
+      cause,
+    );
+  }
+
+  const targetValue = lowerEntityReferenceValue(sourceField, command.target);
+  const currentCount = (dataset[sourceEntity.name] ?? []).filter(
+    candidate => candidate[command.relation.fieldName] === targetValue,
+  ).length;
+  for (const constraint of constraints) {
+    const participantRows = (dataset[constraint.entity.name] ?? []).filter(row =>
+      matchesRef(row, command.target),
+    );
+    const limit = participantRows[0]?.[constraint.fieldName];
+    if (participantRows.length !== 1 || typeof limit !== 'number') {
+      throw new InMemoryDataGraphError(
+        `Relation count constraint Field ${constraint.entity.name}.${constraint.fieldName} could not be evaluated.`,
+        'invalid_command',
+      );
+    }
+    if (currentCount + 1 <= limit) continue;
+
+    throw new InMemoryDataGraphError(
+      constraint.rejection.message,
+      'relation_constraint_rejected',
+      undefined,
+      constraint.rejection,
+    );
+  }
+};
+
 type RelationshipMutationContext = {
   dataset: InMemoryDataset;
   command: RelationshipCommand;
@@ -132,6 +183,13 @@ const applyLink = (context: RelationshipMutationContext): RelationshipCommandRes
   if (context.currentTarget && currentValue === nextValue) {
     return appliedRelationshipCommand({ added: [], removed: [] });
   }
+  assertRelationCountConstraints(
+    dataset,
+    context.sourceEntity,
+    context.targetEntity,
+    sourceField,
+    command as RelationshipCommand & { target: NonNullable<RelationshipCommand['target']> },
+  );
   rows[rowIndex] = { ...row, [command.relation.fieldName]: nextValue };
   dataset[context.sourceEntity.name] = rows;
   return appliedRelationshipCommand({

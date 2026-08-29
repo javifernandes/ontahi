@@ -50,6 +50,62 @@ describe('Supabase direct Relationship Commands', () => {
     });
   });
 
+  it('fails closed when the Relation requires authority-serialized aggregate enforcement', async () => {
+    const LimitedCourse = entity('SupabaseLimitedCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const LimitedStudent = entity('SupabaseLimitedStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(LimitedCourse)),
+    });
+    LimitedCourse.hasMany('students', LimitedStudent, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course has no available seats.',
+        }),
+      ],
+    });
+    mapEntity(LimitedCourse).toTable('limited_courses', { id: 'id', capacity: 'capacity' });
+    mapEntity(LimitedStudent).toTable('limited_students', {
+      id: 'id',
+      course: 'course_id',
+    });
+    const rpc = vi.fn();
+    const command = relationship(
+      LimitedStudent,
+      'course',
+      createEntityRef(LimitedStudent, { id: 'student-1' }),
+    ).assign(createEntityRef(LimitedCourse, { id: 'course-1' }));
+
+    await expect(
+      Effect.runPromise(
+        executeSupabaseRelationshipCommandEffect(
+          {
+            getClient: () => Effect.succeed({ from: vi.fn(), rpc }),
+            createError,
+            entities: [LimitedStudent, LimitedCourse],
+          },
+          command,
+        ),
+      ),
+    ).rejects.toThrow('authority-serialized Relation count constraints');
+    expect(rpc).not.toHaveBeenCalled();
+
+    expect(
+      compileSupabaseRelationshipRpcPayload(
+        relationship(
+          LimitedCourse,
+          'students',
+          createEntityRef(LimitedCourse, { id: 'course-1' }),
+        ).remove(createEntityRef(LimitedStudent, { id: 'student-1' })),
+        [LimitedStudent, LimitedCourse],
+      ),
+    ).toMatchObject({ version: 1, action: 'unlink' });
+  });
+
   it('uses one RPC and materializes the exact replacement delta', async () => {
     const command = relationship(Student, 'course', student).assign(next, {
       ifCurrent: previous,

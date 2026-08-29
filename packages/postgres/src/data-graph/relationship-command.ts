@@ -14,6 +14,7 @@ import {
   compilePostgresRelationConstraints,
   postgresConstraintProjection,
 } from './relation-constraint.js';
+import { compilePostgresRelationCountConstraints } from './relation-count-constraint.js';
 import { compilePostgresSelection, quotePostgresIdentifier } from './sql.js';
 
 export type PostgresRelationshipCommandRow = {
@@ -27,6 +28,7 @@ export type PostgresRelationshipCommandRow = {
 
 export type CompiledPostgresRelationshipCommand = {
   sql: { text: string; values: unknown[] };
+  serializationLock?: { text: string; values: unknown[] };
   sourceMapping: PostgresEntityMapping;
   targetMapping: PostgresEntityMapping;
 };
@@ -111,23 +113,34 @@ export const compilePostgresRelationshipCommand = (
     sourceMapping.columns[command.relation.fieldName]!,
   );
   const requiredTargetCount = command.action === 'link' ? 'target_count = 1' : 'TRUE';
+  const countConstraints = compilePostgresRelationCountConstraints({
+    command,
+    sourceMapping,
+    targetMapping,
+    relationColumn,
+    nextPlaceholder,
+    values,
+  });
 
   return {
     sourceMapping,
     targetMapping,
+    ...(countConstraints.serializationLock
+      ? { serializationLock: countConstraints.serializationLock }
+      : {}),
     sql: {
       values,
       text: `WITH source_rows AS MATERIALIZED (
   SELECT ${relationColumn} AS old_target${postgresConstraintProjection(constraints.sourceProjection)} FROM ${sourceTable} WHERE ${sourceWhere} FOR UPDATE
 ), target_rows AS MATERIALIZED (
-  SELECT 1 AS endpoint${postgresConstraintProjection(constraints.targetProjection)} FROM ${targetTable} WHERE ${targetWhere} FOR SHARE
+  SELECT 1 AS endpoint${postgresConstraintProjection(constraints.targetProjection)}${postgresConstraintProjection(countConstraints.targetProjection)} FROM ${targetTable} WHERE ${targetWhere} FOR SHARE
 ), state AS (
   SELECT (SELECT COUNT(*)::int FROM source_rows) AS source_count,
          (SELECT COUNT(*)::int FROM target_rows) AS target_count,
-         (SELECT old_target FROM source_rows LIMIT 1) AS old_target${postgresConstraintProjection(constraints.stateProjection)}
+         (SELECT old_target FROM source_rows LIMIT 1) AS old_target${postgresConstraintProjection(constraints.stateProjection)}${postgresConstraintProjection(countConstraints.stateProjection)}
 ), guarded_state AS (
   SELECT *, ${expectedCondition} AS precondition_matched,
-         ${constraints.rejectionExpression} AS constraint_rejection
+         COALESCE(${constraints.rejectionExpression}, ${countConstraints.rejectionExpression}) AS constraint_rejection
   FROM state
 ), updated AS (
   UPDATE ${sourceTable} SET ${relationColumn} = ${nextPlaceholder}

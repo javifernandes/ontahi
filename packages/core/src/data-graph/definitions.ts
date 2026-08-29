@@ -542,7 +542,17 @@ export type RelationParticipantSelectionConstraint = {
   readonly rejection: RelationConstraintRejection;
 };
 
-export type RelationConstraint = RelationParticipantSelectionConstraint;
+export type RelationCountAtMostFieldConstraint = {
+  readonly kind: 'relation-count-at-most-field';
+  /** Field on the Entity that declares the to-many Relation. */
+  readonly fieldName: string;
+  readonly enforcement: 'authority-serialized';
+  readonly rejection: RelationConstraintRejection;
+};
+
+export type RelationConstraint =
+  | RelationParticipantSelectionConstraint
+  | RelationCountAtMostFieldConstraint;
 
 export const assertPortableRelationConstraints = (
   constraints: readonly RelationConstraint[] | undefined,

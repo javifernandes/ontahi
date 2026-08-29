@@ -4,6 +4,7 @@ import {
   entity,
   field,
   relationConstraint,
+  resolveDirectRelationCountConstraints,
   resolveDirectRelationConstraints,
   resolveManyToManyRelationConstraints,
 } from './index.js';
@@ -35,6 +36,108 @@ describe('Relation constraint authoring', () => {
         message: 'Completed todos cannot be tagged.',
       },
     });
+  });
+
+  it('builds and canonically resolves an authority-serialized inverse count constraint', () => {
+    const Course = entity('CountConstraintCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const Student = entity('CountConstraintStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(Course)),
+    });
+    const constraint = relationConstraint.countAtMost('capacity', {
+      code: 'course_full',
+      message: 'Course has no available seats.',
+      parameters: { relation: 'students' },
+    });
+    Course.hasMany('students', Student, { via: 'course', constraints: [constraint] });
+
+    expect(constraint).toEqual({
+      kind: 'relation-count-at-most-field',
+      fieldName: 'capacity',
+      enforcement: 'authority-serialized',
+      rejection: {
+        version: 1,
+        code: 'course_full',
+        message: 'Course has no available seats.',
+        parameters: { relation: 'students' },
+      },
+    });
+    expect(
+      resolveDirectRelationCountConstraints(
+        {
+          sourceEntityName: Student.name,
+          fieldName: 'course',
+          targetEntityName: Course.name,
+        },
+        Student,
+        Course,
+      ),
+    ).toEqual([
+      {
+        participant: 'target',
+        entity: Course,
+        fieldName: 'capacity',
+        enforcement: 'authority-serialized',
+        rejection: constraint.rejection,
+      },
+    ]);
+  });
+
+  it('fails closed for invalid count limits and unsupported many-to-many aggregates', () => {
+    expect(() =>
+      relationConstraint.countAtMost('', {
+        code: 'invalid_limit',
+        message: 'Invalid limit.',
+      }),
+    ).toThrow('Field name cannot be empty');
+
+    const Course = entity('InvalidCountCourse', {
+      id: field.id(),
+      label: field.string(),
+    });
+    const Student = entity('InvalidCountStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(Course)),
+    });
+    Course.hasMany('students', Student, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('label', {
+          code: 'invalid_limit',
+          message: 'Invalid limit.',
+        }),
+      ],
+    });
+    expect(() =>
+      resolveDirectRelationCountConstraints(
+        {
+          sourceEntityName: Student.name,
+          fieldName: 'course',
+          targetEntityName: Course.name,
+        },
+        Student,
+        Course,
+      ),
+    ).toThrow('requires stored numeric Field label');
+
+    const Tag = entity('InvalidCountTag', { id: field.id() });
+    const Tagged = entity('InvalidCountTagged', {
+      id: field.id(),
+      limit: field.nonNegativeInteger(),
+    }).manyToMany('tags', Tag, {
+      constraints: [
+        relationConstraint.countAtMost('limit', {
+          code: 'too_many_tags',
+          message: 'Too many tags.',
+        }),
+      ],
+    });
+    expect(() => resolveManyToManyRelationConstraints(Tagged.relations.tags, Tagged, Tag)).toThrow(
+      'Many-to-many Relation count constraints are not supported',
+    );
   });
 
   it('rejects builder output that is not portable', () => {

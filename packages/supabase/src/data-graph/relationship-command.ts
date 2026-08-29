@@ -6,6 +6,7 @@ import {
   liftEntityReferenceValue,
   lowerEntityReferenceValue,
   notAppliedRelationshipCommand,
+  resolveDirectRelationCountConstraints,
   resolveDirectRelationConstraints,
   selectionReferences,
   type AnyEntityDefinition,
@@ -70,6 +71,13 @@ const resolveDirectRelation = (
   }
   let constraints: readonly SupabaseRelationParticipantConstraint[];
   try {
+    const countConstraints =
+      command.action === 'link'
+        ? resolveDirectRelationCountConstraints(command.relation, source, target)
+        : [];
+    if (countConstraints.length > 0) {
+      throw new Error('does not support authority-serialized Relation count constraints.');
+    }
     constraints =
       command.action === 'link'
         ? compileSupabaseRelationConstraints(

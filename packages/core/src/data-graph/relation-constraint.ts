@@ -3,6 +3,8 @@ import {
   resolveHasManyTargetField,
   type AnyEntityDefinition,
   type PortableSelectionExpression,
+  type RelationCountAtMostFieldConstraint,
+  type RelationConstraint,
   type RelationConstraintRejection,
   type RelationDefinition,
   type RelationParticipantSelectionConstraint,
@@ -39,6 +41,20 @@ export const relationConstraint = {
     build: SelectionBuilder<TEntity>,
     rejection: RelationConstraintRejectionInput,
   ) => participantSelection('target', entity, build, rejection),
+  countAtMost: (
+    fieldName: string,
+    rejection: RelationConstraintRejectionInput,
+  ): RelationCountAtMostFieldConstraint => {
+    if (!fieldName) throw new TypeError('Relation count constraint Field name cannot be empty.');
+    const constraint = {
+      kind: 'relation-count-at-most-field',
+      fieldName,
+      enforcement: 'authority-serialized',
+      rejection: { version: 1, ...rejection },
+    } as const;
+    assertPortableRelationConstraints([constraint]);
+    return constraint;
+  },
 };
 
 export type ResolvedRelationConstraint = {
@@ -98,15 +114,74 @@ const resolveConstraints = (
   sourceEntity: AnyEntityDefinition,
   targetEntity: AnyEntityDefinition,
 ): readonly ResolvedRelationConstraint[] =>
-  (relation.constraints ?? []).map(constraint => {
-    const participant = canonicalParticipant(constraint.participant, direction);
+  (relation.constraints ?? [])
+    .filter(
+      (constraint): constraint is RelationParticipantSelectionConstraint =>
+        constraint.kind === 'participant-selection',
+    )
+    .map(constraint => {
+      const participant = canonicalParticipant(constraint.participant, direction);
+      return {
+        participant,
+        entity: participant === 'source' ? sourceEntity : targetEntity,
+        selection: constraint.selection,
+        rejection: constraint.rejection,
+      };
+    });
+
+export type ResolvedDirectRelationCountConstraint = {
+  /** Participant is relative to the canonical direct Relation identity. */
+  readonly participant: 'target';
+  readonly entity: AnyEntityDefinition;
+  readonly fieldName: string;
+  readonly enforcement: 'authority-serialized';
+  readonly rejection: RelationConstraintRejection;
+};
+
+const countConstraints = (
+  constraints: readonly RelationConstraint[] | undefined,
+): readonly RelationCountAtMostFieldConstraint[] =>
+  (constraints ?? []).filter(
+    (constraint): constraint is RelationCountAtMostFieldConstraint =>
+      constraint.kind === 'relation-count-at-most-field',
+  );
+
+const resolveCountConstraints = (
+  declaringEntity: AnyEntityDefinition,
+  relationName: string,
+  relation: RelationDefinition,
+  direction: DirectRelationDirection,
+  targetEntity: AnyEntityDefinition,
+): readonly ResolvedDirectRelationCountConstraint[] => {
+  const constraints = countConstraints(relation.constraints);
+  if (constraints.length === 0) return [];
+  if (relation.relationKind !== 'hasMany') {
+    throw new TypeError(
+      `Relation count constraint ${declaringEntity.name}.${relationName} requires a to-many Relation.`,
+    );
+  }
+  if (direction !== 'inverse') {
+    throw new TypeError(
+      `Relation count constraint ${declaringEntity.name}.${relationName} did not resolve through its to-many endpoint.`,
+    );
+  }
+
+  return constraints.map(constraint => {
+    const field = declaringEntity.fields[constraint.fieldName];
+    if (!field || field.fieldType !== 'number' || field.derived) {
+      throw new TypeError(
+        `Relation count constraint ${declaringEntity.name}.${relationName} requires stored numeric Field ${constraint.fieldName}.`,
+      );
+    }
     return {
-      participant,
-      entity: participant === 'source' ? sourceEntity : targetEntity,
-      selection: constraint.selection,
+      participant: 'target',
+      entity: targetEntity,
+      fieldName: constraint.fieldName,
+      enforcement: constraint.enforcement,
       rejection: constraint.rejection,
     };
   });
+};
 
 export const resolveDirectRelationConstraints = (
   identity: CanonicalRelationIdentity,
@@ -137,6 +212,45 @@ export const resolveDirectRelationConstraints = (
   return resolved;
 };
 
+export const resolveDirectRelationCountConstraints = (
+  identity: CanonicalRelationIdentity,
+  sourceEntity: AnyEntityDefinition,
+  targetEntity: AnyEntityDefinition,
+): readonly ResolvedDirectRelationCountConstraint[] => {
+  if (
+    identity.sourceEntityName !== sourceEntity.name ||
+    identity.targetEntityName !== targetEntity.name
+  ) {
+    throw new Error(
+      'Direct Relation count constraint Entities do not match its canonical identity.',
+    );
+  }
+
+  const resolved: ResolvedDirectRelationCountConstraint[] = [];
+  for (const declaringEntity of new Set([sourceEntity, targetEntity])) {
+    for (const [relationName, relation] of Object.entries(declaringEntity.relations)) {
+      if (countConstraints(relation.constraints).length === 0) continue;
+      const direction = resolveDirectRelationDirection(
+        declaringEntity,
+        relationName,
+        relation,
+        identity,
+      );
+      if (!direction) continue;
+      resolved.push(
+        ...resolveCountConstraints(
+          declaringEntity,
+          relationName,
+          relation,
+          direction,
+          targetEntity,
+        ),
+      );
+    }
+  }
+  return resolved;
+};
+
 export const resolveManyToManyRelationConstraints = (
   relation: RelationDefinition,
   sourceEntity: AnyEntityDefinition,
@@ -144,6 +258,9 @@ export const resolveManyToManyRelationConstraints = (
 ): readonly ResolvedRelationConstraint[] => {
   if (relation.relationKind !== 'manyToMany' || relation.target.name !== targetEntity.name) {
     throw new Error('Many-to-many Relation constraints do not match their endpoint Entities.');
+  }
+  if (countConstraints(relation.constraints).length > 0) {
+    throw new Error('Many-to-many Relation count constraints are not supported.');
   }
   return resolveConstraints(relation, 'forward', sourceEntity, targetEntity);
 };

@@ -130,6 +130,7 @@ export const executePostgresRelationshipCommand = (input: {
   command: RelationshipCommand;
   executeQuery: ExecuteQuery;
   mappings: readonly PostgresEntityMapping[];
+  authoritySerialized?: boolean;
 }) =>
   Effect.tryPromise({
     try: async () => {
@@ -143,6 +144,15 @@ export const executePostgresRelationshipCommand = (input: {
         throw new Error('PostgreSQL Relationship Command references an unmapped Entity.');
       }
       const compiled = compilePostgresRelationshipCommand(input.command, source, target);
+      if (compiled.serializationLock && !input.authoritySerialized) {
+        throw new PostgresDataGraphError(
+          'PostgreSQL Relationship Command requires an authority-serialized transaction.',
+          'execution_failed',
+        );
+      }
+      if (compiled.serializationLock) {
+        await input.executeQuery<QueryResultRow>(compiled.serializationLock);
+      }
       const result = await input.executeQuery<PostgresRelationshipCommandRow & QueryResultRow>(
         compiled.sql,
       );

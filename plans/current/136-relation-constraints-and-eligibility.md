@@ -18,6 +18,8 @@ Completed child: [136f. Supabase Relation Participant Eligibility](../done/136f-
 
 Completed child: [136g. Portable Relationship Command Outcomes](../done/136g-portable-relationship-command-outcomes.md)
 
+Completed child: [136h. Authority-Serialized Relation Count Constraints](../done/136h-authority-serialized-relation-count-constraints.md)
+
 ## Summary
 
 Let a Relation declare portable structural eligibility beyond topology and cardinality. The same
@@ -82,7 +84,7 @@ identity, not an executable closure transported to the server.
       parameters, and explicit redaction rules shared by Explorer, agents, and headless UI.
 - [x] Forward and inverse commands enforce the same canonical constraints.
 - [x] Batch commands define all-or-nothing, empty-selection, and affected-set semantics explicitly.
-- [ ] State-dependent constraints are enforced atomically with mutation; concurrent conflicts have
+- [x] State-dependent constraints are enforced atomically with mutation; concurrent conflicts have
       explicit detection, retry, and failure semantics.
 - [x] At least one adapter-backed proof evaluates and enforces eligibility without provider-specific
       model syntax.
@@ -114,5 +116,13 @@ stable rejection descriptor, and guard the edge mutation. Supabase uses payload 
 constrained links, so an older RPC fails closed; unconstrained and unlink commands retain version 1
 compatibility. Plan 136g carries stable precondition and constraint diagnostics through the remote
 Graph Command boundary and distinguishes applied empty deltas from explicit skipped
-preconditions. Aggregate/cardinality and current-population constraints, conflict retry policy,
-and advisory preflight remain open here.
+preconditions.
+
+Plan 136h adds the first current-population rule:
+`relationConstraint.countAtMost(fieldName, rejection)` on a direct to-many Relation. In-memory
+execution evaluates prospective membership. PostgreSQL starts or reuses an explicit
+`READ COMMITTED` transaction, serializes additions on the destination endpoint, and evaluates from
+a fresh statement snapshot; concurrent last-seat admissions therefore yield one commit and one
+stable rejection without implicit retry. Supabase fails closed for the unsupported requirement.
+Many-to-many aggregates, advisory preflight, and a permanent Entity invariant covering generic
+limit/Reference Field writes remain open.

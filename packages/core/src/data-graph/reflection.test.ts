@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { entity, field, reflectSchemaRelations } from './index.js';
+import { entity, field, reflectSchemaRelations, relationConstraint } from './index.js';
 
 describe('schema relation reflection', () => {
   it('rejects non-portable constraint metadata at declaration time', () => {
@@ -72,6 +72,43 @@ describe('schema relation reflection', () => {
           version: 1,
           code: 'member_inactive',
           message: 'Member must be active.',
+        },
+      },
+    ]);
+  });
+
+  it('reflects aggregate requirements without runtime authority affordances', () => {
+    const Course = entity('ReflectedCapacityCourse', {
+      id: field.id(),
+      capacity: field.nonNegativeInteger(),
+    });
+    const Student = entity('ReflectedCapacityStudent', {
+      id: field.id(),
+      course: field.nullable(field.ref(Course)),
+    });
+    Course.hasMany('students', Student, {
+      via: 'course',
+      constraints: [
+        relationConstraint.countAtMost('capacity', {
+          code: 'course_full',
+          message: 'Course is full.',
+        }),
+      ],
+    });
+
+    expect(
+      reflectSchemaRelations([Course, Student]).find(
+        candidate => candidate.relationId === 'ReflectedCapacityCourse.students',
+      )?.constraints,
+    ).toEqual([
+      {
+        kind: 'relation-count-at-most-field',
+        fieldName: 'capacity',
+        enforcement: 'authority-serialized',
+        rejection: {
+          version: 1,
+          code: 'course_full',
+          message: 'Course is full.',
         },
       },
     ]);

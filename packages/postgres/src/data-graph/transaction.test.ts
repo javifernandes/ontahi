@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createPostgresTransactionCapability } from './transaction.js';
 
-const createHarness = (options?: { failStatement?: 'BEGIN' | 'COMMIT' | 'ROLLBACK' }) => {
+const createHarness = (options?: {
+  failStatement?: 'BEGIN ISOLATION LEVEL READ COMMITTED' | 'COMMIT' | 'ROLLBACK';
+}) => {
   const statements: string[] = [];
   const release = vi.fn();
   const client = {
@@ -36,7 +38,7 @@ describe('PostgreSQL Data Graph transactions', () => {
       ),
     ).resolves.toBe('committed');
 
-    expect(statements).toEqual(['BEGIN', 'COMMIT']);
+    expect(statements).toEqual(['BEGIN ISOLATION LEVEL READ COMMITTED', 'COMMIT']);
     expect(connect).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledOnce();
   });
@@ -51,7 +53,7 @@ describe('PostgreSQL Data Graph transactions', () => {
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) expect(result.left).toBe(rejection);
-    expect(statements).toEqual(['BEGIN', 'ROLLBACK']);
+    expect(statements).toEqual(['BEGIN ISOLATION LEVEL READ COMMITTED', 'ROLLBACK']);
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -63,7 +65,7 @@ describe('PostgreSQL Data Graph transactions', () => {
     );
 
     expect(exit._tag).toBe('Failure');
-    expect(statements).toEqual(['BEGIN', 'ROLLBACK']);
+    expect(statements).toEqual(['BEGIN ISOLATION LEVEL READ COMMITTED', 'ROLLBACK']);
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -81,7 +83,7 @@ describe('PostgreSQL Data Graph transactions', () => {
     if (Exit.isFailure(exit)) {
       expect(Option.getOrUndefined(Cause.dieOption(exit.cause))).toBe(defect);
     }
-    expect(statements).toEqual(['BEGIN', 'ROLLBACK']);
+    expect(statements).toEqual(['BEGIN ISOLATION LEVEL READ COMMITTED', 'ROLLBACK']);
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -95,7 +97,7 @@ describe('PostgreSQL Data Graph transactions', () => {
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) expect(result.left).toBe(rejection);
-    expect(statements).toEqual(['BEGIN', 'ROLLBACK']);
+    expect(statements).toEqual(['BEGIN ISOLATION LEVEL READ COMMITTED', 'ROLLBACK']);
     expect(release).toHaveBeenCalledOnce();
   });
 });
