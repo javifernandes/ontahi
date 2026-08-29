@@ -13,6 +13,7 @@ relatedPlans:
   - bookops://plans/91-reflective-architecture-admin-ui
   - bookops://plans/117-alive-ui-from-reflected-selections
   - bookops://plans/126-ontahi-runtime-data-reflection
+  - ontahi://plans/143-instance-first-explorer
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-data-reflection
 sourceCommit: 67713696
 ---
@@ -21,6 +22,12 @@ sourceCommit: 67713696
 about the live data behind an Entity or [[ontahi.model.selection|Selection]]. It complements static
 application reflection with population, exactness, freshness, cost, and supported evaluation
 capabilities.
+
+Static write affordances complement runtime reads without replacing authority. An adapter may
+project an explicit Entity Mutation Command policy as allowed create/update/delete actions and
+writable Fields. Explorer can use that projection to offer inline controls, but execution must
+still rebuild the portable Command against the server-owned Entity and reapply policy at the
+authoritative boundary. A hidden control is never an authorization decision.
 
 A storage adapter is often the primary evidence source, but the semantic contract belongs to the
 runtime. Search indexes, caches, projections, remote graph segments, and other providers may offer

@@ -99,6 +99,8 @@ await completeVisible.executeAsync();
 The bound invocation always uses the latest render input. Passing the Operation declaration itself
 keeps the lower-level reusable mutation form, where each execution supplies its input.
 
-The Fetch executor sends only the canonical graph-read request. Credentials and other trusted
-request state remain in Fetch initialization and are never embedded in the Query AST. Remote
-Commands remain unsupported until the graph Command protocol and its policy boundary are defined.
+The Fetch executor sends only canonical graph-read and graph-Command requests. Credentials and
+other trusted request state remain in Fetch initialization and are never embedded in a Query AST or
+Command. The executor supports policy-bounded Relationship Commands and identity-scoped Entity
+Mutation Commands; `useGraphExecutorCapability()` lets optional reflective UI discover whether the
+host installed that execution surface without making it mandatory for read-only hosts.

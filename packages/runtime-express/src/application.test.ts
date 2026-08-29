@@ -11,6 +11,7 @@ import {
   query,
   selection,
   value,
+  type EntityMutationCommandPolicy,
   type GraphReadPolicy,
 } from '@ontahi/core/data-graph';
 import { entity as defineOntahiEntity } from '@ontahi/core/entity';
@@ -308,6 +309,45 @@ describe('Ontahi Express application middleware', () => {
       value: [{ subject: 'user-1', kind: 'user' }],
     });
     expect(invocationContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('reflects authorized Entity mutation affordances into Explorer details', async () => {
+    const policy = {
+      entity: TodoEntity,
+      scope: 'all',
+      actions: {
+        update: { fields: ['title'], result: ['id', 'title'] },
+        delete: { result: ['id', 'title'] },
+      },
+    } satisfies EntityMutationCommandPolicy<typeof TodoEntity>;
+    const expressApp = express();
+    expressApp.use(
+      ontahiExpress(createApplication(), {
+        explorer: createOntahiExpressExplorer(),
+        graphCommand: {
+          policies: [policy],
+          dispatcher: vi.fn(),
+        },
+      }),
+    );
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    await expect(
+      fetch(`${origin}/explorer/snapshot`).then(response => response.json()),
+    ).resolves.toMatchObject({
+      entityDetails: [
+        {
+          name: 'Todo',
+          mutations: {
+            update: { fields: ['title'] },
+            delete: true,
+          },
+        },
+      ],
+    });
   });
 
   it('rejects policy wiring for applications without a graph storage runtime', () => {

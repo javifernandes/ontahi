@@ -2,6 +2,7 @@
 
 import type { AnyEntityRef, ReflectedEntityDataFilterOperator } from '@ontahi/core/data-graph';
 import {
+  useGraphExecutorCapability,
   useHasReflectedRelatedEntityDataReader,
   useReflectedRelatedEntityDataQuery,
 } from '@ontahi/react/graph';
@@ -16,6 +17,11 @@ import {
   type ExplorerEntityDataPageSize,
   useExplorerEntityDataBrowser,
 } from './entity-data-browser.js';
+import {
+  ExplorerEditableEntityCell,
+  ExplorerEntityDeleteButton,
+  type ExplorerEntityMutationRunner,
+} from './entity-data-mutations.js';
 import { ExplorerSelect } from './select.js';
 
 export type ExplorerEntityDataPanelProps = {
@@ -170,13 +176,19 @@ export function ExplorerEntityDataPanel({
   })();
   const browser = useExplorerEntityDataBrowser({ entity, initialRef });
   const routes = useExplorerRoutes();
+  const graphExecutor = useGraphExecutorCapability();
   const hasRelatedReader = useHasReflectedRelatedEntityDataReader();
   const [relatedSelection, setRelatedSelection] = useState<RelatedSelection>();
   const toManyRelations = entity.relations.filter(
     relation => relation.cardinality === 'many' && relation.provenance !== 'derived-inverse',
   );
   const showRelatedColumn = hasRelatedReader && toManyRelations.length > 0;
-  const bodyColSpan = browser.columns.length + (showRelatedColumn ? 1 : 0);
+  const runMutation: ExplorerEntityMutationRunner | undefined =
+    graphExecutor?.runEntityMutationCommand
+      ? command => graphExecutor.runEntityMutationCommand!(command)
+      : undefined;
+  const canDelete = Boolean(runMutation && entity.mutations?.delete);
+  const bodyColSpan = browser.columns.length + (showRelatedColumn ? 1 : 0) + (canDelete ? 1 : 0);
   const fieldOptions = entity.fields.map(field => ({ value: field.name, label: field.name }));
   const operatorOptions = browser.availableFilterOperators.map(operator => ({
     value: operator.value,
@@ -313,15 +325,19 @@ export function ExplorerEntityDataPanel({
                 {showRelatedColumn ? (
                   <th className='whitespace-nowrap px-4 py-3 font-medium'>Related</th>
                 ) : null}
+                {canDelete ? (
+                  <th className='whitespace-nowrap px-4 py-3 font-medium'>Actions</th>
+                ) : null}
               </tr>
             </thead>
             <tbody className='divide-y'>
               {browser.result?.rows.map((row, rowIndex) => {
                 const source = rowRef(entity, row);
+                const rowKey = source ? JSON.stringify(source.locator) : String(rowIndex);
 
                 return (
                   <tr
-                    key={`${entity.name}-${browser.page}-${rowIndex}`}
+                    key={`${entity.name}-${browser.page}-${rowKey}`}
                     className='hover:bg-muted/25'
                   >
                     {browser.columns.map(column => {
@@ -332,22 +348,50 @@ export function ExplorerEntityDataPanel({
                       const locator = reference
                         ? referenceLocator(row[column.field], reference.identity)
                         : undefined;
+                      const editable = Boolean(
+                        source &&
+                        runMutation &&
+                        field &&
+                        !field.derived &&
+                        !field.reference &&
+                        entity.mutations?.update?.fields.includes(field.name),
+                      );
+                      const cell =
+                        reference && locator ? (
+                          <a
+                            href={routes.entity(reference.entityName, {
+                              tab: 'data',
+                              ref: locator,
+                            })}
+                            className='text-primary hover:underline'
+                          >
+                            {referenceLabel(reference.entityName, locator)}
+                          </a>
+                        ) : (
+                          formatCellValue(row[column.field])
+                        );
 
                       return (
                         <td key={column.field} className='max-w-[280px] px-4 py-3 align-top'>
-                          <div className='truncate font-mono text-xs text-foreground'>
-                            {reference && locator ? (
-                              <a
-                                href={routes.entity(reference.entityName, {
-                                  tab: 'data',
-                                  ref: locator,
-                                })}
-                                className='text-primary hover:underline'
+                          <div
+                            className={cx(
+                              'font-mono text-xs text-foreground',
+                              editable ? 'overflow-visible' : 'truncate',
+                            )}
+                          >
+                            {editable && source && runMutation && field ? (
+                              <ExplorerEditableEntityCell
+                                entityName={entity.name}
+                                field={field}
+                                value={row[column.field]}
+                                target={source}
+                                runMutation={runMutation}
+                                onApplied={browser.refresh}
                               >
-                                {referenceLabel(reference.entityName, locator)}
-                              </a>
+                                {cell}
+                              </ExplorerEditableEntityCell>
                             ) : (
-                              formatCellValue(row[column.field])
+                              cell
                             )}
                           </div>
                         </td>
@@ -369,6 +413,18 @@ export function ExplorerEntityDataPanel({
                               ))
                             : null}
                         </div>
+                      </td>
+                    ) : null}
+                    {canDelete ? (
+                      <td className='px-4 py-3 align-top'>
+                        {source && runMutation ? (
+                          <ExplorerEntityDeleteButton
+                            entityName={entity.name}
+                            target={source}
+                            runMutation={runMutation}
+                            onApplied={browser.refresh}
+                          />
+                        ) : null}
                       </td>
                     ) : null}
                   </tr>

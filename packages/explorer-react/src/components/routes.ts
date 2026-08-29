@@ -108,7 +108,7 @@ export const parseExplorerEntityBrowserTab = (
     return value;
   }
 
-  return 'structure';
+  return options.canShowData === true ? 'data' : 'structure';
 };
 
 export const parseExplorerOperationBrowserTab = (

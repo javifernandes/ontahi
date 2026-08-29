@@ -47,7 +47,7 @@ definitions. Reading them does not query application data or execute an operatio
 Explorer's server projection combines the catalogs into neutral descriptors:
 
 - Entities include fields, semantic Relation topology, display metadata, exposure, and operation
-  counts;
+  counts, plus statically authorized Entity mutation affordances when the host configured them;
 - operations include identity, kind, authority, exposure, input and output schemas, Ref inputs,
   named portable conditions and dependencies, bridge metadata, durable lifecycle, and HTTP ingress;
 - tasks include their input, progress, result, and step contracts.
@@ -132,6 +132,17 @@ Entity browsing is also explicit. In-memory and PostgreSQL storage bindings can 
 data reading with the application storage; Supabase has its own reader adapter. The host still
 chooses the concrete client, credentials, and database policy used for that inspection.
 
+The instance-first Entity browser opens directly on authorized rows. It switches Entity through a
+searchable picker rather than reserving a permanent schema sidebar; Operations are contextual
+Actions and Schema remains a secondary conceptual view.
+
+An Express Entity Mutation Command policy can also contribute static mutation affordances to the
+Explorer snapshot. An `update` allowlist makes only those non-reference scalar cells editable, and
+an authorized `delete` adds an exact-row destructive action. Explorer sends the canonical portable
+Command through `/graph/commands` and re-reads authoritative data after success. Reflection does
+not authorize the write: the dispatcher rebuilds and validates the Command against the
+server-owned Entity and policy again.
+
 Reference Fields are presented as semantic Ref links, not as raw storage ids. Explorer prefers
 received display identity and otherwise labels the link from its portable locator; following it
 navigates to the related Entity instance without claiming that the Ref already contains current
@@ -165,14 +176,15 @@ presence of required Ref fields.
 
 ## Keep the host boundary visible
 
-| Concern             | Ontahí supplies                                              | The host supplies                                                                 |
-| ------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Model catalog       | Entity, operation, task, ingress, and schema reflection      | The application composition to inspect                                            |
-| HTTP surface        | Generic invocation, snapshot, and Entity-data handlers       | Mount path, middleware, error reporting, and exposure policy                      |
-| Explorer UI         | Descriptor contracts, routes, shell, browsers, and forms     | App routing, static bundle, theme choice, and optional UI extensions              |
-| Operation execution | Reflected invoker contract and canonical dispatcher          | Transport, identity, authentication, and authorization policy                     |
-| Entity data         | Reader contracts plus semantic Ref and Relation presentation | Credentials, RLS/service role choice, graph-read policy, and permitted data scope |
-| Durable runs        | Task descriptors and run/source UI contracts                 | Persistent runtime, run loaders, retention, and access control                    |
+| Concern             | Ontahí supplies                                                | The host supplies                                                                 |
+| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Model catalog       | Entity, operation, task, ingress, and schema reflection        | The application composition to inspect                                            |
+| HTTP surface        | Generic invocation, snapshot, and Entity-data handlers         | Mount path, middleware, error reporting, and exposure policy                      |
+| Explorer UI         | Descriptor contracts, routes, shell, browsers, and forms       | App routing, static bundle, theme choice, and optional UI extensions              |
+| Operation execution | Reflected invoker contract and canonical dispatcher            | Transport, identity, authentication, and authorization policy                     |
+| Entity data         | Reader contracts plus semantic Ref and Relation presentation   | Credentials, RLS/service role choice, graph-read policy, and permitted data scope |
+| Entity mutation     | Inline scalar editing, exact-row delete, and portable Commands | Explicit action/Field/result policy, authority, storage execution, and row scope  |
+| Durable runs        | Task descriptors and run/source UI contracts                   | Persistent runtime, run loaders, retention, and access control                    |
 
 The host completes the application at its environmental edges. It should not duplicate Entity
 schemas, operation contracts, or topology merely to make them inspectable.
@@ -185,9 +197,10 @@ deliberately low-level—snapshot loading, task-run sources, custom Ref inputs, 
 metadata.
 
 The current Relation slice is deliberately read-only: Explorer has no `assign`, `clear`, `add`, or
-`remove` controls. Do not build domain behavior against `ExplorerSnapshot`. Domain code belongs in Entities,
-Selections, operations, and Capabilities. Explorer descriptors are a projection for inspection and
-tooling, free to evolve as the reflective model becomes richer.
+`remove` controls. Generic Entity update/delete is distinct and appears only for static
+identity-scoped mutation policies. Do not build domain behavior against `ExplorerSnapshot`. Domain
+code belongs in Entities, Selections, operations, and Capabilities. Explorer descriptors are a
+projection for inspection and tooling, free to evolve as the reflective model becomes richer.
 
 The Ontahí form now closes where it began: one application declaration. Runtimes execute it,
 codegen carries a safe projection to authored clients, reflection carries a descriptive projection

@@ -20,6 +20,7 @@ import {
   useGraphClientCache,
   useGraphClientCacheSnapshot,
   useGraphExecutor,
+  useGraphExecutorCapability,
   useExecutionIdentity,
   useGraphRuntime,
   useHasReflectedEntityDataReader,
@@ -212,6 +213,16 @@ describe('OntahiGraphProvider', () => {
     });
 
     expect(result.current).toBe(false);
+  });
+
+  it('exposes graph execution as an optional capability', () => {
+    const Wrapper = createWrapper({ runtime: { name: 'bookops-runtime' }, client: false });
+
+    const { result } = renderHook(() => useGraphExecutorCapability(), {
+      wrapper: Wrapper,
+    });
+
+    expect(result.current).toBeUndefined();
   });
 
   it('exposes the host-supplied reflected entity data reader', () => {
