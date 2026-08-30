@@ -311,7 +311,9 @@ describe('PostgreSQL data graph runtime', () => {
     });
     await expect(
       Effect.runPromise(
-        runtime.runEntityMutationCommand(mutation.update(todo, { completed: true })),
+        runtime.runEntityMutationCommand(
+          mutation.update(todo, { completed: true }, { if: { completed: false } }),
+        ),
       ),
     ).resolves.toMatchObject({
       created: [],
@@ -319,7 +321,19 @@ describe('PostgreSQL data graph runtime', () => {
       deleted: [],
     });
     await expect(
-      Effect.runPromise(runtime.runEntityMutationCommand(mutation.delete(todo))),
+      Effect.runPromise(
+        runtime
+          .runEntityMutationCommand(mutation.delete(todo, { if: { completed: false } }))
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'entity_mutation_condition_not_met' },
+    });
+    await expect(
+      Effect.runPromise(
+        runtime.runEntityMutationCommand(mutation.delete(todo, { if: { completed: true } })),
+      ),
     ).resolves.toMatchObject({
       created: [],
       updated: [],

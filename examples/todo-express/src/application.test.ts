@@ -700,7 +700,7 @@ describe('Ontahi todo portability example', () => {
     });
   });
 
-  it('renames a TodoItem through the generic remote Entity mutation capability', async () => {
+  it('renames a TodoItem remotely only while its observed title is current', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Original title', completed: false },
     ];
@@ -711,6 +711,7 @@ describe('Ontahi todo portability example', () => {
     const command = mutateEntity(ClientTodoItemSchema).update(
       createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
       { title: '  Renamed todo  ' },
+      { if: { title: 'Original title' } },
     );
 
     await expect(remoteExecutor.runEntityMutationCommand!(command)).resolves.toEqual({
@@ -728,6 +729,13 @@ describe('Ontahi todo portability example', () => {
         },
       ],
       deleted: [],
+    });
+    expect(getTodoDataset().TodoItem).toEqual([
+      { id: 'todo-1', list: 'list-1', title: 'Renamed todo', completed: false },
+    ]);
+
+    await expect(remoteExecutor.runEntityMutationCommand!(command)).rejects.toMatchObject({
+      code: 'entity_mutation_condition_not_met',
     });
     expect(getTodoDataset().TodoItem).toEqual([
       { id: 'todo-1', list: 'list-1', title: 'Renamed todo', completed: false },

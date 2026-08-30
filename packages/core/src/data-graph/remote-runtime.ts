@@ -8,7 +8,7 @@ import {
   isGraphCommandProtocolError,
   toGraphCommandRequest,
   type GraphCommandProtocolErrorCode,
-  type GraphCommandRequestV1,
+  type GraphCommandRequest,
 } from './command-protocol.js';
 import type { GraphCommandSpec } from './command.js';
 import {
@@ -69,7 +69,7 @@ export type RemoteGraphReadTransport<TOptions = undefined> = (
 ) => Promise<unknown>;
 
 export type RemoteGraphCommandTransport<TOptions = undefined> = (
-  request: GraphCommandRequestV1,
+  request: GraphCommandRequest,
   options?: TOptions,
 ) => Promise<unknown>;
 
@@ -226,7 +226,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
     if (!commandTransport) return Effect.fail(unsupportedCapability('Relationship Command'));
     return Effect.tryPromise({
       try: async () => {
-        let request: GraphCommandRequestV1;
+        let request: GraphCommandRequest;
         try {
           request = toGraphCommandRequest(command);
         } catch (cause) {
@@ -256,7 +256,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
     if (!commandTransport) return Effect.fail(unsupportedCapability('Entity Mutation Command'));
     return Effect.tryPromise({
       try: async () => {
-        let request: GraphCommandRequestV1;
+        let request: GraphCommandRequest;
         try {
           request = toGraphCommandRequest(command);
         } catch (cause) {

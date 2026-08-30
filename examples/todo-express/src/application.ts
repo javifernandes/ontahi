@@ -43,6 +43,7 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
             actions: {
               update: {
                 fields: ['title'],
+                if: ['title'],
                 result: ['id', 'list', 'title', 'completed'],
               },
             },

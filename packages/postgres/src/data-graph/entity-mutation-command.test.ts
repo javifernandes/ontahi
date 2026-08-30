@@ -101,4 +101,72 @@ describe('PostgreSQL Entity Mutation Commands', () => {
 
     expect(result).toMatchObject({ _tag: 'Left', left: { reason: 'cardinality_mismatch' } });
   });
+
+  it('compiles a conditional update as one atomic SQL statement', async () => {
+    const command = mutateEntity(Book).update(
+      createEntityRef(Book, { id: 'book-1' }),
+      { title: 'Revised' },
+      { if: { title: 'Draft', author: createEntityRef(Author, { id: 'author-1' }) } },
+    );
+    const executeQuery = vi.fn().mockResolvedValue({ rowCount: 0, rows: [] });
+
+    const result = await Effect.runPromise(
+      executePostgresEntityMutationCommand({ command, mapping: bookMapping, executeQuery }).pipe(
+        Effect.either,
+      ),
+    );
+
+    expect(executeQuery).toHaveBeenCalledOnce();
+    expect(executeQuery.mock.calls[0]?.[0]).toEqual({
+      text: expect.stringMatching(
+        /UPDATE "books" SET "book_title" = \$4 WHERE \("book_id" = \$1 AND "book_title" = \$2 AND "author_id" = \$3\)/,
+      ),
+      values: ['book-1', 'Draft', 'author-1', 'Revised'],
+    });
+    expect(result).toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'entity_mutation_condition_not_met' },
+    });
+  });
+
+  it('compiles a conditional delete as one atomic SQL statement', async () => {
+    const command = mutateEntity(Book).delete(createEntityRef(Book, { id: 'book-1' }), {
+      if: { title: 'Draft' },
+    });
+    const executeQuery = vi.fn().mockResolvedValue({
+      rowCount: 1,
+      rows: [{ id: 'book-1', title: 'Draft', author: 'author-1' }],
+    });
+
+    await expect(
+      Effect.runPromise(
+        executePostgresEntityMutationCommand({ command, mapping: bookMapping, executeQuery }),
+      ),
+    ).resolves.toMatchObject({ deleted: [{ values: { title: 'Draft' } }] });
+    expect(executeQuery).toHaveBeenCalledOnce();
+    expect(executeQuery.mock.calls[0]?.[0]).toEqual({
+      text: expect.stringMatching(
+        /DELETE FROM "books" WHERE \("book_id" = \$1 AND "book_title" = \$2\)/,
+      ),
+      values: ['book-1', 'Draft'],
+    });
+  });
+
+  it('does not collapse a multi-row conditional mutation into condition-not-met', async () => {
+    const command = mutateEntity(Book).delete(createEntityRef(Book, { id: 'book-1' }), {
+      if: { title: 'Draft' },
+    });
+    const executeQuery = vi.fn().mockResolvedValue({ rowCount: 2, rows: [] });
+
+    await expect(
+      Effect.runPromise(
+        executePostgresEntityMutationCommand({ command, mapping: bookMapping, executeQuery }).pipe(
+          Effect.either,
+        ),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import {
+  hasEntityMutationCondition,
   materializeEntityMutationDelta,
   toEntityMutationGraphCommand,
   type AnyEntityDefinition,
@@ -49,7 +50,10 @@ export const executeSupabaseEntityMutationCommandEffect = <
           getClient: deps.getClient,
           createError: deps.createError,
           cardinalityMismatchCause: actualAffectedRows => ({
-            reason: 'cardinality_mismatch',
+            reason:
+              hasEntityMutationCondition(command) && actualAffectedRows === 0
+                ? 'entity_mutation_condition_not_met'
+                : 'cardinality_mismatch',
             actualAffectedRows,
           }),
         },

@@ -4,6 +4,7 @@ export type PostgresDataGraphErrorReason =
   | 'execution_failed'
   | 'invalid_command'
   | 'cardinality_mismatch'
+  | 'entity_mutation_condition_not_met'
   | 'relation_constraint_rejected'
   | 'relationship_precondition_failed';
 

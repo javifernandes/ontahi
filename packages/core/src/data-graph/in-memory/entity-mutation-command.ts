@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import type { AnyEntityDefinition } from '../definitions.js';
 import type { EntityMutationCommand, EntityMutationDelta } from '../entity-mutation-command.js';
 import {
+  hasEntityMutationCondition,
   materializeEntityMutationDelta,
   toEntityMutationGraphCommand,
 } from '../entity-mutation-command.js';
@@ -17,6 +18,12 @@ const findEntity = (entities: readonly AnyEntityDefinition[], entityName: string
   }
   return entity;
 };
+
+const hasZeroAffectedRows = (error: InMemoryDataGraphError) =>
+  typeof error.cause === 'object' &&
+  error.cause !== null &&
+  'actualAffectedRows' in error.cause &&
+  error.cause.actualAffectedRows === 0;
 
 export const executeInMemoryEntityMutationCommandEffect = (
   dataset: InMemoryDataset,
@@ -36,5 +43,18 @@ export const executeInMemoryEntityMutationCommandEffect = (
     return executeInMemoryGraphCommandEffect<Record<string, unknown>>(
       dataset,
       toEntityMutationGraphCommand(entity, command),
-    ).pipe(Effect.map(values => materializeEntityMutationDelta(entity, command, values)));
+    ).pipe(
+      Effect.mapError(error =>
+        hasEntityMutationCondition(command) &&
+        error.reason === 'cardinality_mismatch' &&
+        hasZeroAffectedRows(error)
+          ? new InMemoryDataGraphError(
+              'Entity mutation condition was not satisfied.',
+              'entity_mutation_condition_not_met',
+              error,
+            )
+          : error,
+      ),
+      Effect.map(values => materializeEntityMutationDelta(entity, command, values)),
+    );
   });

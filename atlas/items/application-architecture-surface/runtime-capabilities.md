@@ -23,6 +23,8 @@ relatedPlans:
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands
   - ontahi://plans/138a-client-entity-mutation-authoring
+  - ontahi://plans/138b-conditional-exact-entity-mutations
+  - ontahi://plans/146-ontahi-runtime-protocol
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
 sourceCommit: 67713696
 ---
@@ -72,6 +74,11 @@ Generated client Entities author that portable capability through `Entity.create
 exact Ref `update(values)` / `delete()` methods. Runtime binding upgrades the authored Commands with
 a non-enumerable `.run()` that resolves the current capability lazily. The semantic Entity, Ref,
 and serialized Command remain free of runtime ownership.
+
+An exact Ref update/delete can include `{ if: { ...observedFields } }`. Supporting the Entity
+Mutation Command capability includes applying that condition atomically with the mutation; a
+runtime must not claim support and lower it to a read followed by a write. Remote authority grants
+condition Fields separately from writable and returned Fields.
 
 Operation declarations may require a semantic guarantee without naming the adapter that supplies
 it. `operation.atomic(...)` reflects `execution.atomicity: 'required'`, from which Core derives the

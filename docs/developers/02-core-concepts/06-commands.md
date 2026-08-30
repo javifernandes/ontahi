@@ -90,6 +90,49 @@ executes it only when an Entity Mutation Command policy explicitly permits the E
 fields, result shape, and row scope. `mutateEntity(Entity)` remains the lower-level constructor for
 framework integrations and code that does not use a generated client facade.
 
+## Make an exact mutation conditional
+
+An exact update or delete can require the authoritative Entity to still match observed stored
+Fields:
+
+```ts
+const enrollment = BoundEnrollment.refById('enrollment-42');
+
+yield * enrollment.update({ status: 'ended' }, { if: { status: 'active' } }).run();
+```
+
+The runtime combines the Ref identity and `if` equality checks with the mutation itself. PostgreSQL
+uses one statement, Supabase uses one filtered mutation request, and in-memory applies both inside
+one mutation boundary. No supported implementation reads first and updates afterward.
+
+When the condition affects no row, Ontahí reports `entity_mutation_condition_not_met`. That result
+does not reveal whether the Entity was deleted, changed, replaced, or hidden by policy. It is the
+caller’s signal to refresh or otherwise reconcile authoritative state.
+
+Remote execution must authorize condition Fields separately from writable and returned Fields:
+
+```ts
+const enrollmentMutationPolicy = {
+  entity: Enrollment,
+  scope: 'all',
+  actions: {
+    update: {
+      fields: ['status'],
+      if: ['status'],
+      result: ['id', 'status'],
+    },
+    delete: {
+      if: ['status'],
+      result: ['id', 'status'],
+    },
+  },
+};
+```
+
+This is one atomic conditional mutation, not an automatic transaction around a multi-step
+Operation. Coordinate several reads and mutations with `operation.atomic(...)` when they must
+commit or roll back together.
+
 ## Upsert with an explicit conflict rule
 
 ```ts
@@ -164,15 +207,15 @@ cardinality without a semantic input carrying it.
 
 ## Command surface
 
-| Target                  | Operators                                                        |
-| ----------------------- | ---------------------------------------------------------------- |
-| Entity                  | `insert`, `insertReturning`, `insertMany`, `insertManyReturning` |
-| Entity                  | `upsert`, `upsertMany`                                           |
-| Generated client Entity | exact portable `create`                                          |
-| Generated client Ref    | exact portable `update`, `delete`                                |
-| Selection               | `update`, `updateReturning`                                      |
-| Selection               | `delete`, `deleteReturning`                                      |
-| Lower-level Query       | explicit `One` / `Many` update and delete variants               |
+| Target                  | Operators                                                         |
+| ----------------------- | ----------------------------------------------------------------- |
+| Entity                  | `insert`, `insertReturning`, `insertMany`, `insertManyReturning`  |
+| Entity                  | `upsert`, `upsertMany`                                            |
+| Generated client Entity | exact portable `create`                                           |
+| Generated client Ref    | exact portable `update`, `delete`, optional atomic `if` condition |
+| Selection               | `update`, `updateReturning`                                       |
+| Selection               | `delete`, `deleteReturning`                                       |
+| Lower-level Query       | explicit `One` / `Many` update and delete variants                |
 
 A simple operation returns its final Command directly:
 

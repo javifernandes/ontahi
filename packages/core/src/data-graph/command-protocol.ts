@@ -7,7 +7,10 @@ import {
   isReferenceFieldDefinition,
   type AnyEntityDefinition,
 } from './definitions.js';
-import type { EntityMutationCommand } from './entity-mutation-command.js';
+import {
+  hasEntityMutationCondition,
+  type EntityMutationCommand,
+} from './entity-mutation-command.js';
 import { validateGraphReadSelection } from './read-protocol.js';
 import { isEntityRef, type AnyEntityRef } from './ref/index.js';
 import type {
@@ -25,6 +28,14 @@ export type GraphCommandRequestV1 = {
   readonly command: AnyGraphCommand;
 };
 
+export type GraphCommandRequestV2 = {
+  readonly version: 2;
+  readonly kind: 'graph-command';
+  readonly command: AnyGraphCommand;
+};
+
+export type GraphCommandRequest = GraphCommandRequestV1 | GraphCommandRequestV2;
+
 export type GraphCommandProtocolErrorCode =
   | 'invalid_request'
   | 'unsupported_version'
@@ -32,6 +43,7 @@ export type GraphCommandProtocolErrorCode =
   | 'invalid_relation'
   | 'invalid_reference'
   | 'invalid_payload'
+  | 'invalid_condition'
   | 'invalid_selection'
   | 'access_denied'
   | 'execution_unavailable';
@@ -45,13 +57,13 @@ export type GraphCommandProtocolError = {
 };
 
 export type GraphCommandRequestParseResult =
-  | { readonly success: true; readonly request: GraphCommandRequestV1 }
+  | { readonly success: true; readonly request: GraphCommandRequest }
   | { readonly success: false; readonly error: GraphCommandProtocolError };
 
 export type GraphCommandRequestResolveResult =
   | {
       readonly success: true;
-      readonly request: GraphCommandRequestV1;
+      readonly request: GraphCommandRequest;
       readonly command: AnyGraphCommand;
     }
   | { readonly success: false; readonly error: GraphCommandProtocolError };
@@ -63,6 +75,7 @@ const graphCommandProtocolErrorCodes = new Set<GraphCommandProtocolErrorCode>([
   'invalid_relation',
   'invalid_reference',
   'invalid_payload',
+  'invalid_condition',
   'invalid_selection',
   'access_denied',
   'execution_unavailable',
@@ -81,8 +94,13 @@ export const graphCommandProtocolError = (
   message: string,
 ): GraphCommandProtocolError => ({ kind: 'protocol-error', error: { code, message } });
 
-export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandRequestV1 => {
-  const request = { version: 1, kind: 'graph-command', command } satisfies GraphCommandRequestV1;
+export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandRequest => {
+  const request = {
+    version:
+      command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command) ? 2 : 1,
+    kind: 'graph-command',
+    command,
+  } satisfies GraphCommandRequest;
   if (!isJsonValue(request)) throw new Error('Data graph Command request must be JSON-safe.');
   return cloneJson(request);
 };
@@ -97,7 +115,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       ),
     };
   }
-  if (value.version !== 1) {
+  if (value.version !== 1 && value.version !== 2) {
     return {
       success: false,
       error: graphCommandProtocolError(
@@ -123,6 +141,11 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       (command.action !== 'create' && command.action !== 'update' && command.action !== 'delete') ||
       (command.action !== 'delete' && !isRecord(command.values)) ||
       (command.action !== 'create' && !isEntityRef(command.target)) ||
+      (command.if !== undefined &&
+        (value.version !== 2 ||
+          command.action === 'create' ||
+          !isRecord(command.if) ||
+          Object.keys(command.if).length === 0)) ||
       !isJsonValue(value)
     ) {
       return {
@@ -149,20 +172,22 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
               entityName: command.entityName,
               target: command.target as AnyEntityRef,
               values: command.values as Record<string, unknown>,
+              ...(command.if === undefined ? {} : { if: command.if as Record<string, unknown> }),
             }
           : {
               kind: 'entity-mutation-command',
               action: 'delete',
               entityName: command.entityName,
               target: command.target as AnyEntityRef,
+              ...(command.if === undefined ? {} : { if: command.if as Record<string, unknown> }),
             };
     return {
       success: true,
       request: cloneJson({
-        version: 1,
+        version: value.version,
         kind: 'graph-command',
         command: canonicalCommand,
-      }) as GraphCommandRequestV1,
+      }) as GraphCommandRequest,
     };
   }
 
@@ -197,7 +222,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
     return {
       success: true,
       request: cloneJson({
-        version: 1,
+        version: value.version,
         kind: 'graph-command',
         command: {
           kind: 'relationship-command',
@@ -220,7 +245,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
                 },
               }),
         },
-      }) as GraphCommandRequestV1,
+      }) as GraphCommandRequest,
     };
   }
 
@@ -252,7 +277,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
   return {
     success: true,
     request: cloneJson({
-      version: 1,
+      version: value.version,
       kind: 'graph-command',
       command: {
         kind: 'many-to-many-relationship-command',
@@ -272,7 +297,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
           selection: command.targets.selection,
         },
       },
-    }) as GraphCommandRequestV1,
+    }) as GraphCommandRequest,
   };
 };
 
@@ -345,7 +370,7 @@ const validateEndpointSelection = (
 };
 
 const resolveManyToManyCommand = (
-  request: GraphCommandRequestV1,
+  request: GraphCommandRequest,
   command: ManyToManyRelationshipCommand,
   entities: readonly AnyEntityDefinition[],
 ): GraphCommandRequestResolveResult => {
@@ -375,7 +400,7 @@ const resolveManyToManyCommand = (
 };
 
 const resolveDirectRelationshipCommand = (
-  request: GraphCommandRequestV1,
+  request: GraphCommandRequest,
   command: RelationshipCommand,
   entities: readonly AnyEntityDefinition[],
 ): GraphCommandRequestResolveResult => {
@@ -452,6 +477,9 @@ const validateRef = (
 const invalidEntityMutationPayload = (message: string): GraphCommandRequestResolveResult =>
   resolutionFailure('invalid_payload', message);
 
+const invalidEntityMutationCondition = (message: string): GraphCommandRequestResolveResult =>
+  resolutionFailure('invalid_condition', message);
+
 const resolveEntityMutationValues = (
   command: Extract<EntityMutationCommand, { action: 'create' | 'update' }>,
   entity: AnyEntityDefinition,
@@ -487,8 +515,40 @@ const resolveEntityMutationValues = (
       );
 };
 
+const resolveEntityMutationCondition = (
+  command: Exclude<EntityMutationCommand, { action: 'create' }>,
+  entity: AnyEntityDefinition,
+):
+  | { readonly valid: true; readonly values?: Record<string, unknown> }
+  | GraphCommandRequestResolveResult => {
+  if (!hasEntityMutationCondition(command)) return { valid: true };
+  const conditionFields = Object.keys(command.if);
+  if (conditionFields.length === 0) {
+    return invalidEntityMutationCondition('Entity Mutation Command condition cannot be empty.');
+  }
+  const storedFields = Object.fromEntries(
+    Object.entries(entity.fields).filter(([, field]) => !isDerivedFieldDefinition(field)),
+  );
+  const invalidField = conditionFields.find(fieldName => !(fieldName in storedFields));
+  if (invalidField) {
+    return invalidEntityMutationCondition(
+      `Entity Mutation Command cannot test ${entity.name}.${invalidField}.`,
+    );
+  }
+  const schema = graphSchema.object(
+    Object.fromEntries(conditionFields.map(fieldName => [fieldName, storedFields[fieldName]!])),
+    { unknownKeys: 'strict' },
+  );
+  const parsed = safeParseGraphSchema(schema, command.if);
+  return parsed.success
+    ? { valid: true, values: parsed.data as Record<string, unknown> }
+    : invalidEntityMutationCondition(
+        parsed.issues[0]?.message ?? 'Entity Mutation Command condition is invalid.',
+      );
+};
+
 const resolveEntityMutationCommand = (
-  request: GraphCommandRequestV1,
+  request: GraphCommandRequest,
   command: EntityMutationCommand,
   entities: readonly AnyEntityDefinition[],
 ): GraphCommandRequestResolveResult => {
@@ -500,15 +560,36 @@ const resolveEntityMutationCommand = (
     const targetError = validateRef(command.target, entity, 'target');
     if (targetError) return { success: false, error: targetError };
   }
-  if (command.action === 'delete') return { success: true, request, command };
+  if (command.action === 'delete') {
+    const condition = resolveEntityMutationCondition(command, entity);
+    if (!('valid' in condition)) return condition;
+    return {
+      success: true,
+      request,
+      command: condition.values ? { ...command, if: condition.values } : command,
+    };
+  }
 
   const values = resolveEntityMutationValues(command, entity);
   if (!('valid' in values)) return values;
-  return { success: true, request, command: { ...command, values: values.values } };
+  if (command.action === 'create') {
+    return { success: true, request, command: { ...command, values: values.values } };
+  }
+  const condition = resolveEntityMutationCondition(command, entity);
+  if (!('valid' in condition)) return condition;
+  return {
+    success: true,
+    request,
+    command: {
+      ...command,
+      values: values.values,
+      ...(condition.values ? { if: condition.values } : {}),
+    },
+  };
 };
 
 export const resolveGraphCommandRequest = (
-  request: GraphCommandRequestV1,
+  request: GraphCommandRequest,
   options: { readonly entities: readonly AnyEntityDefinition[] },
 ): GraphCommandRequestResolveResult => {
   const { command } = request;

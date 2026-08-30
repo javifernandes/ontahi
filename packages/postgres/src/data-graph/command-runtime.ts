@@ -1,5 +1,6 @@
 import {
   appliedRelationshipCommand,
+  hasEntityMutationCondition,
   liftEntityReferenceRecord,
   materializeEntityMutationDelta,
   notAppliedRelationshipCommand,
@@ -69,6 +70,7 @@ export const executePostgresCommand = <TResult>(input: {
           new PostgresDataGraphError(
             `Expected exactly one affected row, got ${result.rowCount ?? 0}.`,
             'cardinality_mismatch',
+            { actualAffectedRows: result.rowCount ?? 0 },
           ),
         );
       }
@@ -96,6 +98,20 @@ export const executePostgresEntityMutationCommand = (input: {
         executeQuery: input.executeQuery,
         mapping: input.mapping,
       }),
+    ),
+    Effect.mapError(error =>
+      hasEntityMutationCondition(input.command) &&
+      error.reason === 'cardinality_mismatch' &&
+      typeof error.cause === 'object' &&
+      error.cause !== null &&
+      'actualAffectedRows' in error.cause &&
+      error.cause.actualAffectedRows === 0
+        ? new PostgresDataGraphError(
+            'Entity mutation condition was not satisfied.',
+            'entity_mutation_condition_not_met',
+            error,
+          )
+        : error,
     ),
     Effect.map(values =>
       materializeEntityMutationDelta(input.mapping.entity, input.command, values),

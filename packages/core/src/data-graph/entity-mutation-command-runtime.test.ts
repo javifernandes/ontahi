@@ -33,9 +33,13 @@ const policyFor = (graph: ReturnType<typeof defineBookGraph>) => ({
     },
     update: {
       fields: ['title', 'published'] as const,
+      if: ['title', 'published'] as const,
       result: ['id', 'title', 'published'] as const,
     },
-    delete: { result: ['id', 'title', 'published'] as const },
+    delete: {
+      if: ['title', 'published'] as const,
+      result: ['id', 'title', 'published'] as const,
+    },
   },
 });
 
@@ -77,18 +81,51 @@ describe('Entity Mutation Command runtime routing', () => {
     );
 
     const directDelta = await Effect.runPromise(
-      DirectBook.refById('book-1').update({ title: 'Revised' }).run(),
+      DirectBook.refById('book-1')
+        .update({ title: 'Revised' }, { if: { title: 'Draft' } })
+        .run(),
     );
     const remoteDelta = await Effect.runPromise(
-      RemoteBook.refById('book-1').update({ title: 'Revised' }).run(),
+      RemoteBook.refById('book-1')
+        .update({ title: 'Revised' }, { if: { title: 'Draft' } })
+        .run(),
     );
 
     expect(remoteDelta).toEqual(directDelta);
     expect(serverDataset).toEqual(directDataset);
     expect(commandTransport).toHaveBeenCalledWith(
-      expect.objectContaining({ version: 1, kind: 'graph-command' }),
+      expect.objectContaining({ version: 2, kind: 'graph-command' }),
       undefined,
     );
+  });
+
+  it('preserves a conditional-mutation rejection through the remote boundary', async () => {
+    const graph = defineBookGraph();
+    const command = mutateEntity(graph.Book).delete(createEntityRef(graph.Book, { id: 'book-1' }), {
+      if: { title: 'Draft' },
+    });
+    const remote = createRemoteDataGraphRuntime({
+      transport: vi.fn(),
+      commandTransport: async () => ({
+        kind: 'graph-command-rejection',
+        diagnostic: {
+          reason: 'entity_mutation_condition_not_met',
+          rejection: {
+            version: 1,
+            code: 'entity_mutation_condition_not_met',
+            message: 'Entity mutation condition was not satisfied.',
+            parameters: { entityName: 'Book', action: 'delete' },
+          },
+        },
+      }),
+    });
+
+    await expect(
+      Effect.runPromise(remote.runEntityMutationCommand(command).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { code: 'entity_mutation_condition_not_met' },
+    });
   });
 
   it('preserves exact-cardinality rejections through the remote boundary', async () => {

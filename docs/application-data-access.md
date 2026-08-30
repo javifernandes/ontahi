@@ -335,9 +335,10 @@ materializing imperative reads.
 
 ## Expose structural Relation changes separately
 
-The graph-command bridge carries only canonical Relationship Commands: the Relation identity,
-`link` or `unlink`, and Ref- or Selection-valued participants. The server must opt each Relation
-and action into a separate default-deny policy:
+The graph-command bridge carries canonical Relationship Commands and exact Entity Mutation
+Commands. A Relationship Command contains the Relation identity, `link` or `unlink`, and Ref- or
+Selection-valued participants. The server must opt each Relation and action into a separate
+default-deny policy:
 
 ```ts
 ontahiExpress(TodoApplication, {
@@ -358,13 +359,18 @@ diagnostic and no delta. Use a Domain Operation instead when the intention coord
 mutations, requires secrets or Capabilities, or owns a domain invariant beyond one structural
 edge.
 
+Exact Entity update/delete can carry `{ if: { field: observedValue } }`. Identity and condition are
+applied in the same provider mutation, never as a read followed by a write. Remote policy must
+allowlist condition Fields independently; a zero-row result is the single authority-safe
+`entity_mutation_condition_not_met` rejection.
+
 ## Current alpha boundaries
 
 - Remote Query policies and `ExecutionIdentity` are intentionally public but still evolving
   authoring surfaces.
-- Remote Relationship Commands are supported behind an explicit graph-command policy. Generic
-  remote Entity Commands remain unsupported; use Operations for those server-only writes without
-  assuming every temporary wrapper is permanent domain vocabulary.
+- Remote Relationship Commands and exact Ref-targeted Entity Mutation Commands are supported
+  behind explicit graph-command policies. Arbitrary Selection Commands, bulk writes, and upsert
+  remain local/server surfaces; use Operations when those writes carry named domain behavior.
 - Client Views are ordinary source declarations. Persisted or server-approved View catalogs are a
   separate future concern.
 - The conventional Fetch client removes repetitive client setup. It does not mount server routes,

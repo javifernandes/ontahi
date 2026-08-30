@@ -17,7 +17,12 @@ import {
   type EntityRef,
 } from './ref/index.js';
 import { isRelationConstraintRejection } from './relationship-command-result.js';
-import { selectionNone, selectionReferences } from './selection-ast.js';
+import {
+  selectionAnd,
+  selectionNone,
+  selectionReferences,
+  type SelectionExpression,
+} from './selection-ast.js';
 
 export type EntityMutationFact = {
   entityName: string;
@@ -78,7 +83,7 @@ export const isExactEntityMutationDelta = (
 };
 
 export type EntityMutationCommandDiagnostic = {
-  readonly reason: 'entity_mutation_cardinality_mismatch';
+  readonly reason: 'entity_mutation_cardinality_mismatch' | 'entity_mutation_condition_not_met';
   readonly rejection: RelationConstraintRejection;
 };
 
@@ -86,8 +91,10 @@ export const isEntityMutationCommandDiagnostic = (
   value: unknown,
 ): value is EntityMutationCommandDiagnostic =>
   isRecord(value) &&
-  value.reason === 'entity_mutation_cardinality_mismatch' &&
-  isRelationConstraintRejection(value.rejection);
+  (value.reason === 'entity_mutation_cardinality_mismatch' ||
+    value.reason === 'entity_mutation_condition_not_met') &&
+  isRelationConstraintRejection(value.rejection) &&
+  value.rejection.code === value.reason;
 
 export const entityMutationCardinalityDiagnostic = (
   command: EntityMutationCommand,
@@ -100,6 +107,24 @@ export const entityMutationCardinalityDiagnostic = (
     parameters: { entityName: command.entityName, action: command.action },
   },
 });
+
+export const entityMutationConditionNotMetDiagnostic = (
+  command: EntityMutationCommand,
+): EntityMutationCommandDiagnostic => ({
+  reason: 'entity_mutation_condition_not_met',
+  rejection: {
+    version: 1,
+    code: 'entity_mutation_condition_not_met',
+    message: 'Entity mutation condition was not satisfied.',
+    parameters: { entityName: command.entityName, action: command.action },
+  },
+});
+
+export const hasEntityMutationCondition = (
+  command: EntityMutationCommand,
+): command is (UpdateEntityMutationCommand | DeleteEntityMutationCommand) & {
+  if: Record<string, unknown>;
+} => command.action !== 'create' && command.if !== undefined;
 
 const ownDataProperty = (record: object, key: PropertyKey): unknown => {
   try {
@@ -130,10 +155,11 @@ export const entityMutationCommandDiagnosticFromError = (
     seen.add(current);
     const diagnostic = ownDataProperty(current, 'diagnostic');
     if (isEntityMutationCommandDiagnostic(diagnostic)) return diagnostic;
-    if (
-      ownDataProperty(current, 'reason') === 'cardinality_mismatch' &&
-      command.action !== 'create'
-    ) {
+    const reason = ownDataProperty(current, 'reason');
+    if (reason === 'entity_mutation_condition_not_met' && command.action !== 'create') {
+      return entityMutationConditionNotMetDiagnostic(command);
+    }
+    if (reason === 'cardinality_mismatch' && command.action !== 'create') {
       return entityMutationCardinalityDiagnostic(command);
     }
     for (const key of ownPropertyKeys(current)) {
@@ -157,6 +183,7 @@ export type UpdateEntityMutationCommand<TEntityName extends string = string> = {
   entityName: TEntityName;
   target: EntityRef<TEntityName>;
   values: Record<string, unknown>;
+  if?: Record<string, unknown>;
 };
 
 export type DeleteEntityMutationCommand<TEntityName extends string = string> = {
@@ -164,6 +191,7 @@ export type DeleteEntityMutationCommand<TEntityName extends string = string> = {
   action: 'delete';
   entityName: TEntityName;
   target: EntityRef<TEntityName>;
+  if?: Record<string, unknown>;
 };
 
 export type EntityMutationCommand =
@@ -183,6 +211,33 @@ const storedEntityFieldNames = (entity: AnyEntityDefinition) =>
     .filter(([, field]) => !isDerivedFieldDefinition(field))
     .map(([fieldName]) => fieldName);
 
+const toEntityMutationConditionSelection = (values: Record<string, unknown>): SelectionExpression =>
+  selectionAnd(
+    ...Object.entries(values).map(([fieldName, value]) =>
+      value === null
+        ? { kind: 'predicate' as const, operator: 'isNull' as const, fieldName }
+        : { kind: 'predicate' as const, operator: 'eq' as const, fieldName, value },
+    ),
+  );
+
+const assertEntityMutationCondition = (
+  entity: AnyEntityDefinition,
+  command: EntityMutationCommand,
+) => {
+  if (!hasEntityMutationCondition(command)) return;
+  const fieldNames = Object.keys(command.if);
+  if (fieldNames.length === 0) {
+    throw new Error('Entity mutation condition cannot be empty.');
+  }
+  const invalidField = fieldNames.find(fieldName => {
+    const field = entity.fields[fieldName];
+    return !field || isDerivedFieldDefinition(field);
+  });
+  if (invalidField) {
+    throw new Error(`Entity mutation condition cannot test ${entity.name}.${invalidField}.`);
+  }
+};
+
 export const toEntityMutationGraphCommand = (
   entity: AnyEntityDefinition,
   command: EntityMutationCommand,
@@ -197,12 +252,21 @@ export const toEntityMutationGraphCommand = (
       `Expected Entity mutation target Ref for ${entity.name}, got ${command.target.entityName}.`,
     );
   }
+  assertEntityMutationCondition(entity, command);
   return {
     kind: 'command',
     operation:
       command.action === 'create' ? 'insert' : command.action === 'update' ? 'update' : 'delete',
     root: entity,
-    selection: 'target' in command ? selectionReferences([command.target]) : selectionNone(),
+    selection:
+      'target' in command
+        ? selectionAnd(
+            selectionReferences([command.target]),
+            ...(hasEntityMutationCondition(command)
+              ? [toEntityMutationConditionSelection(command.if)]
+              : []),
+          )
+        : selectionNone(),
     ...('values' in command ? { payload: command.values } : {}),
     returning: storedEntityFieldNames(entity),
     cardinality: 'one',
@@ -241,6 +305,24 @@ const assertTarget = (entity: AnyEntityDefinition, target: AnyEntityRef) => {
   }
 };
 
+export type EntityMutationCondition<TEntity extends AnyEntityDefinition> = Partial<
+  InferEntityMutationRecord<TEntity['fields']>
+>;
+
+export type EntityMutationConditionOptions<TEntity extends AnyEntityDefinition> = {
+  readonly if: EntityMutationCondition<TEntity>;
+};
+
+const conditionFields = <TEntity extends AnyEntityDefinition>(
+  options?: EntityMutationConditionOptions<TEntity>,
+) => {
+  if (!options) return undefined;
+  if (Object.keys(options.if).length === 0) {
+    throw new Error('Entity mutation condition cannot be empty.');
+  }
+  return options.if as Record<string, unknown>;
+};
+
 export const mutateEntity = <TEntity extends AnyEntityDefinition>(entity: TEntity) => ({
   create: (
     values: InferEntityMutationRecord<TEntity['fields']>,
@@ -253,23 +335,31 @@ export const mutateEntity = <TEntity extends AnyEntityDefinition>(entity: TEntit
   update: (
     target: EntityRef<TEntity['name']>,
     values: Partial<InferEntityMutationRecord<TEntity['fields']>>,
+    options?: EntityMutationConditionOptions<TEntity>,
   ): UpdateEntityMutationCommand<TEntity['name']> => {
     assertTarget(entity, target);
+    const condition = conditionFields(options);
     return {
       kind: 'entity-mutation-command',
       action: 'update',
       entityName: entity.name,
       target,
       values,
+      ...(condition ? { if: condition } : {}),
     };
   },
-  delete: (target: EntityRef<TEntity['name']>): DeleteEntityMutationCommand<TEntity['name']> => {
+  delete: (
+    target: EntityRef<TEntity['name']>,
+    options?: EntityMutationConditionOptions<TEntity>,
+  ): DeleteEntityMutationCommand<TEntity['name']> => {
     assertTarget(entity, target);
+    const condition = conditionFields(options);
     return {
       kind: 'entity-mutation-command',
       action: 'delete',
       entityName: entity.name,
       target,
+      ...(condition ? { if: condition } : {}),
     };
   },
 });

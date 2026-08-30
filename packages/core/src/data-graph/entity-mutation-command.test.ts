@@ -63,6 +63,31 @@ describe('Entity Mutation Command', () => {
     ).toThrow('Expected Entity mutation target Ref for Book, got Author.');
   });
 
+  it('rejects an empty exact-mutation condition before execution', () => {
+    const Book = entity('Book', { id: field.id(), title: field.string() });
+    const book = createEntityRef(Book, { id: 'book-1' });
+    const mutation = mutateEntity(Book);
+
+    expect(() => mutation.update(book, { title: 'Revised' }, { if: {} })).toThrow(
+      'Entity mutation condition cannot be empty.',
+    );
+    expect(() => mutation.delete(book, { if: {} })).toThrow(
+      'Entity mutation condition cannot be empty.',
+    );
+    expect(() =>
+      toEntityMutationGraphCommand(Book, {
+        ...mutation.delete(book),
+        if: {},
+      }),
+    ).toThrow('Entity mutation condition cannot be empty.');
+    expect(() =>
+      toEntityMutationGraphCommand(Book, {
+        ...mutation.delete(book),
+        if: { missing: true },
+      }),
+    ).toThrow('Entity mutation condition cannot test Book.missing.');
+  });
+
   it('requires an update/delete delta to identify the exact command target', () => {
     const Book = entity('Book', { id: field.id(), slug: field.string(), title: field.string() })
       .locators({ refBySlug: 'slug' })
@@ -130,5 +155,72 @@ describe('Entity Mutation Command', () => {
       deleted: [{ entityName: 'Book', ref: book, values: { id: 'book-1', title: 'Core' } }],
     });
     expect(dataset.Book).toEqual([]);
+  });
+
+  it('tests and applies exact mutation conditions in one in-memory mutation boundary', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+      revision: field.number(),
+    });
+    const dataset = {
+      Book: [{ id: 'book-1', title: 'Draft', revision: 3 }],
+    };
+    const runtime = createInMemoryDataGraphRuntime({ dataset, entities: [Book] });
+    const mutation = mutateEntity(Book);
+    const book = createEntityRef(Book, { id: 'book-1' });
+
+    await expect(
+      Effect.runPromise(
+        runtime.runEntityMutationCommand(
+          mutation.update(book, { title: 'Published', revision: 4 }, { if: { revision: 3 } }),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      updated: [{ values: { title: 'Published', revision: 4 } }],
+    });
+
+    const rejected = await Effect.runPromise(
+      runtime
+        .runEntityMutationCommand(mutation.delete(book, { if: { revision: 3 } }))
+        .pipe(Effect.either),
+    );
+
+    expect(rejected).toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'entity_mutation_condition_not_met' },
+    });
+    expect(dataset.Book).toEqual([{ id: 'book-1', title: 'Published', revision: 4 }]);
+  });
+
+  it('preserves a duplicate-identity cardinality failure without mutating either row', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+      revision: field.number(),
+    });
+    const dataset = {
+      Book: [
+        { id: 'book-1', title: 'First copy', revision: 3 },
+        { id: 'book-1', title: 'Second copy', revision: 3 },
+      ],
+    };
+    const runtime = createInMemoryDataGraphRuntime({ dataset, entities: [Book] });
+    const command = mutateEntity(Book).update(
+      createEntityRef(Book, { id: 'book-1' }),
+      { revision: 4 },
+      { if: { revision: 3 } },
+    );
+
+    await expect(
+      Effect.runPromise(runtime.runEntityMutationCommand(command).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'cardinality_mismatch' },
+    });
+    expect(dataset.Book).toEqual([
+      { id: 'book-1', title: 'First copy', revision: 3 },
+      { id: 'book-1', title: 'Second copy', revision: 3 },
+    ]);
   });
 });

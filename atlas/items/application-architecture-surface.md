@@ -32,3 +32,4 @@ The current `architecture()`, `layer`, and `concern` vocabulary predates the gra
 5. [`Storage Schema Contract Validation`](./application-architecture-surface/storage-schema-contract-validation.md)
 6. [`Data Graph Execution Routing`](./application-architecture-surface/data-graph-execution-routing.md)
 7. [`Authentication And Principal`](./application-architecture-surface/authentication-and-principal.md)
+8. [`Ontahí Runtime Protocol`](./application-architecture-surface/runtime-protocol.md)

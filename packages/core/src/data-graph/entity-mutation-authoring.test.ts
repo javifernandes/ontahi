@@ -34,8 +34,11 @@ describe('client Entity mutation authoring', () => {
       course,
       status: 'active',
     });
-    const update = enrollment.update({ status: 'ended', note: 'Transferred' });
-    const remove = enrollment.delete();
+    const update = enrollment.update(
+      { status: 'ended', note: 'Transferred' },
+      { if: { status: 'active' } },
+    );
+    const remove = enrollment.delete({ if: { status: 'ended' } });
 
     expect(create).toEqual({
       kind: 'entity-mutation-command',
@@ -54,12 +57,14 @@ describe('client Entity mutation authoring', () => {
       entityName: 'Enrollment',
       target: createEntityRef(EnrollmentSchema, { id: 'enrollment-1' }),
       values: { status: 'ended', note: 'Transferred' },
+      if: { status: 'active' },
     });
     expect(remove).toEqual({
       kind: 'entity-mutation-command',
       action: 'delete',
       entityName: 'Enrollment',
       target: createEntityRef(EnrollmentSchema, { id: 'enrollment-1' }),
+      if: { status: 'ended' },
     });
     expectTypeOf(create).toMatchTypeOf<EntityMutationCommand>();
     expectTypeOf(update).toMatchTypeOf<EntityMutationCommand>();
@@ -121,6 +126,9 @@ describe('client Entity mutation authoring', () => {
     const course = createEntityRef(Course, { id: 'course-1' });
     type CreateInput = Parameters<typeof Enrollment.create>[0];
     type UpdateInput = Parameters<ReturnType<typeof Enrollment.refById>['update']>[0];
+    type UpdateOptions = NonNullable<
+      Parameters<ReturnType<typeof Enrollment.refById>['update']>[1]
+    >;
     type IncludesDerivedField = 'displayLabel' extends keyof CreateInput ? true : false;
     type IncludesForeignUpdateField = 'title' extends keyof UpdateInput ? true : false;
 
@@ -133,5 +141,9 @@ describe('client Entity mutation authoring', () => {
     expectTypeOf<{ id: string }>().not.toMatchTypeOf<CreateInput['student']>();
     expectTypeOf<IncludesDerivedField>().toEqualTypeOf<false>();
     expectTypeOf<IncludesForeignUpdateField>().toEqualTypeOf<false>();
+    expectTypeOf<UpdateOptions['if']>().toMatchTypeOf<{
+      status?: 'active' | 'ended';
+      student?: EntityRef<'Student'>;
+    }>();
   });
 });
