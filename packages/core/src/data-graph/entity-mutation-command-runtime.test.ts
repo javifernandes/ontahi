@@ -141,6 +141,34 @@ describe('Entity Mutation Command runtime routing', () => {
     ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'invalid_response' } });
   });
 
+  it('rejects a remote update delta for another Ref of the same Entity', async () => {
+    const graph = defineBookGraph();
+    const command = mutateEntity(graph.Book).update(createEntityRef(graph.Book, { id: 'book-1' }), {
+      title: 'Revised',
+    });
+    const remote = createRemoteDataGraphRuntime({
+      transport: vi.fn(),
+      commandTransport: async () => ({
+        kind: 'graph-command-result',
+        value: {
+          created: [],
+          updated: [
+            {
+              entityName: 'Book',
+              ref: createEntityRef(graph.Book, { id: 'book-2' }),
+              values: { id: 'book-2', title: 'Revised', published: false },
+            },
+          ],
+          deleted: [],
+        },
+      }),
+    });
+
+    await expect(
+      Effect.runPromise(remote.runEntityMutationCommand(command).pipe(Effect.either)),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'invalid_response' } });
+  });
+
   it('distinguishes unsupported, invalid, failed, and mismatched remote execution', async () => {
     const graph = defineBookGraph();
     const command = mutateEntity(graph.Book).create({

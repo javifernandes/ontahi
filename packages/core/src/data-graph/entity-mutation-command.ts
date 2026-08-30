@@ -10,6 +10,8 @@ import {
 } from './definitions.js';
 import {
   createEntityIdentityRef,
+  createEntityRef,
+  entityRefsEqual,
   isEntityRef,
   type AnyEntityRef,
   type EntityRef,
@@ -62,11 +64,16 @@ export const isExactEntityMutationDelta = (
       : command.action === 'update'
         ? [...value.created, ...value.deleted]
         : [...value.created, ...value.updated];
+  const exactFact = expected[0];
+  const targetMatches =
+    command.action === 'create'
+      ? exactFact?.ref === undefined || exactFact.ref.entityName === command.entityName
+      : exactFact?.ref !== undefined && entityRefsEqual(exactFact.ref, command.target);
   return (
     expected.length === 1 &&
     unexpected.length === 0 &&
-    expected[0]?.entityName === command.entityName &&
-    (expected[0].ref === undefined || expected[0].ref.entityName === command.entityName)
+    exactFact?.entityName === command.entityName &&
+    targetMatches
   );
 };
 
@@ -210,11 +217,13 @@ export const materializeEntityMutationDelta = (
   const portableValues = Object.fromEntries(
     Object.entries(values).filter(([, value]) => value !== undefined),
   );
+  const ref =
+    command.action === 'create'
+      ? createEntityIdentityRef(entity, portableValues)
+      : createEntityRef(command.target.entityName, command.target.locator);
   const fact: EntityMutationFact = {
     entityName: entity.name,
-    ...(createEntityIdentityRef(entity, portableValues)
-      ? { ref: createEntityIdentityRef(entity, portableValues) }
-      : {}),
+    ...(ref ? { ref } : {}),
     values: portableValues,
   };
   const delta: EntityMutationDelta = { created: [], updated: [], deleted: [] };

@@ -1011,7 +1011,7 @@ export const defineClientEntity = <
   const entityLocators = hasEntityRefLocators(entityOrName) ? entityOrName.refLocators : {};
   const relations = (config?.relations ?? {}) as TRelations;
   const bindMutationCommands = <TRef extends AnyEntityRef>(ref: TRef) =>
-    typeof entityOrName === 'object' && 'fields' in entityOrName
+    typeof entityOrName === 'object'
       ? bindEntityRefMutationAuthoring(
           ref as unknown as EntityRef<EntityName<TEntity>>,
           entityOrName as AnyEntityDefinition,

@@ -6,6 +6,7 @@ import {
   defineClientEntity,
   entity,
   field,
+  type EntityRef,
   type EntityMutationCommand,
 } from './index.js';
 
@@ -118,32 +119,19 @@ describe('client Entity mutation authoring', () => {
     const Enrollment = defineClientEntity(EnrollmentSchema);
     const student = createEntityRef(Student, { id: 'student-1' });
     const course = createEntityRef(Course, { id: 'course-1' });
+    type CreateInput = Parameters<typeof Enrollment.create>[0];
+    type UpdateInput = Parameters<ReturnType<typeof Enrollment.refById>['update']>[0];
+    type IncludesDerivedField = 'displayLabel' extends keyof CreateInput ? true : false;
+    type IncludesForeignUpdateField = 'title' extends keyof UpdateInput ? true : false;
 
     Enrollment.create({ id: 'enrollment-1', student, course, status: 'active' });
     Enrollment.create({ id: 'enrollment-1', student, course, status: 'active', note: 'Optional' });
-
-    if (false) {
-      // @ts-expect-error Required participant Ref is missing.
-      Enrollment.create({ id: 'enrollment-1', course, status: 'active' });
-      Enrollment.create({
-        id: 'enrollment-1',
-        // @ts-expect-error A loaded-looking record is not a canonical Ref.
-        student: { id: 'student-1' },
-        course,
-        status: 'active',
-      });
-      Enrollment.create({
-        id: 'enrollment-1',
-        student,
-        course,
-        status: 'active',
-        // @ts-expect-error Derived Fields are not mutation inputs.
-        displayLabel: 'No',
-      });
-      // @ts-expect-error A Ref can only update its own Entity shape.
-      Enrollment.refById('enrollment-1').update({ title: 'Not an Enrollment Field' });
-    }
-
-    expect(true).toBe(true);
+    expectTypeOf<CreateInput>().toMatchTypeOf<{
+      student: EntityRef<'Student'>;
+      course: EntityRef<'Course'>;
+    }>();
+    expectTypeOf<{ id: string }>().not.toMatchTypeOf<CreateInput['student']>();
+    expectTypeOf<IncludesDerivedField>().toEqualTypeOf<false>();
+    expectTypeOf<IncludesForeignUpdateField>().toEqualTypeOf<false>();
   });
 });

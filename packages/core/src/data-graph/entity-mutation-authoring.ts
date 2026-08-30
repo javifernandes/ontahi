@@ -194,8 +194,10 @@ export const bindRuntimeEntityMutationClientFacade = <
     ]),
   );
 
-  return Object.assign({}, clientEntity, createEntityMutationAuthoring(entity, executor), {
+  return {
+    ...clientEntity,
+    ...createEntityMutationAuthoring(entity, executor),
     ref: (locator: EntityRefLocator) => bindMutationRef(createPortableRef(locator)),
     ...boundLocators,
-  }) as RuntimeBoundEntityMutationClientFacade<TClientEntity, TEntity, TError, TOptions>;
+  } as RuntimeBoundEntityMutationClientFacade<TClientEntity, TEntity, TError, TOptions>;
 };

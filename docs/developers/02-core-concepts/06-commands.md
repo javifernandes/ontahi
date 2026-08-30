@@ -73,7 +73,8 @@ const removeEnrollment = Enrollment.refById('enrollment-42').delete();
 
 `create` requires every required stored Field, including canonical participant Refs. `update`
 accepts only stored Fields from the referenced Entity, and `delete` already knows its exact target
-from the Ref. Derived Fields are never mutation inputs.
+from the Ref. Derived Fields are never mutation inputs. An update/delete delta repeats that exact
+target Ref; a runtime or remote response for another instance of the same Entity is invalid.
 
 These methods author the canonical portable Entity Mutation Command; they do not put mutable state
 or a runtime inside the Entity or Ref. A facade bound to a Data Graph runtime adds a non-enumerable

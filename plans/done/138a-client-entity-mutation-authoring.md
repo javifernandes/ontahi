@@ -97,7 +97,7 @@ objects.
   Refs author exact update/delete Commands, and runtime binding adds lazy non-enumerable `.run()`
   execution without adding runtime state to semantic Entities, Refs, or serialized Commands.
 - Verification:
-  - Core: 98 files and 705 tests passed with coverage; 90.23% statements, 81.30% branches,
+  - Core: 98 files and 707 tests passed with coverage; 90.23% statements, 81.30% branches,
     92.64% functions, and 90.70% lines;
   - React: 11 files and 76 tests passed; typecheck and lint passed;
   - Todo: 6 files and 45 tests passed; codegen check, server/client typecheck, lint, and production

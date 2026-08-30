@@ -49,7 +49,9 @@ in the Entity, action, mutable Fields, returned Fields, and row scope; registrat
 nothing. Generated client Entity facades now author that same contract as `Entity.create(values)`,
 `ref.update(values)`, and `ref.delete()`. A runtime-bound facade adds a non-enumerable `.run()` while
 the serialized Command and Ref remain data-only. `mutateEntity(Entity)` remains the lower-level
-constructor. Bulk affected sets, upsert, and authority-derived atomic scopes remain later work.
+constructor. An update/delete delta carries the exact Ref targeted by its Command; provider and
+remote boundaries reject a fact for another Ref even when the Entity name matches. Bulk affected
+sets, upsert, and authority-derived atomic scopes remain later work.
 Direct Supabase execution lowers this same focused command
 through one PostgREST mutation, declared Entity/Ref mappings, and exact returning cardinality under
 the project's grants and RLS; this does not imply multi-command rollback.

@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   createEntityRef,
   createInMemoryDataGraphRuntime,
+  defineClientEntity,
   entity,
   field,
+  isExactEntityMutationDelta,
+  materializeEntityMutationDelta,
   mutateEntity,
   toEntityMutationGraphCommand,
 } from './index.js';
@@ -58,6 +61,37 @@ describe('Entity Mutation Command', () => {
         values: {},
       }),
     ).toThrow('Expected Entity mutation target Ref for Book, got Author.');
+  });
+
+  it('requires an update/delete delta to identify the exact command target', () => {
+    const Book = entity('Book', { id: field.id(), slug: field.string(), title: field.string() })
+      .locators({ refBySlug: 'slug' })
+      .identity('refById');
+    const ClientBook = defineClientEntity(Book);
+    const target = ClientBook.refBySlug('ontahi');
+    const otherBook = createEntityRef(Book, { slug: 'other' });
+    const command = mutateEntity(Book).update(target, { title: 'Revised' });
+    const factValues = { id: 'book-1', slug: 'ontahi', title: 'Revised' };
+
+    expect(
+      isExactEntityMutationDelta(
+        {
+          created: [],
+          updated: [{ entityName: 'Book', ref: otherBook, values: factValues }],
+          deleted: [],
+        },
+        command,
+      ),
+    ).toBe(false);
+    const materialized = materializeEntityMutationDelta(Book, command, factValues);
+
+    expect(materialized).toEqual({
+      created: [],
+      updated: [{ entityName: 'Book', ref: target, values: factValues }],
+      deleted: [],
+    });
+    expect(materialized.updated[0]?.ref).not.toBe(target);
+    expect(materialized.updated[0]?.ref).not.toHaveProperty('update');
   });
 
   it('returns exact applied deltas through the in-memory runtime', async () => {

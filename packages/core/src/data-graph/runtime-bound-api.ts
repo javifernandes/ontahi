@@ -208,7 +208,7 @@ export const createRuntimeBoundDataGraphApi = <
         > &
           Partial<EntityMutationCommandExecutionRuntime<TCommandError, TCommandOptions>>;
         if (typeof runtime.runEntityMutationCommand !== 'function') {
-          throw new Error(
+          throw new TypeError(
             'The current Data Graph runtime does not support Entity Mutation Command execution.',
           );
         }
@@ -278,7 +278,8 @@ export const createRuntimeBoundDataGraphApi = <
       TCommandError
     >;
 
-    boundClientEntity = Object.assign({}, mutationClientEntity, {
+    boundClientEntity = {
+      ...mutationClientEntity,
       selection,
       all,
       where,
@@ -290,7 +291,7 @@ export const createRuntimeBoundDataGraphApi = <
       upsertMany,
       relatedTo,
       pipe: <TValue>(fn: (entity: typeof boundClientEntity) => TValue) => fn(boundClientEntity),
-    }) as unknown as typeof boundClientEntity;
+    } as unknown as typeof boundClientEntity;
 
     return boundClientEntity;
   };
