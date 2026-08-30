@@ -11,6 +11,47 @@ Ontahí currently has four relevant execution shapes:
 - a **relationship-command bridge** carries explicitly permitted structural link mutations;
 - **HTTP ingress** gives a particular operation an external route and provider channel.
 
+## The Runtime Protocol foundation
+
+Those execution shapes are converging on one transport-independent Ontahí Runtime Protocol. Core
+now defines its first strict envelope and a typed family registry at
+`@ontahi/core/runtime/protocol`. This is a semantic boundary between runtimes, not an HTTP request
+type:
+
+```ts
+import {
+  createRuntimeProtocolRegistry,
+  dataGraphRuntimeProtocolFamilies,
+} from '@ontahi/core/runtime/protocol';
+
+const protocol = createRuntimeProtocolRegistry(dataGraphRuntimeProtocolFamilies);
+const parsed = protocol.parseRequest({
+  protocol: 'ontahi.runtime',
+  version: 1,
+  id: 'request-123',
+  kind: 'request',
+  family: 'graph.command',
+  body: {
+    version: 2,
+    kind: 'graph-command',
+    command: serializedCommand,
+  },
+});
+```
+
+The envelope version and family-body version are deliberately independent. The envelope owns only
+strict JSON framing, one-exchange correlation, family routing, and common protocol diagnostics.
+The complete body remains owned by its family, including its version, policy boundary, typed
+result, and semantic rejection. An unknown envelope version, envelope key, family, or family-body
+version fails before execution. Authority is supplied by the receiving runtime's trusted context;
+it is never accepted from the portable message.
+
+Graph Read and Graph Command are the first registered families because they already have canonical,
+versioned, fail-closed parsers. The registry delegates to those parsers instead of reproducing
+Query or Command validation. It does not execute requests, mount a common endpoint, or change the
+current paths documented below. Operation invocation and Durable Operation observation still need
+versioned family contracts before transport migration.
+
 ## Carry generic operation invocations
 
 The Express adapter mounts the already composed application:

@@ -3,8 +3,8 @@ id: ontahi.runtime-protocol
 kind: system-primitive
 title: Ontahí Runtime Protocol
 parent: ontahi.application-architecture-surface
-status: shaping
-horizon: next
+status: in-progress
+horizon: now
 supports:
   - ontahi.data-graph-execution-routing
   - ontahi.model.operation-invocation
@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/138b-conditional-exact-entity-mutations
   - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/146-ontahi-runtime-protocol
+  - ontahi://plans/146a-runtime-protocol-envelope-and-family-registry
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -25,21 +26,26 @@ message families cover Operation invocation, Durable Operation lifecycle, Data G
 Graph Commands, and future Event subscription and delivery.
 
 One protocol does not make these concepts interchangeable. Each family retains its own portable
-body, authority and policy checks, execution semantics, results, caching, and lifecycle. A common
-versioned envelope supplies correlation, fail-closed compatibility, shared diagnostics, capability
-negotiation, and transport projection. The authoritative receiver rebuilds portable values against
-its canonical application model before applying family policy and execution.
+and independently versioned body, authority and policy checks, execution semantics, results,
+caching, and lifecycle. A strict common envelope now supplies JSON framing, exchange correlation,
+family routing, fail-closed compatibility, and shared protocol diagnostics. Capability negotiation
+and transport projection remain later layers. The authoritative receiver rebuilds portable values
+against its canonical application model before applying family policy and execution.
 
 HTTP, WebSocket, gRPC, queues, process-local calls, and CLI streams are projections of this
 contract. Express should expose one mounted path by default while allowing hosts to route selected
 message kinds through different paths for security, limits, operations, or observability. Those
 paths are deployment choices rather than distinct framework protocols.
 
-The current implementation is converging but not unified. Operation invocation is unversioned;
-Data Graph reads and Commands use separate versioned envelopes; Durable Operation start travels
-through invocation while Task snapshots use another endpoint; Event intents are internal and no
-remote subscription contract exists. Plan 146 owns the common envelope, dispatcher, transport
-projections, Event/session semantics, specification, and conformance work.
+Core exposes the first envelope and typed family registry, proven by delegating `graph.read` and
+`graph.command` bodies to their existing canonical parsers. It does not dispatch execution or
+change current HTTP paths yet. Operation invocation is still unversioned; Durable Operation start
+travels through invocation while Task snapshots use another endpoint. Event intents are internal
+and no remote subscription contract exists.
+
+Events are an explicit design gate. Before Event subscription or delivery joins this protocol,
+Ontahí must define first-class Event declaration, identity, emission, authority, lifecycle,
+ordering, and durability. BookOps provides useful evidence, not a protocol definition to copy.
 
 The protocol is also the prospective boundary between Ontahí as a specification and TypeScript as
 its reference implementation. A compatible implementation in another language must preserve the

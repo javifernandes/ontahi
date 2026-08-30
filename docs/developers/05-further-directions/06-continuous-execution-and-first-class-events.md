@@ -11,6 +11,13 @@ states that something happened and may fan out, persist, replay, or feed project
 current effect events and typed HTTP ingress channels are evidence for one reflected event model
 covering both application facts and third-party facts.
 
+This is a deliberate design gate for the Ontahí Runtime Protocol. Events must not be added as just
+another transport message because BookOps happens to emit or consume something event-shaped.
+Before remote subscription or delivery is specified, Ontahí still needs a first-class answer for
+Event declaration, portable identity, emission, authority, lifecycle, ordering, durability,
+acknowledgement, replay, and failure. BookOps is implementation evidence for that work, not the
+framework contract.
+
 ```mermaid
 flowchart TB
   Invocation["Operation Invocation"] --> Run["Operation run"]
