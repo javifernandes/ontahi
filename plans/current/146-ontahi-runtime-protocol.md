@@ -1,6 +1,8 @@
 # 146. Ontahí Runtime Protocol
 
-Status: next
+Status: current
+
+Completed child: [146a. Runtime Protocol Envelope And Family Registry](../done/146a-runtime-protocol-envelope-and-family-registry.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -38,6 +40,10 @@ Ontahí already has related but separately shaped runtime channels:
 4. Versioned Data Graph Commands containing Entity and Relationship Command variants.
 5. Internal Event intents and ingress channels, without a remote subscription/delivery protocol.
 
+Events are a deliberate stop gate, not merely the last transport adapter. Before an Event
+subscription/delivery slice starts, Ontahí must model Events as first-class semantic values. The
+partial BookOps implementation is evidence for that design review, not a protocol contract to copy.
+
 Data Graph Commands already prove the desired semantic boundary: Entity Mutation Commands and
 Relationship Commands keep different meanings and policies while sharing one message family and
 dispatcher. The next step is to apply that shape across the runtime rather than add another
@@ -66,20 +72,27 @@ Ontahí Runtime Protocol
    └─ deliver
 ```
 
-A provisional request illustrates the shared outer contract without accepting final names:
+A Runtime Protocol request has one strict outer envelope and a complete, independently versioned
+family body:
 
 ```json
 {
+  "protocol": "ontahi.runtime",
   "version": 1,
   "id": "request-123",
-  "kind": "graph.command",
+  "kind": "request",
+  "family": "graph.command",
   "body": {
-    "kind": "entity-mutation-command",
-    "action": "update",
-    "entityName": "Enrollment",
-    "target": {},
-    "values": {},
-    "if": {}
+    "version": 2,
+    "kind": "graph-command",
+    "command": {
+      "kind": "entity-mutation-command",
+      "action": "update",
+      "entityName": "Enrollment",
+      "target": {},
+      "values": {},
+      "if": {}
+    }
   }
 }
 ```
@@ -162,9 +175,13 @@ semantic message bodies and diagnostics.
    preserving a migration path for current endpoints.
 4. **Durable push proof:** multiplex start, observation, progress, cancellation, and result over one
    bidirectional session without changing `useDurableOperation` semantics.
-5. **Event subscription proof:** define an authorized user-notification subscription with explicit
-   delivery and resume behavior, then prove identical local and bridged authoring.
-6. **Specification and conformance:** publish normative JSON examples, semantic requirements, and a
+5. **First-class Event design gate:** stop implementation, inspect Ontahí and BookOps evidence, and
+   define Event identity, declaration, emission, policy, lifecycle, ordering, and durability before
+   designing subscription or delivery messages.
+6. **Event subscription proof:** only after that gate, define an authorized user-notification
+   subscription with explicit delivery and resume behavior, then prove identical local and bridged
+   authoring.
+7. **Specification and conformance:** publish normative JSON examples, semantic requirements, and a
    transport-neutral conformance suite; validate a minimal non-TypeScript implementation.
 
 ## Acceptance Checklist
@@ -186,16 +203,27 @@ semantic message bodies and diagnostics.
 
 ## Open Questions
 
-1. Is one monotonically versioned envelope enough, or do message families also need independent
-   schema versions inside it?
-2. Which response fields are common without erasing typed family-specific results and rejections?
-3. How does capability negotiation work for unary-only, bidirectional, durable, and subscription
+1. How does capability negotiation work for unary-only, bidirectional, durable, and subscription
    transports?
-4. Which identity belongs in the common envelope, and which identities remain inside Durable or
+2. Which compatibility guarantees are required before replacing the current Operation invocation,
+   Graph Read, Graph Command, and Task snapshot envelopes?
+3. How should Operation invocation and Durable lifecycle bodies acquire independent fail-closed
+   family versions without changing their application-facing APIs?
+4. Which identity belongs in the common envelope beyond exchange correlation, if any, and which
+   identities remain inside Durable or
    Event messages?
 5. Should the default HTTP projection use one `POST /runtime` path plus a streaming endpoint, or can
    SSE/WebSocket upgrade share the same mounted path cleanly?
-6. Which compatibility guarantees are required before replacing the current Operation invocation,
-   Graph Read, Graph Command, and Task snapshot envelopes?
-7. What is the smallest Event subscription language that reuses Entity Refs, Selections, policy,
+6. What is the smallest Event subscription language that reuses Entity Refs, Selections, policy,
    and portable identity without turning Events into Queries?
+
+## Settled Foundations
+
+1. Envelope and family schema versions are independent. A new family-body guarantee does not
+   force an unrelated common-envelope version, and an old receiver rejects either unknown version.
+2. The outer response correlates by request id and family. Its body remains the complete typed
+   family result or rejection; the common protocol does not reinterpret those semantics.
+3. Request `id` identifies one exchange only. Durable run, attempt, delivery, subscription, Event,
+   and idempotency identities remain inside the family that defines their lifecycle.
+4. Authority is transport-derived receiver context and is never client-authored into a portable
+   envelope.
