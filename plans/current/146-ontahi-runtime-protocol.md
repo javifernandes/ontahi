@@ -6,6 +6,7 @@ Completed children:
 
 1. [146a. Runtime Protocol Envelope And Family Registry](../done/146a-runtime-protocol-envelope-and-family-registry.md)
 2. [146b. Versioned Operation Protocol Family](../done/146b-versioned-operation-protocol-family.md)
+3. [146c. Runtime Protocol Dispatcher](../done/146c-runtime-protocol-dispatcher.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -49,8 +50,10 @@ partial BookOps implementation is evidence for that design review, not a protoco
 
 Data Graph Commands already prove the desired semantic boundary: Entity Mutation Commands and
 Relationship Commands keep different meanings and policies while sharing one message family and
-dispatcher. The next step is to apply that shape across the runtime rather than add another
-transport-specific bridge for each capability.
+dispatcher. Core now applies that shape across `operation`, `graph.read`, and `graph.command`: one
+transport-neutral dispatcher validates the common request, selects a configured family handler,
+passes receiver-owned context, and correlates the untouched family result. HTTP projection remains
+separate.
 
 ## Proposed Logical Shape
 
@@ -193,7 +196,7 @@ semantic message bodies and diagnostics.
 - [ ] One versioned envelope covers all registered message families without weakening their
       individual semantics.
 - [ ] Unknown versions, kinds, required guarantees, and capabilities fail before execution.
-- [ ] Core dispatch composes existing family dispatchers and policies instead of reimplementing them.
+- [x] Core dispatch composes existing family dispatchers and policies instead of reimplementing them.
 - [ ] Express defaults to one runtime path and supports explicit per-kind routing configuration.
 - [ ] Existing endpoint users have a documented bounded migration path.
 - [ ] Fetch uses one transport contract while application authoring stays unchanged.
@@ -233,3 +236,6 @@ semantic message bodies and diagnostics.
 5. Operation invocation and permission checks share the `operation` family. Its version 1 body
    preserves the existing `invoke` and `check-permission` discriminants; a Durable Operation starts
    through `invoke` and returns its run identity as an ordinary Operation result.
+6. Common dispatch uses optional handlers keyed by registered family. A known family without a
+   handler is an unavailable runtime capability rather than an unknown protocol family; trusted
+   receiver context is passed beside, never inside, the portable request.

@@ -20,6 +20,7 @@ type:
 
 ```ts
 import {
+  createRuntimeProtocolDispatcher,
   createRuntimeProtocolRegistry,
   runtimeProtocolFamilies,
 } from '@ontahi/core/runtime/protocol';
@@ -72,13 +73,39 @@ a View for a projectable Selection output; `check-permission` may not. Its parse
 structurally compatible with the existing canonical dispatcher, which continues to own Operation
 resolution, input hydration, authority, permission checks, projections, and execution.
 
+Core also composes the three existing execution boundaries behind one transport-neutral
+dispatcher:
+
+```ts
+const dispatch = createRuntimeProtocolDispatcher({
+  handlers: {
+    operation: operationDispatcher,
+    'graph.read': graphReadDispatcher,
+    'graph.command': graphCommandDispatcher,
+  },
+});
+
+const response = await dispatch(portableRequest, { authority });
+```
+
+The receiver-owned context is not serialized. Each handler receives its canonical family body and
+that context; an Operation dispatcher can ignore the second argument, while Graph dispatchers use
+it for their existing authority policy. A host needing different read and command authority forms
+can adapt this opaque context in the corresponding handler without changing the wire contract.
+
+Family response bodies remain intact. An Operation failure, Graph Command rejection, or
+family-specific protocol error is wrapped as the correlated response body rather than flattened
+into a common success/failure type. A malformed request never reaches a handler. An unknown family,
+a registered family unavailable in the receiving runtime, a failed handler, and a non-portable
+handler response produce distinct common protocol errors.
+
 A Durable Operation starts through the same `invoke` request. Its successful Operation result
 contains a `TaskRunRef`; that run identity is not the outer request id. Snapshot observation,
 progress, and cancellation still need their own versioned Durable lifecycle contract.
 
-The registry does not execute requests, mount a common endpoint, or change the current paths
-documented below. In particular, the legacy `/operations` HTTP body remains unversioned until the
-common dispatcher and transport migration are implemented.
+The dispatcher does not mount a common endpoint or change the current paths documented below. In
+particular, the legacy `/operations` HTTP body remains unversioned until the transport migration is
+implemented.
 
 ## Carry generic operation invocations
 

@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146a-runtime-protocol-envelope-and-family-registry
   - ontahi://plans/146b-versioned-operation-protocol-family
+  - ontahi://plans/146c-runtime-protocol-dispatcher
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -38,10 +39,16 @@ contract. Express should expose one mounted path by default while allowing hosts
 message kinds through different paths for security, limits, operations, or observability. Those
 paths are deployment choices rather than distinct framework protocols.
 
-Core exposes the first envelope and typed family registry. `operation` body version 1 preserves the
-existing `invoke` and `check-permission` semantics, while `graph.read` and `graph.command` delegate
-to their existing canonical parsers. A canonical tuple names all three families. It does not
-dispatch execution or change current HTTP paths yet: the legacy Operation HTTP body remains
+Core exposes the first envelope, typed family registry, and transport-neutral dispatcher.
+`operation` body version 1 preserves the existing `invoke` and `check-permission` semantics, while
+`graph.read` and `graph.command` delegate to their existing canonical parsers. A canonical tuple
+names all three families, and the common dispatcher routes their validated bodies to configured
+family handlers without absorbing family policy or results. Handler availability is a runtime
+capability: an unknown protocol family and a registered family without a local handler remain
+distinct outcomes. Receiver context stays outside portable messages and is passed directly to the
+selected handler.
+
+The dispatcher does not change current HTTP paths yet: the legacy Operation HTTP body remains
 unversioned during migration. Durable Operation start travels through `operation.invoke` and
 returns a portable run Ref, while Task snapshots still use another unversioned endpoint. Event
 intents are internal and no remote subscription contract exists.
