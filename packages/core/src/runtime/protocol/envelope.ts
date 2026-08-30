@@ -26,7 +26,9 @@ export type RuntimeProtocolErrorCode =
   | 'invalid_envelope'
   | 'unsupported_version'
   | 'unknown_family'
+  | 'family_unavailable'
   | 'invalid_family_request'
+  | 'dispatch_unavailable'
   | 'invalid_response';
 
 export type RuntimeProtocolError = {
@@ -66,7 +68,9 @@ const runtimeProtocolErrorCodes = new Set<RuntimeProtocolErrorCode>([
   'invalid_envelope',
   'unsupported_version',
   'unknown_family',
+  'family_unavailable',
   'invalid_family_request',
+  'dispatch_unavailable',
   'invalid_response',
 ]);
 
