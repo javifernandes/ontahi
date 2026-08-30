@@ -543,6 +543,67 @@ a {
   flex: 1;
 }
 
+.todo-sort-slot {
+  display: grid;
+}
+
+.todo-drag-overlay {
+  position: fixed;
+  z-index: 2000;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 48px;
+  padding: 11px;
+  border: 1px solid rgba(95, 146, 120, 0.5);
+  border-radius: 13px;
+  color: #1a2821;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 22px 44px rgba(27, 60, 43, 0.2),
+    0 5px 14px rgba(27, 60, 43, 0.16);
+  transform: rotate(1.1deg) scale(1.025);
+  transform-origin: center;
+  animation: lift-todo 120ms ease-out;
+  pointer-events: none;
+}
+
+.todo-drag-overlay.completed {
+  background: rgba(247, 249, 246, 0.97);
+}
+
+.todo-drag-check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1.5px solid #87a794;
+  border-radius: 50%;
+  color: white;
+  background: white;
+}
+
+.todo-drag-check svg {
+  width: 13px;
+}
+
+.todo-drag-overlay.completed .todo-drag-check {
+  border-color: #337153;
+  background: #337153;
+}
+
+.todo-drag-overlay .tag-badge button {
+  display: none;
+}
+
+@keyframes lift-todo {
+  from {
+    opacity: 0.5;
+    transform: rotate(0) scale(0.98);
+  }
+}
+
 .todo-item-card {
   position: relative;
   display: grid;
@@ -574,13 +635,9 @@ a {
 }
 
 .todo-item-card.dragging {
-  opacity: 0.35;
-  transform: scale(0.98);
-}
-
-.todo-item-card.drop-target {
-  border-color: #5f9278;
-  box-shadow: 0 -3px 0 rgba(55, 113, 83, 0.45);
+  opacity: 0;
+  box-shadow: none;
+  transform: none;
 }
 
 .todo-item-card:focus-visible {

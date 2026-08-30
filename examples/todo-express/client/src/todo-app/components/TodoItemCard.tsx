@@ -2,7 +2,6 @@ import { Check, LoaderCircle, Plus, Tag as TagIcon, Trash2, X } from 'lucide-rea
 import { useEffect, useRef, useState } from 'react';
 import type {
   CSSProperties,
-  DragEvent,
   FormEvent,
   KeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -18,20 +17,15 @@ type TodoItemCardProps = {
   isCompleting: boolean;
   isDeleting: boolean;
   isDragging: boolean;
-  isDropTarget: boolean;
   isTagging: boolean;
   deletingTagId?: string;
   isTagPickerOpen: boolean;
   closeTagPicker: () => void;
   toggleTagPicker: () => void;
-  startDragging: (event: DragEvent<HTMLDivElement>) => void;
-  dragOver: (event: DragEvent<HTMLDivElement>) => void;
-  drop: (event: DragEvent<HTMLDivElement>) => void;
-  finishDragging: () => void;
   startPointerDragging: (event: ReactPointerEvent<HTMLDivElement>) => void;
   movePointerDragging: (event: ReactPointerEvent<HTMLDivElement>) => void;
   dropPointer: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  cancelPointerDragging: () => void;
+  cancelPointerDragging: (event: ReactPointerEvent<HTMLDivElement>) => void;
   moveBy: (direction: -1 | 1) => void;
   setTodoCompleted: Dashboard['setTodoCompleted'];
   deleteTodo: Dashboard['deleteTodo'];
@@ -49,16 +43,11 @@ export const TodoItemCard = ({
   isCompleting,
   isDeleting,
   isDragging,
-  isDropTarget,
   isTagging,
   deletingTagId,
   isTagPickerOpen,
   closeTagPicker,
   toggleTagPicker,
-  startDragging,
-  dragOver,
-  drop,
-  finishDragging,
   startPointerDragging,
   movePointerDragging,
   dropPointer,
@@ -116,16 +105,11 @@ export const TodoItemCard = ({
 
   return (
     <div
-      className={`todo-item-card${todo.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}${isDropTarget ? ' drop-target' : ''}`}
+      className={`todo-item-card${todo.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}`}
       data-todo-id={todo.id}
-      draggable
       tabIndex={0}
       role='listitem'
       aria-label={`${todo.title}. Drag to reorder; arrow keys also work.`}
-      onDragStart={startDragging}
-      onDragOver={dragOver}
-      onDrop={drop}
-      onDragEnd={finishDragging}
       onPointerDown={startPointerDragging}
       onPointerMove={movePointerDragging}
       onPointerUp={dropPointer}

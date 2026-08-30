@@ -43,6 +43,25 @@ export const reconcileTodoItemOrder = (
 export const moveTodoItem = (currentIds: readonly string[], movingId: string, beforeId?: string) =>
   moveTodoList(currentIds, movingId, beforeId);
 
+export type TodoDropEdge = 'before' | 'after';
+
+export const resolveTodoDropDestination = (
+  currentIds: readonly string[],
+  movingId: string,
+  targetId: string,
+  edge: TodoDropEdge,
+): { beforeTodoId?: string } | undefined => {
+  if (!currentIds.includes(movingId) || movingId === targetId) return undefined;
+
+  const remainingIds = currentIds.filter(id => id !== movingId);
+  const targetIndex = remainingIds.indexOf(targetId);
+  if (targetIndex < 0) return undefined;
+
+  return {
+    beforeTodoId: edge === 'before' ? targetId : remainingIds[targetIndex + 1],
+  };
+};
+
 export type DeskCardPosition = {
   x: number;
   y: number;
