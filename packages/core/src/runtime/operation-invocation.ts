@@ -42,7 +42,8 @@ export type OperationPermissionResponse = {
 export type OperationInvocationProtocolErrorCode =
   | 'invalid_request'
   | 'invalid_response'
-  | 'invocation_unavailable';
+  | 'invocation_unavailable'
+  | 'unsupported_version';
 
 export type OperationInvocationProtocolError = {
   kind: 'protocol-error';

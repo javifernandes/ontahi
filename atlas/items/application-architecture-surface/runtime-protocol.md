@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146a-runtime-protocol-envelope-and-family-registry
+  - ontahi://plans/146b-versioned-operation-protocol-family
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -37,11 +38,13 @@ contract. Express should expose one mounted path by default while allowing hosts
 message kinds through different paths for security, limits, operations, or observability. Those
 paths are deployment choices rather than distinct framework protocols.
 
-Core exposes the first envelope and typed family registry, proven by delegating `graph.read` and
-`graph.command` bodies to their existing canonical parsers. It does not dispatch execution or
-change current HTTP paths yet. Operation invocation is still unversioned; Durable Operation start
-travels through invocation while Task snapshots use another endpoint. Event intents are internal
-and no remote subscription contract exists.
+Core exposes the first envelope and typed family registry. `operation` body version 1 preserves the
+existing `invoke` and `check-permission` semantics, while `graph.read` and `graph.command` delegate
+to their existing canonical parsers. A canonical tuple names all three families. It does not
+dispatch execution or change current HTTP paths yet: the legacy Operation HTTP body remains
+unversioned during migration. Durable Operation start travels through `operation.invoke` and
+returns a portable run Ref, while Task snapshots still use another unversioned endpoint. Event
+intents are internal and no remote subscription contract exists.
 
 Events are an explicit design gate. Before Event subscription or delivery joins this protocol,
 Ontahí must define first-class Event declaration, identity, emission, authority, lifecycle,
