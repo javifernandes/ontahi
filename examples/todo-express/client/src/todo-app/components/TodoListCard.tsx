@@ -230,6 +230,7 @@ export const TodoListCard = ({
       return;
     }
     const bounds = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.setPointerCapture(event.pointerId);
     todoPointerDrag.current = {
       id: todoId,
       pointerId: event.pointerId,
@@ -255,7 +256,6 @@ export const TodoListCard = ({
     }
     if (!drag.moved) {
       drag.moved = true;
-      event.currentTarget.setPointerCapture(event.pointerId);
       draggingTodoIdRef.current = drag.id;
       setDraggingTodoId(drag.id);
       closePopovers();

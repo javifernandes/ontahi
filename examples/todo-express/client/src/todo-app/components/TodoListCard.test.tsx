@@ -208,4 +208,28 @@ describe('TodoListCard item reordering', () => {
     expect(document.querySelector('[data-todo-drag-overlay]')).toBeNull();
     expect(moveTodo).not.toHaveBeenCalled();
   });
+
+  it('cleans up a pending drag released outside the cards before the movement threshold', () => {
+    const moveTodo = vi.fn();
+    act(() => root.render(<TodoListCard {...createProps(moveTodo)} />));
+
+    const stack = container.querySelector<HTMLElement>('.todo-stack')!;
+    const items = Array.from(container.querySelectorAll<HTMLElement>('[data-todo-id]'));
+    vi.spyOn(stack, 'getBoundingClientRect').mockReturnValue(rect(0, 180));
+    items.forEach((item, index) => {
+      vi.spyOn(item, 'getBoundingClientRect').mockReturnValue(rect(index * 60, 50));
+    });
+
+    act(() => items[0]!.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 25 })));
+    expect(captured).toBe(true);
+
+    act(() => items[0]!.dispatchEvent(pointerEvent('pointerup', { x: 400, y: 200 })));
+    expect(captured).toBe(false);
+
+    act(() => items[1]!.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 85 })));
+    act(() => items[1]!.dispatchEvent(pointerEvent('pointermove', { x: 100, y: 25 })));
+
+    expect(document.querySelector('[data-todo-drag-overlay]')?.textContent).toContain('Todo 2');
+    expect(moveTodo).not.toHaveBeenCalled();
+  });
 });
