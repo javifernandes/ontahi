@@ -13,7 +13,15 @@ type TodoListCardProps = ComponentProps<typeof TodoListCard>;
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-const pointerEvent = (type: string, { x, y }: { x: number; y: number }) => {
+const pointerEvent = (
+  type: string,
+  {
+    x,
+    y,
+    pointerId = 1,
+    isPrimary = true,
+  }: { x: number; y: number; pointerId?: number; isPrimary?: boolean },
+) => {
   const event = new MouseEvent(type, {
     bubbles: true,
     button: 0,
@@ -21,8 +29,9 @@ const pointerEvent = (type: string, { x, y }: { x: number; y: number }) => {
     clientY: y,
   });
   Object.defineProperties(event, {
-    pointerId: { value: 1 },
+    pointerId: { value: pointerId },
     pointerType: { value: 'mouse' },
+    isPrimary: { value: isPrimary },
   });
   return event;
 };
@@ -120,6 +129,9 @@ describe('TodoListCard item reordering', () => {
 
     const stack = container.querySelector<HTMLElement>('.todo-stack')!;
     const items = Array.from(container.querySelectorAll<HTMLElement>('[data-todo-id]'));
+    expect(items.every(item => item.parentElement?.getAttribute('role') === 'presentation')).toBe(
+      true,
+    );
     vi.spyOn(stack, 'getBoundingClientRect').mockReturnValue(rect(0, 180));
     items.forEach((item, index) => {
       vi.spyOn(item, 'getBoundingClientRect').mockReturnValue(rect(index * 60, 50));
@@ -149,6 +161,51 @@ describe('TodoListCard item reordering', () => {
     act(() => firstItem.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 25 })));
     act(() => firstItem.dispatchEvent(pointerEvent('pointerup', { x: 100, y: 25 })));
 
+    expect(moveTodo).not.toHaveBeenCalled();
+  });
+
+  it('does not let another pointer replace the pending drag', () => {
+    const moveTodo = vi.fn();
+    act(() => root.render(<TodoListCard {...createProps(moveTodo)} />));
+
+    const stack = container.querySelector<HTMLElement>('.todo-stack')!;
+    const items = Array.from(container.querySelectorAll<HTMLElement>('[data-todo-id]'));
+    vi.spyOn(stack, 'getBoundingClientRect').mockReturnValue(rect(0, 180));
+    items.forEach((item, index) => {
+      vi.spyOn(item, 'getBoundingClientRect').mockReturnValue(rect(index * 60, 50));
+    });
+
+    act(() => items[0]!.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 25 })));
+    act(() =>
+      items[1]!.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 85, pointerId: 2 })),
+    );
+    act(() => items[0]!.dispatchEvent(pointerEvent('pointermove', { x: 100, y: 100 })));
+
+    expect(document.querySelector('[data-todo-drag-overlay]')?.textContent).toContain('Todo 1');
+
+    act(() => items[0]!.dispatchEvent(pointerEvent('pointerup', { x: 100, y: 100 })));
+
+    expect(moveTodo).toHaveBeenCalledWith('todo-1', 'todo-3');
+    expect(document.querySelector('[data-todo-drag-overlay]')).toBeNull();
+  });
+
+  it('does not begin a drag from a non-primary pointer', () => {
+    const moveTodo = vi.fn();
+    act(() => root.render(<TodoListCard {...createProps(moveTodo)} />));
+    const firstItem = container.querySelector<HTMLElement>('[data-todo-id="todo-1"]')!;
+
+    act(() =>
+      firstItem.dispatchEvent(
+        pointerEvent('pointerdown', { x: 100, y: 25, pointerId: 2, isPrimary: false }),
+      ),
+    );
+    act(() =>
+      firstItem.dispatchEvent(
+        pointerEvent('pointermove', { x: 100, y: 100, pointerId: 2, isPrimary: false }),
+      ),
+    );
+
+    expect(document.querySelector('[data-todo-drag-overlay]')).toBeNull();
     expect(moveTodo).not.toHaveBeenCalled();
   });
 });

@@ -221,6 +221,8 @@ export const TodoListCard = ({
 
   const startTodoPointerDrag = (event: ReactPointerEvent<HTMLDivElement>, todoId: string) => {
     if (
+      todoPointerDrag.current ||
+      !event.isPrimary ||
       event.button !== 0 ||
       (event.target instanceof Element &&
         event.target.closest('button, input, form, a, [data-no-item-drag]'))
@@ -478,7 +480,7 @@ export const TodoListCard = ({
           <>
             <div ref={todoStack} className='todo-stack' role='list'>
               {previewItems.map(todo => (
-                <div className='todo-sort-slot' key={todo.id}>
+                <div className='todo-sort-slot' role='presentation' key={todo.id}>
                   <TodoItemCard
                     todo={todo}
                     tags={tags}
