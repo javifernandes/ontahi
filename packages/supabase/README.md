@@ -14,6 +14,19 @@ This package depends on `@ontahi/core` and should not leak back into core. It cu
 Product-specific graph schemas, repositories, task definitions, and workflow descriptors stay in
 the host application.
 
+## Exact Entity mutations
+
+`createSupabaseDataGraphRuntime({ entities: [...] })` advertises Ontahi's focused
+`EntityMutationCommand` capability for create, exact Ref-targeted update, and exact Ref-targeted
+delete. The runtime resolves the semantic Entity from that registry, lowers declared column and Ref
+mappings through PostgREST, requires exactly one returned row, and produces the same portable
+created/updated/deleted delta as the in-memory, PostgreSQL, and remote runtimes.
+
+Each command is one PostgREST mutation and remains subject to the project's grants and RLS. This
+capability does not advertise bulk or Selection-targeted mutations, and it does not imply that
+several commands can share rollback; use a server-side Operation or RPC when coordination across
+multiple writes is required.
+
 ## Atomic many-to-many relationships
 
 Selection-valued many-to-many Relationship Commands use one PostgreSQL transaction through the

@@ -21,6 +21,7 @@ relatedPlans:
   - bookops://plans/130-ontahi-authentication-principal-and-invocation-context
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
+  - ontahi://plans/128g-supabase-exact-entity-mutation-commands
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
 sourceCommit: 67713696
 ---
@@ -59,10 +60,12 @@ commands, and reflected Explorer data. Supabase provides external durability, wh
 conformance, and reflected Entity data over direct PostgreSQL connections.
 
 Entity Mutation Command execution is a focused capability beside generic provider Commands and
-Relationship Commands. In-memory and PostgreSQL runtimes implement exact create/update/delete;
-the remote runtime implements the same capability only when a Command transport is configured.
-React's Fetch executor exposes it without claiming that every local provider supports it. A
-missing capability is explicit rather than a silent remote or provider fallback.
+Relationship Commands. In-memory, PostgreSQL, and Supabase runtimes implement exact
+create/update/delete; the remote runtime implements the same capability only when a Command
+transport is configured. Supabase lowers each exact command to one PostgREST mutation under grants
+and RLS without claiming compositional transactions. React's Fetch executor exposes the portable
+capability without claiming that every local provider supports it. A missing capability is explicit
+rather than a silent remote or provider fallback.
 
 Operation declarations may require a semantic guarantee without naming the adapter that supplies
 it. `operation.atomic(...)` reflects `execution.atomicity: 'required'`, from which Core derives the
