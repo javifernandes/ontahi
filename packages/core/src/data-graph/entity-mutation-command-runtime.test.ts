@@ -6,6 +6,8 @@ import {
   createGraphCommandDispatcher,
   createInMemoryDataGraphRuntime,
   createRemoteDataGraphRuntime,
+  createRuntimeBoundDataGraphApi,
+  defineClientEntity,
   entity,
   field,
   mutateEntity,
@@ -67,19 +69,19 @@ describe('Entity Mutation Command runtime routing', () => {
       ),
     );
     const remote = createRemoteDataGraphRuntime({ transport: vi.fn(), commandTransport });
-    const directCommand = mutateEntity(directGraph.Book).update(
-      createEntityRef(directGraph.Book, { id: 'book-1' }),
-      { title: 'Revised' },
+    const DirectBook = createRuntimeBoundDataGraphApi(() => directRuntime).bindClientEntity(
+      defineClientEntity(directGraph.Book),
     );
-    const remoteCommand = mutateEntity(client.Book).update(
-      createEntityRef(client.Book, { id: 'book-1' }),
-      { title: 'Revised' },
+    const RemoteBook = createRuntimeBoundDataGraphApi(() => remote).bindClientEntity(
+      defineClientEntity(client.Book),
     );
 
     const directDelta = await Effect.runPromise(
-      directRuntime.runEntityMutationCommand(directCommand),
+      DirectBook.refById('book-1').update({ title: 'Revised' }).run(),
     );
-    const remoteDelta = await Effect.runPromise(remote.runEntityMutationCommand(remoteCommand));
+    const remoteDelta = await Effect.runPromise(
+      RemoteBook.refById('book-1').update({ title: 'Revised' }).run(),
+    );
 
     expect(remoteDelta).toEqual(directDelta);
     expect(serverDataset).toEqual(directDataset);
@@ -131,6 +133,34 @@ describe('Entity Mutation Command runtime routing', () => {
       commandTransport: async () => ({
         kind: 'graph-command-result',
         value: { created: [], updated: [], deleted: [] },
+      }),
+    });
+
+    await expect(
+      Effect.runPromise(remote.runEntityMutationCommand(command).pipe(Effect.either)),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { code: 'invalid_response' } });
+  });
+
+  it('rejects a remote update delta for another Ref of the same Entity', async () => {
+    const graph = defineBookGraph();
+    const command = mutateEntity(graph.Book).update(createEntityRef(graph.Book, { id: 'book-1' }), {
+      title: 'Revised',
+    });
+    const remote = createRemoteDataGraphRuntime({
+      transport: vi.fn(),
+      commandTransport: async () => ({
+        kind: 'graph-command-result',
+        value: {
+          created: [],
+          updated: [
+            {
+              entityName: 'Book',
+              ref: createEntityRef(graph.Book, { id: 'book-2' }),
+              values: { id: 'book-2', title: 'Revised', published: false },
+            },
+          ],
+          deleted: [],
+        },
       }),
     });
 

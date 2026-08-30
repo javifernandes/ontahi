@@ -1,4 +1,4 @@
-import { createEntityRef, mutateEntity, relationshipSet, Selection } from '@ontahi/core/data-graph';
+import { createEntityRef, relationshipSet, Selection } from '@ontahi/core/data-graph';
 import {
   useGraphExecutorCapability,
   useGraphQuery,
@@ -292,7 +292,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
         return false;
       }
       await graphExecutor.runEntityMutationCommand(
-        mutateEntity(TagSchema).create({
+        Tag.create({
           id: tagId,
           name,
           color: tagColors[(tags.data?.length ?? 0) % tagColors.length]!,

@@ -1,6 +1,6 @@
 # 138. Entity Mutation Command Authoring And Lifecycle Ergonomics
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/138-entity-mutation-command-authoring`
 
@@ -51,23 +51,34 @@ identity.
 
 ## Acceptance Checklist
 
-- [ ] One concise authoring vocabulary covers create, update, and delete without duplicate concepts.
-- [ ] Entity and Ref methods are fully typed and remain non-enumerable local bindings where needed.
-- [ ] Serialized Commands and Refs contain data only.
-- [ ] Association Entity construction requires canonical participant Refs generically; loaded,
+- [x] One concise authoring vocabulary covers create, update, and delete without duplicate concepts.
+- [x] Entity and Ref methods are fully typed and remain non-enumerable local bindings where needed.
+- [x] Serialized Commands and Refs contain data only.
+- [x] Association Entity construction requires canonical participant Refs generically; loaded,
       detached, unsaved, and full-record inputs are rejected rather than serialized implicitly.
 - [ ] Update/delete commands define portable revision or conditional preconditions and structured
       stale, replaced, and missing-target outcomes.
 - [ ] Direct execution and future remote command types preserve identical concurrency semantics.
-- [ ] Existing `insert` and Selection mutation compatibility has an explicit migration decision.
-- [ ] Plan 128 owns any remote transport rather than the authoring facade inventing one.
+- [x] Existing `insert` and Selection mutation compatibility has an explicit migration decision.
+- [x] Plan 128 owns any remote transport rather than the authoring facade inventing one.
 
-## Open Questions
+## Execution Slices
 
-1. Should `insert` remain the canonical creation verb while `create` belongs only to outcomes or
-   lifecycle language?
-2. Does `ref.delete()` communicate a command target more clearly than
-   `Entity.selection(...).delete()` for exact identity?
+1. [138a. Client Entity Mutation Authoring](../done/138a-client-entity-mutation-authoring.md) adds the
+   portable and runtime-bound Entity/Ref facade over the exact Command contract already proven by
+   Plans 128f and 128g. It deliberately leaves concurrency preconditions unchanged.
+2. [138b. Conditional Exact Entity Mutations](../next/138b-conditional-exact-entity-mutations.md)
+   owns portable revision/conditional evidence and provider outcome semantics now that the
+   authoring vocabulary is stable.
+
+## Decisions And Remaining Questions
+
+1. `insert` and Selection mutation remain the general server/runtime Command surface. `create` is
+   the exact lifecycle verb on generated client Entity facades; `ref.update()` and `ref.delete()`
+   distinguish exact identity from affected-set mutation.
+2. Raw semantic Entities remain declarative metamodel values. Generated client facades own portable
+   authoring, while runtime binding owns executable `.run()` without changing serialization.
 3. Which runtimes can guarantee revision evidence, and what conditional fallback exists when they
    cannot?
-4. Which surface belongs in generated browser clients before generic remote Entity Commands exist?
+4. How should missing, stale, and replaced targets remain diagnostically useful without leaking
+   policy-filtered existence evidence?

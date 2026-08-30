@@ -10,6 +10,7 @@ export * from './command.js';
 export * from './definitions.js';
 export * from './execution.js';
 export * from './entity-mutation-command.js';
+export * from './entity-mutation-authoring.js';
 export * from './in-memory/command.js';
 export * from './in-memory/entity-mutation-command.js';
 export * from './in-memory/relationship-command.js';

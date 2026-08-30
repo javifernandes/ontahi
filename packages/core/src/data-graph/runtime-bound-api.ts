@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { BoundGraphRead, ExecutableGraphRead, GraphReadExecutor } from './binding.js';
 import {
   bindGraphRead,
@@ -7,8 +9,14 @@ import type { BoundGraphCommand, GraphCommandExecutor } from './command-binding.
 import { createBoundGraphCommand } from './command-binding.js';
 import type { GraphCommandSpec } from './command.js';
 import type { AnyEntityDefinition, InferEntityRecord } from './definitions.js';
+import {
+  bindRuntimeEntityMutationClientFacade,
+  type RuntimeBoundEntityMutationClientFacade,
+} from './entity-mutation-authoring.js';
+import type { EntityMutationCommandExecutionRuntime } from './entity-mutation-command.js';
 import { createDataGraphExecutor, type DataGraphExecutor } from './execution.js';
 import type { QueryBuilder, QueryOrView } from './query.js';
+import type { AnyEntityRef, EntityRefLocator } from './ref/index.js';
 import type { DataGraphExecutionRuntime } from './runtime.js';
 import {
   createGraphSelectionAssembly,
@@ -55,6 +63,7 @@ export type RuntimeBoundSelectionEntity<
 
 type ClientEntityWithDefinition = {
   definition: AnyEntityDefinition;
+  ref: (locator: EntityRefLocator) => AnyEntityRef;
 };
 
 type ClientEntityDefinitionOf<TClientEntity extends ClientEntityWithDefinition> =
@@ -78,7 +87,12 @@ export type RuntimeBoundClientEntity<
   TCommandOptions = TReadOptions,
   TCommandError = TError,
 > = Omit<
-  TClientEntity,
+  RuntimeBoundEntityMutationClientFacade<
+    TClientEntity,
+    ClientEntityDefinitionOf<TClientEntity>,
+    TCommandError,
+    TCommandOptions
+  >,
   keyof RuntimeBoundSelectionEntityApi<
     ClientEntityDefinitionOf<TClientEntity>,
     TError,
@@ -180,6 +194,27 @@ export const createRuntimeBoundDataGraphApi = <
   const graphCommandExecutor: GraphCommandExecutor<TCommandError, TCommandOptions> = {
     run: (command, options) => executor.runCommandEffect(command, options),
   };
+  const entityMutationCommandExecutor: EntityMutationCommandExecutionRuntime<
+    TCommandError,
+    TCommandOptions
+  > = {
+    runEntityMutationCommand: (command, options) =>
+      Effect.suspend(() => {
+        const runtime = getRuntime() as DataGraphExecutionRuntime<
+          TError,
+          TReadOptions,
+          TCommandOptions,
+          TCommandError
+        > &
+          Partial<EntityMutationCommandExecutionRuntime<TCommandError, TCommandOptions>>;
+        if (typeof runtime.runEntityMutationCommand !== 'function') {
+          throw new TypeError(
+            'The current Data Graph runtime does not support Entity Mutation Command execution.',
+          );
+        }
+        return runtime.runEntityMutationCommand(command, options);
+      }),
+  };
 
   const createExecutableGraphRead = <TRead extends QueryOrView<any, any>>(
     read: TRead,
@@ -230,6 +265,11 @@ export const createRuntimeBoundDataGraphApi = <
       upsertMany,
       relatedTo,
     } = selectionAssembly.bindSelectionEntity(clientEntity.definition, {});
+    const mutationClientEntity = bindRuntimeEntityMutationClientFacade(
+      clientEntity,
+      clientEntity.definition,
+      entityMutationCommandExecutor,
+    );
     let boundClientEntity!: RuntimeBoundClientEntity<
       TClientEntity,
       TError,
@@ -238,7 +278,8 @@ export const createRuntimeBoundDataGraphApi = <
       TCommandError
     >;
 
-    boundClientEntity = Object.assign({}, clientEntity, {
+    boundClientEntity = {
+      ...mutationClientEntity,
       selection,
       all,
       where,
@@ -250,7 +291,7 @@ export const createRuntimeBoundDataGraphApi = <
       upsertMany,
       relatedTo,
       pipe: <TValue>(fn: (entity: typeof boundClientEntity) => TValue) => fn(boundClientEntity),
-    }) as unknown as typeof boundClientEntity;
+    } as unknown as typeof boundClientEntity;
 
     return boundClientEntity;
   };

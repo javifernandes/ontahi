@@ -54,6 +54,42 @@ const importTodos = TodoItem.insertManyReturning(
 `insert` and `insertMany` omit a return value. Their `Returning` variants return one projected
 record or an array with the same cardinality as the insertion.
 
+## Author an exact Entity lifecycle command
+
+Generated client Entity facades expose a smaller lifecycle vocabulary for one exact Entity
+instance:
+
+```ts
+const enrollment = Enrollment.create({
+  id: 'enrollment-42',
+  student: Student.refById('student-1'),
+  course: Course.refById('course-1'),
+  status: 'active',
+});
+
+const endEnrollment = Enrollment.refById('enrollment-42').update({ status: 'ended' });
+const removeEnrollment = Enrollment.refById('enrollment-42').delete();
+```
+
+`create` requires every required stored Field, including canonical participant Refs. `update`
+accepts only stored Fields from the referenced Entity, and `delete` already knows its exact target
+from the Ref. Derived Fields are never mutation inputs. An update/delete delta repeats that exact
+target Ref; a runtime or remote response for another instance of the same Entity is invalid.
+
+These methods author the canonical portable Entity Mutation Command; they do not put mutable state
+or a runtime inside the Entity or Ref. A facade bound to a Data Graph runtime adds a non-enumerable
+`run()` method to the authored Command:
+
+```ts
+yield * BoundEnrollment.create(values).run();
+yield * BoundEnrollment.refById('enrollment-42').delete().run();
+```
+
+Generated browser code can instead pass the same portable value to the graph executor. The server
+executes it only when an Entity Mutation Command policy explicitly permits the Entity, action,
+fields, result shape, and row scope. `mutateEntity(Entity)` remains the lower-level constructor for
+framework integrations and code that does not use a generated client facade.
+
 ## Upsert with an explicit conflict rule
 
 ```ts
@@ -128,13 +164,15 @@ cardinality without a semantic input carrying it.
 
 ## Command surface
 
-| Target            | Operators                                                        |
-| ----------------- | ---------------------------------------------------------------- |
-| Entity            | `insert`, `insertReturning`, `insertMany`, `insertManyReturning` |
-| Entity            | `upsert`, `upsertMany`                                           |
-| Selection         | `update`, `updateReturning`                                      |
-| Selection         | `delete`, `deleteReturning`                                      |
-| Lower-level Query | explicit `One` / `Many` update and delete variants               |
+| Target                  | Operators                                                        |
+| ----------------------- | ---------------------------------------------------------------- |
+| Entity                  | `insert`, `insertReturning`, `insertMany`, `insertManyReturning` |
+| Entity                  | `upsert`, `upsertMany`                                           |
+| Generated client Entity | exact portable `create`                                          |
+| Generated client Ref    | exact portable `update`, `delete`                                |
+| Selection               | `update`, `updateReturning`                                      |
+| Selection               | `delete`, `deleteReturning`                                      |
+| Lower-level Query       | explicit `One` / `Many` update and delete variants               |
 
 A simple operation returns its final Command directly:
 
@@ -166,7 +204,7 @@ the exact added/removed delta. The result is explicitly `applied` or `not-applie
 status before reading `delta` or `diagnostic`. See [Relations](03-relations.md) for direct,
 many-to-many, conditional, and Reaction lifecycles.
 
-The remote graph bridge currently exposes policy-scoped Relationship Commands, not generic Entity
-insert, update, upsert, or delete Commands. Server-only browser writes of those shapes remain named
-Operations until Ontahí has a write-policy algebra that can safely describe their affected fields,
-row scope, invariants, and reconciliation.
+The remote graph bridge exposes policy-scoped Relationship Commands and exact Entity Mutation
+Commands. It does not transport arbitrary Selection Commands, bulk mutation, insert/upsert, or an
+open-ended provider Command. Writes outside the exact policy algebra remain named Operations until
+Ontahí can preserve their affected fields, row scope, invariants, and reconciliation semantics.

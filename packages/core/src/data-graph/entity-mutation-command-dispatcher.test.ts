@@ -280,7 +280,13 @@ describe('Entity Mutation Command dispatcher', () => {
       policies: [policyFor(graph)],
       executeEntityMutation: vi.fn(async () => ({
         created: [],
-        updated: [{ entityName: 'Author', values: { id: 'book-1', title: 'Revised' } }],
+        updated: [
+          {
+            entityName: 'Book',
+            ref: createEntityRef(graph.Book, { id: 'book-2' }),
+            values: { id: 'book-2', title: 'Revised' },
+          },
+        ],
         deleted: [],
       })),
     });

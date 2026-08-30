@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands
+  - ontahi://plans/138a-client-entity-mutation-authoring
   - bookops://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/command
 sourceCommit: 67713696
@@ -45,7 +46,12 @@ The first generic remote write uses the narrower portable Entity Mutation Comman
 transporting arbitrary Selection Commands. It expresses create or an exact Ref-targeted
 update/delete and returns one exact Entity Mutation Delta. At the server boundary, policy must opt
 in the Entity, action, mutable Fields, returned Fields, and row scope; registration alone grants
-nothing. Bulk affected sets, upsert, authority-derived atomic scopes, and the final Entity/Ref-bound
-authoring facade remain later work. Direct Supabase execution now lowers this same focused command
+nothing. Generated client Entity facades now author that same contract as `Entity.create(values)`,
+`ref.update(values)`, and `ref.delete()`. A runtime-bound facade adds a non-enumerable `.run()` while
+the serialized Command and Ref remain data-only. `mutateEntity(Entity)` remains the lower-level
+constructor. An update/delete delta carries the exact Ref targeted by its Command; provider and
+remote boundaries reject a fact for another Ref even when the Entity name matches. Bulk affected
+sets, upsert, and authority-derived atomic scopes remain later work.
+Direct Supabase execution lowers this same focused command
 through one PostgREST mutation, declared Entity/Ref mappings, and exact returning cardinality under
 the project's grants and RLS; this does not imply multi-command rollback.
