@@ -37,6 +37,7 @@ relatedPlans:
   - ontahi://plans/139e-relations-developer-documentation
   - ontahi://plans/139f-relations-lifecycle-release-rehearsal
   - ontahi://plans/142c-reflected-atomic-operation-execution
+  - ontahi://plans/145-ordered-relations-and-sequence-commands
 migratedFrom: bookops://atlas/model/relation
 sourceCommit: 67713696
 ---
@@ -359,6 +360,14 @@ The canonical developer narrative for this complete lifecycle now lives in
 Todo remains the small direct-many-to-many proof; Classroom keeps conditional direct placement,
 authority-serialized capacity enforcement, virtual capacity Fields, post-commit removal behavior,
 and stateful Enrollment lifecycle in a separate focused example.
+
+Plan 145 explores ordered to-many membership as a focused extension of this structural lifecycle.
+Its working direction uses stable Ref anchors for insert, same-source move, and atomic cross-source
+transfer; numeric UI indices and provider ranking tokens remain outside the portable contract. A
+same-source reorder requires movement evidence beyond the current added/removed delta, while a
+transfer must preserve the distinction between structural reparenting and Entity deletion. The
+first implementation remains server-authoritative and leaves general replicated-sequence or CRDT
+semantics to a later evidence-driven plan.
 
 The generated `1.0.0-alpha.8` release candidate was rehearsed at its exact commit with all ten
 package tarballs, a tarball-only Todo consumer, and Classroom's real PostgreSQL commit/rollback

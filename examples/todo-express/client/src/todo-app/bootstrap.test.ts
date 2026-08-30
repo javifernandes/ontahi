@@ -10,6 +10,7 @@ import {
   reconcileDeskLayout,
   reconcileTodoItemOrder,
   reconcileTodoListOrder,
+  resolveTodoDropDestination,
 } from './todo-list-state.js';
 
 describe('Todo client bootstrap state', () => {
@@ -53,6 +54,30 @@ describe('Todo client bootstrap state', () => {
       'todo-3',
       'todo-1',
       'todo-2',
+    ]);
+  });
+
+  it('resolves item drops to slots before or after the hovered item', () => {
+    const ids = ['todo-1', 'todo-2', 'todo-3'];
+
+    expect(resolveTodoDropDestination(ids, 'todo-1', 'todo-2', 'before')).toEqual({
+      beforeTodoId: 'todo-2',
+    });
+    expect(resolveTodoDropDestination(ids, 'todo-1', 'todo-2', 'after')).toEqual({
+      beforeTodoId: 'todo-3',
+    });
+    expect(resolveTodoDropDestination(ids, 'todo-2', 'todo-3', 'after')).toEqual({
+      beforeTodoId: undefined,
+    });
+    expect(resolveTodoDropDestination(ids, 'todo-3', 'todo-1', 'before')).toEqual({
+      beforeTodoId: 'todo-1',
+    });
+
+    const moveDown = resolveTodoDropDestination(ids, 'todo-1', 'todo-2', 'after');
+    expect(moveTodoItem(ids, 'todo-1', moveDown?.beforeTodoId)).toEqual([
+      'todo-2',
+      'todo-1',
+      'todo-3',
     ]);
   });
 
