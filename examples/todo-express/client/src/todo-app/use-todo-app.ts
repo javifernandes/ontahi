@@ -20,6 +20,7 @@ import { allTodoItemsQuery, tagsQuery, todoListsQuery } from '../todo-queries.js
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
 import { groupTodoLists } from './todo-list-state.js';
+import { renameTodoItem } from './todo-mutations.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
@@ -71,6 +72,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();
   const [completingTodoId, setCompletingTodoId] = useState<string>();
+  const [renamingTodoId, setRenamingTodoId] = useState<string>();
   const [deletingTodoId, setDeletingTodoId] = useState<string>();
   const [taggingTodoId, setTaggingTodoId] = useState<string>();
   const [deletingTagId, setDeletingTagId] = useState<string>();
@@ -234,6 +236,18 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
+  const renameTodo = async (todoId: string, rawTitle: string) => {
+    setActionError(undefined);
+    setRenamingTodoId(todoId);
+    try {
+      const result = await renameTodoItem(graphExecutor, todos.refetch, todoId, rawTitle);
+      setActionError(result.ok ? undefined : result.message);
+      return result.ok;
+    } finally {
+      setRenamingTodoId(undefined);
+    }
+  };
+
   const deleteTodo = async (todoId: string) => {
     setActionError(undefined);
     setDeletingTodoId(todoId);
@@ -353,6 +367,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       recoloringListId,
       deletingListId,
       completingTodoId,
+      renamingTodoId,
       deletingTodoId,
       taggingTodoId,
       deletingTagId,
@@ -363,6 +378,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       deleteList,
       createTodo,
       setTodoCompleted,
+      renameTodo,
       deleteTodo,
       toggleTodoTag,
       createTagForTodo,

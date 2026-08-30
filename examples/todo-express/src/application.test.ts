@@ -700,6 +700,40 @@ describe('Ontahi todo portability example', () => {
     });
   });
 
+  it('renames a TodoItem through the generic remote Entity mutation capability', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Original title', completed: false },
+    ];
+    const remoteExecutor = createFetchGraphReadExecutor({
+      endpoint: `${origin}/graph/reads`,
+      commandEndpoint: `${origin}/graph/commands`,
+    });
+    const command = mutateEntity(ClientTodoItemSchema).update(
+      createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+      { title: '  Renamed todo  ' },
+    );
+
+    await expect(remoteExecutor.runEntityMutationCommand!(command)).resolves.toEqual({
+      created: [],
+      updated: [
+        {
+          entityName: 'TodoItem',
+          ref: createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+          values: {
+            id: 'todo-1',
+            list: ClientTodoList.refById('list-1'),
+            title: 'Renamed todo',
+            completed: false,
+          },
+        },
+      ],
+      deleted: [],
+    });
+    expect(getTodoDataset().TodoItem).toEqual([
+      { id: 'todo-1', list: 'list-1', title: 'Renamed todo', completed: false },
+    ]);
+  });
+
   it('denies a remotely mutable Tag Field that is absent from policy', async () => {
     getTodoDataset().Tag = [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }];
     const remoteExecutor = createFetchGraphReadExecutor({

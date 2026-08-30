@@ -1,4 +1,4 @@
-import { Check, LoaderCircle, Plus, Tag as TagIcon, Trash2, X } from 'lucide-react';
+import { Check, LoaderCircle, Pencil, Plus, Tag as TagIcon, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CSSProperties,
@@ -15,6 +15,7 @@ type TodoItemCardProps = {
   tags: Dashboard['tags'];
   canComplete: boolean;
   isCompleting: boolean;
+  isRenaming: boolean;
   isDeleting: boolean;
   isDragging: boolean;
   isTagging: boolean;
@@ -28,6 +29,7 @@ type TodoItemCardProps = {
   cancelPointerDragging: (event: ReactPointerEvent<HTMLDivElement>) => void;
   moveBy: (direction: -1 | 1) => void;
   setTodoCompleted: Dashboard['setTodoCompleted'];
+  renameTodo: Dashboard['renameTodo'];
   deleteTodo: Dashboard['deleteTodo'];
   toggleTodoTag: Dashboard['toggleTodoTag'];
   createTagForTodo: Dashboard['createTagForTodo'];
@@ -41,6 +43,7 @@ export const TodoItemCard = ({
   tags,
   canComplete,
   isCompleting,
+  isRenaming,
   isDeleting,
   isDragging,
   isTagging,
@@ -54,15 +57,20 @@ export const TodoItemCard = ({
   cancelPointerDragging,
   moveBy,
   setTodoCompleted,
+  renameTodo,
   deleteTodo,
   toggleTodoTag,
   createTagForTodo,
   deleteTag,
 }: TodoItemCardProps) => {
+  const [titleDraft, setTitleDraft] = useState(todo.title);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [confirmingTagDeleteId, setConfirmingTagDeleteId] = useState<string>();
   const tagControl = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setTitleDraft(todo.title), [todo.title]);
 
   useEffect(() => {
     if (!isTagPickerOpen) {
@@ -89,12 +97,41 @@ export const TodoItemCard = ({
 
   const submitNewTag = async (event: FormEvent) => {
     event.preventDefault();
-    if (await createTagForTodo(todo.id, newTagName)) setNewTagName('');
+    if (await createTagForTodo(todo.id, newTagName)) {
+      setNewTagName('');
+      closeTagPicker();
+    }
+  };
+
+  const beginTitleEdit = () => {
+    closeTagPicker();
+    setIsConfirmingDelete(false);
+    setTitleDraft(todo.title);
+    setIsEditingTitle(true);
+  };
+
+  const cancelTitleEdit = () => {
+    setTitleDraft(todo.title);
+    setIsEditingTitle(false);
+  };
+
+  const submitTitle = async (event: FormEvent) => {
+    event.preventDefault();
+    const title = titleDraft.trim();
+    if (!title) return;
+    if (title === todo.title) {
+      cancelTitleEdit();
+      return;
+    }
+    if (await renameTodo(todo.id, title)) setIsEditingTitle(false);
   };
 
   const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
-    if (event.key === 'ArrowUp') {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      beginTitleEdit();
+    } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       moveBy(-1);
     } else if (event.key === 'ArrowDown') {
@@ -109,12 +146,21 @@ export const TodoItemCard = ({
       data-todo-id={todo.id}
       tabIndex={0}
       role='listitem'
-      aria-label={`${todo.title}. Drag to reorder; arrow keys also work.`}
+      aria-label={`${todo.title}. Drag to reorder; arrow keys also work. Press Enter to rename.`}
       onPointerDown={startPointerDragging}
       onPointerMove={movePointerDragging}
       onPointerUp={dropPointer}
       onPointerCancel={cancelPointerDragging}
       onKeyDown={handleCardKeyDown}
+      onDoubleClick={event => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('button, input, form, a, [data-no-item-drag]')
+        ) {
+          return;
+        }
+        beginTitleEdit();
+      }}
     >
       <button
         type='button'
@@ -140,7 +186,49 @@ export const TodoItemCard = ({
       </button>
 
       <div className='todo-item-copy'>
-        <span>{todo.title}</span>
+        {isEditingTitle ? (
+          <form className='rename-todo-form' data-no-item-drag onSubmit={submitTitle}>
+            <input
+              autoFocus
+              aria-label={`Rename ${todo.title}`}
+              value={titleDraft}
+              onChange={event => setTitleDraft(event.target.value)}
+              onFocus={event => event.target.select()}
+              onKeyDown={event => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelTitleEdit();
+                }
+              }}
+              disabled={isRenaming}
+            />
+            <button
+              type='submit'
+              className='icon-button confirm'
+              aria-label='Save todo title'
+              disabled={!titleDraft.trim() || isRenaming}
+            >
+              {isRenaming ? (
+                <LoaderCircle className='spin' aria-hidden='true' />
+              ) : (
+                <Check aria-hidden='true' />
+              )}
+            </button>
+            <button
+              type='button'
+              className='icon-button'
+              onClick={cancelTitleEdit}
+              aria-label='Cancel todo rename'
+              disabled={isRenaming}
+            >
+              <X aria-hidden='true' />
+            </button>
+          </form>
+        ) : (
+          <span className='todo-title' title='Double-click to rename'>
+            {todo.title}
+          </span>
+        )}
         {todo.tags.length > 0 ? (
           <div className='assigned-tags' aria-label={`Tags for ${todo.title}`}>
             {todo.tags.map(tag => (
@@ -161,7 +249,17 @@ export const TodoItemCard = ({
         ) : null}
       </div>
 
-      <div className='todo-item-actions'>
+      <div className={`todo-item-actions${isEditingTitle ? ' editing-title' : ''}`}>
+        <button
+          type='button'
+          className='icon-button rename-todo'
+          onClick={beginTitleEdit}
+          aria-label={`Rename ${todo.title}`}
+          title='Rename todo'
+        >
+          <Pencil aria-hidden='true' />
+        </button>
+
         <div className='tag-control' ref={tagControl}>
           <button
             type='button'

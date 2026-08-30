@@ -369,6 +369,17 @@ a {
   align-items: center;
   gap: 1px;
   margin: -4px -5px 0 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.list-card:hover .list-card-controls,
+.list-card:focus-within .list-card-controls,
+.list-card-controls:has(.color-popover),
+.list-card-controls:has(.delete-confirmation) {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .collapse-list svg {
@@ -421,11 +432,13 @@ a {
 
 .edit-list {
   opacity: 0;
+  pointer-events: none;
 }
 
-.list-name-row:hover .edit-list,
-.list-name-row:focus-within .edit-list {
+.list-card:hover .edit-list,
+.list-card:focus-within .edit-list {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .icon-button {
@@ -697,6 +710,36 @@ a {
   line-height: 1.45;
 }
 
+.todo-title {
+  cursor: text;
+}
+
+.rename-todo-form {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto auto;
+  gap: 3px;
+  align-items: center;
+}
+
+.rename-todo-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #8fad9d;
+  border-radius: 7px;
+  outline: 0;
+  color: #1a2821;
+  background: white;
+  font-size: 13px;
+  font-weight: 610;
+  box-shadow: 0 0 0 3px rgba(51, 113, 83, 0.1);
+}
+
+.rename-todo-form .icon-button {
+  width: 25px;
+  height: 25px;
+}
+
 .completed .todo-item-copy > span {
   color: #8b9690;
   text-decoration: line-through;
@@ -762,16 +805,33 @@ a {
   margin: -2px -3px 0 0;
 }
 
+.todo-item-actions.editing-title {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.rename-todo,
 .delete-todo {
   width: 26px;
   height: 26px;
-  color: #9a746e;
   opacity: 0;
+  pointer-events: none;
 }
 
+.rename-todo {
+  color: #829087;
+}
+
+.delete-todo {
+  color: #9a746e;
+}
+
+.todo-item-card:hover .rename-todo,
+.todo-item-card:focus-within .rename-todo,
 .todo-item-card:hover .delete-todo,
 .todo-item-card:focus-within .delete-todo {
   opacity: 0.78;
+  pointer-events: auto;
 }
 
 .delete-todo:hover:not(:disabled) {
@@ -794,13 +854,15 @@ a {
   height: 26px;
   margin: 0;
   color: #829087;
-  opacity: 0.68;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .todo-item-card:hover .tag-button,
 .todo-item-card:focus-within .tag-button,
 .tag-button[aria-expanded='true'] {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .tag-popover {
@@ -1175,6 +1237,17 @@ a {
   display: block;
   width: 16px;
   height: 16px;
+}
+
+@media (hover: none) {
+  .list-card-controls,
+  .edit-list,
+  .rename-todo,
+  .tag-button,
+  .delete-todo {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 @media (max-width: 700px) {

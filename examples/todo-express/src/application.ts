@@ -38,6 +38,16 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
         policies: [
           { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
           {
+            entity: TodoItem,
+            scope: 'all',
+            actions: {
+              update: {
+                fields: ['title'],
+                result: ['id', 'list', 'title', 'completed'],
+              },
+            },
+          },
+          {
             entity: Tag,
             scope: 'all',
             actions: {
