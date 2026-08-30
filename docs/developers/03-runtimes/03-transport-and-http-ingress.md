@@ -21,10 +21,10 @@ type:
 ```ts
 import {
   createRuntimeProtocolRegistry,
-  dataGraphRuntimeProtocolFamilies,
+  runtimeProtocolFamilies,
 } from '@ontahi/core/runtime/protocol';
 
-const protocol = createRuntimeProtocolRegistry(dataGraphRuntimeProtocolFamilies);
+const protocol = createRuntimeProtocolRegistry(runtimeProtocolFamilies);
 const parsed = protocol.parseRequest({
   protocol: 'ontahi.runtime',
   version: 1,
@@ -46,11 +46,39 @@ result, and semantic rejection. An unknown envelope version, envelope key, famil
 version fails before execution. Authority is supplied by the receiving runtime's trusted context;
 it is never accepted from the portable message.
 
-Graph Read and Graph Command are the first registered families because they already have canonical,
-versioned, fail-closed parsers. The registry delegates to those parsers instead of reproducing
-Query or Command validation. It does not execute requests, mount a common endpoint, or change the
-current paths documented below. Operation invocation and Durable Operation observation still need
-versioned family contracts before transport migration.
+The canonical registry tuple currently contains `operation`, `graph.read`, and `graph.command`.
+Graph Read and Graph Command delegate to their existing fail-closed parsers instead of reproducing
+Query or Command validation. Operation adds body version 1 while preserving its existing semantic
+request kinds:
+
+```ts
+const invoke = {
+  version: 1,
+  kind: 'invoke',
+  operationId: 'Student.transfer',
+  input: { student: studentRef, nextCourse: courseRef },
+};
+
+const permission = {
+  version: 1,
+  kind: 'check-permission',
+  operationId: 'Student.transfer',
+  input: { student: studentRef, nextCourse: courseRef },
+};
+```
+
+The Operation family accepts only known keys and portable JSON. An `invoke` may additionally carry
+a View for a projectable Selection output; `check-permission` may not. Its parsed body remains
+structurally compatible with the existing canonical dispatcher, which continues to own Operation
+resolution, input hydration, authority, permission checks, projections, and execution.
+
+A Durable Operation starts through the same `invoke` request. Its successful Operation result
+contains a `TaskRunRef`; that run identity is not the outer request id. Snapshot observation,
+progress, and cancellation still need their own versioned Durable lifecycle contract.
+
+The registry does not execute requests, mount a common endpoint, or change the current paths
+documented below. In particular, the legacy `/operations` HTTP body remains unversioned until the
+common dispatcher and transport migration are implemented.
 
 ## Carry generic operation invocations
 

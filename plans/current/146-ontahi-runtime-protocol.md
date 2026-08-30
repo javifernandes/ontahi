@@ -2,7 +2,10 @@
 
 Status: current
 
-Completed child: [146a. Runtime Protocol Envelope And Family Registry](../done/146a-runtime-protocol-envelope-and-family-registry.md)
+Completed children:
+
+1. [146a. Runtime Protocol Envelope And Family Registry](../done/146a-runtime-protocol-envelope-and-family-registry.md)
+2. [146b. Versioned Operation Protocol Family](../done/146b-versioned-operation-protocol-family.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -207,8 +210,8 @@ semantic message bodies and diagnostics.
    transports?
 2. Which compatibility guarantees are required before replacing the current Operation invocation,
    Graph Read, Graph Command, and Task snapshot envelopes?
-3. How should Operation invocation and Durable lifecycle bodies acquire independent fail-closed
-   family versions without changing their application-facing APIs?
+3. How should Durable lifecycle bodies acquire independent fail-closed family versions without
+   changing their application-facing APIs?
 4. Which identity belongs in the common envelope beyond exchange correlation, if any, and which
    identities remain inside Durable or
    Event messages?
@@ -227,3 +230,6 @@ semantic message bodies and diagnostics.
    and idempotency identities remain inside the family that defines their lifecycle.
 4. Authority is transport-derived receiver context and is never client-authored into a portable
    envelope.
+5. Operation invocation and permission checks share the `operation` family. Its version 1 body
+   preserves the existing `invoke` and `check-permission` discriminants; a Durable Operation starts
+   through `invoke` and returns its run identity as an ordinary Operation result.
