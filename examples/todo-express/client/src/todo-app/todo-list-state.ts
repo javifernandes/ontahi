@@ -1,20 +1,5 @@
 type Identified = { id: unknown };
 
-export const deleteTodoListWithItems = async ({
-  itemIds,
-  deleteItem,
-  deleteList,
-}: {
-  itemIds: readonly string[];
-  deleteItem: (itemId: string) => Promise<boolean>;
-  deleteList: () => Promise<boolean>;
-}) => {
-  for (const itemId of itemIds) {
-    if (!(await deleteItem(itemId))) return false;
-  }
-  return deleteList();
-};
-
 export const groupTodoLists = <List extends Identified, Todo>(
   lists: readonly List[],
   todos: readonly Todo[],

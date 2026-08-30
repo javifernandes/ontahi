@@ -249,6 +249,22 @@ describe('in-memory reflected entity data', () => {
         relationName: 'ReflectedTodo.tags',
         sourceEntityName: 'ReflectedTag',
         targetEntityName: 'ReflectedTodo',
+        page: 1,
+        pageSize: 1,
+      }),
+    ).resolves.toMatchObject({
+      rows: [{ id: 'todo-1', title: 'Todo 1' }],
+      pageSize: 1,
+      totalCount: 12,
+      hasNextPage: true,
+    });
+
+    await expect(
+      readRelatedEntityData({
+        source: tag,
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'ReflectedTag',
+        targetEntityName: 'ReflectedTodo',
         page: 0,
         pageSize: 7,
       }),

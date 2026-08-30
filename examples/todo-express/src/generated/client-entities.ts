@@ -78,16 +78,6 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       }),
       output: TodoListSchema,
     }),
-    delete: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList']],
-      },
-      input: graphSchema.object({
-        list: TodoListSchema.one(),
-      }),
-    }),
   },
 });
 
@@ -126,6 +116,17 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       input: graphSchema.object({
         todo: graphSchema.existingRef(TodoItemSchema),
       }),
+    }),
+    deleteList: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList'], ['TodoItem'], ['Tag']],
+      },
+      input: graphSchema.object({
+        list: graphSchema.existingRef(TodoListSchema),
+      }),
+      execution: { atomicity: 'required' },
     }),
     deleteTag: defineClientDomainOperation({
       authority: 'server',

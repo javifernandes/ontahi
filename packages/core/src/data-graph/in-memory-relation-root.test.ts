@@ -209,6 +209,67 @@ describe('in-memory relation-root reads', () => {
     ]);
   });
 
+  it('keys many-to-many grouped counts by the complete composite source identity', async () => {
+    const Tag = entity('CompositeTag', { id: field.id() });
+    const Membership = entity('CompositeMembership', {
+      workspaceId: field.string(),
+      memberId: field.string(),
+    })
+      .locators({ byWorkspaceAndMember: ['workspaceId', 'memberId'] })
+      .identity('byWorkspaceAndMember')
+      .manyToMany('tags', Tag);
+    const relation = {
+      sourceEntityName: 'CompositeMembership',
+      relationName: 'tags',
+      targetEntityName: 'CompositeTag',
+      cardinality: 'many-to-many',
+    } as const;
+    const firstMembership = createEntityRef(Membership, {
+      workspaceId: 'workspace-1',
+      memberId: 'member-1',
+    });
+    const secondMembership = createEntityRef(Membership, {
+      workspaceId: 'workspace-1',
+      memberId: 'member-2',
+    });
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        CompositeMembership: [firstMembership.locator, secondMembership.locator],
+        CompositeTag: [{ id: 'tag-1' }, { id: 'tag-2' }],
+      },
+      relationships: [
+        {
+          relation,
+          source: firstMembership,
+          target: createEntityRef(Tag, { id: 'tag-1' }),
+        },
+        {
+          relation,
+          source: secondMembership,
+          target: createEntityRef(Tag, { id: 'tag-2' }),
+        },
+      ],
+    });
+    const graph = createRuntimeBoundDataGraphApi(() => runtime);
+    const Memberships = graph.bindSelectionEntity(Membership);
+    const Tags = graph.bindSelectionEntity(Tag);
+
+    await expect(
+      Effect.runPromise(
+        Tags.relatedTo(
+          Memberships.selection(membership => membership.workspaceId.eq('workspace-1')),
+          { through: 'tags' },
+        ).countBySource(),
+      ),
+    ).resolves.toEqual({
+      sourceRows: [firstMembership.locator, secondMembership.locator],
+      countsBySource: new Map([
+        ['["workspace-1","member-1"]', 1],
+        ['["workspace-1","member-2"]', 1],
+      ]),
+    });
+  });
+
   it('rejects many-to-many traversal when either Entity lacks an identity', async () => {
     const AnonymousTag = entity('AnonymousTag', { name: field.string() });
     const Todo = entity('IdentifiedTodo', { id: field.id() }).manyToMany('tags', AnonymousTag);

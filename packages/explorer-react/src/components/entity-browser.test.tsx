@@ -535,13 +535,21 @@ describe('ExplorerEntityBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'New Assignment' }));
     await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
     expect(await screen.findByText('scope is required.')).toBeTruthy();
+    expect(screen.getByText('JSON · workspaceId, slug')).toBeTruthy();
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Create published' }), 'true');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Create status' }), 'ready');
     fireEvent.change(screen.getByRole('textbox', { name: 'Create scope' }), {
-      target: { value: '{"workspaceId":"workspace-1","slug":"main"}' },
+      target: { value: 'not-json' },
     });
     await user.type(screen.getByRole('spinbutton', { name: 'Create score' }), '42');
+    await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
+    expect(await screen.findByText('scope needs JSON with workspaceId, slug.')).toBeTruthy();
+    expect(runMutation).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Create scope' }), {
+      target: { value: '{"workspaceId":"workspace-1","slug":"main"}' },
+    });
     await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
 
     expect(await screen.findByText('Create unavailable.')).toBeTruthy();
@@ -639,6 +647,7 @@ describe('ExplorerEntityBrowser', () => {
   it('shows pending related counts without blocking entity rows', async () => {
     const pendingRelatedRead: ReflectedRelatedEntityDataReader['readRelatedEntityData'] = () =>
       new Promise(() => undefined);
+    const readRelatedEntityData = vi.fn(pendingRelatedRead);
     const relatedBook: ExplorerEntityDetail = {
       ...entities[0]!,
       identity: { name: 'refById', fields: ['id'] },
@@ -664,7 +673,7 @@ describe('ExplorerEntityBrowser', () => {
           hasPreviousPage: false,
           hasNextPage: false,
         }),
-        readRelatedEntityData: vi.fn(pendingRelatedRead),
+        readRelatedEntityData,
         children: (
           <ExplorerEntityBrowser
             entities={[relatedBook, entities[1]!]}
@@ -679,6 +688,52 @@ describe('ExplorerEntityBrowser', () => {
     expect((await screen.findByRole('button', { name: 'collaborators' })).textContent).toContain(
       '…',
     );
+    expect(readRelatedEntityData).toHaveBeenCalledWith(
+      expect.objectContaining({ relationName: 'collaborators', pageSize: 1 }),
+    );
+  });
+
+  it('distinguishes an unavailable related count from an empty relation', async () => {
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      relations: [
+        {
+          name: 'collaborators',
+          kind: 'hasMany',
+          target: 'Profile',
+          cardinality: 'many',
+        },
+      ],
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Book',
+          columns: [{ field: 'id', type: 'id', nullable: false }],
+          rows: [{ id: 'book-1' }],
+          page: 1,
+          pageSize: 25,
+          totalCount: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        readRelatedEntityData: vi.fn().mockRejectedValue(new Error('Count unavailable.')),
+        children: (
+          <ExplorerEntityBrowser
+            entities={[relatedBook, entities[1]!]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    const button = await screen.findByRole('button', { name: 'collaborators' });
+    await waitFor(() => expect(button.textContent).toContain('!'));
+    expect(screen.getByTitle('Related count unavailable')).toBeTruthy();
   });
 
   it('renders a Reference Field as a semantic Entity link instead of a raw id cell', async () => {

@@ -172,7 +172,7 @@ const ExplorerRelatedInstancesButton = ({
     sourceEntityName: source.entityName,
     targetEntityName: relation.target,
     page: 1,
-    pageSize: 25,
+    pageSize: 1,
   });
 
   return (
@@ -183,8 +183,14 @@ const ExplorerRelatedInstancesButton = ({
       className='inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition hover:border-primary hover:text-primary'
     >
       <span>{relation.name}</span>
-      <span className='min-w-4 rounded-full bg-muted px-1 text-center text-[10px] text-muted-foreground'>
-        {query.isLoading ? '…' : (query.data?.totalCount ?? 0)}
+      <span
+        title={query.error ? 'Related count unavailable' : undefined}
+        className={cx(
+          'min-w-4 rounded-full bg-muted px-1 text-center text-[10px] text-muted-foreground',
+          query.error && 'bg-destructive/10 text-destructive',
+        )}
+      >
+        {query.isLoading ? '…' : query.error ? '!' : (query.data?.totalCount ?? 0)}
       </span>
     </button>
   );

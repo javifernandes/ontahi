@@ -9,7 +9,7 @@ import { createRuntimeBoundDataGraphApi } from './runtime-bound-api.js';
 import type { DataGraphExecutionRuntime } from './runtime.js';
 import { Selection } from './selection-value.js';
 
-const reflectedPageSizeOptions = [10, 25, 50, 100] as const;
+const reflectedPageSizeOptions = [1, 10, 25, 50, 100] as const;
 
 export const createRuntimeReflectedRelatedEntityDataReader = ({
   createRuntime,
@@ -37,7 +37,7 @@ export const createRuntimeReflectedRelatedEntityDataReader = ({
     const page = Number.isInteger(query.page) && query.page && query.page > 0 ? query.page : 1;
     const pageSize =
       reflectedPageSizeOptions.find(option => option === query.pageSize) ??
-      reflectedPageSizeOptions[1];
+      reflectedPageSizeOptions[2];
     const offset = (page - 1) * pageSize;
     const pageRows = rows.slice(offset, offset + pageSize);
 

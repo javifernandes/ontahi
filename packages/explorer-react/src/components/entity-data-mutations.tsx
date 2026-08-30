@@ -83,7 +83,13 @@ const parseCreateDraftValue = (
     };
   }
 
-  return JSON.parse(draft) as unknown;
+  try {
+    return JSON.parse(draft) as unknown;
+  } catch {
+    throw new Error(
+      `${field.name} needs JSON with ${field.reference.identity?.fields.join(', ') ?? 'the target identity fields'}.`,
+    );
+  }
 };
 
 const MutationValueInput = ({
@@ -256,6 +262,11 @@ export const ExplorerEntityCreateButton = ({
                   {field.name}
                   {field.nullable ? (
                     <span className='ml-1 font-normal text-muted-foreground'>optional</span>
+                  ) : null}
+                  {(field.reference?.identity?.fields.length ?? 0) > 1 ? (
+                    <span className='ml-1 font-normal text-muted-foreground'>
+                      JSON · {field.reference!.identity!.fields.join(', ')}
+                    </span>
                   ) : null}
                 </span>
                 <MutationValueInput

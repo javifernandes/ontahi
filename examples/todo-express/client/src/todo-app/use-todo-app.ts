@@ -19,7 +19,7 @@ import { allTodoItemsQuery, tagsQuery, todoListsQuery } from '../todo-queries.js
 
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
-import { deleteTodoListWithItems, groupTodoLists } from './todo-list-state.js';
+import { groupTodoLists } from './todo-list-state.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
@@ -82,7 +82,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const createListOperation = useOperation(TodoList.domain.create);
   const renameListOperation = useOperation(TodoList.domain.rename);
   const recolorListOperation = useOperation(TodoList.domain.recolor);
-  const deleteListOperation = useOperation(TodoList.domain.delete);
+  const deleteListOperation = useOperation(TodoItem.domain.deleteList);
   const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
   const createTodoOperation = useOperation(TodoItem.domain.create);
   const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
@@ -174,33 +174,12 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
 
   const deleteList = async (listId: string) => {
     setActionError(undefined);
-    if (todos.isLoading || todos.isError) {
-      setActionError('Todo items are unavailable. Refresh the board before deleting this list.');
-      return false;
-    }
-
     setDeletingListId(listId);
     try {
-      const list = dashboardLists.find(candidate => candidate.id === listId);
-      return deleteTodoListWithItems({
-        itemIds: (list?.items ?? []).map(todo => todo.id),
-        deleteItem: async todoId => {
-          const result = await deleteTodoOperation.executeAsync({
-            todo: TodoItem.refById(todoId),
-          });
-          const message = operationMessage(result, 'One of the list items could not be deleted.');
-          setActionError(message);
-          return !message;
-        },
-        deleteList: async () => {
-          const result = await deleteListOperation.executeAsync({
-            list: TodoList.refById(listId),
-          });
-          const message = operationMessage(result, 'The list could not be deleted.');
-          setActionError(message);
-          return !message;
-        },
-      });
+      const result = await deleteListOperation.executeAsync({ list: TodoList.refById(listId) });
+      const message = operationMessage(result, 'The list could not be deleted.');
+      setActionError(message);
+      return !message;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be deleted.'));
       return false;

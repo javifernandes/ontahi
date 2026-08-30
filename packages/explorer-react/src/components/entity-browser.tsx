@@ -244,7 +244,7 @@ const EntityBrowserDetail = ({
           ) : null}
         </div>
       </div>
-      <div className='pt-24'>
+      <div className='pt-32 md:pt-24'>
         {effectiveTab === 'structure' ? (
           <ExplorerEntityStructurePanel entity={entity} renderDiagram={renderDiagram} />
         ) : null}

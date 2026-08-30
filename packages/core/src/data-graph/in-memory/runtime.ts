@@ -27,6 +27,7 @@ import type {
 } from '../relationship-command.js';
 import type { DataGraphExecutionRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
+import type { DataGraphTransactionCapability } from '../transaction.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
@@ -244,7 +245,10 @@ const executeRelatedRootRead = <TResult>(
           sourceRows,
           countsBySource: new Map(
             sourceEntityRows.map(row => {
-              const key = row[sourceIdentityFields[0]!];
+              const key =
+                sourceIdentityFields.length === 1
+                  ? row[sourceIdentityFields[0]!]
+                  : rowKey(row, sourceIdentityFields);
               const count = canonicalFacts.filter(fact => {
                 const selectedSource = spec.relationOwner === 'source' ? fact.source : fact.target;
                 const selectedTarget = spec.relationOwner === 'source' ? fact.target : fact.source;
@@ -375,11 +379,7 @@ const countRead = <TParams, TResult>(
   ).length;
 };
 
-export const createInMemoryDataGraphRuntime = (input: {
-  dataset: InMemoryDataset;
-  entities?: readonly AnyEntityDefinition[];
-  relationships?: RelationshipFact[];
-}): DataGraphExecutionRuntime<
+export type InMemoryDataGraphRuntime = DataGraphExecutionRuntime<
   InMemoryDataGraphError,
   undefined,
   undefined,
@@ -387,7 +387,14 @@ export const createInMemoryDataGraphRuntime = (input: {
 > &
   EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
   ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
-  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> => {
+  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
+  DataGraphTransactionCapability<InMemoryDataGraphRuntime>;
+
+export const createInMemoryDataGraphRuntime = (input: {
+  dataset: InMemoryDataset;
+  entities?: readonly AnyEntityDefinition[];
+  relationships?: RelationshipFact[];
+}): InMemoryDataGraphRuntime => {
   const relationships = input.relationships ?? [];
   input.relationships = relationships;
   return {
@@ -442,13 +449,27 @@ export const createInMemoryDataGraphRuntime = (input: {
       ),
     runRelationshipCommand: command =>
       executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
-  } satisfies DataGraphExecutionRuntime<
-    InMemoryDataGraphError,
-    undefined,
-    undefined,
-    InMemoryDataGraphError
-  > &
-    EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
-    ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
-    RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;
+    transaction: work =>
+      Effect.suspend(() => {
+        const transactionDataset = structuredClone(input.dataset) as InMemoryDataset;
+        const transactionRelationships = structuredClone(relationships) as RelationshipFact[];
+        const transactionRuntime = createInMemoryDataGraphRuntime({
+          dataset: transactionDataset,
+          entities: input.entities,
+          relationships: transactionRelationships,
+        });
+
+        return work(transactionRuntime).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              for (const entityName of Object.keys(input.dataset)) {
+                delete input.dataset[entityName];
+              }
+              Object.assign(input.dataset, transactionDataset);
+              relationships.splice(0, relationships.length, ...transactionRelationships);
+            }),
+          ),
+        );
+      }),
+  } satisfies InMemoryDataGraphRuntime;
 };

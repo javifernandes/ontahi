@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
 import {
   bringDeskCardToFront,
-  deleteTodoListWithItems,
   defaultDeskCardPosition,
   groupTodoLists,
   moveTodoItem,
@@ -14,29 +13,6 @@ import {
 } from './todo-list-state.js';
 
 describe('Todo client bootstrap state', () => {
-  it('deletes every item before its list and stops when an item fails', async () => {
-    const calls: string[] = [];
-    const deleteItem = vi.fn(async (itemId: string) => {
-      calls.push(`item:${itemId}`);
-      return itemId !== 'blocked';
-    });
-    const deleteList = vi.fn(async () => {
-      calls.push('list');
-      return true;
-    });
-
-    await expect(
-      deleteTodoListWithItems({ itemIds: ['one', 'two'], deleteItem, deleteList }),
-    ).resolves.toBe(true);
-    expect(calls).toEqual(['item:one', 'item:two', 'list']);
-
-    calls.length = 0;
-    await expect(
-      deleteTodoListWithItems({ itemIds: ['one', 'blocked', 'three'], deleteItem, deleteList }),
-    ).resolves.toBe(false);
-    expect(calls).toEqual(['item:one', 'item:blocked']);
-  });
-
   it('groups every todo under its list for the dashboard', () => {
     const lists = [
       { id: 'inbox', name: 'Inbox' },

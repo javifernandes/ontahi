@@ -108,7 +108,7 @@ describe('Ontahi todo portability example', () => {
     locator: { id },
   });
 
-  const entityRef = (entityName: 'TodoItem' | 'Tag', id: string) => ({
+  const entityRef = (entityName: 'TodoItem' | 'TodoList' | 'Tag', id: string) => ({
     kind: 'entity-ref' as const,
     entityName,
     locator: { id },
@@ -241,8 +241,24 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
-  it('deletes an empty TodoList by identity', async () => {
-    const response = await invoke('TodoList.delete', { list: selectTodoList('list-1') });
+  it('atomically deletes a TodoList with its items and tag associations', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Second', completed: true },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Shared', color: '#dd6658' }];
+    const relation = relationshipSet(
+      TodoItem,
+      'tags',
+      createEntityRef(TodoItem, { id: 'todo-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' })).relation;
+    getTodoRelationships().push({
+      relation,
+      source: createEntityRef(TodoItem, { id: 'todo-1' }),
+      target: createEntityRef(Tag, { id: 'tag-1' }),
+    });
+
+    const response = await invoke('TodoItem.deleteList', { list: entityRef('TodoList', 'list-1') });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -250,6 +266,9 @@ describe('Ontahi todo portability example', () => {
       result: { ok: true, kind: 'success' },
     });
     expect(getTodoDataset().TodoList).toEqual([]);
+    expect(getTodoDataset().TodoItem).toEqual([]);
+    expect(getTodoDataset().Tag).toEqual([{ id: 'tag-1', name: 'Shared', color: '#dd6658' }]);
+    expect(getTodoRelationships()).toEqual([]);
   });
 
   it('assigns a persisted pastel color to a TodoList', async () => {
