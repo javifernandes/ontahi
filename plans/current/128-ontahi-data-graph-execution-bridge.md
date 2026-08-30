@@ -55,6 +55,7 @@ Related work:
 10. [128d. Relationship Command Policy And Dispatcher](../done/128d-relationship-command-policy-dispatcher.md)
 11. [128e. Relationship Command Runtime Routing](../done/128e-relationship-command-runtime-routing.md)
 12. [128f. Remote Identity-Scoped Entity Mutation Commands](../done/128f-remote-identity-scoped-entity-mutation-commands.md)
+13. [128g. Supabase Exact Entity Mutation Commands](../done/128g-supabase-exact-entity-mutation-commands.md)
 
 ## Architectural Thesis
 
@@ -250,6 +251,8 @@ languages.
     - [x] Plan 128f transports create plus exact-identity update/delete with explicit per-action
           Field policy and deliberately public `scope: 'all'`; bulk/upsert and authority-derived
           atomic row scopes remain later slices.
+    - [x] Plan 128g gives Supabase direct-storage runtimes the same exact Entity mutation capability
+          without claiming compositional transactions.
 - [ ] Evaluate hybrid routing as an input to future graph segmentation.
 
 ### First Proof: Runtime-Bound Selections

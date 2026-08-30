@@ -87,6 +87,7 @@ export const executeSupabaseGraphCommandEffect = <
   deps: {
     getClient: (options?: TCommandOptions) => Effect.Effect<TClient, TError>;
     createError: SupabaseErrorFactory<TError>;
+    cardinalityMismatchCause?: (actualAffectedRows: number) => unknown;
   },
   command: GraphCommandSpec<any, any, TResult>,
   options?: TCommandOptions & {
@@ -138,13 +139,17 @@ export const executeSupabaseGraphCommandEffect = <
           }),
       });
 
+    const cardinalityMismatchCause = (actualAffectedRows: number) =>
+      deps.cardinalityMismatchCause?.(actualAffectedRows) ??
+      `Expected exactly one affected row, got ${actualAffectedRows}`;
+
     if (compiledSelection.kind === 'none') {
       if (command.cardinality === 'one') {
         return yield* Effect.fail(
           deps.createError({
             message,
             logMessage,
-            cause: 'Expected exactly one affected row, got 0',
+            cause: cardinalityMismatchCause(0),
           }),
         );
       }
@@ -186,7 +191,7 @@ export const executeSupabaseGraphCommandEffect = <
               deps.createError({
                 message,
                 logMessage,
-                cause: `Expected exactly one affected row, got ${mappedRows.length}`,
+                cause: cardinalityMismatchCause(mappedRows.length),
               }),
             );
       }
@@ -211,7 +216,7 @@ export const executeSupabaseGraphCommandEffect = <
           deps.createError({
             message,
             logMessage,
-            cause: `Expected exactly one affected row, got ${rows.length}`,
+            cause: cardinalityMismatchCause(rows.length),
           }),
         );
       }

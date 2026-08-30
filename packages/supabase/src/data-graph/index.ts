@@ -273,6 +273,7 @@ export const getProbeColumnForEntity = (entityDefinition: AnyEntityDefinition) =
   Object.values(getEntityMapping(entityDefinition).columns)[0] ?? 'id';
 
 export * from './command.js';
+export * from './entity-mutation-command.js';
 export * from './materialization.js';
 export * from './query.js';
 export * from './reflected-entity-data.js';
