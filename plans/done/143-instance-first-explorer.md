@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/143-instance-first-explorer`
 Related plans:
 
 1. [137. Reflected Relation Affordances](../current/137-reflected-relation-affordances.md)
-2. [138. Entity Mutation Command Authoring](../next/138-entity-mutation-command-authoring.md)
+2. [138. Entity Mutation Command Authoring](../current/138-entity-mutation-command-authoring.md)
 3. [144. Executable Ontologies](../backlog/144-executable-ontologies.md)
 
 ## Summary

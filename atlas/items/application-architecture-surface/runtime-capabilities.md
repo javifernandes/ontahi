@@ -22,6 +22,7 @@ relatedPlans:
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands
+  - ontahi://plans/138a-client-entity-mutation-authoring
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
 sourceCommit: 67713696
 ---
@@ -66,6 +67,11 @@ transport is configured. Supabase lowers each exact command to one PostgREST mut
 and RLS without claiming compositional transactions. React's Fetch executor exposes the portable
 capability without claiming that every local provider supports it. A missing capability is explicit
 rather than a silent remote or provider fallback.
+
+Generated client Entities author that portable capability through `Entity.create(values)` and
+exact Ref `update(values)` / `delete()` methods. Runtime binding upgrades the authored Commands with
+a non-enumerable `.run()` that resolves the current capability lazily. The semantic Entity, Ref,
+and serialized Command remain free of runtime ownership.
 
 Operation declarations may require a semantic guarantee without naming the adapter that supplies
 it. `operation.atomic(...)` reflects `execution.atomicity: 'required'`, from which Core derives the

@@ -210,7 +210,11 @@ export const bindEntityRefOperationProxy = <
 ): BoundEntityRefOperationProxy<TRef, TOperations, TResult> =>
   new Proxy(ref, {
     get(target, property, receiver) {
-      if (typeof property !== 'string' || !(property in operations)) {
+      if (
+        typeof property !== 'string' ||
+        Reflect.getOwnPropertyDescriptor(target, property) !== undefined ||
+        !(property in operations)
+      ) {
         return Reflect.get(target, property, receiver);
       }
 

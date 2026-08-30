@@ -60,6 +60,50 @@ describe('Fetch graph client', () => {
     });
   });
 
+  it('binds generated client Entity mutation authoring to the remote Command capability', async () => {
+    const TodoSchema = entity('MutableTodo', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const Todo = defineClientEntity(TodoSchema);
+    const todo = Todo.refById('todo-1');
+    const delta = {
+      created: [],
+      updated: [
+        {
+          entityName: 'MutableTodo',
+          ref: todo,
+          values: { id: 'todo-1', title: 'Remote' },
+        },
+      ],
+      deleted: [],
+    };
+    const fetchRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ kind: 'graph-command-result', value: delta }),
+    });
+    const client = createFetchGraphClient({
+      graphRead: { fetch: fetchRequest as typeof fetch },
+    });
+    const BoundTodo = client.graph.bindClientEntity(Todo);
+
+    await expect(
+      runBrowserEffect(BoundTodo.refById('todo-1').update({ title: 'Remote' }).run()),
+    ).resolves.toEqual(delta);
+    expect(JSON.parse(fetchRequest.mock.calls[0]![1].body)).toMatchObject({
+      version: 1,
+      kind: 'graph-command',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'MutableTodo',
+        target: { entityName: 'MutableTodo', locator: { id: 'todo-1' } },
+        values: { title: 'Remote' },
+      },
+    });
+  });
+
   it('uses the conventional Operation and task endpoints', async () => {
     const fetchRequest = vi
       .fn()

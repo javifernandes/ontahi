@@ -13,6 +13,9 @@ import {
   query,
   selection,
   type DataGraphExecutionRuntime,
+  type EntityMutationCommand,
+  type EntityMutationCommandExecutionRuntime,
+  type EntityMutationDelta,
 } from './index.js';
 
 describe('runtime-bound data graph api', () => {
@@ -150,6 +153,83 @@ describe('runtime-bound data graph api', () => {
           .run({ authority: 'viewer' }),
       ),
     ).resolves.toEqual([{ id: 'book-1', optionAuthority: 'viewer' }]);
+  });
+
+  it('binds executable exact Entity mutations to client Entities and their Refs', async () => {
+    const mutationDelta = (command: EntityMutationCommand): EntityMutationDelta => {
+      const fact = {
+        entityName: command.entityName,
+        ...('target' in command ? { ref: command.target } : {}),
+        values: 'values' in command ? command.values : {},
+      };
+      return {
+        created: command.action === 'create' ? [fact] : [],
+        updated: command.action === 'update' ? [fact] : [],
+        deleted: command.action === 'delete' ? [fact] : [],
+      };
+    };
+    const runEntityMutationCommand = vi.fn(
+      (command: EntityMutationCommand, _options?: { authority: 'system' }) =>
+        Effect.succeed(mutationDelta(command)),
+    );
+    const runtime = {
+      ...createRuntime(),
+      runEntityMutationCommand,
+    } as ReturnType<typeof createRuntime> &
+      EntityMutationCommandExecutionRuntime<never, { authority: 'system' }>;
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const ClientBook = defineClientEntity(Book);
+    const BoundBook = api.bindClientEntity(ClientBook);
+    const create = BoundBook.create({ id: 'book-1', slug: 'progbook', title: 'Progbook' });
+    const book = BoundBook.ref({ id: 'book-1' });
+    const locatedBook = BoundBook.refById('book-1');
+    const update = book.update({ title: 'Revised' });
+    const remove = locatedBook.delete();
+
+    expect(Object.keys(create)).not.toContain('run');
+    expect(Object.keys(book)).toEqual(['kind', 'entityName', 'locator']);
+    expect(JSON.stringify(create)).not.toContain('run');
+
+    await expect(Effect.runPromise(create.run({ authority: 'system' }))).resolves.toEqual({
+      created: [
+        {
+          entityName: 'Book',
+          values: { id: 'book-1', slug: 'progbook', title: 'Progbook' },
+        },
+      ],
+      updated: [],
+      deleted: [],
+    });
+    await expect(Effect.runPromise(update.run({ authority: 'system' }))).resolves.toMatchObject({
+      updated: [{ entityName: 'Book', ref: book, values: { title: 'Revised' } }],
+    });
+    await expect(Effect.runPromise(remove.run({ authority: 'system' }))).resolves.toMatchObject({
+      deleted: [{ entityName: 'Book', ref: locatedBook }],
+    });
+    expect(runEntityMutationCommand.mock.calls.map(([command]) => command.action)).toEqual([
+      'create',
+      'update',
+      'delete',
+    ]);
+    expect(
+      runEntityMutationCommand.mock.calls.every(([, options]) => options?.authority === 'system'),
+    ).toBe(true);
+  });
+
+  it('fails executable Entity mutations explicitly when the current runtime lacks the capability', async () => {
+    const runtime = createRuntime();
+    const api = createRuntimeBoundDataGraphApi(() => runtime);
+    const ClientBook = defineClientEntity(Book);
+    const BoundBook = api.bindClientEntity(ClientBook);
+
+    await expect(
+      Effect.runPromise(
+        BoundBook.create({ id: 'book-1', slug: 'progbook', title: 'Progbook' }).run({
+          authority: 'system',
+        }),
+      ),
+    ).rejects.toThrow('does not support Entity Mutation Command execution');
+    expect(runtime.runCommand).not.toHaveBeenCalled();
   });
 
   it('keeps semantic selections portable while binding their read and command branches', async () => {

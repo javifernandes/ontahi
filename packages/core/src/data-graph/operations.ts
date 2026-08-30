@@ -6,6 +6,12 @@ import type {
   GraphSchemaLike,
   RelationKind,
 } from './definitions.js';
+import {
+  bindEntityRefMutationAuthoring,
+  createEntityMutationAuthoring,
+  type EntityMutationAuthoring,
+  type EntityRefMutationAuthoring,
+} from './entity-mutation-authoring.js';
 import type { PortableOperationConditions } from './model-expression/index.js';
 import type { DomainOperationExecutionMetadata } from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
@@ -18,6 +24,7 @@ import {
   isEntityRef,
   type AnyEntityRef,
   type BoundEntityRefLocators,
+  type EntityRef,
   normalizeEntityRef,
   type EntityRefLocator,
   type EntityRefLocatorDeclarations,
@@ -406,13 +413,14 @@ export type ClientEntityWithDomainOperations<
   };
   domain: ResolveDomainOperations<EntityName<TEntity>, TOperations>;
 } & (TEntity extends AnyEntityDefinition
-  ? EntitySelectionFactory<TEntity> & {
-      definition: TEntity;
-      view: <TViewName extends string, const TShape extends EntityViewShape<TEntity>>(
-        viewName: TViewName,
-        shape: TShape,
-      ) => RecursiveEntityViewDefinition<TEntity, TShape>;
-    }
+  ? EntityMutationAuthoring<TEntity> &
+      EntitySelectionFactory<TEntity> & {
+        definition: TEntity;
+        view: <TViewName extends string, const TShape extends EntityViewShape<TEntity>>(
+          viewName: TViewName,
+          shape: TShape,
+        ) => RecursiveEntityViewDefinition<TEntity, TShape>;
+      }
   : {});
 
 export type ClientEntityRelationDeclaration<
@@ -432,6 +440,31 @@ type ClientEntityRelationOperations<TRelations extends ClientEntityRelationDecla
     ? TOperations
     : never;
 };
+
+type WithClientEntityMutationRefs<TSurface, TEntity> = TEntity extends AnyEntityDefinition
+  ? {
+      [TKey in keyof TSurface]: TSurface[TKey] extends (...args: infer TArgs) => infer TResult
+        ? TResult extends AnyEntityRef
+          ? (...args: TArgs) => TResult & EntityRefMutationAuthoring<TEntity>
+          : TSurface[TKey]
+        : TSurface[TKey];
+    }
+  : TSurface;
+
+type ClientEntityRefLocatorSurface<
+  TEntity extends Pick<AnyEntityDefinition, 'name'> | string,
+  TOperations extends ClientDomainOperationDeclarations,
+  TRelations extends ClientEntityRelationDeclarations,
+> = WithClientEntityMutationRefs<
+  BoundEntityRefLocators<
+    TEntity,
+    ResolveDomainOperations<EntityName<TEntity>, TOperations>,
+    TEntity extends AnyEntityDefinition ? EntityRefLocators<TEntity> : {},
+    typeof createDomainOperationInvocationFromRef,
+    ClientEntityRelationOperations<TRelations>
+  >,
+  TEntity
+>;
 
 export type GraphRelationWithOperations<
   TSource extends Pick<AnyEntityDefinition, 'name'>,
@@ -948,13 +981,7 @@ export const defineClientEntity = <
     relations?: TRelations;
   },
 ): ClientEntityWithDomainOperations<TEntity, TOperations> &
-  BoundEntityRefLocators<
-    TEntity,
-    ResolveDomainOperations<EntityName<TEntity>, TOperations>,
-    TEntity extends AnyEntityDefinition ? EntityRefLocators<TEntity> : {},
-    typeof createDomainOperationInvocationFromRef,
-    ClientEntityRelationOperations<TRelations>
-  > => {
+  ClientEntityRefLocatorSurface<TEntity, TOperations, TRelations> => {
   const entityName = typeof entityOrName === 'string' ? entityOrName : entityOrName.name;
   const domain = resolveDomainOperations(
     entityName,
@@ -970,6 +997,7 @@ export const defineClientEntity = <
     ...(typeof entityOrName === 'object' && 'fields' in entityOrName
       ? {
           definition: entityOrName,
+          ...createEntityMutationAuthoring(entityOrName as AnyEntityDefinition),
           all: () => query(entityOrName as AnyEntityDefinition),
           where: (build: SelectionBuilder<AnyEntityDefinition>) =>
             query(entityOrName as AnyEntityDefinition).where(build),
@@ -982,6 +1010,13 @@ export const defineClientEntity = <
   };
   const entityLocators = hasEntityRefLocators(entityOrName) ? entityOrName.refLocators : {};
   const relations = (config?.relations ?? {}) as TRelations;
+  const bindMutationCommands = <TRef extends AnyEntityRef>(ref: TRef) =>
+    typeof entityOrName === 'object' && 'fields' in entityOrName
+      ? bindEntityRefMutationAuthoring(
+          ref as unknown as EntityRef<EntityName<TEntity>>,
+          entityOrName as AnyEntityDefinition,
+        )
+      : ref;
   const bindRelationshipCommands = <TRef extends AnyEntityRef>(ref: TRef) =>
     typeof entityOrName === 'object' && 'relations' in entityOrName
       ? bindEntityRefRelationshipCommands(ref, entityOrName as AnyEntityDefinition)
@@ -993,7 +1028,7 @@ export const defineClientEntity = <
           receiver: relation.receiver ?? toReceiverName(relation.sourceName ?? entityName),
           run: ({ operation, input }) => createDomainOperationInvocationFromRef(operation, input),
         }),
-      bindEntityRefOperationProxy(bindRelationshipCommands(ref), domain, {
+      bindEntityRefOperationProxy(bindRelationshipCommands(bindMutationCommands(ref)), domain, {
         run: ({ operation, input }) => createDomainOperationInvocationFromRef(operation, input),
       }),
     );
@@ -1019,13 +1054,7 @@ export const defineClientEntity = <
       ? clientEntityWithLocatorApi.locators(entityLocators)
       : clientEntityWithLocatorApi
   ) as ClientEntityWithDomainOperations<TEntity, TOperations> &
-    BoundEntityRefLocators<
-      TEntity,
-      ResolveDomainOperations<EntityName<TEntity>, TOperations>,
-      TEntity extends AnyEntityDefinition ? EntityRefLocators<TEntity> : {},
-      typeof createDomainOperationInvocationFromRef,
-      ClientEntityRelationOperations<TRelations>
-    >;
+    ClientEntityRefLocatorSurface<TEntity, TOperations, TRelations>;
 };
 
 const toPascalCase = (value: string) =>

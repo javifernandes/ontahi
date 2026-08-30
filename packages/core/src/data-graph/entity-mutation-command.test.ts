@@ -42,9 +42,10 @@ describe('Entity Mutation Command', () => {
     const Book = entity('Book', { id: field.id() });
     const Author = entity('Author', { id: field.id() });
 
-    expect(() => mutateEntity(Book).delete(createEntityRef(Author, { id: 'author-1' }))).toThrow(
-      'Expected Entity mutation target Ref for Book, got Author.',
-    );
+    expect(() =>
+      // @ts-expect-error Entity mutation targets are statically scoped to their Entity.
+      mutateEntity(Book).delete(createEntityRef(Author, { id: 'author-1' })),
+    ).toThrow('Expected Entity mutation target Ref for Book, got Author.');
     expect(() =>
       toEntityMutationGraphCommand(Book, mutateEntity(Author).create({ id: 'author-1' })),
     ).toThrow('Expected Entity mutation command for Book, got Author.');

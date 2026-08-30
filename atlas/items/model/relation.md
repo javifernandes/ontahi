@@ -249,9 +249,9 @@ the Cartesian edge mutation with the resulting rejection evidence. The declared 
 structured adapter evidence. `unlink` bypasses link eligibility so an application can repair a fact
 whose participants no longer satisfy the current rule.
 
-For example, an association with its own state remains ordinary Entity lifecycle. The current
-low-level command authoring primitive makes that lifecycle explicit; its spelling is not a settled
-high-level Entity facade:
+For example, an association with its own state remains ordinary Entity lifecycle. The generated
+client facade makes that lifecycle explicit without adding mutable state to the raw semantic
+Entity:
 
 ```ts
 const Enrollment = entity({
@@ -266,15 +266,17 @@ const Enrollment = entity({
   refByStudentAndCourse: ['student', 'course'],
 });
 
-const createEnrollment = mutateEntity(Enrollment).create({
+const ClientEnrollment = defineClientEntity(Enrollment);
+
+const createEnrollment = ClientEnrollment.create({
   student,
   course,
   startedAt: new Date(),
   status: 'active',
 });
 
-const enrollment = Enrollment.refByStudentAndCourse(student, course);
-const deleteEnrollment = mutateEntity(Enrollment).delete(enrollment);
+const enrollment = ClientEnrollment.refByStudentAndCourse(student, course);
+const deleteEnrollment = enrollment.delete();
 
 await Effect.runPromise(runtime.runEntityMutationCommand(createEnrollment));
 await Effect.runPromise(runtime.runEntityMutationCommand(deleteEnrollment));
@@ -285,8 +287,8 @@ instance establishes the reified association; deleting it extinguishes that asso
 application-authored lifecycle Operation is required for either structural action. Traversal may
 observe the same relationship fact as a direct Relation, while Applied Outcomes preserve the
 important distinction between changing a primitive edge and creating or deleting an Entity with its
-own identity and lifecycle. Generic Entity Mutation Commands still lack a public remote bridge;
-Relationship Commands already have a versioned, default-deny remote path.
+own identity and lifecycle. Exact Entity Mutation Commands and Relationship Commands both have
+versioned, default-deny remote paths; arbitrary provider or Selection Commands do not.
 
 The executable `examples/classroom` proof keeps a direct Relation and an association-shaped Entity
 side by side. `Student.currentCourse` represents the student's current placement and supports an
