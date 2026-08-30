@@ -220,4 +220,45 @@ describe('data-graph in-memory runtime', () => {
       },
     });
   });
+
+  it('commits successful transactions and rolls failed transactions back', async () => {
+    const Book = entity('TransactionalBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const dataset = {
+      TransactionalBook: [{ id: 'book-1', title: 'Before' }],
+    };
+    const runtime = createInMemoryDataGraphRuntime({ dataset });
+    const updateTitle = (title: string) => ({
+      kind: 'command' as const,
+      operation: 'update' as const,
+      root: Book,
+      selection: query(Book)
+        .where(book => book.id.eq('book-1'))
+        .build().selection,
+      payload: { title },
+      cardinality: 'one' as const,
+    });
+
+    await expect(
+      Effect.runPromise(
+        runtime
+          .transaction(transactionRuntime =>
+            transactionRuntime
+              .runCommand(updateTitle('Rolled back'))
+              .pipe(Effect.andThen(Effect.fail('stop'))),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({ _tag: 'Left', left: 'stop' });
+    expect(dataset.TransactionalBook).toEqual([{ id: 'book-1', title: 'Before' }]);
+
+    await Effect.runPromise(
+      runtime.transaction(transactionRuntime =>
+        transactionRuntime.runCommand(updateTitle('Committed')),
+      ),
+    );
+    expect(dataset.TransactionalBook).toEqual([{ id: 'book-1', title: 'Committed' }]);
+  });
 });

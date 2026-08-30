@@ -20,7 +20,9 @@ describe('Todo public mode', () => {
   });
 
   it('keeps the complete operation public when authentication is disabled', async () => {
-    await expect(TodoItem.complete({ todos: ['todo-public'] })).resolves.toMatchObject({
+    await expect(
+      TodoItem.setCompleted({ todos: ['todo-public'], completed: true }),
+    ).resolves.toMatchObject({
       ok: true,
       kind: 'success',
     });

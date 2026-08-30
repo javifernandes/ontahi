@@ -70,11 +70,6 @@ const getEntityNameFromPathname = (pathname: string, basePath: string) => {
   return encodedEntityName ? decodeURIComponent(encodedEntityName) : undefined;
 };
 
-const describeEntityStructureSummary = (entity: ExplorerEntityDetail) =>
-  entity.relationOwner
-    ? `Relation owner for ${entity.relationOwner.source}.${entity.relationOwner.name}`
-    : `${entity.fieldCount} fields, ${entity.relationCount} relations`;
-
 const getEntitySearchText = (entity: ExplorerEntityDetail) =>
   [
     entity.name,
@@ -126,22 +121,15 @@ const EntityPicker = ({
         aria-haspopup='listbox'
         aria-label={`Select entity, ${selectedEntity.name}`}
         onClick={() => setOpen(current => !current)}
-        className='group flex w-full max-w-xl items-center gap-3 rounded-2xl border bg-card px-3 py-2 text-left shadow-sm transition hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20'
+        className='group flex w-full max-w-sm items-center gap-3 rounded-2xl border bg-card/95 px-3 py-2 text-left shadow-lg backdrop-blur transition hover:border-primary/50 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20'
       >
         <span className='flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground'>
           <Boxes className='size-5' />
         </span>
         <span className='grid min-w-0 flex-1'>
-          <span className='text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground'>
-            Entity
-          </span>
-          <span className='truncate font-mono text-lg font-semibold text-foreground'>
+          <span className='truncate font-mono text-base font-semibold text-foreground'>
             {selectedEntity.name}
           </span>
-        </span>
-        <span className='hidden text-right text-xs text-muted-foreground sm:grid'>
-          <span>{selectedEntity.fieldCount} fields</span>
-          <span>{selectedEntity.relationCount} relations</span>
         </span>
         <ChevronsUpDown className='size-4 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
       </button>
@@ -182,10 +170,6 @@ const EntityPicker = ({
                   <span className='grid min-w-0 flex-1 gap-0.5'>
                     <span className='truncate font-mono text-sm font-semibold text-foreground'>
                       {entity.name}
-                    </span>
-                    <span className='truncate text-xs text-muted-foreground'>
-                      {describeEntityStructureSummary(entity)} ·{' '}
-                      {entity.graphOperationCount + entity.domainOperationCount} actions
                     </span>
                   </span>
                   {selected ? <Check className='size-4 shrink-0 text-primary' /> : null}
@@ -231,10 +215,10 @@ const EntityBrowserDetail = ({
   const effectiveTab = parseExplorerEntityBrowserTab(tab, { canShowData });
 
   return (
-    <section className='relative grid content-start gap-5'>
-      <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
-        {entityPicker}
-        <div className='flex shrink-0 flex-wrap items-center gap-2'>
+    <section className='relative min-h-[calc(100vh-9rem)]'>
+      <div className='pointer-events-none absolute inset-x-4 top-4 z-40 flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+        <div className='pointer-events-auto min-w-0 flex-1'>{entityPicker}</div>
+        <div className='pointer-events-auto flex shrink-0 flex-wrap items-center gap-2'>
           {canShowData && effectiveTab !== 'data' ? (
             <button
               type='button'
@@ -260,19 +244,21 @@ const EntityBrowserDetail = ({
           ) : null}
         </div>
       </div>
-      {effectiveTab === 'structure' ? (
-        <ExplorerEntityStructurePanel entity={entity} renderDiagram={renderDiagram} />
-      ) : null}
-      {effectiveTab === 'operations' ? (
-        <ExplorerEntityOperationsPanel
-          operations={operations}
-          tasks={tasks}
-          embedded
-          renderExecutePanel={renderExecutePanel}
-          renderRefInput={renderRefInput}
-        />
-      ) : null}
-      {effectiveTab === 'data' && renderDataPanel ? renderDataPanel({ entity }) : null}
+      <div className='pt-32 md:pt-24'>
+        {effectiveTab === 'structure' ? (
+          <ExplorerEntityStructurePanel entity={entity} renderDiagram={renderDiagram} />
+        ) : null}
+        {effectiveTab === 'operations' ? (
+          <ExplorerEntityOperationsPanel
+            operations={operations}
+            tasks={tasks}
+            embedded
+            renderExecutePanel={renderExecutePanel}
+            renderRefInput={renderRefInput}
+          />
+        ) : null}
+        {effectiveTab === 'data' && renderDataPanel ? renderDataPanel({ entity }) : null}
+      </div>
       {effectiveTab !== 'structure' ? (
         <div className='sticky bottom-6 ml-auto pt-2'>
           <button

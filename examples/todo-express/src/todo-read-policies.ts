@@ -18,6 +18,7 @@ const TodoListReadPolicy = {
   fields: {
     id: { select: true, filter: ['eq', 'in'] },
     name: { select: true, filter: ['eq'], order: true },
+    color: { select: true },
   },
   scope: 'all',
 } satisfies GraphReadPolicy<typeof TodoList, TodoGraphReadAuthority>;

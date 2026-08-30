@@ -4,7 +4,7 @@ import type {
 } from '@ontahi/core/data-graph';
 import { OntahiGraphProvider, type ReactGraphExecutor } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +16,11 @@ import type {
   ExplorerTaskDescriptor,
 } from '../contracts/index.js';
 
-import { ExplorerEditableEntityCell, ExplorerEntityDeleteButton } from './entity-data-mutations.js';
+import {
+  ExplorerEditableEntityCell,
+  ExplorerEntityCreateButton,
+  ExplorerEntityDeleteButton,
+} from './entity-data-mutations.js';
 
 import { ExplorerEntityBrowser, ExplorerProvider } from './index.js';
 
@@ -217,6 +221,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByTestId('execute-panel').textContent).toBe('execute Book.getSharingInfo');
     expect(hrefs).toContain('/internal/graph/entities/Book');
     expect(hrefs).toContain('/internal/graph/entities/Profile');
+    expect(screen.queryByText('2 fields')).toBeNull();
   });
 
   it('keeps instance browsing primary across local entity navigation', async () => {
@@ -338,6 +343,7 @@ describe('ExplorerEntityBrowser', () => {
         { name: 'color', type: 'string', nullable: false },
       ],
       mutations: {
+        create: { fields: ['id', 'name', 'color'] },
         update: { fields: ['name', 'color'] },
         delete: true,
       },
@@ -381,6 +387,20 @@ describe('ExplorerEntityBrowser', () => {
             selectedEntityName='Tag'
           />
         ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'New Tag' }));
+    await user.type(screen.getByRole('textbox', { name: 'Create name' }), 'Later');
+    await user.type(screen.getByRole('textbox', { name: 'Create color' }), '#abc123');
+    await user.click(screen.getByRole('button', { name: 'Create Tag' }));
+
+    await waitFor(() =>
+      expect(runEntityMutationCommand).toHaveBeenCalledWith({
+        kind: 'entity-mutation-command',
+        action: 'create',
+        entityName: 'Tag',
+        values: { id: expect.any(String), name: 'Later', color: '#abc123' },
       }),
     );
 
@@ -452,6 +472,107 @@ describe('ExplorerEntityBrowser', () => {
     expect(onApplied).not.toHaveBeenCalled();
   });
 
+  it('validates rich create inputs, closes its popover, and reports mutation failures', async () => {
+    const user = userEvent.setup();
+    const entity: ExplorerEntityDetail = {
+      ...entities[1]!,
+      name: 'Assignment',
+      identity: { name: 'id', fields: ['id'] },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'published', type: 'boolean', nullable: false },
+        { name: 'status', type: 'string', nullable: false, enumValues: ['draft', 'ready'] },
+        {
+          name: 'owner',
+          type: 'reference',
+          nullable: true,
+          reference: {
+            entityName: 'Profile',
+            identity: { name: 'refById', fields: ['id'] },
+          },
+        },
+        {
+          name: 'scope',
+          type: 'reference',
+          nullable: false,
+          reference: {
+            entityName: 'Scope',
+            identity: { name: 'composite', fields: ['workspaceId', 'slug'] },
+          },
+        },
+        { name: 'score', type: 'integer', nullable: false },
+      ],
+      mutations: {
+        create: { fields: ['id', 'published', 'status', 'owner', 'scope', 'score'] },
+      },
+    };
+    const runMutation = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Create unavailable.'))
+      .mockResolvedValue({ created: [], updated: [], deleted: [] });
+    const onApplied = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ExplorerEntityCreateButton
+        entity={entity}
+        onApplied={onApplied}
+        runMutation={runMutation}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'New Assignment' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('form', { name: 'Create Assignment' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'New Assignment' }));
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('form', { name: 'Create Assignment' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'New Assignment' }));
+    await user.click(screen.getByRole('button', { name: 'Close create form' }));
+    expect(screen.queryByRole('form', { name: 'Create Assignment' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'New Assignment' }));
+    await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
+    expect(await screen.findByText('scope is required.')).toBeTruthy();
+    expect(screen.getByText('JSON · workspaceId, slug')).toBeTruthy();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Create published' }), 'true');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Create status' }), 'ready');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Create scope' }), {
+      target: { value: 'not-json' },
+    });
+    await user.type(screen.getByRole('spinbutton', { name: 'Create score' }), '42');
+    await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
+    expect(await screen.findByText('scope needs JSON with workspaceId, slug.')).toBeTruthy();
+    expect(runMutation).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Create scope' }), {
+      target: { value: '{"workspaceId":"workspace-1","slug":"main"}' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
+
+    expect(await screen.findByText('Create unavailable.')).toBeTruthy();
+    expect(onApplied).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Create Assignment' }));
+    await waitFor(() => expect(onApplied).toHaveBeenCalledOnce());
+    expect(runMutation).toHaveBeenLastCalledWith({
+      kind: 'entity-mutation-command',
+      action: 'create',
+      entityName: 'Assignment',
+      values: {
+        id: expect.any(String),
+        published: true,
+        status: 'ready',
+        owner: null,
+        scope: { workspaceId: 'workspace-1', slug: 'main' },
+        score: 42,
+      },
+    });
+    expect(screen.queryByRole('form', { name: 'Create Assignment' })).toBeNull();
+  });
+
   it('cancels delete confirmation and reports non-Error mutation failures', async () => {
     const user = userEvent.setup();
     const runMutation = vi.fn().mockRejectedValue('offline');
@@ -496,7 +617,16 @@ describe('ExplorerEntityBrowser', () => {
     render(
       withReflectedEntityDataReader({
         readEntityData: vi.fn(pendingRead),
-        readRelatedEntityData: vi.fn(),
+        readRelatedEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Profile',
+          columns: [],
+          rows: [],
+          page: 1,
+          pageSize: 25,
+          totalCount: 0,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
         children: (
           <ExplorerEntityBrowser
             entities={[relatedBook, entities[1]!]}
@@ -512,6 +642,98 @@ describe('ExplorerEntityBrowser', () => {
     expect(
       (screen.getByText('Loading rows...').closest('td') as HTMLTableCellElement | null)?.colSpan,
     ).toBe(relatedBook.fields.length + 1);
+  });
+
+  it('shows pending related counts without blocking entity rows', async () => {
+    const pendingRelatedRead: ReflectedRelatedEntityDataReader['readRelatedEntityData'] = () =>
+      new Promise(() => undefined);
+    const readRelatedEntityData = vi.fn(pendingRelatedRead);
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      relations: [
+        {
+          name: 'collaborators',
+          kind: 'hasMany',
+          target: 'Profile',
+          cardinality: 'many',
+        },
+      ],
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Book',
+          columns: [{ field: 'id', type: 'id', nullable: false }],
+          rows: [{ id: 'book-1' }],
+          page: 1,
+          pageSize: 25,
+          totalCount: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        readRelatedEntityData,
+        children: (
+          <ExplorerEntityBrowser
+            entities={[relatedBook, entities[1]!]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    expect((await screen.findByRole('button', { name: 'collaborators' })).textContent).toContain(
+      '…',
+    );
+    expect(readRelatedEntityData).toHaveBeenCalledWith(
+      expect.objectContaining({ relationName: 'collaborators', pageSize: 1 }),
+    );
+  });
+
+  it('distinguishes an unavailable related count from an empty relation', async () => {
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      relations: [
+        {
+          name: 'collaborators',
+          kind: 'hasMany',
+          target: 'Profile',
+          cardinality: 'many',
+        },
+      ],
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Book',
+          columns: [{ field: 'id', type: 'id', nullable: false }],
+          rows: [{ id: 'book-1' }],
+          page: 1,
+          pageSize: 25,
+          totalCount: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        readRelatedEntityData: vi.fn().mockRejectedValue(new Error('Count unavailable.')),
+        children: (
+          <ExplorerEntityBrowser
+            entities={[relatedBook, entities[1]!]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    const button = await screen.findByRole('button', { name: 'collaborators' });
+    await waitFor(() => expect(button.textContent).toContain('!'));
+    expect(screen.getByTitle('Related count unavailable')).toBeTruthy();
   });
 
   it('renders a Reference Field as a semantic Entity link instead of a raw id cell', async () => {
@@ -668,6 +890,7 @@ describe('ExplorerEntityBrowser', () => {
       relations: [
         {
           name: 'collaborators',
+          provenance: 'derived-inverse',
           kind: 'hasMany',
           target: 'Profile',
           targetIdentity: { name: 'refById', fields: ['id'] },
@@ -727,7 +950,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByRole('link', { name: 'profile-2' }).getAttribute('href')).toBe(
       '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
     );
-    expect(readRelatedEntityData).toHaveBeenLastCalledWith({
+    expect(readRelatedEntityData).toHaveBeenCalledWith({
       source: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
       relationName: 'collaborators',
       sourceEntityName: 'Book',

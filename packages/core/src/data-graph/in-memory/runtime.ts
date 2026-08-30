@@ -9,6 +9,7 @@ import {
   type QueryOrView,
   type QuerySpec,
 } from '../query.js';
+import { getEntityIdentityLocator } from '../ref/index.js';
 import {
   liftEntityReferenceFieldValues,
   normalizeEntityReferenceJoinValue,
@@ -26,6 +27,7 @@ import type {
 } from '../relationship-command.js';
 import type { DataGraphExecutionRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
+import type { DataGraphTransactionCapability } from '../transaction.js';
 
 import { executeInMemoryGraphCommandEffect, InMemoryDataGraphError } from './command.js';
 import { executeInMemoryEntityMutationCommandEffect } from './entity-mutation-command.js';
@@ -177,6 +179,94 @@ const executeRelatedRootRead = <TResult>(
   dataset: InMemoryDataset,
   relationships: readonly RelationshipFact[] = [],
 ): TResult[] => {
+  const relationEntity = spec.relationOwner === 'source' ? spec.sourceEntity : spec.target.root;
+  const relationDefinition = relationEntity.relations[spec.relationName];
+  if (relationDefinition?.relationKind === 'manyToMany') {
+    const sourceEntityRows = executeEntityRows(spec.source, dataset, relationships);
+    const sourceRows =
+      spec.mode === 'resolve' || spec.mode === 'countBySource'
+        ? executeRead(spec.source, undefined, dataset, relationships)
+        : sourceEntityRows;
+    const sourceIdentityFields = getEntityIdentityLocator(spec.sourceEntity)?.locator.fields ?? [];
+    const targetIdentityFields = getEntityIdentityLocator(spec.target.root)?.locator.fields ?? [];
+    if (sourceIdentityFields.length === 0 || targetIdentityFields.length === 0) {
+      throw new Error(
+        `Relation ${relationEntity.name}.${spec.relationName} requires identities on both Entities.`,
+      );
+    }
+
+    const rowKey = (row: Record<string, unknown>, fields: readonly string[]) =>
+      JSON.stringify(fields.map(field => row[field]));
+    const refKey = (ref: RelationshipFact['source'], fields: readonly string[]) =>
+      JSON.stringify(fields.map(field => ref.locator[field]));
+    const sourceKeys = new Set(sourceEntityRows.map(row => rowKey(row, sourceIdentityFields)));
+    const canonicalRelation = {
+      sourceEntityName: relationEntity.name,
+      relationName: spec.relationName,
+      targetEntityName: relationDefinition.target.name,
+    };
+    const canonicalFacts = relationships.filter(
+      fact =>
+        'cardinality' in fact.relation &&
+        fact.relation.cardinality === 'many-to-many' &&
+        fact.relation.sourceEntityName === canonicalRelation.sourceEntityName &&
+        fact.relation.relationName === canonicalRelation.relationName &&
+        fact.relation.targetEntityName === canonicalRelation.targetEntityName,
+    );
+    const relatedTargetKeys = new Set(
+      canonicalFacts
+        .filter(fact => {
+          const selectedSource = spec.relationOwner === 'source' ? fact.source : fact.target;
+          return sourceKeys.has(refKey(selectedSource, sourceIdentityFields));
+        })
+        .map(fact => {
+          const relatedTarget = spec.relationOwner === 'source' ? fact.target : fact.source;
+          return refKey(relatedTarget, targetIdentityFields);
+        }),
+    );
+    const targetRows = selectRows(spec.target, dataset, relationships, { applyLimit: false })
+      .filter(row => relatedTargetKeys.has(rowKey(row, targetIdentityFields)))
+      .slice(0, spec.target.limit ?? Number.POSITIVE_INFINITY);
+    const entityRows = materializeRows<Record<string, unknown>>(
+      spec.target,
+      targetRows,
+      dataset,
+      relationships,
+      { entityRows: true },
+    );
+    const selectedTargetKeys = new Set(entityRows.map(row => rowKey(row, targetIdentityFields)));
+
+    if (spec.mode === 'entityRows') return entityRows as TResult[];
+    const rows = materializeRows<TResult>(spec.target, targetRows, dataset, relationships);
+    if (spec.mode === 'resolve') return [{ sourceRows, rows }] as TResult[];
+    if (spec.mode === 'countBySource') {
+      return [
+        {
+          sourceRows,
+          countsBySource: new Map(
+            sourceEntityRows.map(row => {
+              const key =
+                sourceIdentityFields.length === 1
+                  ? row[sourceIdentityFields[0]!]
+                  : rowKey(row, sourceIdentityFields);
+              const count = canonicalFacts.filter(fact => {
+                const selectedSource = spec.relationOwner === 'source' ? fact.source : fact.target;
+                const selectedTarget = spec.relationOwner === 'source' ? fact.target : fact.source;
+                return (
+                  refKey(selectedSource, sourceIdentityFields) ===
+                    rowKey(row, sourceIdentityFields) &&
+                  selectedTargetKeys.has(refKey(selectedTarget, targetIdentityFields))
+                );
+              }).length;
+              return [key, count];
+            }),
+          ),
+        },
+      ] as TResult[];
+    }
+    return rows;
+  }
+
   const { sourceField, targetField } = resolveRelatedRootFields(
     spec.target.root,
     spec.sourceEntity,
@@ -251,6 +341,20 @@ const countRead = <TParams, TResult>(
     return count;
   }
 
+  const relationEntity =
+    queryOrView.relationOwner === 'source' ? queryOrView.sourceEntity : queryOrView.target.root;
+  if (relationEntity.relations[queryOrView.relationName]?.relationKind === 'manyToMany') {
+    return executeRelatedRootRead(
+      {
+        ...queryOrView,
+        mode: 'entityRows',
+        target: { ...queryOrView.target, limit: undefined },
+      },
+      dataset,
+      relationships,
+    ).length;
+  }
+
   const { sourceField, targetField } = resolveRelatedRootFields(
     queryOrView.target.root,
     queryOrView.sourceEntity,
@@ -275,11 +379,7 @@ const countRead = <TParams, TResult>(
   ).length;
 };
 
-export const createInMemoryDataGraphRuntime = (input: {
-  dataset: InMemoryDataset;
-  entities?: readonly AnyEntityDefinition[];
-  relationships?: RelationshipFact[];
-}): DataGraphExecutionRuntime<
+export type InMemoryDataGraphRuntime = DataGraphExecutionRuntime<
   InMemoryDataGraphError,
   undefined,
   undefined,
@@ -287,7 +387,14 @@ export const createInMemoryDataGraphRuntime = (input: {
 > &
   EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
   ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
-  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> => {
+  RelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
+  DataGraphTransactionCapability<InMemoryDataGraphRuntime>;
+
+export const createInMemoryDataGraphRuntime = (input: {
+  dataset: InMemoryDataset;
+  entities?: readonly AnyEntityDefinition[];
+  relationships?: RelationshipFact[];
+}): InMemoryDataGraphRuntime => {
   const relationships = input.relationships ?? [];
   input.relationships = relationships;
   return {
@@ -342,13 +449,27 @@ export const createInMemoryDataGraphRuntime = (input: {
       ),
     runRelationshipCommand: command =>
       executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
-  } satisfies DataGraphExecutionRuntime<
-    InMemoryDataGraphError,
-    undefined,
-    undefined,
-    InMemoryDataGraphError
-  > &
-    EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
-    ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
-    RelationshipCommandExecutionRuntime<InMemoryDataGraphError>;
+    transaction: work =>
+      Effect.suspend(() => {
+        const transactionDataset = structuredClone(input.dataset) as InMemoryDataset;
+        const transactionRelationships = structuredClone(relationships) as RelationshipFact[];
+        const transactionRuntime = createInMemoryDataGraphRuntime({
+          dataset: transactionDataset,
+          entities: input.entities,
+          relationships: transactionRelationships,
+        });
+
+        return work(transactionRuntime).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              for (const entityName of Object.keys(input.dataset)) {
+                delete input.dataset[entityName];
+              }
+              Object.assign(input.dataset, transactionDataset);
+              relationships.splice(0, relationships.length, ...transactionRelationships);
+            }),
+          ),
+        );
+      }),
+  } satisfies InMemoryDataGraphRuntime;
 };

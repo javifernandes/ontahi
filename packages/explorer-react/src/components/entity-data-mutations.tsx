@@ -1,8 +1,16 @@
 'use client';
 
 import type { AnyEntityRef, EntityMutationCommand } from '@ontahi/core/data-graph';
-import { Check, Pencil, Trash2, X } from 'lucide-react';
-import { useEffect, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
@@ -43,14 +51,59 @@ const parseDraftValue = (field: ExplorerEntityDetail['fields'][number], draft: s
   return draft;
 };
 
+const createDrafts = (fields: ExplorerEntityDetail['fields']) =>
+  Object.fromEntries(
+    fields.map(field => [
+      field.name,
+      field.type === 'boolean' ? 'false' : field.enumValues?.[0] ? String(field.enumValues[0]) : '',
+    ]),
+  );
+
+const isGeneratedIdentityField = (
+  entity: ExplorerEntityDetail,
+  field: ExplorerEntityDetail['fields'][number],
+) =>
+  entity.identity?.fields.length === 1 &&
+  entity.identity.fields[0] === field.name &&
+  field.name === 'id';
+
+const parseCreateDraftValue = (
+  field: ExplorerEntityDetail['fields'][number],
+  draft: string,
+): unknown => {
+  if (!field.reference) return parseDraftValue(field, draft);
+  if (field.nullable && draft === '') return null;
+
+  const identityField = field.reference.identity?.fields[0];
+  if (identityField && field.reference.identity?.fields.length === 1) {
+    return {
+      kind: 'entity-ref',
+      entityName: field.reference.entityName,
+      locator: { [identityField]: draft },
+    };
+  }
+
+  try {
+    return JSON.parse(draft) as unknown;
+  } catch {
+    throw new Error(
+      `${field.name} needs JSON with ${field.reference.identity?.fields.join(', ') ?? 'the target identity fields'}.`,
+    );
+  }
+};
+
 const MutationValueInput = ({
+  autoFocus = true,
   draft,
   field,
+  label = `Edit ${field.name}`,
   onChange,
   onKeyDown,
 }: {
+  autoFocus?: boolean;
   draft: string;
   field: ExplorerEntityDetail['fields'][number];
+  label?: string;
   onChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
 }) => {
@@ -59,11 +112,11 @@ const MutationValueInput = ({
 
   return options.length > 0 ? (
     <select
-      autoFocus
+      autoFocus={autoFocus}
       value={draft}
       onChange={event => onChange(event.target.value)}
       onKeyDown={onKeyDown}
-      aria-label={`Edit ${field.name}`}
+      aria-label={label}
       className='min-h-8 min-w-28 rounded-md border bg-background px-2 text-xs outline-none focus:border-primary'
     >
       {field.nullable ? <option value=''>null</option> : null}
@@ -75,16 +128,170 @@ const MutationValueInput = ({
     </select>
   ) : (
     <input
-      autoFocus
+      autoFocus={autoFocus}
       value={draft}
       type={
         ['integer', 'int', 'number', 'float', 'double'].includes(field.type) ? 'number' : 'text'
       }
       onChange={event => onChange(event.target.value)}
       onKeyDown={onKeyDown}
-      aria-label={`Edit ${field.name}`}
+      aria-label={label}
       className='min-h-8 min-w-28 rounded-md border bg-background px-2 font-mono text-xs outline-none focus:border-primary'
     />
+  );
+};
+
+export const ExplorerEntityCreateButton = ({
+  entity,
+  onApplied,
+  runMutation,
+}: {
+  entity: ExplorerEntityDetail;
+  onApplied: () => Promise<unknown>;
+  runMutation: ExplorerEntityMutationRunner;
+}) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const createFields = (entity.mutations?.create?.fields ?? [])
+    .map(fieldName => entity.fields.find(field => field.name === fieldName))
+    .filter((field): field is ExplorerEntityDetail['fields'][number] => Boolean(field));
+  const inputFields = createFields.filter(field => !isGeneratedIdentityField(entity, field));
+  const [open, setOpen] = useState(false);
+  const [drafts, setDrafts] = useState(() => createDrafts(inputFields));
+  const [error, setError] = useState<string>();
+  const [isCreating, setIsCreating] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+    setDrafts(createDrafts(inputFields));
+    setError(undefined);
+  }, [entity.name]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(undefined);
+
+    const missingField = inputFields.find(
+      field => !field.nullable && field.type !== 'boolean' && !drafts[field.name]?.trim(),
+    );
+    if (missingField) {
+      setError(`${missingField.name} is required.`);
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const values = Object.fromEntries(
+        createFields.map(field => [
+          field.name,
+          isGeneratedIdentityField(entity, field)
+            ? globalThis.crypto.randomUUID()
+            : parseCreateDraftValue(field, drafts[field.name] ?? ''),
+        ]),
+      );
+      await runMutation({
+        kind: 'entity-mutation-command',
+        action: 'create',
+        entityName: entity.name,
+        values,
+      });
+      await onApplied();
+      setDrafts(createDrafts(inputFields));
+      setOpen(false);
+    } catch (caught) {
+      setError(mutationErrorMessage(caught));
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div ref={rootRef} className='relative ml-auto'>
+      <button
+        type='button'
+        onClick={() => {
+          setError(undefined);
+          setOpen(current => !current);
+        }}
+        aria-expanded={open}
+        className='inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
+      >
+        <Plus className='size-4' />
+        New {entity.name}
+      </button>
+
+      {open ? (
+        <form
+          onSubmit={create}
+          className='absolute right-0 top-[calc(100%+0.5rem)] z-50 grid w-[min(22rem,calc(100vw-2rem))] gap-4 rounded-2xl border bg-popover p-4 text-popover-foreground shadow-xl'
+          aria-label={`Create ${entity.name}`}
+        >
+          <div className='flex items-center justify-between gap-3'>
+            <strong className='text-sm'>New {entity.name}</strong>
+            <button
+              type='button'
+              onClick={() => setOpen(false)}
+              className='inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
+              aria-label='Close create form'
+            >
+              <X className='size-4' />
+            </button>
+          </div>
+
+          <div className='grid gap-3'>
+            {inputFields.map((field, index) => (
+              <label key={field.name} className='grid gap-1.5 text-xs font-medium'>
+                <span>
+                  {field.name}
+                  {field.nullable ? (
+                    <span className='ml-1 font-normal text-muted-foreground'>optional</span>
+                  ) : null}
+                  {(field.reference?.identity?.fields.length ?? 0) > 1 ? (
+                    <span className='ml-1 font-normal text-muted-foreground'>
+                      JSON · {field.reference!.identity!.fields.join(', ')}
+                    </span>
+                  ) : null}
+                </span>
+                <MutationValueInput
+                  autoFocus={index === 0}
+                  draft={drafts[field.name] ?? ''}
+                  field={field}
+                  label={`Create ${field.name}`}
+                  onChange={value => setDrafts(current => ({ ...current, [field.name]: value }))}
+                  onKeyDown={() => undefined}
+                />
+              </label>
+            ))}
+          </div>
+
+          {error ? <p className='text-xs text-destructive'>{error}</p> : null}
+          <button
+            type='submit'
+            disabled={isCreating}
+            className='inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50'
+          >
+            {isCreating ? 'Creating…' : `Create ${entity.name}`}
+          </button>
+        </form>
+      ) : null}
+    </div>
   );
 };
 

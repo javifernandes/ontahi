@@ -24,33 +24,37 @@ export type TodoCapabilities = OntahiCapabilities & {
   };
 };
 
+const todoListFields = {
+  id: field.id(),
+  name: field.nonEmptyString({
+    trim: true,
+    exclude: {
+      values: ['archive'],
+      caseInsensitive: true,
+    },
+    messages: {
+      exclude: 'Archive is reserved for system use.',
+    },
+  }),
+  color: field.nonEmptyString({ trim: true }),
+};
+
 export const TodoList = entity({
   name: 'TodoList',
-  fields: {
-    id: field.id(),
-    name: field.nonEmptyString({
-      trim: true,
-      exclude: {
-        values: ['archive'],
-        caseInsensitive: true,
-      },
-      messages: {
-        exclude: 'Archive is reserved for system use.',
-      },
-    }),
-  },
+  fields: todoListFields,
+  display: { primary: 'name', search: ['name'] },
   domainOperationDefaults: entityDefaults,
   uses: {
     capabilities: {} as TodoCapabilities,
   },
   operations: ({ self, commands, operation, app }) => ({
     create: operation({
-      input: graphSchema.pick(self, ['id', 'name']).named('CreateTodoListInput'),
+      input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
       output: self,
       bridge: { invalidate: [['TodoList']] },
       run: input =>
         Effect.gen(function* () {
-          const created = yield* commands.insertReturning(input, ['id', 'name']).run();
+          const created = yield* commands.insertReturning(input, ['id', 'name', 'color']).run();
 
           yield* app.runtime.notifications.todoListCreated({
             listId: created.id,
@@ -67,16 +71,28 @@ export const TodoList = entity({
       }),
       output: self,
       bridge: { invalidate: [['TodoList']] },
-      run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name']),
+      run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name', 'color']),
     }),
-    delete: operation({
+    recolor: operation({
       input: graphSchema.object({
         list: self.one(),
+        color: self.fields.color,
       }),
+      output: self,
       bridge: { invalidate: [['TodoList']] },
-      run: ({ list }) => list.delete(),
+      run: ({ list, color }) => list.updateReturning({ color }, ['id', 'name', 'color']),
     }),
   }),
+});
+
+export const Tag = entity({
+  name: 'Tag',
+  fields: {
+    id: field.id(),
+    name: field.nonEmptyString({ trim: true }),
+    color: field.nonEmptyString({ trim: true }),
+  },
+  display: { primary: 'name', search: ['name'] },
 });
 
 const todoItemFields = {
@@ -86,27 +102,10 @@ const todoItemFields = {
   completed: field.boolean(),
 };
 
-export const Tag = entity({
-  name: 'Tag',
-  fields: {
-    id: field.id(),
-    name: field.nonEmptyString({ trim: true }),
-    color: field.nonEmptyString({ trim: true }),
-  },
-  domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation }) => ({
-    create: operation({
-      input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTagInput'),
-      output: self,
-      bridge: { invalidate: [['Tag']] },
-      run: input => commands.insertReturning(input, ['id', 'name', 'color']),
-    }),
-  }),
-});
-
 export const TodoItem = entity({
   name: 'TodoItem',
   fields: todoItemFields,
+  display: { primary: 'title', search: ['title'] },
   relations: {
     tags: relation.manyToMany(Tag, {
       constraints: (): readonly RelationConstraint[] => [
@@ -121,7 +120,25 @@ export const TodoItem = entity({
     entities: () => ({ TodoList }),
   },
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, operation, ingress, app }) => {
+  operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
+    const todoEntities = app.graph.defineEntity(self);
+    const tagEntities = app.graph.defineEntity(Tag);
+    const tagCommands = commandsFor(Tag);
+    const listCommands = commandsFor(TodoList);
+    const unlinkTodoTags = (todoId: string) =>
+      Effect.gen(function* () {
+        const tags = yield* tagEntities
+          .relatedTo(
+            todoEntities.selection(candidate => candidate.id.eq(todoId)),
+            {
+              through: 'tags',
+            },
+          )
+          .run();
+        for (const tag of tags) {
+          yield* todoEntities.refById(todoId).tags.remove(tagEntities.refById(tag.id)).run();
+        }
+      });
     const runCompleteAll = createRunCompleteAll(() =>
       commands
         .where(todo => todo.completed.eq(false))
@@ -158,13 +175,68 @@ export const TodoItem = entity({
               .run();
           }),
       }),
-      complete: operation({
+      setCompleted: operation({
         input: graphSchema.object({
           todos: self.many(),
+          completed: self.fields.completed,
         }),
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         bridge: { invalidate: [['TodoItem']] },
-        run: ({ todos }) => todos.update({ completed: true }),
+        run: ({ todos, completed }) => todos.update({ completed }),
+      }),
+      delete: operation({
+        input: graphSchema.object({
+          todo: graphSchema.existingRef(self),
+        }),
+        bridge: { invalidate: [['TodoItem']] },
+        *run({ todo }) {
+          yield* unlinkTodoTags(todo.id);
+          yield* commands
+            .where(candidate => candidate.id.eq(todo.id))
+            .delete()
+            .run();
+        },
+      }),
+      deleteList: operation.atomic({
+        input: graphSchema.object({
+          list: graphSchema.existingRef(TodoList),
+        }),
+        bridge: { invalidate: [['TodoList'], ['TodoItem'], ['Tag']] },
+        *run({ list }) {
+          const todos = yield* todoEntities.where(todo => todo.list.eq(list.ref)).run();
+          for (const todo of todos) yield* unlinkTodoTags(todo.id);
+          yield* commands
+            .where(todo => todo.list.eq(list.ref))
+            .delete()
+            .run();
+          yield* listCommands
+            .where(candidate => candidate.id.eq(list.id))
+            .delete()
+            .run();
+        },
+      }),
+      deleteTag: operation({
+        input: graphSchema.object({
+          tag: graphSchema.existingRef(Tag),
+        }),
+        bridge: { invalidate: [['Tag'], ['TodoItem']] },
+        *run({ tag }) {
+          const todos = yield* todoEntities
+            .relatedTo(
+              tagEntities.selection(candidate => candidate.id.eq(tag.id)),
+              {
+                through: 'tags',
+              },
+            )
+            .run();
+          for (const todo of todos) {
+            yield* todoEntities.refById(todo.id).tags.remove(tag.ref).run();
+          }
+          yield* tagCommands
+            .where(candidate => candidate.id.eq(tag.id))
+            .delete()
+            .run();
+        },
       }),
       deleteAll: operation({
         bridge: { invalidate: [['TodoItem']] },

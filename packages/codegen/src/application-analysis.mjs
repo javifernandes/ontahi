@@ -256,7 +256,7 @@ export const analyzeOntahiApplication = ({ graphApiPath, sourceLoader }) => {
     tasks.push(...entityTasks);
     ingress.push(...entityIngress);
 
-    if (clientOperations.length > 0) {
+    if (clientOperations.length > 0 || definition.entitySchemaProjection) {
       clientEntities.push({
         ...analyzedEntity,
         operations: clientOperations,

@@ -18,6 +18,7 @@ describe('Fetch graph client', () => {
     expect(client.operationBridgeAdapters?.[0]?.name).toBe('fetch');
     expect(client.reflectedOperationInvoker).toBeDefined();
     expect(client.reflectedEntityDataReader).toBeDefined();
+    expect(client.reflectedRelatedEntityDataReader).toBeDefined();
   });
 
   it('binds a generated client Entity facade for fluent execution outside React', async () => {
@@ -127,12 +128,49 @@ describe('Fetch graph client', () => {
     });
   });
 
+  it('reads reflected related Entity data from the conventional Explorer endpoint', async () => {
+    const fetchRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        entityName: 'TodoItem',
+        columns: [],
+        rows: [{ id: 'todo-1' }],
+        page: 1,
+        pageSize: 25,
+        totalCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      }),
+    });
+    const client = createFetchGraphClient({
+      reflectedRelatedEntityData: { fetch: fetchRequest as typeof fetch },
+    });
+    const query = {
+      source: { kind: 'entity-ref' as const, entityName: 'Tag', locator: { id: 'tag-1' } },
+      relationName: 'TodoItem.tags',
+      sourceEntityName: 'Tag',
+      targetEntityName: 'TodoItem',
+    };
+
+    await expect(
+      client.reflectedRelatedEntityDataReader?.readRelatedEntityData(query),
+    ).resolves.toMatchObject({ rows: [{ id: 'todo-1' }], totalCount: 1 });
+    expect(fetchRequest).toHaveBeenCalledWith('/explorer/related-entities', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(query),
+    });
+  });
+
   it('allows every conventional capability to be disabled', () => {
     expect(
       createFetchGraphClient({
         graphRead: false,
         operations: false,
         reflectedEntityData: false,
+        reflectedRelatedEntityData: false,
       }),
     ).toEqual({});
   });

@@ -2,7 +2,7 @@ import type { Selection } from '@ontahi/core/data-graph';
 
 import { Tag, TodoItem, TodoItemSchema, TodoList } from '../../src/generated/client-entities.js';
 
-const TodoListItem = TodoList.view('TodoListItem', { id: true, name: true });
+const TodoListItem = TodoList.view('TodoListItem', { id: true, name: true, color: true });
 const TagItem = Tag.view('TagItem', { id: true, name: true, color: true });
 const TodoItemListItem = TodoItem.view('TodoItemListItem', {
   id: true,
@@ -19,6 +19,10 @@ export const todoListsQuery = TodoList.all()
 export const tagsQuery = Tag.all()
   .as(TagItem)
   .orderBy(tag => tag.name);
+
+export const allTodoItemsQuery = TodoItem.all()
+  .as(TodoItemListItem)
+  .orderBy(todo => todo.title);
 
 export const todoItemsQuery = (todos: Selection<typeof TodoItemSchema>) =>
   TodoItem.all()

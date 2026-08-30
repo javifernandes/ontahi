@@ -241,6 +241,19 @@ export const ontahiExpress = <
         .then(result => response.json(result))
         .catch(next);
     });
+    router.post(`${explorerPath}/related-entities`, express.json(), (request, response, next) => {
+      if (!application.reflectedRelatedEntityDataReader) {
+        response.status(404).json({
+          error: 'Reflected related Entity data is not configured for this application.',
+        });
+        return;
+      }
+
+      void application.reflectedRelatedEntityDataReader
+        .readRelatedEntityData(request.body)
+        .then(result => response.json(result))
+        .catch(next);
+    });
 
     const explorerIndexFile = explorer.indexFile;
     if (explorerIndexFile) {

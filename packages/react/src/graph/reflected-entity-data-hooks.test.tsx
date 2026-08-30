@@ -133,7 +133,9 @@ describe('reflected entity data hooks', () => {
     const queryClient = new QueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>
-        <OntahiGraphProvider runtime={{ name: 'test-runtime' }}>{children}</OntahiGraphProvider>
+        <OntahiGraphProvider runtime={{ name: 'test-runtime' }} client={false}>
+          {children}
+        </OntahiGraphProvider>
       </QueryClientProvider>
     );
 

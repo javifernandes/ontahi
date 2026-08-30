@@ -111,6 +111,18 @@ const createApplication = (): OntahiApplication =>
         hasNextPage: false,
       })),
     },
+    reflectedRelatedEntityDataReader: {
+      readRelatedEntityData: vi.fn(async query => ({
+        entityName: query.targetEntityName,
+        columns: [],
+        rows: [{ id: 'todo-related' }],
+        page: 1,
+        pageSize: 25,
+        totalCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      })),
+    },
   }) as unknown as OntahiApplication;
 
 describe('Ontahi Express application middleware', () => {
@@ -247,6 +259,21 @@ describe('Ontahi Express application middleware', () => {
     ).resolves.toMatchObject({
       entityName: 'Todo',
       rows: [{ id: 'todo-1' }],
+    });
+    await expect(
+      fetch(`${origin}/explorer/related-entities`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: { kind: 'entity-ref', entityName: 'Todo', locator: { id: 'todo-1' } },
+          relationName: 'children',
+          sourceEntityName: 'Todo',
+          targetEntityName: 'Todo',
+        }),
+      }).then(response => response.json()),
+    ).resolves.toMatchObject({
+      entityName: 'Todo',
+      rows: [{ id: 'todo-related' }],
     });
   });
 

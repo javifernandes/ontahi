@@ -3,6 +3,8 @@
 import type {
   ReflectedEntityDataReader,
   ReflectedEntityDataResult,
+  ReflectedRelatedEntityDataReader,
+  ReflectedRelatedEntityDataQuery,
   ReflectedOperationInvoker,
   RemoteDataGraphError,
   RuntimeBoundDataGraphApi,
@@ -25,6 +27,8 @@ export type FetchReflectedEntityDataReaderOptions = {
   fetch?: typeof globalThis.fetch;
 };
 
+export type FetchReflectedRelatedEntityDataReaderOptions = FetchReflectedEntityDataReaderOptions;
+
 export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOptions> = {
   graph?: RuntimeBoundDataGraphApi<
     RemoteDataGraphError,
@@ -35,6 +39,7 @@ export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOpt
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
+  reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
 };
 
@@ -47,11 +52,34 @@ export type FetchGraphClientOptions<TOptions = undefined> = {
   graphRead?: false | FetchGraphReadExecutorOptions<TOptions>;
   operations?: false | FetchOperationBridgeOptions;
   reflectedEntityData?: false | FetchReflectedEntityDataReaderOptions;
+  reflectedRelatedEntityData?: false | FetchReflectedRelatedEntityDataReaderOptions;
 };
 
 const DEFAULT_OPERATIONS_ENDPOINT = '/operations';
 const DEFAULT_TASKS_ENDPOINT = '/operations/tasks';
 const DEFAULT_REFLECTED_ENTITY_DATA_ENDPOINT = '/explorer/entities';
+const DEFAULT_REFLECTED_RELATED_ENTITY_DATA_ENDPOINT = '/explorer/related-entities';
+
+const postReflectedEntityDataQuery = async (
+  endpoint: string,
+  query:
+    | ReflectedRelatedEntityDataQuery
+    | Parameters<ReflectedEntityDataReader['readEntityData']>[0],
+  fetchRequest: typeof globalThis.fetch,
+) => {
+  const response = await fetchRequest(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(query),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Reflected entity data request failed with status ${response.status}.`);
+  }
+
+  return response.json() as Promise<ReflectedEntityDataResult>;
+};
 
 const conventionalOperationOptions = (
   options: FetchOperationBridgeOptions,
@@ -68,20 +96,14 @@ export const createFetchReflectedEntityDataReader = ({
   endpoint = DEFAULT_REFLECTED_ENTITY_DATA_ENDPOINT,
   fetch: fetchRequest = globalThis.fetch,
 }: FetchReflectedEntityDataReaderOptions = {}): ReflectedEntityDataReader => ({
-  readEntityData: async query => {
-    const response = await fetchRequest(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(query),
-    });
+  readEntityData: query => postReflectedEntityDataQuery(endpoint, query, fetchRequest),
+});
 
-    if (!response.ok) {
-      throw new Error(`Reflected entity data request failed with status ${response.status}.`);
-    }
-
-    return response.json() as Promise<ReflectedEntityDataResult>;
-  },
+export const createFetchReflectedRelatedEntityDataReader = ({
+  endpoint = DEFAULT_REFLECTED_RELATED_ENTITY_DATA_ENDPOINT,
+  fetch: fetchRequest = globalThis.fetch,
+}: FetchReflectedRelatedEntityDataReaderOptions = {}): ReflectedRelatedEntityDataReader => ({
+  readRelatedEntityData: query => postReflectedEntityDataQuery(endpoint, query, fetchRequest),
 });
 
 export function createFetchGraphClient<TOptions = undefined>(): FetchGraphClient<TOptions>;
@@ -97,6 +119,7 @@ export function createFetchGraphClient<TOptions = undefined>({
   graphRead = {},
   operations = {},
   reflectedEntityData = {},
+  reflectedRelatedEntityData = {},
 }: FetchGraphClientOptions<TOptions> = {}): OntahiGraphClient<TOptions, TOptions> {
   const operationOptions =
     operations === false ? undefined : conventionalOperationOptions(operations);
@@ -119,5 +142,12 @@ export function createFetchGraphClient<TOptions = undefined>({
     ...(reflectedEntityData === false
       ? {}
       : { reflectedEntityDataReader: createFetchReflectedEntityDataReader(reflectedEntityData) }),
+    ...(reflectedRelatedEntityData === false
+      ? {}
+      : {
+          reflectedRelatedEntityDataReader: createFetchReflectedRelatedEntityDataReader(
+            reflectedRelatedEntityData,
+          ),
+        }),
   };
 }

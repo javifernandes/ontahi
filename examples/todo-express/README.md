@@ -27,7 +27,7 @@ graph client, so the application only supplies runtime identity. It uses `useGra
 endpoint wiring.
 
 The default is an explicit public mode: the complete application works without login and
-`TodoItem.complete` has no authentication requirement.
+`TodoItem.setCompleted` has no authentication requirement.
 
 To exercise real authentication, create a GitHub OAuth App with
 `http://localhost:3001/auth/github/callback` as its callback URL and start Todo in GitHub mode:
@@ -41,7 +41,7 @@ pnpm todo:dev:local -- --auth github
 
 GitHub mode fails immediately when any required credential is missing, mounts real Passport login,
 session, callback, and logout routes, and adds `app.require.authenticated()` to
-`TodoItem.complete`. Passport and GitHub OAuth belong to this Express host.
+`TodoItem.setCompleted`. Passport and GitHub OAuth belong to this Express host.
 The host maps Passport's authenticated `request.user` through
 `authentication.principal(request)`. The provider-neutral `@ontahi/runtime-express` adapter invokes
 that single `invocationContext` factory for Operations and remote graph reads. Todo only passes its
@@ -50,7 +50,7 @@ The same protected operation can be invoked from plain Node by establishing that
 
 ```ts
 await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
-  TodoItem.complete({ todos: ['todo-123'] }),
+  TodoItem.setCompleted({ todos: ['todo-123'], completed: true }),
 );
 ```
 
@@ -95,7 +95,9 @@ pnpm --filter @ontahi/example-todo-express dev:postgres
 ```
 
 The Compose service persists data in a named volume. Use `db:stop` to stop it or `db:reset` to
-recreate the database and reapply `migrations/001-create-todos.sql`.
+recreate the database and reapply every file in `migrations/`. PostgreSQL only runs these init
+scripts when creating the volume, so reset an existing example database after pulling a new
+migration.
 
 You can also create a list and then a todo item directly through Ontahi's transport-neutral invocation
 protocol:
@@ -103,7 +105,7 @@ protocol:
 ```sh
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoList.create","input":{"id":"list-1","name":"Inbox"}}'
+  -d '{"kind":"invoke","operationId":"TodoList.create","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
 
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
@@ -141,8 +143,8 @@ The generated schema authors the selection, while the caller-owned View chooses 
 The server independently validates both against `TodoItem`'s explicit remote read policy.
 
 Each entity owns its fields, identity, relations, and operations in one semantic declaration.
-`TodoItem.complete` accepts `self.many()` inside that declaration, so its target cardinality is part of
-the validated operation contract instead of an example-local list of IDs. Ontahi keeps the
+`TodoItem.setCompleted` accepts `self.many()` inside that declaration, so its target cardinality is
+part of the validated operation contract instead of an example-local list of IDs. Ontahi keeps the
 selection representation behind the entity-facing API.
 
 `relationshipSet(TodoItem, 'tags', todos).add(tags)` combines Selection-valued source and target
@@ -174,9 +176,9 @@ Or by predicate:
 }
 ```
 
-Send either value as the `todos` field when invoking `TodoItem.complete`. Ontahi validates the
-Selection, hydrates it at the transport boundary, and evaluates the same settled Selection algebra
-in the in-memory update command.
+Send either value as the `todos` field when invoking `TodoItem.setCompleted`, together with the
+desired `completed` Boolean. Ontahi validates the Selection, hydrates it at the transport boundary,
+and evaluates the same settled Selection algebra in the in-memory update command.
 
 The generated client preserves operation input and output schemas, so React infers hook types without local record declarations or generic arguments:
 
@@ -184,10 +186,12 @@ The generated client preserves operation input and output schemas, so React infe
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
 const todos = useGraphQuery(TodoItem.all().where(visibleTodos).as(TodoItemListItem));
 const createTodo = useOperation(TodoItem.domain.create);
-const completeVisible = useOperation(TodoItem.domain.complete({ todos: visibleTodos }));
+const setVisibleCompleted = useOperation(
+  TodoItem.domain.setCompleted({ todos: visibleTodos, completed: true }),
+);
 const completeAll = useDurableOperation(TodoItem.domain.completeAll);
 
-completeVisible.execute();
+setVisibleCompleted.execute();
 completeAll.execute();
 ```
 
@@ -204,7 +208,7 @@ For explicit members, the hook accepts IDs or entity records and derives refs th
 default identity:
 
 ```ts
-await completeTodos.executeAsync({ todos: selectedIds });
+await setTodosCompleted.executeAsync({ todos: selectedIds, completed: true });
 ```
 
 The operation still receives `Selection<typeof TodoItem>` on the server, and the transport still

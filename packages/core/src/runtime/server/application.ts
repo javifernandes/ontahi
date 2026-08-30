@@ -1,6 +1,10 @@
 import { Effect } from 'effect';
 
-import type { GraphApi, ReflectedEntityDataReader } from '../../data-graph/index.js';
+import type {
+  GraphApi,
+  ReflectedEntityDataReader,
+  ReflectedRelatedEntityDataReader,
+} from '../../data-graph/index.js';
 import { defineGraphApi } from '../../data-graph/index.js';
 import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
 import type { TaskSnapshot } from '../contracts.js';
@@ -16,6 +20,7 @@ type AnyApplicationEntity = object;
 type RuntimeWithReflectedEntityData = ArchitectureAppFacade<any, any> & {
   graph: {
     readEntityData?: ReflectedEntityDataReader['readEntityData'];
+    readRelatedEntityData?: ReflectedRelatedEntityDataReader['readRelatedEntityData'];
   };
 };
 
@@ -38,6 +43,7 @@ export type DefineOntahiApplicationFromEntitiesOptions<
 export type OntahiApplication<TGraph extends AnyGraphApi = AnyGraphApi> = {
   graph: TGraph;
   reflectedEntityDataReader?: ReflectedEntityDataReader;
+  reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
   resolveOperation: (operationId: string) => OperationInvocationOperation | undefined;
   invokeOperation: (
     operation: OperationInvocationOperation,
@@ -70,10 +76,14 @@ export function defineOntahiApplication(
   const reflectedEntityDataReader =
     options.reflectedEntityDataReader ??
     (runtime.graph.readEntityData ? { readEntityData: runtime.graph.readEntityData } : undefined);
+  const reflectedRelatedEntityDataReader = runtime.graph.readRelatedEntityData
+    ? { readRelatedEntityData: runtime.graph.readRelatedEntityData }
+    : undefined;
 
   return {
     graph,
     reflectedEntityDataReader,
+    reflectedRelatedEntityDataReader,
     resolveOperation: operationId =>
       graph.getDomainOperation(operationId) as OperationInvocationOperation | undefined,
     invokeOperation: (operation, input, projection) =>

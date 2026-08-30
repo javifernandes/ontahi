@@ -273,10 +273,94 @@ const createPostgresBaseDataGraphRuntime = (
   const executeRelatedRootRead = async (
     spec: RelatedRootReadSpec<any, any, any, any, any>,
   ): Promise<any[]> => {
+    const relationEntity = spec.relationOwner === 'source' ? spec.sourceEntity : spec.target.root;
+    const relationDefinition = relationEntity.relations[spec.relationName];
+    if (relationDefinition?.relationKind === 'manyToMany') {
+      if (relationDefinition.mapping?.type !== 'many-to-many') {
+        throw new Error(
+          `PostgreSQL many-to-many Relation ${relationEntity.name}.${spec.relationName} is not mapped.`,
+        );
+      }
+      const canonicalSourceMapping = mappingFor(registry, relationEntity);
+      const canonicalTargetMapping = mappingFor(registry, relationDefinition.target);
+      const canonicalSourceField = Object.entries(canonicalSourceMapping.columns).find(
+        ([, column]) => column === relationDefinition.mapping!.fromColumn,
+      )?.[0];
+      const canonicalTargetField = Object.entries(canonicalTargetMapping.columns).find(
+        ([, column]) => column === relationDefinition.mapping!.toColumn,
+      )?.[0];
+      if (!canonicalSourceField || !canonicalTargetField) {
+        throw new Error(
+          `PostgreSQL many-to-many Relation ${relationEntity.name}.${spec.relationName} does not match Entity mappings.`,
+        );
+      }
+
+      const sourceField =
+        spec.relationOwner === 'source' ? canonicalSourceField : canonicalTargetField;
+      const targetField =
+        spec.relationOwner === 'source' ? canonicalTargetField : canonicalSourceField;
+      const throughSourceColumn =
+        spec.relationOwner === 'source'
+          ? relationDefinition.mapping.throughFromColumn
+          : relationDefinition.mapping.throughToColumn;
+      const throughTargetColumn =
+        spec.relationOwner === 'source'
+          ? relationDefinition.mapping.throughToColumn
+          : relationDefinition.mapping.throughFromColumn;
+      const sourceEntityRows = await executeEntityRows(spec.source);
+      const sourceRows =
+        spec.mode === 'resolve' || spec.mode === 'countBySource'
+          ? await executeRead(spec.source, undefined)
+          : sourceEntityRows;
+      const sourceValues = uniqueNonNullValues(sourceEntityRows, spec.sourceEntity, sourceField);
+
+      if (sourceValues.length === 0) {
+        if (spec.mode === 'resolve') return [{ sourceRows, rows: [] }];
+        if (spec.mode === 'countBySource') {
+          return [{ sourceRows, countsBySource: new Map<unknown, number>() }];
+        }
+        return [];
+      }
+
+      const edgeResult = await executeQuery<
+        { source_value: unknown; target_value: unknown } & QueryResultRow
+      >({
+        text:
+          `SELECT ${quotePostgresIdentifier(throughSourceColumn)} AS source_value, ` +
+          `${quotePostgresIdentifier(throughTargetColumn)} AS target_value ` +
+          `FROM ${quotePostgresIdentifier(relationDefinition.mapping.throughTable)} ` +
+          `WHERE ${quotePostgresIdentifier(throughSourceColumn)} = ANY($1)`,
+        values: [sourceValues],
+      });
+      const targetSpec = withRelatedTargetPredicate(
+        spec,
+        targetField,
+        edgeResult.rows.map(edge => edge.target_value),
+      );
+      const entityRows = await readSpec(targetSpec, { entityRows: true });
+      if (spec.mode === 'entityRows') return entityRows;
+      if (spec.mode === 'countBySource') {
+        const selectedTargetValues = new Set<unknown>(
+          uniqueNonNullValues(entityRows, spec.target.root, targetField),
+        );
+        const countsBySource = new Map<unknown, number>(sourceValues.map(value => [value, 0]));
+        edgeResult.rows.forEach(edge => {
+          if (selectedTargetValues.has(edge.target_value)) {
+            countsBySource.set(edge.source_value, (countsBySource.get(edge.source_value) ?? 0) + 1);
+          }
+        });
+        return [{ sourceRows, countsBySource }];
+      }
+
+      const rows = await readSpec(targetSpec);
+      return spec.mode === 'resolve' ? [{ sourceRows, rows }] : rows;
+    }
+
     const { sourceField, targetField } = resolveRelatedRootFields(
       spec.target.root,
       spec.sourceEntity,
       spec.relationName,
+      spec.relationOwner,
     );
     const sourceEntityRows = await executeEntityRows(spec.source);
     const sourceRows =
@@ -345,25 +429,12 @@ const createPostgresBaseDataGraphRuntime = (
     count: (queryOrView, params) => {
       if (isRelatedRootReadSpec(queryOrView)) {
         return Effect.tryPromise({
-          try: async () => {
-            const { sourceField, targetField } = resolveRelatedRootFields(
-              queryOrView.target.root,
-              queryOrView.sourceEntity,
-              queryOrView.relationName,
-            );
-            const sourceValues = uniqueNonNullValues(
-              await executeEntityRows(queryOrView.source),
-              queryOrView.sourceEntity,
-              sourceField,
-            );
-            if (sourceValues.length === 0) return 0;
-            return (
-              await readSpec(withRelatedTargetPredicate(queryOrView, targetField, sourceValues), {
-                entityRows: true,
-                applyLimit: false,
-              })
-            ).length;
-          },
+          try: () =>
+            executeRelatedRootRead({
+              ...queryOrView,
+              mode: 'entityRows',
+              target: { ...queryOrView.target, limit: undefined },
+            }).then(rows => rows.length),
           catch: cause =>
             cause instanceof PostgresDataGraphError
               ? cause
