@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [138. Entity Mutation Command Authoring And Lifecycle Ergonomics](../current/138-entity-mutation-command-authoring.md)
+Parent plan: [138. Entity Mutation Command Authoring And Lifecycle Ergonomics](./138-entity-mutation-command-authoring.md)
 
 Canonical ID: `ontahi://plans/138a-client-entity-mutation-authoring`
 
@@ -104,5 +104,7 @@ objects.
     build passed;
   - Core typecheck and lint, repository formatting, all package builds, Changeset status, diff
     checks, and clean-room package artifact install/type/runtime verification passed.
-- Follow-up: [Plan 138b](../next/138b-conditional-exact-entity-mutations.md) owns portable conditional
-  evidence and authority-safe missing/stale/replaced outcomes; the parent Plan remains current.
+- Follow-up: [Plan 138b](./138b-conditional-exact-entity-mutations.md) added portable conditional
+  evidence and, when a conditional mutation affects no target, the single authority-safe
+  `entity_mutation_condition_not_met` outcome; it does not distinguish missing, stale, replaced,
+  or policy-hidden targets. An unconditional missing target remains an exact-cardinality failure.

@@ -559,6 +559,6 @@ experiment. Likely follow-ups are:
 - Remaining work is extracted rather than added to this closed research plan:
   - [136. Relation Constraints And Eligibility Semantics](../current/136-relation-constraints-and-eligibility.md)
   - [137. Reflected Relation Affordances](../current/137-reflected-relation-affordances.md)
-  - [138. Entity Mutation Command Authoring](../current/138-entity-mutation-command-authoring.md)
+  - [138. Entity Mutation Command Authoring](./138-entity-mutation-command-authoring.md)
   - [128. Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md) owns
     remaining client execution ergonomics and generic Entity Command transport.

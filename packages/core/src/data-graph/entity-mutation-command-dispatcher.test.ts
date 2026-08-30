@@ -31,8 +31,12 @@ const policyFor = (
       fields: ['id', 'title', 'published'],
       result: ['id', 'title', 'published'],
     },
-    update: { fields: ['title', 'published'], result: ['id', 'title', 'published'] },
-    delete: { result: ['id', 'title', 'published'] },
+    update: {
+      fields: ['title', 'published'],
+      if: ['title', 'published'],
+      result: ['id', 'title', 'published'],
+    },
+    delete: { if: ['title', 'published'], result: ['id', 'title', 'published'] },
   },
 });
 
@@ -58,6 +62,58 @@ describe('Entity Mutation Command dispatcher', () => {
         executeEntityMutation,
       }),
     ).toThrow('must allow stored mutation and result Fields');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          {
+            ...policyFor(graph),
+            actions: {
+              update: { fields: ['title'], if: ['label'], result: ['id'] },
+            },
+          },
+        ],
+        executeEntityMutation,
+      }),
+    ).toThrow('must allow stored mutation and result Fields');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          {
+            ...policyFor(graph),
+            actions: {
+              update: { fields: ['title'], if: ['published', 'published'], result: ['id'] },
+            },
+          },
+        ],
+        executeEntityMutation,
+      }),
+    ).toThrow('must allow stored mutation and result Fields');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          {
+            ...policyFor(graph),
+            actions: {
+              create: { fields: ['id'], if: ['published'], result: ['id'] },
+            },
+          } as never,
+        ],
+        executeEntityMutation,
+      }),
+    ).toThrow('requires a condition Field allowlist only for update/delete');
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          {
+            ...policyFor(graph),
+            actions: {
+              delete: { if: 'published', result: ['id'] },
+            },
+          } as never,
+        ],
+        executeEntityMutation,
+      }),
+    ).toThrow('requires a condition Field allowlist only for update/delete');
     expect(() =>
       createGraphCommandDispatcher({
         policies: [{ ...policyFor(graph), actions: {} }],
@@ -122,6 +178,42 @@ describe('Entity Mutation Command dispatcher', () => {
       updateOnly(toGraphCommandRequest(mutation.update(target, { published: true })), {
         authority: undefined,
       }),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    expect(executeEntityMutation).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit condition Field allowlist before execution', async () => {
+    const graph = defineBookGraph();
+    const executeEntityMutation = vi.fn();
+    const target = createEntityRef(graph.Book, { id: 'book-1' });
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            update: {
+              fields: ['title'],
+              if: ['published'],
+              result: ['id', 'title'],
+            },
+          },
+        },
+      ],
+      executeEntityMutation,
+    });
+
+    await expect(
+      dispatch(
+        toGraphCommandRequest(
+          mutateEntity(graph.Book).update(
+            target,
+            { title: 'Revised' },
+            { if: { internalNote: 'secret' } },
+          ),
+        ),
+        { authority: undefined },
+      ),
     ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
     expect(executeEntityMutation).not.toHaveBeenCalled();
   });
@@ -208,6 +300,40 @@ describe('Entity Mutation Command dispatcher', () => {
       },
     });
     expect(reportError).toHaveBeenCalledOnce();
+  });
+
+  it('collapses a zero-row conditional mutation into one authority-safe rejection', async () => {
+    const graph = defineBookGraph();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [policyFor(graph)],
+      executeEntityMutation: vi.fn(async () =>
+        Promise.reject(
+          Object.assign(new Error('provider detail'), {
+            reason: 'entity_mutation_condition_not_met',
+          }),
+        ),
+      ),
+    });
+    const command = mutateEntity(graph.Book).update(
+      createEntityRef(graph.Book, { id: 'book-1' }),
+      { title: 'Revised' },
+      { if: { published: false } },
+    );
+
+    await expect(
+      dispatch(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toEqual({
+      kind: 'graph-command-rejection',
+      diagnostic: {
+        reason: 'entity_mutation_condition_not_met',
+        rejection: {
+          version: 1,
+          code: 'entity_mutation_condition_not_met',
+          message: 'Entity mutation condition was not satisfied.',
+          parameters: { entityName: 'Book', action: 'update' },
+        },
+      },
+    });
   });
 
   it('does not describe a create provider failure as a missing target', async () => {

@@ -14,6 +14,8 @@ relatedPlans:
   - ontahi://plans/128a-ontahi-recursive-views-and-projectable-operation-results
   - ontahi://plans/128b-ontahi-projectable-operation-client-bridge
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
+  - ontahi://plans/138b-conditional-exact-entity-mutations
+  - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - bookops://plans/57-client-runtime-bridge-and-server-dispatch
@@ -74,6 +76,12 @@ Authority-derived row scope is intentionally not simulated with a pre-read. It r
 intersection with the mutation target and remains follow-up work. Generated client Entities are
 also not yet directly runtime-bound for fluent `.run()` outside the React executor, and telemetry,
 reflected policy diagnostics, bulk writes, and upsert remain future routing work.
+
+Exact Entity update/delete now also accept an equality condition over explicitly authorized stored
+Fields. In-memory, PostgreSQL, Supabase, and the remote bridge must apply identity, condition, and
+mutation as one atomic provider action. Conditional Commands cross a fail-closed versioned boundary
+and collapse a zero-row result into one authority-safe rejection rather than pre-reading to explain
+why it did not apply.
 
 Recursive caller-authored Views and projectable Selection-shaped Operation results now work in Core
 and through generated React clients. The caller supplies the materialization View, the Operation

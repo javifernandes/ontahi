@@ -120,7 +120,7 @@ describe('data graph Relationship Command protocol', () => {
     { name: 'non-object request', request: null, code: 'invalid_request' },
     {
       name: 'unsupported version',
-      request: { version: 2, kind: 'graph-command', command: {} },
+      request: { version: 3, kind: 'graph-command', command: {} },
       code: 'unsupported_version',
     },
     {
@@ -243,6 +243,56 @@ describe('data graph Entity Mutation Command protocol', () => {
     ]);
   });
 
+  it('uses a fail-closed protocol version for conditional exact mutations', () => {
+    const client = defineBookGraph();
+    const server = defineBookGraph();
+    const book = createEntityRef(client, { id: 'book-1' });
+    const command = mutateEntity(client).update(
+      book,
+      { title: '  Revised  ' },
+      { if: { title: '  Ontahi  ', published: false } },
+    );
+    const transported = JSON.parse(JSON.stringify(toGraphCommandRequest(command)));
+
+    expect(transported).toEqual({ version: 2, kind: 'graph-command', command });
+    const parsed = parseGraphCommandRequest(transported);
+    expect(parsed).toMatchObject({ success: true });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+    expect(resolveGraphCommandRequest(parsed.request, { entities: [server] })).toEqual({
+      success: true,
+      request: parsed.request,
+      command: mutateEntity(server).update(
+        createEntityRef(server, { id: 'book-1' }),
+        { title: 'Revised' },
+        { if: { title: 'Ontahi', published: false } },
+      ),
+    });
+
+    expect(parseGraphCommandRequest({ ...transported, version: 1 })).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_request' } },
+    });
+    expect(
+      parseGraphCommandRequest({
+        ...transported,
+        command: { ...transported.command, if: {} },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+    expect(
+      parseGraphCommandRequest({
+        version: 2,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'create',
+          entityName: 'Book',
+          values: { id: 'book-1', title: 'Ontahi', published: false },
+          if: { published: false },
+        },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+  });
+
   it.each([
     {
       name: 'invalid locator value',
@@ -298,6 +348,19 @@ describe('data graph Entity Mutation Command protocol', () => {
       code: 'invalid_payload',
     },
     {
+      name: 'unknown condition Field',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Book',
+        target: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+        values: { title: 'Revised' },
+        if: { sql: 'drop table books' },
+      },
+      version: 2,
+      code: 'invalid_condition',
+    },
+    {
       name: 'unknown Entity',
       command: {
         kind: 'entity-mutation-command',
@@ -307,9 +370,13 @@ describe('data graph Entity Mutation Command protocol', () => {
       },
       code: 'unknown_entity',
     },
-  ])('rejects an $name while rebuilding the server Command', ({ command, code }) => {
+  ])('rejects an $name while rebuilding the server Command', ({ command, code, version = 1 }) => {
     const Book = defineBookGraph();
-    const parsed = parseGraphCommandRequest({ version: 1, kind: 'graph-command', command });
+    const parsed = parseGraphCommandRequest({
+      version,
+      kind: 'graph-command',
+      command,
+    });
     expect(parsed).toMatchObject({ success: true });
     if (!parsed.success) throw new Error(parsed.error.error.message);
 

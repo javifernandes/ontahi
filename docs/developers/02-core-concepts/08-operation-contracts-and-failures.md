@@ -134,10 +134,10 @@ transfer: operation.atomic({
 ```
 
 Codegen analyzes the expression-bodied callback without invoking it and emits versioned JSON-safe
-IR. The server application and generated clients import the same condition registry. The
-authoring callback is never a runtime fallback: missing or stale generated metadata fails during
-application composition. Unsupported syntax fails codegen at its source line rather than becoming
-opaque JavaScript.
+portable expression metadata. The server application and generated clients import the same
+condition registry. The authoring callback is never a runtime fallback: missing or stale generated
+metadata fails during application composition. Unsupported syntax fails codegen at its source line
+rather than becoming opaque JavaScript.
 
 Every condition has a stable id such as `Student.transfer.pre.differentCourses`, declared input
 dependencies, and the conventional `operation_condition_rejected` failure. A client with the
@@ -156,11 +156,11 @@ if (condition) {
 }
 ```
 
-This is advisory UX. The authority evaluates the same IR again immediately before the body. A
-client result never reserves state or substitutes for authoritative execution. `unknown` means a
-dependency is unavailable; it is not rejection or permission denial.
+This is advisory UX. The authority evaluates the same portable expression again immediately before
+the body. A client result never reserves state or substitutes for authoritative execution.
+`unknown` means a dependency is unavailable; it is not rejection or permission denial.
 
-Runtime-only applications can author the same IR explicitly with
+Runtime-only applications can author the same portable expression explicitly with
 `modelExpression.condition(modelExpression.define(...))`. That is a parity escape hatch for
 environments without source analysis, not a second semantic model.
 
@@ -269,7 +269,7 @@ An operation currently has these distinct extension points:
 | --------------------- | ------------------------------------------------------------------------------ |
 | `input`               | Describe and validate admissible values.                                       |
 | `requires`            | Gate whether execution may be attempted in the current context.                |
-| named `contracts.pre` | Portable input conditions compiled to reflected Model Expression IR.           |
+| named `contracts.pre` | Portable input conditions compiled to reflected Model Expression metadata.     |
 | `contract(...)`       | Explicit opaque server-only pre/post checks.                                   |
 | `concerns`            | Wrap execution with cross-cutting behavior such as rate limiting or telemetry. |
 | success effects       | Emit events or run follow-up work only after a successful result.              |

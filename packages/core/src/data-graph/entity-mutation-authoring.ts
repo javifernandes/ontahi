@@ -7,6 +7,7 @@ import {
   type DeleteEntityMutationCommand,
   type EntityMutationCommand,
   type EntityMutationCommandExecutionRuntime,
+  type EntityMutationConditionOptions,
   type EntityMutationDelta,
   type UpdateEntityMutationCommand,
 } from './entity-mutation-command.js';
@@ -44,8 +45,11 @@ export type EntityRefMutationAuthoring<
 > = {
   update: (
     values: Partial<InferEntityMutationRecord<TEntity['fields']>>,
+    options?: EntityMutationConditionOptions<TEntity>,
   ) => CommandForExecutor<UpdateEntityMutationCommand<TEntity['name']>, TExecutor>;
-  delete: () => CommandForExecutor<DeleteEntityMutationCommand<TEntity['name']>, TExecutor>;
+  delete: (
+    options?: EntityMutationConditionOptions<TEntity>,
+  ) => CommandForExecutor<DeleteEntityMutationCommand<TEntity['name']>, TExecutor>;
 };
 
 const bindExecutableEntityMutationCommand = <
@@ -103,14 +107,17 @@ export const bindEntityRefMutationAuthoring = <
     update: {
       configurable: true,
       enumerable: false,
-      value: (values: Partial<InferEntityMutationRecord<TEntity['fields']>>) =>
-        bindCommandForExecutor(mutation.update(ref, values), executor),
+      value: (
+        values: Partial<InferEntityMutationRecord<TEntity['fields']>>,
+        options?: EntityMutationConditionOptions<TEntity>,
+      ) => bindCommandForExecutor(mutation.update(ref, values, options), executor),
       writable: true,
     },
     delete: {
       configurable: true,
       enumerable: false,
-      value: () => bindCommandForExecutor(mutation.delete(ref), executor),
+      value: (options?: EntityMutationConditionOptions<TEntity>) =>
+        bindCommandForExecutor(mutation.delete(ref, options), executor),
       writable: true,
     },
   });

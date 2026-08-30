@@ -60,9 +60,13 @@ export type EntityMutationCommandPolicy<TEntity extends AnyEntityDefinition = An
       };
       readonly update?: {
         readonly fields: EntityMutationPolicyFields<TEntity>;
+        readonly if?: EntityMutationPolicyFields<TEntity>;
         readonly result: EntityMutationPolicyFields<TEntity>;
       };
-      readonly delete?: { readonly result: EntityMutationPolicyFields<TEntity> };
+      readonly delete?: {
+        readonly if?: EntityMutationPolicyFields<TEntity>;
+        readonly result: EntityMutationPolicyFields<TEntity>;
+      };
     };
   };
 
@@ -164,11 +168,24 @@ const validateEntityMutationActionDeclaration = (
     mutationFields = declaration.fields;
   }
 
+  const hasConditionDeclaration = 'if' in declaration;
+  const conditionFields = hasConditionDeclaration ? declaration.if : [];
+  if (
+    (action === 'create' && hasConditionDeclaration) ||
+    (conditionFields !== undefined && !Array.isArray(conditionFields))
+  ) {
+    throw new Error(
+      `Entity Mutation Command policy ${policy.entity.name}.${action} requires a condition Field allowlist only for update/delete.`,
+    );
+  }
+
   const resultFields = declaration.result;
-  const fields = [...mutationFields, ...resultFields];
+  const effectiveConditionFields = conditionFields ?? [];
+  const fields = [...mutationFields, ...effectiveConditionFields, ...resultFields];
   if (
     (action !== 'delete' && mutationFields.length === 0) ||
     new Set(mutationFields).size !== mutationFields.length ||
+    new Set(effectiveConditionFields).size !== effectiveConditionFields.length ||
     new Set(resultFields).size !== resultFields.length ||
     fields.some(fieldName => {
       const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
@@ -332,11 +349,20 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     const declaration = policy.actions[command.action];
     const declarationFields =
       isRecord(declaration) && 'fields' in declaration ? declaration.fields : undefined;
+    const conditionFields =
+      isRecord(declaration) && 'if' in declaration && Array.isArray(declaration.if)
+        ? declaration.if
+        : undefined;
+    const commandConditionFields =
+      command.action !== 'create' && command.if ? Object.keys(command.if) : [];
     const allowed =
       isRecord(declaration) &&
       (command.action === 'delete' ||
         (Array.isArray(declarationFields) &&
-          Object.keys(command.values).every(fieldName => declarationFields.includes(fieldName))));
+          Object.keys(command.values).every(fieldName => declarationFields.includes(fieldName)))) &&
+      (commandConditionFields.length === 0 ||
+        (conditionFields !== undefined &&
+          commandConditionFields.every(fieldName => conditionFields.includes(fieldName))));
     if (!allowed) {
       return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
     }

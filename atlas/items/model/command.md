@@ -17,6 +17,8 @@ relatedPlans:
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands
   - ontahi://plans/138a-client-entity-mutation-authoring
+  - ontahi://plans/138b-conditional-exact-entity-mutations
+  - ontahi://plans/146-ontahi-runtime-protocol
   - bookops://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/command
 sourceCommit: 67713696
@@ -55,3 +57,11 @@ sets, upsert, and authority-derived atomic scopes remain later work.
 Direct Supabase execution lowers this same focused command
 through one PostgREST mutation, declared Entity/Ref mappings, and exact returning cardinality under
 the project's grants and RLS; this does not imply multi-command rollback.
+
+Exact Ref-targeted update/delete may carry an `if` equality condition over stored Entity Fields.
+The runtime combines identity and condition with the mutation atomically: one PostgreSQL statement,
+one filtered Supabase request, or one in-memory mutation boundary. A zero-row result becomes the
+single authority-safe `entity_mutation_condition_not_met` rejection; it does not classify the
+target as missing, changed, replaced, or policy-hidden. Remote policy allowlists condition Fields
+separately from writable and returned Fields. Conditional Commands use a fail-closed protocol
+version so an older receiver cannot discard the condition and execute an unconditional mutation.

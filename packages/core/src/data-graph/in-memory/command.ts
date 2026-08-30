@@ -14,6 +14,7 @@ import { applySelectionExpression } from './query.js';
 
 export type InMemoryDataGraphFailureReason =
   | 'cardinality_mismatch'
+  | 'entity_mutation_condition_not_met'
   | 'invalid_command'
   | 'relation_constraint_rejected'
   | 'relationship_precondition_failed'
@@ -123,6 +124,7 @@ const assertOneAffectedRow = (
     throw new InMemoryDataGraphError(
       `Expected exactly one affected row, got ${rows.length}.`,
       'cardinality_mismatch',
+      { actualAffectedRows: rows.length },
     );
   }
 };
