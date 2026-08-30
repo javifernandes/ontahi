@@ -49,7 +49,11 @@ const rect = (top: number, height: number) =>
     toJSON: () => undefined,
   }) satisfies DOMRect;
 
-const createProps = (moveTodo: TodoListCardProps['moveTodo']): TodoListCardProps => ({
+const createProps = (
+  moveTodo: TodoListCardProps['moveTodo'],
+  renameTodo: TodoListCardProps['renameTodo'] = vi.fn().mockResolvedValue(true),
+  overrides: Partial<TodoListCardProps> = {},
+): TodoListCardProps => ({
   list: {
     id: 'list-1',
     name: 'Inbox',
@@ -79,10 +83,12 @@ const createProps = (moveTodo: TodoListCardProps['moveTodo']): TodoListCardProps
   deleteList: vi.fn().mockResolvedValue(true),
   createTodo: vi.fn().mockResolvedValue(true),
   setTodoCompleted: vi.fn().mockResolvedValue(true),
+  renameTodo,
   deleteTodo: vi.fn().mockResolvedValue(true),
   toggleTodoTag: vi.fn().mockResolvedValue(true),
   createTagForTodo: vi.fn().mockResolvedValue(true),
   deleteTag: vi.fn().mockResolvedValue(true),
+  ...overrides,
 });
 
 describe('TodoListCard item reordering', () => {
@@ -164,6 +170,101 @@ describe('TodoListCard item reordering', () => {
     expect(moveTodo).not.toHaveBeenCalled();
   });
 
+  it('renames a todo inline after double-clicking its title', async () => {
+    const renameTodo = vi.fn().mockResolvedValue(true);
+    act(() => root.render(<TodoListCard {...createProps(vi.fn(), renameTodo)} />));
+
+    const firstItem = container.querySelector<HTMLElement>('[data-todo-id="todo-1"]')!;
+    act(() => firstItem.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Rename Todo 1"]')!;
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    act(() => {
+      valueSetter.call(input, 'Renamed todo');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input
+        .closest('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(renameTodo).toHaveBeenCalledWith('todo-1', 'Renamed todo');
+    expect(container.querySelector('input[aria-label="Rename Todo 1"]')).toBeNull();
+  });
+
+  it('also opens inline rename from the item action', () => {
+    act(() => root.render(<TodoListCard {...createProps(vi.fn())} />));
+
+    const renameButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Rename Todo 1"]',
+    )!;
+    act(() => renameButton.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+    expect(container.querySelector('input[aria-label="Rename Todo 1"]')).not.toBeNull();
+  });
+
+  it('closes the tag picker after creating and assigning a new tag', async () => {
+    const closePopovers = vi.fn();
+    const createTagForTodo = vi.fn().mockResolvedValue(true);
+    act(() =>
+      root.render(
+        <TodoListCard
+          {...createProps(vi.fn(), vi.fn().mockResolvedValue(true), {
+            closePopovers,
+            createTagForTodo,
+            openTagPickerTodoId: 'todo-1',
+          })}
+        />,
+      ),
+    );
+
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="New tag name"]')!;
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    act(() => {
+      valueSetter.call(input, 'New tag');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input
+        .closest('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(createTagForTodo).toHaveBeenCalledWith('todo-1', 'New tag');
+    expect(closePopovers).toHaveBeenCalledOnce();
+  });
+
+  it('supports keyboard rename entry and cancellation without dispatching unchanged titles', async () => {
+    const renameTodo = vi.fn().mockResolvedValue(true);
+    act(() => root.render(<TodoListCard {...createProps(vi.fn(), renameTodo)} />));
+
+    const firstItem = container.querySelector<HTMLElement>('[data-todo-id="todo-1"]')!;
+    act(() =>
+      firstItem.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+    );
+
+    let input = container.querySelector<HTMLInputElement>('input[aria-label="Rename Todo 1"]')!;
+    act(() => input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' })));
+    expect(container.querySelector('input[aria-label="Rename Todo 1"]')).toBeNull();
+
+    act(() =>
+      firstItem.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })),
+    );
+    input = container.querySelector<HTMLInputElement>('input[aria-label="Rename Todo 1"]')!;
+    await act(async () => {
+      input
+        .closest('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(renameTodo).not.toHaveBeenCalled();
+    expect(container.querySelector('input[aria-label="Rename Todo 1"]')).toBeNull();
+  });
+
   it('does not let another pointer replace the pending drag', () => {
     const moveTodo = vi.fn();
     act(() => root.render(<TodoListCard {...createProps(moveTodo)} />));
@@ -221,9 +322,9 @@ describe('TodoListCard item reordering', () => {
     });
 
     act(() => items[0]!.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 25 })));
-    expect(captured).toBe(true);
+    expect(captured).toBe(false);
 
-    act(() => items[0]!.dispatchEvent(pointerEvent('pointerup', { x: 400, y: 200 })));
+    act(() => document.dispatchEvent(pointerEvent('pointerup', { x: 400, y: 200 })));
     expect(captured).toBe(false);
 
     act(() => items[1]!.dispatchEvent(pointerEvent('pointerdown', { x: 100, y: 85 })));

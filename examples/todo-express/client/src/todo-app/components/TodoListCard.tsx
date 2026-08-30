@@ -1,5 +1,5 @@
 import { Check, ChevronDown, LoaderCircle, Palette, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CSSProperties,
   FormEvent,
@@ -24,6 +24,7 @@ type TodoListCardProps = {
   isDeleting: boolean;
   isDragging: boolean;
   completingTodoId?: string;
+  renamingTodoId?: string;
   deletingTodoId?: string;
   taggingTodoId?: string;
   deletingTagId?: string;
@@ -38,6 +39,7 @@ type TodoListCardProps = {
   deleteList: Dashboard['deleteList'];
   createTodo: Dashboard['createTodo'];
   setTodoCompleted: Dashboard['setTodoCompleted'];
+  renameTodo: Dashboard['renameTodo'];
   deleteTodo: Dashboard['deleteTodo'];
   toggleTodoTag: Dashboard['toggleTodoTag'];
   createTagForTodo: Dashboard['createTagForTodo'];
@@ -79,6 +81,7 @@ export const TodoListCard = ({
   isDeleting,
   isDragging,
   completingTodoId,
+  renamingTodoId,
   deletingTodoId,
   taggingTodoId,
   deletingTagId,
@@ -93,6 +96,7 @@ export const TodoListCard = ({
   deleteList,
   createTodo,
   setTodoCompleted,
+  renameTodo,
   deleteTodo,
   toggleTodoTag,
   createTagForTodo,
@@ -157,22 +161,37 @@ export const TodoListCard = ({
     if (await createTodo(list.id, todoTitle)) setTodoTitle('');
   };
 
-  const updateTodoDropPreview = (preview?: TodoDropPreview) => {
+  const updateTodoDropPreview = useCallback((preview?: TodoDropPreview) => {
     todoDropPreviewRef.current = preview;
     setTodoDropPreview(current => {
       if (!current && !preview) return current;
       if (current && preview && current.beforeTodoId === preview.beforeTodoId) return current;
       return preview;
     });
-  };
+  }, []);
 
-  const finishTodoDrag = () => {
+  const finishTodoDrag = useCallback(() => {
     todoPointerDrag.current = undefined;
     draggingTodoIdRef.current = undefined;
     setDraggingTodoId(undefined);
     setTodoDragOverlay(undefined);
     updateTodoDropPreview(undefined);
-  };
+  }, [updateTodoDropPreview]);
+
+  useEffect(() => {
+    const finishPendingTodoDrag = (event: PointerEvent) => {
+      const drag = todoPointerDrag.current;
+      if (!drag || drag.moved || drag.pointerId !== event.pointerId) return;
+      finishTodoDrag();
+    };
+
+    document.addEventListener('pointerup', finishPendingTodoDrag);
+    document.addEventListener('pointercancel', finishPendingTodoDrag);
+    return () => {
+      document.removeEventListener('pointerup', finishPendingTodoDrag);
+      document.removeEventListener('pointercancel', finishPendingTodoDrag);
+    };
+  }, [finishTodoDrag]);
 
   const previewTodoDrop = (targetTodoId: string, pointerY: number, target: HTMLElement) => {
     const movingTodoId = draggingTodoIdRef.current;
@@ -230,7 +249,6 @@ export const TodoListCard = ({
       return;
     }
     const bounds = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.setPointerCapture(event.pointerId);
     todoPointerDrag.current = {
       id: todoId,
       pointerId: event.pointerId,
@@ -256,6 +274,7 @@ export const TodoListCard = ({
     }
     if (!drag.moved) {
       drag.moved = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
       draggingTodoIdRef.current = drag.id;
       setDraggingTodoId(drag.id);
       closePopovers();
@@ -486,6 +505,7 @@ export const TodoListCard = ({
                     tags={tags}
                     canComplete={canComplete}
                     isCompleting={completingTodoId === todo.id}
+                    isRenaming={renamingTodoId === todo.id}
                     isDeleting={deletingTodoId === todo.id}
                     isDragging={draggingTodoId === todo.id}
                     isTagging={taggingTodoId === todo.id}
@@ -499,6 +519,7 @@ export const TodoListCard = ({
                     cancelPointerDragging={cancelTodoPointerDrag}
                     moveBy={direction => moveTodoBy(todo.id, direction)}
                     setTodoCompleted={setTodoCompleted}
+                    renameTodo={renameTodo}
                     deleteTodo={deleteTodo}
                     toggleTodoTag={toggleTodoTag}
                     createTagForTodo={createTagForTodo}

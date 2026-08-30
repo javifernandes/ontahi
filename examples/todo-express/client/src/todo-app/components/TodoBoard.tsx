@@ -87,6 +87,7 @@ export const TodoBoard = ({
   recoloringListId,
   deletingListId,
   completingTodoId,
+  renamingTodoId,
   deletingTodoId,
   taggingTodoId,
   deletingTagId,
@@ -97,6 +98,7 @@ export const TodoBoard = ({
   deleteList,
   createTodo,
   setTodoCompleted,
+  renameTodo,
   deleteTodo,
   toggleTodoTag,
   createTagForTodo,
@@ -369,6 +371,7 @@ export const TodoBoard = ({
                 isDeleting={deletingListId === list.id}
                 isDragging={draggingListId === list.id}
                 completingTodoId={completingTodoId}
+                renamingTodoId={renamingTodoId}
                 deletingTodoId={deletingTodoId}
                 taggingTodoId={taggingTodoId}
                 deletingTagId={deletingTagId}
@@ -391,6 +394,7 @@ export const TodoBoard = ({
                 deleteList={deleteList}
                 createTodo={createTodo}
                 setTodoCompleted={setTodoCompleted}
+                renameTodo={renameTodo}
                 deleteTodo={deleteTodo}
                 toggleTodoTag={toggleTodoTag}
                 createTagForTodo={createTagForTodo}
