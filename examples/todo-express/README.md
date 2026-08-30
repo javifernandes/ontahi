@@ -95,7 +95,9 @@ pnpm --filter @ontahi/example-todo-express dev:postgres
 ```
 
 The Compose service persists data in a named volume. Use `db:stop` to stop it or `db:reset` to
-recreate the database and reapply `migrations/001-create-todos.sql`.
+recreate the database and reapply every file in `migrations/`. PostgreSQL only runs these init
+scripts when creating the volume, so reset an existing example database after pulling a new
+migration.
 
 You can also create a list and then a todo item directly through Ontahi's transport-neutral invocation
 protocol:
@@ -103,7 +105,7 @@ protocol:
 ```sh
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoList.create","input":{"id":"list-1","name":"Inbox"}}'
+  -d '{"kind":"invoke","operationId":"TodoList.create","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
 
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \

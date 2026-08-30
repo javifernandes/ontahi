@@ -224,7 +224,6 @@ export const TodoBoard = ({
 
     const position = reconciledDeskLayout[listId];
     if (!position) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
     cardDrag.current = {
       id: listId,
       pointerId: event.pointerId,
@@ -245,7 +244,10 @@ export const TodoBoard = ({
     const deltaY = event.clientY - drag.pointerY;
     if (!drag.moved && Math.hypot(deltaX, deltaY) < 5) return;
 
-    drag.moved = true;
+    if (!drag.moved) {
+      drag.moved = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     event.preventDefault();
     setDraggingListId(drag.id);
     setDeskLayout(current => {
@@ -340,6 +342,7 @@ export const TodoBoard = ({
               style={cardPositionStyle(position)}
               data-desk-card
               tabIndex={0}
+              role='group'
               aria-label={`Move ${list.name} card. Drag it or use arrow keys.`}
               onPointerDown={event => beginCardDrag(event, list.id)}
               onPointerMove={moveCard}

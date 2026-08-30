@@ -180,7 +180,14 @@ export const TodoItem = entity({
         }),
         bridge: { invalidate: [['TodoItem']] },
         *run({ todo }) {
-          const tags = yield* tagCommands.all().run();
+          const tags = yield* tagEntities
+            .relatedTo(
+              todoEntities.selection(candidate => candidate.id.eq(todo.id)),
+              {
+                through: 'tags',
+              },
+            )
+            .run();
           for (const tag of tags) {
             yield* todoEntities.refById(todo.id).tags.remove(tagEntities.refById(tag.id)).run();
           }
@@ -196,7 +203,14 @@ export const TodoItem = entity({
         }),
         bridge: { invalidate: [['Tag'], ['TodoItem']] },
         *run({ tag }) {
-          const todos = yield* todoEntities.all().run();
+          const todos = yield* todoEntities
+            .relatedTo(
+              tagEntities.selection(candidate => candidate.id.eq(tag.id)),
+              {
+                through: 'tags',
+              },
+            )
+            .run();
           for (const todo of todos) {
             yield* todoEntities.refById(todo.id).tags.remove(tag.ref).run();
           }

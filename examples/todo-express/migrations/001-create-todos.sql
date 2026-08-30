@@ -1,7 +1,6 @@
 CREATE TABLE todo_lists (
   id text PRIMARY KEY,
-  name text NOT NULL,
-  color text NOT NULL
+  name text NOT NULL
 );
 
 CREATE TABLE todo_items (

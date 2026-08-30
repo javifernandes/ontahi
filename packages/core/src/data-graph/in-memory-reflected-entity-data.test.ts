@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createEntityRef,
   createInMemoryDataGraphStorage,
   createRuntimeBoundDataGraphApi,
   entity,
@@ -11,6 +12,7 @@ import {
   mapRelation,
   query,
   type InMemoryDataset,
+  type RelationshipFact,
 } from './index.js';
 
 describe('in-memory reflected entity data', () => {
@@ -179,5 +181,108 @@ describe('in-memory reflected entity data', () => {
       rows: [{ id: 'course-1', capacity: 4, availableSeats: 4 }],
     });
     expect(dataset.ReflectedCourse).toEqual([{ id: 'course-1', capacity: 4 }]);
+  });
+
+  it('validates and paginates reflected inverse many-to-many reads', async () => {
+    const Tag = entity('ReflectedTag', {
+      id: field.id(),
+      name: field.string(),
+    });
+    const Todo = entity('ReflectedTodo', {
+      id: field.id(),
+      title: field.string(),
+    })
+      .manyToMany('tags', Tag)
+      .display({ primary: 'title' });
+    const tag = createEntityRef(Tag, { id: 'tag-1' });
+    const todos = Array.from({ length: 12 }, (_, index) => ({
+      id: `todo-${index + 1}`,
+      title: `Todo ${index + 1}`,
+    }));
+    const relation = {
+      sourceEntityName: 'ReflectedTodo',
+      relationName: 'tags',
+      targetEntityName: 'ReflectedTag',
+      cardinality: 'many-to-many',
+    } as const;
+    const relationships: RelationshipFact[] = todos.map(todo => ({
+      relation,
+      source: createEntityRef(Todo, { id: todo.id }),
+      target: tag,
+    }));
+    const storage = createInMemoryDataGraphStorage({
+      entities: [Todo, Tag],
+      dataset: {
+        ReflectedTodo: todos,
+        ReflectedTag: [{ id: 'tag-1', name: 'Shared' }],
+      },
+      relationships,
+    });
+    const readRelatedEntityData = storage.readRelatedEntityData!;
+
+    await expect(
+      readRelatedEntityData({
+        source: tag,
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'ReflectedTag',
+        targetEntityName: 'ReflectedTodo',
+        page: 2,
+        pageSize: 10,
+      }),
+    ).resolves.toMatchObject({
+      entityName: 'ReflectedTodo',
+      display: { primary: 'title' },
+      rows: [
+        { id: 'todo-11', title: 'Todo 11' },
+        { id: 'todo-12', title: 'Todo 12' },
+      ],
+      page: 2,
+      pageSize: 10,
+      totalCount: 12,
+      hasPreviousPage: true,
+      hasNextPage: false,
+    });
+
+    await expect(
+      readRelatedEntityData({
+        source: tag,
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'ReflectedTag',
+        targetEntityName: 'ReflectedTodo',
+        page: 0,
+        pageSize: 7,
+      }),
+    ).resolves.toMatchObject({
+      page: 1,
+      pageSize: 25,
+      totalCount: 12,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+
+    await expect(
+      readRelatedEntityData({
+        source: { ...tag, entityName: 'MissingSource' },
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'MissingSource',
+        targetEntityName: 'ReflectedTodo',
+      }),
+    ).rejects.toThrow('Unknown graph Entity: MissingSource');
+    await expect(
+      readRelatedEntityData({
+        source: tag,
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'ReflectedTodo',
+        targetEntityName: 'ReflectedTag',
+      }),
+    ).rejects.toThrow('Unknown graph Entity: ReflectedTodo');
+    await expect(
+      readRelatedEntityData({
+        source: tag,
+        relationName: 'ReflectedTodo.tags',
+        sourceEntityName: 'ReflectedTag',
+        targetEntityName: 'MissingTarget',
+      }),
+    ).rejects.toThrow('Unknown graph Entity: MissingTarget');
   });
 });

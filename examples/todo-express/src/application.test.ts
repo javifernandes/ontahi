@@ -275,17 +275,27 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', list: 'list-1', title: 'Remove me', completed: false },
       { id: 'todo-2', list: 'list-1', title: 'Keep me', completed: false },
     ];
-    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Attached', color: '#dd6658' }];
+    getTodoDataset().Tag = [
+      { id: 'tag-1', name: 'Attached', color: '#dd6658' },
+      { id: 'tag-2', name: 'Keep attached', color: '#6f8d72' },
+    ];
     const relation = relationshipSet(
       TodoItem,
       'tags',
       createEntityRef(TodoItem, { id: 'todo-1' }),
     ).add(createEntityRef(Tag, { id: 'tag-1' })).relation;
-    getTodoRelationships().push({
-      relation,
-      source: createEntityRef(TodoItem, { id: 'todo-1' }),
-      target: createEntityRef(Tag, { id: 'tag-1' }),
-    });
+    getTodoRelationships().push(
+      {
+        relation,
+        source: createEntityRef(TodoItem, { id: 'todo-1' }),
+        target: createEntityRef(Tag, { id: 'tag-1' }),
+      },
+      {
+        relation,
+        source: createEntityRef(TodoItem, { id: 'todo-2' }),
+        target: createEntityRef(Tag, { id: 'tag-2' }),
+      },
+    );
 
     const response = await invoke('TodoItem.delete', {
       todo: entityRef('TodoItem', 'todo-1'),
@@ -299,24 +309,41 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().TodoItem).toEqual([
       { id: 'todo-2', list: 'list-1', title: 'Keep me', completed: false },
     ]);
-    expect(getTodoRelationships()).toEqual([]);
+    expect(getTodoRelationships()).toEqual([
+      {
+        relation,
+        source: createEntityRef(TodoItem, { id: 'todo-2' }),
+        target: createEntityRef(Tag, { id: 'tag-2' }),
+      },
+    ]);
   });
 
   it('deletes a Tag and unlinks it from every TodoItem', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Tagged', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Keep tagged', completed: false },
     ];
-    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Temporary', color: '#dd6658' }];
+    getTodoDataset().Tag = [
+      { id: 'tag-1', name: 'Temporary', color: '#dd6658' },
+      { id: 'tag-2', name: 'Persistent', color: '#6f8d72' },
+    ];
     const relation = relationshipSet(
       TodoItem,
       'tags',
       createEntityRef(TodoItem, { id: 'todo-1' }),
     ).add(createEntityRef(Tag, { id: 'tag-1' })).relation;
-    getTodoRelationships().push({
-      relation,
-      source: createEntityRef(TodoItem, { id: 'todo-1' }),
-      target: createEntityRef(Tag, { id: 'tag-1' }),
-    });
+    getTodoRelationships().push(
+      {
+        relation,
+        source: createEntityRef(TodoItem, { id: 'todo-1' }),
+        target: createEntityRef(Tag, { id: 'tag-1' }),
+      },
+      {
+        relation,
+        source: createEntityRef(TodoItem, { id: 'todo-2' }),
+        target: createEntityRef(Tag, { id: 'tag-2' }),
+      },
+    );
 
     const response = await invoke('TodoItem.deleteTag', { tag: entityRef('Tag', 'tag-1') });
 
@@ -325,8 +352,14 @@ describe('Ontahi todo portability example', () => {
       kind: 'invocation-result',
       result: { ok: true, kind: 'success' },
     });
-    expect(getTodoDataset().Tag).toEqual([]);
-    expect(getTodoRelationships()).toEqual([]);
+    expect(getTodoDataset().Tag).toEqual([{ id: 'tag-2', name: 'Persistent', color: '#6f8d72' }]);
+    expect(getTodoRelationships()).toEqual([
+      {
+        relation,
+        source: createEntityRef(TodoItem, { id: 'todo-2' }),
+        target: createEntityRef(Tag, { id: 'tag-2' }),
+      },
+    ]);
   });
 
   it('returns the canonical validation result for invalid input', async () => {

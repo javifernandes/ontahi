@@ -9,6 +9,7 @@ import {
   createRuntimeBoundDataGraphApi,
   entity,
   field,
+  type RelationshipFact,
 } from './index.js';
 
 describe('in-memory relation-root reads', () => {
@@ -113,5 +114,121 @@ describe('in-memory relation-root reads', () => {
       Stream.runCollect(runtime.stream(projectedBooks.build(), undefined)),
     );
     expect(Array.from(streamed)).toEqual([{ slug: 'alpha' }, { slug: 'beta' }]);
+  });
+
+  it('traverses many-to-many facts in both directions and groups counts by source', async () => {
+    const Tag = entity('RelationTag', {
+      id: field.id(),
+      name: field.string(),
+    });
+    const Todo = entity('RelationTodo', {
+      id: field.id(),
+      title: field.string(),
+    }).manyToMany('tags', Tag);
+    const relation = {
+      sourceEntityName: 'RelationTodo',
+      relationName: 'tags',
+      targetEntityName: 'RelationTag',
+      cardinality: 'many-to-many',
+    } as const;
+    const relationships: RelationshipFact[] = [
+      {
+        relation,
+        source: createEntityRef(Todo, { id: 'todo-1' }),
+        target: createEntityRef(Tag, { id: 'tag-1' }),
+      },
+      {
+        relation,
+        source: createEntityRef(Todo, { id: 'todo-1' }),
+        target: createEntityRef(Tag, { id: 'tag-2' }),
+      },
+      {
+        relation,
+        source: createEntityRef(Todo, { id: 'todo-2' }),
+        target: createEntityRef(Tag, { id: 'tag-2' }),
+      },
+      {
+        relation: { ...relation, relationName: 'other' },
+        source: createEntityRef(Todo, { id: 'todo-2' }),
+        target: createEntityRef(Tag, { id: 'tag-1' }),
+      },
+    ];
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        RelationTodo: [
+          { id: 'todo-1', title: 'First' },
+          { id: 'todo-2', title: 'Second' },
+        ],
+        RelationTag: [
+          { id: 'tag-1', name: 'Urgent' },
+          { id: 'tag-2', name: 'Framework' },
+        ],
+      },
+      relationships,
+    });
+    const graph = createRuntimeBoundDataGraphApi(() => runtime);
+    const Todos = graph.bindSelectionEntity(Todo);
+    const Tags = graph.bindSelectionEntity(Tag);
+    const selectedTodos = Todos.selection(todo => todo.id.in(['todo-1', 'todo-2']));
+    const tags = Tags.relatedTo(selectedTodos, { through: 'tags' }).orderBy(tag => tag.id);
+
+    await expect(Effect.runPromise(tags.resolve())).resolves.toEqual({
+      sourceRows: [
+        { id: 'todo-1', title: 'First' },
+        { id: 'todo-2', title: 'Second' },
+      ],
+      rows: [
+        { id: 'tag-1', name: 'Urgent' },
+        { id: 'tag-2', name: 'Framework' },
+      ],
+    });
+    await expect(Effect.runPromise(tags.countBySource())).resolves.toEqual({
+      sourceRows: [
+        { id: 'todo-1', title: 'First' },
+        { id: 'todo-2', title: 'Second' },
+      ],
+      countsBySource: new Map([
+        ['todo-1', 2],
+        ['todo-2', 1],
+      ]),
+    });
+    await expect(Effect.runPromise(tags.limit(1).count())).resolves.toBe(2);
+
+    await expect(
+      Effect.runPromise(
+        Todos.relatedTo(
+          Tags.selection(tag => tag.id.eq('tag-2')),
+          { through: 'tags' },
+        )
+          .orderBy(todo => todo.id)
+          .run(),
+      ),
+    ).resolves.toEqual([
+      { id: 'todo-1', title: 'First' },
+      { id: 'todo-2', title: 'Second' },
+    ]);
+  });
+
+  it('rejects many-to-many traversal when either Entity lacks an identity', async () => {
+    const AnonymousTag = entity('AnonymousTag', { name: field.string() });
+    const Todo = entity('IdentifiedTodo', { id: field.id() }).manyToMany('tags', AnonymousTag);
+    const runtime = createInMemoryDataGraphRuntime({
+      dataset: {
+        IdentifiedTodo: [{ id: 'todo-1' }],
+        AnonymousTag: [{ name: 'No identity' }],
+      },
+    });
+    const graph = createRuntimeBoundDataGraphApi(() => runtime);
+    const Todos = graph.bindSelectionEntity(Todo);
+    const Tags = graph.bindSelectionEntity(AnonymousTag);
+
+    await expect(
+      Effect.runPromise(
+        Tags.relatedTo(
+          Todos.selection(todo => todo.id.eq('todo-1')),
+          { through: 'tags' },
+        ).run(),
+      ),
+    ).rejects.toThrow('Failed to execute in-memory read.');
   });
 });

@@ -298,6 +298,7 @@ a {
 
 .list-card {
   --card-tilt: 0deg;
+
   position: relative;
   display: flex;
   flex-direction: column;

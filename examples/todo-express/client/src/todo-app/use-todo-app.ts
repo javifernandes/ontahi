@@ -19,7 +19,7 @@ import { allTodoItemsQuery, tagsQuery, todoListsQuery } from '../todo-queries.js
 
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
-import { canDeleteTodoList, groupTodoLists } from './todo-list-state.js';
+import { deleteTodoListWithItems, groupTodoLists } from './todo-list-state.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
@@ -174,12 +174,33 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
 
   const deleteList = async (listId: string) => {
     setActionError(undefined);
+    if (todos.isLoading || todos.isError) {
+      setActionError('Todo items are unavailable. Refresh the board before deleting this list.');
+      return false;
+    }
+
     setDeletingListId(listId);
     try {
-      const result = await deleteListOperation.executeAsync({ list: TodoList.refById(listId) });
-      const message = operationMessage(result, 'The list could not be deleted.');
-      setActionError(message);
-      return !message;
+      const list = dashboardLists.find(candidate => candidate.id === listId);
+      return deleteTodoListWithItems({
+        itemIds: (list?.items ?? []).map(todo => todo.id),
+        deleteItem: async todoId => {
+          const result = await deleteTodoOperation.executeAsync({
+            todo: TodoItem.refById(todoId),
+          });
+          const message = operationMessage(result, 'One of the list items could not be deleted.');
+          setActionError(message);
+          return !message;
+        },
+        deleteList: async () => {
+          const result = await deleteListOperation.executeAsync({
+            list: TodoList.refById(listId),
+          });
+          const message = operationMessage(result, 'The list could not be deleted.');
+          setActionError(message);
+          return !message;
+        },
+      });
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be deleted.'));
       return false;
@@ -341,10 +362,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       signOut,
     },
     dashboard: {
-      lists: dashboardLists.map(list => ({
-        ...list,
-        canDelete: canDeleteTodoList({ isLoading: todos.isLoading, itemCount: list.items.length }),
-      })),
+      lists: dashboardLists,
       tags: tags.data ?? [],
       isLoading: lists.isLoading || todos.isLoading,
       isError: lists.isError || todos.isError || tags.isError,

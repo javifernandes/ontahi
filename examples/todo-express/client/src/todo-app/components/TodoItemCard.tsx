@@ -120,6 +120,7 @@ export const TodoItemCard = ({
       data-todo-id={todo.id}
       draggable
       tabIndex={0}
+      role='listitem'
       aria-label={`${todo.title}. Drag to reorder; arrow keys also work.`}
       onDragStart={startDragging}
       onDragOver={dragOver}

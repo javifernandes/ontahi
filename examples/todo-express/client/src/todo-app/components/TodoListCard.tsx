@@ -257,14 +257,7 @@ export const TodoListCard = ({
             </form>
           ) : (
             <div className='list-name-row'>
-              <h3
-                className='list-name'
-                onKeyDown={event => {
-                  if (event.key === 'Enter') setIsEditingName(true);
-                }}
-                tabIndex={0}
-                title='Double-click to collapse or expand'
-              >
+              <h3 className='list-name' title='Double-click to collapse or expand'>
                 {list.name}
               </h3>
               <button
@@ -335,7 +328,11 @@ export const TodoListCard = ({
 
           {isConfirmingDelete ? (
             <div className='delete-confirmation'>
-              <span>Delete?</span>
+              <span>
+                {list.items.length > 0
+                  ? `Delete ${list.items.length} ${list.items.length === 1 ? 'item' : 'items'}?`
+                  : 'Delete?'}
+              </span>
               <button
                 type='button'
                 className='icon-button danger-icon'
@@ -365,9 +362,9 @@ export const TodoListCard = ({
               type='button'
               className='icon-button delete-list'
               onClick={() => setIsConfirmingDelete(true)}
-              disabled={!list.canDelete}
+              disabled={isDeleting}
               aria-label={`Delete ${list.name}`}
-              title={list.canDelete ? 'Delete list' : 'A list must be empty before deleting it'}
+              title='Delete list and its items'
             >
               <Trash2 aria-hidden='true' />
             </button>
@@ -379,6 +376,7 @@ export const TodoListCard = ({
         <>
           <div
             className='todo-stack'
+            role='list'
             onDragOver={event => {
               if (draggingTodoIdRef.current && event.target === event.currentTarget) {
                 event.preventDefault();
