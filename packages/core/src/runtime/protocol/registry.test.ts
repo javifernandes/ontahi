@@ -94,6 +94,65 @@ describe('Runtime Protocol family registry', () => {
     });
   });
 
+  it('rejects malformed outer envelopes before family parsing', () => {
+    const registry = createRuntimeProtocolRegistry([echoFamily] as const);
+
+    expect(registry.parseRequest(null)).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_envelope' } },
+    });
+  });
+
+  it('rejects non-JSON family results without leaking non-JSON errors', () => {
+    const invalidCanonicalFamily = defineRuntimeProtocolFamily({
+      name: 'test.invalid-canonical',
+      parseRequest: () => ({ success: true as const, request: { run: () => undefined } }),
+    });
+    const nonJsonErrorFamily = defineRuntimeProtocolFamily({
+      name: 'test.non-json-error',
+      parseRequest: () => ({ success: false as const, error: new Error('private error') }),
+    });
+    const registry = createRuntimeProtocolRegistry([
+      invalidCanonicalFamily,
+      nonJsonErrorFamily,
+    ] as const);
+
+    expect(
+      registry.parseRequest(
+        createRuntimeProtocolRequest({
+          id: 'request-invalid-canonical',
+          family: 'test.invalid-canonical',
+          body: {},
+        }),
+      ),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_family_request' } },
+    });
+    expect(
+      registry.parseRequest(
+        createRuntimeProtocolRequest({
+          id: 'request-private-error',
+          family: 'test.non-json-error',
+          body: {},
+        }),
+      ),
+    ).toEqual({
+      success: false,
+      error: {
+        protocol: 'ontahi.runtime',
+        version: 1,
+        id: 'request-private-error',
+        kind: 'protocol-error',
+        family: 'test.non-json-error',
+        error: {
+          code: 'invalid_family_request',
+          message: 'Runtime Protocol family test.non-json-error rejected its request body.',
+        },
+      },
+    });
+  });
+
   it('rejects duplicate and invalid family registration eagerly', () => {
     expect(() => createRuntimeProtocolRegistry([echoFamily, echoFamily])).toThrow(
       'Duplicate Runtime Protocol family test.echo.',
@@ -103,6 +162,11 @@ describe('Runtime Protocol family registry', () => {
         name: 'Not A Family',
         parseRequest: echoFamily.parseRequest,
       }),
+    ).toThrow('Invalid Runtime Protocol family name "Not A Family".');
+    expect(() =>
+      createRuntimeProtocolRegistry([
+        { name: 'Not A Family', parseRequest: echoFamily.parseRequest },
+      ]),
     ).toThrow('Invalid Runtime Protocol family name "Not A Family".');
   });
 });

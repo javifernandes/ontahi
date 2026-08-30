@@ -96,8 +96,15 @@ export const runtimeProtocolError = (
   code: RuntimeProtocolErrorCode,
   message: string,
   context: RuntimeProtocolErrorContext = {},
-): RuntimeProtocolError =>
-  cloneJson({
+): RuntimeProtocolError => {
+  if (context.id !== undefined && !isRequestId(context.id)) {
+    throw new TypeError('Runtime Protocol error id is invalid.');
+  }
+  if (context.family !== undefined && !isRuntimeProtocolFamilyName(context.family)) {
+    throw new TypeError('Runtime Protocol error family is invalid.');
+  }
+
+  return cloneJson({
     protocol: RUNTIME_PROTOCOL_NAME,
     version: RUNTIME_PROTOCOL_VERSION,
     ...(context.id === undefined ? {} : { id: context.id }),
@@ -109,6 +116,7 @@ export const runtimeProtocolError = (
       ...(context.details === undefined ? {} : { details: context.details }),
     },
   });
+};
 
 export const isRuntimeProtocolError = (value: unknown): value is RuntimeProtocolError =>
   isRecord(value) &&

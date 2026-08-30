@@ -49,6 +49,13 @@ describe('Runtime Protocol envelope', () => {
       code: 'unsupported_version',
     },
     {
+      name: 'wrong protocol name',
+      mutate: (request: Record<string, unknown>) => {
+        request.protocol = 'another.protocol';
+      },
+      code: 'invalid_envelope',
+    },
+    {
       name: 'unknown strict key',
       mutate: (request: Record<string, unknown>) => {
         request.requires = ['stronger-semantics'];
@@ -56,9 +63,23 @@ describe('Runtime Protocol envelope', () => {
       code: 'invalid_envelope',
     },
     {
+      name: 'wrong message kind',
+      mutate: (request: Record<string, unknown>) => {
+        request.kind = 'response';
+      },
+      code: 'invalid_envelope',
+    },
+    {
       name: 'empty correlation id',
       mutate: (request: Record<string, unknown>) => {
         request.id = '';
+      },
+      code: 'invalid_envelope',
+    },
+    {
+      name: 'invalid family name',
+      mutate: (request: Record<string, unknown>) => {
+        request.family = 'Graph Read';
       },
       code: 'invalid_envelope',
     },
@@ -83,6 +104,28 @@ describe('Runtime Protocol envelope', () => {
       success: false,
       error: { kind: 'protocol-error', error: { code } },
     });
+  });
+
+  it('rejects a non-object envelope before inspecting protocol fields', () => {
+    expect(parseRuntimeProtocolRequestEnvelope(null)).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_envelope' } },
+    });
+  });
+
+  it('rejects invalid authored requests and non-JSON response bodies', () => {
+    expect(() =>
+      createRuntimeProtocolRequest({ id: '', family: 'graph.read', body: graphReadBody }),
+    ).toThrow('Runtime Protocol request id must be a non-empty string');
+
+    const request = createRuntimeProtocolRequest({
+      id: 'request-123',
+      family: 'graph.read',
+      body: graphReadBody,
+    });
+    expect(() => createRuntimeProtocolResponse(request, { run: () => undefined })).toThrow(
+      'Runtime Protocol response envelope must be JSON-safe.',
+    );
   });
 
   it('correlates a JSON-safe response without reinterpreting its family semantics', () => {
@@ -160,6 +203,23 @@ describe('Runtime Protocol envelope', () => {
       success: true,
       response,
     });
+  });
+
+  it.each([
+    {
+      name: 'empty request id',
+      context: { id: '' },
+      message: 'Runtime Protocol error id is invalid.',
+    },
+    {
+      name: 'invalid family name',
+      context: { family: 'Graph Read' },
+      message: 'Runtime Protocol error family is invalid.',
+    },
+  ])('refuses to create a protocol error with an $name', ({ context, message }) => {
+    expect(() => runtimeProtocolError('invalid_envelope', 'Invalid request.', context)).toThrow(
+      message,
+    );
   });
 
   it('rejects a protocol error that omits exchange correlation', () => {

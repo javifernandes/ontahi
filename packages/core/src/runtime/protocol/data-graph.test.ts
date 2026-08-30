@@ -10,9 +10,13 @@ import {
   toGraphReadRequest,
 } from '../../data-graph/index.js';
 
-import { graphCommandRuntimeProtocolFamily, graphReadRuntimeProtocolFamily } from './data-graph.js';
-import { createRuntimeProtocolRequest, createRuntimeProtocolResponse } from './envelope.js';
-import { createRuntimeProtocolRegistry } from './registry.js';
+import {
+  createRuntimeProtocolRegistry,
+  createRuntimeProtocolRequest,
+  createRuntimeProtocolResponse,
+  graphCommandRuntimeProtocolFamily,
+  graphReadRuntimeProtocolFamily,
+} from './index.js';
 
 const Book = entity('Book', {
   id: field.id(),
