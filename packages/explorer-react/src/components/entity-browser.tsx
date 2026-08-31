@@ -1,8 +1,18 @@
 'use client';
 
 import { useHasReflectedEntityDataReader } from '@ontahi/react/graph';
+import { QueryClientContext } from '@tanstack/react-query';
 import { Boxes, Braces, Check, ChevronsUpDown, Network, Search } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 
 import type {
   ExplorerEntityDetail,
@@ -243,12 +253,21 @@ const EntityBrowserDetail = ({
   tasks: ExplorerTaskDescriptor[];
   onTabChange: (tab: ExplorerEntityBrowserTab) => void;
 }) => {
+  const queryClient = useContext(QueryClientContext);
   const canShowData = Boolean(renderDataPanel && !entity.relationOwner);
   const effectiveTab = parseExplorerEntityBrowserTab(tab, { canShowData });
   const [collectionPosition, setCollectionPosition] = useState<ExplorerWorkspaceNodePosition>(
     explorerCollectionNodeInitialPosition,
   );
   const [collectionCollapsed, setCollectionCollapsed] = useState(false);
+  const refreshCollectionData = useCallback(async () => {
+    if (!queryClient) return;
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['graph', 'reflected-entity-data'] }),
+      queryClient.invalidateQueries({ queryKey: ['graph', 'reflected-related-entity-data'] }),
+    ]);
+  }, [queryClient]);
 
   return (
     <section className='relative min-h-[calc(100vh-9rem)]'>
@@ -305,6 +324,7 @@ const EntityBrowserDetail = ({
             actions={
               <ExplorerEntityActions
                 ariaLabel={`Actions for ${entity.name} instances`}
+                onSuccess={refreshCollectionData}
                 operations={operations}
                 renderExecutePanel={renderExecutePanel}
                 renderRefInput={renderRefInput}

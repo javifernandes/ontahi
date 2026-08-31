@@ -122,6 +122,227 @@ type ExplorerOperationAction = {
   operation: ExplorerOperationDescriptor;
 };
 
+export type ExplorerEntityActionsProps = Readonly<{
+  ariaLabel: string;
+  contextLabel?: string;
+  onSuccess?: () => void | Promise<unknown>;
+  operations: ExplorerOperationDescriptor[];
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
+  source?: AnyEntityRef;
+  tasks?: ExplorerTaskDescriptor[];
+}>;
+
+const actionControlClassName =
+  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground';
+
+const ExplorerActionCloseButton = ({ onClose }: Readonly<{ onClose: () => void }>) => (
+  <button
+    type='button'
+    aria-label='Close actions'
+    title='Close actions'
+    onClick={onClose}
+    className={actionControlClassName}
+  >
+    <X className='size-4' />
+  </button>
+);
+
+const ExplorerEntityActionList = ({
+  actions,
+  contextLabel,
+  onClose,
+  onSelect,
+  tasks,
+}: Readonly<{
+  actions: ExplorerOperationAction[];
+  contextLabel?: string;
+  onClose: () => void;
+  onSelect: (operationId: string) => void;
+  tasks: ExplorerTaskDescriptor[];
+}>) => {
+  const routes = useExplorerRoutes();
+
+  return (
+    <>
+      <div className='flex items-start justify-between gap-3 border-b px-4 py-3'>
+        <div className='min-w-0'>
+          <h3 className='text-sm font-semibold text-foreground'>Actions</h3>
+          {contextLabel ? (
+            <p className='mt-0.5 truncate text-xs text-muted-foreground'>{contextLabel}</p>
+          ) : null}
+        </div>
+        <ExplorerActionCloseButton onClose={onClose} />
+      </div>
+      <div className='max-h-80 overflow-y-auto p-2'>
+        {actions.map(({ operation }) => (
+          <button
+            key={operation.id}
+            type='button'
+            onClick={() => onSelect(operation.id)}
+            className='group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-accent'
+          >
+            <CirclePlay className='size-4 shrink-0 text-primary' />
+            <span className='grid min-w-0 flex-1 gap-0.5'>
+              <span className='truncate text-sm font-medium text-foreground'>
+                {humanizeExplorerName(operation.name)}
+              </span>
+              {operation.description ? (
+                <span className='line-clamp-2 text-xs text-muted-foreground'>
+                  {operation.description}
+                </span>
+              ) : null}
+            </span>
+            <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
+          </button>
+        ))}
+        {tasks.length > 0 ? (
+          <div className={cx('mt-1 border-t pt-1', actions.length === 0 && 'mt-0')}>
+            {tasks.map(task => (
+              <a
+                key={task.id}
+                href={routes.task(task.id)}
+                className='group flex items-center gap-3 rounded-xl px-3 py-2.5 text-left no-underline transition hover:bg-accent'
+              >
+                <span className='min-w-0 flex-1 truncate text-sm font-medium text-foreground'>
+                  {humanizeExplorerName(task.name)}
+                </span>
+                <span className='text-xs text-muted-foreground'>Task</span>
+                <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+};
+
+const ExplorerEntityActionDetail = ({
+  action,
+  contextLabel,
+  onBack,
+  onClose,
+  onSuccess,
+  renderExecutePanel,
+  renderRefInput,
+  source,
+}: Readonly<{
+  action: ExplorerOperationAction;
+  contextLabel?: string;
+  onBack: () => void;
+  onClose: () => void;
+  onSuccess?: () => void | Promise<unknown>;
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
+  source?: AnyEntityRef;
+}>) => {
+  const bindingPath = action.binding ? getBindingPath(action.binding) : undefined;
+  const hiddenInputPaths = bindingPath ? [bindingPath] : [];
+  const initialInput = useMemo(
+    () =>
+      action.binding && source
+        ? buildExplorerContextualOperationInput(action.binding, source)
+        : undefined,
+    [action, source],
+  );
+  const handleOperationSuccess = async () => {
+    try {
+      await onSuccess?.();
+    } finally {
+      if (isExplorerOperationPotentiallyDestructive(action.operation)) onClose();
+    }
+  };
+  const variant = source ? 'contextual' : 'compact';
+  const executePanel = renderExecutePanel?.({
+    hiddenInputPaths,
+    initialInput,
+    onSuccess: handleOperationSuccess,
+    operation: action.operation,
+    variant,
+  }) ?? (
+    <ExplorerOperationExecutePanel
+      hiddenInputPaths={hiddenInputPaths}
+      initialInput={initialInput}
+      onSuccess={handleOperationSuccess}
+      operation={action.operation}
+      renderRefInput={renderRefInput}
+      variant={variant}
+    />
+  );
+
+  return (
+    <>
+      <div className='flex items-start gap-2 border-b px-3 py-3'>
+        <button
+          type='button'
+          aria-label='Back to actions'
+          onClick={onBack}
+          className={actionControlClassName}
+        >
+          <ArrowLeft className='size-4' />
+        </button>
+        <div className='min-w-0 flex-1 pt-1'>
+          <h3 className='truncate text-sm font-semibold text-foreground'>
+            {humanizeExplorerName(action.operation.name)}
+          </h3>
+          {bindingPath && contextLabel ? (
+            <p className='mt-1 truncate font-mono text-[11px] text-muted-foreground'>
+              {bindingPath}: {contextLabel}
+            </p>
+          ) : null}
+        </div>
+        <ExplorerActionCloseButton onClose={onClose} />
+      </div>
+      <div className='max-h-[min(32rem,calc(100vh-8rem))] overflow-y-auto p-3'>{executePanel}</div>
+    </>
+  );
+};
+
+const ExplorerEntityActionsPopover = ({
+  actions,
+  contextLabel,
+  onClose,
+  onSelect,
+  onSuccess,
+  renderExecutePanel,
+  renderRefInput,
+  selectedAction,
+  source,
+  tasks,
+}: Readonly<{
+  actions: ExplorerOperationAction[];
+  contextLabel?: string;
+  onClose: () => void;
+  onSelect: (operationId: string | undefined) => void;
+  onSuccess?: () => void | Promise<unknown>;
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
+  selectedAction?: ExplorerOperationAction;
+  source?: AnyEntityRef;
+  tasks: ExplorerTaskDescriptor[];
+}>) =>
+  selectedAction ? (
+    <ExplorerEntityActionDetail
+      action={selectedAction}
+      contextLabel={contextLabel}
+      onBack={() => onSelect(undefined)}
+      onClose={onClose}
+      onSuccess={onSuccess}
+      renderExecutePanel={renderExecutePanel}
+      renderRefInput={renderRefInput}
+      source={source}
+    />
+  ) : (
+    <ExplorerEntityActionList
+      actions={actions}
+      contextLabel={contextLabel}
+      onClose={onClose}
+      onSelect={onSelect}
+      tasks={tasks}
+    />
+  );
+
 export function ExplorerEntityActions({
   ariaLabel,
   contextLabel,
@@ -131,18 +352,8 @@ export function ExplorerEntityActions({
   renderRefInput,
   source,
   tasks = [],
-}: {
-  ariaLabel: string;
-  contextLabel?: string;
-  onSuccess?: () => void | Promise<unknown>;
-  operations: ExplorerOperationDescriptor[];
-  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
-  renderRefInput?: ExplorerOperationRefInputRenderer;
-  source?: AnyEntityRef;
-  tasks?: ExplorerTaskDescriptor[];
-}) {
+}: ExplorerEntityActionsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const routes = useExplorerRoutes();
   const hasReflectedEntityDataReader = useHasReflectedEntityDataReader();
   const supportsOperation = useReflectedOperationSupport();
   const [open, setOpen] = useState(false);
@@ -172,13 +383,6 @@ export function ExplorerEntityActions({
   );
   const selectedAction = availableActions.find(
     action => action.operation.id === selectedOperationId,
-  );
-  const initialInput = useMemo(
-    () =>
-      selectedAction?.binding && source
-        ? buildExplorerContextualOperationInput(selectedAction.binding, source)
-        : undefined,
-    [selectedAction, source],
   );
 
   useEffect(() => {
@@ -214,39 +418,6 @@ export function ExplorerEntityActions({
     return null;
   }
 
-  const handleOperationSuccess = selectedAction
-    ? async () => {
-        try {
-          await onSuccess?.();
-        } finally {
-          if (isExplorerOperationPotentiallyDestructive(selectedAction.operation)) {
-            closeActions();
-          }
-        }
-      }
-    : undefined;
-
-  const executePanel = selectedAction
-    ? (renderExecutePanel?.({
-        hiddenInputPaths: selectedAction.binding ? [getBindingPath(selectedAction.binding)] : [],
-        initialInput,
-        onSuccess: handleOperationSuccess,
-        operation: selectedAction.operation,
-        variant: source ? 'contextual' : 'compact',
-      }) ?? (
-        <ExplorerOperationExecutePanel
-          hiddenInputPaths={
-            selectedAction.binding ? [getBindingPath(selectedAction.binding)] : undefined
-          }
-          initialInput={initialInput}
-          onSuccess={handleOperationSuccess}
-          operation={selectedAction.operation}
-          renderRefInput={renderRefInput}
-          variant={source ? 'contextual' : 'compact'}
-        />
-      ))
-    : null;
-
   return (
     <div ref={rootRef} className='relative'>
       <button
@@ -269,104 +440,18 @@ export function ExplorerEntityActions({
 
       {open ? (
         <div className='absolute right-0 top-[calc(100%+0.5rem)] z-[100] w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-2xl'>
-          {selectedAction ? (
-            <>
-              <div className='flex items-start gap-2 border-b px-3 py-3'>
-                <button
-                  type='button'
-                  aria-label='Back to actions'
-                  onClick={() => setSelectedOperationId(undefined)}
-                  className='inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground'
-                >
-                  <ArrowLeft className='size-4' />
-                </button>
-                <div className='min-w-0 flex-1 pt-1'>
-                  <h3 className='truncate text-sm font-semibold text-foreground'>
-                    {humanizeExplorerName(selectedAction.operation.name)}
-                  </h3>
-                  {selectedAction.binding && contextLabel ? (
-                    <p className='mt-1 truncate font-mono text-[11px] text-muted-foreground'>
-                      {getBindingPath(selectedAction.binding)}: {contextLabel}
-                    </p>
-                  ) : null}
-                </div>
-                <button
-                  type='button'
-                  aria-label='Close actions'
-                  title='Close actions'
-                  onClick={closeActions}
-                  className='inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground'
-                >
-                  <X className='size-4' />
-                </button>
-              </div>
-              <div className='max-h-[min(32rem,calc(100vh-8rem))] overflow-y-auto p-3'>
-                {executePanel}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className='flex items-start justify-between gap-3 border-b px-4 py-3'>
-                <div className='min-w-0'>
-                  <h3 className='text-sm font-semibold text-foreground'>Actions</h3>
-                  {contextLabel ? (
-                    <p className='mt-0.5 truncate text-xs text-muted-foreground'>{contextLabel}</p>
-                  ) : null}
-                </div>
-                <button
-                  type='button'
-                  aria-label='Close actions'
-                  title='Close actions'
-                  onClick={closeActions}
-                  className='inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground'
-                >
-                  <X className='size-4' />
-                </button>
-              </div>
-              <div className='max-h-80 overflow-y-auto p-2'>
-                {availableActions.map(({ operation }) => (
-                  <button
-                    key={operation.id}
-                    type='button'
-                    onClick={() => setSelectedOperationId(operation.id)}
-                    className='group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-accent'
-                  >
-                    <CirclePlay className='size-4 shrink-0 text-primary' />
-                    <span className='grid min-w-0 flex-1 gap-0.5'>
-                      <span className='truncate text-sm font-medium text-foreground'>
-                        {humanizeExplorerName(operation.name)}
-                      </span>
-                      {operation.description ? (
-                        <span className='line-clamp-2 text-xs text-muted-foreground'>
-                          {operation.description}
-                        </span>
-                      ) : null}
-                    </span>
-                    <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
-                  </button>
-                ))}
-                {tasks.length > 0 ? (
-                  <div
-                    className={cx('mt-1 border-t pt-1', availableActions.length === 0 && 'mt-0')}
-                  >
-                    {tasks.map(task => (
-                      <a
-                        key={task.id}
-                        href={routes.task(task.id)}
-                        className='group flex items-center gap-3 rounded-xl px-3 py-2.5 text-left no-underline transition hover:bg-accent'
-                      >
-                        <span className='min-w-0 flex-1 truncate text-sm font-medium text-foreground'>
-                          {humanizeExplorerName(task.name)}
-                        </span>
-                        <span className='text-xs text-muted-foreground'>Task</span>
-                        <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </>
-          )}
+          <ExplorerEntityActionsPopover
+            actions={availableActions}
+            contextLabel={contextLabel}
+            onClose={closeActions}
+            onSelect={setSelectedOperationId}
+            onSuccess={onSuccess}
+            renderExecutePanel={renderExecutePanel}
+            renderRefInput={renderRefInput}
+            selectedAction={selectedAction}
+            source={source}
+            tasks={tasks}
+          />
         </div>
       ) : null}
     </div>

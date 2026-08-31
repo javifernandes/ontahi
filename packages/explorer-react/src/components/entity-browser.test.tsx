@@ -259,6 +259,16 @@ describe('ExplorerEntityBrowser', () => {
 
   it('keeps executable Entity actions inside the collection node instead of a section button', async () => {
     const user = userEvent.setup();
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Book',
+      columns: [{ field: 'title', type: 'string', nullable: false }],
+      rows: [{ title: 'Ontahi' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
     const invokeOperation = vi.fn().mockResolvedValue({
       ok: true,
       kind: 'success',
@@ -275,6 +285,7 @@ describe('ExplorerEntityBrowser', () => {
 
     render(
       withReflectedEntityDataReader({
+        readEntityData,
         reflectedOperationInvoker: { invokeOperation },
         children: (
           <ExplorerEntityBrowser
@@ -309,6 +320,7 @@ describe('ExplorerEntityBrowser', () => {
         expect.objectContaining({ operationId: 'Book.refreshCatalog', input: {} }),
       ),
     );
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
   });
 
   it('moves, minimizes, and restores the Entity collection node', async () => {
