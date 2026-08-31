@@ -185,6 +185,43 @@ list: operation({
 A more complex operation can execute an intermediate Query and continue composing work. The
 runtime remains responsible for interpreting the same Query language against its storage.
 
+## Execute a Query from a headless host
+
+Code at the server-application boundary can execute the same Query without manually opening a
+server Effect scope or installing a storage concern:
+
+```ts
+const item = await application.graph.read(
+  query(AtlasItem)
+    .where(item => item.id.eq(itemId))
+    .one(),
+  { scope: 'atlas.item-context' },
+);
+```
+
+`application.graph.read(...)` is bound to that exact application and returns a Promise. A plain
+Query or View returns every match. The Query terminal communicates the other interpretations:
+
+```ts
+const first = await application.graph.read(items.first()); // Item | null
+const one = await application.graph.read(items.one()); // Item, strict cardinality
+const count = await application.graph.read(items.count()); // number
+const exists = await application.graph.read(items.exists()); // boolean
+```
+
+Pass View parameters and provider-specific read options together when needed:
+
+```ts
+const rows = await application.graph.read(itemsByStatus, {
+  params: { status: 'open' },
+  runtimeOptions,
+});
+```
+
+The application boundary supplies runtime context, telemetry, and the configured storage for that
+application. Inside an Operation, keep using its runtime-bound Query methods and Effects: the
+Operation already owns a scope, UnitOfWork, authorization context, and possibly a transaction.
+
 ## Observe a Query from React
 
 Generated client Entities expose the same `all()` and `where(...)` entry points. React derives the

@@ -62,10 +62,10 @@ const getGraphRuntimeConcern = (
     : undefined;
 };
 
-export const resolveArchitectureLayerDefaults = async (
+export const resolveArchitectureLayerDefaultsFor = (
+  architectureDefinition: ArchitectureDefinition<unknown>,
   prefix: string,
-): Promise<ArchitectureLayerDefaults> => {
-  const architectureDefinition = await getArchitecture();
+): ArchitectureLayerDefaults => {
   const layers = architectureDefinition.layers;
   const graphRuntimeConcern = getGraphRuntimeConcern(architectureDefinition);
 
@@ -84,6 +84,11 @@ export const resolveArchitectureLayerDefaults = async (
     },
   );
 };
+
+export const resolveArchitectureLayerDefaults = async (
+  prefix: string,
+): Promise<ArchitectureLayerDefaults> =>
+  resolveArchitectureLayerDefaultsFor(await getArchitecture(), prefix);
 
 export const getArchitectureEffectors = async <TEvent = unknown>(): Promise<Effectors<TEvent>> =>
   ((await getArchitecture<TEvent>()).effectors ?? {}) as Effectors<TEvent>;

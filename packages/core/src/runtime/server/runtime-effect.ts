@@ -1,7 +1,11 @@
 import { toError } from '@ontahi/core/value/error';
 import { Cause, Effect, Exit } from 'effect';
 
-import { resolveArchitectureLayerDefaults } from './architecture-registry.js';
+import {
+  resolveArchitectureLayerDefaults,
+  resolveArchitectureLayerDefaultsFor,
+} from './architecture-registry.js';
+import type { ArchitectureDefinition, ArchitectureLayerDefaults } from './architecture-types.js';
 import { RateLimitExceededError } from './concerns/rate-limit.js';
 import { applyLayerConcerns, combineConcerns } from './concerns.js';
 import { getServerRuntimeConfig } from './config.js';
@@ -12,20 +16,22 @@ import { executeEffectIntents, normalizeEffectSuccess } from './intents.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
 import type { LayerConcern } from './layer-types.js';
 
-export const runServerEffect = async <TValue, TInput = unknown>(
+type RunServerEffectOptions<TInput> = {
+  scope: string;
+  telemetrySpanName?: string;
+  input?: Record<string, unknown>;
+  extra?: Record<string, unknown>;
+  concernInput?: TInput;
+  concerns?: ReadonlyArray<LayerConcern<TInput, unknown>>;
+};
+
+const runServerEffectWithDefaults = async <TValue, TInput>(
   effect: Effect.Effect<TValue | EffectSuccessPayload<TValue>, unknown>,
-  options: {
-    scope: string;
-    telemetrySpanName?: string;
-    input?: Record<string, unknown>;
-    extra?: Record<string, unknown>;
-    concernInput?: TInput;
-    concerns?: ReadonlyArray<LayerConcern<TInput, unknown>>;
-  },
+  options: RunServerEffectOptions<TInput>,
+  architectureDefaults: ArchitectureLayerDefaults,
 ): Promise<TValue> => {
   const parentContext = getOperationRuntimeContext();
   const invocationContext = getCurrentInvocationContext();
-  const architectureDefaults = await resolveArchitectureLayerDefaults(options.scope);
   const context: OperationRuntimeContext = {
     scope: options.scope,
     telemetrySpanName: options.telemetrySpanName ?? options.scope,
@@ -92,3 +98,24 @@ export const runServerEffect = async <TValue, TInput = unknown>(
   const error = Cause.squash(exit.cause);
   throw toError(error);
 };
+
+export const runServerEffect = async <TValue, TInput = unknown>(
+  effect: Effect.Effect<TValue | EffectSuccessPayload<TValue>, unknown>,
+  options: RunServerEffectOptions<TInput>,
+): Promise<TValue> =>
+  runServerEffectWithDefaults(
+    effect,
+    options,
+    await resolveArchitectureLayerDefaults(options.scope),
+  );
+
+export const runServerEffectForArchitecture = <TValue, TInput = unknown>(
+  architecture: ArchitectureDefinition<unknown>,
+  effect: Effect.Effect<TValue | EffectSuccessPayload<TValue>, unknown>,
+  options: RunServerEffectOptions<TInput>,
+): Promise<TValue> =>
+  runServerEffectWithDefaults(
+    effect,
+    options,
+    resolveArchitectureLayerDefaultsFor(architecture, options.scope),
+  );

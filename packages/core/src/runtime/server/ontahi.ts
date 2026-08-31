@@ -25,6 +25,10 @@ import {
 } from '../../data-graph/index.js';
 
 import type { ArchitectureAppFacade, RegisteredArchitecture } from './app-facade.js';
+import {
+  createApplicationGraphReadApi,
+  type ApplicationGraphReadApi,
+} from './application-graph-read.js';
 import { defineOntahiApplication, type OntahiApplication } from './application.js';
 import { architecture } from './architecture-registry.js';
 import type { ArchitectureDefinition } from './architecture-types.js';
@@ -76,6 +80,9 @@ export type GraphCommandableOntahiApplication<TGraph extends GraphApi<any> = Gra
   OntahiApplication<TGraph> & {
     createGraphCommandDispatcher: ApplicationGraphCommandDispatcherFactory;
   };
+
+type ApplicationGraph<TGraph extends GraphApi<any>, TReadOptions = undefined> = TGraph &
+  ApplicationGraphReadApi<TReadOptions>;
 type OntahiGraphFacade<TRuntime extends AnyDataGraphRuntime> = ReturnType<
   typeof createDataGraphArchitectureAdapter<
     unknown,
@@ -162,7 +169,10 @@ export type ComposedOntahiApplication<
   TEntities extends Record<string, object> | readonly AnyOntahiEntityDeclaration[],
   TCapabilities extends OntahiCapabilities = {},
 > = GraphReadableOntahiApplication<
-  GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>
+  ApplicationGraph<
+    GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>,
+    RuntimeReadOptions<StorageRuntime<TStorage>>
+  >
 > & {
   architecture: RegisteredArchitecture<
     OntahiCapabilityEvent<TCapabilities>,
@@ -296,6 +306,10 @@ export const ontahi = <
     entities,
     runtime: registered.app,
   });
+  const applicationGraph = Object.assign(
+    application.graph,
+    createApplicationGraphReadApi(graph, registered),
+  );
   applicationForReactions = application;
 
   const registerEntity = <TDeclaration extends AnyOntahiEntityDeclaration>(
@@ -438,6 +452,7 @@ export const ontahi = <
     });
 
   return Object.assign(application, {
+    graph: applicationGraph,
     app: registered.app,
     architecture: registered,
     registerBoundEntities,
