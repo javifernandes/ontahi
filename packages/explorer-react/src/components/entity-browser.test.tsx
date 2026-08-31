@@ -1127,6 +1127,8 @@ describe('ExplorerEntityBrowser', () => {
     });
     const ontahiHeader = screen.getByRole('heading', { name: 'Ontahi' }).closest('header')!;
     fireEvent.pointerDown(ontahiHeader, { button: 0, clientX: 560, clientY: 112, pointerId: 7 });
+    fireEvent.pointerMove(ontahiHeader, { clientX: 562, clientY: 113, pointerId: 7 });
+    expect(ontahiPosition.style.left).toBe(initialLeft);
     fireEvent.pointerMove(ontahiHeader, { clientX: 320, clientY: 220, pointerId: 7 });
     fireEvent.pointerUp(ontahiHeader, { clientX: 320, clientY: 220, pointerId: 7 });
 
@@ -1135,6 +1137,10 @@ describe('ExplorerEntityBrowser', () => {
     expect(ontahiPosition.style.top).toBe('204px');
     const movedLeft = ontahiPosition.style.left;
     const movedTop = ontahiPosition.style.top;
+
+    expect(fireEvent.click(ontahiHeader)).toBe(false);
+    expect(fireEvent.doubleClick(ontahiHeader)).toBe(false);
+    expect(screen.getByRole('complementary', { name: 'Book instance Ontahi' })).toBeTruthy();
     await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 
     fireEvent.doubleClick(ontahiHeader);

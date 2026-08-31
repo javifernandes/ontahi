@@ -31,7 +31,6 @@ export const getExplorerReferenceLocator = (
 
   if (
     typeof value === 'object' &&
-    value !== null &&
     'kind' in value &&
     value.kind === 'entity-ref' &&
     'locator' in value &&
