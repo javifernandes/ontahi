@@ -57,7 +57,7 @@ const request = <const TFamily extends string, TBody>(id: string, family: TFamil
   createRuntimeProtocolRequest({ id, family, body });
 
 describe('Runtime Protocol dispatcher', () => {
-  it('routes every canonical family with receiver context and correlates complete family bodies', async () => {
+  it('routes Operation and Data Graph families with receiver context and correlated bodies', async () => {
     const context = { authority: { subject: 'user-1' } };
     const operationResult = {
       kind: 'permission-result',

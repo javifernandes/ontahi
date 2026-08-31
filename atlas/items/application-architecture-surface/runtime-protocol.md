@@ -20,6 +20,7 @@ relatedPlans:
   - ontahi://plans/146a-runtime-protocol-envelope-and-family-registry
   - ontahi://plans/146b-versioned-operation-protocol-family
   - ontahi://plans/146c-runtime-protocol-dispatcher
+  - ontahi://plans/146d-versioned-durable-operation-observation-protocol
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -40,18 +41,24 @@ message kinds through different paths for security, limits, operations, or obser
 paths are deployment choices rather than distinct framework protocols.
 
 Core exposes the first envelope, typed family registry, and transport-neutral dispatcher.
-`operation` body version 1 preserves the existing `invoke` and `check-permission` semantics, while
-`graph.read` and `graph.command` delegate to their existing canonical parsers. A canonical tuple
-names all three families, and the common dispatcher routes their validated bodies to configured
-family handlers without absorbing family policy or results. Handler availability is a runtime
-capability: an unknown protocol family and a registered family without a local handler remain
-distinct outcomes. Receiver context stays outside portable messages and is passed directly to the
-selected handler.
+`operation` body version 1 preserves the existing `invoke` and `check-permission` semantics;
+`durable.operation` body version 1 observes an accepted Task run through `inspect` and a versioned
+portable `snapshot`; and `graph.read` plus `graph.command` delegate to their existing canonical
+parsers. A canonical tuple names all four families, and the common dispatcher routes their
+validated bodies to configured family handlers without absorbing family policy or results.
+Handler availability is a runtime capability: an unknown protocol family and a registered family
+without a local handler remain distinct outcomes. Receiver context stays outside portable messages
+and is passed directly to the selected handler.
 
 The dispatcher does not change current HTTP paths yet: the legacy Operation HTTP body remains
 unversioned during migration. Durable Operation start travels through `operation.invoke` and
-returns a portable run Ref, while Task snapshots still use another unversioned endpoint. Event
-intents are internal and no remote subscription contract exists.
+returns a portable run Ref. The new observation family does not automatically expose Task state;
+the receiver must install an authority-aware handler, while the current Task snapshot endpoint and
+React Fetch bridge remain on their legacy contract until transport migration. Repeated `inspect`
+is the portable polling primitive. A later push transport may deliver the same snapshot semantics
+without changing the React hook. Cancellation remains only an observable status because no current
+Task Runtime exposes a truthful cancellation capability. Event intents are internal and no remote
+subscription contract exists.
 
 Events are an explicit design gate. Before Event subscription or delivery joins this protocol,
 Ontahí must define first-class Event declaration, identity, emission, authority, lifecycle,

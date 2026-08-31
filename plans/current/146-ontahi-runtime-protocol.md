@@ -7,6 +7,7 @@ Completed children:
 1. [146a. Runtime Protocol Envelope And Family Registry](../done/146a-runtime-protocol-envelope-and-family-registry.md)
 2. [146b. Versioned Operation Protocol Family](../done/146b-versioned-operation-protocol-family.md)
 3. [146c. Runtime Protocol Dispatcher](../done/146c-runtime-protocol-dispatcher.md)
+4. [146d. Versioned Durable Operation Observation Protocol](../done/146d-versioned-durable-operation-observation-protocol.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -38,8 +39,8 @@ able to implement the same syntax, semantics, policy boundary, and conformance s
 Ontahí already has related but separately shaped runtime channels:
 
 1. Operation invocation and permission checks.
-2. Durable Operation start through invocation plus a separate Task snapshot endpoint used for
-   progress and final results.
+2. Durable Operation start through invocation plus a versioned `durable.operation.inspect` and
+   snapshot contract; the current HTTP/React adapters still use a separate legacy Task endpoint.
 3. Versioned Data Graph reads.
 4. Versioned Data Graph Commands containing Entity and Relationship Command variants.
 5. Internal Event intents and ingress channels, without a remote subscription/delivery protocol.
@@ -50,10 +51,10 @@ partial BookOps implementation is evidence for that design review, not a protoco
 
 Data Graph Commands already prove the desired semantic boundary: Entity Mutation Commands and
 Relationship Commands keep different meanings and policies while sharing one message family and
-dispatcher. Core now applies that shape across `operation`, `graph.read`, and `graph.command`: one
-transport-neutral dispatcher validates the common request, selects a configured family handler,
-passes receiver-owned context, and correlates the untouched family result. HTTP projection remains
-separate.
+dispatcher. Core now applies that shape across `operation`, `durable.operation`, `graph.read`, and
+`graph.command`: one transport-neutral dispatcher validates the common request, selects a
+configured family handler, passes receiver-owned context, and correlates the untouched family
+result. HTTP projection remains separate.
 
 ## Proposed Logical Shape
 
@@ -65,7 +66,7 @@ Ontahí Runtime Protocol
 ├─ Durable Operations
 │  ├─ start
 │  ├─ inspect/progress
-│  ├─ cancel
+│  ├─ cancel (after runtimes expose an enforceable capability)
 │  └─ result
 ├─ Data Graph
 │  ├─ read
@@ -193,7 +194,7 @@ semantic message bodies and diagnostics.
 ## Acceptance Checklist
 
 - [ ] Every current remote message and Durable Operation lifecycle request is inventoried.
-- [ ] One versioned envelope covers all registered message families without weakening their
+- [x] One versioned envelope covers all registered message families without weakening their
       individual semantics.
 - [ ] Unknown versions, kinds, required guarantees, and capabilities fail before execution.
 - [x] Core dispatch composes existing family dispatchers and policies instead of reimplementing them.
@@ -213,8 +214,8 @@ semantic message bodies and diagnostics.
    transports?
 2. Which compatibility guarantees are required before replacing the current Operation invocation,
    Graph Read, Graph Command, and Task snapshot envelopes?
-3. How should Durable lifecycle bodies acquire independent fail-closed family versions without
-   changing their application-facing APIs?
+3. What enforceable cancellation contract can Task Runtimes share before `durable.operation`
+   accepts a cancel request?
 4. Which identity belongs in the common envelope beyond exchange correlation, if any, and which
    identities remain inside Durable or
    Event messages?
@@ -239,3 +240,7 @@ semantic message bodies and diagnostics.
 6. Common dispatch uses optional handlers keyed by registered family. A known family without a
    handler is an unavailable runtime capability rather than an unknown protocol family; trusted
    receiver context is passed beside, never inside, the portable request.
+7. Durable Operation observation is `durable.operation.inspect` plus a versioned snapshot.
+   Progress, result, error, and cancelled state are snapshot values. React delegates observation to
+   Runtime Transport; Fetch may poll and a push-capable transport may subscribe without changing
+   hook semantics. Cancellation is not a request until runtimes can enforce it.

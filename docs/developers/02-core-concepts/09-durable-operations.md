@@ -123,9 +123,31 @@ runtime accepts the start request.
 
 ## Snapshots are the observation contract
 
-Today, `useDurableOperation` polls task snapshots through the configured bridge. It stops at
-`completed`, `failed`, or `cancelled` and exposes the latest snapshot as lifecycle state. Polling is
-the current portable baseline, not a generic stream abstraction.
+The Runtime Protocol represents observation as a versioned `durable.operation` request. Starting
+the work remains `operation.invoke`; after receiving its `TaskRunRef`, a runtime can inspect that
+identity:
+
+```ts
+{
+  version: 1,
+  kind: 'inspect',
+  run: { taskId: 'Todo.completeAll', runId: 'run-1' },
+}
+```
+
+The response is a versioned `snapshot` containing queued, running, completed, failed, or cancelled
+state plus progress, result, or error when present. Progress and result are snapshot states, not
+commands. Repeating `inspect` is the portable polling primitive.
+
+The intended React boundary is one Runtime Transport observer. `useDurableOperation` consumes its
+snapshots; the transport chooses how to produce them from its capabilities. A Fetch transport polls
+with repeated `inspect` requests. A future push-capable transport can subscribe and deliver the
+same snapshot values without changing component code, lifecycle state, or completion-time cache
+invalidation.
+
+Today, the compatibility implementation still calls `getTaskSnapshot` on the configured Operation
+bridge and owns TanStack Query polling. It stops at `completed`, `failed`, or `cancelled`. The next
+transport slice moves that strategy behind the Runtime Transport while preserving the public hook.
 
 The conventional React client already observes `/operations/tasks`. A host with custom paths
 configures the client bundle once:
@@ -139,11 +161,9 @@ const client = createFetchGraphClient({
 });
 ```
 
-The provider passes that task observer to `useDurableOperation`; individual bridge adapters remain
-available as a lower-level override. The Express adapter exposes both endpoints from the same
-composed application. A future
-push-capable observer can preserve the `TaskRunRef` and snapshot contract, but the current public
-hook uses polling.
+The provider passes that legacy task reader to `useDurableOperation`; individual bridge adapters
+remain available as a lower-level override. The Express adapter exposes both endpoints from the
+same composed application until the unified Runtime Protocol transport replaces them.
 
 ## The runtime defines the guarantee
 
@@ -156,5 +176,7 @@ persistent task storage, credentials, and deployment artifacts; the durable oper
 semantic source for its lifecycle schemas.
 
 Use durable steps only where the workflow has a real internal boundary that needs its own typed
-input and output. Retry, replay, and cancellation are explicit runtime or application operations;
-they are not hidden side effects of starting a durable operation.
+input and output. Retry and replay remain explicit runtime or application operations; they are not
+hidden side effects of starting a durable operation. `cancelled` can already be observed in a
+snapshot, but Ontahí does not yet expose a cancellation request because its Task Runtimes do not
+share an enforceable cancellation capability.
