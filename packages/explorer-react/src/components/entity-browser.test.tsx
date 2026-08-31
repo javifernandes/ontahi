@@ -22,7 +22,7 @@ import {
   ExplorerEntityDeleteButton,
 } from './entity-data-mutations.js';
 
-import { ExplorerEntityBrowser, ExplorerProvider } from './index.js';
+import { ExplorerEntityBrowser, ExplorerEntityDataPanel, ExplorerProvider } from './index.js';
 
 const emptySchema: ExplorerSchemaDescriptor = {
   source: 'unknown',
@@ -404,6 +404,60 @@ describe('ExplorerEntityBrowser', () => {
         pageSize: 25,
       }),
     );
+  });
+
+  it('keeps the Entity data panel usable as a standalone public surface', async () => {
+    const standaloneBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      mutations: {
+        create: { fields: ['id', 'title'] },
+        delete: true,
+      },
+    };
+    const graphExecutor = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      runCommand: vi.fn(),
+      runEntityMutationCommand: vi.fn(),
+    } as unknown as ReactGraphExecutor;
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          graphExecutor,
+          readEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Book',
+            columns: [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'title', type: 'string', nullable: true },
+            ],
+            omittedColumns: [
+              {
+                column: 'legacy_notes',
+                field: 'legacyNotes',
+                reason: 'The legacy column is not queryable.',
+              },
+            ],
+            rows: [{ id: 'book-1', title: 'Ontahi' }],
+            page: 1,
+            pageSize: 25,
+            totalCount: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          children: <ExplorerEntityDataPanel entity={standaloneBook} />,
+        })}
+      </ExplorerProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Data' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New Book' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Delete row' })).toBeTruthy();
+    expect(screen.getByText('Some mapped fields are not queryable in this table.')).toBeTruthy();
+    expect(screen.getByText('legacyNotes (legacy_notes)')).toBeTruthy();
   });
 
   it('edits authorized scalar fields and deletes exact rows through Entity mutation Commands', async () => {
