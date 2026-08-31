@@ -109,21 +109,22 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
 
   const createList = async (rawName: string) => {
     const name = rawName.trim();
-    if (!name) return false;
+    if (!name) return undefined;
 
     setActionError(undefined);
     try {
+      const listId = globalThis.crypto.randomUUID();
       const result = await createListOperation.executeAsync({
-        id: globalThis.crypto.randomUUID(),
+        id: listId,
         name,
         color: listPastelColors[(lists.data?.length ?? 0) % listPastelColors.length]!,
       });
       const message = operationMessage(result, 'The list could not be created.');
       setActionError(message);
-      return !message;
+      return message ? undefined : listId;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be created.'));
-      return false;
+      return undefined;
     }
   };
 

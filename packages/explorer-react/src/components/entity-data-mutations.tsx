@@ -1,7 +1,12 @@
 'use client';
 
-import type { AnyEntityRef, EntityMutationCommand } from '@ontahi/core/data-graph';
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  isEntityRefLocatorValue,
+  type AnyEntityRef,
+  type EntityMutationCommand,
+  type EntityRefLocator,
+} from '@ontahi/core/data-graph';
+import { Check, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react';
 import {
   useEffect,
   useRef,
@@ -9,6 +14,7 @@ import {
   type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEventHandler,
   type ReactNode,
 } from 'react';
 
@@ -16,6 +22,11 @@ import type { ExplorerEntityDetail } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
 export type ExplorerEntityMutationRunner = (command: EntityMutationCommand) => Promise<unknown>;
+
+type ExplorerEntityField = ExplorerEntityDetail['fields'][number];
+
+const nullDraftValue = '__ontahi_null__';
+const colorValuePattern = /^#[\da-f]{6}$/i;
 
 const mutationErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'The mutation could not be applied.';
@@ -43,11 +54,97 @@ const mutationControlStyles = {
   },
 } satisfies Record<string, CSSProperties>;
 
-const parseDraftValue = (field: ExplorerEntityDetail['fields'][number], draft: string): unknown => {
-  if (field.nullable && draft === '') return null;
+const referenceLocatorDraft = (field: ExplorerEntityField, value: unknown) => {
+  const locator =
+    value && typeof value === 'object' && 'locator' in value
+      ? (value as { locator: unknown }).locator
+      : value;
+  const identityFields = field.reference?.identity?.fields ?? [];
+  if (identityFields.length === 1) {
+    const identityValue =
+      locator && typeof locator === 'object'
+        ? (locator as Record<string, unknown>)[identityFields[0]!]
+        : locator;
+    return identityValue == null ? '' : String(identityValue);
+  }
+  return locator == null ? '' : JSON.stringify(locator, null, 2);
+};
+
+const createMutationDraft = (field: ExplorerEntityField, value: unknown) => {
+  if (value == null) return field.nullable ? nullDraftValue : '';
+  if (field.reference) return referenceLocatorDraft(field, value);
+  if (field.type === 'json') return JSON.stringify(value, null, 2);
+  if (field.type === 'date') {
+    const date = new Date(String(value));
+    if (!Number.isNaN(date.getTime())) {
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+      return localDate.toISOString().slice(0, 16);
+    }
+  }
+  return String(value);
+};
+
+const parseReferenceDraft = (field: ExplorerEntityField, draft: string): AnyEntityRef => {
+  const identityFields = field.reference?.identity?.fields ?? [];
+  let locator: EntityRefLocator;
+
+  if (identityFields.length === 1) {
+    if (!draft.trim()) throw new Error(`${field.name} is required.`);
+    locator = { [identityFields[0]!]: draft };
+  } else {
+    try {
+      const parsed = JSON.parse(draft) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+      if (!Object.values(parsed).every(isEntityRefLocatorValue)) throw new Error();
+      if (!identityFields.every(identityField => identityField in parsed)) throw new Error();
+      locator = parsed as EntityRefLocator;
+    } catch {
+      throw new Error(
+        `${field.name} needs JSON with ${identityFields.join(', ') || 'the target identity fields'}.`,
+      );
+    }
+  }
+
+  return {
+    kind: 'entity-ref',
+    entityName: field.reference!.entityName,
+    locator,
+  };
+};
+
+const parseDraftValue = (field: ExplorerEntityField, draft: string): unknown => {
+  if (draft === nullDraftValue) {
+    if (field.nullable) return null;
+    throw new Error(`${field.name} is required.`);
+  }
+  if (field.reference) return parseReferenceDraft(field, draft);
   if (field.type === 'boolean') return draft === 'true';
-  if (['integer', 'int'].includes(field.type)) return Number.parseInt(draft, 10);
-  if (['number', 'float', 'double'].includes(field.type)) return Number.parseFloat(draft);
+  if (['integer', 'int'].includes(field.type)) {
+    const value = Number(draft);
+    if (!draft.trim() || !Number.isInteger(value)) {
+      throw new Error(`${field.name} needs an integer.`);
+    }
+    return value;
+  }
+  if (['number', 'float', 'double'].includes(field.type)) {
+    const value = Number(draft);
+    if (!draft.trim() || !Number.isFinite(value)) {
+      throw new Error(`${field.name} needs a number.`);
+    }
+    return value;
+  }
+  if (field.type === 'date') {
+    const value = new Date(draft);
+    if (Number.isNaN(value.getTime())) throw new Error(`${field.name} needs a valid date.`);
+    return value.toISOString();
+  }
+  if (field.type === 'json') {
+    try {
+      return JSON.parse(draft) as unknown;
+    } catch {
+      throw new Error(`${field.name} needs valid JSON.`);
+    }
+  }
   return draft;
 };
 
@@ -55,7 +152,13 @@ const createDrafts = (fields: ExplorerEntityDetail['fields']) =>
   Object.fromEntries(
     fields.map(field => [
       field.name,
-      field.type === 'boolean' ? 'false' : field.enumValues?.[0] ? String(field.enumValues[0]) : '',
+      field.nullable
+        ? nullDraftValue
+        : field.type === 'boolean'
+          ? 'false'
+          : field.enumValues?.[0]
+            ? String(field.enumValues[0])
+            : '',
     ]),
   );
 
@@ -67,30 +170,14 @@ const isGeneratedIdentityField = (
   entity.identity.fields[0] === field.name &&
   field.name === 'id';
 
-const parseCreateDraftValue = (
-  field: ExplorerEntityDetail['fields'][number],
-  draft: string,
-): unknown => {
-  if (!field.reference) return parseDraftValue(field, draft);
-  if (field.nullable && draft === '') return null;
+const parseCreateDraftValue = (field: ExplorerEntityField, draft: string): unknown =>
+  parseDraftValue(field, draft);
 
-  const identityField = field.reference.identity?.fields[0];
-  if (identityField && field.reference.identity?.fields.length === 1) {
-    return {
-      kind: 'entity-ref',
-      entityName: field.reference.entityName,
-      locator: { [identityField]: draft },
-    };
-  }
+const defaultMutationDraft = (field: ExplorerEntityField) =>
+  field.type === 'boolean' ? 'false' : field.enumValues?.[0] ? String(field.enumValues[0]) : '';
 
-  try {
-    return JSON.parse(draft) as unknown;
-  } catch {
-    throw new Error(
-      `${field.name} needs JSON with ${field.reference.identity?.fields.join(', ') ?? 'the target identity fields'}.`,
-    );
-  }
-};
+const isColorField = (field: ExplorerEntityField, draft: string) =>
+  field.type === 'string' && (/color/i.test(field.name) || colorValuePattern.test(draft));
 
 const MutationValueInput = ({
   autoFocus = true,
@@ -107,37 +194,136 @@ const MutationValueInput = ({
   onChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
 }) => {
-  const options =
-    field.type === 'boolean' ? ['true', 'false'] : field.enumValues ? [...field.enumValues] : [];
+  const isNull = draft === nullDraftValue;
+  const lastNonNullDraft = useRef(isNull ? defaultMutationDraft(field) : draft);
+  useEffect(() => {
+    if (!isNull) lastNonNullDraft.current = draft;
+  }, [draft, isNull]);
+  const inputClassName =
+    'min-h-8 w-full min-w-24 rounded-md border bg-background px-2 font-mono text-xs outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground';
+  let control: ReactNode;
 
-  return options.length > 0 ? (
-    <select
-      autoFocus={autoFocus}
-      value={draft}
-      onChange={event => onChange(event.target.value)}
-      onKeyDown={onKeyDown}
-      aria-label={label}
-      className='min-h-8 min-w-28 rounded-md border bg-background px-2 text-xs outline-none focus:border-primary'
-    >
-      {field.nullable ? <option value=''>null</option> : null}
-      {options.map(option => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
-  ) : (
-    <input
-      autoFocus={autoFocus}
-      value={draft}
-      type={
-        ['integer', 'int', 'number', 'float', 'double'].includes(field.type) ? 'number' : 'text'
-      }
-      onChange={event => onChange(event.target.value)}
-      onKeyDown={onKeyDown}
-      aria-label={label}
-      className='min-h-8 min-w-28 rounded-md border bg-background px-2 font-mono text-xs outline-none focus:border-primary'
-    />
+  if (field.type === 'boolean') {
+    const checked = draft === 'true';
+    control = (
+      <button
+        autoFocus={autoFocus && !isNull}
+        type='button'
+        role='switch'
+        aria-checked={checked}
+        aria-label={label}
+        disabled={isNull}
+        onClick={() => onChange(checked ? 'false' : 'true')}
+        onKeyDown={onKeyDown}
+        className='inline-flex min-h-8 items-center gap-2 rounded-md border bg-background px-2 text-xs text-foreground outline-none transition focus:border-primary disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground'
+      >
+        <span
+          aria-hidden='true'
+          className={cx(
+            'flex h-5 w-9 items-center rounded-full p-0.5 transition-colors',
+            checked ? 'justify-end bg-primary' : 'justify-start bg-muted-foreground/35',
+          )}
+        >
+          <span className='size-4 rounded-full bg-white shadow-sm' />
+        </span>
+        <span>{checked ? 'Yes' : 'No'}</span>
+      </button>
+    );
+  } else if (field.enumValues?.length) {
+    control = (
+      <select
+        autoFocus={autoFocus && !isNull}
+        value={isNull ? '' : draft}
+        disabled={isNull}
+        onChange={event => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label={label}
+        className={inputClassName}
+      >
+        {field.enumValues.map(option => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  } else if (isColorField(field, draft)) {
+    control = (
+      <span className='inline-flex w-full min-w-0 items-center gap-2'>
+        <input
+          autoFocus={autoFocus && !isNull}
+          type='color'
+          value={colorValuePattern.test(draft) ? draft : '#000000'}
+          disabled={isNull}
+          onChange={event => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          aria-label={`${label} color picker`}
+          className='size-8 shrink-0 cursor-pointer rounded-md border bg-background p-1 disabled:cursor-not-allowed disabled:opacity-50'
+        />
+        <input
+          value={isNull ? '' : draft}
+          disabled={isNull}
+          type='text'
+          onChange={event => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          aria-label={label}
+          className={inputClassName}
+        />
+      </span>
+    );
+  } else if (field.type === 'json' || (field.reference?.identity?.fields.length ?? 0) > 1) {
+    control = (
+      <textarea
+        autoFocus={autoFocus && !isNull}
+        value={isNull ? '' : draft}
+        disabled={isNull}
+        rows={3}
+        onChange={event => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label={label}
+        className={cx(inputClassName, 'resize-y py-2')}
+      />
+    );
+  } else {
+    control = (
+      <input
+        autoFocus={autoFocus && !isNull}
+        value={isNull ? '' : draft}
+        disabled={isNull}
+        type={
+          ['integer', 'int', 'number', 'float', 'double'].includes(field.type)
+            ? 'number'
+            : field.type === 'date'
+              ? 'datetime-local'
+              : 'text'
+        }
+        onChange={event => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label={label}
+        className={inputClassName}
+      />
+    );
+  }
+
+  return (
+    <span className='grid min-w-0 flex-1 gap-1.5'>
+      {control}
+      {field.nullable ? (
+        <label className='inline-flex w-fit items-center gap-1.5 text-[11px] font-normal text-muted-foreground'>
+          <input
+            autoFocus={autoFocus && isNull}
+            type='checkbox'
+            checked={isNull}
+            onChange={event =>
+              onChange(event.target.checked ? nullDraftValue : lastNonNullDraft.current)
+            }
+            onKeyDown={onKeyDown}
+            aria-label={`${label} is null`}
+          />
+          Null
+        </label>
+      ) : null}
+    </span>
   );
 };
 
@@ -257,7 +443,7 @@ export const ExplorerEntityCreateButton = ({
 
           <div className='grid gap-3'>
             {inputFields.map((field, index) => (
-              <label key={field.name} className='grid gap-1.5 text-xs font-medium'>
+              <div key={field.name} className='grid gap-1.5 text-xs font-medium'>
                 <span>
                   {field.name}
                   {field.nullable ? (
@@ -277,7 +463,7 @@ export const ExplorerEntityCreateButton = ({
                   onChange={value => setDrafts(current => ({ ...current, [field.name]: value }))}
                   onKeyDown={() => undefined}
                 />
-              </label>
+              </div>
             ))}
           </div>
 
@@ -299,6 +485,8 @@ export const ExplorerEditableEntityCell = ({
   children,
   entityName,
   field,
+  href,
+  onNavigate,
   onApplied,
   runMutation,
   target,
@@ -307,35 +495,38 @@ export const ExplorerEditableEntityCell = ({
   children: ReactNode;
   entityName: string;
   field: ExplorerEntityDetail['fields'][number];
+  href?: string;
+  onNavigate?: MouseEventHandler<HTMLAnchorElement>;
   onApplied: () => Promise<unknown>;
   runMutation: ExplorerEntityMutationRunner;
   target: AnyEntityRef;
   value: unknown;
 }) => {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(() => (value == null ? '' : String(value)));
+  const [draft, setDraft] = useState(() => createMutationDraft(field, value));
   const [error, setError] = useState<string>();
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!editing) setDraft(value == null ? '' : String(value));
-  }, [editing, value]);
+    if (!editing) setDraft(createMutationDraft(field, value));
+  }, [editing, field, value]);
 
   const cancel = () => {
-    setDraft(value == null ? '' : String(value));
+    setDraft(createMutationDraft(field, value));
     setError(undefined);
     setEditing(false);
   };
-  const save = async () => {
+  const save = async (nextDraft = draft) => {
     setIsSaving(true);
     setError(undefined);
+    setDraft(nextDraft);
     try {
       await runMutation({
         kind: 'entity-mutation-command',
         action: 'update',
         entityName,
         target,
-        values: { [field.name]: parseDraftValue(field, draft) },
+        values: { [field.name]: parseDraftValue(field, nextDraft) },
       });
       await onApplied();
       setEditing(false);
@@ -347,7 +538,11 @@ export const ExplorerEditableEntityCell = ({
   };
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') cancel();
-    if (event.key === 'Enter') {
+    if (
+      event.key === 'Enter' &&
+      event.currentTarget.tagName !== 'TEXTAREA' &&
+      event.currentTarget.tagName !== 'BUTTON'
+    ) {
       event.preventDefault();
       void save();
     }
@@ -358,6 +553,60 @@ export const ExplorerEditableEntityCell = ({
       typeof value === 'string' && /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
         ? value
         : undefined;
+
+    if (field.type === 'boolean' && !field.nullable) {
+      const checked = value === true;
+      return (
+        <span className='grid justify-items-start gap-1'>
+          <button
+            type='button'
+            role='switch'
+            aria-checked={checked}
+            aria-label={`Edit ${field.name}`}
+            title={`Set ${field.name} to ${checked ? 'false' : 'true'}`}
+            disabled={isSaving}
+            onClick={() => void save(checked ? 'false' : 'true')}
+            className='inline-flex min-h-7 items-center gap-2 rounded-md px-1.5 text-xs text-foreground transition hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50'
+          >
+            <span
+              aria-hidden='true'
+              className={cx(
+                'flex h-5 w-9 items-center rounded-full p-0.5 transition-colors',
+                checked ? 'justify-end bg-primary' : 'justify-start bg-muted-foreground/35',
+              )}
+            >
+              <span className='size-4 rounded-full bg-white shadow-sm' />
+            </span>
+            <span>{isSaving ? 'Saving…' : checked ? 'Yes' : 'No'}</span>
+          </button>
+          {error ? <span className='text-xs text-destructive'>{error}</span> : null}
+        </span>
+      );
+    }
+
+    if (href) {
+      return (
+        <span className='inline-flex max-w-full items-center gap-1.5'>
+          <a
+            href={href}
+            onClick={onNavigate}
+            className='truncate text-primary no-underline hover:underline'
+          >
+            {children}
+          </a>
+          <button
+            type='button'
+            onClick={() => setEditing(true)}
+            aria-label={`Edit ${field.name}`}
+            title={`Edit ${field.name}`}
+            style={mutationControlStyles.cell}
+            className='inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
+          >
+            <Pencil className='size-3.5' />
+          </button>
+        </span>
+      );
+    }
 
     return (
       <button
@@ -389,8 +638,8 @@ export const ExplorerEditableEntityCell = ({
   }
 
   return (
-    <div className='grid min-w-48 gap-1.5'>
-      <div className='flex items-center gap-1.5'>
+    <div className='grid w-full min-w-0 gap-1.5'>
+      <div className='flex min-w-0 items-start gap-1.5'>
         <MutationValueInput
           draft={draft}
           field={field}
@@ -404,10 +653,13 @@ export const ExplorerEditableEntityCell = ({
           aria-label={`Save ${field.name}`}
           title={`Save ${field.name}`}
           style={mutationControlStyles.primary}
-          className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md px-2 text-xs font-medium disabled:opacity-50'
+          className='inline-flex size-8 shrink-0 items-center justify-center rounded-md disabled:opacity-50'
         >
-          <Check className='size-4' />
-          <span>Save</span>
+          {isSaving ? (
+            <LoaderCircle aria-hidden='true' className='size-4 animate-spin' />
+          ) : (
+            <Check aria-hidden='true' className='size-4' />
+          )}
         </button>
         <button
           type='button'
@@ -416,10 +668,9 @@ export const ExplorerEditableEntityCell = ({
           aria-label={`Cancel ${field.name}`}
           title={`Cancel ${field.name}`}
           style={mutationControlStyles.secondary}
-          className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md px-2 text-xs font-medium disabled:opacity-50'
+          className='inline-flex size-8 shrink-0 items-center justify-center rounded-md disabled:opacity-50'
         >
-          <X className='size-4' />
-          <span>Cancel</span>
+          <X aria-hidden='true' className='size-4' />
         </button>
       </div>
       {error ? <span className='text-xs text-destructive'>{error}</span> : null}

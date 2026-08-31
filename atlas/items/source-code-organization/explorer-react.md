@@ -14,6 +14,8 @@ relatedPlans:
   - bookops://plans/118-ontahi-selection-language-editor
   - bookops://plans/117-alive-ui-from-reflected-selections
   - bookops://plans/126-ontahi-runtime-data-reflection
+  - ontahi://plans/137-reflected-relation-affordances
+  - ontahi://plans/137b-instance-first-explorer-workspace
 migratedFrom: bookops://atlas/source-code-organization/explorer-react
 sourceCommit: 67713696
 ---
@@ -21,6 +23,12 @@ sourceCommit: 67713696
 `@ontahi/explorer-react` is the reusable React UI package for Ontahi Explorer.
 
 Ontahi Explorer is the product-facing surface for inspecting Ontahi systems: entities, operations, tasks, events, contracts, topology, authority, runtime, resources, and framework metadata.
+
+Explorer is also the automatic first UI of an Ontahi application. The same instance-first surface
+can serve a regular application user or an administrator because access scope is supplied by
+runtime reads, policies, and capabilities rather than selected by an Explorer-side mode. Hosts may
+wrap it in different navigation or operational context, but Explorer must not add an `isAdmin`
+bypass or infer ownership filters locally.
 
 The emerging [[ontahi.model.selection|Selection]] model gives Explorer a shared semantic foundation for entity Data filters, saved selections, operation-target previews, statistics, widgets, and dashboards. A future Selection language editor should edit the canonical Selection AST directly so table filters, visual composition, textual representations, and runtime execution do not become separate query languages. The editor is a reusable language artifact embedded by Explorer, not necessarily a React implementation owned by this package.
 
@@ -40,9 +48,10 @@ Boundary inventory:
 8. the operations and entity browsers are package-owned, and ordinary operation execution is package-owned through the reflected operation invoker plus reflected entity data hooks; BookOps passes only `renderGraphOpsOperationRefInput` from `graph-ops-operation-ref-input.tsx` for the host-specific chapter path/TOC picker,
 9. the entity browser renders a package-owned Data tab when `@ontahi/react/graph` has a reflected entity data reader; BookOps currently supplies a temporary reader adapter around its existing server action,
 10. reflected operation execution goes through `@ontahi/react/graph` with a host-supplied operation invoker, so Explorer-owned operation execution code can call operations by descriptor-discovered `operationId + input`,
-11. the entity browser receives a host diagram renderer because Mermaid rendering remains an app concern,
-12. the tasks browser receives host task-run refresh and source loaders because access checks and task-run stores remain app concerns,
-13. remaining BookOps GraphOps components should be shells, host adapters, host-specific controls, or compatibility bridges rather than reusable Explorer UI.
+11. identified Entity rows open package-owned instance nodes in an Explorer-level in-memory workspace; expanded and collapsed representations share one draggable positioning model across Entity and query navigation, nodes from different Entity types can coexist for comparison, the active overlapping node comes to the front, expansion rehydrates the row by portable identity, authorized Fields reuse one type-aware Entity Mutation editor in both table cells and windows, Reference values resolve authorized target display metadata while retaining portable locator identity, Query-backed direct or inverse Relation reads remain scoped to each open instance rather than every visible row, and authority-reflected many-to-many affordances drive generic participant link/unlink controls without treating structural verbs as permission,
+12. the entity browser receives a host diagram renderer because Mermaid rendering remains an app concern,
+13. the tasks browser receives host task-run refresh and source loaders because access checks and task-run stores remain app concerns,
+14. remaining BookOps GraphOps components should be shells, host adapters, host-specific controls, or compatibility bridges rather than reusable Explorer UI.
 
 Future selection-driven surfaces are directional rather than part of the current extraction boundary: saved-filter persistence, projectional selection editing, aggregate widgets, and dashboards should follow the Selection model instead of being designed as isolated Explorer features.
 
@@ -50,3 +59,9 @@ Explorer's current reflected Entity data reader is also implementation evidence 
 [[ontahi.runtime-data-reflection|Runtime Data Reflection]]. Future adaptive inputs should consume
 that provider-neutral profile through [[ontahi.alive-ui|Alive UI]] rather than infer population and
 search viability from Explorer components.
+
+The first adaptive inputs still expose one missing model boundary: `string` does not distinguish a
+color from arbitrary text. Explorer temporarily recognizes conventional color names and hex values
+for presentation, but reusable semantic value packages such as `Color` should eventually supply
+their own validation, serialization, reflection, and UI hints instead of accumulating field-name
+heuristics in Explorer.

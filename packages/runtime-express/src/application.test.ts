@@ -13,8 +13,9 @@ import {
   value,
   type EntityMutationCommandPolicy,
   type GraphReadPolicy,
+  type ManyToManyRelationshipCommandPolicy,
 } from '@ontahi/core/data-graph';
-import { entity as defineOntahiEntity } from '@ontahi/core/entity';
+import { entity as defineOntahiEntity, relation as defineRelation } from '@ontahi/core/entity';
 import {
   createRuntimeProtocolDispatcher,
   createRuntimeProtocolRequest,
@@ -29,6 +30,7 @@ import {
   type InvocationContext,
   type OntahiApplication,
 } from '@ontahi/core/runtime/server';
+import type { ExplorerEntityDetail } from '@ontahi/explorer-react/contracts';
 import { Effect } from 'effect';
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -380,6 +382,49 @@ describe('Ontahi Express application middleware', () => {
           },
         },
       ],
+    });
+  });
+
+  it('reflects authorized many-to-many mutation affordances into Explorer details', async () => {
+    const Label = defineOntahiEntity({
+      name: 'ExplorerLabel',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const Note = defineOntahiEntity({
+      name: 'ExplorerNote',
+      fields: { id: field.id(), title: field.string() },
+      relations: { labels: defineRelation.manyToMany(Label) },
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: { ExplorerNote: [], ExplorerLabel: [] },
+      }),
+      entities: [Note, Label],
+    });
+    const policy = {
+      entity: Note,
+      relationName: 'labels',
+      actions: ['link', 'unlink'],
+    } satisfies ManyToManyRelationshipCommandPolicy<typeof Note>;
+    const expressApp = express();
+    expressApp.use(
+      ontahiExpress(application, {
+        explorer: createOntahiExpressExplorer(),
+        graphCommand: { policies: [policy] },
+      }),
+    );
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const response = (await fetch(`${origin}/explorer/snapshot`).then(value => value.json())) as {
+      entityDetails: ExplorerEntityDetail[];
+    };
+    const note = response.entityDetails.find(entity => entity.name === 'ExplorerNote');
+
+    expect(note?.relations.find(relation => relation.name === 'labels')).toMatchObject({
+      structuralVerbs: ['add', 'remove'],
+      mutations: { add: true, remove: true },
     });
   });
 

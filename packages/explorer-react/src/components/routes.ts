@@ -31,6 +31,21 @@ export type ExplorerRoutes = {
   event: (eventType: string) => string;
 };
 
+export const shouldHandleExplorerNavigation = (event: {
+  altKey: boolean;
+  button: number;
+  ctrlKey: boolean;
+  defaultPrevented: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}) =>
+  !event.defaultPrevented &&
+  event.button === 0 &&
+  !event.metaKey &&
+  !event.ctrlKey &&
+  !event.shiftKey &&
+  !event.altKey;
+
 export const normalizeExplorerBasePath = (basePath: string) => {
   const trimmed = basePath.trim();
 

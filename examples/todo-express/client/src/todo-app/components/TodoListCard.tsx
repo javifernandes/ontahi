@@ -18,6 +18,7 @@ type TodoListCardProps = {
   list: Dashboard['lists'][number];
   tags: Dashboard['tags'];
   canComplete: boolean;
+  focusTodoInput: boolean;
   isCreatingTodo: boolean;
   isRenaming: boolean;
   isRecoloring: boolean;
@@ -75,6 +76,7 @@ export const TodoListCard = ({
   list,
   tags,
   canComplete,
+  focusTodoInput,
   isCreatingTodo,
   isRenaming,
   isRecoloring,
@@ -115,8 +117,13 @@ export const TodoListCard = ({
   const todoPointerDrag = useRef<TodoPointerDrag>();
   const todoStack = useRef<HTMLDivElement>(null);
   const colorControl = useRef<HTMLDivElement>(null);
+  const quickAddInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => setNameDraft(list.name), [list.name]);
+
+  useEffect(() => {
+    if (focusTodoInput) quickAddInput.current?.focus();
+  }, [focusTodoInput]);
 
   useEffect(() => {
     if (!isColorPickerOpen) return;
@@ -539,6 +546,7 @@ export const TodoListCard = ({
             <form className='quick-add' onSubmit={submitTodo}>
               <Plus aria-hidden='true' />
               <input
+                ref={quickAddInput}
                 aria-label={`Add a todo to ${list.name}`}
                 value={todoTitle}
                 onChange={event => setTodoTitle(event.target.value)}

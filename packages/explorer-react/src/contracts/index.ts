@@ -81,6 +81,7 @@ export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
     nullable?: boolean;
     required?: boolean;
     structuralVerbs?: Array<'assign' | 'clear' | 'add' | 'remove'>;
+    mutations?: { add?: true; remove?: true };
     canonicalIdentity?:
       | { sourceEntityName: string; fieldName: string; targetEntityName: string }
       | {

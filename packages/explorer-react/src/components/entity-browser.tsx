@@ -17,6 +17,7 @@ import {
   ExplorerEntityStructurePanel,
   type ExplorerEntityStructurePanelProps,
 } from './entity-detail-panels.js';
+import { ExplorerEntityInstanceWorkspaceProvider } from './entity-instance-workspace.js';
 import { ExplorerEntityOperationsPanel } from './entity-operations-panel.js';
 import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
 import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
@@ -371,7 +372,7 @@ export function ExplorerEntityBrowser({
     globalThis.history.pushState(null, '', routes.entity(selectedEntity.name, { tab: nextTab }));
   };
 
-  return (
+  const browser = (
     <div className={cx('grid gap-6', className)}>
       {selectedEntity ? (
         <EntityBrowserDetail
@@ -394,5 +395,13 @@ export function ExplorerEntityBrowser({
         />
       ) : null}
     </div>
+  );
+
+  return hasReflectedEntityDataReader ? (
+    <ExplorerEntityInstanceWorkspaceProvider entities={entities}>
+      {browser}
+    </ExplorerEntityInstanceWorkspaceProvider>
+  ) : (
+    browser
   );
 }

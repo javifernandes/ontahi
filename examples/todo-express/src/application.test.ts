@@ -555,7 +555,18 @@ describe('Ontahi todo portability example', () => {
         operations: expect.arrayContaining([expect.objectContaining({ id: 'TodoItem.deleteAll' })]),
       },
       entityDetails: expect.arrayContaining([
-        expect.objectContaining({ name: 'TodoItem' }),
+        expect.objectContaining({
+          name: 'TodoItem',
+          mutations: {
+            update: { fields: ['list', 'title', 'completed'] },
+          },
+        }),
+        expect.objectContaining({
+          name: 'TodoList',
+          mutations: {
+            update: { fields: ['name', 'color'] },
+          },
+        }),
         expect.objectContaining({
           name: 'Tag',
           mutations: {
@@ -743,6 +754,44 @@ describe('Ontahi todo portability example', () => {
     });
     expect(getTodoDataset().TodoItem).toEqual([
       { id: 'todo-1', list: 'list-1', title: 'Renamed todo', completed: false },
+    ]);
+  });
+
+  it('updates TodoItem boolean and Reference Fields through the generic remote Entity mutation capability', async () => {
+    getTodoDataset().TodoList = [
+      { id: 'list-1', name: 'Inbox', color: '#f5ddd5' },
+      { id: 'list-2', name: 'Later', color: '#dce8f5' },
+    ];
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Ship it', completed: false },
+    ];
+    const remoteExecutor = createFetchGraphReadExecutor({
+      endpoint: `${origin}/graph/reads`,
+      commandEndpoint: `${origin}/graph/commands`,
+    });
+    const command = mutateEntity(ClientTodoItemSchema).update(
+      createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+      { list: ClientTodoList.refById('list-2'), completed: true },
+    );
+
+    await expect(remoteExecutor.runEntityMutationCommand!(command)).resolves.toEqual({
+      created: [],
+      updated: [
+        {
+          entityName: 'TodoItem',
+          ref: createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+          values: {
+            id: 'todo-1',
+            list: ClientTodoList.refById('list-2'),
+            title: 'Ship it',
+            completed: true,
+          },
+        },
+      ],
+      deleted: [],
+    });
+    expect(getTodoDataset().TodoItem).toEqual([
+      { id: 'todo-1', list: 'list-2', title: 'Ship it', completed: true },
     ]);
   });
 
