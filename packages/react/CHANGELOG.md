@@ -1,5 +1,55 @@
 # @ontahi/react
 
+## 1.0.0-alpha.9
+
+### Minor Changes
+
+- 3069b93: Make reflected Entity instances the Explorer's primary canvas when data reads are available, using
+  a searchable Entity switcher instead of a permanent sidebar, with Operations exposed as contextual
+  Actions and Schema as a secondary floating affordance.
+
+  Reflect statically authorized Entity mutation fields and actions into Explorer so scalar cells can
+  be edited inline and exact rows can be deleted through the remote graph Command boundary.
+
+- 015893f: Keep schema-only Entities in generated clients and add reflected Entity creation to the Explorer.
+
+  Expose forward and inverse related-instance reads, counts, and drill-downs through in-memory and
+  PostgreSQL storage, the Ontahi application runtime, Express, and the default React fetch client.
+  Make the in-memory Data Graph runtime transactional so atomic Operations have the same local
+  execution contract as transactional adapters.
+
+- 31878c3: Bridge portable identity-scoped Entity Mutation Commands through a versioned default-deny remote
+  boundary. Create, exact update, and exact delete now execute through PostgreSQL and Fetch with
+  server-owned schema validation, explicit per-action mutation/result Field allowlists, exact deltas,
+  and structured cardinality rejections.
+- 8def4c1: Add a transport-neutral Runtime Transport with asynchronous Durable Operation observation. The
+  Fetch implementation sends versioned `durable.operation.inspect` requests and owns polling and
+  abort behavior, React hooks consume snapshots without selecting a delivery strategy, and Express
+  can project an explicitly configured Runtime Protocol dispatcher at one host-owned path.
+- ea87f14: Add reflected atomic Domain Operations with `operation.atomic(...)`. Core derives the Data Graph
+  atomicity requirement, the server runner owns the complete transaction boundary, generated clients
+  preserve the contract, and React/Explorer report whether the current runtime can execute locally,
+  bridge to an authority, or cannot satisfy the requirement.
+
+### Patch Changes
+
+- Updated dependencies [82654bc]
+- Updated dependencies [0544f8b]
+- Updated dependencies [2ed9511]
+- Updated dependencies [926919d]
+- Updated dependencies [a5d07f1]
+- Updated dependencies [71b3d4d]
+- Updated dependencies [015893f]
+- Updated dependencies [31878c3]
+- Updated dependencies [caf7b08]
+- Updated dependencies [5a9246f]
+- Updated dependencies [8def4c1]
+- Updated dependencies [2242b00]
+- Updated dependencies [ea87f14]
+- Updated dependencies [58fcaae]
+- Updated dependencies [3a3119b]
+  - @ontahi/core@1.0.0-alpha.9
+
 ## 1.0.0-alpha.8
 
 ### Major Changes

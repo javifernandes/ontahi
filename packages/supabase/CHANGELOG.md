@@ -1,5 +1,44 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.9
+
+### Minor Changes
+
+- 0544f8b: Add typed `if` conditions to exact Ref-targeted Entity update/delete Commands. In-memory,
+  PostgreSQL, Supabase, and remote execution apply identity and authorized equality conditions in one
+  atomic mutation, return one authority-safe rejection when it does not apply, and use a fail-closed
+  wire version so older servers cannot silently execute an unconditional mutation.
+- 926919d: Add virtual read-only derived Fields backed by portable Model Expressions. Codegen compiles natural
+  Field and Relation expressions, Core reflects and evaluates exact dependencies in memory,
+  PostgreSQL lowers the same IR to authorized graph reads, and Explorer presents derived metadata and
+  runtime values without exposing assignment.
+- 2242b00: Add portable `relationConstraint.countAtMost(...)` metadata and prospective in-memory enforcement
+  for direct to-many Relations. PostgreSQL now serializes competing additions on the destination
+  endpoint before evaluating the aggregate from a fresh transaction snapshot, while Supabase fails
+  closed until its RPC can provide the same authority-serialized guarantee.
+- f73b2cb: Add direct Supabase execution for portable exact Entity Mutation Commands. Registered Entities now
+  support create, Ref-targeted update, and Ref-targeted delete through existing PostgREST mapping and
+  RLS boundaries, returning exact portable deltas and structured cardinality evidence.
+
+### Patch Changes
+
+- Updated dependencies [82654bc]
+- Updated dependencies [0544f8b]
+- Updated dependencies [2ed9511]
+- Updated dependencies [926919d]
+- Updated dependencies [a5d07f1]
+- Updated dependencies [71b3d4d]
+- Updated dependencies [015893f]
+- Updated dependencies [31878c3]
+- Updated dependencies [caf7b08]
+- Updated dependencies [5a9246f]
+- Updated dependencies [8def4c1]
+- Updated dependencies [2242b00]
+- Updated dependencies [ea87f14]
+- Updated dependencies [58fcaae]
+- Updated dependencies [3a3119b]
+  - @ontahi/core@1.0.0-alpha.9
+
 ## 1.0.0-alpha.8
 
 ### Major Changes
