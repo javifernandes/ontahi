@@ -1,5 +1,52 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.9
+
+### Minor Changes
+
+- 0544f8b: Add typed `if` conditions to exact Ref-targeted Entity update/delete Commands. In-memory,
+  PostgreSQL, Supabase, and remote execution apply identity and authorized equality conditions in one
+  atomic mutation, return one authority-safe rejection when it does not apply, and use a fail-closed
+  wire version so older servers cannot silently execute an unconditional mutation.
+- 926919d: Add virtual read-only derived Fields backed by portable Model Expressions. Codegen compiles natural
+  Field and Relation expressions, Core reflects and evaluates exact dependencies in memory,
+  PostgreSQL lowers the same IR to authorized graph reads, and Explorer presents derived metadata and
+  runtime values without exposing assignment.
+- 015893f: Keep schema-only Entities in generated clients and add reflected Entity creation to the Explorer.
+
+  Expose forward and inverse related-instance reads, counts, and drill-downs through in-memory and
+  PostgreSQL storage, the Ontahi application runtime, Express, and the default React fetch client.
+  Make the in-memory Data Graph runtime transactional so atomic Operations have the same local
+  execution contract as transactional adapters.
+
+- 31878c3: Bridge portable identity-scoped Entity Mutation Commands through a versioned default-deny remote
+  boundary. Create, exact update, and exact delete now execute through PostgreSQL and Fetch with
+  server-owned schema validation, explicit per-action mutation/result Field allowlists, exact deltas,
+  and structured cardinality rejections.
+- 2242b00: Add portable `relationConstraint.countAtMost(...)` metadata and prospective in-memory enforcement
+  for direct to-many Relations. PostgreSQL now serializes competing additions on the destination
+  endpoint before evaluating the aggregate from a fresh transaction snapshot, while Supabase fails
+  closed until its RPC can provide the same authority-serialized guarantee.
+
+### Patch Changes
+
+- Updated dependencies [82654bc]
+- Updated dependencies [0544f8b]
+- Updated dependencies [2ed9511]
+- Updated dependencies [926919d]
+- Updated dependencies [a5d07f1]
+- Updated dependencies [71b3d4d]
+- Updated dependencies [015893f]
+- Updated dependencies [31878c3]
+- Updated dependencies [caf7b08]
+- Updated dependencies [5a9246f]
+- Updated dependencies [8def4c1]
+- Updated dependencies [2242b00]
+- Updated dependencies [ea87f14]
+- Updated dependencies [58fcaae]
+- Updated dependencies [3a3119b]
+  - @ontahi/core@1.0.0-alpha.9
+
 ## 1.0.0-alpha.8
 
 ### Major Changes

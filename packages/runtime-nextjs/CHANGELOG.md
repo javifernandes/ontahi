@@ -1,5 +1,39 @@
 # @ontahi/runtime-nextjs
 
+## 1.0.0-alpha.9
+
+### Minor Changes
+
+- 71b3d4d: Add named portable Domain Operation input conditions backed by canonical Model Expression IR.
+  Codegen compiles natural Ref-identity expressions without executing callbacks, emits one condition
+  registry shared by server and generated clients, and reports unsupported syntax at its source.
+  Core evaluates conditions authoritatively before the body and exposes tri-state advisory
+  evaluation, dependencies, conventional rejection, reflection, and an explicit runtime-only
+  builder. Explorer presents reflected condition names.
+
+  Callback-valued top-level `contracts.pre` and `contracts.post` are removed during the alpha. Move
+  arbitrary server-only checks to `contract({ pre, post })` in `concerns`; top-level
+  `contracts.pre` now accepts named portable conditions.
+
+### Patch Changes
+
+- Updated dependencies [82654bc]
+- Updated dependencies [0544f8b]
+- Updated dependencies [2ed9511]
+- Updated dependencies [926919d]
+- Updated dependencies [a5d07f1]
+- Updated dependencies [71b3d4d]
+- Updated dependencies [015893f]
+- Updated dependencies [31878c3]
+- Updated dependencies [caf7b08]
+- Updated dependencies [5a9246f]
+- Updated dependencies [8def4c1]
+- Updated dependencies [2242b00]
+- Updated dependencies [ea87f14]
+- Updated dependencies [58fcaae]
+- Updated dependencies [3a3119b]
+  - @ontahi/core@1.0.0-alpha.9
+
 ## 1.0.0-alpha.8
 
 ### Patch Changes
