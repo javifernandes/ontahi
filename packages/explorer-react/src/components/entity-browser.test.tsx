@@ -1,5 +1,6 @@
 import type {
   ReflectedEntityDataReader,
+  ReflectedOperationInvoker,
   ReflectedRelatedEntityDataReader,
 } from '@ontahi/core/data-graph';
 import { OntahiGraphProvider, type ReactGraphExecutor } from '@ontahi/react/graph';
@@ -159,11 +160,13 @@ const withReflectedEntityDataReader = ({
     hasNextPage: false,
   }),
   readRelatedEntityData,
+  reflectedOperationInvoker,
   graphExecutor,
 }: {
   children: ReactNode;
   readEntityData?: ReflectedEntityDataReader['readEntityData'];
   readRelatedEntityData?: ReflectedRelatedEntityDataReader['readRelatedEntityData'];
+  reflectedOperationInvoker?: ReflectedOperationInvoker;
   graphExecutor?: ReactGraphExecutor;
 }) => {
   const queryClient = new QueryClient({
@@ -183,6 +186,7 @@ const withReflectedEntityDataReader = ({
         reflectedRelatedEntityDataReader={
           readRelatedEntityData ? { readRelatedEntityData } : undefined
         }
+        reflectedOperationInvoker={reflectedOperationInvoker}
       >
         {children}
       </OntahiGraphProvider>
@@ -251,6 +255,60 @@ describe('ExplorerEntityBrowser', () => {
 
     expect(screen.getByText('Fields')).toBeTruthy();
     expect(globalThis.location.search).toBe('?tab=structure');
+  });
+
+  it('keeps executable Entity actions inside the collection node instead of a section button', async () => {
+    const user = userEvent.setup();
+    const invokeOperation = vi.fn().mockResolvedValue({
+      ok: true,
+      kind: 'success',
+      value: { refreshed: true },
+    });
+    const collectionOperation: ExplorerOperationDescriptor = {
+      ...operation,
+      id: 'Book.refreshCatalog',
+      name: 'refreshCatalog',
+      kind: 'domain',
+      exposure: 'bridge',
+      inputSchema: { source: 'ontahi', summary: 'object', fields: [] },
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        reflectedOperationInvoker: { invokeOperation },
+        children: (
+          <ExplorerEntityBrowser
+            entities={entities}
+            operations={[collectionOperation]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    expect(screen.queryByRole('button', { name: /^Actions$/ })).toBeNull();
+    const actionsButton = screen.getByRole('button', { name: 'Actions for Book instances' });
+    await user.click(actionsButton);
+    expect(actionsButton.getAttribute('aria-expanded')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Close actions' }));
+    expect(actionsButton.getAttribute('aria-expanded')).toBe('false');
+
+    await user.click(actionsButton);
+    await user.click(screen.getByRole('button', { name: /^Refresh Catalog/ }));
+    await user.click(screen.getByRole('button', { name: 'Close actions' }));
+    expect(actionsButton.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+
+    await user.click(actionsButton);
+    await user.click(screen.getByRole('button', { name: /^Refresh Catalog/ }));
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() =>
+      expect(invokeOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'Book.refreshCatalog', input: {} }),
+      ),
+    );
   });
 
   it('moves, minimizes, and restores the Entity collection node', async () => {
@@ -1190,6 +1248,183 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByRole('complementary', { name: 'Book instance Ontahi' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Close Book instance Ontahi' }));
     expect(screen.queryByRole('complementary', { name: 'Book instance Ontahi' })).toBeNull();
+  });
+
+  it('invokes a contextual operation with the current instance already bound', async () => {
+    const user = userEvent.setup();
+    const invokeOperation = vi.fn().mockResolvedValue({
+      ok: true,
+      kind: 'success',
+      value: { id: 'book-1', title: 'Executable ontologies' },
+    });
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Book',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'title', type: 'string', nullable: false },
+      ],
+      rows: [{ id: 'book-1', title: 'Ontahi' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    const inspectableBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [],
+    };
+    const contextualOperation: ExplorerOperationDescriptor = {
+      id: 'Library.renameBook',
+      entityName: 'Library',
+      name: 'renameBook',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [
+          { path: 'book', type: 'Book', required: true },
+          { path: 'title', type: 'string', required: true },
+        ],
+      },
+      inputRefs: [
+        {
+          path: 'book',
+          entityName: 'Book',
+          receiver: false,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData,
+        reflectedOperationInvoker: { invokeOperation },
+        children: (
+          <ExplorerEntityBrowser
+            entities={[inspectableBook]}
+            operations={[contextualOperation]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('row', { name: /book-1 Ontahi/ }));
+    await user.click(screen.getByRole('button', { name: 'Actions for Book instance Ontahi' }));
+    await user.click(screen.getByRole('button', { name: 'Rename Book' }));
+
+    expect(screen.queryByLabelText('book Book')).toBeNull();
+    expect(screen.getByText('book: Ontahi')).toBeTruthy();
+    await user.type(screen.getByPlaceholderText('title'), 'Executable ontologies');
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() =>
+      expect(invokeOperation).toHaveBeenCalledWith({
+        operationId: 'Library.renameBook',
+        operation: {
+          id: 'Library.renameBook',
+          entityName: 'Library',
+          name: 'renameBook',
+          kind: 'domain',
+          authority: 'server',
+          exposure: 'bridge',
+        },
+        input: {
+          book: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+          title: 'Executable ontologies',
+        },
+      }),
+    );
+    expect(await screen.findByText('Done')).toBeTruthy();
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('closes a contextual destructive action after it succeeds', async () => {
+    const user = userEvent.setup();
+    const invokeOperation = vi.fn().mockResolvedValue({
+      ok: true,
+      kind: 'success',
+      value: { deleted: true },
+    });
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Book',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'title', type: 'string', nullable: false },
+      ],
+      rows: [{ id: 'book-1', title: 'Ontahi' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    const inspectableBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [],
+    };
+    const deleteOperation: ExplorerOperationDescriptor = {
+      id: 'Library.deleteBook',
+      entityName: 'Library',
+      name: 'deleteBook',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [{ path: 'book', type: 'Book', required: true }],
+      },
+      inputRefs: [
+        {
+          path: 'book',
+          entityName: 'Book',
+          receiver: false,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData,
+        reflectedOperationInvoker: { invokeOperation },
+        children: (
+          <ExplorerEntityBrowser
+            entities={[inspectableBook]}
+            operations={[deleteOperation]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('row', { name: /book-1 Ontahi/ }));
+    const actionsButton = screen.getByRole('button', {
+      name: 'Actions for Book instance Ontahi',
+    });
+    await user.click(actionsButton);
+    await user.click(screen.getByRole('button', { name: 'Delete Book' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm this destructive action.' }));
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(invokeOperation).toHaveBeenCalledOnce());
+    await waitFor(() => expect(actionsButton.getAttribute('aria-expanded')).toBe('false'));
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
   });
 
   it('moves, minimizes, restores, and closes independent instance windows', async () => {

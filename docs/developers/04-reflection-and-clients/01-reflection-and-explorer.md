@@ -167,6 +167,15 @@ collapsed in place, restored, or closed; the active window is brought to the fro
 survives Entity, filter, pagination, Schema, and Actions navigation, but remains ephemeral across an
 Explorer unmount or page reload. Restoring a collapsed node re-reads its authoritative row.
 
+Executable Operations live with their context instead of requiring a separate catalog section on
+the data canvas. The collection node exposes Operations owned by its Entity. An instance window can
+also expose an Operation owned anywhere in the application when exactly one reflected Ref input or
+one-cardinality Entity Selection matches the instance identity. Explorer binds that target and asks
+only for the remaining inputs. It does not guess between multiple compatible targets or convert a
+many-cardinality Selection into an instance action. This is a UI projection over the ordinary
+Operation contract: the reflected invoker, input validation, runtime policy, and server authority
+remain unchanged.
+
 For declared `hasMany` and `manyToMany` Relations, an instance window can load related instances.
 The host-provided related-data reader must execute a Relation-root Query through the configured
 runtime and graph-read policy. Reads are scoped to open instances rather than every row in a table.

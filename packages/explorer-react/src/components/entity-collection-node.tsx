@@ -20,6 +20,7 @@ export const explorerCollectionNodeInitialPosition: ExplorerWorkspaceNodePositio
 };
 
 export function ExplorerEntityCollectionNode({
+  actions,
   children,
   collapsed,
   draggingLabel,
@@ -29,6 +30,7 @@ export function ExplorerEntityCollectionNode({
   onMove,
   position,
 }: {
+  actions?: ReactNode;
   children: ReactNode;
   collapsed: boolean;
   draggingLabel?: string;
@@ -109,6 +111,7 @@ export function ExplorerEntityCollectionNode({
                 )}
               >
                 <div className='min-w-0 flex-1'>{entityPicker}</div>
+                {actions}
                 <button
                   type='button'
                   onClick={() => onCollapseChange(true)}

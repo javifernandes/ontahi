@@ -8,6 +8,13 @@ export {
 } from './config.js';
 export { humanizeExplorerName } from './display-name.js';
 export {
+  buildExplorerContextualOperationInput,
+  ExplorerEntityActions,
+  getExplorerInstanceOperationBinding,
+  getExplorerInstanceOperationBindings,
+  type ExplorerInstanceOperationBinding,
+} from './entity-actions.js';
+export {
   explorerEntityDataFieldSupportsContains,
   explorerEntityDataFilterOperators,
   explorerEntityDataPageSizeOptions,

@@ -1016,13 +1016,19 @@ type ExplorerOperationExecutionState =
     };
 
 type UseExplorerOperationExecutorOptions = {
+  initialInput?: unknown;
+  onSuccess?: (result: unknown) => void | Promise<unknown>;
   operation: ExplorerOperationDescriptor;
 };
 
 const getOperationInvocationErrorMessage = (invocation: { message?: string }) =>
   invocation.message ?? 'Operation execution failed.';
 
-export function useExplorerOperationExecutor({ operation }: UseExplorerOperationExecutorOptions) {
+export function useExplorerOperationExecutor({
+  initialInput,
+  onSuccess,
+  operation,
+}: UseExplorerOperationExecutorOptions) {
   const reflectedOperation = useMemo(
     () => ({
       id: operation.id,
@@ -1048,7 +1054,13 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
   const runOperation = useReflectedOperationRunner(reflectedOperation);
   const supportsOperation = useReflectedOperationSupport();
   const executionAffordance = useReflectedOperationExecutionAffordance(reflectedOperation);
-  const inputDraftText = useMemo(() => formatExplorerOperationInputDraft(operation), [operation]);
+  const inputDraftText = useMemo(
+    () =>
+      initialInput === undefined
+        ? formatExplorerOperationInputDraft(operation)
+        : formatExplorerOperationInputValue(operation, initialInput),
+    [initialInput, operation],
+  );
   const [inputJson, setInputJson] = useState(() => inputDraftText);
   const [confirmed, setConfirmed] = useState(false);
   const [state, setState] = useState<ExplorerOperationExecutionState>({ status: 'idle' });
@@ -1116,6 +1128,11 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
           result: invocation.value,
           invocation,
         });
+        try {
+          await onSuccess?.(invocation.value);
+        } catch {
+          // The operation succeeded even when a host refresh callback cannot complete.
+        }
         return;
       }
 
@@ -1152,6 +1169,7 @@ export function useExplorerOperationExecutor({ operation }: UseExplorerOperation
     execute,
     resetInput: () => {
       setInputJson(inputDraftText);
+      setConfirmed(false);
       setState({ status: 'idle' });
     },
     setConfirmed,

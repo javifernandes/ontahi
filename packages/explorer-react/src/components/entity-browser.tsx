@@ -12,6 +12,7 @@ import type {
 import { cx } from '../internal/cx.js';
 
 import { useExplorerConfig, useExplorerRoutes } from './config.js';
+import { ExplorerEntityActions } from './entity-actions.js';
 import {
   ExplorerEntityCollectionNode,
   explorerCollectionNodeInitialPosition,
@@ -270,7 +271,7 @@ const EntityBrowserDetail = ({
               Instances
             </button>
           ) : null}
-          {operations.length > 0 || tasks.length > 0 ? (
+          {!canShowData && (operations.length > 0 || tasks.length > 0) ? (
             <button
               type='button'
               onClick={() => onTabChange('operations')}
@@ -301,6 +302,15 @@ const EntityBrowserDetail = ({
         ) : null}
         {effectiveTab === 'data' && renderDataPanel ? (
           <ExplorerEntityCollectionNode
+            actions={
+              <ExplorerEntityActions
+                ariaLabel={`Actions for ${entity.name} instances`}
+                operations={operations}
+                renderExecutePanel={renderExecutePanel}
+                renderRefInput={renderRefInput}
+                tasks={tasks}
+              />
+            }
             collapsed={collectionCollapsed}
             entityName={entity.name}
             entityPicker={embeddedEntityPicker}
@@ -458,7 +468,12 @@ export function ExplorerEntityBrowser({
   );
 
   return hasReflectedEntityDataReader ? (
-    <ExplorerEntityInstanceWorkspaceProvider entities={entities}>
+    <ExplorerEntityInstanceWorkspaceProvider
+      entities={entities}
+      operations={operations}
+      renderExecutePanel={renderExecutePanel}
+      renderRefInput={renderRefInput}
+    >
       {browser}
     </ExplorerEntityInstanceWorkspaceProvider>
   ) : (

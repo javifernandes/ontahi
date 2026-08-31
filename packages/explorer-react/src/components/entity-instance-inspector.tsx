@@ -4,10 +4,11 @@ import type { AnyEntityRef } from '@ontahi/core/data-graph';
 import { ArrowUpRight, Minus, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 
-import type { ExplorerEntityDetail } from '../contracts/index.js';
+import type { ExplorerEntityDetail, ExplorerOperationDescriptor } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
 import { useExplorerRoutes } from './config.js';
+import { ExplorerEntityActions } from './entity-actions.js';
 import {
   ExplorerEditableEntityCell,
   type ExplorerEntityMutationRunner,
@@ -20,6 +21,8 @@ import {
 } from './entity-instance-values.js';
 import type { ExplorerInstanceNavigation } from './entity-instance-workspace.js';
 import { ExplorerEntityReferenceValue } from './entity-reference-value.js';
+import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
+import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
 import { shouldHandleExplorerNavigation } from './routes.js';
 
 const ExplorerInspectorValue = ({ value }: { value: unknown }) => {
@@ -52,6 +55,9 @@ export const ExplorerEntityInstanceInspector = ({
   onMinimize,
   onNavigate,
   onUpdated,
+  operations,
+  renderExecutePanel,
+  renderRefInput,
   row,
   runMutation,
   source,
@@ -65,6 +71,9 @@ export const ExplorerEntityInstanceInspector = ({
   onMinimize: () => void;
   onNavigate: (input: ExplorerInstanceNavigation) => void;
   onUpdated: () => Promise<unknown>;
+  operations: ExplorerOperationDescriptor[];
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
   row: Record<string, unknown>;
   runMutation?: ExplorerEntityMutationRunner;
   source: AnyEntityRef;
@@ -80,7 +89,7 @@ export const ExplorerEntityInstanceInspector = ({
       onPointerDown={onActivate}
       onFocusCapture={onActivate}
       className={cx(
-        'pointer-events-auto flex h-fit max-h-full w-[min(27rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden rounded-2xl border bg-card/95 text-card-foreground backdrop-blur transition-[border-color,box-shadow]',
+        'pointer-events-auto flex h-fit max-h-full w-[min(27rem,calc(100vw-1.5rem))] shrink-0 flex-col rounded-2xl border bg-card/95 text-card-foreground backdrop-blur transition-[border-color,box-shadow]',
         dragging
           ? 'border-primary/50 shadow-2xl ring-2 ring-primary/20'
           : active
@@ -92,7 +101,7 @@ export const ExplorerEntityInstanceInspector = ({
         data-explorer-workspace-drag-handle
         title='Drag to move · Double-click to minimize'
         className={cx(
-          'flex touch-none select-none items-start justify-between gap-4 border-b px-4 py-3',
+          'relative flex touch-none select-none items-start justify-between gap-4 rounded-t-2xl border-b px-4 py-3',
           dragging ? 'cursor-grabbing' : 'cursor-grab',
         )}
       >
@@ -103,6 +112,15 @@ export const ExplorerEntityInstanceInspector = ({
           <h2 className='mt-1 truncate text-xl font-semibold text-foreground'>{label}</h2>
         </div>
         <div className='flex shrink-0 items-center gap-1'>
+          <ExplorerEntityActions
+            ariaLabel={`Actions for ${entity.name} instance ${label}`}
+            contextLabel={label}
+            onSuccess={onUpdated}
+            operations={operations}
+            renderExecutePanel={renderExecutePanel}
+            renderRefInput={renderRefInput}
+            source={source}
+          />
           <button
             type='button'
             onClick={onMinimize}
@@ -122,7 +140,7 @@ export const ExplorerEntityInstanceInspector = ({
         </div>
       </header>
 
-      <div className='grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4'>
+      <div className='grid min-h-0 flex-1 content-start gap-4 overflow-y-auto rounded-b-2xl p-4'>
         <dl className='grid gap-0.5'>
           {entity.fields.map(field => {
             const value = row[field.name];

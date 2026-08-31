@@ -169,22 +169,43 @@ Turn the current Entity collection into the first collection-view node:
 This is a layout proof for a composable Explorer workspace, not yet a generalized window manager
 or a saved Selection model.
 
+## Eighth Vertical Slice
+
+Project reflected Operations into the node that supplies their context:
+
+1. replace the separate Actions button on the data canvas with an operation affordance in the
+   collection-node header while keeping explicit `operations` routes compatible for deep links;
+2. inspect every reflected Operation for exactly one Ref input compatible with an open instance's
+   portable identity, independently of the Entity namespace that owns the Operation;
+3. treat a one-cardinality Entity Selection as the same contextual receiver shape, while leaving
+   many-cardinality Selections and ambiguous same-Entity inputs explicit;
+4. prefer a future explicit `receiver` marker when reflection supplies one, without requiring it
+   for today's schema-native inputs;
+5. bind the current instance into the canonical operation input, hide only that bound input, and
+   render the remaining contract through the generic compact form;
+6. execute through the existing reflected invoker, show compact success or rejection feedback,
+   and refresh authoritative Entity and Relation queries after success;
+7. keep contextual discovery as Explorer presentation intelligence rather than introducing a
+   parallel authored method registry or treating visibility as authorization.
+
+Todo proves one-cardinality binding with `TodoList.rename` and `TodoList.recolor`, ordinary Ref
+binding with `TodoItem.create` and `TodoItem.delete`, and cross-owner discovery by exposing
+`TodoItem.deleteTag` from a `Tag` instance.
+
 ## Later Slices
 
 1. Extend authority-aware Relation affordances from many-to-many `add`/`remove` to direct
    `assign`/`clear` and composition lifecycle semantics.
 2. Replace raw Reference inputs in generic create/update forms with reflected, searchable Entity
    pickers when the runtime exposes a safe target Selection.
-3. Present rich Operations contextually for one instance or a Selection using the same reflected
-   contracts consumed by headless UI.
-4. Let Reference or Relation traversal open a target instance directly in the existing cross-Entity
+3. Let Reference or Relation traversal open a target instance directly in the existing cross-Entity
    workspace instead of merely navigating to a filtered table.
-5. Explore persistent filters, views, and saved window boards only after their state and Selection
+4. Explore persistent filters, views, and saved window boards only after their state and Selection
    semantics are explicit.
-6. Expose an optional runtime-projected access-scope description if it helps operators understand
+5. Expose an optional runtime-projected access-scope description if it helps operators understand
    why a surface is narrow or broad. Such a description is diagnostic evidence, never client-side
    authority.
-7. Explore explicit container nodes—boards, sectors, bags, or cells—that own visual membership and
+6. Explore explicit container nodes—boards, sectors, bags, or cells—that own visual membership and
    can collapse or reveal their contained instance nodes. Keep visual containment distinct from a
    domain Relation until the application models them as the same concept deliberately.
 
@@ -224,6 +245,8 @@ or a saved Selection model.
     order, and position-preserving collapse/expansion for both full and compact representations.
 12. Reframe the active Entity table as one compact movable and collapsible collection-view node,
     with Entity selection and query controls inside its own surface.
+13. Move executable Operations into collection and instance action menus, bind unambiguous current
+    instances, and reuse the reflected mini form for remaining inputs.
 
 ## Acceptance Checklist
 
@@ -257,21 +280,29 @@ or a saved Selection model.
       remains available.
 - [x] The active Entity collection is a compact movable node whose embedded Entity selector,
       minimize/restore interaction, and query controls remain usable.
+- [x] The collection node owns its operation affordance instead of reserving a separate Actions
+      section on the data canvas.
+- [x] Instance windows discover cross-owner Ref and one-cardinality Selection Operations, bind the
+      current portable identity, and expose only the remaining inputs.
+- [x] Ambiguous instance targets and many-cardinality Selections are not inferred as instance
+      actions.
 - [x] Explorer contains no regular-user/admin branch and no client-side policy bypass.
 - [x] Focused component tests, affected package tests, typecheck, lint, and format checks pass.
 - [x] Consumer-visible package changes have a Changeset and durable Explorer knowledge is updated.
 
 ## Progress
 
-The first seven vertical slices are implemented through 2026-08-31. Todo Explorer proves row
+The first eight vertical slices are implemented through 2026-08-31. Todo Explorer proves row
 selection, portable Reference navigation, Query-backed traversal from `TodoList` to the derived
 inverse `TodoItem.list`, parallel instance comparison, ephemeral collapse/expansion behavior, and
 authorized type-aware editing in both tables and windows. It also proves authority-reflected
 many-to-many Tag linking and unlinking through canonical Relationship Commands. Its Explorer-level
 workspace now keeps mixed-Entity windows across navigation and rehydrates restored rows. The
-active Entity collection is also a compact movable and collapsible node, while multiple collection
-views and saved query state remain later work alongside persistent view state, direct cross-Entity
-opening from graph links, direct/composition Relation editing, and portable eligibility.
+active Entity collection is also a compact movable and collapsible node. Collection-level
+Operations now live in that node, while instance windows derive bound actions from compatible Ref
+inputs and one-cardinality Selections. Multiple collection views and saved query state remain later
+work alongside persistent view state, direct cross-Entity opening from graph links,
+direct/composition Relation editing, and portable eligibility.
 
 ## Decisions
 
@@ -297,6 +328,9 @@ opening from graph links, direct/composition Relation editing, and portable elig
 12. A collection-view node owns an Entity and ephemeral query state, while an instance node owns a
     portable Entity identity. Sharing one visual interaction grammar does not collapse those two
     semantic identities.
+13. An instance action is a contextual projection of an ordinary Operation. Explorer may bind one
+    unambiguous Ref or one-cardinality Selection from the current identity, but operation ownership,
+    validation, execution, and authority remain unchanged.
 
 ## Open Questions
 
