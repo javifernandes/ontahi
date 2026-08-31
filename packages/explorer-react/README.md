@@ -28,10 +28,12 @@ React, ReactDOM, TanStack Query, and Lucide remain host peers. Monaco is owned b
 because the JSON operation editor is part of the provided Explorer UI.
 
 `ExplorerEntityBrowser` is instance-first when the host registers a reflected Entity data reader:
-the selected Entity opens on its rows, a searchable dropdown switches Entities without consuming a
-permanent sidebar, Operations appear as contextual Actions, and Schema remains available as a
-secondary floating affordance. The surface intentionally omits a title and explanatory hero copy.
-Hosts without a reflected reader continue to open on the reflected Entity structure. Explicit
+the selected Entity opens as one compact collection-view node containing its rows and query
+controls. Its header owns the searchable Entity switcher, and the complete node can move, minimize,
+restore, and move to the front when activated without consuming the canvas as a permanent page
+section. Operations appear as contextual Actions, and Schema remains available as a secondary
+floating affordance. The surface intentionally omits a title and explanatory hero copy. Hosts
+without a reflected reader continue to open on the reflected Entity structure. Explicit
 `structure`, `operations`, and `data` tab routes remain supported for deep links.
 
 Selecting identified rows opens non-blocking instance windows. Multiple windows can remain open
@@ -53,6 +55,11 @@ The complete non-interactive header and the compact node are the same pointer dr
 presentation states. Nodes may be freely placed and overlapped inside the viewport, and activating
 one raises it above its siblings. Position survives Entity and query navigation as well as
 collapse/expansion. It is not persisted across an Explorer unmount or page reload.
+
+The current collection node represents the active Entity plus its ephemeral filter, sort, and page
+state; instance nodes represent portable Entity identities. Explorer deliberately exposes only one
+collection node for now. Multiple collection views, resizing, closing, persistence, and saved
+Selections require an explicit view-state model rather than being inferred from this first layout.
 
 Reference cells and instance-window values resolve their authorized target through the reflected
 Entity data reader and render its declared primary and secondary display fields. The portable

@@ -22,8 +22,8 @@ import type { ExplorerEntityDetail } from '../contracts/index.js';
 import type { ExplorerEntityMutationRunner } from './entity-data-mutations.js';
 import { ExplorerEntityInstanceInspector } from './entity-instance-inspector.js';
 import {
-  ExplorerDraggableInstanceNode,
-  type ExplorerInstanceNodePosition,
+  ExplorerDraggableWorkspaceNode,
+  type ExplorerWorkspaceNodePosition,
 } from './entity-instance-node.js';
 import { getExplorerEntityInstanceLabel, getExplorerRowRef } from './entity-instance-values.js';
 
@@ -36,7 +36,7 @@ export type ExplorerInstanceWindow = {
   source: AnyEntityRef;
 };
 
-export type ExplorerInstanceWindowPosition = ExplorerInstanceNodePosition;
+export type ExplorerInstanceWindowPosition = ExplorerWorkspaceNodePosition;
 
 export type ExplorerInstanceNavigation = {
   href: string;
@@ -46,11 +46,13 @@ export type ExplorerInstanceNavigation = {
 
 type InstanceWorkspace = {
   activeKey?: string;
+  collectionActive: boolean;
   windows: ExplorerInstanceWindow[];
 };
 
 type InstanceWorkspaceAction =
   | { type: 'activate'; key: string }
+  | { type: 'activate-collection' }
   | { type: 'close'; key: string }
   | { type: 'minimize'; key: string }
   | { type: 'move'; key: string; position: ExplorerInstanceWindowPosition }
@@ -60,6 +62,8 @@ type InstanceWorkspaceAction =
 
 type ExplorerInstanceWorkspaceContextValue = {
   activeKey?: string;
+  collectionActive: boolean;
+  activateCollection: () => void;
   navigate: (input: ExplorerInstanceNavigation) => void;
   open: (input: {
     entity: ExplorerEntityDetail;
@@ -124,7 +128,13 @@ const reduceInstanceWorkspace = (
   state: InstanceWorkspace,
   action: InstanceWorkspaceAction,
 ): InstanceWorkspace => {
-  if (action.type === 'activate') return { ...state, activeKey: action.key };
+  if (action.type === 'activate') {
+    return { ...state, activeKey: action.key, collectionActive: false };
+  }
+
+  if (action.type === 'activate-collection') {
+    return { ...state, collectionActive: true };
+  }
 
   if (action.type === 'open') {
     const existing = state.windows.some(window => window.key === action.window.key);
@@ -135,7 +145,7 @@ const reduceInstanceWorkspace = (
             : window,
         )
       : [...state.windows, action.window];
-    return { windows, activeKey: action.window.key };
+    return { windows, activeKey: action.window.key, collectionActive: false };
   }
 
   if (action.type === 'move') {
@@ -144,6 +154,7 @@ const reduceInstanceWorkspace = (
         window.key === action.key ? { ...window, position: action.position } : window,
       ),
       activeKey: action.key,
+      collectionActive: false,
     };
   }
 
@@ -153,6 +164,7 @@ const reduceInstanceWorkspace = (
         window.key === action.key ? { ...window, minimized: false } : window,
       ),
       activeKey: action.key,
+      collectionActive: false,
     };
   }
 
@@ -167,19 +179,24 @@ const reduceInstanceWorkspace = (
 
   if (action.type === 'close') {
     const windows = state.windows.filter(window => window.key !== action.key);
+    const activeKey =
+      state.activeKey === action.key ? latestExpandedWindowKey(windows) : state.activeKey;
     return {
       windows,
-      activeKey:
-        state.activeKey === action.key ? latestExpandedWindowKey(windows) : state.activeKey,
+      activeKey,
+      collectionActive: activeKey ? state.collectionActive : true,
     };
   }
 
   const windows = state.windows.map(window =>
     window.key === action.key ? { ...window, minimized: true } : window,
   );
+  const activeKey =
+    state.activeKey === action.key ? latestExpandedWindowKey(windows) : state.activeKey;
   return {
     windows,
-    activeKey: state.activeKey === action.key ? latestExpandedWindowKey(windows) : state.activeKey,
+    activeKey,
+    collectionActive: activeKey ? state.collectionActive : true,
   };
 };
 
@@ -260,7 +277,11 @@ const WorkspaceWindows = ({
   };
 
   return state.windows.length > 0 ? (
-    <div aria-label='Open instance windows' className='pointer-events-none fixed inset-0 z-50'>
+    <div
+      aria-label='Open instance windows'
+      className='pointer-events-none fixed inset-0'
+      style={{ zIndex: state.collectionActive ? 50 : 60 }}
+    >
       {state.windows.map((window, index) => {
         const entity = findWorkspaceEntity(entities, window);
         if (!entity) return null;
@@ -283,7 +304,7 @@ const WorkspaceWindows = ({
         };
 
         return (
-          <ExplorerDraggableInstanceNode
+          <ExplorerDraggableWorkspaceNode
             key={window.key}
             position={position}
             constraintWidth={window.minimized ? instanceCollapsedNodeWidth : instanceWindowWidth}
@@ -301,7 +322,7 @@ const WorkspaceWindows = ({
               window.minimized ? (
                 <button
                   type='button'
-                  data-explorer-instance-drag-handle
+                  data-explorer-workspace-drag-handle
                   aria-label={`Restore ${entity.name} instance ${label}`}
                   title='Drag to move · Double-click to restore'
                   onClick={event => {
@@ -342,7 +363,7 @@ const WorkspaceWindows = ({
                 />
               )
             }
-          </ExplorerDraggableInstanceNode>
+          </ExplorerDraggableWorkspaceNode>
         );
       })}
     </div>
@@ -356,7 +377,10 @@ export const ExplorerEntityInstanceWorkspaceProvider = ({
   children: ReactNode;
   entities: ExplorerEntityDetail[];
 }) => {
-  const [state, dispatch] = useReducer(reduceInstanceWorkspace, { windows: [] });
+  const [state, dispatch] = useReducer(reduceInstanceWorkspace, {
+    collectionActive: true,
+    windows: [],
+  });
   const createWindow = ({
     entity,
     row,
@@ -397,6 +421,8 @@ export const ExplorerEntityInstanceWorkspaceProvider = ({
     <ExplorerInstanceWorkspaceContext.Provider
       value={{
         activeKey: state.activeKey,
+        collectionActive: state.collectionActive,
+        activateCollection: () => dispatch({ type: 'activate-collection' }),
         navigate,
         open: ({ entity, row, source }) =>
           dispatch({

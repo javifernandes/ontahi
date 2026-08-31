@@ -22,7 +22,7 @@ import {
   ExplorerEntityDeleteButton,
 } from './entity-data-mutations.js';
 
-import { ExplorerEntityBrowser, ExplorerProvider } from './index.js';
+import { ExplorerEntityBrowser, ExplorerEntityDataPanel, ExplorerProvider } from './index.js';
 
 const emptySchema: ExplorerSchemaDescriptor = {
   source: 'unknown',
@@ -253,6 +253,82 @@ describe('ExplorerEntityBrowser', () => {
     expect(globalThis.location.search).toBe('?tab=structure');
   });
 
+  it('moves, minimizes, and restores the Entity collection node', async () => {
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        <ExplorerEntityBrowser
+          entities={entities}
+          operations={[]}
+          tasks={[]}
+          selectedEntityName='Book'
+          renderDataPanel={({ entity }) => <div data-testid='data-panel'>data {entity.name}</div>}
+        />
+      </ExplorerProvider>,
+    );
+
+    const collection = screen.getByRole('region', { name: 'Book instances' });
+    const position = collection.parentElement!;
+    const header = collection.querySelector('header')!;
+    Object.defineProperty(position, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        bottom: 424,
+        height: 400,
+        left: 24,
+        right: 920,
+        top: 24,
+        width: 896,
+        x: 24,
+        y: 24,
+        toJSON: () => ({}),
+      }),
+    });
+
+    fireEvent.pointerDown(header, { button: 0, clientX: 60, clientY: 50, pointerId: 5 });
+    fireEvent.pointerMove(header, { clientX: 100, clientY: 100, pointerId: 5 });
+    fireEvent.pointerUp(header, { clientX: 100, clientY: 100, pointerId: 5 });
+
+    expect(position.style.left).toBe('64px');
+    expect(position.style.top).toBe('74px');
+    await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize Book instances' }));
+    expect(screen.queryByRole('region', { name: 'Book instances' })).toBeNull();
+    let restore = screen.getByRole('button', { name: 'Restore Book instances' });
+    Object.defineProperty(position, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        bottom: 130,
+        height: 56,
+        left: 64,
+        right: 352,
+        top: 74,
+        width: 288,
+        x: 64,
+        y: 74,
+        toJSON: () => ({}),
+      }),
+    });
+    fireEvent.pointerDown(restore, { button: 0, clientX: 80, clientY: 90, pointerId: 6 });
+    fireEvent.pointerMove(restore, { clientX: 100, clientY: 110, pointerId: 6 });
+    fireEvent.pointerUp(restore, { clientX: 100, clientY: 110, pointerId: 6 });
+
+    expect(position.style.left).toBe('84px');
+    expect(position.style.top).toBe('94px');
+    await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+
+    fireEvent.click(restore, { detail: 0 });
+    let restored = screen.getByRole('region', { name: 'Book instances' });
+    fireEvent.doubleClick(restored.querySelector('header')!);
+    restore = screen.getByRole('button', { name: 'Restore Book instances' });
+
+    fireEvent.doubleClick(restore);
+    restored = screen.getByRole('region', { name: 'Book instances' });
+    expect(restored.parentElement?.style.left).toBe('84px');
+    expect(restored.parentElement?.style.top).toBe('94px');
+    expect(screen.getByTestId('data-panel').textContent).toBe('data Book');
+  });
+
   it('hides data when no host data panel is supplied or the entity is a relation owner', () => {
     const { rerender } = render(
       <ExplorerEntityBrowser
@@ -328,6 +404,60 @@ describe('ExplorerEntityBrowser', () => {
         pageSize: 25,
       }),
     );
+  });
+
+  it('keeps the Entity data panel usable as a standalone public surface', async () => {
+    const standaloneBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      mutations: {
+        create: { fields: ['id', 'title'] },
+        delete: true,
+      },
+    };
+    const graphExecutor = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      runCommand: vi.fn(),
+      runEntityMutationCommand: vi.fn(),
+    } as unknown as ReactGraphExecutor;
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          graphExecutor,
+          readEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Book',
+            columns: [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'title', type: 'string', nullable: true },
+            ],
+            omittedColumns: [
+              {
+                column: 'legacy_notes',
+                field: 'legacyNotes',
+                reason: 'The legacy column is not queryable.',
+              },
+            ],
+            rows: [{ id: 'book-1', title: 'Ontahi' }],
+            page: 1,
+            pageSize: 25,
+            totalCount: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          children: <ExplorerEntityDataPanel entity={standaloneBook} />,
+        })}
+      </ExplorerProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Data' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New Book' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Delete row' })).toBeTruthy();
+    expect(screen.getByText('Some mapped fields are not queryable in this table.')).toBeTruthy();
+    expect(screen.getByText('legacyNotes (legacy_notes)')).toBeTruthy();
   });
 
   it('edits authorized scalar fields and deletes exact rows through Entity mutation Commands', async () => {
@@ -1107,6 +1237,22 @@ describe('ExplorerEntityBrowser', () => {
     expect(
       screen.getByRole('complementary', { name: 'Book instance Executable ontologies' }),
     ).toBeTruthy();
+
+    const collectionLayer = screen.getByLabelText('Open collection views');
+    const instanceLayer = screen.getByLabelText('Open instance windows');
+    const collection = screen.getByRole('region', { name: 'Book instances' });
+    expect(collectionLayer.style.zIndex).toBe('50');
+    expect(instanceLayer.style.zIndex).toBe('60');
+
+    fireEvent.pointerDown(collection);
+    expect(collectionLayer.style.zIndex).toBe('60');
+    expect(instanceLayer.style.zIndex).toBe('50');
+
+    fireEvent.pointerDown(
+      screen.getByRole('complementary', { name: 'Book instance Executable ontologies' }),
+    );
+    expect(collectionLayer.style.zIndex).toBe('50');
+    expect(instanceLayer.style.zIndex).toBe('60');
 
     const ontahiWindow = screen.getByRole('complementary', { name: 'Book instance Ontahi' });
     const ontahiPosition = ontahiWindow.parentElement!;

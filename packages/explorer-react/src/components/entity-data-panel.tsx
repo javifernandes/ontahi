@@ -34,6 +34,7 @@ import { shouldHandleExplorerNavigation } from './routes.js';
 import { ExplorerSelect } from './select.js';
 
 export type ExplorerEntityDataPanelProps = {
+  embedded?: boolean;
   entity: ExplorerEntityDetail;
   showHeader?: boolean;
 };
@@ -42,6 +43,7 @@ const isInteractiveRowTarget = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('a, button, input, select, textarea'));
 
 function ExplorerEntityDataPanelContent({
+  embedded = false,
   entity,
   showHeader = true,
 }: ExplorerEntityDataPanelProps) {
@@ -89,17 +91,19 @@ function ExplorerEntityDataPanelContent({
   }));
 
   return (
-    <section className='grid content-start gap-4'>
-      <div className='rounded-lg border bg-card p-5'>
-        <div className='flex flex-col gap-4'>
-          {showHeader || (canCreate && runMutation) ? (
+    <section className={cx('grid content-start', embedded ? 'gap-0' : 'gap-4')}>
+      <div
+        className={cx('bg-card', embedded ? 'border-b bg-muted/10 p-3' : 'rounded-lg border p-5')}
+      >
+        <div className={cx('flex flex-col', embedded ? 'gap-2' : 'gap-4')}>
+          {showHeader || (!embedded && canCreate && runMutation) ? (
             <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
               {showHeader ? (
                 <div>
                   <h3 className='font-semibold text-foreground'>Data</h3>
                 </div>
               ) : null}
-              {canCreate && runMutation ? (
+              {canCreate && runMutation && (!embedded || showHeader) ? (
                 <ExplorerEntityCreateButton
                   entity={entity}
                   runMutation={runMutation}
@@ -109,8 +113,14 @@ function ExplorerEntityDataPanelContent({
             </div>
           ) : null}
 
-          <div className='grid gap-3 xl:grid-cols-[minmax(220px,1fr)_minmax(360px,1.5fr)_minmax(260px,0.9fr)]'>
-            <label className='relative block'>
+          <div
+            className={cx(
+              embedded
+                ? 'flex flex-wrap items-center gap-2'
+                : 'grid gap-3 xl:grid-cols-[minmax(220px,1fr)_minmax(360px,1.5fr)_minmax(260px,0.9fr)]',
+            )}
+          >
+            <label className={cx('relative block', embedded && 'min-w-44 flex-1')}>
               <Search className='pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
               <input
                 value={browser.search}
@@ -120,7 +130,14 @@ function ExplorerEntityDataPanelContent({
               />
             </label>
 
-            <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]'>
+            <div
+              className={cx(
+                'grid gap-2',
+                embedded
+                  ? 'min-w-[21rem] flex-[1.35] grid-cols-[minmax(0,.85fr)_7rem_minmax(0,1fr)]'
+                  : 'md:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]',
+              )}
+            >
               <ExplorerSelect
                 value={browser.filterField}
                 onValueChange={browser.setFilterField}
@@ -144,7 +161,14 @@ function ExplorerEntityDataPanelContent({
               />
             </div>
 
-            <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_96px]'>
+            <div
+              className={cx(
+                'grid gap-2',
+                embedded
+                  ? 'min-w-48 flex-[.8] grid-cols-[minmax(0,1fr)_5rem]'
+                  : 'md:grid-cols-[minmax(0,1fr)_96px]',
+              )}
+            >
               <ExplorerSelect
                 value={browser.sortField}
                 onValueChange={browser.setSortField}
@@ -156,12 +180,24 @@ function ExplorerEntityDataPanelContent({
                 options={sortDirectionOptions}
               />
             </div>
+            {embedded && !showHeader && canCreate && runMutation ? (
+              <ExplorerEntityCreateButton
+                entity={entity}
+                runMutation={runMutation}
+                onApplied={browser.refresh}
+              />
+            ) : null}
           </div>
         </div>
       </div>
 
       {browser.result?.omittedColumns?.length ? (
-        <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950'>
+        <div
+          className={cx(
+            'border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950',
+            !embedded && 'rounded-lg',
+          )}
+        >
           <div className='font-medium'>Some mapped fields are not queryable in this table.</div>
           <div className='mt-1 text-amber-900'>
             {browser.result.omittedColumns
@@ -171,14 +207,22 @@ function ExplorerEntityDataPanelContent({
         </div>
       ) : null}
 
-      <div className='overflow-hidden rounded-lg border bg-card'>
+      <div className={cx('overflow-hidden bg-card', !embedded && 'rounded-lg border')}>
         {browser.error ? <div className='p-5 text-sm text-destructive'>{browser.error}</div> : null}
         <div className='overflow-x-auto'>
-          <table className='w-full min-w-[760px] text-left text-sm'>
+          <table
+            className={cx('w-full text-left text-sm', embedded ? 'min-w-[720px]' : 'min-w-[760px]')}
+          >
             <thead className='border-b bg-muted/35 text-xs uppercase tracking-wide text-muted-foreground'>
               <tr>
                 {browser.columns.map(column => (
-                  <th key={column.field} className='whitespace-nowrap px-4 py-3 font-medium'>
+                  <th
+                    key={column.field}
+                    className={cx(
+                      'whitespace-nowrap font-medium',
+                      embedded ? 'px-3 py-2.5' : 'px-4 py-3',
+                    )}
+                  >
                     <div className='grid gap-1'>
                       <span className='font-mono text-foreground'>{column.field}</span>
                       <span className='font-mono normal-case text-muted-foreground'>
@@ -188,7 +232,14 @@ function ExplorerEntityDataPanelContent({
                   </th>
                 ))}
                 {canDelete ? (
-                  <th className='whitespace-nowrap px-4 py-3 font-medium'>Actions</th>
+                  <th
+                    className={cx(
+                      'whitespace-nowrap font-medium',
+                      embedded ? 'px-3 py-2.5' : 'px-4 py-3',
+                    )}
+                  >
+                    Actions
+                  </th>
                 ) : null}
               </tr>
             </thead>
@@ -287,7 +338,13 @@ function ExplorerEntityDataPanelContent({
                         );
 
                       return (
-                        <td key={column.field} className='max-w-[280px] px-4 py-3 align-top'>
+                        <td
+                          key={column.field}
+                          className={cx(
+                            'max-w-[280px] align-top',
+                            embedded ? 'px-3 py-2.5' : 'px-4 py-3',
+                          )}
+                        >
                           <div
                             className={cx(
                               'font-mono text-xs text-foreground',
@@ -315,7 +372,7 @@ function ExplorerEntityDataPanelContent({
                       );
                     })}
                     {canDelete ? (
-                      <td className='px-4 py-3 align-top'>
+                      <td className={cx('align-top', embedded ? 'px-3 py-2.5' : 'px-4 py-3')}>
                         {source && runMutation ? (
                           <ExplorerEntityDeleteButton
                             entityName={entity.name}
@@ -346,7 +403,12 @@ function ExplorerEntityDataPanelContent({
             </tbody>
           </table>
         </div>
-        <div className='flex flex-col gap-3 border-t px-4 py-3 text-sm md:flex-row md:items-center md:justify-between'>
+        <div
+          className={cx(
+            'flex flex-col gap-3 border-t text-sm md:flex-row md:items-center md:justify-between',
+            embedded ? 'px-3 py-2' : 'px-4 py-3',
+          )}
+        >
           <div className='text-muted-foreground'>
             Page {browser.page} of {browser.totalPages}
           </div>
