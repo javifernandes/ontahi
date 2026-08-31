@@ -8,6 +8,7 @@ Completed children:
 2. [146b. Versioned Operation Protocol Family](../done/146b-versioned-operation-protocol-family.md)
 3. [146c. Runtime Protocol Dispatcher](../done/146c-runtime-protocol-dispatcher.md)
 4. [146d. Versioned Durable Operation Observation Protocol](../done/146d-versioned-durable-operation-observation-protocol.md)
+5. [146e. Runtime Transport Durable Observation](../done/146e-runtime-transport-durable-observation.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -40,7 +41,8 @@ Ontahí already has related but separately shaped runtime channels:
 
 1. Operation invocation and permission checks.
 2. Durable Operation start through invocation plus a versioned `durable.operation.inspect` and
-   snapshot contract; the current HTTP/React adapters still use a separate legacy Task endpoint.
+   snapshot contract. React consumes Runtime Transport observation, Fetch implements it by polling
+   the common protocol path, and the raw Task GET remains only as compatibility.
 3. Versioned Data Graph reads.
 4. Versioned Data Graph Commands containing Entity and Relationship Command variants.
 5. Internal Event intents and ingress channels, without a remote subscription/delivery protocol.
@@ -54,7 +56,8 @@ Relationship Commands keep different meanings and policies while sharing one mes
 dispatcher. Core now applies that shape across `operation`, `durable.operation`, `graph.read`, and
 `graph.command`: one transport-neutral dispatcher validates the common request, selects a
 configured family handler, passes receiver-owned context, and correlates the untouched family
-result. HTTP projection remains separate.
+result. Express can project an injected dispatcher at one path without choosing handlers or
+authority for the host; migration of the remaining clients and legacy paths is still open.
 
 ## Proposed Logical Shape
 
@@ -242,5 +245,10 @@ semantic message bodies and diagnostics.
    receiver context is passed beside, never inside, the portable request.
 7. Durable Operation observation is `durable.operation.inspect` plus a versioned snapshot.
    Progress, result, error, and cancelled state are snapshot values. React delegates observation to
-   Runtime Transport; Fetch may poll and a push-capable transport may subscribe without changing
-   hook semantics. Cancellation is not a request until runtimes can enforce it.
+   Runtime Transport; Fetch polls and any push-capable transport may yield the same asynchronous
+   snapshot sequence without changing hook semantics. Poll cadence belongs to Fetch transport
+   configuration, not React or the Operation bridge. Cancellation is not a request until runtimes
+   can enforce it.
+8. Express Runtime Protocol projection is opt-in and handler-neutral. It validates the envelope
+   before deriving receiver-owned context and dispatches only the family handlers explicitly
+   installed by the host; no Durable observation authority is inferred by the adapter.

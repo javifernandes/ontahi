@@ -73,13 +73,13 @@ a View for a projectable Selection output; `check-permission` may not. Its parse
 structurally compatible with the existing canonical dispatcher, which continues to own Operation
 resolution, input hydration, authority, permission checks, projections, and execution.
 
-Core also composes the three existing execution boundaries behind one transport-neutral
-dispatcher:
+Core composes the registered execution boundaries behind one transport-neutral dispatcher:
 
 ```ts
 const dispatch = createRuntimeProtocolDispatcher({
   handlers: {
     operation: operationDispatcher,
+    'durable.operation': durableObservationHandler,
     'graph.read': graphReadDispatcher,
     'graph.command': graphCommandDispatcher,
   },
@@ -116,14 +116,15 @@ portable polling baseline. The family is registered but has no implicit server h
 must install authority-aware observation explicitly. A cancelled snapshot is valid, but no
 `cancel` request exists until Task Runtimes expose an enforceable cancellation capability.
 
-React will consume this through a Runtime Transport observer. Fetch can implement observation by
-repeating `inspect`; a push-capable transport can subscribe and deliver the same snapshot body.
-The hook should not select either strategy. The current `getTaskSnapshot`/`pollIntervalMs` bridge is
-kept until the transport migration slice.
+React consumes this through a Runtime Transport observer. The Fetch implementation repeats
+`inspect` at its configured cadence and yields snapshots until terminal state; a future
+push-capable transport can produce the same asynchronous sequence. `useDurableOperation` selects
+neither strategy, and Operation bridge adapters no longer carry Task snapshot methods.
 
-The dispatcher does not mount a common endpoint or change the current paths documented below. In
-particular, the legacy `/operations` HTTP body remains unversioned until the transport migration is
-implemented.
+Express can project an injected common dispatcher at `POST /runtime`. It validates the envelope and
+family body before deriving receiver context, but does not install handlers or authorization. The
+host explicitly chooses which families the dispatcher exposes. The legacy `/operations` HTTP body
+and raw Task GET remain during the bounded endpoint migration.
 
 ## Carry generic operation invocations
 
@@ -134,6 +135,13 @@ const ontahiHttp = {
   mountPath: '/runtime/ontahi',
 };
 
+const runtimeDispatcher = createRuntimeProtocolDispatcher({
+  handlers: {
+    'durable.operation': async request =>
+      toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
+  },
+});
+
 const server = express();
 
 server.use(
@@ -142,6 +150,10 @@ server.use(
     invocationContext: request => ({
       principal: authenticate(request),
     }),
+    runtimeProtocol: {
+      dispatcher: runtimeDispatcher,
+      context: request => ({ principal: authenticate(request) }),
+    },
     graphRead: {
       policies: todoGraphReadPolicies,
     },
@@ -156,9 +168,11 @@ server.use(
 `mountPath` places every Ontahí-owned HTTP surface below one host-selected root:
 
 - `POST /runtime/ontahi/operations` invokes operations and answers permission checks;
+- `POST /runtime/ontahi/runtime` carries configured Runtime Protocol families, including Durable
+  observation in this example;
 - `POST /runtime/ontahi/graph/reads` executes explicitly permitted Queries;
 - `POST /runtime/ontahi/graph/commands` executes explicitly permitted Relationship Commands;
-- `GET /runtime/ontahi/operations/tasks/:taskId/:runId` observes durable runs;
+- `GET /runtime/ontahi/operations/tasks/:taskId/:runId` is the legacy Durable observation path;
 - `GET /runtime/ontahi/application` returns reflected application metadata;
 - `/runtime/ontahi/explorer/*` serves inspection endpoints when Explorer is enabled.
 
@@ -171,6 +185,7 @@ const client = createFetchGraphClient({
     commandEndpoint: '/runtime/ontahi/graph/commands',
   },
   operations: { mountPath: '/runtime/ontahi' },
+  runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
 

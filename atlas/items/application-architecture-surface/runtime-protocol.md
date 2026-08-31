@@ -21,6 +21,7 @@ relatedPlans:
   - ontahi://plans/146b-versioned-operation-protocol-family
   - ontahi://plans/146c-runtime-protocol-dispatcher
   - ontahi://plans/146d-versioned-durable-operation-observation-protocol
+  - ontahi://plans/146e-runtime-transport-durable-observation
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -50,15 +51,18 @@ Handler availability is a runtime capability: an unknown protocol family and a r
 without a local handler remain distinct outcomes. Receiver context stays outside portable messages
 and is passed directly to the selected handler.
 
-The dispatcher does not change current HTTP paths yet: the legacy Operation HTTP body remains
-unversioned during migration. Durable Operation start travels through `operation.invoke` and
-returns a portable run Ref. The new observation family does not automatically expose Task state;
-the receiver must install an authority-aware handler, while the current Task snapshot endpoint and
-React Fetch bridge remain on their legacy contract until transport migration. Repeated `inspect`
-is the portable polling primitive. A later push transport may deliver the same snapshot semantics
-without changing the React hook. Cancellation remains only an observable status because no current
-Task Runtime exposes a truthful cancellation capability. Event intents are internal and no remote
-subscription contract exists.
+The Express projection can mount an injected common dispatcher at `/runtime`; it never installs an
+authority-free Durable handler. The host derives receiver context and explicitly maps
+`durable.operation.inspect` to its Task runtime. Legacy family-specific routes remain during
+migration, including the raw Task snapshot GET.
+
+The client-side `RuntimeTransport` exposes unary request exchange plus optional family
+capabilities. Its Durable observer is an asynchronous snapshot sequence. The Fetch implementation
+produces that sequence by repeatedly sending versioned `inspect` envelopes; React consumes the
+sequence without owning polling cadence. A later push transport may produce the same sequence
+without changing the hook or protocol. Cancellation remains only an observable status because no
+current Task Runtime exposes a truthful cancellation capability. Event intents are internal and no
+remote subscription contract exists.
 
 Events are an explicit design gate. Before Event subscription or delivery joins this protocol,
 Ontahí must define first-class Event declaration, identity, emission, authority, lifecycle,

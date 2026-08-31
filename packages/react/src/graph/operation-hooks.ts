@@ -41,6 +41,7 @@ import {
   useGraphClientCache,
   useGraphClientCacheVersion,
   useReflectedOperationInvoker,
+  useRuntimeTransportCapability,
 } from './context.js';
 import {
   getOperationClientCacheKey,
@@ -410,32 +411,61 @@ export function useDurableOperation<TInput, TResult = unknown>(
   operation: DurableOperationLike<TInput, TResult>,
   options?: DurableOperationHookOptions<TInput>,
 ): DurableOperationHookResult<TInput, TResult> {
-  const adapter = useDefaultOperationBridgeAdapter();
+  const runtimeTransport = useRuntimeTransportCapability();
+  const observer = runtimeTransport?.durableOperation;
   const queryClient = useQueryClient();
   const mutation = useOperation<TInput, TaskRunRef>(
     operation as ClientOperationLike<TInput, TaskRunRef>,
     { ...options, invalidateOnSuccess: false },
   );
   const runRef = mutation.value;
-  const snapshotQuery = useQuery({
-    queryKey: ['ontahi-task-run', runRef?.taskId, runRef?.runId],
-    enabled: Boolean(runRef && adapter.getTaskSnapshot),
-    queryFn: () => {
-      if (!runRef || !adapter.getTaskSnapshot) {
-        throw new Error('The operation bridge does not provide task snapshot transport.');
+  const runKey = runRef ? `${runRef.taskId}:${runRef.runId}` : undefined;
+  const [observation, setObservation] = useState<{
+    runKey: string | undefined;
+    snapshot: TaskSnapshot<TResult> | undefined;
+    active: boolean;
+  }>({ runKey: undefined, snapshot: undefined, active: false });
+  const currentObservation = observation.runKey === runKey ? observation : undefined;
+  const snapshot = currentObservation?.snapshot;
+  const invalidatedRunRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!runRef || !runKey || !observer) return;
+
+    const controller = new AbortController();
+    let active = true;
+    setObservation({ runKey, snapshot: undefined, active: true });
+
+    void (async () => {
+      try {
+        for await (const nextSnapshot of observer.observe<TResult>(
+          { taskId: runRef.taskId, runId: runRef.runId },
+          { signal: controller.signal },
+        )) {
+          if (!active) return;
+          setObservation({ runKey, snapshot: nextSnapshot, active: true });
+        }
+      } catch {
+        if (!controller.signal.aborted && active) {
+          setObservation(current =>
+            current.runKey === runKey ? { ...current, active: false } : current,
+          );
+        }
+        return;
       }
 
-      return adapter.getTaskSnapshot<TResult>({ taskId: runRef.taskId, runId: runRef.runId });
-    },
-    refetchInterval: query => {
-      const status = (query.state.data as TaskSnapshot<TResult> | undefined)?.status;
-      return status === 'completed' || status === 'failed' || status === 'cancelled'
-        ? false
-        : (options?.pollIntervalMs ?? 500);
-    },
-  });
-  const snapshot = snapshotQuery.data;
-  const invalidatedRunRef = useRef<string | undefined>(undefined);
+      if (active) {
+        setObservation(current =>
+          current.runKey === runKey ? { ...current, active: false } : current,
+        );
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [observer, runKey, runRef]);
 
   useEffect(() => {
     if (
@@ -465,6 +495,7 @@ export function useDurableOperation<TInput, TResult = unknown>(
 
   const reset = useCallback(() => {
     mutation.reset();
+    setObservation({ runKey: undefined, snapshot: undefined, active: false });
     invalidatedRunRef.current = undefined;
   }, [mutation]);
   const runStatus = snapshot?.status ?? runRef?.status;
@@ -482,10 +513,12 @@ export function useDurableOperation<TInput, TResult = unknown>(
     isCompleted: runStatus === 'completed',
     isFailed: runStatus === 'failed',
     isCancelled: runStatus === 'cancelled',
-    isRefreshingRun: snapshotQuery.isFetching,
+    isRefreshingRun: currentObservation?.active ?? false,
     isExecuting:
       mutation.isExecuting ||
-      (Boolean(adapter.getTaskSnapshot) && (runStatus === 'queued' || runStatus === 'running')),
+      (Boolean(observer) &&
+        currentObservation?.active !== false &&
+        (runStatus === 'queued' || runStatus === 'running')),
   };
 }
 

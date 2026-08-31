@@ -1,5 +1,9 @@
 import { defineClientEntity, entity, field } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
+import {
+  createRuntimeProtocolResponse,
+  type RuntimeProtocolRequestEnvelope,
+} from '@ontahi/core/runtime/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFetchGraphClient } from './index.js';
@@ -14,6 +18,7 @@ describe('Fetch graph client', () => {
 
     expect(client.graph).toBeDefined();
     expect(client.graphExecutor).toBeDefined();
+    expect(client.runtimeTransport).toBeDefined();
     expect(client.operationBridgeAdapters).toHaveLength(1);
     expect(client.operationBridgeAdapters?.[0]?.name).toBe('fetch');
     expect(client.reflectedOperationInvoker).toBeDefined();
@@ -104,35 +109,55 @@ describe('Fetch graph client', () => {
     });
   });
 
-  it('uses the conventional Operation and task endpoints', async () => {
-    const fetchRequest = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ taskId: 'Todo.completeAll', runId: 'run-1', status: 'completed' }),
-      })
-      .mockResolvedValueOnce({
+  it('uses the conventional Runtime Protocol and Operation endpoints', async () => {
+    const fetchRequest = vi.fn(async (endpoint: string, init?: RequestInit) => {
+      if (endpoint === '/runtime') {
+        const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+        return {
+          ok: true,
+          json: async () =>
+            createRuntimeProtocolResponse(request, {
+              version: 1,
+              kind: 'snapshot',
+              snapshot: {
+                taskId: 'Todo.completeAll',
+                runId: 'run-1',
+                status: 'completed',
+                updatedAt: '2026-08-31T01:00:00.000Z',
+              },
+            }),
+        };
+      }
+      return {
         ok: true,
         json: async () => ({
           kind: 'invocation-result',
           result: { ok: true, kind: 'success', value: { completed: 2 } },
         }),
-      });
-    vi.stubGlobal('fetch', fetchRequest);
-    const client = createFetchGraphClient();
-
-    await client.operationBridgeAdapters?.[0]?.getTaskSnapshot?.({
-      taskId: 'Todo.completeAll',
-      runId: 'run-1',
+      };
     });
+    vi.stubGlobal('fetch', fetchRequest);
+    const client = createFetchGraphClient({
+      runtimeTransport: { requestId: () => 'inspect-1' },
+    });
+
+    await client.runtimeTransport?.durableOperation
+      ?.observe({ taskId: 'Todo.completeAll', runId: 'run-1' })
+      [Symbol.asyncIterator]()
+      .next();
     await client.reflectedOperationInvoker?.invokeOperation({
       operationId: 'Todo.complete',
       input: { ids: ['todo-1'] },
     });
 
-    expect(fetchRequest).toHaveBeenNthCalledWith(1, '/operations/tasks/Todo.completeAll/run-1', {
-      credentials: 'same-origin',
-    });
+    expect(fetchRequest).toHaveBeenNthCalledWith(
+      1,
+      '/runtime',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"family":"durable.operation"'),
+      }),
+    );
     expect(fetchRequest).toHaveBeenNthCalledWith(
       2,
       '/operations',
@@ -213,6 +238,7 @@ describe('Fetch graph client', () => {
       createFetchGraphClient({
         graphRead: false,
         operations: false,
+        runtimeTransport: false,
         reflectedEntityData: false,
         reflectedRelatedEntityData: false,
       }),

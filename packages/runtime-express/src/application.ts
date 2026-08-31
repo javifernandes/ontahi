@@ -28,6 +28,10 @@ import {
 import { mountExpressHttpIngress, type OntahiExpressIngressOptions } from './http-ingress.js';
 import { createExpressOperationInvocationHandler } from './operation-invocation/handler.js';
 import type { ExpressInvocationContextFactory } from './request-context.js';
+import {
+  createExpressRuntimeProtocolHandler,
+  type CreateExpressRuntimeProtocolHandlerOptions,
+} from './runtime-protocol/handler.js';
 import { createExpressTaskSnapshotHandler } from './task-snapshot/handler.js';
 
 export type OntahiExpressExplorerOptions = {
@@ -92,14 +96,21 @@ export type OntahiExpressGraphCommandOptions<TAuthority = InvocationContext> = {
   authority?: ExpressGraphCommandAuthorityFactory<TAuthority>;
 };
 
+export type OntahiExpressRuntimeProtocolOptions<TContext> =
+  CreateExpressRuntimeProtocolHandlerOptions<TContext> & {
+    path?: string;
+  };
+
 export type OntahiExpressOptions<
   TGraphReadAuthority = InvocationContext,
   TGraphCommandAuthority = InvocationContext,
+  TRuntimeProtocolContext = unknown,
 > = {
   mountPath?: string;
   operationsPath?: string;
   graphRead?: OntahiExpressGraphReadOptions<TGraphReadAuthority>;
   graphCommand?: OntahiExpressGraphCommandOptions<TGraphCommandAuthority>;
+  runtimeProtocol?: OntahiExpressRuntimeProtocolOptions<TRuntimeProtocolContext>;
   applicationPath?: string | false;
   explorer?: OntahiExpressExplorerOptions;
   ingress?: OntahiExpressIngressOptions;
@@ -116,9 +127,14 @@ const mountPath = (value: string) => {
 export const ontahiExpress = <
   TGraphReadAuthority = InvocationContext,
   TGraphCommandAuthority = InvocationContext,
+  TRuntimeProtocolContext = unknown,
 >(
   application: OntahiApplication,
-  options: OntahiExpressOptions<TGraphReadAuthority, TGraphCommandAuthority> = {},
+  options: OntahiExpressOptions<
+    TGraphReadAuthority,
+    TGraphCommandAuthority,
+    TRuntimeProtocolContext
+  > = {},
 ): Router => {
   const router = express.Router();
   const operationsPath = routePath(options.operationsPath ?? '/operations');
@@ -142,6 +158,18 @@ export const ontahiExpress = <
       reportError: options.reportError,
     }),
   );
+
+  if (options.runtimeProtocol) {
+    const runtimeProtocolOptions = options.runtimeProtocol;
+    router.post(
+      routePath(runtimeProtocolOptions.path ?? '/runtime'),
+      express.json(),
+      createExpressRuntimeProtocolHandler({
+        ...runtimeProtocolOptions,
+        reportError: runtimeProtocolOptions.reportError ?? options.reportError,
+      }),
+    );
+  }
 
   if (options.graphRead) {
     const graphReadOptions = options.graphRead;

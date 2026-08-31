@@ -24,7 +24,8 @@ restarts Express when framework code changes.
 Open `http://localhost:3001` for the React UI. `OntahiGraphProvider` installs the conventional Fetch
 graph client, so the application only supplies runtime identity. It uses `useGraphQuery`,
 `useOperation`, and `useDurableOperation` against the same Express process without repeating
-endpoint wiring.
+endpoint wiring. Durable runs start through `/operations`; the Runtime Transport observes them with
+versioned `durable.operation.inspect` messages through `/runtime` and owns the polling cadence.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.setCompleted` has no authentication requirement.
@@ -114,9 +115,10 @@ curl -X POST http://localhost:3001/operations \
 
 Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded in the same Vite
 application. `ontahiExpress(TodoApplication, { explorer: ... })` mounts the operation bridge,
-durable task snapshots, application metadata, Explorer snapshot, reflected entity data, and the
-Explorer SPA. Execute panels use the same `/operations` bridge as the Todo UI, while reflected data
-comes from whichever graph storage is active.
+the explicitly configured Runtime Protocol dispatcher, legacy durable task snapshots, application
+metadata, Explorer snapshot, reflected entity data, and the Explorer SPA. Execute panels use the
+same `/operations` bridge as the Todo UI, while reflected data comes from whichever graph storage
+is active.
 
 ## Entities, Relations, Selections, and Operations
 
@@ -229,8 +231,9 @@ composition refines that same value without creating a UI-only filter language.
    `inProcessTasks()`, the notification Capability, and the public entities into the complete
    `TodoApplication` used by reflection, execution, tasks, ingress, and code generation. Task
    executor and storage can be configured separately when durable state must outlive the process.
-4. [`src/application.ts`](./src/application.ts) mounts the Operation and graph-read bridges through
-   one `ontahiExpress(...)` middleware.
+4. [`src/application.ts`](./src/application.ts) mounts the Operation and graph-read bridges plus an
+   explicit Durable observation handler behind the common Runtime Protocol path through one
+   `ontahiExpress(...)` middleware.
 5. The `ontahi-codegen` command analyzes the conventional `src/graph.ts` composition root and
    reproducibly emits `src/generated/client-entities.ts`; the app carries no custom generation
    script.

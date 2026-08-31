@@ -10,6 +10,7 @@ import {
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
 import { anonymousExecutionIdentity, type ExecutionIdentity } from '@ontahi/core/runtime/identity';
+import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import {
   createContext,
   useCallback,
@@ -35,6 +36,7 @@ const GraphRuntimeContext = createContext<unknown | null>(null);
 const ExecutionIdentityContext = createContext<ExecutionIdentity>(anonymousExecutionIdentity);
 const GraphExecutorContext = createContext<ReactGraphExecutor<any, any> | null>(null);
 const GraphClientCacheContext = createContext<GraphClientCache | null>(null);
+const RuntimeTransportContext = createContext<RuntimeTransport | null>(null);
 const OperationBridgeAdaptersContext = createContext<Map<string, AnyOperationBridgeAdapter> | null>(
   null,
 );
@@ -51,6 +53,7 @@ export type OntahiGraphProviderProps<
   children: ReactNode;
   runtime: TGraphRuntime;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
+  runtimeTransport?: RuntimeTransport;
   client?: OntahiGraphClient<TReadOptions, TCommandOptions> | false;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
@@ -69,6 +72,7 @@ export function OntahiGraphProvider<
   children,
   runtime,
   graphExecutor,
+  runtimeTransport,
   client,
   operationBridgeAdapters,
   reflectedEntityDataReader,
@@ -82,6 +86,7 @@ export function OntahiGraphProvider<
   const [defaultClientCache] = useState(() => createGraphClientCache());
   const graphClient = client === false ? undefined : (client ?? defaultGraphClient);
   const resolvedGraphExecutor = graphExecutor ?? graphClient?.graphExecutor;
+  const resolvedRuntimeTransport = runtimeTransport ?? graphClient?.runtimeTransport;
   const resolvedOperationBridgeAdapters =
     operationBridgeAdapters ?? graphClient?.operationBridgeAdapters ?? [];
   const resolvedReflectedEntityDataReader =
@@ -117,13 +122,15 @@ export function OntahiGraphProvider<
             value={resolvedReflectedEntityDataReader ?? null}
           >
             <OperationBridgeAdaptersContext.Provider value={bridgeAdapterMap}>
-              <GraphClientCacheContext.Provider value={graphClientCache}>
-                <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
-                  <GraphRuntimeContext.Provider value={runtime}>
-                    {children}
-                  </GraphRuntimeContext.Provider>
-                </GraphExecutorContext.Provider>
-              </GraphClientCacheContext.Provider>
+              <RuntimeTransportContext.Provider value={resolvedRuntimeTransport ?? null}>
+                <GraphClientCacheContext.Provider value={graphClientCache}>
+                  <GraphExecutorContext.Provider value={resolvedGraphExecutor ?? null}>
+                    <GraphRuntimeContext.Provider value={runtime}>
+                      {children}
+                    </GraphRuntimeContext.Provider>
+                  </GraphExecutorContext.Provider>
+                </GraphClientCacheContext.Provider>
+              </RuntimeTransportContext.Provider>
             </OperationBridgeAdaptersContext.Provider>
           </ReflectedEntityDataReaderContext.Provider>
         </ReflectedRelatedEntityDataReaderContext.Provider>
@@ -163,6 +170,16 @@ export function useGraphExecutorCapability<
   return (useContext(GraphExecutorContext) ?? undefined) as
     | ReactGraphExecutor<TReadOptions, TCommandOptions>
     | undefined;
+}
+
+export const useRuntimeTransportCapability = () => useContext(RuntimeTransportContext) ?? undefined;
+
+export function useRuntimeTransport() {
+  const transport = useRuntimeTransportCapability();
+  if (!transport) {
+    throw new Error('useRuntimeTransport requires an OntahiGraphProvider with runtimeTransport');
+  }
+  return transport;
 }
 
 export function useGraphClientCache() {

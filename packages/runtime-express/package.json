@@ -39,6 +39,11 @@
       "import": "./dist/graph-command/index.js",
       "require": "./dist/graph-command/index.js"
     },
+    "./runtime-protocol": {
+      "types": "./dist/runtime-protocol/index.d.ts",
+      "import": "./dist/runtime-protocol/index.js",
+      "require": "./dist/runtime-protocol/index.js"
+    },
     "./explorer": {
       "types": "./dist/explorer/index.d.ts",
       "import": "./dist/explorer/index.js",

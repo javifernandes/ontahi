@@ -139,31 +139,29 @@ The response is a versioned `snapshot` containing queued, running, completed, fa
 state plus progress, result, or error when present. Progress and result are snapshot states, not
 commands. Repeating `inspect` is the portable polling primitive.
 
-The intended React boundary is one Runtime Transport observer. `useDurableOperation` consumes its
-snapshots; the transport chooses how to produce them from its capabilities. A Fetch transport polls
-with repeated `inspect` requests. A future push-capable transport can subscribe and deliver the
-same snapshot values without changing component code, lifecycle state, or completion-time cache
-invalidation.
+The React boundary is one Runtime Transport observer. `useDurableOperation` consumes its
+asynchronous snapshot sequence; the transport chooses how to produce it from its capabilities. The
+Fetch transport polls with repeated `inspect` requests and stops at `completed`, `failed`, or
+`cancelled`. A future push-capable transport can produce the same sequence without changing
+component code, lifecycle state, or completion-time cache invalidation.
 
-Today, the compatibility implementation still calls `getTaskSnapshot` on the configured Operation
-bridge and owns TanStack Query polling. It stops at `completed`, `failed`, or `cancelled`. The next
-transport slice moves that strategy behind the Runtime Transport while preserving the public hook.
-
-The conventional React client already observes `/operations/tasks`. A host with custom paths
-configures the client bundle once:
+Polling cadence belongs to Fetch configuration, not the hook:
 
 ```ts
 const client = createFetchGraphClient({
-  operations: {
-    endpoint: '/runtime/ontahi/operations',
-    taskEndpoint: '/runtime/ontahi/operations/tasks',
+  runtimeTransport: {
+    endpoint: '/runtime/ontahi/runtime',
+    durableOperation: { pollIntervalMs: 750 },
   },
 });
 ```
 
-The provider passes that legacy task reader to `useDurableOperation`; individual bridge adapters
-remain available as a lower-level override. The Express adapter exposes both endpoints from the
-same composed application until the unified Runtime Protocol transport replaces them.
+The conventional same-origin client uses `POST /runtime`. `OntahiGraphProvider` exposes its Runtime
+Transport independently from Operation bridge adapters, so a host can replace observation without
+changing invocation. Express requires an explicitly configured common dispatcher and trusted
+request-context factory before mounting that path; it does not expose Task state automatically.
+The legacy Task snapshot GET remains only as a bounded compatibility surface during endpoint
+migration.
 
 ## The runtime defines the guarantee
 

@@ -51,9 +51,10 @@ const first = useGraphQuery(openTodos.first());
 ```
 
 `OntahiGraphProvider` installs a conventional same-origin Fetch client by default. It connects
-graph reads to `/graph/reads`, Operations and task snapshots to `/operations`, and reflected
-Explorer data to `/explorer/entities`. These capabilities are lazy: declaring the provider does
-not issue a request until the application uses one of them.
+graph reads to `/graph/reads`, Operations to `/operations`, Durable Operation observation to the
+Runtime Protocol at `/runtime`, and reflected Explorer data to `/explorer/entities`. These
+capabilities are lazy: declaring the provider does not issue a request until the application uses
+one of them.
 
 Hosts can replace any individual capability through the existing provider props, install a
 configured client with `client={createFetchGraphClient(...)}`, or set `client={false}` for a fully
@@ -98,6 +99,32 @@ await completeVisible.executeAsync();
 
 The bound invocation always uses the latest render input. Passing the Operation declaration itself
 keeps the lower-level reusable mutation form, where each execution supplies its input.
+
+Durable Operations use the same invocation bridge to start a run, then observe its lifecycle
+through Runtime Transport:
+
+```tsx
+const completeAll = useDurableOperation(TodoItem.domain.completeAll);
+
+await completeAll.executeAsync();
+// completeAll.status/progress/finalValue follow the accepted run.
+```
+
+The hook consumes an asynchronous snapshot sequence and does not choose polling or push. The
+conventional Fetch Runtime Transport implements that sequence with versioned
+`durable.operation.inspect` requests and owns the polling cadence:
+
+```ts
+const client = createFetchGraphClient({
+  runtimeTransport: {
+    endpoint: '/runtime/ontahi/runtime',
+    durableOperation: { pollIntervalMs: 750 },
+  },
+});
+```
+
+Hosts can replace `runtimeTransport` independently on `OntahiGraphProvider`; a future push-capable
+transport can yield the same snapshots without changing the hook.
 
 The Fetch executor sends only canonical graph-read and graph-Command requests. Credentials and
 other trusted request state remain in Fetch initialization and are never embedded in a Query AST or

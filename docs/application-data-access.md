@@ -243,7 +243,7 @@ The default Fetch client is lazy and uses:
 - `/graph/reads` for Queries;
 - `/graph/commands` for explicitly permitted Relationship Commands;
 - `/operations` for Operations;
-- `/operations/tasks` for durable task snapshots;
+- `/runtime` for versioned Durable Operation observation;
 - `/explorer/entities` for reflected Explorer data.
 
 Customize the bundle when the host uses another mount root:
@@ -257,6 +257,7 @@ const graphClient = createFetchGraphClient({
     commandEndpoint: '/runtime/ontahi/graph/commands',
   },
   operations: { mountPath: '/runtime/ontahi' },
+  runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
 

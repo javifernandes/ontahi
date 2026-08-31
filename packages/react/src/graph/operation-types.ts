@@ -94,9 +94,7 @@ export type OperationHookOptions<TInput, TData> = {
   invalidateOnSuccess?: boolean;
 };
 
-export type DurableOperationHookOptions<TInput> = OperationHookOptions<TInput, TaskRunRef> & {
-  pollIntervalMs?: number;
-};
+export type DurableOperationHookOptions<TInput> = OperationHookOptions<TInput, TaskRunRef>;
 
 export type OperationInputArgs<TInput> = [TInput] extends [void] ? [] : [input: TInput];
 
