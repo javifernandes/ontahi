@@ -3,7 +3,17 @@
 import type { AnyEntityRef } from '@ontahi/core/data-graph';
 import { useHasReflectedEntityDataReader, useReflectedOperationSupport } from '@ontahi/react/graph';
 import { ArrowLeft, ArrowUpRight, CirclePlay, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 
 import type {
   ExplorerOperationDescriptor,
@@ -86,6 +96,15 @@ export const getExplorerInstanceOperationBindings = (
     return binding ? [binding] : [];
   });
 
+export const getExplorerRelationOperations = (
+  operations: ExplorerOperationDescriptor[],
+  source: AnyEntityRef,
+  targetEntityName: string,
+) =>
+  getExplorerInstanceOperationBindings(operations, source)
+    .filter(binding => binding.operation.resultEntityName === targetEntityName)
+    .map(binding => binding.operation);
+
 export const buildExplorerContextualOperationInput = (
   binding: ExplorerInstanceOperationBinding,
   source: AnyEntityRef,
@@ -129,8 +148,11 @@ export type ExplorerEntityActionsProps = Readonly<{
   operations: ExplorerOperationDescriptor[];
   renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
   renderRefInput?: ExplorerOperationRefInputRenderer;
+  renderInPortal?: boolean;
   source?: AnyEntityRef;
   tasks?: ExplorerTaskDescriptor[];
+  triggerClassName?: string;
+  triggerIcon?: ReactNode;
 }>;
 
 const actionControlClassName =
@@ -350,14 +372,19 @@ export function ExplorerEntityActions({
   operations,
   renderExecutePanel,
   renderRefInput,
+  renderInPortal = false,
   source,
   tasks = [],
+  triggerClassName,
+  triggerIcon,
 }: ExplorerEntityActionsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const hasReflectedEntityDataReader = useHasReflectedEntityDataReader();
   const supportsOperation = useReflectedOperationSupport();
   const [open, setOpen] = useState(false);
   const [selectedOperationId, setSelectedOperationId] = useState<string>();
+  const [portalStyle, setPortalStyle] = useState<CSSProperties>();
   const closeActions = useCallback(() => {
     setOpen(false);
     setSelectedOperationId(undefined);
@@ -385,11 +412,52 @@ export function ExplorerEntityActions({
     action => action.operation.id === selectedOperationId,
   );
 
+  const positionPortal = useCallback(() => {
+    const trigger = rootRef.current;
+    if (!trigger || typeof globalThis.window === 'undefined') return;
+
+    const margin = 16;
+    const gap = 8;
+    const width = Math.min(368, globalThis.innerWidth - margin * 2);
+    const rect = trigger.getBoundingClientRect();
+    const spaceBelow = globalThis.innerHeight - rect.bottom - gap - margin;
+    const spaceAbove = rect.top - gap - margin;
+    const placeAbove = spaceBelow < 240 && spaceAbove > spaceBelow;
+    const left = Math.min(
+      Math.max(margin, rect.right - width),
+      globalThis.innerWidth - width - margin,
+    );
+
+    setPortalStyle({
+      left,
+      maxHeight: Math.max(0, placeAbove ? spaceAbove : spaceBelow),
+      width,
+      ...(placeAbove
+        ? { bottom: globalThis.innerHeight - rect.top + gap }
+        : { top: rect.bottom + gap }),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !renderInPortal) return;
+
+    positionPortal();
+    globalThis.addEventListener('resize', positionPortal);
+    globalThis.addEventListener('scroll', positionPortal, true);
+    return () => {
+      globalThis.removeEventListener('resize', positionPortal);
+      globalThis.removeEventListener('scroll', positionPortal, true);
+    };
+  }, [open, positionPortal, renderInPortal, selectedOperationId]);
+
   useEffect(() => {
     if (!open) return;
 
     const closeFromOutside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      if (
+        !rootRef.current?.contains(event.target as Node) &&
+        !popoverRef.current?.contains(event.target as Node)
+      ) {
         closeActions();
       }
     };
@@ -418,6 +486,32 @@ export function ExplorerEntityActions({
     return null;
   }
 
+  const popover = open ? (
+    <div
+      ref={popoverRef}
+      style={renderInPortal ? portalStyle : undefined}
+      className={cx(
+        'z-[300] overflow-y-auto rounded-2xl border bg-popover text-popover-foreground shadow-2xl',
+        renderInPortal
+          ? 'fixed'
+          : 'absolute right-0 top-[calc(100%+0.5rem)] w-[min(23rem,calc(100vw-2rem))]',
+      )}
+    >
+      <ExplorerEntityActionsPopover
+        actions={availableActions}
+        contextLabel={contextLabel}
+        onClose={closeActions}
+        onSelect={setSelectedOperationId}
+        onSuccess={onSuccess}
+        renderExecutePanel={renderExecutePanel}
+        renderRefInput={renderRefInput}
+        selectedAction={selectedAction}
+        source={source}
+        tasks={tasks}
+      />
+    </div>
+  ) : null;
+
   return (
     <div ref={rootRef} className='relative'>
       <button
@@ -433,27 +527,15 @@ export function ExplorerEntityActions({
           'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition',
           'hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
           open && 'bg-primary/10 text-primary',
+          triggerClassName,
         )}
       >
-        <CirclePlay className='size-4' />
+        {triggerIcon ?? <CirclePlay className='size-4' />}
       </button>
 
-      {open ? (
-        <div className='absolute right-0 top-[calc(100%+0.5rem)] z-[100] w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-2xl'>
-          <ExplorerEntityActionsPopover
-            actions={availableActions}
-            contextLabel={contextLabel}
-            onClose={closeActions}
-            onSelect={setSelectedOperationId}
-            onSuccess={onSuccess}
-            renderExecutePanel={renderExecutePanel}
-            renderRefInput={renderRefInput}
-            selectedAction={selectedAction}
-            source={source}
-            tasks={tasks}
-          />
-        </div>
-      ) : null}
+      {renderInPortal && popover && typeof document !== 'undefined'
+        ? createPortal(popover, document.body)
+        : popover}
     </div>
   );
 }

@@ -552,7 +552,13 @@ describe('Ontahi todo portability example', () => {
           expect.objectContaining({ name: 'TodoItem' }),
           expect.objectContaining({ name: 'Tag' }),
         ]),
-        operations: expect.arrayContaining([expect.objectContaining({ id: 'TodoItem.deleteAll' })]),
+        operations: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'TodoItem.create',
+            resultEntityName: 'TodoItem',
+          }),
+          expect.objectContaining({ id: 'TodoItem.deleteAll' }),
+        ]),
       },
       entityDetails: expect.arrayContaining([
         expect.objectContaining({

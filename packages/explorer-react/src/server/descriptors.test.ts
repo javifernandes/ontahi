@@ -305,6 +305,33 @@ describe('explorer descriptor builder', () => {
     ]);
   });
 
+  it('reflects a direct Entity Operation result for contextual relation actions', () => {
+    const List = entity('RelationActionList', { id: field.id() });
+    const Item = entity('RelationActionItem', {
+      id: field.id(),
+      list: field.ref(List),
+      title: field.string(),
+    });
+    const snapshot = buildExplorerSnapshot({
+      entities: [List, Item],
+      domainOperations: [
+        {
+          id: 'RelationActionItem.create',
+          entityName: 'RelationActionItem',
+          name: 'create',
+          authority: 'server',
+          exposure: 'bridge',
+          input: graphSchema.pick(Item, ['id', 'list', 'title']),
+          output: Item,
+        },
+      ],
+    });
+
+    expect(snapshot.operations[0]).toEqual(
+      expect.objectContaining({ resultEntityName: 'RelationActionItem' }),
+    );
+  });
+
   it('reflects when an Operation Ref requires an existing participant', () => {
     const Book = entity('ExistingInputBook', { id: field.id() });
     const snapshot = buildExplorerSnapshot({

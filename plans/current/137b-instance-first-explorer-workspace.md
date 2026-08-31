@@ -192,6 +192,23 @@ Todo proves one-cardinality binding with `TodoList.rename` and `TodoList.recolor
 binding with `TodoItem.create` and `TodoItem.delete`, and cross-owner discovery by exposing
 `TodoItem.deleteTag` from a `Tag` instance.
 
+## Ninth Vertical Slice
+
+Project contextual Operations into the Relation block that gives them meaning:
+
+1. reflect the direct result Entity of an Operation without inferring behavior from its name;
+2. expose a source-bound Operation in a Relation header only when that direct result is the
+   Relation target Entity;
+3. expose each identified related row's ordinary contextual instance Actions beside that row;
+4. bind the source or related target through the existing operation-input rules and reuse the
+   generic compact form and invoker;
+5. refresh the parent window and authoritative Relation query after successful execution;
+6. keep structural Relation verbs, lifecycle, composition, unlink, and delete semantics separate.
+
+Todo proves the header projection by placing `TodoItem.create` beside the derived inverse
+`TodoList -> TodoItem` Relation while excluding `TodoItem.deleteList`, even though both Operations
+accept a `TodoList`. Related `TodoItem` rows expose `TodoItem.delete` through their own identity.
+
 ## Later Slices
 
 1. Extend authority-aware Relation affordances from many-to-many `add`/`remove` to direct
@@ -247,6 +264,8 @@ binding with `TodoItem.create` and `TodoItem.delete`, and cross-owner discovery 
     with Entity selection and query controls inside its own surface.
 13. Move executable Operations into collection and instance action menus, bind unambiguous current
     instances, and reuse the reflected mini form for remaining inputs.
+14. Project target-returning contextual Operations into Relation headers and expose contextual
+    instance Actions on identified related rows.
 
 ## Acceptance Checklist
 
@@ -286,13 +305,15 @@ binding with `TodoItem.create` and `TodoItem.delete`, and cross-owner discovery 
       current portable identity, and expose only the remaining inputs.
 - [x] Ambiguous instance targets and many-cardinality Selections are not inferred as instance
       actions.
+- [x] Relation headers expose only source-bound Operations whose direct result Entity matches the
+      Relation target, and related rows expose their target-instance Actions.
 - [x] Explorer contains no regular-user/admin branch and no client-side policy bypass.
 - [x] Focused component tests, affected package tests, typecheck, lint, and format checks pass.
 - [x] Consumer-visible package changes have a Changeset and durable Explorer knowledge is updated.
 
 ## Progress
 
-The first eight vertical slices are implemented through 2026-08-31. Todo Explorer proves row
+The first nine vertical slices are implemented through 2026-08-31. Todo Explorer proves row
 selection, portable Reference navigation, Query-backed traversal from `TodoList` to the derived
 inverse `TodoItem.list`, parallel instance comparison, ephemeral collapse/expansion behavior, and
 authorized type-aware editing in both tables and windows. It also proves authority-reflected
@@ -300,9 +321,10 @@ many-to-many Tag linking and unlinking through canonical Relationship Commands. 
 workspace now keeps mixed-Entity windows across navigation and rehydrates restored rows. The
 active Entity collection is also a compact movable and collapsible node. Collection-level
 Operations now live in that node, while instance windows derive bound actions from compatible Ref
-inputs and one-cardinality Selections. Multiple collection views and saved query state remain later
-work alongside persistent view state, direct cross-Entity opening from graph links,
-direct/composition Relation editing, and portable eligibility.
+inputs and one-cardinality Selections. Relation headers further project source-bound Operations
+that directly return their target Entity, and identified related rows own their target-instance
+Actions. Multiple collection views and saved query state remain later work alongside persistent
+view state, direct/composition Relation editing, ordered Relations, and portable eligibility.
 
 ## Decisions
 
@@ -331,6 +353,9 @@ direct/composition Relation editing, and portable eligibility.
 13. An instance action is a contextual projection of an ordinary Operation. Explorer may bind one
     unambiguous Ref or one-cardinality Selection from the current identity, but operation ownership,
     validation, execution, and authority remain unchanged.
+14. Relation-local Action placement requires both an unambiguous source binding and an explicit
+    direct result Entity matching the Relation target; it never derives lifecycle semantics from an
+    Operation name or structural Relation verb.
 
 ## Open Questions
 

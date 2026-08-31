@@ -2057,6 +2057,178 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByRole('complementary', { name: 'Book instance book-1' })).toBeTruthy();
   });
 
+  it('projects create Actions into a Relation header and instance Actions into related rows', async () => {
+    const user = userEvent.setup();
+    const invokeOperation = vi.fn().mockResolvedValue({
+      ok: true,
+      kind: 'success',
+      value: { id: 'profile-3', name: 'Grace' },
+    });
+    const readRelatedEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Profile',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'name', type: 'string', nullable: false },
+      ],
+      display: { primary: 'name' },
+      rows: [{ id: 'profile-1', name: 'Ada' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    const relatedBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      relations: [
+        {
+          name: 'collaborators',
+          provenance: 'derived-inverse',
+          kind: 'hasMany',
+          target: 'Profile',
+          targetIdentity: { name: 'refById', fields: ['id'] },
+          targetDisplay: { primary: 'name' },
+          direction: 'inverse',
+          cardinality: 'many',
+        },
+      ],
+    };
+    const profile: ExplorerEntityDetail = {
+      ...entities[1]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'name' },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+      ],
+    };
+    const createProfile: ExplorerOperationDescriptor = {
+      id: 'Profile.createForBook',
+      entityName: 'Profile',
+      resultEntityName: 'Profile',
+      name: 'create',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [
+          { path: 'book', type: 'Book', required: true },
+          { path: 'name', type: 'string', required: true },
+        ],
+      },
+      inputRefs: [
+        {
+          path: 'book',
+          entityName: 'Book',
+          receiver: false,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+    const archiveProfile: ExplorerOperationDescriptor = {
+      id: 'Profile.archive',
+      entityName: 'Profile',
+      name: 'archive',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [{ path: 'profile', type: 'Profile', required: true }],
+      },
+      inputRefs: [
+        {
+          path: 'profile',
+          entityName: 'Profile',
+          receiver: false,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['profile'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          readEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Book',
+            columns: [{ field: 'id', type: 'id', nullable: false }],
+            rows: [{ id: 'book-1' }],
+            page: 1,
+            pageSize: 25,
+            totalCount: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          readRelatedEntityData,
+          reflectedOperationInvoker: { invokeOperation },
+          children: (
+            <ExplorerEntityBrowser
+              entities={[relatedBook, profile]}
+              operations={[createProfile, archiveProfile]}
+              tasks={[]}
+              selectedEntityName='Book'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await user.click(await screen.findByRole('row', { name: 'book-1' }));
+    const relation = screen.getByRole('region', { name: 'collaborators relation' });
+    await within(relation).findByRole('link', { name: 'Ada' });
+
+    await user.click(
+      within(relation).getByRole('button', { name: 'Actions for Profile relation' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+    expect(screen.getByText('book: book-1')).not.toBeNull();
+    expect(screen.queryByLabelText('book Book')).toBeNull();
+    await user.type(screen.getByPlaceholderText('name'), 'Grace');
+    const relatedReadsBeforeCreate = readRelatedEntityData.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() =>
+      expect(invokeOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'Profile.createForBook',
+          input: {
+            book: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+            name: 'Grace',
+          },
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(readRelatedEntityData.mock.calls.length).toBeGreaterThan(relatedReadsBeforeCreate),
+    );
+    await user.click(screen.getByRole('button', { name: 'Close actions' }));
+
+    await user.click(
+      within(relation).getByRole('button', { name: 'Actions for Profile instance Ada' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() =>
+      expect(invokeOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'Profile.archive',
+          input: {
+            profile: { kind: 'entity-ref', entityName: 'Profile', locator: { id: 'profile-1' } },
+          },
+        }),
+      ),
+    );
+  });
+
   it('adds and removes authorized many-to-many participants from an instance relation', async () => {
     const user = userEvent.setup();
     const taggedTodo: ExplorerEntityDetail = {
