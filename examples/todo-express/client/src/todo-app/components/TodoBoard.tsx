@@ -106,6 +106,7 @@ export const TodoBoard = ({
 }: TodoAppModel['dashboard']) => {
   const [isAddingList, setIsAddingList] = useState(false);
   const [listName, setListName] = useState('');
+  const [focusTodoForListId, setFocusTodoForListId] = useState<string>();
   const [orderedListIds, setOrderedListIds] = useState(() =>
     storedStringArray(listOrderStorageKey),
   );
@@ -208,8 +209,10 @@ export const TodoBoard = ({
 
   const submitList = async (event: FormEvent) => {
     event.preventDefault();
-    if (!(await createList(listName))) return;
+    const createdListId = await createList(listName);
+    if (!createdListId) return;
 
+    setFocusTodoForListId(createdListId);
     setListName('');
     setIsAddingList(false);
   };
@@ -365,6 +368,7 @@ export const TodoBoard = ({
                 list={list}
                 tags={tags}
                 canComplete={canComplete}
+                focusTodoInput={focusTodoForListId === list.id}
                 isCreatingTodo={creatingTodoFor === list.id}
                 isRenaming={renamingListId === list.id}
                 isRecoloring={recoloringListId === list.id}

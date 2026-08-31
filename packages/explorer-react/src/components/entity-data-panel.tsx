@@ -1,13 +1,9 @@
 'use client';
 
 import type { AnyEntityRef, ReflectedEntityDataFilterOperator } from '@ontahi/core/data-graph';
-import {
-  useGraphExecutorCapability,
-  useHasReflectedRelatedEntityDataReader,
-  useReflectedRelatedEntityDataQuery,
-} from '@ontahi/react/graph';
+import { useGraphExecutorCapability } from '@ontahi/react/graph';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
@@ -23,6 +19,18 @@ import {
   ExplorerEntityDeleteButton,
   type ExplorerEntityMutationRunner,
 } from './entity-data-mutations.js';
+import {
+  formatExplorerEntityValue,
+  getExplorerReferenceLocator,
+  getExplorerRowRef,
+} from './entity-instance-values.js';
+import {
+  ExplorerEntityInstanceWorkspaceProvider,
+  explorerInstanceWindowKey,
+  useExplorerEntityInstanceWorkspace,
+} from './entity-instance-workspace.js';
+import { ExplorerEntityReferenceValue } from './entity-reference-value.js';
+import { shouldHandleExplorerNavigation } from './routes.js';
 import { ExplorerSelect } from './select.js';
 
 export type ExplorerEntityDataPanelProps = {
@@ -30,173 +38,10 @@ export type ExplorerEntityDataPanelProps = {
   showHeader?: boolean;
 };
 
-type RelatedSelection = {
-  source: AnyEntityRef;
-  relation: ExplorerEntityDetail['relations'][number];
-};
+const isInteractiveRowTarget = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('a, button, input, select, textarea'));
 
-const formatCellValue = (value: unknown) => {
-  if (value == null) {
-    return <span className='text-muted-foreground'>null</span>;
-  }
-
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
-
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-
-  return String(value);
-};
-
-const referenceLocator = (
-  value: unknown,
-  identity: { fields: string[] } | undefined,
-): Record<string, unknown> | undefined => {
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    'kind' in value &&
-    value.kind === 'entity-ref' &&
-    'locator' in value &&
-    typeof value.locator === 'object' &&
-    value.locator !== null
-  ) {
-    return value.locator as Record<string, unknown>;
-  }
-
-  return identity?.fields.length === 1 ? { [identity.fields[0]!]: value } : undefined;
-};
-
-const referenceLabel = (entityName: string, locator: Record<string, unknown>) =>
-  `${entityName} · ${Object.values(locator)
-    .map(value => String(value))
-    .join(' · ')}`;
-
-const rowRef = (
-  entity: ExplorerEntityDetail,
-  row: Record<string, unknown>,
-): AnyEntityRef | undefined => {
-  const fields = entity.identity?.fields;
-  if (!fields?.length || fields.some(field => row[field] === undefined)) return undefined;
-
-  return {
-    kind: 'entity-ref',
-    entityName: entity.name,
-    locator: Object.fromEntries(
-      fields.map(field => [field, row[field]]),
-    ) as AnyEntityRef['locator'],
-  };
-};
-
-const relatedRowLabel = (row: Record<string, unknown>, relation: RelatedSelection['relation']) => {
-  const primary = relation.targetDisplay?.primary;
-  if (primary && row[primary] != null) return String(row[primary]);
-
-  const fields = relation.targetIdentity?.fields ?? [];
-  return fields.length > 0
-    ? fields.map(field => String(row[field] ?? '')).join(' · ')
-    : JSON.stringify(row);
-};
-
-const ExplorerRelatedInstances = ({
-  onClose,
-  selection,
-}: {
-  onClose: () => void;
-  selection: RelatedSelection;
-}) => {
-  const routes = useExplorerRoutes();
-  const query = useReflectedRelatedEntityDataQuery({
-    source: selection.source,
-    relationName: selection.relation.name,
-    sourceEntityName: selection.source.entityName,
-    targetEntityName: selection.relation.target,
-    page: 1,
-    pageSize: 25,
-  });
-
-  return (
-    <section className='rounded-lg border bg-card p-5' aria-label='Related instances'>
-      <div className='flex items-center justify-between gap-3'>
-        <h3 className='font-semibold text-foreground'>{selection.relation.name}</h3>
-        <button
-          type='button'
-          onClick={onClose}
-          className='text-sm text-muted-foreground hover:text-foreground'
-          aria-label='Close related instances'
-        >
-          Close
-        </button>
-      </div>
-      {query.error ? <p className='mt-3 text-sm text-destructive'>{query.error.message}</p> : null}
-      {query.isLoading ? <p className='mt-3 text-sm text-muted-foreground'>Loading…</p> : null}
-      <ul className='mt-3 grid gap-2'>
-        {query.data?.rows.map((row, index) => {
-          const fields = selection.relation.targetIdentity?.fields ?? [];
-          const locator =
-            fields.length > 0 && fields.every(field => row[field] !== undefined)
-              ? Object.fromEntries(fields.map(field => [field, row[field]]))
-              : undefined;
-          const href = locator
-            ? routes.entity(selection.relation.target, { tab: 'data', ref: locator })
-            : routes.entity(selection.relation.target, { tab: 'data' });
-
-          return (
-            <li key={locator ? JSON.stringify(locator) : index}>
-              <a href={href} className='text-sm text-primary hover:underline'>
-                {relatedRowLabel(row, selection.relation)}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-};
-
-const ExplorerRelatedInstancesButton = ({
-  onSelect,
-  relation,
-  source,
-}: {
-  onSelect: () => void;
-  relation: RelatedSelection['relation'];
-  source: AnyEntityRef;
-}) => {
-  const query = useReflectedRelatedEntityDataQuery({
-    source,
-    relationName: relation.name,
-    sourceEntityName: source.entityName,
-    targetEntityName: relation.target,
-    page: 1,
-    pageSize: 1,
-  });
-
-  return (
-    <button
-      type='button'
-      onClick={onSelect}
-      aria-label={relation.name}
-      className='inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-foreground shadow-sm transition hover:border-primary hover:text-primary'
-    >
-      <span>{relation.name}</span>
-      <span
-        title={query.error ? 'Related count unavailable' : undefined}
-        className={cx(
-          'min-w-4 rounded-full bg-muted px-1 text-center text-[10px] text-muted-foreground',
-          query.error && 'bg-destructive/10 text-destructive',
-        )}
-      >
-        {query.isLoading ? '…' : query.error ? '!' : (query.data?.totalCount ?? 0)}
-      </span>
-    </button>
-  );
-};
-
-export function ExplorerEntityDataPanel({
+function ExplorerEntityDataPanelContent({
   entity,
   showHeader = true,
 }: ExplorerEntityDataPanelProps) {
@@ -217,17 +62,14 @@ export function ExplorerEntityDataPanel({
   const browser = useExplorerEntityDataBrowser({ entity, initialRef });
   const routes = useExplorerRoutes();
   const graphExecutor = useGraphExecutorCapability();
-  const hasRelatedReader = useHasReflectedRelatedEntityDataReader();
-  const [relatedSelection, setRelatedSelection] = useState<RelatedSelection>();
-  const toManyRelations = entity.relations.filter(relation => relation.cardinality === 'many');
-  const showRelatedColumn = hasRelatedReader && toManyRelations.length > 0;
+  const instanceWorkspace = useExplorerEntityInstanceWorkspace();
   const runMutation: ExplorerEntityMutationRunner | undefined =
     graphExecutor?.runEntityMutationCommand
       ? command => graphExecutor.runEntityMutationCommand!(command)
       : undefined;
   const canDelete = Boolean(runMutation && entity.mutations?.delete);
   const canCreate = Boolean(runMutation && entity.mutations?.create);
-  const bodyColSpan = browser.columns.length + (showRelatedColumn ? 1 : 0) + (canDelete ? 1 : 0);
+  const bodyColSpan = browser.columns.length + (canDelete ? 1 : 0);
   const fieldOptions = entity.fields.map(field => ({ value: field.name, label: field.name }));
   const operatorOptions = browser.availableFilterOperators.map(operator => ({
     value: operator.value,
@@ -245,20 +87,6 @@ export function ExplorerEntityDataPanel({
     value: String(option),
     label: `${option} / page`,
   }));
-
-  useEffect(() => {
-    setRelatedSelection(undefined);
-  }, [
-    browser.filterField,
-    browser.filterOperator,
-    browser.filterValue,
-    browser.page,
-    browser.pageSize,
-    browser.search,
-    browser.sortDirection,
-    browser.sortField,
-    entity.name,
-  ]);
 
   return (
     <section className='grid content-start gap-4'>
@@ -359,9 +187,6 @@ export function ExplorerEntityDataPanel({
                     </div>
                   </th>
                 ))}
-                {showRelatedColumn ? (
-                  <th className='whitespace-nowrap px-4 py-3 font-medium'>Related</th>
-                ) : null}
                 {canDelete ? (
                   <th className='whitespace-nowrap px-4 py-3 font-medium'>Actions</th>
                 ) : null}
@@ -369,13 +194,30 @@ export function ExplorerEntityDataPanel({
             </thead>
             <tbody className='divide-y'>
               {browser.result?.rows.map((row, rowIndex) => {
-                const source = rowRef(entity, row);
+                const source = getExplorerRowRef(entity, row);
                 const rowKey = source ? JSON.stringify(source.locator) : String(rowIndex);
+                const windowKey = source ? explorerInstanceWindowKey(source) : undefined;
+                const selected = windowKey === instanceWorkspace?.activeKey;
+                const selectInstance = (
+                  event: MouseEvent<HTMLTableRowElement> | KeyboardEvent<HTMLTableRowElement>,
+                ) => {
+                  if (!source || isInteractiveRowTarget(event.target)) return;
+                  if ('key' in event && !['Enter', ' '].includes(event.key)) return;
+                  if ('key' in event) event.preventDefault();
+                  instanceWorkspace?.open({ entity, row, source });
+                };
 
                 return (
                   <tr
                     key={`${entity.name}-${browser.page}-${rowKey}`}
-                    className='hover:bg-muted/25'
+                    tabIndex={source ? 0 : undefined}
+                    onClick={selectInstance}
+                    onKeyDown={selectInstance}
+                    className={cx(
+                      source &&
+                        'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30',
+                      selected ? 'bg-primary/10' : 'hover:bg-muted/25',
+                    )}
                   >
                     {browser.columns.map(column => {
                       const field = entity.fields.find(
@@ -383,29 +225,65 @@ export function ExplorerEntityDataPanel({
                       );
                       const reference = field?.reference;
                       const locator = reference
-                        ? referenceLocator(row[column.field], reference.identity)
+                        ? getExplorerReferenceLocator(row[column.field], reference.identity)
                         : undefined;
                       const editable = Boolean(
                         source &&
                         runMutation &&
                         field &&
                         !field.derived &&
-                        !field.reference &&
+                        !entity.identity?.fields.includes(field.name) &&
                         entity.mutations?.update?.fields.includes(field.name),
                       );
-                      const cell =
-                        reference && locator ? (
-                          <a
-                            href={routes.entity(reference.entityName, {
+                      const referenceHref =
+                        reference && locator
+                          ? routes.entity(reference.entityName, {
                               tab: 'data',
                               ref: locator,
-                            })}
-                            className='text-primary hover:underline'
-                          >
-                            {referenceLabel(reference.entityName, locator)}
-                          </a>
+                            })
+                          : undefined;
+                      const referenceSource =
+                        reference && locator
+                          ? ({
+                              kind: 'entity-ref',
+                              entityName: reference.entityName,
+                              locator: locator as AnyEntityRef['locator'],
+                            } satisfies AnyEntityRef)
+                          : undefined;
+                      const navigateReference = (event: MouseEvent<HTMLAnchorElement>) => {
+                        if (
+                          !referenceHref ||
+                          !referenceSource ||
+                          !instanceWorkspace ||
+                          !shouldHandleExplorerNavigation(event)
+                        ) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        instanceWorkspace.navigate({
+                          href: referenceHref,
+                          source: referenceSource,
+                        });
+                      };
+                      const cell =
+                        reference && locator ? (
+                          editable ? (
+                            <ExplorerEntityReferenceValue locator={locator} reference={reference} />
+                          ) : (
+                            <a
+                              href={referenceHref}
+                              onClick={navigateReference}
+                              className='text-primary hover:underline'
+                            >
+                              <ExplorerEntityReferenceValue
+                                locator={locator}
+                                reference={reference}
+                              />
+                            </a>
+                          )
                         ) : (
-                          formatCellValue(row[column.field])
+                          formatExplorerEntityValue(row[column.field])
                         );
 
                       return (
@@ -420,6 +298,8 @@ export function ExplorerEntityDataPanel({
                               <ExplorerEditableEntityCell
                                 entityName={entity.name}
                                 field={field}
+                                href={referenceHref}
+                                onNavigate={navigateReference}
                                 value={row[column.field]}
                                 target={source}
                                 runMutation={runMutation}
@@ -434,22 +314,6 @@ export function ExplorerEntityDataPanel({
                         </td>
                       );
                     })}
-                    {showRelatedColumn ? (
-                      <td className='px-4 py-3 align-top'>
-                        <div className='flex flex-wrap gap-2'>
-                          {source
-                            ? toManyRelations.map(relation => (
-                                <ExplorerRelatedInstancesButton
-                                  key={relation.name}
-                                  source={source}
-                                  relation={relation}
-                                  onSelect={() => setRelatedSelection({ source, relation })}
-                                />
-                              ))
-                            : null}
-                        </div>
-                      </td>
-                    ) : null}
                     {canDelete ? (
                       <td className='px-4 py-3 align-top'>
                         {source && runMutation ? (
@@ -517,12 +381,18 @@ export function ExplorerEntityDataPanel({
           </div>
         </div>
       </div>
-      {relatedSelection ? (
-        <ExplorerRelatedInstances
-          selection={relatedSelection}
-          onClose={() => setRelatedSelection(undefined)}
-        />
-      ) : null}
     </section>
+  );
+}
+
+export function ExplorerEntityDataPanel(props: ExplorerEntityDataPanelProps) {
+  const workspace = useExplorerEntityInstanceWorkspace();
+
+  return workspace ? (
+    <ExplorerEntityDataPanelContent {...props} />
+  ) : (
+    <ExplorerEntityInstanceWorkspaceProvider entities={[props.entity]}>
+      <ExplorerEntityDataPanelContent {...props} />
+    </ExplorerEntityInstanceWorkspaceProvider>
   );
 }

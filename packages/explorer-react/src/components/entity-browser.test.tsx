@@ -4,7 +4,7 @@ import type {
 } from '@ontahi/core/data-graph';
 import { OntahiGraphProvider, type ReactGraphExecutor } from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -404,6 +404,25 @@ describe('ExplorerEntityBrowser', () => {
       }),
     );
 
+    await user.click(screen.getByRole('button', { name: 'Edit color' }));
+    fireEvent.change(screen.getByLabelText('Edit color color picker'), {
+      target: { value: '#4263eb' },
+    });
+    const saveColor = screen.getByRole('button', { name: 'Save color' });
+    expect(saveColor.textContent).toBe('');
+    expect(screen.getByRole('button', { name: 'Cancel color' }).textContent).toBe('');
+    await user.click(saveColor);
+
+    await waitFor(() =>
+      expect(runEntityMutationCommand).toHaveBeenCalledWith({
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Tag',
+        target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+        values: { color: '#4263eb' },
+      }),
+    );
+
     await user.click(await screen.findByRole('button', { name: 'Edit name' }));
     await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
     await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Important');
@@ -472,6 +491,136 @@ describe('ExplorerEntityBrowser', () => {
     expect(onApplied).not.toHaveBeenCalled();
   });
 
+  it('uses reflected editors for booleans, enums, numbers, dates, JSON, references, and null', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockResolvedValue({ created: [], updated: [], deleted: [] });
+    const onApplied = vi.fn().mockResolvedValue(undefined);
+    const target = {
+      kind: 'entity-ref',
+      entityName: 'Record',
+      locator: { id: 'record-1' },
+    } as const;
+    const cells = [
+      { field: { name: 'completed', type: 'boolean', nullable: false }, value: false },
+      {
+        field: {
+          name: 'status',
+          type: 'enum',
+          nullable: false,
+          enumValues: ['draft', 'ready'],
+        },
+        value: 'draft',
+      },
+      { field: { name: 'score', type: 'number', nullable: false }, value: 1 },
+      {
+        field: { name: 'scheduledAt', type: 'date', nullable: false },
+        value: '2026-08-30T10:00:00.000Z',
+      },
+      { field: { name: 'metadata', type: 'json', nullable: false }, value: { rank: 1 } },
+      {
+        field: {
+          name: 'owner',
+          type: 'reference',
+          nullable: false,
+          reference: {
+            entityName: 'Profile',
+            identity: { name: 'refById', fields: ['id'] },
+          },
+        },
+        value: { kind: 'entity-ref', entityName: 'Profile', locator: { id: 'profile-1' } },
+      },
+      { field: { name: 'note', type: 'string', nullable: true }, value: 'Keep me' },
+    ] satisfies Array<{
+      field: ExplorerEntityDetail['fields'][number];
+      value: unknown;
+    }>;
+
+    render(
+      <div>
+        {cells.map(({ field, value }) => (
+          <ExplorerEditableEntityCell
+            key={field.name}
+            entityName='Record'
+            field={field}
+            href={field.name === 'owner' ? '/profiles/profile-1' : undefined}
+            onApplied={onApplied}
+            runMutation={runMutation}
+            target={target}
+            value={value}
+          >
+            {field.name === 'owner' ? 'Profile · profile-1' : String(value)}
+          </ExplorerEditableEntityCell>
+        ))}
+      </div>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Profile · profile-1' }).getAttribute('href')).toBe(
+      '/profiles/profile-1',
+    );
+
+    await user.click(screen.getByRole('switch', { name: 'Edit completed' }));
+    await waitFor(() =>
+      expect(runMutation).toHaveBeenCalledWith(
+        expect.objectContaining({ values: { completed: true } }),
+      ),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit status' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Edit status' }), 'ready');
+    await user.click(screen.getByRole('button', { name: 'Save status' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit score' }));
+    await user.clear(screen.getByRole('spinbutton', { name: 'Edit score' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Edit score' }), '42.5');
+    await user.click(screen.getByRole('button', { name: 'Save score' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit scheduledAt' }));
+    fireEvent.change(screen.getByLabelText('Edit scheduledAt'), {
+      target: { value: '2026-08-30T12:45' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Save scheduledAt' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit metadata' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Edit metadata' }), {
+      target: { value: '{"rank":2}' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Save metadata' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit owner' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Edit owner' }));
+    await user.type(screen.getByRole('textbox', { name: 'Edit owner' }), 'profile-2');
+    await user.click(screen.getByRole('button', { name: 'Save owner' }));
+
+    await user.click(screen.getByRole('button', { name: 'Edit note' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Edit note is null' }));
+    await user.click(screen.getByRole('button', { name: 'Save note' }));
+
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ values: { status: 'ready' } }),
+    );
+    expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { score: 42.5 } }));
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        values: { scheduledAt: new Date('2026-08-30T12:45').toISOString() },
+      }),
+    );
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ values: { metadata: { rank: 2 } } }),
+    );
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        values: {
+          owner: {
+            kind: 'entity-ref',
+            entityName: 'Profile',
+            locator: { id: 'profile-2' },
+          },
+        },
+      }),
+    );
+    expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { note: null } }));
+  });
+
   it('validates rich create inputs, closes its popover, and reports mutation failures', async () => {
     const user = userEvent.setup();
     const entity: ExplorerEntityDetail = {
@@ -537,7 +686,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(await screen.findByText('scope is required.')).toBeTruthy();
     expect(screen.getByText('JSON · workspaceId, slug')).toBeTruthy();
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Create published' }), 'true');
+    await user.click(screen.getByRole('switch', { name: 'Create published' }));
     await user.selectOptions(screen.getByRole('combobox', { name: 'Create status' }), 'ready');
     fireEvent.change(screen.getByRole('textbox', { name: 'Create scope' }), {
       target: { value: 'not-json' },
@@ -566,7 +715,11 @@ describe('ExplorerEntityBrowser', () => {
         published: true,
         status: 'ready',
         owner: null,
-        scope: { workspaceId: 'workspace-1', slug: 'main' },
+        scope: {
+          kind: 'entity-ref',
+          entityName: 'Scope',
+          locator: { workspaceId: 'workspace-1', slug: 'main' },
+        },
         score: 42,
       },
     });
@@ -599,7 +752,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(onApplied).not.toHaveBeenCalled();
   });
 
-  it('spans loading rows across the conditional Related column', () => {
+  it('spans loading rows across reflected Entity fields', () => {
     const pendingRead: ReflectedEntityDataReader['readEntityData'] = () =>
       new Promise(() => undefined);
     const relatedBook: ExplorerEntityDetail = {
@@ -641,10 +794,11 @@ describe('ExplorerEntityBrowser', () => {
 
     expect(
       (screen.getByText('Loading rows...').closest('td') as HTMLTableCellElement | null)?.colSpan,
-    ).toBe(relatedBook.fields.length + 1);
+    ).toBe(relatedBook.fields.length);
   });
 
-  it('shows pending related counts without blocking entity rows', async () => {
+  it('shows pending related data without blocking the selected instance', async () => {
+    const user = userEvent.setup();
     const pendingRelatedRead: ReflectedRelatedEntityDataReader['readRelatedEntityData'] = () =>
       new Promise(() => undefined);
     const readRelatedEntityData = vi.fn(pendingRelatedRead);
@@ -685,15 +839,17 @@ describe('ExplorerEntityBrowser', () => {
       }),
     );
 
-    expect((await screen.findByRole('button', { name: 'collaborators' })).textContent).toContain(
+    await user.click(await screen.findByRole('row', { name: 'book-1' }));
+    expect(screen.getByRole('region', { name: 'collaborators relation' }).textContent).toContain(
       '…',
     );
     expect(readRelatedEntityData).toHaveBeenCalledWith(
-      expect.objectContaining({ relationName: 'collaborators', pageSize: 1 }),
+      expect.objectContaining({ relationName: 'collaborators', pageSize: 25 }),
     );
   });
 
-  it('distinguishes an unavailable related count from an empty relation', async () => {
+  it('distinguishes unavailable related data from an empty relation', async () => {
+    const user = userEvent.setup();
     const relatedBook: ExplorerEntityDetail = {
       ...entities[0]!,
       identity: { name: 'refById', fields: ['id'] },
@@ -731,13 +887,53 @@ describe('ExplorerEntityBrowser', () => {
       }),
     );
 
-    const button = await screen.findByRole('button', { name: 'collaborators' });
-    await waitFor(() => expect(button.textContent).toContain('!'));
-    expect(screen.getByTitle('Related count unavailable')).toBeTruthy();
+    await user.click(await screen.findByRole('row', { name: 'book-1' }));
+    const relation = screen.getByRole('region', { name: 'collaborators relation' });
+    await waitFor(() => expect(relation.textContent).toContain('!'));
+    expect(screen.getByText('Count unavailable.')).toBeTruthy();
   });
 
   it('renders a Reference Field as a semantic Entity link instead of a raw id cell', async () => {
     const user = userEvent.setup();
+    const readEntityData = vi.fn<ReflectedEntityDataReader['readEntityData']>(async query => {
+      if (query.entityName === 'Profile') {
+        const id = query.filters?.find(filter => filter.field === 'id')?.value;
+        return {
+          entityName: 'Profile',
+          columns: [
+            { field: 'id', type: 'id', nullable: false },
+            { field: 'name', type: 'string', nullable: false },
+          ],
+          display: { primary: 'name' },
+          rows: id ? [{ id, name: id === 'profile-1' ? 'Alice' : 'Bob' }] : [],
+          page: 1,
+          pageSize: 10,
+          totalCount: id ? 1 : 0,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        };
+      }
+
+      return {
+        entityName: 'Book',
+        columns: [{ field: 'owner', type: 'reference', nullable: false }],
+        rows: [
+          {
+            owner: {
+              kind: 'entity-ref',
+              entityName: 'Profile',
+              locator: { id: 'profile-1' },
+            },
+          },
+          { owner: 'profile-2' },
+        ],
+        page: 1,
+        pageSize: 25,
+        totalCount: 2,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      };
+    });
     const bookWithOwner: ExplorerEntityDetail = {
       ...entities[0]!,
       fields: [
@@ -758,25 +954,7 @@ describe('ExplorerEntityBrowser', () => {
     render(
       <ExplorerProvider basePath='/internal/graph'>
         {withReflectedEntityDataReader({
-          readEntityData: vi.fn().mockResolvedValue({
-            entityName: 'Book',
-            columns: [{ field: 'owner', type: 'reference', nullable: false }],
-            rows: [
-              {
-                owner: {
-                  kind: 'entity-ref',
-                  entityName: 'Profile',
-                  locator: { id: 'profile-1' },
-                },
-              },
-              { owner: 'profile-2' },
-            ],
-            page: 1,
-            pageSize: 25,
-            totalCount: 2,
-            hasPreviousPage: false,
-            hasNextPage: false,
-          }),
+          readEntityData,
           children: (
             <ExplorerEntityBrowser
               entities={[bookWithOwner, entities[1]!]}
@@ -789,14 +967,519 @@ describe('ExplorerEntityBrowser', () => {
       </ExplorerProvider>,
     );
 
-    const owner = await screen.findByRole('link', { name: 'Profile · profile-1' });
+    const owner = await screen.findByRole('link', { name: 'Alice' });
     expect(owner.getAttribute('href')).toBe(
       '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D',
     );
-    expect(screen.getByRole('link', { name: 'Profile · profile-2' }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'Bob' }).getAttribute('href')).toBe(
       '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
     );
-    expect(screen.queryByText('profile-1')).toBeNull();
+    expect(owner.querySelector('[title="Profile · profile-1"]')).toBeTruthy();
+    expect(readEntityData).toHaveBeenCalledWith({
+      entityName: 'Profile',
+      filters: [{ field: 'id', operator: 'equals', value: 'profile-1' }],
+      page: 1,
+      pageSize: 10,
+    });
+  });
+
+  it('opens a reflected instance inspector from the row and closes it from the keyboard', async () => {
+    const user = userEvent.setup();
+    const inspectableBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      fields: [
+        ...entities[0]!.fields,
+        {
+          name: 'owner',
+          type: 'reference',
+          nullable: false,
+          reference: {
+            entityName: 'Profile',
+            identity: { name: 'refById', fields: ['id'] },
+          },
+        },
+      ],
+      relations: [],
+    };
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          readEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Book',
+            columns: [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'title', type: 'string', nullable: true },
+              { field: 'owner', type: 'reference', nullable: false },
+            ],
+            rows: [
+              {
+                id: 'book-1',
+                title: 'Ontahi',
+                owner: {
+                  kind: 'entity-ref',
+                  entityName: 'Profile',
+                  locator: { id: 'profile-1' },
+                },
+              },
+            ],
+            page: 1,
+            pageSize: 25,
+            totalCount: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          children: (
+            <ExplorerEntityBrowser
+              entities={[inspectableBook, entities[1]!]}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await user.click(await screen.findByRole('row', { name: /book-1 Ontahi/ }));
+
+    expect(screen.getByRole('complementary', { name: 'Book instance Ontahi' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Ontahi' })).toBeTruthy();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Book instance Ontahi' }))
+        .getByRole('link', { name: 'Profile · profile-1' })
+        .getAttribute('href'),
+    ).toBe('/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Book instance Ontahi' })).toBeNull();
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('complementary', { name: 'Book instance Ontahi' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Close Book instance Ontahi' }));
+    expect(screen.queryByRole('complementary', { name: 'Book instance Ontahi' })).toBeNull();
+  });
+
+  it('moves, minimizes, restores, and closes independent instance windows', async () => {
+    const user = userEvent.setup();
+    const inspectableBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [],
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Book',
+          columns: [
+            { field: 'id', type: 'id', nullable: false },
+            { field: 'title', type: 'string', nullable: true },
+          ],
+          rows: [
+            { id: 'book-1', title: 'Ontahi' },
+            { id: 'book-2', title: 'Executable ontologies' },
+          ],
+          page: 1,
+          pageSize: 25,
+          totalCount: 2,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        children: (
+          <ExplorerEntityBrowser
+            entities={[inspectableBook]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('row', { name: /book-1 Ontahi/ }));
+    await user.click(screen.getByRole('row', { name: /book-2 Executable ontologies/ }));
+
+    expect(screen.getByRole('complementary', { name: 'Book instance Ontahi' })).toBeTruthy();
+    expect(
+      screen.getByRole('complementary', { name: 'Book instance Executable ontologies' }),
+    ).toBeTruthy();
+
+    const ontahiWindow = screen.getByRole('complementary', { name: 'Book instance Ontahi' });
+    const ontahiPosition = ontahiWindow.parentElement!;
+    const initialLeft = ontahiPosition.style.left;
+    Object.defineProperty(ontahiPosition, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        bottom: 396,
+        height: 300,
+        left: 532,
+        right: 964,
+        top: 96,
+        width: 432,
+        x: 532,
+        y: 96,
+        toJSON: () => ({}),
+      }),
+    });
+    const ontahiHeader = screen.getByRole('heading', { name: 'Ontahi' }).closest('header')!;
+    fireEvent.pointerDown(ontahiHeader, { button: 0, clientX: 560, clientY: 112, pointerId: 7 });
+    fireEvent.pointerMove(ontahiHeader, { clientX: 320, clientY: 220, pointerId: 7 });
+    fireEvent.pointerUp(ontahiHeader, { clientX: 320, clientY: 220, pointerId: 7 });
+
+    expect(ontahiPosition.style.left).not.toBe(initialLeft);
+    expect(ontahiPosition.style.left).toBe('292px');
+    expect(ontahiPosition.style.top).toBe('204px');
+    const movedLeft = ontahiPosition.style.left;
+    const movedTop = ontahiPosition.style.top;
+    await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+
+    fireEvent.doubleClick(ontahiHeader);
+    expect(screen.queryByRole('complementary', { name: 'Book instance Ontahi' })).toBeNull();
+    const restoreOntahi = screen.getByRole('button', { name: 'Restore Book instance Ontahi' });
+    Object.defineProperty(ontahiPosition, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        bottom: 262,
+        height: 58,
+        left: 292,
+        right: 548,
+        top: 204,
+        width: 256,
+        x: 292,
+        y: 204,
+        toJSON: () => ({}),
+      }),
+    });
+    fireEvent.pointerDown(restoreOntahi, {
+      button: 0,
+      clientX: 320,
+      clientY: 220,
+      pointerId: 8,
+    });
+    fireEvent.pointerMove(restoreOntahi, {
+      clientX: 520,
+      clientY: 320,
+      pointerId: 8,
+    });
+    fireEvent.pointerUp(restoreOntahi, { clientX: 520, clientY: 320, pointerId: 8 });
+
+    expect(ontahiPosition.style.left).toBe('492px');
+    expect(ontahiPosition.style.top).toBe('304px');
+    expect(screen.queryByRole('complementary', { name: 'Book instance Ontahi' })).toBeNull();
+    expect(
+      screen.getByRole('complementary', { name: 'Book instance Executable ontologies' }),
+    ).toBeTruthy();
+
+    await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+    fireEvent.doubleClick(restoreOntahi);
+    const restoredOntahi = screen.getByRole('complementary', { name: 'Book instance Ontahi' });
+    expect(restoredOntahi.parentElement?.style.left).not.toBe(movedLeft);
+    expect(restoredOntahi.parentElement?.style.top).not.toBe(movedTop);
+    expect(restoredOntahi.parentElement?.style.left).toBe('492px');
+    expect(restoredOntahi.parentElement?.style.top).toBe('304px');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Book instance Ontahi' })).toBeNull();
+    expect(
+      screen.getByRole('complementary', { name: 'Book instance Executable ontologies' }),
+    ).toBeTruthy();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Close Book instance Executable ontologies' }),
+    );
+    expect(screen.queryByRole('complementary')).toBeNull();
+  });
+
+  it('keeps the instance workspace across Entity navigation', async () => {
+    const user = userEvent.setup();
+    const inspectableBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [],
+    };
+    const inspectableProfile: ExplorerEntityDetail = {
+      ...entities[1]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'name' },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+      ],
+    };
+    const readEntityData = vi.fn(async query => {
+      const profile = query.entityName === 'Profile';
+      return {
+        entityName: query.entityName,
+        columns: profile
+          ? [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'name', type: 'string', nullable: false },
+            ]
+          : [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'title', type: 'string', nullable: true },
+            ],
+        rows: profile ? [{ id: 'profile-1', name: 'Ada' }] : [{ id: 'book-1', title: 'Ontahi' }],
+        page: 1,
+        pageSize: 25,
+        totalCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      };
+    });
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData,
+        children: (
+          <ExplorerEntityBrowser
+            entities={[inspectableBook, inspectableProfile]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('row', { name: /book-1 Ontahi/ }));
+    await user.click(screen.getByRole('button', { name: 'Minimize Book instance Ontahi' }));
+
+    await user.click(screen.getByRole('combobox', { name: 'Select entity, Book' }));
+    await user.click(screen.getByRole('option', { name: /Profile/ }));
+
+    expect(await screen.findByRole('row', { name: /profile-1 Ada/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Restore Book instance Ontahi' })).toBeTruthy();
+
+    await user.click(screen.getByRole('row', { name: /profile-1 Ada/ }));
+    expect(screen.getByRole('complementary', { name: 'Profile instance Ada' })).toBeTruthy();
+
+    await user.dblClick(screen.getByRole('button', { name: 'Restore Book instance Ontahi' }));
+    expect(screen.getByRole('complementary', { name: 'Book instance Ontahi' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Profile instance Ada' })).toBeTruthy();
+  });
+
+  it('keeps every instance window when navigating through a related instance', async () => {
+    const user = userEvent.setup();
+    const inspectableList: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [
+        {
+          name: 'items',
+          kind: 'hasMany',
+          target: 'Profile',
+          targetIdentity: { name: 'refById', fields: ['id'] },
+          targetDisplay: { primary: 'name' },
+          cardinality: 'many',
+        },
+      ],
+    };
+    const inspectableItem: ExplorerEntityDetail = {
+      ...entities[1]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'name' },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+      ],
+    };
+    const readEntityData = vi.fn(async query => {
+      const readingItems = query.entityName === 'Profile';
+      return {
+        entityName: query.entityName,
+        columns: readingItems
+          ? [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'name', type: 'string', nullable: false },
+            ]
+          : [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'title', type: 'string', nullable: false },
+            ],
+        rows: readingItems
+          ? [{ id: 'item-1', name: 'First item' }]
+          : [
+              { id: 'list-1', title: 'Inbox' },
+              { id: 'list-2', title: 'Later' },
+            ],
+        page: 1,
+        pageSize: 25,
+        totalCount: readingItems ? 1 : 2,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      };
+    });
+
+    render(
+      <ExplorerProvider basePath='/internal/graph'>
+        {withReflectedEntityDataReader({
+          readEntityData,
+          readRelatedEntityData: vi.fn().mockResolvedValue({
+            entityName: 'Profile',
+            columns: [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'name', type: 'string', nullable: false },
+            ],
+            rows: [{ id: 'item-1', name: 'First item' }],
+            page: 1,
+            pageSize: 25,
+            totalCount: 1,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          }),
+          children: (
+            <ExplorerEntityBrowser
+              entities={[inspectableList, inspectableItem]}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName='Book'
+            />
+          ),
+        })}
+      </ExplorerProvider>,
+    );
+
+    await user.click(await screen.findByRole('row', { name: /list-1 Inbox/ }));
+    await user.click(screen.getByRole('button', { name: 'Minimize Book instance Inbox' }));
+    await user.click(screen.getByRole('row', { name: /list-2 Later/ }));
+
+    const later = screen.getByRole('complementary', { name: 'Book instance Later' });
+    const itemLink = await within(later).findByRole('link', { name: 'First item' });
+
+    expect(fireEvent.click(itemLink)).toBe(false);
+    expect(
+      await screen.findByRole('complementary', { name: 'Profile instance First item' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Book instance Later' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Restore Book instance Inbox' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Select entity, Profile' })).toBeTruthy();
+  });
+
+  it('edits authorized scalar fields inside an instance window and keeps it fresh', async () => {
+    const user = userEvent.setup();
+    const editableTag: ExplorerEntityDetail = {
+      ...entities[1]!,
+      name: 'Tag',
+      identity: { name: 'id', fields: ['id'] },
+      display: { primary: 'name' },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+        { name: 'color', type: 'string', nullable: false },
+      ],
+      mutations: {
+        update: { fields: ['name', 'color'] },
+      },
+    };
+    const initialResult = {
+      entityName: 'Tag',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'name', type: 'string', nullable: false },
+        { field: 'color', type: 'string', nullable: false },
+      ],
+      rows: [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    };
+    const readEntityData = vi
+      .fn()
+      .mockResolvedValueOnce(initialResult)
+      .mockResolvedValueOnce({
+        ...initialResult,
+        rows: [{ id: 'tag-1', name: 'Important', color: '#d95d4f' }],
+      })
+      .mockResolvedValue({
+        ...initialResult,
+        rows: [{ id: 'tag-1', name: 'Important', color: '#4263eb' }],
+      });
+    const runEntityMutationCommand = vi.fn().mockResolvedValue({
+      created: [],
+      updated: [],
+      deleted: [],
+    });
+    const graphExecutor = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      runCommand: vi.fn(),
+      runEntityMutationCommand,
+    } as unknown as ReactGraphExecutor;
+
+    render(
+      withReflectedEntityDataReader({
+        graphExecutor,
+        readEntityData,
+        children: (
+          <ExplorerEntityBrowser
+            entities={[editableTag]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='Tag'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('row', { name: /tag-1 Urgent/ }));
+    const inspector = screen.getByRole('complementary', { name: 'Tag instance Urgent' });
+    expect(within(inspector).queryByRole('button', { name: 'Edit id' })).toBeNull();
+
+    await user.click(within(inspector).getByRole('button', { name: 'Edit name' }));
+    await user.clear(within(inspector).getByRole('textbox', { name: 'Edit name' }));
+    await user.type(within(inspector).getByRole('textbox', { name: 'Edit name' }), 'Draft');
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('complementary', { name: 'Tag instance Urgent' })).toBeTruthy();
+    expect(within(inspector).getByRole('button', { name: 'Edit name' }).textContent).toContain(
+      'Urgent',
+    );
+
+    await user.click(within(inspector).getByRole('button', { name: 'Edit name' }));
+    await user.clear(within(inspector).getByRole('textbox', { name: 'Edit name' }));
+    await user.type(within(inspector).getByRole('textbox', { name: 'Edit name' }), 'Important');
+    await user.click(within(inspector).getByRole('button', { name: 'Save name' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('complementary', { name: 'Tag instance Important' })).toBeTruthy(),
+    );
+    expect(runEntityMutationCommand).toHaveBeenCalledWith({
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName: 'Tag',
+      target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+      values: { name: 'Important' },
+    });
+
+    const refreshedInspector = screen.getByRole('complementary', {
+      name: 'Tag instance Important',
+    });
+    await user.click(within(refreshedInspector).getByRole('button', { name: 'Edit color' }));
+    fireEvent.change(within(refreshedInspector).getByLabelText('Edit color color picker'), {
+      target: { value: '#4263eb' },
+    });
+    await user.click(within(refreshedInspector).getByRole('button', { name: 'Save color' }));
+
+    await waitFor(() =>
+      expect(runEntityMutationCommand).toHaveBeenCalledWith({
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Tag',
+        target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
+        values: { color: '#4263eb' },
+      }),
+    );
+    expect(within(refreshedInspector).getByText('#4263eb')).toBeTruthy();
   });
 
   it('applies a portable locator from the URL and safely ignores malformed locator input', async () => {
@@ -942,14 +1625,15 @@ describe('ExplorerEntityBrowser', () => {
       </ExplorerProvider>,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'collaborators' }));
+    await user.click(await screen.findByRole('row', { name: 'book-1' }));
 
-    expect((await screen.findByRole('link', { name: 'Ada' })).getAttribute('href')).toBe(
-      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D',
-    );
-    expect(screen.getByRole('link', { name: 'profile-2' }).getAttribute('href')).toBe(
-      '/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D',
-    );
+    const collaborators = screen.getByRole('region', { name: 'collaborators relation' });
+    expect(
+      (await within(collaborators).findByRole('link', { name: 'Ada' })).getAttribute('href'),
+    ).toBe('/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-1%22%7D');
+    expect(
+      within(collaborators).getByRole('link', { name: 'profile-2' }).getAttribute('href'),
+    ).toBe('/internal/graph/entities/Profile?tab=data&ref=%7B%22id%22%3A%22profile-2%22%7D');
     expect(readRelatedEntityData).toHaveBeenCalledWith({
       source: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
       relationName: 'collaborators',
@@ -959,20 +1643,169 @@ describe('ExplorerEntityBrowser', () => {
       pageSize: 25,
     });
 
-    await user.click(screen.getByRole('button', { name: 'reviewers' }));
     await vi.waitFor(() =>
-      expect(readRelatedEntityData).toHaveBeenLastCalledWith(
-        expect.objectContaining({ relationName: 'reviewers' }),
+      expect(readRelatedEntityData).toHaveBeenCalledWith(
+        expect.objectContaining({ relationName: 'reviewers', pageSize: 25 }),
       ),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Close related instances' }));
-    expect(screen.queryByRole('region', { name: 'Related instances' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close Book instance book-1' }));
+    expect(screen.queryByRole('complementary', { name: 'Book instance book-1' })).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: 'collaborators' }));
-    expect(await screen.findByRole('region', { name: 'Related instances' })).toBeTruthy();
+    await user.click(screen.getByRole('row', { name: 'book-1' }));
+    expect(screen.getByRole('complementary', { name: 'Book instance book-1' })).toBeTruthy();
     await user.type(screen.getByPlaceholderText('Search scalar fields'), 'changed');
-    expect(screen.queryByRole('region', { name: 'Related instances' })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Book instance book-1' })).toBeTruthy();
+  });
+
+  it('adds and removes authorized many-to-many participants from an instance relation', async () => {
+    const user = userEvent.setup();
+    const taggedTodo: ExplorerEntityDetail = {
+      ...entities[0]!,
+      name: 'TodoItem',
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [
+        {
+          name: 'tags',
+          kind: 'manyToMany',
+          target: 'Tag',
+          targetIdentity: { name: 'refById', fields: ['id'] },
+          targetDisplay: { primary: 'name' },
+          direction: 'forward',
+          cardinality: 'many',
+          structuralVerbs: ['add', 'remove'],
+          mutations: { add: true, remove: true },
+          canonicalIdentity: {
+            sourceEntityName: 'TodoItem',
+            relationName: 'tags',
+            targetEntityName: 'Tag',
+            cardinality: 'many-to-many',
+          },
+        },
+      ],
+    };
+    const tag: ExplorerEntityDetail = {
+      ...entities[1]!,
+      name: 'Tag',
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'name' },
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+      ],
+    };
+    const readEntityData = vi.fn(async query => ({
+      entityName: query.entityName,
+      columns:
+        query.entityName === 'Tag'
+          ? [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'name', type: 'string', nullable: false },
+            ]
+          : [
+              { field: 'id', type: 'id', nullable: false },
+              { field: 'title', type: 'string', nullable: false },
+            ],
+      rows:
+        query.entityName === 'Tag'
+          ? [
+              { id: 'tag-1', name: 'Urgent' },
+              { id: 'tag-2', name: 'Ideas' },
+            ]
+          : [{ id: 'todo-1', title: 'Try relation editing' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: query.entityName === 'Tag' ? 2 : 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    }));
+    const runManyToManyRelationshipCommand = vi.fn().mockResolvedValue({
+      status: 'applied',
+      delta: { added: [], removed: [] },
+    });
+    const graphExecutor = {
+      get: vi.fn(),
+      run: vi.fn(),
+      count: vi.fn(),
+      runCommand: vi.fn(),
+      runManyToManyRelationshipCommand,
+    } as unknown as ReactGraphExecutor;
+
+    render(
+      withReflectedEntityDataReader({
+        graphExecutor,
+        readEntityData,
+        readRelatedEntityData: vi.fn().mockResolvedValue({
+          entityName: 'Tag',
+          columns: [
+            { field: 'id', type: 'id', nullable: false },
+            { field: 'name', type: 'string', nullable: false },
+          ],
+          rows: [{ id: 'tag-1', name: 'Urgent' }],
+          page: 1,
+          pageSize: 25,
+          totalCount: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        children: (
+          <ExplorerEntityBrowser
+            entities={[taggedTodo, tag]}
+            operations={[]}
+            tasks={[]}
+            selectedEntityName='TodoItem'
+          />
+        ),
+      }),
+    );
+
+    await user.click(await screen.findByRole('row', { name: /todo-1 Try relation editing/ }));
+    const inspector = screen.getByRole('complementary', {
+      name: 'TodoItem instance Try relation editing',
+    });
+
+    await user.click(within(inspector).getByRole('button', { name: 'Add Tag' }));
+    expect(within(inspector).queryByRole('button', { name: 'Link Urgent' })).toBeNull();
+    await user.click(await within(inspector).findByRole('button', { name: 'Link Ideas' }));
+
+    expect(runManyToManyRelationshipCommand).toHaveBeenLastCalledWith({
+      kind: 'many-to-many-relationship-command',
+      action: 'link',
+      relation: {
+        sourceEntityName: 'TodoItem',
+        relationName: 'tags',
+        targetEntityName: 'Tag',
+        cardinality: 'many-to-many',
+      },
+      sources: {
+        entityName: 'TodoItem',
+        selection: {
+          kind: 'references',
+          refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
+        },
+      },
+      targets: {
+        entityName: 'Tag',
+        selection: {
+          kind: 'references',
+          refs: [{ kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-2' } }],
+        },
+      },
+    });
+
+    await user.click(within(inspector).getByRole('button', { name: 'Unlink Urgent' }));
+    expect(runManyToManyRelationshipCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        kind: 'many-to-many-relationship-command',
+        action: 'unlink',
+        targets: expect.objectContaining({
+          selection: expect.objectContaining({
+            refs: [{ kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } }],
+          }),
+        }),
+      }),
+    );
   });
 
   it('filters entities by search text', async () => {

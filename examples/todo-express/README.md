@@ -90,6 +90,11 @@ port when the default `3001` is already in use.
 The default remains zero-infrastructure in-memory storage. To exercise the direct PostgreSQL
 adapter with the host-owned migration:
 
+Each in-memory process start creates the same small Inbox/Later workspace with todos and tags, so
+the Todo UI and Explorer are immediately testable after a restart. Mutations remain process-local
+and the deterministic seed is recreated on the next start. PostgreSQL storage is not seeded by
+this path.
+
 ```sh
 pnpm --filter @ontahi/example-todo-express db:start
 pnpm --filter @ontahi/example-todo-express dev:postgres

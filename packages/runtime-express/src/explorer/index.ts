@@ -1,4 +1,7 @@
-import type { EntityMutationCommandPolicy } from '@ontahi/core/data-graph';
+import type {
+  EntityMutationCommandPolicy,
+  ManyToManyRelationshipCommandPolicy,
+} from '@ontahi/core/data-graph';
 import type {
   ExplorerEntityDetail,
   ExplorerEntityMutationDescriptor,
@@ -17,6 +20,15 @@ const isEntityMutationPolicy = (policy: unknown): policy is EntityMutationComman
   policy !== null &&
   'actions' in policy &&
   !Array.isArray(policy.actions);
+
+const isManyToManyRelationshipPolicy = (
+  policy: unknown,
+): policy is ManyToManyRelationshipCommandPolicy<any> =>
+  typeof policy === 'object' &&
+  policy !== null &&
+  'relationName' in policy &&
+  'actions' in policy &&
+  Array.isArray(policy.actions);
 
 const describeEntityMutations = (
   entityName: string,
@@ -42,6 +54,36 @@ const withEntityMutations = (
   return mutations ? { ...detail, mutations } : detail;
 };
 
+const withRelationMutations = (
+  detail: ExplorerEntityDetail,
+  policies: readonly unknown[],
+): ExplorerEntityDetail => ({
+  ...detail,
+  relations: detail.relations.map(relation => {
+    const identity = relation.canonicalIdentity;
+    if (!identity || !('relationName' in identity)) return relation;
+
+    const policy = policies.find(
+      candidate =>
+        isManyToManyRelationshipPolicy(candidate) &&
+        candidate.entity.name === identity.sourceEntityName &&
+        candidate.relationName === identity.relationName,
+    );
+    if (!policy || !isManyToManyRelationshipPolicy(policy)) return relation;
+
+    return {
+      ...relation,
+      mutations: {
+        ...(policy.actions.includes('link') ? { add: true as const } : {}),
+        ...(policy.actions.includes('unlink') ? { remove: true as const } : {}),
+      },
+    };
+  }),
+});
+
+const withGraphCommandAffordances = (detail: ExplorerEntityDetail, policies: readonly unknown[]) =>
+  withRelationMutations(withEntityMutations(detail, policies), policies);
+
 const buildApplicationExplorerSnapshot: OntahiExpressExplorerOptions['buildSnapshot'] = (
   application,
   context,
@@ -62,7 +104,7 @@ const buildApplicationExplorerSnapshot: OntahiExpressExplorerOptions['buildSnaps
     entityDetails: entities
       .map(entity => getExplorerEntityDetail({ entities, graphSummary }, entity.name))
       .filter(detail => detail !== null)
-      .map(detail => withEntityMutations(detail, context?.graphCommandPolicies ?? [])),
+      .map(detail => withGraphCommandAffordances(detail, context?.graphCommandPolicies ?? [])),
   };
 };
 

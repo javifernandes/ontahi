@@ -11,7 +11,7 @@ import express, { type Express } from 'express';
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication } from './graph.js';
 import { todoGraphReadPolicies } from './todo-read-policies.js';
-import { Tag, TodoItem } from './todo.js';
+import { Tag, TodoItem, TodoList } from './todo.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
@@ -58,9 +58,19 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
             scope: 'all',
             actions: {
               update: {
-                fields: ['title'],
+                fields: ['list', 'title', 'completed'],
                 if: ['title'],
                 result: ['id', 'list', 'title', 'completed'],
+              },
+            },
+          },
+          {
+            entity: TodoList,
+            scope: 'all',
+            actions: {
+              update: {
+                fields: ['name', 'color'],
+                result: ['id', 'name', 'color'],
               },
             },
           },

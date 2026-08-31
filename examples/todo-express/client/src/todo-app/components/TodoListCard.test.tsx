@@ -68,6 +68,7 @@ const createProps = (
   },
   tags: [],
   canComplete: true,
+  focusTodoInput: false,
   isCreatingTodo: false,
   isRenaming: false,
   isRecoloring: false,

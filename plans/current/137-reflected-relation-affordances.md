@@ -8,6 +8,8 @@ Depends on: [136. Relation Constraints And Eligibility Semantics](./136-relation
 
 Completed child: [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md)
 
+Active child: [137b. Instance-First Explorer Workspace](./137b-instance-first-explorer-workspace.md)
+
 ## Summary
 
 Project Relation semantics as actionable, authority-aware affordances. Explorer, agents, and a
@@ -45,8 +47,11 @@ eligibility constraints, and the distinction between direct Relations and Associ
 1. [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md) reflects and
    presents static Relation semantics, portable Ref identity, and authorized Query-backed related
    data without depending on Plan 136 or exposing mutation affordances.
-2. Plan 136 later contributes portable eligibility and rejection metadata.
-3. Plan 78 contributes authority decisions; Plan 128 contributes remote execution; Plan 135 and
+2. [137b. Instance-First Explorer Workspace](./137b-instance-first-explorer-workspace.md) makes
+   authorized instances and graph traversal the primary automatic application surface while
+   keeping access scope under runtime policy.
+3. Plan 136 later contributes portable eligibility and rejection metadata.
+4. Plan 78 contributes authority decisions; Plan 128 contributes remote execution; Plan 135 and
    Plan 132 contribute optimistic outcome reconciliation.
 
 ## Acceptance Checklist
@@ -62,6 +67,18 @@ eligibility constraints, and the distinction between direct Relations and Associ
       Entity identity, attributes, and lifecycle, and does not misclassify ordinary Ref-bearing
       Entities.
 - [ ] A small Explorer proof and a framework-agnostic headless proof consume the same metadata.
+
+## Progress
+
+The first mutation proof landed on 2026-08-30. The Express runtime projects configured
+many-to-many `link`/`unlink` policy as `add`/`remove` affordances on both canonical and inverse
+Relation descriptors. Explorer instance windows consume that metadata to search currently
+unlinked participants, issue canonical Relationship Commands, unlink existing participants, show
+server rejection messages, and refresh authoritative related data. This proves the Explorer path
+without claiming that static policy presence is a complete per-command eligibility decision.
+
+Portable eligibility and denial reasons, a framework-agnostic headless proof, Relationship Delta
+reconciliation, duplicate suppression, and out-of-order outcome handling remain open.
 
 ## Open Questions
 
