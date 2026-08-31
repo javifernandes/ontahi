@@ -13,8 +13,14 @@ export {
   type OntahiExpressExplorerOptions,
   type OntahiExpressGraphReadOptions,
   type OntahiExpressGraphCommandOptions,
+  type OntahiExpressRuntimeProtocolOptions,
   type OntahiExpressOptions,
 } from '../application.js';
+export {
+  createExpressRuntimeProtocolHandler,
+  type CreateExpressRuntimeProtocolHandlerOptions,
+  type ExpressRuntimeProtocolContextFactory,
+} from '../runtime-protocol/index.js';
 export {
   createExpressGraphReadHandler,
   type CreateExpressGraphReadHandlerOptions,

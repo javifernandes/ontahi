@@ -5,11 +5,7 @@ import type {
   ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
 import { resolveOperationExecutionAffordance } from '@ontahi/core/data-graph';
-import type {
-  OperationInvocationResult,
-  TaskRunIdentity,
-  TaskSnapshot,
-} from '@ontahi/core/runtime/contracts';
+import type { OperationInvocationResult } from '@ontahi/core/runtime/contracts';
 import {
   isOperationInvocationProtocolResponse,
   type OperationInvocationRequest,
@@ -28,7 +24,6 @@ import type { ActionResultLike } from './use-action.js';
 export type FetchOperationBridgeOptions = {
   mountPath?: string;
   endpoint?: string;
-  taskEndpoint?: string;
 };
 
 const DEFAULT_ENDPOINT = '/api/data-graph/domain-operations';
@@ -44,27 +39,6 @@ const mountedEndpoint = (mountPath: string, endpoint: string) =>
 const operationEndpoint = (options: FetchOperationBridgeOptions) =>
   options.endpoint ??
   (options.mountPath ? mountedEndpoint(options.mountPath, 'operations') : DEFAULT_ENDPOINT);
-
-const operationTaskEndpoint = (options: FetchOperationBridgeOptions) =>
-  options.taskEndpoint ??
-  (options.mountPath ? mountedEndpoint(options.mountPath, 'operations/tasks') : undefined);
-
-const fetchTaskSnapshot = async <TResult>(
-  endpoint: string,
-  ref: TaskRunIdentity,
-): Promise<TaskSnapshot<TResult>> => {
-  const response = await fetch(
-    `${endpoint}/${encodeURIComponent(ref.taskId)}/${encodeURIComponent(ref.runId)}`,
-    { credentials: 'same-origin' },
-  );
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok || typeof payload !== 'object' || payload === null) {
-    throw new Error(`Task snapshot request failed with status ${response.status}.`);
-  }
-
-  return payload as TaskSnapshot<TResult>;
-};
 
 const attachFetchBridgeRuntime = <TInput, TData>(
   operation: OperationBridge.BridgedOperationLike<TInput, TData>,
@@ -182,18 +156,12 @@ export const createFetchOperationBridgeAdapter = (
   options: FetchOperationBridgeOptions = {},
 ): OperationBridge.AnyOperationBridgeAdapter => {
   const endpoint = operationEndpoint(options);
-  const taskEndpoint = operationTaskEndpoint(options);
   const buildRuntimeAction = <TInput, TData>(
     operation: OperationBridge.BridgedOperationLike<TInput, TData>,
   ) => createFetchBridgeAction(endpoint, operation);
 
   return {
     name: 'fetch',
-    ...(taskEndpoint
-      ? {
-          getTaskSnapshot: (ref: TaskRunIdentity) => fetchTaskSnapshot(taskEndpoint, ref),
-        }
-      : {}),
     useBridgeAction: operation =>
       useMemo(
         () => buildRuntimeAction(operation) as OperationBridge.OperationBridgeAction<any, any>,

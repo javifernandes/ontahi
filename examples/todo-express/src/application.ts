@@ -1,5 +1,9 @@
 import path from 'node:path';
 
+import {
+  createRuntimeProtocolDispatcher,
+  toDurableOperationSnapshotResponse,
+} from '@ontahi/core/runtime/protocol';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import express, { type Express } from 'express';
@@ -17,6 +21,12 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
   const authentication = options.authentication ?? createTodoAuthentication();
+  const runtimeProtocolDispatcher = createRuntimeProtocolDispatcher({
+    handlers: {
+      'durable.operation': async request =>
+        toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
+    },
+  });
 
   authentication.mount(server);
 
@@ -31,6 +41,12 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
       invocationContext: request => ({
         principal: authentication.principal(request),
       }),
+      runtimeProtocol: {
+        dispatcher: runtimeProtocolDispatcher,
+        context: request => ({
+          principal: authentication.principal(request),
+        }),
+      },
       graphRead: {
         policies: todoGraphReadPolicies,
       },

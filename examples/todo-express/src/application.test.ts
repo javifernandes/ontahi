@@ -9,6 +9,10 @@ import {
   Selection,
   toGraphCommandRequest,
 } from '@ontahi/core/data-graph';
+import {
+  createRuntimeProtocolRequest,
+  toDurableOperationProtocolRequest,
+} from '@ontahi/core/runtime/protocol';
 import { createFetchGraphReadExecutor } from '@ontahi/react/graph';
 import { Effect } from 'effect';
 import type { Request } from 'express';
@@ -845,13 +849,27 @@ describe('Ontahi todo portability example', () => {
         value: { taskId: 'TodoItem.completeAll' },
       },
     });
-    const snapshotUrl = `${endpoint}/tasks/${encodeURIComponent(start.result.value.taskId)}/${encodeURIComponent(start.result.value.runId)}`;
+    let inspection = 0;
 
     await expect
       .poll(
         async () => {
-          const snapshot = await fetch(snapshotUrl).then(result => result.json());
-          return snapshot;
+          inspection += 1;
+          const response = await fetch(`${origin}/runtime`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(
+              createRuntimeProtocolRequest({
+                id: `inspect-${inspection}`,
+                family: 'durable.operation',
+                body: toDurableOperationProtocolRequest(start.result.value),
+              }),
+            ),
+          });
+          const observation = (await response.json()) as {
+            body?: { kind?: string; snapshot?: unknown };
+          };
+          return observation.body?.snapshot;
         },
         { timeout: 3_000 },
       )

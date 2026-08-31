@@ -16,6 +16,12 @@ import {
 } from '@ontahi/core/data-graph';
 import { entity as defineOntahiEntity } from '@ontahi/core/entity';
 import {
+  createRuntimeProtocolDispatcher,
+  createRuntimeProtocolRequest,
+  toDurableOperationProtocolRequest,
+  toDurableOperationSnapshotResponse,
+} from '@ontahi/core/runtime/protocol';
+import {
   configureServerRuntime,
   getCurrentPrincipal,
   ontahi,
@@ -399,11 +405,21 @@ describe('Ontahi Express application middleware', () => {
 
   it('mounts every Ontahi route below a custom root path', async () => {
     const application = createApplication();
+    const runtimeProtocolDispatcher = createRuntimeProtocolDispatcher({
+      handlers: {
+        'durable.operation': async request =>
+          toDurableOperationSnapshotResponse(await application.getTaskSnapshot(request.run)),
+      },
+    });
     const expressApp = express();
     expressApp.use(
       ontahiExpress(application, {
         mountPath: '/internal/ontahi',
         explorer: createOntahiExpressExplorer(),
+        runtimeProtocol: {
+          dispatcher: runtimeProtocolDispatcher,
+          context: () => undefined,
+        },
       }),
     );
     server = await new Promise<Server>(resolve => {
@@ -429,6 +445,26 @@ describe('Ontahi Express application middleware', () => {
         response.json(),
       ),
     ).resolves.toMatchObject({ status: 'completed' });
+    await expect(
+      fetch(`${origin}/internal/ontahi/runtime`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(
+          createRuntimeProtocolRequest({
+            id: 'inspect-1',
+            family: 'durable.operation',
+            body: toDurableOperationProtocolRequest({
+              taskId: 'Todo.completeAll',
+              runId: 'run-1',
+            }),
+          }),
+        ),
+      }).then(response => response.json()),
+    ).resolves.toMatchObject({
+      kind: 'response',
+      family: 'durable.operation',
+      body: { kind: 'snapshot', snapshot: { status: 'completed' } },
+    });
     await expect(
       fetch(`${origin}/internal/ontahi/explorer/snapshot`).then(response => response.json()),
     ).resolves.toMatchObject({ snapshot: { entities: [{ name: 'Todo' }] } });

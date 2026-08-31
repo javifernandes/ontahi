@@ -153,7 +153,7 @@ The provider installs one lazy Fetch client for the conventional routes:
 - `/graph/reads` for Queries;
 - `/graph/commands` for explicitly permitted Relationship Commands;
 - `/operations` for Operations;
-- `/operations/tasks` for durable snapshots;
+- `/runtime` for versioned Durable Operation observation;
 - `/explorer/entities` for reflected Entity data.
 
 Mounting the provider sends no request. A hook uses a capability only when a component asks for
@@ -166,6 +166,7 @@ const client = createFetchGraphClient({
     commandEndpoint: '/runtime/ontahi/graph/commands',
   },
   operations: { mountPath: '/runtime/ontahi' },
+  runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
 
@@ -374,9 +375,11 @@ graph program.
 A durable invocation succeeds when the runtime accepts a run. Its data changes may happen later in
 a worker, so invalidating at acceptance could refetch the old state.
 
-`useDurableOperation` observes the accepted `TaskRunRef`. It invalidates the Operation's declared
-observations only after the snapshot reaches `completed`; `failed` and `cancelled` runs do not
-pretend that the intended change happened.
+`useDurableOperation` observes the accepted `TaskRunRef` through Runtime Transport. The hook
+consumes one asynchronous snapshot sequence; Fetch currently produces it by polling the versioned
+`durable.operation.inspect` message, while a push transport can produce the same sequence later.
+The hook invalidates the Operation's declared observations only after the snapshot reaches
+`completed`; `failed` and `cancelled` runs do not pretend that the intended change happened.
 
 The invariant across ordinary and durable Operations is the same: the projected contract tells the
 browser what was invoked, what kind of value came back, and which observations may now be stale.

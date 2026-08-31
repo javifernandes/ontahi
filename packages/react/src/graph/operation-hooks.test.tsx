@@ -9,6 +9,7 @@ import {
   graphOutput,
   graphSchema,
 } from '@ontahi/core/data-graph';
+import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -31,11 +32,9 @@ const createWrapper = (
   reflectedOperationInvoker?: Parameters<
     typeof OntahiGraphProvider
   >[0]['reflectedOperationInvoker'],
-  getTaskSnapshot?: NonNullable<
-    Parameters<typeof createNextActionOperationBridgeAdapter>[1]
-  >['getTaskSnapshot'],
+  runtimeTransport?: RuntimeTransport,
 ) => {
-  const bridgeAdapter = createNextActionOperationBridgeAdapter(bridgeAction, { getTaskSnapshot });
+  const bridgeAdapter = createNextActionOperationBridgeAdapter(bridgeAction);
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
@@ -43,6 +42,7 @@ const createWrapper = (
         <OntahiGraphProvider
           runtime={{ name: 'test-runtime' }}
           operationBridgeAdapters={[bridgeAdapter]}
+          runtimeTransport={runtimeTransport}
           clientCache={clientCache}
           reflectedOperationInvoker={reflectedOperationInvoker}
         >
@@ -472,35 +472,40 @@ describe('operation hooks', () => {
         },
       }),
     }).importBook;
-    const getTaskSnapshot = vi
-      .fn()
-      .mockResolvedValueOnce({
-        taskId: 'book.import',
-        runId: 'run-1',
-        status: 'running',
-        updatedAt: '2026-07-23T00:00:00.000Z',
-        progress: { phase: 'importing' },
-      })
-      .mockResolvedValue({
-        taskId: 'book.import',
-        runId: 'run-1',
-        status: 'completed',
-        updatedAt: '2026-07-23T00:00:01.000Z',
-        completedAt: '2026-07-23T00:00:01.000Z',
-        result: { imported: 3 },
-      });
+    const observe = vi.fn(() =>
+      (async function* () {
+        yield {
+          taskId: 'book.import',
+          runId: 'run-1',
+          status: 'running' as const,
+          updatedAt: '2026-07-23T00:00:00.000Z',
+          progress: { phase: 'importing' },
+        };
+        yield {
+          taskId: 'book.import',
+          runId: 'run-1',
+          status: 'completed' as const,
+          updatedAt: '2026-07-23T00:00:01.000Z',
+          completedAt: '2026-07-23T00:00:01.000Z',
+          result: { imported: 3 },
+        };
+      })(),
+    );
+    const runtimeTransport = {
+      request: vi.fn(),
+      durableOperation: { observe },
+    } as unknown as RuntimeTransport;
     const { Wrapper } = createWrapper(
       bridgeAction,
       createGraphClientCache(),
       new QueryClient(),
       undefined,
-      getTaskSnapshot,
+      runtimeTransport,
     );
     const { result } = renderHook(
       () =>
         useDurableOperation(operation, {
           invalidateOnSuccess: false,
-          pollIntervalMs: 10,
         }),
       { wrapper: Wrapper },
     );
@@ -524,7 +529,10 @@ describe('operation hooks', () => {
     expect(result.current.durable.runtime).toBe('vercel-workflow');
     await waitFor(() => expect(result.current.isCompleted).toBe(true));
     expect(result.current.finalValue).toEqual({ imported: 3 });
-    expect(getTaskSnapshot).toHaveBeenCalledWith({ taskId: 'book.import', runId: 'run-1' });
+    expect(observe).toHaveBeenCalledWith(
+      { taskId: 'book.import', runId: 'run-1' },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it('invalidates queries when a void-input durable operation completes', async () => {
@@ -546,22 +554,30 @@ describe('operation hooks', () => {
         durable: { runtime: 'in-process' },
       }),
     }).completeAll;
-    const getTaskSnapshot = vi.fn().mockResolvedValue({
-      taskId: 'Todo.completeAll',
-      runId: 'run-1',
-      status: 'completed',
-      updatedAt: '2026-07-24T00:00:01.000Z',
-      completedAt: '2026-07-24T00:00:01.000Z',
-      result: { completed: 2 },
-    });
+    const observe = vi.fn(() =>
+      (async function* () {
+        yield {
+          taskId: 'Todo.completeAll',
+          runId: 'run-1',
+          status: 'completed' as const,
+          updatedAt: '2026-07-24T00:00:01.000Z',
+          completedAt: '2026-07-24T00:00:01.000Z',
+          result: { completed: 2 },
+        };
+      })(),
+    );
+    const runtimeTransport = {
+      request: vi.fn(),
+      durableOperation: { observe },
+    } as unknown as RuntimeTransport;
     const { Wrapper } = createWrapper(
       bridgeAction,
       createGraphClientCache(),
       queryClient,
       undefined,
-      getTaskSnapshot,
+      runtimeTransport,
     );
-    const { result } = renderHook(() => useDurableOperation(operation, { pollIntervalMs: 10 }), {
+    const { result } = renderHook(() => useDurableOperation(operation), {
       wrapper: Wrapper,
     });
 
@@ -575,6 +591,65 @@ describe('operation hooks', () => {
         queryKey: ['Todo'],
       }),
     );
+  });
+
+  it('aborts an active Runtime Transport observation when reset', async () => {
+    const bridgeAction = vi.fn().mockResolvedValue({
+      data: { taskId: 'Todo.completeAll', runId: 'run-abort', status: 'queued' },
+    });
+    const operation = defineClientDomainOperationsForEntity('Todo', {
+      completeAll: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        input: graphSchema.void(),
+        bridge: {},
+        durable: { runtime: 'in-process' },
+      }),
+    }).completeAll;
+    let observationSignal: AbortSignal | undefined;
+    const observe = vi.fn(
+      (
+        _run: unknown,
+        options?: {
+          signal?: AbortSignal;
+        },
+      ) =>
+        (async function* () {
+          observationSignal = options?.signal;
+          yield {
+            taskId: 'Todo.completeAll',
+            runId: 'run-abort',
+            status: 'running' as const,
+            updatedAt: '2026-07-24T00:00:00.000Z',
+          };
+          await new Promise<void>(resolve =>
+            options?.signal?.addEventListener('abort', () => resolve(), { once: true }),
+          );
+        })(),
+    );
+    const runtimeTransport = {
+      request: vi.fn(),
+      durableOperation: { observe },
+    } as unknown as RuntimeTransport;
+    const { Wrapper } = createWrapper(
+      bridgeAction,
+      createGraphClientCache(),
+      new QueryClient(),
+      undefined,
+      runtimeTransport,
+    );
+    const { result } = renderHook(() => useDurableOperation(operation), { wrapper: Wrapper });
+
+    await act(async () => {
+      await result.current.executeAsync();
+    });
+    await waitFor(() => expect(result.current.isRunning).toBe(true));
+
+    act(() => result.current.reset());
+
+    expect(observationSignal?.aborted).toBe(true);
+    expect(result.current.snapshot).toBeUndefined();
+    expect(result.current.isRefreshingRun).toBe(false);
   });
 
   it('runs reflected bridge operations from descriptor metadata', async () => {

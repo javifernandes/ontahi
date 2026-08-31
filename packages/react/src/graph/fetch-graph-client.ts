@@ -10,6 +10,7 @@ import type {
   RuntimeBoundDataGraphApi,
 } from '@ontahi/core/data-graph';
 import { createRuntimeBoundDataGraphApi } from '@ontahi/core/data-graph';
+import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 
 import {
   createFetchOperationBridgeAdapter,
@@ -21,6 +22,10 @@ import {
 import type { ReactGraphExecutor } from './executor.js';
 import type { FetchGraphReadExecutorOptions } from './fetch-graph-read-executor.js';
 import { createFetchGraphReadCapability } from './fetch-graph-runtime.js';
+import {
+  createFetchRuntimeTransport,
+  type FetchRuntimeTransportOptions,
+} from './fetch-runtime-transport.js';
 
 export type FetchReflectedEntityDataReaderOptions = {
   endpoint?: string;
@@ -37,6 +42,7 @@ export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOpt
     RemoteDataGraphError
   >;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
+  runtimeTransport?: RuntimeTransport;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
@@ -51,12 +57,12 @@ export type FetchGraphClient<TOptions = undefined> = OntahiGraphClient<TOptions,
 export type FetchGraphClientOptions<TOptions = undefined> = {
   graphRead?: false | FetchGraphReadExecutorOptions<TOptions>;
   operations?: false | FetchOperationBridgeOptions;
+  runtimeTransport?: false | FetchRuntimeTransportOptions;
   reflectedEntityData?: false | FetchReflectedEntityDataReaderOptions;
   reflectedRelatedEntityData?: false | FetchReflectedRelatedEntityDataReaderOptions;
 };
 
 const DEFAULT_OPERATIONS_ENDPOINT = '/operations';
-const DEFAULT_TASKS_ENDPOINT = '/operations/tasks';
 const DEFAULT_REFLECTED_ENTITY_DATA_ENDPOINT = '/explorer/entities';
 const DEFAULT_REFLECTED_RELATED_ENTITY_DATA_ENDPOINT = '/explorer/related-entities';
 
@@ -87,7 +93,6 @@ const conventionalOperationOptions = (
   options.mountPath === undefined
     ? {
         endpoint: DEFAULT_OPERATIONS_ENDPOINT,
-        taskEndpoint: DEFAULT_TASKS_ENDPOINT,
         ...options,
       }
     : options;
@@ -118,6 +123,7 @@ export function createFetchGraphClient<TOptions = undefined>(
 export function createFetchGraphClient<TOptions = undefined>({
   graphRead = {},
   operations = {},
+  runtimeTransport = {},
   reflectedEntityData = {},
   reflectedRelatedEntityData = {},
 }: FetchGraphClientOptions<TOptions> = {}): OntahiGraphClient<TOptions, TOptions> {
@@ -133,6 +139,9 @@ export function createFetchGraphClient<TOptions = undefined>({
           graphExecutor: graphReadCapability.graphExecutor,
         }
       : {}),
+    ...(runtimeTransport === false
+      ? {}
+      : { runtimeTransport: createFetchRuntimeTransport(runtimeTransport) }),
     ...(operationOptions
       ? {
           operationBridgeAdapters: [createFetchOperationBridgeAdapter(operationOptions)],

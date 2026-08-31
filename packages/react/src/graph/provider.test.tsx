@@ -7,6 +7,7 @@ import {
   type ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
+import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -30,6 +31,8 @@ import {
   useReflectedEntityDataReader,
   useReflectedOperationExecutionAffordance,
   useReflectedOperationInvoker,
+  useRuntimeTransport,
+  useRuntimeTransportCapability,
   type ReactGraphExecutor,
 } from './index.js';
 
@@ -46,6 +49,7 @@ const createWrapper = ({
   runtime,
   clientCache,
   graphExecutor,
+  runtimeTransport,
   operationBridgeAdapters,
   reflectedEntityDataReader,
   reflectedOperationInvoker,
@@ -55,6 +59,7 @@ const createWrapper = ({
   runtime: unknown;
   clientCache?: GraphClientCache;
   graphExecutor?: ReactGraphExecutor;
+  runtimeTransport?: RuntimeTransport;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedOperationInvoker?: ReflectedOperationInvoker;
@@ -66,6 +71,7 @@ const createWrapper = ({
       <OntahiGraphProvider
         runtime={runtime}
         graphExecutor={graphExecutor}
+        runtimeTransport={runtimeTransport}
         clientCache={clientCache}
         operationBridgeAdapters={operationBridgeAdapters}
         reflectedEntityDataReader={reflectedEntityDataReader}
@@ -83,6 +89,7 @@ describe('OntahiGraphProvider', () => {
     const { result } = renderHook(
       () => ({
         executor: useGraphExecutor(),
+        runtimeTransport: useRuntimeTransport(),
         adapter: useDefaultOperationBridgeAdapter(),
         entityReader: useReflectedEntityDataReader(),
         operationInvoker: useReflectedOperationInvoker(),
@@ -91,6 +98,7 @@ describe('OntahiGraphProvider', () => {
     );
 
     expect(result.current.executor).toBeDefined();
+    expect(result.current.runtimeTransport.durableOperation).toBeDefined();
     expect(result.current.adapter.name).toBe('fetch');
     expect(result.current.entityReader).toBeDefined();
     expect(result.current.operationInvoker).toBeDefined();
@@ -223,6 +231,39 @@ describe('OntahiGraphProvider', () => {
     });
 
     expect(result.current).toBeUndefined();
+  });
+
+  it('exposes Runtime Transport as an independently replaceable capability', () => {
+    const runtimeTransport = {
+      request: vi.fn(),
+    } as unknown as RuntimeTransport;
+    const configured = renderHook(() => useRuntimeTransport(), {
+      wrapper: createWrapper({
+        runtime: { name: 'bookops-runtime' },
+        client: false,
+        runtimeTransport,
+      }),
+    });
+    const absent = renderHook(() => useRuntimeTransportCapability(), {
+      wrapper: createWrapper({ runtime: { name: 'local-runtime' }, client: false }),
+    });
+
+    expect(configured.result.current).toBe(runtimeTransport);
+    expect(absent.result.current).toBeUndefined();
+  });
+
+  it('requires Runtime Transport only from consumers that request the mandatory capability', () => {
+    const reportError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      expect(() =>
+        renderHook(() => useRuntimeTransport(), {
+          wrapper: createWrapper({ runtime: { name: 'local-runtime' }, client: false }),
+        }),
+      ).toThrow('useRuntimeTransport requires an OntahiGraphProvider with runtimeTransport');
+    } finally {
+      reportError.mockRestore();
+    }
   });
 
   it('exposes the host-supplied reflected entity data reader', () => {
