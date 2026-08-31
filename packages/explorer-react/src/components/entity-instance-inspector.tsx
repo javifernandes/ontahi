@@ -89,7 +89,7 @@ export const ExplorerEntityInstanceInspector = ({
       )}
     >
       <header
-        data-explorer-instance-drag-handle
+        data-explorer-workspace-drag-handle
         title='Drag to move · Double-click to minimize'
         className={cx(
           'flex touch-none select-none items-start justify-between gap-4 border-b px-4 py-3',

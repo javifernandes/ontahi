@@ -47,6 +47,8 @@ a client prop, reveal inaccessible population facts, or fall back to an unscoped
    table, preserving the graph-node context while adjacent nodes are inspected.
 5. Operations and Schema remain available as secondary surfaces, which is compatible with an
    instance-first workspace.
+6. the active Entity collection now uses the same movable node vocabulary as instance windows,
+   instead of occupying the complete canvas as an immovable page section.
 
 ## First Vertical Slice
 
@@ -148,6 +150,25 @@ Add the first authority-reflected Relation editor:
 This slice does not yet model portable eligibility, optimistic Relationship Deltas, or lifecycle
 semantics for composition-like direct Relations.
 
+## Seventh Vertical Slice
+
+Turn the current Entity collection into the first collection-view node:
+
+1. represent the active Entity rows and current query controls as one compact canvas node rather
+   than a full-width page section;
+2. place Entity selection in the node header so the node communicates what collection it owns;
+3. let the complete node move, minimize, restore, and participate in the same click-to-front order
+   as instance nodes;
+4. keep generic create, filtering, sorting, inline editing, delete, pagination, and row-to-instance
+   navigation inside the node;
+5. distinguish collection identity—Entity plus ephemeral query state—from portable Entity-instance
+   identity;
+6. keep this slice to one collection node without close, resize, duplication, saved views, or
+   persisted layout.
+
+This is a layout proof for a composable Explorer workspace, not yet a generalized window manager
+or a saved Selection model.
+
 ## Later Slices
 
 1. Extend authority-aware Relation affordances from many-to-many `add`/`remove` to direct
@@ -201,6 +222,8 @@ semantics for composition-like direct Relations.
     participant picker and unlink controls.
 11. Model ephemeral node position explicitly and support pointer dragging, overlap, activation
     order, and position-preserving collapse/expansion for both full and compact representations.
+12. Reframe the active Entity table as one compact movable and collapsible collection-view node,
+    with Entity selection and query controls inside its own surface.
 
 ## Acceptance Checklist
 
@@ -232,20 +255,23 @@ semantics for composition-like direct Relations.
       structural verbs as permission.
 - [x] Existing generic create, inline update, delete, filtering, sorting, and pagination behavior
       remains available.
+- [x] The active Entity collection is a compact movable node whose embedded Entity selector,
+      minimize/restore interaction, and query controls remain usable.
 - [x] Explorer contains no regular-user/admin branch and no client-side policy bypass.
 - [x] Focused component tests, affected package tests, typecheck, lint, and format checks pass.
 - [x] Consumer-visible package changes have a Changeset and durable Explorer knowledge is updated.
 
 ## Progress
 
-The first six vertical slices are implemented on 2026-08-30. Todo Explorer proves row
+The first seven vertical slices are implemented through 2026-08-31. Todo Explorer proves row
 selection, portable Reference navigation, Query-backed traversal from `TodoList` to the derived
 inverse `TodoItem.list`, parallel instance comparison, ephemeral collapse/expansion behavior, and
 authorized type-aware editing in both tables and windows. It also proves authority-reflected
 many-to-many Tag linking and unlinking through canonical Relationship Commands. Its Explorer-level
-workspace now keeps mixed-Entity windows across navigation and rehydrates restored rows. Persistent
-view state, direct cross-Entity opening from graph links, direct/composition Relation editing, and
-portable eligibility remain later work.
+workspace now keeps mixed-Entity windows across navigation and rehydrates restored rows. The
+active Entity collection is also a compact movable and collapsible node, while multiple collection
+views and saved query state remain later work alongside persistent view state, direct cross-Entity
+opening from graph links, direct/composition Relation editing, and portable eligibility.
 
 ## Decisions
 
@@ -268,6 +294,9 @@ portable eligibility remain later work.
     is intentionally session-memory state; persistence requires an explicit state model and owner.
 11. Many-to-many mutation controls require runtime-projected `add`/`remove` affordances; static
     structural verbs remain topology only, and server execution remains authoritative.
+12. A collection-view node owns an Entity and ephemeral query state, while an instance node owns a
+    portable Entity identity. Sharing one visual interaction grammar does not collapse those two
+    semantic identities.
 
 ## Open Questions
 

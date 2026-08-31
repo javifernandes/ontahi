@@ -2,7 +2,7 @@
 
 import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 
-export type ExplorerInstanceNodePosition = {
+export type ExplorerWorkspaceNodePosition = {
   x: number;
   y: number;
 };
@@ -18,7 +18,7 @@ type DragState = {
   width: number;
 };
 
-export function ExplorerDraggableInstanceNode({
+export function ExplorerDraggableWorkspaceNode({
   children,
   constraintWidth = 432,
   maxHeight,
@@ -33,8 +33,8 @@ export function ExplorerDraggableInstanceNode({
   maxHeight: string;
   onActivate: () => void;
   onDoubleClick?: () => void;
-  onMove: (position: ExplorerInstanceNodePosition) => void;
-  position: ExplorerInstanceNodePosition;
+  onMove: (position: ExplorerWorkspaceNodePosition) => void;
+  position: ExplorerWorkspaceNodePosition;
   zIndex: number;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -44,7 +44,7 @@ export function ExplorerDraggableInstanceNode({
 
   const startDragging = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !(event.target instanceof Element)) return;
-    const handle = event.target.closest('[data-explorer-instance-drag-handle]');
+    const handle = event.target.closest('[data-explorer-workspace-drag-handle]');
     if (!handle) return;
     const interactive = event.target.closest('a, button, input, select, textarea');
     if (interactive && interactive !== handle) return;
@@ -115,7 +115,7 @@ export function ExplorerDraggableInstanceNode({
       return;
     }
     if (!onDoubleClick || !(event.target instanceof Element)) return;
-    const handle = event.target.closest('[data-explorer-instance-drag-handle]');
+    const handle = event.target.closest('[data-explorer-workspace-drag-handle]');
     if (!handle) return;
     const interactive = event.target.closest('a, button, input, select, textarea');
     if (interactive && interactive !== handle) return;

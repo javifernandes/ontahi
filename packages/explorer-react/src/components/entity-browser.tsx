@@ -12,11 +12,16 @@ import type {
 import { cx } from '../internal/cx.js';
 
 import { useExplorerConfig, useExplorerRoutes } from './config.js';
+import {
+  ExplorerEntityCollectionNode,
+  explorerCollectionNodeInitialPosition,
+} from './entity-collection-node.js';
 import { ExplorerEntityDataPanel } from './entity-data-panel.js';
 import {
   ExplorerEntityStructurePanel,
   type ExplorerEntityStructurePanelProps,
 } from './entity-detail-panels.js';
+import type { ExplorerWorkspaceNodePosition } from './entity-instance-node.js';
 import { ExplorerEntityInstanceWorkspaceProvider } from './entity-instance-workspace.js';
 import { ExplorerEntityOperationsPanel } from './entity-operations-panel.js';
 import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
@@ -84,10 +89,12 @@ const getEntitySearchText = (entity: ExplorerEntityDetail) =>
     .toLowerCase();
 
 const EntityPicker = ({
+  embedded = false,
   entities,
   selectedEntity,
   onSelect,
 }: {
+  embedded?: boolean;
   entities: ExplorerEntityDetail[];
   selectedEntity: ExplorerEntityDetail;
   onSelect: (event: MouseEvent<HTMLAnchorElement>, entityName: string) => void;
@@ -114,21 +121,37 @@ const EntityPicker = ({
   }, [open]);
 
   return (
-    <div ref={rootRef} className='relative min-w-0 flex-1'>
+    <div ref={rootRef} className={cx('relative min-w-0', !embedded && 'flex-1')}>
       <button
         type='button'
         role='combobox'
         aria-expanded={open}
         aria-haspopup='listbox'
         aria-label={`Select entity, ${selectedEntity.name}`}
+        data-explorer-workspace-drag-handle={embedded ? '' : undefined}
         onClick={() => setOpen(current => !current)}
-        className='group flex w-full max-w-sm items-center gap-3 rounded-2xl border bg-card/95 px-3 py-2 text-left shadow-lg backdrop-blur transition hover:border-primary/50 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20'
+        className={cx(
+          'group flex items-center text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
+          embedded
+            ? 'w-fit max-w-full gap-2 rounded-lg px-1 py-0.5 hover:bg-accent'
+            : 'w-full max-w-sm gap-3 rounded-2xl border bg-card/95 px-3 py-2 shadow-lg backdrop-blur hover:border-primary/50 hover:shadow-xl',
+        )}
       >
-        <span className='flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground'>
-          <Boxes className='size-5' />
+        <span
+          className={cx(
+            'flex shrink-0 items-center justify-center bg-primary text-primary-foreground',
+            embedded ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
+          )}
+        >
+          <Boxes className={embedded ? 'size-4' : 'size-5'} />
         </span>
         <span className='grid min-w-0 flex-1'>
-          <span className='truncate font-mono text-base font-semibold text-foreground'>
+          <span
+            className={cx(
+              'truncate font-mono font-semibold text-foreground',
+              embedded ? 'text-sm' : 'text-base',
+            )}
+          >
             {selectedEntity.name}
           </span>
         </span>
@@ -136,7 +159,12 @@ const EntityPicker = ({
       </button>
 
       {open ? (
-        <div className='absolute left-0 top-[calc(100%+0.5rem)] z-50 w-full max-w-xl overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-xl'>
+        <div
+          className={cx(
+            'absolute left-0 top-[calc(100%+0.5rem)] z-50 max-w-xl overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-xl',
+            embedded ? 'w-72' : 'w-full',
+          )}
+        >
           <label className='relative block border-b p-2'>
             <Search className='pointer-events-none absolute left-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
             <input
@@ -191,6 +219,7 @@ const EntityPicker = ({
 
 const EntityBrowserDetail = ({
   entity,
+  embeddedEntityPicker,
   entityPicker,
   operations,
   renderDataPanel,
@@ -202,6 +231,7 @@ const EntityBrowserDetail = ({
   onTabChange,
 }: {
   entity: ExplorerEntityDetail;
+  embeddedEntityPicker: ReactNode;
   entityPicker: ReactNode;
   operations: ExplorerOperationDescriptor[];
   renderDataPanel?: ExplorerEntityDataPanelRenderer;
@@ -214,11 +244,22 @@ const EntityBrowserDetail = ({
 }) => {
   const canShowData = Boolean(renderDataPanel && !entity.relationOwner);
   const effectiveTab = parseExplorerEntityBrowserTab(tab, { canShowData });
+  const [collectionPosition, setCollectionPosition] = useState<ExplorerWorkspaceNodePosition>(
+    explorerCollectionNodeInitialPosition,
+  );
+  const [collectionCollapsed, setCollectionCollapsed] = useState(false);
 
   return (
     <section className='relative min-h-[calc(100vh-9rem)]'>
-      <div className='pointer-events-none absolute inset-x-4 top-4 z-40 flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
-        <div className='pointer-events-auto min-w-0 flex-1'>{entityPicker}</div>
+      <div
+        className={cx(
+          'pointer-events-none absolute inset-x-4 top-4 z-40 flex flex-col gap-3 md:flex-row md:items-center',
+          effectiveTab === 'data' ? 'md:justify-end' : 'md:justify-between',
+        )}
+      >
+        {effectiveTab !== 'data' ? (
+          <div className='pointer-events-auto min-w-0 flex-1'>{entityPicker}</div>
+        ) : null}
         <div className='pointer-events-auto flex shrink-0 flex-wrap items-center gap-2'>
           {canShowData && effectiveTab !== 'data' ? (
             <button
@@ -245,7 +286,7 @@ const EntityBrowserDetail = ({
           ) : null}
         </div>
       </div>
-      <div className='pt-32 md:pt-24'>
+      <div className={cx(effectiveTab !== 'data' && 'pt-32 md:pt-24')}>
         {effectiveTab === 'structure' ? (
           <ExplorerEntityStructurePanel entity={entity} renderDiagram={renderDiagram} />
         ) : null}
@@ -258,10 +299,21 @@ const EntityBrowserDetail = ({
             renderRefInput={renderRefInput}
           />
         ) : null}
-        {effectiveTab === 'data' && renderDataPanel ? renderDataPanel({ entity }) : null}
+        {effectiveTab === 'data' && renderDataPanel ? (
+          <ExplorerEntityCollectionNode
+            collapsed={collectionCollapsed}
+            entityName={entity.name}
+            entityPicker={embeddedEntityPicker}
+            position={collectionPosition}
+            onCollapseChange={setCollectionCollapsed}
+            onMove={setCollectionPosition}
+          >
+            {renderDataPanel({ entity })}
+          </ExplorerEntityCollectionNode>
+        ) : null}
       </div>
       {effectiveTab !== 'structure' ? (
-        <div className='sticky bottom-6 ml-auto pt-2'>
+        <div className='fixed bottom-6 left-6 z-40'>
           <button
             type='button'
             onClick={() => onTabChange('structure')}
@@ -294,7 +346,7 @@ export function ExplorerEntityBrowser({
   const resolvedRenderDataPanel =
     renderDataPanel ??
     (hasReflectedEntityDataReader
-      ? ({ entity }) => <ExplorerEntityDataPanel entity={entity} showHeader={false} />
+      ? ({ entity }) => <ExplorerEntityDataPanel embedded entity={entity} showHeader={false} />
       : undefined);
   const canShowDataTab = Boolean(resolvedRenderDataPanel);
   const [selectedName, setSelectedName] = useState(() =>
@@ -377,6 +429,14 @@ export function ExplorerEntityBrowser({
       {selectedEntity ? (
         <EntityBrowserDetail
           entity={selectedEntity}
+          embeddedEntityPicker={
+            <EntityPicker
+              embedded
+              entities={entities}
+              selectedEntity={selectedEntity}
+              onSelect={selectEntity}
+            />
+          }
           entityPicker={
             <EntityPicker
               entities={entities}
