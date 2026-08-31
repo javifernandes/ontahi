@@ -47,10 +47,10 @@ result, and semantic rejection. An unknown envelope version, envelope key, famil
 version fails before execution. Authority is supplied by the receiving runtime's trusted context;
 it is never accepted from the portable message.
 
-The canonical registry tuple currently contains `operation`, `graph.read`, and `graph.command`.
-Graph Read and Graph Command delegate to their existing fail-closed parsers instead of reproducing
-Query or Command validation. Operation adds body version 1 while preserving its existing semantic
-request kinds:
+The canonical registry tuple currently contains `operation`, `durable.operation`, `graph.read`,
+and `graph.command`. Graph Read and Graph Command delegate to their existing fail-closed parsers
+instead of reproducing Query or Command validation. Operation adds body version 1 while preserving
+its existing semantic request kinds:
 
 ```ts
 const invoke = {
@@ -100,8 +100,26 @@ a registered family unavailable in the receiving runtime, a failed handler, and 
 handler response produce distinct common protocol errors.
 
 A Durable Operation starts through the same `invoke` request. Its successful Operation result
-contains a `TaskRunRef`; that run identity is not the outer request id. Snapshot observation,
-progress, and cancellation still need their own versioned Durable lifecycle contract.
+contains a `TaskRunRef`; that run identity is not the outer request id. Observation then uses the
+versioned `durable.operation` family:
+
+```ts
+const inspect = {
+  version: 1,
+  kind: 'inspect',
+  run: { taskId: 'Todo.completeAll', runId: 'run-1' },
+};
+```
+
+Its `snapshot` response carries progress, terminal result, or error. Repeated inspection is the
+portable polling baseline. The family is registered but has no implicit server handler: a receiver
+must install authority-aware observation explicitly. A cancelled snapshot is valid, but no
+`cancel` request exists until Task Runtimes expose an enforceable cancellation capability.
+
+React will consume this through a Runtime Transport observer. Fetch can implement observation by
+repeating `inspect`; a push-capable transport can subscribe and deliver the same snapshot body.
+The hook should not select either strategy. The current `getTaskSnapshot`/`pollIntervalMs` bridge is
+kept until the transport migration slice.
 
 The dispatcher does not mount a common endpoint or change the current paths documented below. In
 particular, the legacy `/operations` HTTP body remains unversioned until the transport migration is

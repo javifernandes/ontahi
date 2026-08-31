@@ -18,9 +18,12 @@ describe('Runtime Protocol envelope', () => {
     orderBy: [],
   } as const;
 
-  it.each(['operation', 'graph.read', 'graph.command'])('accepts the family name %s', family => {
-    expect(isRuntimeProtocolFamilyName(family)).toBe(true);
-  });
+  it.each(['operation', 'durable.operation', 'graph.read', 'graph.command'])(
+    'accepts the family name %s',
+    family => {
+      expect(isRuntimeProtocolFamilyName(family)).toBe(true);
+    },
+  );
 
   it('preserves independent envelope and family-body versions through JSON', () => {
     const request = createRuntimeProtocolRequest({
