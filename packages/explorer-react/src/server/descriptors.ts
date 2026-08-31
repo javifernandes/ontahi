@@ -688,6 +688,15 @@ const getIngressRoutesByOperationId = (routes: readonly ExplorerHttpIngressLike[
   return routesByOperationId;
 };
 
+const describeOperationResultEntityName = (output: unknown) => {
+  if (!output || typeof output !== 'object') return undefined;
+
+  const candidate = output as { kind?: unknown; name?: unknown };
+  return candidate.kind === 'entity' && typeof candidate.name === 'string'
+    ? candidate.name
+    : undefined;
+};
+
 const describeGraphOperation = (
   operation: ExplorerOperationLike,
   ingressRoutesByOperationId: Map<
@@ -697,6 +706,7 @@ const describeGraphOperation = (
 ): ExplorerOperationDescriptor => ({
   id: operation.id,
   entityName: operation.entityName,
+  resultEntityName: describeOperationResultEntityName(operation.output),
   name: operation.name,
   kind: 'graph',
   description: operation.description,
@@ -719,6 +729,7 @@ const describeDomainOperation = (
 ): ExplorerOperationDescriptor => ({
   id: operation.id,
   entityName: operation.entityName,
+  resultEntityName: describeOperationResultEntityName(operation.output),
   name: operation.name,
   kind: operation.durable ? 'durable' : 'domain',
   description: operation.description,

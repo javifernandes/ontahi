@@ -176,6 +176,12 @@ many-cardinality Selection into an instance action. This is a UI projection over
 Operation contract: the reflected invoker, input validation, runtime policy, and server authority
 remain unchanged.
 
+Relation blocks project the same Operations more precisely. A Relation header may expose an
+Operation when the current source instance binds exactly one input and the Operation directly
+returns the Relation target Entity. Related rows expose the contextual Actions of their own target
+instance. Explorer refreshes the parent and Relation query after success, but does not interpret
+this placement as ownership, composition, or permission to unlink or delete.
+
 For declared `hasMany` and `manyToMany` Relations, an instance window can load related instances.
 The host-provided related-data reader must execute a Relation-root Query through the configured
 runtime and graph-read policy. Reads are scoped to open instances rather than every row in a table.

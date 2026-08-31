@@ -161,6 +161,7 @@ export type ExplorerOperationInputRefDescriptor = {
 export type ExplorerOperationDescriptor = {
   id: string;
   entityName: string;
+  resultEntityName?: string;
   name: string;
   kind: 'graph' | 'domain' | 'durable';
   description?: string;

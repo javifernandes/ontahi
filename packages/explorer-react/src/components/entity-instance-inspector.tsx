@@ -227,8 +227,13 @@ export const ExplorerEntityInstanceInspector = ({
             {relations.map(relation => (
               <ExplorerInstanceRelation
                 key={relation.name}
+                onUpdated={onUpdated}
+                operations={operations}
                 relation={relation}
+                renderExecutePanel={renderExecutePanel}
+                renderRefInput={renderRefInput}
                 source={source}
+                sourceLabel={label}
                 onNavigate={onNavigate}
               />
             ))}

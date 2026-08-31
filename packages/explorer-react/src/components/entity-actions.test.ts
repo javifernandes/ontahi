@@ -7,6 +7,7 @@ import {
   buildExplorerContextualOperationInput,
   getExplorerInstanceOperationBinding,
   getExplorerInstanceOperationBindings,
+  getExplorerRelationOperations,
 } from './entity-actions.js';
 
 const operation = (
@@ -151,5 +152,43 @@ describe('Explorer instance operation bindings', () => {
       }),
     ).toBeNull();
     expect(getExplorerInstanceOperationBindings([operation()], tagRef)).toHaveLength(1);
+  });
+
+  it('projects only source-bound operations that return the Relation target', () => {
+    const listRef: AnyEntityRef = {
+      kind: 'entity-ref',
+      entityName: 'TodoList',
+      locator: { id: 'list-1' },
+    };
+    const listInput = {
+      path: 'list',
+      entityName: 'TodoList',
+      receiver: false,
+      optional: false,
+      locators: [{ name: 'refById', fields: ['list'], sourceFields: ['id'] }],
+    };
+    const create = operation({
+      id: 'TodoItem.create',
+      name: 'create',
+      resultEntityName: 'TodoItem',
+      inputRefs: [listInput],
+    });
+    const deleteList = operation({
+      id: 'TodoItem.deleteList',
+      name: 'deleteList',
+      inputRefs: [listInput],
+    });
+    const unrelatedResult = operation({
+      id: 'Audit.createForList',
+      name: 'createForList',
+      resultEntityName: 'Audit',
+      inputRefs: [listInput],
+    });
+
+    expect(
+      getExplorerRelationOperations([create, deleteList, unrelatedResult], listRef, 'TodoItem').map(
+        candidate => candidate.id,
+      ),
+    ).toEqual(['TodoItem.create']);
   });
 });

@@ -14,12 +14,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, LoaderCircle, Network, Plus, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import type { ExplorerEntityDetail } from '../contracts/index.js';
+import type { ExplorerEntityDetail, ExplorerOperationDescriptor } from '../contracts/index.js';
 
 import { useExplorerRoutes } from './config.js';
 import { humanizeExplorerName } from './display-name.js';
+import { ExplorerEntityActions, getExplorerRelationOperations } from './entity-actions.js';
 import { getExplorerRelatedRowLabel } from './entity-instance-values.js';
 import type { ExplorerInstanceNavigation } from './entity-instance-workspace.js';
+import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
+import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
 import { shouldHandleExplorerNavigation } from './routes.js';
 
 const relatedRowLocator = (
@@ -90,12 +93,22 @@ export const createExplorerManyToManyRelationshipCommand = (
 
 export const ExplorerInstanceRelation = ({
   onNavigate,
+  onUpdated,
+  operations,
   relation,
+  renderExecutePanel,
+  renderRefInput,
   source,
+  sourceLabel,
 }: {
   onNavigate: (input: ExplorerInstanceNavigation) => void;
+  onUpdated: () => Promise<unknown>;
+  operations: ExplorerOperationDescriptor[];
   relation: ExplorerEntityDetail['relations'][number];
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
   source: AnyEntityRef;
+  sourceLabel: string;
 }) => {
   const routes = useExplorerRoutes();
   const graphExecutor = useGraphExecutorCapability();
@@ -121,6 +134,10 @@ export const ExplorerInstanceRelation = ({
   );
   const canAdd = canRunManyToMany && relation.mutations?.add === true;
   const canRemove = canRunManyToMany && relation.mutations?.remove === true;
+  const relationOperations = useMemo(
+    () => getExplorerRelationOperations(operations, source, relation.target),
+    [operations, relation.target, source],
+  );
   const candidates = useReflectedEntityDataQuery(
     {
       entityName: relation.target,
@@ -145,6 +162,12 @@ export const ExplorerInstanceRelation = ({
     const ref = relatedRowRef(row, relation);
     return ref && !linkedKeys.has(refKey(ref));
   });
+  const refreshRelation = async () => {
+    await Promise.allSettled([
+      onUpdated(),
+      queryClient.invalidateQueries({ queryKey: ['graph', 'reflected-related-entity-data'] }),
+    ]);
+  };
 
   const mutate = async (
     action: ManyToManyRelationshipCommand['action'],
@@ -166,9 +189,7 @@ export const ExplorerInstanceRelation = ({
         setPickerOpen(false);
         setSearch('');
       }
-      await queryClient.invalidateQueries({
-        queryKey: ['graph', 'reflected-related-entity-data'],
-      });
+      await refreshRelation();
     } catch (error) {
       setMutationError(
         error instanceof Error ? error.message : 'The relationship could not be changed.',
@@ -191,6 +212,19 @@ export const ExplorerInstanceRelation = ({
           <span className='rounded-full bg-muted px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground'>
             {query.isLoading ? '…' : query.error ? '!' : (query.data?.totalCount ?? 0)}
           </span>
+          {relationOperations.length > 0 ? (
+            <ExplorerEntityActions
+              ariaLabel={`Actions for ${displayName} relation`}
+              contextLabel={sourceLabel}
+              onSuccess={refreshRelation}
+              operations={relationOperations}
+              renderInPortal
+              renderExecutePanel={renderExecutePanel}
+              renderRefInput={renderRefInput}
+              source={source}
+              triggerIcon={<Plus className='size-4' />}
+            />
+          ) : null}
           {canAdd ? (
             <button
               type='button'
@@ -309,6 +343,19 @@ export const ExplorerInstanceRelation = ({
                   <span className='truncate'>{label}</span>
                   <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
                 </a>
+                {participant ? (
+                  <ExplorerEntityActions
+                    ariaLabel={`Actions for ${relation.target} instance ${label}`}
+                    contextLabel={label}
+                    onSuccess={refreshRelation}
+                    operations={operations}
+                    renderInPortal
+                    renderExecutePanel={renderExecutePanel}
+                    renderRefInput={renderRefInput}
+                    source={participant}
+                    triggerClassName='opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                  />
+                ) : null}
                 {canRemove && participant ? (
                   <button
                     type='button'

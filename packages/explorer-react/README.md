@@ -45,6 +45,14 @@ multi-target Operations and many-cardinality Selections remain explicit rather t
 Execution still depends on the registered reflected invoker and the runtime remains authoritative;
 the contextual menu is a presentation projection, not a new instance-method or permission model.
 
+Relation blocks reuse that same projection at two narrower contexts. A Relation header exposes
+source-bound Operations only when their direct reflected result Entity is the Relation target, so
+an operation such as `TodoItem.create` can appear beside `TodoList -> TodoItem` without admitting
+an unrelated source-bound operation such as list deletion. Each identified related row also owns
+the contextual Actions of that target instance. Successful actions refresh the parent window and
+authoritative Relation query. This placement does not infer composition, lifecycle, or structural
+Relation mutation semantics.
+
 Selecting identified rows opens non-blocking instance windows. Multiple windows can remain open
 for comparison; each can collapse in place into a compact canvas node, expand, activate, or close
 without changing Entity data. Windows use reflected display and identity metadata, preserve portable
