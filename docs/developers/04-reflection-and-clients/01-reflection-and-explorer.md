@@ -144,9 +144,10 @@ not authorize the write: the dispatcher rebuilds and validates the Command again
 server-owned Entity and policy again.
 
 Reference Fields are presented as semantic Ref links, not as raw storage ids. Explorer prefers
-received display identity and otherwise labels the link from its portable locator; following it
-navigates to the related Entity instance without claiming that the Ref already contains current
-attributes.
+display identity resolved through an authorized Entity read and otherwise labels the link from its
+portable locator. Following it navigates to the related Entity instance without claiming that the
+Ref already contains current attributes. Repeated References share the graph-read cache, while the
+portable locator remains the link identity and fallback.
 
 The Entity detail reflects each Relation's declared endpoint, target Entity, direct kind,
 forward/inverse direction, cardinality, nullability, and cardinality-specific structural verbs.
@@ -160,11 +161,23 @@ authorized runtime value rather than looking for a physical column. Explorer doe
 expression itself and never treats the rows currently displayed in a panel as complete aggregate
 evidence.
 
-For declared `hasMany` and `manyToMany` Relations, the data browser can open a related-instances
-panel. Loading that panel uses the host-provided related-data reader, which must execute a
-Relation-root Query through the configured runtime and graph-read policy. Explorer neither reads a
-provider table directly nor reimplements authorization. A Ref already present can be displayed as
-identity; loading target attributes is always an authorized graph read.
+Selecting an identified row opens a non-blocking instance window. Several windows, including
+instances of different Entity types, can coexist for comparison. They can be dragged, overlapped,
+collapsed in place, restored, or closed; the active window is brought to the front. The workspace
+survives Entity, filter, pagination, Schema, and Actions navigation, but remains ephemeral across an
+Explorer unmount or page reload. Restoring a collapsed node re-reads its authoritative row.
+
+For declared `hasMany` and `manyToMany` Relations, an instance window can load related instances.
+The host-provided related-data reader must execute a Relation-root Query through the configured
+runtime and graph-read policy. Reads are scoped to open instances rather than every row in a table.
+Explorer neither reads a provider table directly nor reimplements authorization. A Ref already
+present can be displayed as identity; loading target attributes is always an authorized graph read.
+
+A many-to-many Relation becomes editable only when the server snapshot projects authorized `add`
+or `remove` affordances and the graph client supports Relationship Commands. Explorer can then
+search currently unlinked participants, add one, or remove an existing participant. It sends the
+canonical source/target Command and re-reads the authoritative Relation after an applied outcome.
+Structural verbs remain descriptive metadata and never grant permission by themselves.
 
 Association-shaped records remain ordinary Entities. Explorer reflects explicit graph-relation
 ownership when present and otherwise reports classification `unknown`; it never guesses from the
@@ -176,15 +189,16 @@ presence of required Ref fields.
 
 ## Keep the host boundary visible
 
-| Concern             | Ontahí supplies                                                | The host supplies                                                                 |
-| ------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Model catalog       | Entity, operation, task, ingress, and schema reflection        | The application composition to inspect                                            |
-| HTTP surface        | Generic invocation, snapshot, and Entity-data handlers         | Mount path, middleware, error reporting, and exposure policy                      |
-| Explorer UI         | Descriptor contracts, routes, shell, browsers, and forms       | App routing, static bundle, theme choice, and optional UI extensions              |
-| Operation execution | Reflected invoker contract and canonical dispatcher            | Transport, identity, authentication, and authorization policy                     |
-| Entity data         | Reader contracts plus semantic Ref and Relation presentation   | Credentials, RLS/service role choice, graph-read policy, and permitted data scope |
-| Entity mutation     | Inline scalar editing, exact-row delete, and portable Commands | Explicit action/Field/result policy, authority, storage execution, and row scope  |
-| Durable runs        | Task descriptors and run/source UI contracts                   | Persistent runtime, run loaders, retention, and access control                    |
+| Concern             | Ontahí supplies                                                   | The host supplies                                                                 |
+| ------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Model catalog       | Entity, operation, task, ingress, and schema reflection           | The application composition to inspect                                            |
+| HTTP surface        | Generic invocation, snapshot, and Entity-data handlers            | Mount path, middleware, error reporting, and exposure policy                      |
+| Explorer UI         | Descriptor contracts, routes, shell, browsers, and forms          | App routing, static bundle, theme choice, and optional UI extensions              |
+| Operation execution | Reflected invoker contract and canonical dispatcher               | Transport, identity, authentication, and authorization policy                     |
+| Entity data         | Reader contracts plus semantic Ref and Relation presentation      | Credentials, RLS/service role choice, graph-read policy, and permitted data scope |
+| Entity mutation     | Inline scalar editing, exact-row delete, and portable Commands    | Explicit action/Field/result policy, authority, storage execution, and row scope  |
+| Relation mutation   | Authorized many-to-many add/remove controls and portable Commands | Explicit link/unlink policy, authority, command execution, and participant scope  |
+| Durable runs        | Task descriptors and run/source UI contracts                      | Persistent runtime, run loaders, retention, and access control                    |
 
 The host completes the application at its environmental edges. It should not duplicate Entity
 schemas, operation contracts, or topology merely to make them inspectable.
@@ -196,11 +210,13 @@ Explorer consumes them through host-supplied runtime capabilities. Some assembly
 deliberately low-level—snapshot loading, task-run sources, custom Ref inputs, and app-specific event
 metadata.
 
-The current Relation slice is deliberately read-only: Explorer has no `assign`, `clear`, `add`, or
-`remove` controls. Generic Entity update/delete is distinct and appears only for static
-identity-scoped mutation policies. Do not build domain behavior against `ExplorerSnapshot`. Domain
-code belongs in Entities, Selections, operations, and Capabilities. Explorer descriptors are a
-projection for inspection and tooling, free to evolve as the reflective model becomes richer.
+Relation topology and structural verbs are deliberately read-only metadata. Explorer can expose
+`add` and `remove` for many-to-many Relations only through separately reflected authority-aware
+affordances; direct `assign` and `clear` are not yet generic Explorer controls. Generic Entity
+update/delete is distinct and appears only for static identity-scoped mutation policies. Do not
+build domain behavior against `ExplorerSnapshot`. Domain code belongs in Entities, Selections,
+operations, and Capabilities. Explorer descriptors are a projection for inspection and tooling,
+free to evolve as the reflective model becomes richer.
 
 The Ontahí form now closes where it began: one application declaration. Runtimes execute it,
 codegen carries a safe projection to authored clients, reflection carries a descriptive projection
