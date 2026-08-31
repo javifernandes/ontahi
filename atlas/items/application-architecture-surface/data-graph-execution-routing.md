@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/138b-conditional-exact-entity-mutations
   - ontahi://plans/146-ontahi-runtime-protocol
+  - ontahi://plans/147-application-bound-headless-graph-reads
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - bookops://plans/57-client-runtime-bridge-and-server-dispatch
@@ -42,6 +43,13 @@ provide equivalent enforcement at its authoritative data boundary, such as Postg
 
 Runtime binding must preserve one call-site language, result model, cache identity, observability
 surface, and provider-capability diagnostics across direct and remote execution.
+
+At a headless host boundary, the composed application owns that binding explicitly.
+`application.graph.read(...)` interprets a plain Query or View as many rows and the semantic
+`first`, `one`, `count`, and `exists` terminals as their corresponding result, while opening the
+server runtime scope and pinning the storage configured by that exact application. Operation code
+continues to use runtime-bound Effects so it inherits its existing authority, UnitOfWork, concerns,
+and transaction rather than opening another application boundary.
 
 Reflected Domain Operations also preserve static execution requirements. The current planner
 combines `execution.atomicity: 'required'` with explicit live bindings and returns a local, bridge,

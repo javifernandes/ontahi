@@ -34,6 +34,23 @@ The configured storage remains available as `application.storage`. Provider-spec
 stay typed: in-memory applications expose their dataset for test setup, while persistent providers
 do not pretend to offer an in-process dataset.
 
+Headless host code can execute a semantic Query without assembling the lower-level server Effect
+scope:
+
+```ts
+const todo = await application.graph.read(
+  query(TodoItem)
+    .where(item => item.id.eq('todo-1'))
+    .one(),
+  { scope: 'todo.export' },
+);
+```
+
+The application pins its own configured graph runtime even when several Ontahí applications share
+a process. Plain Queries and Views return arrays; `first`, `one`, `count`, and `exists` terminals
+select their corresponding result. Runtime-bound Effects remain the composition API inside
+Operations.
+
 ## Caller-owned Views
 
 An Operation may define a semantic population by returning a declarative Selection while each

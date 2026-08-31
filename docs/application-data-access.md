@@ -37,6 +37,31 @@ export const TodoApplication = ontahi({
 Entity registration makes a definition available to the server runtime and reflection. It does
 not grant a remote client access to the Entity.
 
+## Read from a headless host
+
+A server process, build tool, CLI, or test can execute a Query through the composed application:
+
+```ts
+import { query } from '@ontahi/core/data-graph';
+
+const item = await TodoApplication.graph.read(
+  query(TodoItem)
+    .where(todo => todo.id.eq(todoId))
+    .one(),
+  { scope: 'todo.build-item' },
+);
+```
+
+This is the canonical host-application read path. It pins the storage runtime configured by that
+exact application and opens the server execution context automatically. A plain Query or View
+returns an array; `.first()` returns one value or `null`; `.one()` requires exactly one value;
+`.count()` returns a number; and `.exists()` returns a boolean. Parameterized Views use
+`{ params }`, and provider read options pass through as `{ runtimeOptions }`.
+
+Do not use this Promise boundary to replace the runtime-bound Effects inside Operations. An
+Operation already has the correct authority, UnitOfWork, concerns, and transaction context; its
+Queries should continue to compose through that existing scope.
+
 ## Expose an explicit read surface
 
 Remote graph reads are default-deny. Every remotely readable Entity needs a policy that chooses
