@@ -4,7 +4,7 @@ import type {
   OperationInvocationResult,
   OperationValidationIssue,
 } from '@ontahi/core/runtime/contracts';
-import { ArrowRight, ExternalLink, Play, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, Play, RefreshCw, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 
 import type {
@@ -33,7 +33,7 @@ import { ExplorerSelect } from './select.js';
 import { ExplorerSelectionInput } from './selection-input.js';
 import type { ExplorerThemePreference } from './theme.js';
 
-export type ExplorerOperationExecutePanelVariant = 'default' | 'compact';
+export type ExplorerOperationExecutePanelVariant = 'default' | 'compact' | 'contextual';
 
 export type ExplorerOperationRefInputRenderProps = {
   input: unknown;
@@ -48,6 +48,9 @@ export type ExplorerOperationRefInputRenderer = (
 ) => ReactNode;
 
 export type ExplorerOperationExecutePanelProps = {
+  hiddenInputPaths?: readonly string[];
+  initialInput?: unknown;
+  onSuccess?: (result: unknown) => void | Promise<unknown>;
   operation: ExplorerOperationDescriptor;
   variant?: ExplorerOperationExecutePanelVariant;
   renderRefInput?: ExplorerOperationRefInputRenderer;
@@ -414,7 +417,7 @@ const ExplorerBooleanChoice = ({
         aria-label={field.path}
         className={cx(
           'inline-flex min-w-0 overflow-hidden rounded-md border bg-background p-0.5',
-          variant === 'compact' ? 'w-fit max-w-full border-0 bg-background/60' : 'min-h-10',
+          variant !== 'default' ? 'w-fit max-w-full border-0 bg-background/60' : 'min-h-10',
         )}
       >
         {options.map(option => {
@@ -429,7 +432,7 @@ const ExplorerBooleanChoice = ({
               onClick={() => onChange(option.value)}
               className={cx(
                 'rounded px-2.5 py-1 text-sm font-medium transition-colors',
-                variant === 'compact' ? 'text-xs' : 'min-h-8',
+                variant !== 'default' ? 'text-xs' : 'min-h-8',
                 selected
                   ? 'bg-primary/15 text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -498,7 +501,7 @@ const ExplorerRefInputRow = ({
       inputRef={inputRef}
       locator={selectedLocator}
       onChange={onChange}
-      variant={variant}
+      variant={variant === 'default' ? 'default' : 'compact'}
     />
   );
   const locatorSelect = (
@@ -515,7 +518,7 @@ const ExplorerRefInputRow = ({
     />
   );
 
-  if (variant === 'compact') {
+  if (variant !== 'default') {
     return (
       <div
         className={cx(
@@ -631,10 +634,10 @@ const ExplorerScalarInputRow = ({
         updateValue(nextValue === EXPLORER_UNSET_SELECT_VALUE ? null : nextValue)
       }
       options={enumOptions}
-      placeholder={variant === 'compact' ? field.path : field.type}
+      placeholder={variant !== 'default' ? field.path : field.type}
       triggerClassName={cx(
         'justify-between',
-        variant === 'compact'
+        variant !== 'default'
           ? 'h-8 min-h-8 border-0 bg-transparent px-0 text-sm font-medium text-foreground shadow-none hover:bg-transparent'
           : 'h-10 min-h-10 bg-background',
       )}
@@ -662,7 +665,7 @@ const ExplorerScalarInputRow = ({
       value={formatInputFieldControlValue(value)}
       onChange={event => updateValue(parseInputFieldControlValue(field, event.target.value))}
       placeholder={field.required ? field.type : 'optional'}
-      rows={variant === 'compact' ? 2 : 3}
+      rows={variant !== 'default' ? 2 : 3}
       aria-describedby={issue ? issueId : undefined}
       aria-invalid={Boolean(issue)}
       required={field.required}
@@ -720,7 +723,7 @@ const ExplorerScalarInputRow = ({
     />
   );
 
-  if (variant === 'compact') {
+  if (variant !== 'default') {
     return (
       <div
         className={cx(
@@ -772,18 +775,26 @@ const ExplorerScalarInputRow = ({
 };
 
 const ExplorerOperationInputForm = ({
+  hiddenInputPaths = [],
   operation,
   executor,
   renderRefInput,
   variant = 'default',
 }: {
+  hiddenInputPaths?: readonly string[];
   operation: ExplorerOperationDescriptor;
   executor: ReturnType<typeof useExplorerOperationExecutor>;
   renderRefInput?: ExplorerOperationRefInputRenderer;
   variant?: ExplorerOperationExecutePanelVariant;
 }) => {
-  const inputRefs = operation.inputRefs?.filter(inputRef => inputRef.locators.length > 0) ?? [];
-  const scalarFields = getExplorerOperationScalarInputFields(operation);
+  const hiddenPaths = new Set(hiddenInputPaths);
+  const inputRefs =
+    operation.inputRefs?.filter(
+      inputRef => inputRef.locators.length > 0 && !hiddenPaths.has(inputRef.path),
+    ) ?? [];
+  const scalarFields = getExplorerOperationScalarInputFields(operation).filter(
+    field => !hiddenPaths.has(field.path),
+  );
   const hasInputFields = inputRefs.length > 0 || scalarFields.length > 0;
 
   if (!hasInputFields) {
@@ -800,7 +811,7 @@ const ExplorerOperationInputForm = ({
     <section
       className={cx(
         'grid rounded-lg',
-        variant === 'compact' ? 'gap-1' : 'gap-1 bg-muted/20 px-3 py-1',
+        variant !== 'default' ? 'gap-1' : 'gap-1 bg-muted/20 px-3 py-1',
       )}
     >
       {!executor.parsedInputPreview.ok ? (
@@ -809,7 +820,7 @@ const ExplorerOperationInputForm = ({
         </p>
       ) : null}
 
-      <div className={cx(variant === 'compact' ? 'grid gap-1' : 'divide-y')}>
+      <div className={cx(variant !== 'default' ? 'grid gap-1' : 'divide-y')}>
         {inputRefs.map((inputRef, index) => (
           <ExplorerRefInputRow
             key={inputRef.path}
@@ -1004,20 +1015,24 @@ const ExplorerOperationErrorFeedback = ({
 
 export function ExplorerOperationExecutePanel({
   className,
+  hiddenInputPaths,
+  initialInput,
+  onSuccess,
   operation,
   renderRefInput,
   theme,
   variant = 'default',
 }: ExplorerOperationExecutePanelProps) {
-  const executor = useExplorerOperationExecutor({ operation });
+  const executor = useExplorerOperationExecutor({ initialInput, onSuccess, operation });
+  const contextual = variant === 'contextual';
 
   return (
     <div className={cx('grid gap-4', className)}>
-      {executor.executionAffordance?.status === 'local' ? (
+      {!contextual && executor.executionAffordance?.status === 'local' ? (
         <p className='text-sm text-muted-foreground'>
           Execution: local on {executor.executionAffordance.runtime}.
         </p>
-      ) : executor.executionAffordance?.status === 'bridge' ? (
+      ) : !contextual && executor.executionAffordance?.status === 'bridge' ? (
         <p className='text-sm text-muted-foreground'>
           Execution: bridge to {executor.executionAffordance.authority} via{' '}
           {executor.executionAffordance.bridge}.
@@ -1026,12 +1041,15 @@ export function ExplorerOperationExecutePanel({
       {executor.executable ? (
         <>
           <ExplorerOperationInputForm
+            hiddenInputPaths={hiddenInputPaths}
             operation={operation}
             executor={executor}
             renderRefInput={renderRefInput}
             variant={variant}
           />
-          <ExplorerJsonInputInspector operation={operation} executor={executor} theme={theme} />
+          {!contextual ? (
+            <ExplorerJsonInputInspector operation={operation} executor={executor} theme={theme} />
+          ) : null}
           {!executor.parsedInputPreview.ok ? (
             <p className='text-sm text-destructive'>{executor.parsedInputPreview.error}</p>
           ) : null}
@@ -1044,8 +1062,9 @@ export function ExplorerOperationExecutePanel({
                 className='mt-0.5'
               />
               <span>
-                I understand this operation can delete or remove data. The operation input may also
-                require its own confirmation field.
+                {contextual
+                  ? 'Confirm this destructive action.'
+                  : 'I understand this operation can delete or remove data. The operation input may also require its own confirmation field.'}
               </span>
             </label>
           ) : null}
@@ -1068,14 +1087,29 @@ export function ExplorerOperationExecutePanel({
             <button
               type='button'
               onClick={executor.resetInput}
-              className='inline-flex min-h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm font-medium text-foreground hover:bg-accent'
+              aria-label={contextual ? 'Reset input' : undefined}
+              title={contextual ? 'Reset input' : undefined}
+              className={cx(
+                'inline-flex min-h-9 items-center gap-2 rounded-md border bg-background text-sm font-medium text-foreground hover:bg-accent',
+                contextual ? 'size-9 justify-center' : 'px-3',
+              )}
             >
               <RotateCcw className='size-4' />
-              Reset input
+              {contextual ? null : 'Reset input'}
             </button>
           </div>
 
-          {executor.state.status === 'success' && operation.kind === 'durable' ? (
+          {contextual && executor.state.status === 'success' ? (
+            <p
+              role='status'
+              className='inline-flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-medium text-primary'
+            >
+              <Check className='size-4' />
+              Done
+            </p>
+          ) : null}
+
+          {!contextual && executor.state.status === 'success' && operation.kind === 'durable' ? (
             isExplorerTaskRunRef(executor.state.result) ? (
               <ExplorerDurableOperationRun
                 operation={operation}
@@ -1102,7 +1136,7 @@ export function ExplorerOperationExecutePanel({
             )
           ) : null}
 
-          {executor.state.status === 'success' && operation.kind !== 'durable' ? (
+          {!contextual && executor.state.status === 'success' && operation.kind !== 'durable' ? (
             <div className='grid gap-2'>
               <h5 className='text-xs font-semibold uppercase tracking-wide text-primary'>
                 Result value
@@ -1130,7 +1164,16 @@ export function ExplorerOperationExecutePanel({
             </div>
           ) : null}
 
-          {executor.state.status === 'error' ? (
+          {executor.state.status === 'error' && contextual ? (
+            <p
+              role='alert'
+              className='rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive'
+            >
+              {executor.state.error}
+            </p>
+          ) : null}
+
+          {executor.state.status === 'error' && !contextual ? (
             <ExplorerOperationErrorFeedback
               error={executor.state.error}
               invocation={executor.state.invocation}

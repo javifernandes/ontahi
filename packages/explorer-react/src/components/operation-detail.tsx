@@ -20,6 +20,9 @@ export { explorerOperationDetailTabs };
 export type { ExplorerOperationDetailTab };
 
 export type ExplorerOperationExecutePanelRenderer = (props: {
+  hiddenInputPaths?: readonly string[];
+  initialInput?: unknown;
+  onSuccess?: (result: unknown) => void | Promise<unknown>;
   operation: ExplorerOperationDescriptor;
   variant: ExplorerOperationExecutePanelVariant;
 }) => ReactNode;

@@ -17,7 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { ExplorerEntityDetail } from '../contracts/index.js';
+import type { ExplorerEntityDetail, ExplorerOperationDescriptor } from '../contracts/index.js';
 
 import type { ExplorerEntityMutationRunner } from './entity-data-mutations.js';
 import { ExplorerEntityInstanceInspector } from './entity-instance-inspector.js';
@@ -26,6 +26,8 @@ import {
   type ExplorerWorkspaceNodePosition,
 } from './entity-instance-node.js';
 import { getExplorerEntityInstanceLabel, getExplorerRowRef } from './entity-instance-values.js';
+import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
+import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
 
 export type ExplorerInstanceWindow = {
   entityName: string;
@@ -229,11 +231,17 @@ const WorkspaceWindows = ({
   dispatch,
   entities,
   onNavigate,
+  operations,
+  renderExecutePanel,
+  renderRefInput,
   state,
 }: {
   dispatch: Dispatch<InstanceWorkspaceAction>;
   entities: ExplorerEntityDetail[];
   onNavigate: (input: ExplorerInstanceNavigation) => void;
+  operations: ExplorerOperationDescriptor[];
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
   state: InstanceWorkspace;
 }) => {
   const graphExecutor = useGraphExecutorCapability();
@@ -352,6 +360,9 @@ const WorkspaceWindows = ({
                   canReadRelatedData={hasRelatedReader}
                   dragging={dragging}
                   entity={entity}
+                  operations={operations}
+                  renderExecutePanel={renderExecutePanel}
+                  renderRefInput={renderRefInput}
                   row={window.row}
                   runMutation={runMutation}
                   source={window.source}
@@ -373,9 +384,15 @@ const WorkspaceWindows = ({
 export const ExplorerEntityInstanceWorkspaceProvider = ({
   children,
   entities,
+  operations = [],
+  renderExecutePanel,
+  renderRefInput,
 }: {
   children: ReactNode;
   entities: ExplorerEntityDetail[];
+  operations?: ExplorerOperationDescriptor[];
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
 }) => {
   const [state, dispatch] = useReducer(reduceInstanceWorkspace, {
     collectionActive: true,
@@ -434,6 +451,9 @@ export const ExplorerEntityInstanceWorkspaceProvider = ({
       {children}
       <WorkspaceWindows
         entities={entities}
+        operations={operations}
+        renderExecutePanel={renderExecutePanel}
+        renderRefInput={renderRefInput}
         state={state}
         dispatch={dispatch}
         onNavigate={navigate}

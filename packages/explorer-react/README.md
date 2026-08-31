@@ -36,6 +36,15 @@ floating affordance. The surface intentionally omits a title and explanatory her
 without a reflected reader continue to open on the reflected Entity structure. Explicit
 `structure`, `operations`, and `data` tab routes remain supported for deep links.
 
+The collection header now owns its Entity-scoped operation and Task affordance instead of sending
+the user to a separate Actions page. An instance window derives a narrower action menu from all
+reflected Operations: it binds the current portable identity when exactly one compatible Ref input
+or one-cardinality Entity Selection can represent that instance. The bound target stays visible as
+context but disappears from the mini form, which asks only for the remaining inputs. Ambiguous
+multi-target Operations and many-cardinality Selections remain explicit rather than being guessed.
+Execution still depends on the registered reflected invoker and the runtime remains authoritative;
+the contextual menu is a presentation projection, not a new instance-method or permission model.
+
 Selecting identified rows opens non-blocking instance windows. Multiple windows can remain open
 for comparison; each can collapse in place into a compact canvas node, expand, activate, or close
 without changing Entity data. Windows use reflected display and identity metadata, preserve portable
