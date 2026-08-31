@@ -100,6 +100,18 @@ type ApplicationGraphReadRuntime<TReadOptions> = {
 
 const DEFAULT_APPLICATION_GRAPH_READ_SCOPE = 'ontahi.graph.read';
 
+const createApplicationGraphReadEffect = <TReadOptions>(
+  runtime: ApplicationGraphReadRuntime<TReadOptions>,
+  intent: GraphReadIntent | 'many',
+  source: QueryOrView<any, any>,
+  params: unknown,
+  runtimeOptions: TReadOptions | undefined,
+) => {
+  if (intent === 'many') return runtime.runViewEffect(source, params, runtimeOptions);
+  if (intent === 'count') return runtime.countViewEffect(source, params, runtimeOptions);
+  return runtime.getViewEffect(source, params, runtimeOptions);
+};
+
 export const createApplicationGraphReadApi = <TReadOptions>(
   runtime: ApplicationGraphReadRuntime<TReadOptions>,
   architecture: ArchitectureDefinition<unknown>,
@@ -114,12 +126,13 @@ export const createApplicationGraphReadApi = <TReadOptions>(
     const intent = expression?.intent ?? 'many';
     const params = options?.params;
     const runtimeOptions = options?.runtimeOptions;
-    const effect =
-      intent === 'many'
-        ? runtime.runViewEffect(source, params, runtimeOptions)
-        : intent === 'count'
-          ? runtime.countViewEffect(source, params, runtimeOptions)
-          : runtime.getViewEffect(source, params, runtimeOptions);
+    const effect = createApplicationGraphReadEffect(
+      runtime,
+      intent,
+      source,
+      params,
+      runtimeOptions,
+    );
     const value = await runServerEffectForArchitecture(architecture, effect, {
       scope: options?.scope ?? DEFAULT_APPLICATION_GRAPH_READ_SCOPE,
     });

@@ -9,6 +9,7 @@ import {
   view,
 } from '../../data-graph/index.js';
 
+import type { ApplicationGraphReadOptions } from './application-graph-read.js';
 import { ontahi } from './ontahi.js';
 
 const HeadlessItem = entity('HeadlessItem', {
@@ -68,10 +69,10 @@ describe('application-bound Graph reads', () => {
         query(root).where(item => item.title.eq(params.title)),
     );
 
-    if (false) {
-      // @ts-expect-error Parameterized Views require their params at the application boundary.
-      application.graph.read(byTitle);
-    }
+    type ParameterizedViewOptions = ApplicationGraphReadOptions<typeof byTitle, undefined>;
+    type ParamsAreRequired = {} extends Pick<ParameterizedViewOptions, 'params'> ? false : true;
+    expectTypeOf<ParamsAreRequired>().toEqualTypeOf<true>();
+    expectTypeOf<ParameterizedViewOptions['params']>().toEqualTypeOf<{ title: string }>();
 
     const repeated = application.graph.read(byTitle, { params: { title: 'Repeated' } });
     expectTypeOf(repeated).toEqualTypeOf<Promise<Array<{ id: string; title: string }>>>();
@@ -161,16 +162,12 @@ describe('application-bound Graph reads', () => {
       },
     };
     const application = ontahi({ storage, entities: { HeadlessItem } });
-
-    if (false) {
-      application.graph.read(query(HeadlessItem), {
-        // @ts-expect-error Storage read options stay provider-typed.
-        runtimeOptions: { requestId: 42 },
-      });
-    }
+    const items = query(HeadlessItem);
+    type ProviderReadOptions = ApplicationGraphReadOptions<typeof items, ReadOptions>;
+    expectTypeOf<ProviderReadOptions['runtimeOptions']>().toEqualTypeOf<ReadOptions | undefined>();
 
     await expect(
-      application.graph.read(query(HeadlessItem), {
+      application.graph.read(items, {
         runtimeOptions: { requestId: 'atlas-build' },
       }),
     ).resolves.toHaveLength(1);
