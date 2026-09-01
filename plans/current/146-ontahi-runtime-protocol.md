@@ -9,6 +9,11 @@ Completed children:
 3. [146c. Runtime Protocol Dispatcher](../done/146c-runtime-protocol-dispatcher.md)
 4. [146d. Versioned Durable Operation Observation Protocol](../done/146d-versioned-durable-operation-observation-protocol.md)
 5. [146e. Runtime Transport Durable Observation](../done/146e-runtime-transport-durable-observation.md)
+6. [146f. Next.js Runtime Protocol Adapter](../done/146f-nextjs-runtime-protocol-adapter.md)
+
+Next child:
+
+1. [146g. Unified Fetch Runtime Protocol Clients](../next/146g-unified-fetch-runtime-protocol-clients.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -57,7 +62,9 @@ dispatcher. Core now applies that shape across `operation`, `durable.operation`,
 `graph.command`: one transport-neutral dispatcher validates the common request, selects a
 configured family handler, passes receiver-owned context, and correlates the untouched family
 result. Express can project an injected dispatcher at one path without choosing handlers or
-authority for the host; migration of the remaining clients and legacy paths is still open.
+authority for the host. Next.js can project the same dispatcher through an App Router Route
+Handler with the same prevalidation, authority, correlation, and HTTP status boundary. Migration
+of the remaining clients and legacy paths is extracted as Plan 146g.
 
 ## Proposed Logical Shape
 
@@ -252,3 +259,7 @@ semantic message bodies and diagnostics.
 8. Express Runtime Protocol projection is opt-in and handler-neutral. It validates the envelope
    before deriving receiver-owned context and dispatches only the family handlers explicitly
    installed by the host; no Durable observation authority is inferred by the adapter.
+9. Next.js Runtime Protocol projection has the same handler-neutral and authority-neutral boundary.
+   It adapts only Web `Request`/`Response`, validates before deriving server context, preserves
+   Express HTTP status semantics, and routes every registered family through the injected common
+   dispatcher without its own family switch.
