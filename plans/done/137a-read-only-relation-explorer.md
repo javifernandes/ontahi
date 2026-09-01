@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/137a-read-only-relation-explorer`
 
-Parent plan: [137. Reflected Relation Affordances](../current/137-reflected-relation-affordances.md)
+Parent plan: [137. Reflected Relation Affordances](./137-reflected-relation-affordances.md)
 
 ## Summary
 

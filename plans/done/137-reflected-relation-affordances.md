@@ -1,14 +1,14 @@
 # 137. Reflected Relation Affordances For Explorer, Agents, And Headless UI
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/137-reflected-relation-affordances`
 
-Depends on: [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
+Depends on: [136. Relation Constraints And Eligibility Semantics](../current/136-relation-constraints-and-eligibility.md)
 
-Completed child: [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md)
+Completed child: [137a. Read-Only Relation Explorer](./137a-read-only-relation-explorer.md)
 
-Active child: [137b. Instance-First Explorer Workspace](./137b-instance-first-explorer-workspace.md)
+Completed child: [137b. Instance-First Explorer Workspace](./137b-instance-first-explorer-workspace.md)
 
 ## Summary
 
@@ -44,26 +44,27 @@ eligibility constraints, and the distinction between direct Relations and Associ
 
 ## Execution Slices
 
-1. [137a. Read-Only Relation Explorer](../done/137a-read-only-relation-explorer.md) reflects and
+1. [137a. Read-Only Relation Explorer](./137a-read-only-relation-explorer.md) reflects and
    presents static Relation semantics, portable Ref identity, and authorized Query-backed related
    data without depending on Plan 136 or exposing mutation affordances.
 2. [137b. Instance-First Explorer Workspace](./137b-instance-first-explorer-workspace.md) makes
    authorized instances and graph traversal the primary automatic application surface while
    keeping access scope under runtime policy.
-3. Plan 136 later contributes portable eligibility and rejection metadata.
+3. [Plan 136](../current/136-relation-constraints-and-eligibility.md) contributes portable
+   eligibility, stable rejection metadata, provider enforcement, and exact Relationship outcomes.
 4. Plan 78 contributes authority decisions; Plan 128 contributes remote execution; Plan 135 and
    Plan 132 contribute optimistic outcome reconciliation.
 
 ## Acceptance Checklist
 
-- [ ] One reflected contract serves Explorer, agents, and headless UI consumers.
-- [ ] Available verbs follow cardinality and canonical forward/inverse identity.
-- [ ] Eligibility explanations are stable and safe to expose.
+- [x] One reflected Relation contract is portable across Explorer, agent, and headless consumers.
+- [x] Available structural verbs follow cardinality and canonical forward/inverse identity.
+- [x] Eligibility rejections have stable, safe, versioned descriptors.
 - [ ] Authority-dependent actions remain visibly undecided until evaluated by the server.
 - [ ] Optimistic consumers correlate commands and outcomes, suppress duplicates, and handle
       out-of-order delivery using Plans 135/132 without requiring unavailable revision metadata.
-- [ ] Relationship Deltas preserve canonical relation/source/target and exact added/removed facts.
-- [ ] Association Entity reflection uses explicit role metadata or remains `unknown`, preserves
+- [x] Relationship Deltas preserve canonical relation/source/target and exact added/removed facts.
+- [x] Association Entity reflection uses explicit role metadata or remains `unknown`, preserves
       Entity identity, attributes, and lifecycle, and does not misclassify ordinary Ref-bearing
       Entities.
 - [ ] A small Explorer proof and a framework-agnostic headless proof consume the same metadata.
@@ -77,8 +78,13 @@ unlinked participants, issue canonical Relationship Commands, unlink existing pa
 server rejection messages, and refresh authoritative related data. This proves the Explorer path
 without claiming that static policy presence is a complete per-command eligibility decision.
 
-Portable eligibility and denial reasons, a framework-agnostic headless proof, Relationship Delta
-reconciliation, duplicate suppression, and out-of-order outcome handling remain open.
+Advisory eligibility projection in clients, a framework-agnostic headless proof, Relationship
+Delta reconciliation, duplicate suppression, and out-of-order outcome handling remain open.
+
+Plan 137b subsequently made the Explorer instance canvas operational: it added cross-Entity
+instance windows, reflected Field editing, Query-backed Relation traversal, authorized
+many-to-many mutation, contextual Entity Actions, and Relation-local Action projection. This
+completed the Explorer proof without turning placement or structural verbs into authorization.
 
 ## Open Questions
 
@@ -87,3 +93,21 @@ reconciliation, duplicate suppression, and out-of-order outcome handling remain 
 3. How should generated clients expose affordance metadata without increasing their runtime weight?
 4. What is the smallest explicit Association Entity role metadata that improves tooling without
    creating a public subtype?
+
+## Closure And Evolution
+
+Closed on 2026-08-31. The parent plan succeeded at establishing reflected Relation topology,
+portable identity, stable eligibility evidence, exact Relationship outcomes, and an authority-aware
+Explorer proof. Keeping the umbrella active no longer made the remaining work more coherent.
+
+Unchecked acceptance items remain deliberate historical evidence of deferred scope:
+
+1. explicit `allowed` / `denied` / `requires-server-decision` projection belongs with future
+   runtime access-scope diagnostics rather than static Explorer inference;
+2. a framework-agnostic headless proof should be cut from a concrete consumer instead of extending
+   this Explorer-led intervention speculatively;
+3. optimistic correlation, duplicate suppression, and out-of-order handling continue through
+   Plans 135 and 132, with ordered Relation UI and deltas continuing in
+   [Plan 145](../next/145-ordered-relations-and-sequence-commands.md);
+4. direct Relation and composition lifecycle affordances require a new focused plan when their
+   runtime contract is ready.

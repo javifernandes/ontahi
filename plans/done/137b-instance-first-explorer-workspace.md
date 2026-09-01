@@ -1,6 +1,6 @@
 # 137b. Instance-First Explorer Workspace
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/137b-instance-first-explorer-workspace`
 
@@ -371,3 +371,24 @@ view state, direct/composition Relation editing, ordered Relations, and portable
    subscribe to identity-scoped refresh while they remain open?
 6. What contract lets reusable semantic value packages such as `Color` contribute validation,
    serialization, reflection, and default controls across Explorer and custom application UIs?
+
+## Closure And Evolution
+
+Closed on 2026-08-31 after nine vertical slices. The intervention established one instance-first
+Explorer workspace with movable collection and instance nodes, cross-Entity comparison, reflected
+editing, Query-backed Relation traversal, authorized many-to-many mutation, contextual Entity
+Actions, and Relation-local Action projection. Todo provided the end-to-end runtime and interaction
+proof.
+
+The later-slice list remains historical scope, not an assertion that those items shipped. Follow-up
+work should begin as a new intervention rather than reopening this workspace plan:
+
+1. semantic canvas navigation can open or raise Reference and Relation targets without changing the
+   active collection view;
+2. searchable Reference pickers need an explicit authorized target Selection;
+3. direct Relation mutation and composition lifecycle need reflected runtime affordances rather
+   than structural-verb inference;
+4. ordered membership, reordering, and transfer belong to
+   [Plan 145](../next/145-ordered-relations-and-sequence-commands.md);
+5. persistent boards, ownership, tenancy, access-scope diagnostics, and replicated view state
+   remain separate model and runtime work.

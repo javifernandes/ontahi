@@ -9,7 +9,7 @@ Advances: [74a. Unit Of Work Runtime Scope](./74a-unit-of-work-runtime-scope.md)
 Supports:
 
 1. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
-2. [137. Reflected Relation Affordances](../current/137-reflected-relation-affordances.md)
+2. [137. Reflected Relation Affordances](./137-reflected-relation-affordances.md)
 
 ## Summary
 
