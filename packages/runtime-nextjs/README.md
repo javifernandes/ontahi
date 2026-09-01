@@ -11,8 +11,48 @@ This package depends on `@ontahi/core` and owns the Next.js / `next-safe-action`
 2. `@ontahi/runtime-nextjs/actions/server`: server-only `next-safe-action` transport and feature action factory helpers.
 3. `@ontahi/runtime-nextjs/operation-invocation`: an App Router `Request`/`Response` adapter for the transport-neutral operation invocation protocol from `@ontahi/core`.
 4. `@ontahi/runtime-nextjs/graph-read`: an App Router adapter for policy-scoped remote data graph reads.
+5. `@ontahi/runtime-nextjs/runtime-protocol`: an App Router adapter for an injected common Runtime
+   Protocol dispatcher and receiver-owned context factory.
 
 New generic consumers should import action metadata and result helpers from `@ontahi/core/runtime/actions`. React hooks and operation bridge adapters live in `@ontahi/react/actions` so this package can stay focused on Next.js runtime concerns.
+
+## Runtime Protocol
+
+Export a `POST` handler from an App Router route such as `app/api/runtime/route.ts`:
+
+```ts
+import { createRuntimeProtocolDispatcher } from '@ontahi/core/runtime/protocol';
+import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
+
+const dispatcher = createRuntimeProtocolDispatcher({
+  handlers: {
+    operation: operationDispatcher,
+    'durable.operation': durableObservationHandler,
+    'graph.read': graphReadDispatcher,
+    'graph.command': graphCommandDispatcher,
+  },
+});
+
+export const POST = createNextRuntimeProtocolRouteHandler({
+  dispatcher,
+  context: async request => ({
+    principal: await resolvePrincipal(request),
+  }),
+});
+```
+
+The adapter validates JSON, the common envelope, and the canonical family body before calling the
+context factory. It installs no handlers, policies, authorization, or capabilities; the host owns
+the dispatcher and derives trusted context only from the received server request. All registered
+families pass through the same dispatcher without Next.js-specific routing.
+
+Common invalid requests return `400`, a known family without an installed handler returns `501`,
+unavailable dispatch returns `503`, invalid upstream responses return `502`, and complete family
+responses—including semantic rejections and family protocol errors—return `200`. Existing
+`operation-invocation` and `graph-read` adapters remain available while clients migrate from their
+family-specific paths.
+
+## Operation invocation
 
 The operation route can derive an Ontahi invocation context from each web request. Authentication
 remains a host concern; the adapter receives only the resulting Principal:

@@ -126,6 +126,27 @@ family body before deriving receiver context, but does not install handlers or a
 host explicitly chooses which families the dispatcher exposes. The legacy `/operations` HTTP body
 and raw Task GET remain during the bounded endpoint migration.
 
+Next.js App Router can project that same dispatcher without an application-local protocol route:
+
+```ts
+import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
+
+export const POST = createNextRuntimeProtocolRouteHandler({
+  dispatcher: runtimeDispatcher,
+  context: async request => ({
+    principal: await resolvePrincipal(request),
+  }),
+});
+```
+
+The host chooses the route location, conventionally `app/api/runtime/route.ts`. Like Express, the
+adapter validates before deriving context, installs no family handler or policy, and maps common
+protocol errors to `400`, `501`, `502`, or `503` while preserving complete family responses at
+`200`. The separate Next.js Operation invocation and Graph Read adapters remain compatibility
+surfaces until their Fetch clients move to `RuntimeTransport` and the common path. That migration
+must select legacy `/operations`, `/graph/reads`, and `/graph/commands` routes explicitly; it must
+not replay an ambiguous failed request automatically against a second endpoint.
+
 ## Carry generic operation invocations
 
 The Express adapter mounts the already composed application:

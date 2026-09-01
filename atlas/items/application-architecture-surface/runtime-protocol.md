@@ -22,6 +22,8 @@ relatedPlans:
   - ontahi://plans/146c-runtime-protocol-dispatcher
   - ontahi://plans/146d-versioned-durable-operation-observation-protocol
   - ontahi://plans/146e-runtime-transport-durable-observation
+  - ontahi://plans/146f-nextjs-runtime-protocol-adapter
+  - ontahi://plans/146g-unified-fetch-runtime-protocol-clients
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -55,6 +57,19 @@ The Express projection can mount an injected common dispatcher at `/runtime`; it
 authority-free Durable handler. The host derives receiver context and explicitly maps
 `durable.operation.inspect` to its Task runtime. Legacy family-specific routes remain during
 migration, including the raw Task snapshot GET.
+
+The Next.js App Router projection exposes the same injected dispatcher and context boundary
+through a Web `Request`/`Response` Route Handler. It validates the canonical envelope and family
+body before deriving context from the received request, preserves the Express HTTP status
+semantics, and contains no family-specific switch. It likewise installs no handlers, policies,
+authorization, or capabilities. Hosts choose the App Router path; family-specific Next.js adapters
+remain compatibility surfaces during client migration.
+
+The canonical Fetch direction is one Runtime Transport for `operation`, `durable.operation`,
+`graph.read`, and `graph.command`. Family-specific endpoints remain a bounded, explicitly selected
+compatibility mode during migration. A client must never fall back automatically from `/runtime`
+to a legacy route after transmission because an ambiguous Operation or Command could execute
+twice.
 
 The client-side `RuntimeTransport` exposes unary request exchange plus optional family
 capabilities. Its Durable observer is an asynchronous snapshot sequence. The Fetch implementation
