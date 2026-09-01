@@ -45,9 +45,9 @@
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@opentelemetry/api": ">=1.9.0 <2.0.0"
