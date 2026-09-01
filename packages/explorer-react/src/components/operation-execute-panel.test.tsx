@@ -138,6 +138,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ExplorerOperationExecutePanel', () => {
+  it('omits reset when an operation has no editable inputs', () => {
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({
+          inputSchema: { source: 'ontahi', summary: 'object', fields: [] },
+        })}
+        variant='contextual'
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reset input' })).toBeNull();
+  });
+
   it('executes scalar inputs through the reflected operation invoker', async () => {
     const user = userEvent.setup();
     invokeOperationMock.mockResolvedValueOnce(
@@ -315,7 +329,7 @@ describe('ExplorerOperationExecutePanel', () => {
     expect(screen.queryByRole('button', { name: /run/i })).toBeNull();
   });
 
-  it('shows when the current runtime will bridge an atomic operation', () => {
+  it('keeps executable transport details out of the domain action UI', () => {
     renderWithGraphRuntime(
       <ExplorerOperationExecutePanel
         operation={buildOperation({ execution: { atomicity: 'required' } })}
@@ -332,8 +346,46 @@ describe('ExplorerOperationExecutePanel', () => {
       },
     );
 
-    expect(screen.getByText('Execution: bridge to server via fetch.')).toBeTruthy();
+    expect(screen.queryByText(/Execution: bridge to server via fetch/i)).toBeNull();
     expect(screen.getByRole('button', { name: /^run$/i })).toBeTruthy();
+  });
+
+  it('renders named Color values with a color control and keeps their string representation', async () => {
+    const user = userEvent.setup();
+
+    renderWithGraphRuntime(
+      <ExplorerOperationExecutePanel
+        operation={buildOperation({
+          id: 'TodoList.recolor',
+          entityName: 'TodoList',
+          name: 'recolor',
+          inputSchema: {
+            source: 'ontahi',
+            summary: 'object',
+            fields: [{ path: 'color', type: 'Color', required: true }],
+          },
+        })}
+        variant='compact'
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('color color picker'), {
+      target: { value: '#dbe8f4' },
+    });
+    expect((screen.getByRole('textbox', { name: 'color' }) as HTMLInputElement).value).toBe(
+      '#dbe8f4',
+    );
+    expect(screen.getByText('color')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /^run$/i }));
+
+    await waitFor(() =>
+      expect(invokeOperationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'TodoList.recolor',
+          input: { color: '#dbe8f4' },
+        }),
+      ),
+    );
   });
 
   it('keeps compact scalar inputs placeholder-like and executes destructive operations after confirmation', async () => {
@@ -560,9 +612,11 @@ describe('ExplorerOperationExecutePanel', () => {
 
     await user.click(screen.getByRole('textbox', { name: 'Choose ReadingProgress' }));
 
-    const loading = await screen.findByRole('status');
-    expect(loading.textContent).toContain('Loading ReadingProgress…');
-    expect(loading.parentElement?.className).toContain('max-h-64');
+    const loading = (await screen.findByText('Loading ReadingProgress…')).closest(
+      '[role="status"]',
+    );
+    expect(loading).toBeTruthy();
+    expect(loading?.parentElement?.className).toContain('max-h-64');
   });
 
   it('uses single-choice semantics for one-cardinality selections', async () => {
@@ -622,15 +676,21 @@ describe('ExplorerOperationExecutePanel', () => {
     );
 
     expect(screen.queryByRole('radio', { name: 'All' })).toBeNull();
-    await user.click(screen.getByRole('textbox', { name: 'Choose ReadingProgress' }));
+    expect(screen.queryByRole('radio', { name: 'None' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'progress scope' })).toBeNull();
+    const picker = screen.getByRole('textbox', { name: 'Choose ReadingProgress' });
+    expect(picker.getAttribute('aria-required')).toBe('true');
+    expect(screen.getAllByText('required').length).toBeGreaterThan(0);
+    await user.click(picker);
     const option = await screen.findByRole('radio', { name: /Programming Book/ });
     expect(within(option).getByText(/Javi/)).toBeTruthy();
     expect(within(option).getByText(/javi@example.com/)).toBeTruthy();
     expect(within(option).getByText(/user-1.*book-1/)).toBeTruthy();
     await user.click(option);
-    expect(screen.getByRole('radio', { name: 'Selected (1)' }).getAttribute('aria-checked')).toBe(
-      'true',
-    );
+    expect(
+      (screen.getByRole('textbox', { name: 'Choose ReadingProgress' }) as HTMLInputElement).value,
+    ).toBe('Programming Book');
+    expect(screen.getByText('Selected')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /^run$/i }));
 
     await waitFor(() => {

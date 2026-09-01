@@ -143,6 +143,20 @@ export const getExplorerOperationScalarInputFields = (
   );
 };
 
+export const hasExplorerOperationVisibleInputs = (
+  operation: Pick<ExplorerOperationDescriptor, 'inputSchema' | 'inputRefs'>,
+  hiddenInputPaths: readonly string[] = [],
+) => {
+  const hiddenPaths = new Set(hiddenInputPaths);
+
+  return (
+    (operation.inputRefs ?? []).some(
+      inputRef => inputRef.locators.length > 0 && !hiddenPaths.has(inputRef.path),
+    ) ||
+    getExplorerOperationScalarInputFields(operation).some(field => !hiddenPaths.has(field.path))
+  );
+};
+
 type ExplorerEntityRefDraft = {
   kind: 'entity-ref';
   entityName: string;
@@ -307,6 +321,26 @@ const isMissingRequiredValue = (value: unknown, type: string) =>
   (value === null && !schemaFieldAllowsNull(type)) ||
   (typeof value === 'string' && value.trim() === '');
 
+const isEmptyRequiredSelection = (
+  field: ExplorerSchemaDescriptor['fields'][number],
+  value: unknown,
+) => {
+  if (!field.selection || field.selection.cardinality !== 'one') {
+    return false;
+  }
+  if (!isObjectRecord(value) || !isObjectRecord(value.expression)) {
+    return true;
+  }
+
+  const expression = value.expression;
+
+  return (
+    expression.kind === 'none' ||
+    (expression.kind === 'references' &&
+      (!Array.isArray(expression.refs) || expression.refs.length === 0))
+  );
+};
+
 export const validateExplorerOperationInput = (
   operation: Pick<ExplorerOperationDescriptor, 'inputSchema' | 'inputRefs'>,
   input: unknown,
@@ -364,7 +398,8 @@ export const validateExplorerOperationInput = (
       continue;
     }
 
-    if (isMissingRequiredValue(readExplorerInputPathValue(input, field.path), field.type)) {
+    const value = readExplorerInputPathValue(input, field.path);
+    if (isMissingRequiredValue(value, field.type) || isEmptyRequiredSelection(field, value)) {
       addRequiredIssue(field.path);
     }
   }
@@ -1105,15 +1140,19 @@ export function useExplorerOperationExecutor({
     state.status === 'error' && state.invocation?.kind === 'input_invalid'
       ? state.invocation.issues
       : localValidationIssues;
-  const canExecute =
+  const canExecuteWithoutConfirmation =
     executable &&
     parsedInputPreview.ok &&
     localValidationIssues.length === 0 &&
-    (!destructive || confirmed) &&
     state.status !== 'running';
+  const canExecute = canExecuteWithoutConfirmation && (!destructive || confirmed);
 
-  const execute = async () => {
-    if (!executable || !parsedInputPreview.ok || !canExecute) {
+  const execute = async (destructiveConfirmed = confirmed) => {
+    if (
+      !canExecuteWithoutConfirmation ||
+      (destructive && !destructiveConfirmed) ||
+      !parsedInputPreview.ok
+    ) {
       return;
     }
 
@@ -1166,7 +1205,8 @@ export function useExplorerOperationExecutor({
     parsedInputPreview,
     state,
     validationIssues,
-    execute,
+    execute: () => execute(),
+    executeConfirmed: () => execute(true),
     resetInput: () => {
       setInputJson(inputDraftText);
       setConfirmed(false);

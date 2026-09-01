@@ -41,15 +41,16 @@ describe('in-memory reflected entity data', () => {
       title: field.string(),
       published: field.boolean(),
       score: field.number(),
+      coverColor: field.named('Color', field.string()),
     }).display({
       primary: 'title',
       search: ['title'],
     });
     const dataset: InMemoryDataset = {
       Book: [
-        { id: 'book-1', title: 'Alpha', published: true, score: 3 },
-        { id: 'book-2', title: 'Beta', published: false, score: 2 },
-        { id: 'book-3', title: 'Alphabet', published: true, score: 1 },
+        { id: 'book-1', title: 'Alpha', published: true, score: 3, coverColor: '#ffffff' },
+        { id: 'book-2', title: 'Beta', published: false, score: 2, coverColor: '#eeeeee' },
+        { id: 'book-3', title: 'Alphabet', published: true, score: 1, coverColor: '#dddddd' },
       ],
     };
     const storage = createInMemoryDataGraphStorage({
@@ -77,6 +78,12 @@ describe('in-memory reflected entity data', () => {
       totalCount: 2,
       hasPreviousPage: false,
       hasNextPage: true,
+    });
+    const reflected = await storage.readEntityData({ entityName: 'Book' });
+    expect(reflected.columns).toContainEqual({
+      field: 'coverColor',
+      type: 'Color',
+      nullable: false,
     });
 
     await Effect.runPromise(

@@ -2,7 +2,7 @@
 
 import type { AnyEntityRef } from '@ontahi/core/data-graph';
 import { useHasReflectedEntityDataReader, useReflectedOperationSupport } from '@ontahi/react/graph';
-import { ArrowLeft, ArrowUpRight, CirclePlay, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, CirclePlay, Trash2, X } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -35,7 +35,9 @@ import {
 } from './operation-execute-panel.js';
 import {
   buildExplorerOperationInputDraft,
+  hasExplorerOperationVisibleInputs,
   isExplorerOperationPotentiallyDestructive,
+  useExplorerOperationExecutor,
 } from './operation-executor.js';
 
 export type ExplorerInstanceOperationBinding =
@@ -149,6 +151,7 @@ export type ExplorerEntityActionsProps = Readonly<{
   renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
   renderRefInput?: ExplorerOperationRefInputRenderer;
   renderInPortal?: boolean;
+  inlineSingleAction?: boolean;
   source?: AnyEntityRef;
   tasks?: ExplorerTaskDescriptor[];
   triggerClassName?: string;
@@ -157,6 +160,20 @@ export type ExplorerEntityActionsProps = Readonly<{
 
 const actionControlClassName =
   'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground';
+
+const getExplorerActionPortalHost = (trigger: HTMLElement) => {
+  let current: HTMLElement | null = trigger;
+  let themedHost: HTMLElement | undefined;
+
+  while (current && current !== document.body) {
+    if (globalThis.getComputedStyle(current).getPropertyValue('--popover').trim()) {
+      themedHost = current;
+    }
+    current = current.parentElement;
+  }
+
+  return themedHost ?? document.body;
+};
 
 const ExplorerActionCloseButton = ({ onClose }: Readonly<{ onClose: () => void }>) => (
   <button
@@ -172,71 +189,49 @@ const ExplorerActionCloseButton = ({ onClose }: Readonly<{ onClose: () => void }
 
 const ExplorerEntityActionList = ({
   actions,
-  contextLabel,
-  onClose,
+  ariaLabel,
   onSelect,
   tasks,
 }: Readonly<{
   actions: ExplorerOperationAction[];
-  contextLabel?: string;
-  onClose: () => void;
+  ariaLabel: string;
   onSelect: (operationId: string) => void;
   tasks: ExplorerTaskDescriptor[];
 }>) => {
   const routes = useExplorerRoutes();
 
   return (
-    <>
-      <div className='flex items-start justify-between gap-3 border-b px-4 py-3'>
-        <div className='min-w-0'>
-          <h3 className='text-sm font-semibold text-foreground'>Actions</h3>
-          {contextLabel ? (
-            <p className='mt-0.5 truncate text-xs text-muted-foreground'>{contextLabel}</p>
-          ) : null}
-        </div>
-        <ExplorerActionCloseButton onClose={onClose} />
-      </div>
-      <div className='max-h-80 overflow-y-auto p-2'>
-        {actions.map(({ operation }) => (
-          <button
-            key={operation.id}
-            type='button'
-            onClick={() => onSelect(operation.id)}
-            className='group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-accent'
-          >
-            <CirclePlay className='size-4 shrink-0 text-primary' />
-            <span className='grid min-w-0 flex-1 gap-0.5'>
-              <span className='truncate text-sm font-medium text-foreground'>
-                {humanizeExplorerName(operation.name)}
+    <div role='menu' aria-label={ariaLabel} className='max-h-80 overflow-y-auto p-1.5'>
+      {actions.map(({ operation }) => (
+        <button
+          key={operation.id}
+          type='button'
+          role='menuitem'
+          onClick={() => onSelect(operation.id)}
+          className='flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-accent'
+        >
+          <span className='truncate'>{humanizeExplorerName(operation.name)}</span>
+        </button>
+      ))}
+      {tasks.length > 0 ? (
+        <div className={cx('mt-1 border-t pt-1', actions.length === 0 && 'mt-0')}>
+          {tasks.map(task => (
+            <a
+              key={task.id}
+              href={routes.task(task.id)}
+              role='menuitem'
+              className='group flex items-center gap-3 rounded-lg px-3 py-2 text-left no-underline transition hover:bg-accent'
+            >
+              <span className='min-w-0 flex-1 truncate text-sm font-medium text-foreground'>
+                {humanizeExplorerName(task.name)}
               </span>
-              {operation.description ? (
-                <span className='line-clamp-2 text-xs text-muted-foreground'>
-                  {operation.description}
-                </span>
-              ) : null}
-            </span>
-            <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
-          </button>
-        ))}
-        {tasks.length > 0 ? (
-          <div className={cx('mt-1 border-t pt-1', actions.length === 0 && 'mt-0')}>
-            {tasks.map(task => (
-              <a
-                key={task.id}
-                href={routes.task(task.id)}
-                className='group flex items-center gap-3 rounded-xl px-3 py-2.5 text-left no-underline transition hover:bg-accent'
-              >
-                <span className='min-w-0 flex-1 truncate text-sm font-medium text-foreground'>
-                  {humanizeExplorerName(task.name)}
-                </span>
-                <span className='text-xs text-muted-foreground'>Task</span>
-                <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
-              </a>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </>
+              <span className='text-xs text-muted-foreground'>Task</span>
+              <ArrowUpRight className='size-3.5 shrink-0 text-muted-foreground transition group-hover:text-foreground' />
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 };
 
@@ -321,9 +316,76 @@ const ExplorerEntityActionDetail = ({
   );
 };
 
+const ExplorerEntityActionConfirmation = ({
+  action,
+  onBack,
+  onClose,
+  onSuccess,
+  source,
+}: Readonly<{
+  action: ExplorerOperationAction;
+  onBack: () => void;
+  onClose: () => void;
+  onSuccess?: () => void | Promise<unknown>;
+  source?: AnyEntityRef;
+}>) => {
+  const actionLabel = humanizeExplorerName(action.operation.name);
+  const initialInput = useMemo(
+    () =>
+      action.binding && source
+        ? buildExplorerContextualOperationInput(action.binding, source)
+        : undefined,
+    [action, source],
+  );
+  const executor = useExplorerOperationExecutor({
+    initialInput,
+    operation: action.operation,
+    onSuccess: async () => {
+      try {
+        await onSuccess?.();
+      } finally {
+        onClose();
+      }
+    },
+  });
+  const running = executor.state.status === 'running';
+
+  return (
+    <div role='group' aria-label={`Confirm ${actionLabel}`} className='p-1.5'>
+      <div className='grid gap-2 rounded-lg bg-destructive/10 p-3'>
+        <p className='text-sm font-medium text-foreground'>{actionLabel}?</p>
+        <div className='flex justify-end gap-2'>
+          <button
+            type='button'
+            onClick={onBack}
+            className='inline-flex min-h-8 items-center rounded-md px-3 text-xs font-medium text-muted-foreground transition hover:bg-background/70 hover:text-foreground'
+          >
+            Cancel
+          </button>
+          <button
+            type='button'
+            disabled={running || !executor.executable || !executor.parsedInputPreview.ok}
+            onClick={() => void executor.executeConfirmed()}
+            className='inline-flex min-h-8 items-center rounded-md bg-destructive px-3 text-xs font-medium text-white transition hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50'
+          >
+            {running ? 'Confirming…' : 'Confirm'}
+          </button>
+        </div>
+        {executor.state.status === 'error' ? (
+          <p role='status' className='text-xs text-destructive'>
+            {executor.state.error}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 const ExplorerEntityActionsPopover = ({
   actions,
+  ariaLabel,
   contextLabel,
+  inlineConfirmation,
   onClose,
   onSelect,
   onSuccess,
@@ -334,7 +396,9 @@ const ExplorerEntityActionsPopover = ({
   tasks,
 }: Readonly<{
   actions: ExplorerOperationAction[];
+  ariaLabel: string;
   contextLabel?: string;
+  inlineConfirmation: boolean;
   onClose: () => void;
   onSelect: (operationId: string | undefined) => void;
   onSuccess?: () => void | Promise<unknown>;
@@ -344,7 +408,15 @@ const ExplorerEntityActionsPopover = ({
   source?: AnyEntityRef;
   tasks: ExplorerTaskDescriptor[];
 }>) =>
-  selectedAction ? (
+  selectedAction && inlineConfirmation ? (
+    <ExplorerEntityActionConfirmation
+      action={selectedAction}
+      onBack={() => onSelect(undefined)}
+      onClose={onClose}
+      onSuccess={onSuccess}
+      source={source}
+    />
+  ) : selectedAction ? (
     <ExplorerEntityActionDetail
       action={selectedAction}
       contextLabel={contextLabel}
@@ -358,8 +430,7 @@ const ExplorerEntityActionsPopover = ({
   ) : (
     <ExplorerEntityActionList
       actions={actions}
-      contextLabel={contextLabel}
-      onClose={onClose}
+      ariaLabel={ariaLabel}
       onSelect={onSelect}
       tasks={tasks}
     />
@@ -368,6 +439,7 @@ const ExplorerEntityActionsPopover = ({
 export function ExplorerEntityActions({
   ariaLabel,
   contextLabel,
+  inlineSingleAction = false,
   onSuccess,
   operations,
   renderExecutePanel,
@@ -399,18 +471,39 @@ export function ExplorerEntityActions({
         : operations.map(operation => ({ operation })),
     [operations, source],
   );
-  const availableActions = actions.filter(({ operation }) =>
-    canShowExplorerOperationExecutePanel({
-      hasReflectedEntityDataReader,
-      hasReflectedOperationInvoker: supportsOperation(operation),
-      operation,
-      renderExecutePanel,
-      renderRefInput,
-    }),
+  const availableActions = actions.filter(
+    ({ operation }) =>
+      !(
+        operation.kind === 'durable' &&
+        operation.durable &&
+        tasks.some(task => task.id === operation.durable?.taskId)
+      ) &&
+      canShowExplorerOperationExecutePanel({
+        hasReflectedEntityDataReader,
+        hasReflectedOperationInvoker: supportsOperation(operation),
+        operation,
+        renderExecutePanel,
+        renderRefInput,
+      }),
   );
+  const directAction =
+    inlineSingleAction && tasks.length === 0 && availableActions.length === 1
+      ? availableActions[0]
+      : undefined;
   const selectedAction = availableActions.find(
     action => action.operation.id === selectedOperationId,
   );
+  const hiddenInputPaths = selectedAction?.binding ? [getBindingPath(selectedAction.binding)] : [];
+  const inlineConfirmation = Boolean(
+    selectedAction &&
+    !renderExecutePanel &&
+    isExplorerOperationPotentiallyDestructive(selectedAction.operation) &&
+    !hasExplorerOperationVisibleInputs(selectedAction.operation, hiddenInputPaths),
+  );
+  const expandedActionDetail = Boolean(selectedAction && !inlineConfirmation);
+  const directActionLabel = directAction
+    ? `${humanizeExplorerName(directAction.operation.name)} · ${ariaLabel}`
+    : ariaLabel;
 
   const positionPortal = useCallback(() => {
     const trigger = rootRef.current;
@@ -418,7 +511,7 @@ export function ExplorerEntityActions({
 
     const margin = 16;
     const gap = 8;
-    const width = Math.min(368, globalThis.innerWidth - margin * 2);
+    const width = Math.min(expandedActionDetail ? 368 : 272, globalThis.innerWidth - margin * 2);
     const rect = trigger.getBoundingClientRect();
     const spaceBelow = globalThis.innerHeight - rect.bottom - gap - margin;
     const spaceAbove = rect.top - gap - margin;
@@ -436,7 +529,7 @@ export function ExplorerEntityActions({
         ? { bottom: globalThis.innerHeight - rect.top + gap }
         : { top: rect.bottom + gap }),
     });
-  }, []);
+  }, [expandedActionDetail]);
 
   useLayoutEffect(() => {
     if (!open || !renderInPortal) return;
@@ -494,12 +587,19 @@ export function ExplorerEntityActions({
         'z-[300] overflow-y-auto rounded-2xl border bg-popover text-popover-foreground shadow-2xl',
         renderInPortal
           ? 'fixed'
-          : 'absolute right-0 top-[calc(100%+0.5rem)] w-[min(23rem,calc(100vw-2rem))]',
+          : cx(
+              'absolute right-0 top-[calc(100%+0.5rem)]',
+              expandedActionDetail
+                ? 'w-[min(23rem,calc(100vw-2rem))]'
+                : 'w-[min(17rem,calc(100vw-2rem))]',
+            ),
       )}
     >
       <ExplorerEntityActionsPopover
         actions={availableActions}
+        ariaLabel={ariaLabel}
         contextLabel={contextLabel}
+        inlineConfirmation={inlineConfirmation}
         onClose={closeActions}
         onSelect={setSelectedOperationId}
         onSuccess={onSuccess}
@@ -516,12 +616,16 @@ export function ExplorerEntityActions({
     <div ref={rootRef} className='relative'>
       <button
         type='button'
-        aria-label={ariaLabel}
+        aria-label={directActionLabel}
         aria-expanded={open}
-        title={ariaLabel}
+        aria-haspopup={directAction ? 'dialog' : 'menu'}
+        title={directActionLabel}
         onClick={() => {
-          setOpen(current => !current);
-          setSelectedOperationId(undefined);
+          setOpen(current => {
+            const nextOpen = !current;
+            setSelectedOperationId(nextOpen ? directAction?.operation.id : undefined);
+            return nextOpen;
+          });
         }}
         className={cx(
           'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition',
@@ -530,11 +634,19 @@ export function ExplorerEntityActions({
           triggerClassName,
         )}
       >
-        {triggerIcon ?? <CirclePlay className='size-4' />}
+        {triggerIcon ??
+          (directAction && isExplorerOperationPotentiallyDestructive(directAction.operation) ? (
+            <Trash2 className='size-4' />
+          ) : (
+            <CirclePlay className='size-4' />
+          ))}
       </button>
 
       {renderInPortal && popover && typeof document !== 'undefined'
-        ? createPortal(popover, document.body)
+        ? createPortal(
+            popover,
+            rootRef.current ? getExplorerActionPortalHost(rootRef.current) : document.body,
+          )
         : popover}
     </div>
   );

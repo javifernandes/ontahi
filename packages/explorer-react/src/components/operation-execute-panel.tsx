@@ -25,6 +25,7 @@ import {
   getExplorerEntityRefInputLocator,
   getExplorerInputFieldDraftValue,
   getExplorerOperationScalarInputFields,
+  hasExplorerOperationVisibleInputs,
   updateExplorerEntityRefInputDraft,
   updateExplorerInputFieldDraft,
   useExplorerOperationExecutor,
@@ -308,6 +309,10 @@ const isStructuredInputField = (field: ExplorerSchemaField) => {
 
 const isSelectionInputField = (field: ExplorerSchemaField) => Boolean(field.selection);
 
+const isColorInputField = (field: ExplorerSchemaField) => field.type.toLowerCase() === 'color';
+
+const colorValuePattern = /^#[\da-f]{6}$/i;
+
 const formatInputFieldControlValue = (value: unknown) => {
   if (value == null) {
     return '';
@@ -352,6 +357,10 @@ const getBooleanInputLabels = (field: ExplorerSchemaField) => ({
 
 const getCompactInputTypeLabel = (field: ExplorerSchemaField) => {
   if (field.selection) {
+    if (field.required && field.selection.cardinality === 'one') {
+      return 'required';
+    }
+
     return `${field.selection.entityName} selection (${field.selection.cardinality})`;
   }
 
@@ -369,6 +378,10 @@ const getCompactInputTypeLabel = (field: ExplorerSchemaField) => {
     return 'number';
   }
 
+  if (isColorInputField(field)) {
+    return 'color';
+  }
+
   if (isStructuredInputField(field)) {
     return field.type.toLowerCase().includes('array') ? 'list' : 'object';
   }
@@ -377,6 +390,57 @@ const getCompactInputTypeLabel = (field: ExplorerSchemaField) => {
 };
 
 const EXPLORER_UNSET_SELECT_VALUE = '__explorer_unset__';
+
+const ExplorerColorInput = ({
+  field,
+  value,
+  onChange,
+  variant,
+  issueId,
+  invalid,
+}: {
+  field: ExplorerSchemaField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  variant: ExplorerOperationExecutePanelVariant;
+  issueId: string;
+  invalid: boolean;
+}) => {
+  const draft = formatInputFieldControlValue(value);
+
+  return (
+    <span className='flex min-w-0 items-center gap-2'>
+      <input
+        type='color'
+        value={colorValuePattern.test(draft) ? draft : '#000000'}
+        onChange={event => onChange(event.target.value)}
+        aria-label={`${field.path} color picker`}
+        aria-describedby={invalid ? issueId : undefined}
+        aria-invalid={invalid}
+        required={field.required}
+        className={cx(
+          'size-8 shrink-0 cursor-pointer rounded-md border bg-background p-1',
+          variant === 'default' && 'size-10',
+        )}
+      />
+      <input
+        type='text'
+        value={draft}
+        onChange={event => onChange(parseInputFieldControlValue(field, event.target.value))}
+        placeholder={variant === 'default' ? (field.required ? 'Color' : 'optional') : field.path}
+        aria-label={field.path}
+        aria-describedby={invalid ? issueId : undefined}
+        aria-invalid={invalid}
+        required={field.required}
+        className={cx(
+          'min-w-0 flex-1 bg-transparent font-mono text-sm font-medium text-foreground outline-none placeholder:text-foreground/80',
+          variant === 'default' &&
+            'min-h-10 rounded-md border bg-background px-3 font-normal focus:border-primary aria-[invalid=true]:border-destructive',
+        )}
+      />
+    </span>
+  );
+};
 
 const getEditableInputValue = (
   operation: ExplorerOperationDescriptor,
@@ -660,6 +724,15 @@ const ExplorerScalarInputRow = ({
     enumControl
   ) : isBooleanInputField(field) ? (
     <ExplorerBooleanChoice field={field} value={value} onChange={updateValue} variant='default' />
+  ) : isColorInputField(field) ? (
+    <ExplorerColorInput
+      field={field}
+      value={value}
+      onChange={updateValue}
+      variant='default'
+      issueId={issueId}
+      invalid={Boolean(issue)}
+    />
   ) : isStructuredInputField(field) ? (
     <textarea
       value={formatInputFieldControlValue(value)}
@@ -696,6 +769,15 @@ const ExplorerScalarInputRow = ({
       onChange={updateValue}
       variant='compact'
       showFieldLabel
+    />
+  ) : isColorInputField(field) ? (
+    <ExplorerColorInput
+      field={field}
+      value={value}
+      onChange={updateValue}
+      variant='compact'
+      issueId={issueId}
+      invalid={Boolean(issue)}
     />
   ) : isStructuredInputField(field) ? (
     <textarea
@@ -1025,19 +1107,10 @@ export function ExplorerOperationExecutePanel({
 }: ExplorerOperationExecutePanelProps) {
   const executor = useExplorerOperationExecutor({ initialInput, onSuccess, operation });
   const contextual = variant === 'contextual';
+  const hasVisibleInputs = hasExplorerOperationVisibleInputs(operation, hiddenInputPaths);
 
   return (
     <div className={cx('grid gap-4', className)}>
-      {!contextual && executor.executionAffordance?.status === 'local' ? (
-        <p className='text-sm text-muted-foreground'>
-          Execution: local on {executor.executionAffordance.runtime}.
-        </p>
-      ) : !contextual && executor.executionAffordance?.status === 'bridge' ? (
-        <p className='text-sm text-muted-foreground'>
-          Execution: bridge to {executor.executionAffordance.authority} via{' '}
-          {executor.executionAffordance.bridge}.
-        </p>
-      ) : null}
       {executor.executable ? (
         <>
           <ExplorerOperationInputForm
@@ -1084,19 +1157,21 @@ export function ExplorerOperationExecutePanel({
                   ? 'Start'
                   : 'Run'}
             </button>
-            <button
-              type='button'
-              onClick={executor.resetInput}
-              aria-label={contextual ? 'Reset input' : undefined}
-              title={contextual ? 'Reset input' : undefined}
-              className={cx(
-                'inline-flex min-h-9 items-center gap-2 rounded-md border bg-background text-sm font-medium text-foreground hover:bg-accent',
-                contextual ? 'size-9 justify-center' : 'px-3',
-              )}
-            >
-              <RotateCcw className='size-4' />
-              {contextual ? null : 'Reset input'}
-            </button>
+            {hasVisibleInputs ? (
+              <button
+                type='button'
+                onClick={executor.resetInput}
+                aria-label={contextual ? 'Reset input' : undefined}
+                title={contextual ? 'Reset input' : undefined}
+                className={cx(
+                  'inline-flex min-h-9 items-center gap-2 rounded-md border bg-background text-sm font-medium text-foreground hover:bg-accent',
+                  contextual ? 'size-9 justify-center' : 'px-3',
+                )}
+              >
+                <RotateCcw className='size-4' />
+                {contextual ? null : 'Reset input'}
+              </button>
+            ) : null}
           </div>
 
           {contextual && executor.state.status === 'success' ? (

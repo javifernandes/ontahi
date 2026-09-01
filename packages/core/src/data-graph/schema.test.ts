@@ -22,6 +22,25 @@ import {
 } from './index.js';
 
 describe('data-graph schema DSL', () => {
+  it('names scalar value types without changing their runtime representation', () => {
+    const Color = field.named('Color', field.nonEmptyString({ trim: true }));
+
+    expect(safeParseGraphSchema(Color, '  #dbe8f4  ')).toEqual({
+      success: true,
+      data: '#dbe8f4',
+    });
+    expect(toGraphSchemaDescriptor(Color)).toMatchObject({
+      kind: 'scalar',
+      type: 'string',
+      valueType: 'Color',
+    });
+    expect(toGraphJsonSchema(Color)).toMatchObject({
+      title: 'Color',
+      type: 'string',
+    });
+    expectTypeOf(Color.__value).toEqualTypeOf<string | undefined>();
+  });
+
   it('declares excluded string values as a reflected constraint', () => {
     const ListName = field.nonEmptyString({
       trim: true,

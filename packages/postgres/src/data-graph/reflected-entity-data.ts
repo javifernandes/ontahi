@@ -15,6 +15,7 @@ import { createPostgresMappingRegistry, type PostgresEntityMapping } from './map
 
 type FieldShape = {
   fieldType?: string;
+  valueType?: string;
   nullable?: boolean;
 };
 
@@ -89,7 +90,10 @@ export const listPostgresReflectedEntityData = async (
     field,
     column,
     sql: quoteIdentifier(column),
-    type: (entity.fields[field] as FieldShape | undefined)?.fieldType ?? 'unknown',
+    type:
+      (entity.fields[field] as FieldShape | undefined)?.valueType ??
+      (entity.fields[field] as FieldShape | undefined)?.fieldType ??
+      'unknown',
     nullable: Boolean((entity.fields[field] as FieldShape | undefined)?.nullable),
   }));
   const derivedColumns = Object.entries(entity.fields).flatMap(([field, definition]) => {
@@ -98,7 +102,8 @@ export const listPostgresReflectedEntityData = async (
       {
         field,
         sql: compilePostgresDerivedField(entity, mapping, definition.derived.expression),
-        type: (definition as FieldShape).fieldType ?? 'unknown',
+        type:
+          (definition as FieldShape).valueType ?? (definition as FieldShape).fieldType ?? 'unknown',
         nullable: Boolean((definition as FieldShape).nullable),
       },
     ];

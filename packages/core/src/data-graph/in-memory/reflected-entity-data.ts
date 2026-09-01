@@ -13,6 +13,7 @@ import { materializeDerivedFields, type InMemoryDataset } from './materializatio
 
 type FieldShape = {
   fieldType?: string;
+  valueType?: string;
   nullable?: boolean;
 };
 
@@ -146,7 +147,8 @@ export const listInMemoryReflectedEntityData = (
     entityName: entity.name,
     columns: Object.entries(entity.fields).map(([field, definition]) => ({
       field,
-      type: (definition as FieldShape).fieldType ?? 'unknown',
+      type:
+        (definition as FieldShape).valueType ?? (definition as FieldShape).fieldType ?? 'unknown',
       nullable: Boolean((definition as FieldShape).nullable),
     })),
     display,

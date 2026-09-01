@@ -94,10 +94,13 @@ export const ExplorerSelectionInput = ({
   const refs = readSelectionRefs(value);
   const selectedKeys = new Set(refs.map(refKey));
   const selectionKind = getSelectionExpressionKind(value);
+  const isRequiredSingleSelection = field.required && field.selection.cardinality === 'one';
   const scopeKinds =
     field.selection.cardinality === 'many'
       ? (['none', 'references', 'all'] as const)
-      : (['none', 'references'] as const);
+      : field.required
+        ? ([] as const)
+        : (['none', 'references'] as const);
   const dataQuery = useReflectedEntityDataQuery(
     {
       entityName: field.selection.entityName,
@@ -136,44 +139,50 @@ export const ExplorerSelectionInput = ({
     selectExpression(
       nextRefs.length === 0 ? { kind: 'none' } : { kind: 'references', refs: nextRefs },
     );
+    if (field.selection.cardinality === 'one') {
+      setQuery(rowPrimaryLabel(row, dataQuery.data?.display?.primary));
+      setIsOpen(false);
+    }
   };
 
   return (
     <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
       <span className='truncate text-sm font-medium text-foreground'>{field.path}</span>
-      <div
-        role='radiogroup'
-        aria-label={`${field.path} scope`}
-        className='inline-flex overflow-hidden rounded-md border bg-background p-0.5'
-      >
-        {scopeKinds.map(kind => (
-          <button
-            key={kind}
-            type='button'
-            role='radio'
-            aria-label={
-              kind === 'none' ? 'None' : kind === 'all' ? 'All' : `Selected (${refs.length})`
-            }
-            aria-checked={selectionKind === kind}
-            onClick={() => {
-              if (kind === 'references') {
-                setIsOpen(true);
-                inputRef.current?.focus();
-                return;
+      {scopeKinds.length > 0 ? (
+        <div
+          role='radiogroup'
+          aria-label={`${field.path} scope`}
+          className='inline-flex overflow-hidden rounded-md border bg-background p-0.5'
+        >
+          {scopeKinds.map(kind => (
+            <button
+              key={kind}
+              type='button'
+              role='radio'
+              aria-label={
+                kind === 'none' ? 'None' : kind === 'all' ? 'All' : `Selected (${refs.length})`
               }
-              selectExpression({ kind });
-            }}
-            className={cx(
-              'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-              selectionKind === kind
-                ? 'bg-primary/15 text-primary'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            {kind === 'none' ? 'None' : kind === 'all' ? 'All' : `Selected (${refs.length})`}
-          </button>
-        ))}
-      </div>
+              aria-checked={selectionKind === kind}
+              onClick={() => {
+                if (kind === 'references') {
+                  setIsOpen(true);
+                  inputRef.current?.focus();
+                  return;
+                }
+                selectExpression({ kind });
+              }}
+              className={cx(
+                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                selectionKind === kind
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {kind === 'none' ? 'None' : kind === 'all' ? 'All' : `Selected (${refs.length})`}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {identity ? (
         <div className='relative min-w-[14rem] flex-1'>
@@ -186,11 +195,12 @@ export const ExplorerSelectionInput = ({
             onChange={event => setQuery(event.target.value)}
             placeholder={`Choose ${field.selection.entityName}${field.selection.cardinality === 'many' ? 's' : ''}`}
             aria-label={`Choose ${field.selection.entityName}`}
+            aria-required={isRequiredSingleSelection}
             className='min-h-8 w-full rounded-md border bg-background pl-8 pr-8 text-sm outline-none focus:border-primary'
           />
           {refs.length > 0 ? (
             <span className='absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-primary'>
-              {refs.length}
+              {isRequiredSingleSelection ? 'Selected' : refs.length}
             </span>
           ) : null}
           {isOpen ? (

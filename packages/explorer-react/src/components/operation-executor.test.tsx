@@ -474,6 +474,51 @@ describe('useExplorerOperationExecutor helpers', () => {
     ).toEqual([]);
   });
 
+  it('reports an empty required Entity selection until it contains a reference', () => {
+    const operation = buildOperation({
+      inputRefs: [],
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [
+          {
+            path: 'list',
+            type: 'Selection<TodoList>',
+            required: true,
+            selection: {
+              entityName: 'TodoList',
+              cardinality: 'one',
+              identity: { name: 'id', fields: ['id'] },
+            },
+          },
+        ],
+      },
+    });
+    const input = buildExplorerOperationInputDraft(operation);
+
+    expect(validateExplorerOperationInput(operation, input)).toEqual([
+      { path: 'list', code: 'required', message: 'list is required.' },
+    ]);
+    expect(
+      validateExplorerOperationInput(operation, {
+        list: {
+          kind: 'selection',
+          entityName: 'TodoList',
+          expression: {
+            kind: 'references',
+            refs: [
+              {
+                kind: 'entity-ref',
+                entityName: 'TodoList',
+                locator: { id: 'list-inbox' },
+              },
+            ],
+          },
+        },
+      }),
+    ).toEqual([]);
+  });
+
   it('marks bridged server operations and browser-direct graph operations executable', () => {
     expect(isExplorerOperationExecutable(buildOperation())).toBe(true);
     expect(isExplorerOperationExecutable(buildOperation({ kind: 'graph' }))).toBe(false);
