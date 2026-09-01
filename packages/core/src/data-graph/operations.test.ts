@@ -205,6 +205,7 @@ describe('data-graph operations', () => {
         reindexBookSearch: defineDomainOperationMetadata({
           authority: 'server',
           exposure: 'server-only',
+          graphOps: { receiver: 'book' },
           durable: {
             finalOutput: ReindexBookSearchResultSchema,
           },
@@ -235,6 +236,7 @@ describe('data-graph operations', () => {
       name: 'reindexBookSearch',
       authority: 'server',
       exposure: 'server-only',
+      graphOps: { receiver: 'book' },
       durable: {
         runtime: 'vercel-workflow',
         finalOutput: ReindexBookSearchResultSchema,

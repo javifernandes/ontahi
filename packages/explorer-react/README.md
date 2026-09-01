@@ -37,17 +37,19 @@ without a reflected reader continue to open on the reflected Entity structure. E
 `structure`, `operations`, and `data` tab routes remain supported for deep links.
 
 The collection header now owns its Entity-scoped operation and Task affordance instead of sending
-the user to a separate Actions page. An instance window derives a narrower action menu from all
-reflected Operations: it binds the current portable identity when exactly one compatible Ref input
-or one-cardinality Entity Selection can represent that instance. The bound target stays visible as
-context but disappears from the mini form, which asks only for the remaining inputs. Ambiguous
-multi-target Operations and many-cardinality Selections remain explicit rather than being guessed.
-Execution still depends on the registered reflected invoker and the runtime remains authoritative;
-the contextual menu is a presentation projection, not a new instance-method or permission model.
+the user to a separate Actions page. An instance window and each collection row derive a narrower
+action menu from Operations that explicitly declare the current identity as their receiver through
+`graphOps.receiver`. The receiver may be an Entity Ref or a one-cardinality Entity Selection; it
+stays visible as context but disappears from the mini form, which asks only for the remaining
+inputs. A compatible input that is merely contextual does not become an instance action. This
+keeps operations such as `TodoItem.createItem` on the `TodoList -> TodoItem` relation while
+projecting `TodoItem.deleteList` onto each TodoList. Execution still depends on the registered
+reflected invoker and the runtime remains authoritative; receiver projection does not add
+permission.
 
 Relation blocks reuse that same projection at two narrower contexts. A Relation header exposes
 source-bound Operations only when their direct reflected result Entity is the Relation target, so
-an operation such as `TodoItem.create` can appear beside `TodoList -> TodoItem` without admitting
+an operation such as `TodoItem.createItem` can appear beside `TodoList -> TodoItem` without admitting
 an unrelated source-bound operation such as list deletion. Each identified related row also owns
 the contextual Actions of that target instance. Successful actions refresh the parent window and
 authoritative Relation query. This placement does not infer composition, lifecycle, or structural

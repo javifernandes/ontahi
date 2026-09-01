@@ -90,7 +90,7 @@ for lower-level reads that cannot be encoded by the graph-read protocol, and the
 First-class Operation invocations bind render-owned input without losing the declaration form:
 
 ```ts
-const createTodo = useOperation(TodoItem.domain.create);
+const createTodo = useOperation(TodoItem.domain.createItem);
 const completeVisible = useOperation(TodoItem.domain.complete({ todos: visibleTodos }));
 
 await createTodo.executeAsync(newTodo);

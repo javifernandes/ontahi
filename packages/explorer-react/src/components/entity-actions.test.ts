@@ -7,6 +7,8 @@ import {
   buildExplorerContextualOperationInput,
   getExplorerInstanceOperationBinding,
   getExplorerInstanceOperationBindings,
+  getExplorerInstanceReceiverOperationBinding,
+  getExplorerInstanceReceiverOperationBindings,
   getExplorerRelationOperations,
 } from './entity-actions.js';
 import { hasExplorerOperationVisibleInputs } from './operation-executor.js';
@@ -81,6 +83,52 @@ describe('Explorer instance operation bindings', () => {
 
     expect(binding?.kind).toBe('reference');
     expect(binding?.kind === 'reference' ? binding.inputRef.path : undefined).toBe('tag');
+  });
+
+  it('projects only explicit receivers as instance actions', () => {
+    const contextual = operation();
+    const receiver = operation({
+      receiverPath: 'tag',
+      inputRefs: contextual.inputRefs?.map(inputRef => ({ ...inputRef, receiver: true })),
+    });
+
+    expect(getExplorerInstanceReceiverOperationBinding(contextual, tagRef)).toBeNull();
+    expect(getExplorerInstanceReceiverOperationBinding(receiver, tagRef)).toMatchObject({
+      kind: 'reference',
+      inputRef: { path: 'tag' },
+    });
+    expect(
+      getExplorerInstanceReceiverOperationBindings([contextual, receiver], tagRef),
+    ).toHaveLength(1);
+  });
+
+  it('recognizes a one-cardinality Selection receiver by its reflected path', () => {
+    const listRef: AnyEntityRef = {
+      kind: 'entity-ref',
+      entityName: 'TodoList',
+      locator: { id: 'list-1' },
+    };
+    const rename = operation({
+      receiverPath: 'list',
+      inputRefs: [],
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [
+          {
+            path: 'list',
+            type: 'Selection<TodoList>',
+            required: true,
+            selection: { entityName: 'TodoList', cardinality: 'one' },
+          },
+        ],
+      },
+    });
+
+    expect(getExplorerInstanceReceiverOperationBinding(rename, listRef)).toMatchObject({
+      kind: 'selection',
+      field: { path: 'list' },
+    });
   });
 
   it('binds one-cardinality Entity selections but leaves many selections explicit', () => {

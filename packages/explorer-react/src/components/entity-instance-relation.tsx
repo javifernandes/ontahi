@@ -215,6 +215,7 @@ export const ExplorerInstanceRelation = ({
           {relationOperations.length > 0 ? (
             <ExplorerEntityActions
               ariaLabel={`Actions for ${displayName} relation`}
+              bindingMode='context'
               contextLabel={sourceLabel}
               onSuccess={refreshRelation}
               operations={relationOperations}

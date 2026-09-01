@@ -26,14 +26,11 @@ export const TodoList = entity({
       },
     }),
   },
-  operations: ({ self, operation }) => ({
-    rename: operation({
-      input: O.object({
-        list: self.one(),
-        name: self.fields.name,
-      }),
+  operations: ({ self, commands, operation }) => ({
+    createList: operation({
+      input: O.pick(self, ['id', 'name']).named('CreateTodoListInput'),
       output: self,
-      run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name']),
+      run: input => commands.insertReturning(input, ['id', 'name']),
     }),
   }),
 });
@@ -41,16 +38,16 @@ export const TodoList = entity({
 
 `exclude` is reflected schema data. The server validates it, codegen preserves it, and a UI can
 inspect the same values and message before invoking the operation. Nothing needs to execute to
-discover that `Archive` is outside the accepted set. `rename` reuses `self.fields.name`; inputs
-derived with `O.pick(...)` inherit it too.
+discover that `Archive` is outside the accepted set. `createList` derives its input with
+`O.pick(...)`, so it inherits the constraint from `self.fields.name`.
 
 ## Validate an operation input
 
 The operation owns the parser for its complete input:
 
 ```ts
-const validation = TodoList.domain.rename.input.safeParse({
-  list: TodoList.refById('list-research'),
+const validation = TodoList.domain.createList.input.safeParse({
+  id: 'list-research',
   name: 'Archive',
 });
 
@@ -71,10 +68,10 @@ one unit:
 ```tsx
 const {
   input,
-  execute: rename,
+  execute: createList,
   isExecuting,
-} = useOperation(TodoList.domain.rename, {
-  list: TodoList.refById(selectedListId),
+} = useOperation(TodoList.domain.createList, {
+  id: crypto.randomUUID(),
   name: '',
 });
 
@@ -82,7 +79,7 @@ return (
   <form
     onSubmit={event => {
       event.preventDefault();
-      rename();
+      createList();
     }}
   >
     <input
@@ -91,7 +88,7 @@ return (
     />
 
     <button disabled={!input.isValid || isExecuting} type='submit'>
-      Rename
+      Create
     </button>
 
     {input.issue('name') && <p>{input.issue('name')?.message}</p>}
@@ -100,7 +97,7 @@ return (
 ```
 
 `input.draft` is the editable public value. `input.value` is its parsed, normalized value when
-`input.isValid` is true. Calling `rename()` executes that value, so the component cannot validate
+`input.isValid` is true. Calling `createList()` executes that value, so the component cannot validate
 one object and accidentally send another. The server still validates the input authoritatively.
 
 This is a headless operation-input model, not a visual form framework. The component decides how to
@@ -168,12 +165,12 @@ environments without source analysis, not a second semantic model.
 
 Queries, Capabilities, time, and arbitrary Effect programs are not portable conditions. Put these
 checks in the explicit `contract(...)` concern. Uniqueness, for example, depends on current
-application state. A `create` Operation may query for an existing TodoList before running its
+application state. A `createList` Operation may query for an existing TodoList before running its
 Command:
 
 ```ts
 operations: ({ self, commands, operation, app }) => ({
-  create: operation({
+  createList: operation({
     input: O.pick(self, ['id', 'name']).named('CreateTodoListInput'),
     output: self,
     concerns: [
@@ -241,12 +238,9 @@ boundary; the existing spelling alone does not supply one.
 `requires` is for a reusable runtime gate rather than a fact asserted by this operation:
 
 ```ts
-rename: operation({
+createList: operation({
   requires: [todoListWritesEnabled],
-  input: O.object({
-    list: self.one(),
-    name: self.fields.name,
-  }),
+  input: O.pick(self, ['id', 'name']).named('CreateTodoListInput'),
   // ...
 }),
 ```
@@ -301,8 +295,8 @@ settled.
 ## Keep the two failures distinct
 
 ```ts
-const invalid = await TodoList.rename({
-  list: 'A',
+const invalid = await TodoList.createList({
+  id: 'A',
   name: 'Archive',
 });
 
@@ -310,7 +304,7 @@ if (!invalid.ok && invalid.kind === 'input_invalid') {
   console.error(invalid.issues[0]?.message);
 }
 
-const duplicate = await TodoList.create({
+const duplicate = await TodoList.createList({
   id: crypto.randomUUID(),
   name: 'Research',
 });

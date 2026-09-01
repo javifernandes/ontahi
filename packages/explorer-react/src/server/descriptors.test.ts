@@ -305,6 +305,31 @@ describe('explorer descriptor builder', () => {
     ]);
   });
 
+  it('reflects the Operation receiver path onto its matching Entity Ref', () => {
+    const Book = entity('ReceiverBook', { id: field.id() });
+    const snapshot = buildExplorerSnapshot({
+      entities: [Book],
+      domainOperations: [
+        {
+          id: 'ReceiverBook.archive',
+          entityName: 'ReceiverBook',
+          name: 'archive',
+          authority: 'server',
+          exposure: 'bridge',
+          input: graphSchema.object({
+            book: graphSchema.existingRef(Book),
+          }),
+          graphOps: { receiver: 'book' },
+        },
+      ],
+    });
+
+    expect(snapshot.operations[0]).toMatchObject({
+      receiverPath: 'book',
+      inputRefs: [{ path: 'book', entityName: 'ReceiverBook', receiver: true }],
+    });
+  });
+
   it('reflects a direct Entity Operation result for contextual relation actions', () => {
     const List = entity('RelationActionList', { id: field.id() });
     const Item = entity('RelationActionItem', {

@@ -7,40 +7,34 @@ A Query or Command describes a data interaction. An Operation gives that interac
 meaning and may compose several Queries, Commands, capabilities, or durable steps behind one
 stable contract.
 
-## Name behavior on the Entity
+## Name behavior beyond generic mutation
 
-Create, rename, and delete are TodoList operations:
+An Operation should name application behavior, not duplicate a generic Entity Command. In the Todo
+example, list creation remains an Operation because it also emits an application notification:
 
 ```ts
-operations: ({ self, commands, operation }) => ({
-  create: operation({
+operations: ({ self, commands, operation, app }) => ({
+  createList: operation({
     input: O.pick(self, ['id', 'name']).named('CreateTodoListInput'),
     output: self,
-    run: input => commands.insertReturning(input, ['id', 'name']),
-  }),
-
-  rename: operation({
-    input: O.object({
-      list: self.one(),
-      name: self.fields.name,
-    }),
-    output: self,
-    run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name']),
-  }),
-
-  delete: operation({
-    input: O.object({
-      list: self.one(),
-    }),
-    run: ({ list }) => list.delete(),
+    run: input =>
+      Effect.gen(function* () {
+        const created = yield* commands.insertReturning(input, ['id', 'name']).run();
+        yield* app.runtime.notifications.todoListCreated({
+          listId: created.id,
+          name: created.name,
+        });
+        return created;
+      }),
   }),
 }),
 ```
 
-The input schema is the public contract. The command is the storage-neutral effect. Because
-`list` is declared as `self.one()`, its fluent mutations already carry exact-one cardinality;
-there is no `updateOne` or `deleteOne` ceremony to repeat. `create`, `rename`, and `delete` are
-domain vocabulary available to every host.
+The input schema is the public contract and the Command is the storage-neutral graph effect. A
+plain rename or recolor uses an Entity update Command directly; wrapping either in a same-shaped
+Operation would add vocabulary without behavior. Rich lifecycle work such as cascading list
+deletion, notifications, authorization requirements, or durable execution still belongs in a
+named Operation.
 
 ## Compose effectful bodies without wrapper ceremony
 
@@ -91,24 +85,18 @@ the generator form is only sequencing syntax.
 ## Use them from Node
 
 ```ts
-import { TodoList } from './graph.js';
+import { TodoItem, TodoList } from './graph.js';
 
-const created = await TodoList.create({
+const created = await TodoList.createList({
   id: crypto.randomUUID(),
   name: 'Research backlog',
 });
-if (!created.ok) throw new Error(`TodoList.create failed: ${created.kind}`);
+if (!created.ok) throw new Error(`TodoList.createList failed: ${created.kind}`);
 
 const list = TodoList.refById(created.value.id);
 
-const renamed = await TodoList.rename({
-  list,
-  name: 'Research queue',
-});
-if (!renamed.ok) throw new Error(`TodoList.rename failed: ${renamed.kind}`);
-
-const deleted = await TodoList.delete({ list });
-if (!deleted.ok) throw new Error(`TodoList.delete failed: ${deleted.kind}`);
+const deleted = await TodoItem.deleteList({ list });
+if (!deleted.ok) throw new Error(`TodoItem.deleteList failed: ${deleted.kind}`);
 ```
 
 The caller uses the entity, its locator, and its operations. It does not construct transport URLs,
@@ -179,9 +167,8 @@ bridge: { invalidate: [['TodoList']] },
 The generated operations then work through `useOperation`:
 
 ```tsx
-const createList = useOperation(TodoList.domain.create);
-const renameList = useOperation(TodoList.domain.rename);
-const deleteList = useOperation(TodoList.domain.delete);
+const createList = useOperation(TodoList.domain.createList);
+const deleteList = useOperation(TodoItem.domain.deleteList);
 
 return (
   <div>
@@ -195,18 +182,6 @@ return (
       }
     >
       Create
-    </button>
-
-    <button
-      disabled={renameList.isExecuting}
-      onClick={() =>
-        void renameList.executeAsync({
-          list: TodoList.refById(selectedListId),
-          name: 'Research queue',
-        })
-      }
-    >
-      Rename
     </button>
 
     <button

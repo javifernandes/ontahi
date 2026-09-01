@@ -111,11 +111,11 @@ protocol:
 ```sh
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoList.create","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
+  -d '{"kind":"invoke","operationId":"TodoList.createList","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
 
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoItem.create","input":{"id":"todo-1","list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}'
+  -d '{"kind":"invoke","operationId":"TodoItem.createItem","input":{"id":"todo-1","list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}'
 ```
 
 Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded in the same Vite
@@ -192,7 +192,7 @@ The generated client preserves operation input and output schemas, so React infe
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
 const todos = useGraphQuery(TodoItem.all().where(visibleTodos).as(TodoItemListItem));
-const createTodo = useOperation(TodoItem.domain.create);
+const createTodo = useOperation(TodoItem.domain.createItem);
 const setVisibleCompleted = useOperation(
   TodoItem.domain.setCompleted({ todos: visibleTodos, completed: true }),
 );

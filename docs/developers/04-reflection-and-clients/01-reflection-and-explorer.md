@@ -168,13 +168,31 @@ survives Entity, filter, pagination, Schema, and Actions navigation, but remains
 Explorer unmount or page reload. Restoring a collapsed node re-reads its authoritative row.
 
 Executable Operations live with their context instead of requiring a separate catalog section on
-the data canvas. The collection node exposes Operations owned by its Entity. An instance window can
-also expose an Operation owned anywhere in the application when exactly one reflected Ref input or
-one-cardinality Entity Selection matches the instance identity. Explorer binds that target and asks
-only for the remaining inputs. It does not guess between multiple compatible targets or convert a
-many-cardinality Selection into an instance action. This is a UI projection over the ordinary
+the data canvas. The collection node exposes Operations owned by its Entity. An instance window or
+row exposes an Operation owned anywhere in the application only when its `graphOps.receiver`
+explicitly names a compatible Entity Ref or one-cardinality Entity Selection input. Explorer binds
+that receiver and asks only for the remaining inputs. Merely accepting the Entity as context does
+not make an Operation an instance action, and a many-cardinality receiver remains a future bulk
+action rather than being projected onto one row. This is a UI projection over the ordinary
 Operation contract: the reflected invoker, input validation, runtime policy, and server authority
 remain unchanged.
+
+Declare the receiver on the Operation contract rather than teaching Explorer operation names:
+
+```ts
+deleteList: operation.atomic({
+  input: graphSchema.object({
+    list: graphSchema.existingRef(TodoList),
+  }),
+  graphOps: { receiver: 'list' },
+  // delete the list, its composed items, and their links
+  run: ({ list }) => deleteTodoList(list),
+}),
+```
+
+An operation such as `createItem` may still accept `list` as a contextual input without declaring
+it as receiver. Relation projection can prefill that input, while TodoList rows remain free of an
+action that actually creates a different Entity.
 
 Relation blocks project the same Operations more precisely. A Relation header may expose an
 Operation when the current source instance binds exactly one input and the Operation directly

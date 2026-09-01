@@ -46,7 +46,7 @@ The operation coordinates the graph command and the external effect:
 
 ```ts
 operations: ({ self, commands, operation, app }) => ({
-  create: operation({
+  createList: operation({
     input: O.pick(self, ['id', 'name']).named('CreateTodoListInput'),
     output: self,
     run: input =>
@@ -66,7 +66,7 @@ operations: ({ self, commands, operation, app }) => ({
 }),
 ```
 
-The Entity decides **when** notification belongs in `create`. It does not know whether the host
+The Entity decides **when** notification belongs in `createList`. It does not know whether the host
 sends email, publishes an event, writes an audit record, or does nothing.
 
 The Query or Command still owns graph execution. The Capability owns work outside that graph. The
@@ -106,7 +106,7 @@ at the host boundary, and preserves lazy execution. The implementation itself do
 ```ts
 import { TodoList } from './graph.js';
 
-const result = await TodoList.create({
+const result = await TodoList.createList({
   id: crypto.randomUUID(),
   name: 'Reading queue',
 });
@@ -182,7 +182,7 @@ rollback.
 ## React sees the operation, not the Capability
 
 ```tsx
-const createList = useOperation(TodoList.domain.create);
+const createList = useOperation(TodoList.domain.createList);
 
 await createList.executeAsync({
   id: crypto.randomUUID(),

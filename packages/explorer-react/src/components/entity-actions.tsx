@@ -71,11 +71,6 @@ export const getExplorerInstanceOperationBinding = (
           .map(locator => ({ kind: 'reference' as const, inputRef, locator, operation }))
       : [],
   );
-  const receiverCandidates = candidates.filter(candidate => candidate.inputRef.receiver);
-  if (receiverCandidates.length > 0) {
-    return receiverCandidates.length === 1 ? receiverCandidates[0]! : null;
-  }
-
   const selectionCandidates = operation.inputSchema.fields.flatMap(field =>
     field.selection?.entityName === source.entityName && field.selection.cardinality === 'one'
       ? [{ kind: 'selection' as const, field, operation }]
@@ -85,6 +80,14 @@ export const getExplorerInstanceOperationBinding = (
     ...candidates,
     ...selectionCandidates,
   ];
+  const receiverCandidates = resolvedCandidates.filter(binding =>
+    binding.kind === 'reference'
+      ? binding.inputRef.receiver || binding.inputRef.path === operation.receiverPath
+      : binding.field.path === operation.receiverPath,
+  );
+  if (receiverCandidates.length > 0) {
+    return receiverCandidates.length === 1 ? receiverCandidates[0]! : null;
+  }
 
   return resolvedCandidates.length === 1 ? resolvedCandidates[0]! : null;
 };
@@ -95,6 +98,30 @@ export const getExplorerInstanceOperationBindings = (
 ) =>
   operations.flatMap(operation => {
     const binding = getExplorerInstanceOperationBinding(operation, source);
+    return binding ? [binding] : [];
+  });
+
+export const getExplorerInstanceReceiverOperationBinding = (
+  operation: ExplorerOperationDescriptor,
+  source: AnyEntityRef,
+): ExplorerInstanceOperationBinding | null => {
+  const binding = getExplorerInstanceOperationBinding(operation, source);
+  if (!binding) return null;
+
+  const bindingPath = binding.kind === 'reference' ? binding.inputRef.path : binding.field.path;
+  const isReceiver =
+    bindingPath === operation.receiverPath ||
+    (binding.kind === 'reference' && binding.inputRef.receiver);
+
+  return isReceiver ? binding : null;
+};
+
+export const getExplorerInstanceReceiverOperationBindings = (
+  operations: ExplorerOperationDescriptor[],
+  source: AnyEntityRef,
+) =>
+  operations.flatMap(operation => {
+    const binding = getExplorerInstanceReceiverOperationBinding(operation, source);
     return binding ? [binding] : [];
   });
 
@@ -145,6 +172,7 @@ type ExplorerOperationAction = {
 
 export type ExplorerEntityActionsProps = Readonly<{
   ariaLabel: string;
+  bindingMode?: 'context' | 'receiver';
   contextLabel?: string;
   onSuccess?: () => void | Promise<unknown>;
   operations: ExplorerOperationDescriptor[];
@@ -395,6 +423,7 @@ const ExplorerEntityActionConfirmation = ({
 const ExplorerEntityActionsPopover = ({
   actions,
   ariaLabel,
+  closeConfirmationOnCancel,
   contextLabel,
   inlineConfirmation,
   onClose,
@@ -408,6 +437,7 @@ const ExplorerEntityActionsPopover = ({
 }: Readonly<{
   actions: ExplorerOperationAction[];
   ariaLabel: string;
+  closeConfirmationOnCancel: boolean;
   contextLabel?: string;
   inlineConfirmation: boolean;
   onClose: () => void;
@@ -422,7 +452,7 @@ const ExplorerEntityActionsPopover = ({
   selectedAction && inlineConfirmation ? (
     <ExplorerEntityActionConfirmation
       action={selectedAction}
-      onBack={() => onSelect(undefined)}
+      onBack={closeConfirmationOnCancel ? onClose : () => onSelect(undefined)}
       onClose={onClose}
       onSuccess={onSuccess}
       source={source}
@@ -449,6 +479,7 @@ const ExplorerEntityActionsPopover = ({
 
 export function ExplorerEntityActions({
   ariaLabel,
+  bindingMode = 'receiver',
   contextLabel,
   inlineSingleAction = false,
   onSuccess,
@@ -475,12 +506,15 @@ export function ExplorerEntityActions({
   const actions = useMemo<ExplorerOperationAction[]>(
     () =>
       source
-        ? getExplorerInstanceOperationBindings(operations, source).map(binding => ({
+        ? (bindingMode === 'context'
+            ? getExplorerInstanceOperationBindings(operations, source)
+            : getExplorerInstanceReceiverOperationBindings(operations, source)
+          ).map(binding => ({
             binding,
             operation: binding.operation,
           }))
         : operations.map(operation => ({ operation })),
-    [operations, source],
+    [bindingMode, operations, source],
   );
   const availableActions = actions.filter(
     ({ operation }) =>
@@ -609,6 +643,7 @@ export function ExplorerEntityActions({
       <ExplorerEntityActionsPopover
         actions={availableActions}
         ariaLabel={ariaLabel}
+        closeConfirmationOnCancel={Boolean(directAction)}
         contextLabel={contextLabel}
         inlineConfirmation={inlineConfirmation}
         onClose={closeActions}

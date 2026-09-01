@@ -12,6 +12,8 @@ export {
   ExplorerEntityActions,
   getExplorerInstanceOperationBinding,
   getExplorerInstanceOperationBindings,
+  getExplorerInstanceReceiverOperationBinding,
+  getExplorerInstanceReceiverOperationBindings,
   type ExplorerInstanceOperationBinding,
 } from './entity-actions.js';
 export {

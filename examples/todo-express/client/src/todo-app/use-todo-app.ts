@@ -1,4 +1,4 @@
-import { createEntityRef, relationshipSet, Selection } from '@ontahi/core/data-graph';
+import { createEntityRef, mutateEntity, relationshipSet, Selection } from '@ontahi/core/data-graph';
 import {
   useGraphExecutorCapability,
   useGraphQuery,
@@ -14,6 +14,7 @@ import {
   TodoItem,
   TodoItemSchema,
   TodoList,
+  TodoListSchema,
 } from '../../../src/generated/client-entities.js';
 import { allTodoItemsQuery, tagsQuery, todoListsQuery } from '../todo-queries.js';
 
@@ -81,12 +82,10 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const tags = useGraphQuery(tagsQuery);
   const todos = useGraphQuery(allTodoItemsQuery);
   const graphExecutor = useGraphExecutorCapability();
-  const createListOperation = useOperation(TodoList.domain.create);
-  const renameListOperation = useOperation(TodoList.domain.rename);
-  const recolorListOperation = useOperation(TodoList.domain.recolor);
+  const createListOperation = useOperation(TodoList.domain.createList);
   const deleteListOperation = useOperation(TodoItem.domain.deleteList);
   const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
-  const createTodoOperation = useOperation(TodoItem.domain.create);
+  const createTodoOperation = useOperation(TodoItem.domain.createItem);
   const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
   const deleteTodoOperation = useOperation(TodoItem.domain.delete);
   const linkTags = useManyToManyRelationshipCommand(
@@ -132,13 +131,17 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setRecoloringListId(listId);
     try {
-      const result = await recolorListOperation.executeAsync({
-        list: TodoList.refById(listId),
-        color,
-      });
-      const message = operationMessage(result, 'The list color could not be changed.');
-      setActionError(message);
-      return !message;
+      if (!graphExecutor?.runEntityMutationCommand) {
+        setActionError('This runtime cannot recolor lists.');
+        return false;
+      }
+      await graphExecutor.runEntityMutationCommand(
+        mutateEntity(TodoListSchema).update(createEntityRef(TodoListSchema, { id: listId }), {
+          color,
+        }),
+      );
+      await lists.refetch();
+      return true;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list color could not be changed.'));
       return false;
@@ -151,22 +154,20 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     const name = rawName.trim();
     if (!name) return false;
 
-    const validation = TodoList.domain.rename.input.safeParse({ list: listId, name });
-    if (!validation.success) {
-      setActionError(validation.issues[0]?.message ?? 'The list name is not valid.');
-      return false;
-    }
-
     setActionError(undefined);
     setRenamingListId(listId);
     try {
-      const result = await renameListOperation.executeAsync({
-        list: TodoList.refById(listId),
-        name,
-      });
-      const message = operationMessage(result, 'The list could not be renamed.');
-      setActionError(message);
-      return !message;
+      if (!graphExecutor?.runEntityMutationCommand) {
+        setActionError('This runtime cannot rename lists.');
+        return false;
+      }
+      await graphExecutor.runEntityMutationCommand(
+        mutateEntity(TodoListSchema).update(createEntityRef(TodoListSchema, { id: listId }), {
+          name,
+        }),
+      );
+      await lists.refetch();
+      return true;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be renamed.'));
       return false;

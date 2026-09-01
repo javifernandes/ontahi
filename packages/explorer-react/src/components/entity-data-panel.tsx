@@ -5,10 +5,14 @@ import { useGraphExecutorCapability } from '@ontahi/react/graph';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 
-import type { ExplorerEntityDetail } from '../contracts/index.js';
+import type { ExplorerEntityDetail, ExplorerOperationDescriptor } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
 import { useExplorerRoutes } from './config.js';
+import {
+  ExplorerEntityActions,
+  getExplorerInstanceReceiverOperationBindings,
+} from './entity-actions.js';
 import {
   type ExplorerEntityDataPageSize,
   useExplorerEntityDataBrowser,
@@ -21,6 +25,7 @@ import {
 } from './entity-data-mutations.js';
 import {
   formatExplorerEntityValue,
+  getExplorerEntityInstanceLabel,
   getExplorerReferenceLocator,
   getExplorerRowRef,
 } from './entity-instance-values.js';
@@ -30,12 +35,17 @@ import {
   useExplorerEntityInstanceWorkspace,
 } from './entity-instance-workspace.js';
 import { ExplorerEntityReferenceValue } from './entity-reference-value.js';
+import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
+import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
 import { shouldHandleExplorerNavigation } from './routes.js';
 import { ExplorerSelect } from './select.js';
 
 export type ExplorerEntityDataPanelProps = {
   embedded?: boolean;
   entity: ExplorerEntityDetail;
+  operations?: ExplorerOperationDescriptor[];
+  renderExecutePanel?: ExplorerOperationExecutePanelRenderer;
+  renderRefInput?: ExplorerOperationRefInputRenderer;
   showHeader?: boolean;
 };
 
@@ -45,6 +55,9 @@ const isInteractiveRowTarget = (target: EventTarget | null) =>
 function ExplorerEntityDataPanelContent({
   embedded = false,
   entity,
+  operations = [],
+  renderExecutePanel,
+  renderRefInput,
   showHeader = true,
 }: ExplorerEntityDataPanelProps) {
   const initialRef = (() => {
@@ -71,7 +84,14 @@ function ExplorerEntityDataPanelContent({
       : undefined;
   const canDelete = Boolean(runMutation && entity.mutations?.delete);
   const canCreate = Boolean(runMutation && entity.mutations?.create);
-  const bodyColSpan = browser.columns.length + (canDelete ? 1 : 0);
+  const hasRowOperations = Boolean(
+    browser.result?.rows.some(row => {
+      const source = getExplorerRowRef(entity, row);
+      return source && getExplorerInstanceReceiverOperationBindings(operations, source).length > 0;
+    }),
+  );
+  const hasRowActions = canDelete || hasRowOperations;
+  const bodyColSpan = browser.columns.length + (hasRowActions ? 1 : 0);
   const fieldOptions = entity.fields.map(field => ({ value: field.name, label: field.name }));
   const operatorOptions = browser.availableFilterOperators.map(operator => ({
     value: operator.value,
@@ -231,14 +251,15 @@ function ExplorerEntityDataPanelContent({
                     </div>
                   </th>
                 ))}
-                {canDelete ? (
+                {hasRowActions ? (
                   <th
+                    aria-label='Row actions'
                     className={cx(
                       'whitespace-nowrap font-medium',
                       embedded ? 'px-3 py-2.5' : 'px-4 py-3',
                     )}
                   >
-                    Actions
+                    <span className='sr-only'>Row actions</span>
                   </th>
                 ) : null}
               </tr>
@@ -247,6 +268,7 @@ function ExplorerEntityDataPanelContent({
               {browser.result?.rows.map((row, rowIndex) => {
                 const source = getExplorerRowRef(entity, row);
                 const rowKey = source ? JSON.stringify(source.locator) : String(rowIndex);
+                const label = getExplorerEntityInstanceLabel(entity, row);
                 const windowKey = source ? explorerInstanceWindowKey(source) : undefined;
                 const selected = windowKey === instanceWorkspace?.activeKey;
                 const selectInstance = (
@@ -265,6 +287,7 @@ function ExplorerEntityDataPanelContent({
                     onClick={selectInstance}
                     onKeyDown={selectInstance}
                     className={cx(
+                      'group',
                       source &&
                         'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30',
                       selected ? 'bg-primary/10' : 'hover:bg-muted/25',
@@ -371,16 +394,32 @@ function ExplorerEntityDataPanelContent({
                         </td>
                       );
                     })}
-                    {canDelete ? (
+                    {hasRowActions ? (
                       <td className={cx('align-top', embedded ? 'px-3 py-2.5' : 'px-4 py-3')}>
-                        {source && runMutation ? (
-                          <ExplorerEntityDeleteButton
-                            entityName={entity.name}
-                            target={source}
-                            runMutation={runMutation}
-                            onApplied={browser.refresh}
-                          />
-                        ) : null}
+                        <div className='flex items-center justify-end gap-1'>
+                          {source && hasRowOperations ? (
+                            <ExplorerEntityActions
+                              ariaLabel={`Actions for ${entity.name} instance ${label}`}
+                              contextLabel={label}
+                              inlineSingleAction
+                              onSuccess={browser.refresh}
+                              operations={operations}
+                              renderExecutePanel={renderExecutePanel}
+                              renderInPortal
+                              renderRefInput={renderRefInput}
+                              source={source}
+                              triggerClassName='opacity-40 group-hover:opacity-100 group-focus-within:opacity-100'
+                            />
+                          ) : null}
+                          {source && runMutation && canDelete ? (
+                            <ExplorerEntityDeleteButton
+                              entityName={entity.name}
+                              target={source}
+                              runMutation={runMutation}
+                              onApplied={browser.refresh}
+                            />
+                          ) : null}
+                        </div>
                       </td>
                     ) : null}
                   </tr>
@@ -453,7 +492,12 @@ export function ExplorerEntityDataPanel(props: ExplorerEntityDataPanelProps) {
   return workspace ? (
     <ExplorerEntityDataPanelContent {...props} />
   ) : (
-    <ExplorerEntityInstanceWorkspaceProvider entities={[props.entity]}>
+    <ExplorerEntityInstanceWorkspaceProvider
+      entities={[props.entity]}
+      operations={props.operations}
+      renderExecutePanel={props.renderExecutePanel}
+      renderRefInput={props.renderRefInput}
+    >
       <ExplorerEntityDataPanelContent {...props} />
     </ExplorerEntityInstanceWorkspaceProvider>
   );
