@@ -166,7 +166,7 @@ describe('Supabase reflected entity data reader', () => {
   it('uses display metadata to constrain free-text search', async () => {
     const Book = entity('Book', {
       id: field.id(),
-      title: field.string(),
+      title: field.named('Title', field.string()),
       slug: field.string(),
     }).display({
       primary: 'title',
@@ -187,6 +187,12 @@ describe('Supabase reflected entity data reader', () => {
     });
 
     expect(supabaseMock.attempts[0]?.search).toBe('title.ilike.*book-1*');
+    expect(result.columns).toContainEqual({
+      field: 'title',
+      type: 'string',
+      valueType: 'Title',
+      nullable: false,
+    });
     expect(result.display).toEqual({
       primary: 'title',
       secondary: ['slug'],

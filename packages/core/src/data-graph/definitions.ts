@@ -794,6 +794,9 @@ export const field = {
     if (!valueType) {
       throw new TypeError('Named Field value types require a non-empty name.');
     }
+    if (valueType !== name) {
+      throw new TypeError('Named Field value types cannot have surrounding whitespace.');
+    }
     if (definition.fieldType === 'reference') {
       throw new TypeError('Named Field value types must wrap a scalar Field definition.');
     }

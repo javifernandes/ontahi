@@ -82,7 +82,8 @@ describe('in-memory reflected entity data', () => {
     const reflected = await storage.readEntityData({ entityName: 'Book' });
     expect(reflected.columns).toContainEqual({
       field: 'coverColor',
-      type: 'Color',
+      type: 'string',
+      valueType: 'Color',
       nullable: false,
     });
 

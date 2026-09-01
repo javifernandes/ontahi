@@ -38,7 +38,11 @@ describe('data-graph schema DSL', () => {
       title: 'Color',
       type: 'string',
     });
+    expectTypeOf(Color.valueType).toEqualTypeOf<'Color'>();
     expectTypeOf(Color.__value).toEqualTypeOf<string | undefined>();
+    expect(() => field.named(' Color ', field.string())).toThrow(
+      'Named Field value types cannot have surrounding whitespace.',
+    );
   });
 
   it('declares excluded string values as a reflected constraint', () => {

@@ -86,24 +86,28 @@ export const listPostgresReflectedEntityData = async (
     [mapping.table],
   );
   const availableColumns = new Set(physicalColumns.rows.map(row => row.column_name));
-  const storedColumns = Object.entries(mapping.columns).map(([field, column]) => ({
-    field,
-    column,
-    sql: quoteIdentifier(column),
-    type:
-      (entity.fields[field] as FieldShape | undefined)?.valueType ??
-      (entity.fields[field] as FieldShape | undefined)?.fieldType ??
-      'unknown',
-    nullable: Boolean((entity.fields[field] as FieldShape | undefined)?.nullable),
-  }));
+  const storedColumns = Object.entries(mapping.columns).map(([field, column]) => {
+    const definition = entity.fields[field] as FieldShape | undefined;
+
+    return {
+      field,
+      column,
+      sql: quoteIdentifier(column),
+      type: definition?.fieldType ?? 'unknown',
+      ...(definition?.valueType ? { valueType: definition.valueType } : {}),
+      nullable: Boolean(definition?.nullable),
+    };
+  });
   const derivedColumns = Object.entries(entity.fields).flatMap(([field, definition]) => {
     if (!isDerivedFieldDefinition(definition) || !definition.derived.expression) return [];
     return [
       {
         field,
         sql: compilePostgresDerivedField(entity, mapping, definition.derived.expression),
-        type:
-          (definition as FieldShape).valueType ?? (definition as FieldShape).fieldType ?? 'unknown',
+        type: (definition as FieldShape).fieldType ?? 'unknown',
+        ...((definition as FieldShape).valueType
+          ? { valueType: (definition as FieldShape).valueType }
+          : {}),
         nullable: Boolean((definition as FieldShape).nullable),
       },
     ];
@@ -182,7 +186,12 @@ export const listPostgresReflectedEntityData = async (
 
   return {
     entityName: entity.name,
-    columns: columns.map(({ field, type, nullable }) => ({ field, type, nullable })),
+    columns: columns.map(({ field, type, valueType, nullable }) => ({
+      field,
+      type,
+      ...(valueType ? { valueType } : {}),
+      nullable,
+    })),
     display,
     omittedColumns,
     rows: rowsResult.rows,

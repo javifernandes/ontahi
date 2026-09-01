@@ -46,7 +46,7 @@ export const Explorer = () => {
   );
 
   return (
-    <div className='explorer-host'>
+    <div className='explorer-host' data-explorer-theme-host>
       <ExplorerProvider basePath='/explorer'>
         <a className='explorer-exit' href='/'>
           ← Todo

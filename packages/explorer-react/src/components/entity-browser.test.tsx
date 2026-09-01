@@ -17,6 +17,7 @@ import type {
   ExplorerTaskDescriptor,
 } from '../contracts/index.js';
 
+import { ExplorerEntityActions } from './entity-actions.js';
 import {
   ExplorerEditableEntityCell,
   ExplorerEntityCreateButton,
@@ -583,7 +584,7 @@ describe('ExplorerEntityBrowser', () => {
       fields: [
         { name: 'id', type: 'id', nullable: false },
         { name: 'name', type: 'string', nullable: false },
-        { name: 'color', type: 'Color', nullable: false },
+        { name: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       mutations: {
         create: { fields: ['id', 'name', 'color'] },
@@ -596,7 +597,7 @@ describe('ExplorerEntityBrowser', () => {
       columns: [
         { field: 'id', type: 'id', nullable: false },
         { field: 'name', type: 'string', nullable: false },
-        { field: 'color', type: 'Color', nullable: false },
+        { field: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       rows: [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }],
       page: 1,
@@ -754,6 +755,31 @@ describe('ExplorerEntityBrowser', () => {
 
     expect(screen.queryByLabelText('Edit color color picker')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Edit color' })).toBeTruthy();
+  });
+
+  it('parses named numeric Fields through their primitive type', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockResolvedValue({ created: [], updated: [], deleted: [] });
+
+    render(
+      <ExplorerEditableEntityCell
+        entityName='Counter'
+        field={{ name: 'count', type: 'number', valueType: 'Count', nullable: false }}
+        onApplied={vi.fn()}
+        runMutation={runMutation}
+        target={{ kind: 'entity-ref', entityName: 'Counter', locator: { id: 'counter-1' } }}
+        value={1}
+      >
+        1
+      </ExplorerEditableEntityCell>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit count' }));
+    await user.clear(screen.getByRole('spinbutton', { name: 'Edit count' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Edit count' }), '12');
+    await user.click(screen.getByRole('button', { name: 'Save count' }));
+
+    expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { count: 12 } }));
   });
 
   it('uses reflected editors for booleans, enums, numbers, dates, JSON, references, and null', async () => {
@@ -1516,6 +1542,53 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
   });
 
+  it('disables inline confirmation when a bound locator is locally invalid', async () => {
+    const user = userEvent.setup();
+    const deleteOperation: ExplorerOperationDescriptor = {
+      id: 'Library.deleteBook',
+      entityName: 'Library',
+      name: 'deleteBook',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [{ path: 'book', type: 'Book', required: true }],
+      },
+      inputRefs: [
+        {
+          path: 'book',
+          entityName: 'Book',
+          receiver: false,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        reflectedOperationInvoker: {
+          invokeOperation: vi.fn().mockResolvedValue({ ok: true, kind: 'success', value: {} }),
+        },
+        children: (
+          <ExplorerEntityActions
+            ariaLabel='Actions for invalid Book'
+            operations={[deleteOperation]}
+            source={{ kind: 'entity-ref', entityName: 'Book', locator: { id: '' } }}
+          />
+        ),
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions for invalid Book' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete Book' }));
+
+    expect(screen.getByRole('button', { name: 'Confirm' }).hasAttribute('disabled')).toBe(true);
+  });
+
   it('moves, minimizes, restores, and closes independent instance windows', async () => {
     const user = userEvent.setup();
     const inspectableBook: ExplorerEntityDetail = {
@@ -1848,7 +1921,7 @@ describe('ExplorerEntityBrowser', () => {
       fields: [
         { name: 'id', type: 'id', nullable: false },
         { name: 'name', type: 'string', nullable: false },
-        { name: 'color', type: 'Color', nullable: false },
+        { name: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       mutations: {
         update: { fields: ['name', 'color'] },
@@ -1859,7 +1932,7 @@ describe('ExplorerEntityBrowser', () => {
       columns: [
         { field: 'id', type: 'id', nullable: false },
         { field: 'name', type: 'string', nullable: false },
-        { field: 'color', type: 'Color', nullable: false },
+        { field: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       rows: [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }],
       page: 1,
@@ -2232,31 +2305,41 @@ describe('ExplorerEntityBrowser', () => {
     };
 
     render(
-      <div data-testid='explorer-theme' style={{ '--popover': '0 0% 100%' } as CSSProperties}>
-        <ExplorerProvider basePath='/internal/graph'>
-          {withReflectedEntityDataReader({
-            readEntityData: vi.fn().mockResolvedValue({
-              entityName: 'Book',
-              columns: [{ field: 'id', type: 'id', nullable: false }],
-              rows: [{ id: 'book-1' }],
-              page: 1,
-              pageSize: 25,
-              totalCount: 1,
-              hasPreviousPage: false,
-              hasNextPage: false,
-            }),
-            readRelatedEntityData,
-            reflectedOperationInvoker: { invokeOperation },
-            children: (
-              <ExplorerEntityBrowser
-                entities={[relatedBook, profile]}
-                operations={[createProfile, archiveProfile]}
-                tasks={[]}
-                selectedEntityName='Book'
-              />
-            ),
-          })}
-        </ExplorerProvider>
+      <div
+        data-testid='outer-theme'
+        data-explorer-theme-host
+        style={{ '--popover': '120 20% 10%' } as CSSProperties}
+      >
+        <div
+          data-testid='explorer-theme'
+          data-explorer-theme-host
+          style={{ '--popover': '0 0% 100%' } as CSSProperties}
+        >
+          <ExplorerProvider basePath='/internal/graph'>
+            {withReflectedEntityDataReader({
+              readEntityData: vi.fn().mockResolvedValue({
+                entityName: 'Book',
+                columns: [{ field: 'id', type: 'id', nullable: false }],
+                rows: [{ id: 'book-1' }],
+                page: 1,
+                pageSize: 25,
+                totalCount: 1,
+                hasPreviousPage: false,
+                hasNextPage: false,
+              }),
+              readRelatedEntityData,
+              reflectedOperationInvoker: { invokeOperation },
+              children: (
+                <ExplorerEntityBrowser
+                  entities={[relatedBook, profile]}
+                  operations={[createProfile, archiveProfile]}
+                  tasks={[]}
+                  selectedEntityName='Book'
+                />
+              ),
+            })}
+          </ExplorerProvider>
+        </div>
       </div>,
     );
 

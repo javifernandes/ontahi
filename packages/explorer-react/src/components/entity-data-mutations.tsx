@@ -176,7 +176,7 @@ const parseCreateDraftValue = (field: ExplorerEntityField, draft: string): unkno
 const defaultMutationDraft = (field: ExplorerEntityField) =>
   field.type === 'boolean' ? 'false' : field.enumValues?.[0] ? String(field.enumValues[0]) : '';
 
-const isColorField = (field: ExplorerEntityField) => field.type.toLowerCase() === 'color';
+const isColorField = (field: ExplorerEntityField) => field.valueType?.toLowerCase() === 'color';
 
 const MutationValueInput = ({
   autoFocus = true,

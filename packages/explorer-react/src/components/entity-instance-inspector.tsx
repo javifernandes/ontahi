@@ -33,7 +33,7 @@ const ExplorerInspectorValue = ({
   value: unknown;
 }) => {
   const colorSwatch =
-    field.type.toLowerCase() === 'color' &&
+    field.valueType?.toLowerCase() === 'color' &&
     typeof value === 'string' &&
     /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
       ? value

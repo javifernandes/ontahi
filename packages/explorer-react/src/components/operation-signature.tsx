@@ -37,6 +37,10 @@ const humanizeScalarType = (field: ExplorerSchemaField) => {
     return `${field.selection.entityName} selection (${field.selection.cardinality})`;
   }
 
+  if (field.valueType) {
+    return field.valueType;
+  }
+
   const normalizedType = field.type.toLowerCase();
 
   if (normalizedType.includes('string')) {

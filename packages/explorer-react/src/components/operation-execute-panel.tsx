@@ -309,7 +309,8 @@ const isStructuredInputField = (field: ExplorerSchemaField) => {
 
 const isSelectionInputField = (field: ExplorerSchemaField) => Boolean(field.selection);
 
-const isColorInputField = (field: ExplorerSchemaField) => field.type.toLowerCase() === 'color';
+const isColorInputField = (field: ExplorerSchemaField) =>
+  field.valueType?.toLowerCase() === 'color';
 
 const colorValuePattern = /^#[\da-f]{6}$/i;
 
@@ -698,7 +699,7 @@ const ExplorerScalarInputRow = ({
         updateValue(nextValue === EXPLORER_UNSET_SELECT_VALUE ? null : nextValue)
       }
       options={enumOptions}
-      placeholder={variant !== 'default' ? field.path : field.type}
+      placeholder={variant !== 'default' ? field.path : (field.valueType ?? field.type)}
       triggerClassName={cx(
         'justify-between',
         variant !== 'default'
@@ -737,7 +738,7 @@ const ExplorerScalarInputRow = ({
     <textarea
       value={formatInputFieldControlValue(value)}
       onChange={event => updateValue(parseInputFieldControlValue(field, event.target.value))}
-      placeholder={field.required ? field.type : 'optional'}
+      placeholder={field.required ? (field.valueType ?? field.type) : 'optional'}
       rows={variant !== 'default' ? 2 : 3}
       aria-describedby={issue ? issueId : undefined}
       aria-invalid={Boolean(issue)}
@@ -751,7 +752,7 @@ const ExplorerScalarInputRow = ({
       step={field.type.toLowerCase().includes('integer') ? 1 : undefined}
       value={formatInputFieldControlValue(value)}
       onChange={event => updateValue(parseInputFieldControlValue(field, event.target.value))}
-      placeholder={field.required ? field.type : 'optional'}
+      placeholder={field.required ? (field.valueType ?? field.type) : 'optional'}
       aria-describedby={issue ? issueId : undefined}
       aria-invalid={Boolean(issue)}
       required={field.required}
@@ -839,7 +840,9 @@ const ExplorerScalarInputRow = ({
           <span className='font-mono text-sm font-semibold text-foreground'>{field.path}</span>
           {!field.required ? <span className='text-xs text-muted-foreground'>optional</span> : null}
         </div>
-        <div className='mt-1 truncate text-xs text-muted-foreground'>{field.type}</div>
+        <div className='mt-1 truncate text-xs text-muted-foreground'>
+          {field.valueType ?? field.type}
+        </div>
       </div>
 
       <div className='grid gap-1'>

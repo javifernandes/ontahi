@@ -607,7 +607,8 @@ export const getExplorerEntityDetail = (
 
       return {
         name,
-        type: fieldShape.valueType ?? fieldShape.fieldType ?? 'unknown',
+        type: fieldShape.fieldType ?? 'unknown',
+        ...(fieldShape.valueType ? { valueType: fieldShape.valueType } : {}),
         nullable: Boolean(fieldShape.nullable),
         enumValues: fieldShape.enumValues ? [...fieldShape.enumValues] : undefined,
         ...(fieldShape.derived

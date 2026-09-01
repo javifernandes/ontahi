@@ -392,7 +392,8 @@ describe('explorer descriptor builder', () => {
           },
           {
             name: 'accent',
-            type: 'Color',
+            type: 'string',
+            valueType: 'Color',
             nullable: false,
             enumValues: undefined,
           },

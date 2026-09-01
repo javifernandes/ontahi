@@ -226,7 +226,7 @@ function ExplorerEntityDataPanelContent({
                     <div className='grid gap-1'>
                       <span className='font-mono text-foreground'>{column.field}</span>
                       <span className='font-mono normal-case text-muted-foreground'>
-                        {column.type}
+                        {column.valueType ?? column.type}
                       </span>
                     </div>
                   </th>

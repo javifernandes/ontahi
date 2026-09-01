@@ -162,17 +162,23 @@ const actionControlClassName =
   'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground';
 
 const getExplorerActionPortalHost = (trigger: HTMLElement) => {
+  const explicitHost = trigger.closest<HTMLElement>('[data-explorer-theme-host]');
+  if (explicitHost) return explicitHost;
+
   let current: HTMLElement | null = trigger;
-  let themedHost: HTMLElement | undefined;
 
   while (current && current !== document.body) {
-    if (globalThis.getComputedStyle(current).getPropertyValue('--popover').trim()) {
-      themedHost = current;
+    const popover = globalThis.getComputedStyle(current).getPropertyValue('--popover').trim();
+    const parentPopover = current.parentElement
+      ? globalThis.getComputedStyle(current.parentElement).getPropertyValue('--popover').trim()
+      : '';
+    if (popover && popover !== parentPopover) {
+      return current;
     }
     current = current.parentElement;
   }
 
-  return themedHost ?? document.body;
+  return document.body;
 };
 
 const ExplorerActionCloseButton = ({ onClose }: Readonly<{ onClose: () => void }>) => (
@@ -364,7 +370,12 @@ const ExplorerEntityActionConfirmation = ({
           </button>
           <button
             type='button'
-            disabled={running || !executor.executable || !executor.parsedInputPreview.ok}
+            disabled={
+              running ||
+              !executor.executable ||
+              !executor.parsedInputPreview.ok ||
+              executor.localValidationIssues.length > 0
+            }
             onClick={() => void executor.executeConfirmed()}
             className='inline-flex min-h-8 items-center rounded-md bg-destructive px-3 text-xs font-medium text-white transition hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50'
           >

@@ -362,7 +362,7 @@ describe('ExplorerOperationExecutePanel', () => {
           inputSchema: {
             source: 'ontahi',
             summary: 'object',
-            fields: [{ path: 'color', type: 'Color', required: true }],
+            fields: [{ path: 'color', type: 'string', valueType: 'Color', required: true }],
           },
         })}
         variant='compact'
