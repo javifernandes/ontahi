@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/postgres",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "Direct PostgreSQL data graph runtime for Ontahi",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/postgres",
   "license": "Apache-2.0",

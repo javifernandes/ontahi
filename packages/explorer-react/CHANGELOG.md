@@ -1,5 +1,44 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.10
+
+### Minor Changes
+
+- 0e27355: Present the active Entity table and query controls as one compact movable and collapsible
+  collection-view node that participates in the same click-to-front order as instance nodes. Entity
+  selection now lives in the node header, while create, filtering, sorting, inline editing, deletion,
+  pagination, and instance-window navigation remain available inside the collection surface.
+- 6f22cfe: Present reflected Operations as contextual actions on collection and instance nodes. Instance
+  actions bind one unambiguous compatible Ref input or one-cardinality Entity Selection, hide that
+  bound target from the compact form, execute through the existing reflected invoker, and refresh
+  authoritative Entity and Relation data after success.
+- f903bee: Project target-returning contextual Operations into Relation headers and expose contextual
+  instance Actions on identified related rows. Operation descriptors now identify direct Entity
+  results so Explorer can place Relation CTAs without inferring behavior from operation names.
+
+### Patch Changes
+
+- a389b29: Add explicit Operation receiver metadata and project only receiver-bound operations onto Entity
+  table rows and instance windows. A row exposes its sole action directly and uses the compact action
+  menu when several operations bind to that instance, while relation creation remains contextual and
+  preserves bound inputs, destructive confirmation, and refresh after execution.
+- 36f16e8: Present Entity, instance, and Relation action choices as compact menus without repeating the
+  surrounding node's heading or context label. Action execution panels retain their own navigation
+  and close controls after a choice is made, while fully bound destructive actions confirm inline
+  and operations without editable inputs omit the reset control. Executable action forms no longer
+  surface their bridge or local-runtime transport details to domain users.
+  Durable operations represented by a reflected task now appear only once, Relation action portals
+  retain their Explorer theme, and a sole related-instance action is exposed directly instead of
+  hiding behind a one-item menu.
+- 36f16e8: Allow scalar Entity fields to declare a reusable semantic value type with `field.named`. Reflected
+  Entity data and operation schemas preserve that type so Explorer controls can be selected from the
+  domain model instead of field-name conventions. The Todo example now declares `Color` this way,
+  and Explorer renders it with a color picker while simplifying required one-Entity selections.
+- Updated dependencies [a389b29]
+- Updated dependencies [36f16e8]
+  - @ontahi/core@1.0.0-alpha.10
+  - @ontahi/react@1.0.0-alpha.10
+
 ## 1.0.0-alpha.9
 
 ### Minor Changes

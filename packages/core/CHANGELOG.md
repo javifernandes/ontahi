@@ -1,5 +1,18 @@
 # @ontahi/core
 
+## 1.0.0-alpha.10
+
+### Minor Changes
+
+- a389b29: Add explicit Operation receiver metadata and project only receiver-bound operations onto Entity
+  table rows and instance windows. A row exposes its sole action directly and uses the compact action
+  menu when several operations bind to that instance, while relation creation remains contextual and
+  preserves bound inputs, destructive confirmation, and refresh after execution.
+- 36f16e8: Allow scalar Entity fields to declare a reusable semantic value type with `field.named`. Reflected
+  Entity data and operation schemas preserve that type so Explorer controls can be selected from the
+  domain model instead of field-name conventions. The Todo example now declares `Color` this way,
+  and Explorer renders it with a color picker while simplifying required one-Entity selections.
+
 ## 1.0.0-alpha.9
 
 ### Minor Changes

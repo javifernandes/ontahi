@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/runtime-nextjs",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "Next.js runtime and transport adapters for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-nextjs",
   "license": "Apache-2.0",

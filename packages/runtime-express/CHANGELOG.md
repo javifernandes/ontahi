@@ -1,5 +1,18 @@
 # @ontahi/runtime-express
 
+## 1.0.0-alpha.10
+
+### Patch Changes
+
+- Updated dependencies [0e27355]
+- Updated dependencies [6f22cfe]
+- Updated dependencies [a389b29]
+- Updated dependencies [36f16e8]
+- Updated dependencies [f903bee]
+- Updated dependencies [36f16e8]
+  - @ontahi/explorer-react@1.0.0-alpha.10
+  - @ontahi/core@1.0.0-alpha.10
+
 ## 1.0.0-alpha.9
 
 ### Minor Changes
