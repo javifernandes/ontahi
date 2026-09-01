@@ -277,7 +277,7 @@ Use an Operation when the application is asking the domain to do something rathe
 reading its graph:
 
 ```tsx
-const createTodo = useOperation(TodoItem.domain.create);
+const createTodo = useOperation(TodoItem.domain.createItem);
 await createTodo.executeAsync({ id, list, title });
 ```
 

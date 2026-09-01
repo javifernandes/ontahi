@@ -331,7 +331,7 @@ reading its graph:
 ```ts
 import { useOperation, useOperationQuery } from '@ontahi/react/graph';
 
-const createTodo = useOperation(TodoItem.domain.create);
+const createTodo = useOperation(TodoItem.domain.createItem);
 await createTodo.executeAsync({ id, list, title });
 
 const completeVisible = useOperation(TodoItem.domain.complete({ todos: visibleTodos }));

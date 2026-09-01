@@ -154,6 +154,7 @@ export type OperationInputRefGraphOpsMetadata = {
 };
 
 export type DomainOperationGraphOpsMetadata = {
+  receiver?: string;
   inputRefs?: Record<string, OperationInputRefGraphOpsMetadata>;
 };
 

@@ -45,37 +45,13 @@ const CompleteAllOutputValue = value('CompleteAllOutput', {
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
-    create: defineClientDomainOperation({
+    createList: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {
         invalidate: [['TodoList']],
       },
       input: graphSchema.pick(TodoListSchema, ['id', 'name', 'color']).named('CreateTodoListInput'),
-      output: TodoListSchema,
-    }),
-    rename: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList']],
-      },
-      input: graphSchema.object({
-        list: TodoListSchema.one(),
-        name: TodoListSchema.fields.name,
-      }),
-      output: TodoListSchema,
-    }),
-    recolor: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList']],
-      },
-      input: graphSchema.object({
-        list: TodoListSchema.one(),
-        color: TodoListSchema.fields.color,
-      }),
       output: TodoListSchema,
     }),
   },
@@ -87,7 +63,7 @@ export const Tag = defineClientEntity(TagSchema, {
 
 export const TodoItem = defineClientEntity(TodoItemSchema, {
   domainOperations: {
-    create: defineClientDomainOperation({
+    createItem: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
       bridge: {

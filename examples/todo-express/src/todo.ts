@@ -48,7 +48,7 @@ export const TodoList = entity({
     capabilities: {} as TodoCapabilities,
   },
   operations: ({ self, commands, operation, app }) => ({
-    create: operation({
+    createList: operation({
       input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
       output: self,
       bridge: { invalidate: [['TodoList']] },
@@ -63,24 +63,6 @@ export const TodoList = entity({
 
           return created;
         }),
-    }),
-    rename: operation({
-      input: graphSchema.object({
-        list: self.one(),
-        name: self.fields.name,
-      }),
-      output: self,
-      bridge: { invalidate: [['TodoList']] },
-      run: ({ list, name }) => list.updateReturning({ name }, ['id', 'name', 'color']),
-    }),
-    recolor: operation({
-      input: graphSchema.object({
-        list: self.one(),
-        color: self.fields.color,
-      }),
-      output: self,
-      bridge: { invalidate: [['TodoList']] },
-      run: ({ list, color }) => list.updateReturning({ color }, ['id', 'name', 'color']),
     }),
   }),
 });
@@ -151,7 +133,7 @@ export const TodoItem = entity({
     );
 
     return {
-      create: operation({
+      createItem: operation({
         input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
         output: self,
         bridge: { invalidate: [['TodoItem']] },
@@ -180,6 +162,7 @@ export const TodoItem = entity({
           todos: self.many(),
           completed: self.fields.completed,
         }),
+        graphOps: { receiver: 'todos' },
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         bridge: { invalidate: [['TodoItem']] },
         run: ({ todos, completed }) => todos.update({ completed }),
@@ -188,6 +171,7 @@ export const TodoItem = entity({
         input: graphSchema.object({
           todo: graphSchema.existingRef(self),
         }),
+        graphOps: { receiver: 'todo' },
         bridge: { invalidate: [['TodoItem']] },
         *run({ todo }) {
           yield* unlinkTodoTags(todo.id);
@@ -201,6 +185,7 @@ export const TodoItem = entity({
         input: graphSchema.object({
           list: graphSchema.existingRef(TodoList),
         }),
+        graphOps: { receiver: 'list' },
         bridge: { invalidate: [['TodoList'], ['TodoItem'], ['Tag']] },
         *run({ list }) {
           const todos = yield* todoEntities.where(todo => todo.list.eq(list.ref)).run();
@@ -219,6 +204,7 @@ export const TodoItem = entity({
         input: graphSchema.object({
           tag: graphSchema.existingRef(Tag),
         }),
+        graphOps: { receiver: 'tag' },
         bridge: { invalidate: [['Tag'], ['TodoItem']] },
         *run({ tag }) {
           const todos = yield* todoEntities

@@ -193,6 +193,7 @@ export type ExplorerOperationDescriptor = {
     channel?: string;
   }>;
   inputSchema: ExplorerSchemaDescriptor;
+  receiverPath?: string;
   inputRefs?: ExplorerOperationInputRefDescriptor[];
   resultSchema: ExplorerSchemaDescriptor;
 };

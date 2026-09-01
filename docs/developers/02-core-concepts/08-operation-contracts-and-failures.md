@@ -310,7 +310,7 @@ if (!invalid.ok && invalid.kind === 'input_invalid') {
   console.error(invalid.issues[0]?.message);
 }
 
-const duplicate = await TodoList.create({
+const duplicate = await TodoList.createList({
   id: crypto.randomUUID(),
   name: 'Research',
 });

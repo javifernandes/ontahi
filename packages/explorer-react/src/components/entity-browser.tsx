@@ -376,7 +376,16 @@ export function ExplorerEntityBrowser({
   const resolvedRenderDataPanel =
     renderDataPanel ??
     (hasReflectedEntityDataReader
-      ? ({ entity }) => <ExplorerEntityDataPanel embedded entity={entity} showHeader={false} />
+      ? ({ entity }) => (
+          <ExplorerEntityDataPanel
+            embedded
+            entity={entity}
+            operations={operations}
+            renderExecutePanel={renderExecutePanel}
+            renderRefInput={renderRefInput}
+            showHeader={false}
+          />
+        )
       : undefined);
   const canShowDataTab = Boolean(resolvedRenderDataPanel);
   const [selectedName, setSelectedName] = useState(() =>

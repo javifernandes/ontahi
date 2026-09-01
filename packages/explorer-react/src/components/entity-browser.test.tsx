@@ -568,7 +568,7 @@ describe('ExplorerEntityBrowser', () => {
 
     expect(await screen.findByRole('heading', { name: 'Data' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'New Book' })).toBeTruthy();
-    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Row actions' })).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Delete row' })).toBeTruthy();
     expect(screen.getByText('Some mapped fields are not queryable in this table.')).toBeTruthy();
     expect(screen.getByText('legacyNotes (legacy_notes)')).toBeTruthy();
@@ -1398,7 +1398,7 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: false,
+          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -1451,6 +1451,115 @@ describe('ExplorerEntityBrowser', () => {
     await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
   });
 
+  it('projects a compatible operation directly into each Entity table row', async () => {
+    const user = userEvent.setup();
+    const invokeOperation = vi.fn().mockResolvedValue({
+      ok: true,
+      kind: 'success',
+      value: { deleted: true },
+    });
+    const readEntityData = vi.fn().mockResolvedValue({
+      entityName: 'Book',
+      columns: [
+        { field: 'id', type: 'id', nullable: false },
+        { field: 'title', type: 'string', nullable: false },
+      ],
+      rows: [{ id: 'book-1', title: 'Ontahi' }],
+      page: 1,
+      pageSize: 25,
+      totalCount: 1,
+      hasPreviousPage: false,
+      hasNextPage: false,
+    });
+    const inspectableBook: ExplorerEntityDetail = {
+      ...entities[0]!,
+      identity: { name: 'refById', fields: ['id'] },
+      display: { primary: 'title' },
+      relations: [],
+    };
+    const deleteOperation: ExplorerOperationDescriptor = {
+      id: 'Library.deleteBook',
+      entityName: 'Library',
+      name: 'deleteBook',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [{ path: 'book', type: 'Book', required: true }],
+      },
+      inputRefs: [
+        {
+          path: 'book',
+          entityName: 'Book',
+          receiver: true,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+    const createRelatedItem: ExplorerOperationDescriptor = {
+      ...deleteOperation,
+      id: 'Chapter.create',
+      entityName: 'Chapter',
+      name: 'create',
+      resultEntityName: 'Chapter',
+      inputRefs: deleteOperation.inputRefs?.map(inputRef => ({
+        ...inputRef,
+        receiver: false,
+      })),
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        readEntityData,
+        reflectedOperationInvoker: { invokeOperation },
+        children: (
+          <ExplorerEntityBrowser
+            entities={[inspectableBook]}
+            operations={[createRelatedItem, deleteOperation]}
+            tasks={[]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    const row = await screen.findByRole('row', { name: /book-1 Ontahi/ });
+    expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+    await user.click(
+      within(row).getByRole('button', {
+        name: 'Delete Book · Actions for Book instance Ontahi',
+      }),
+    );
+    let confirmation = screen.getByRole('group', { name: 'Confirm Delete Book' });
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('group', { name: 'Confirm Delete Book' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Delete Book' })).toBeNull();
+
+    const directAction = within(row).getByRole('button', {
+      name: 'Delete Book · Actions for Book instance Ontahi',
+    });
+    expect(directAction.getAttribute('aria-expanded')).toBe('false');
+    await user.click(directAction);
+    confirmation = screen.getByRole('group', { name: 'Confirm Delete Book' });
+    await user.click(within(confirmation).getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() =>
+      expect(invokeOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'Library.deleteBook',
+          input: {
+            book: { kind: 'entity-ref', entityName: 'Book', locator: { id: 'book-1' } },
+          },
+        }),
+      ),
+    );
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
+  });
+
   it('closes a contextual destructive action after it succeeds', async () => {
     const user = userEvent.setup();
     const invokeOperation = vi.fn().mockResolvedValue({
@@ -1493,7 +1602,7 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: false,
+          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -1560,7 +1669,7 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'book',
           entityName: 'Book',
-          receiver: false,
+          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
         },
@@ -2296,7 +2405,7 @@ describe('ExplorerEntityBrowser', () => {
         {
           path: 'profile',
           entityName: 'Profile',
-          receiver: false,
+          receiver: true,
           optional: false,
           locators: [{ name: 'refById', fields: ['profile'], sourceFields: ['id'] }],
         },
