@@ -30,6 +30,7 @@ export type DerivedFieldMetadata = {
 export type FieldDefinition<TValue> = {
   kind: 'field';
   fieldType: 'id' | 'string' | 'number' | 'boolean' | 'date' | 'json' | 'enum' | 'reference';
+  valueType?: string;
   enumValues?: readonly string[];
   stringConstraints?: StringFieldConstraints;
   numberConstraints?: NumberFieldConstraints;
@@ -784,6 +785,24 @@ const normalizeStringConstraints = (
 };
 
 export const field = {
+  named: <const TName extends string, TDefinition extends AnyFieldDefinition>(
+    name: TName,
+    definition: TDefinition,
+  ): TDefinition & { valueType: TName } => {
+    const valueType = name.trim();
+
+    if (!valueType) {
+      throw new TypeError('Named Field value types require a non-empty name.');
+    }
+    if (valueType !== name) {
+      throw new TypeError('Named Field value types cannot have surrounding whitespace.');
+    }
+    if (definition.fieldType === 'reference') {
+      throw new TypeError('Named Field value types must wrap a scalar Field definition.');
+    }
+
+    return { ...definition, valueType } as TDefinition & { valueType: TName };
+  },
   id: (): IdFieldDefinition => ({
     kind: 'field',
     fieldType: 'id',

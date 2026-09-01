@@ -347,6 +347,7 @@ export const ExplorerInstanceRelation = ({
                   <ExplorerEntityActions
                     ariaLabel={`Actions for ${relation.target} instance ${label}`}
                     contextLabel={label}
+                    inlineSingleAction
                     onSuccess={refreshRelation}
                     operations={operations}
                     renderInPortal

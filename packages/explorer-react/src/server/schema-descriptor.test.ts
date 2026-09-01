@@ -94,6 +94,23 @@ describe('graph ops schema descriptor', () => {
     expect(descriptor.jsonSchema).toEqual(expect.objectContaining({ type: 'object' }));
   });
 
+  it('keeps named scalar semantics separate from their primitive input type', () => {
+    const descriptor = describeRuntimeSchema(
+      value('CounterInput', {
+        count: field.named('Count', field.integer()),
+      }),
+    );
+
+    expect(descriptor.fields).toContainEqual(
+      expect.objectContaining({
+        path: 'count',
+        type: 'integer',
+        valueType: 'Count',
+        required: true,
+      }),
+    );
+  });
+
   it('returns plain JSON schema objects for client component props', () => {
     const descriptor = describeRuntimeSchema(
       value('ImportInput', {

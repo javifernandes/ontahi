@@ -25,9 +25,17 @@ import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.j
 import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
 import { shouldHandleExplorerNavigation } from './routes.js';
 
-const ExplorerInspectorValue = ({ value }: { value: unknown }) => {
+const ExplorerInspectorValue = ({
+  field,
+  value,
+}: {
+  field: ExplorerEntityDetail['fields'][number];
+  value: unknown;
+}) => {
   const colorSwatch =
-    typeof value === 'string' && /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
+    field.valueType?.toLowerCase() === 'color' &&
+    typeof value === 'string' &&
+    /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
       ? value
       : undefined;
 
@@ -214,7 +222,7 @@ export const ExplorerEntityInstanceInspector = ({
                       <ArrowUpRight className='size-3 shrink-0' />
                     </a>
                   ) : (
-                    <ExplorerInspectorValue value={value} />
+                    <ExplorerInspectorValue field={field} value={value} />
                   )}
                 </dd>
               </div>

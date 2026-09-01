@@ -78,6 +78,7 @@ export type ExplorerEntityLike = {
 
 export type ExplorerEntityFieldLike = {
   fieldType?: string;
+  valueType?: string;
   nullable?: boolean;
   enumValues?: readonly string[];
   derived?: {
@@ -607,6 +608,7 @@ export const getExplorerEntityDetail = (
       return {
         name,
         type: fieldShape.fieldType ?? 'unknown',
+        ...(fieldShape.valueType ? { valueType: fieldShape.valueType } : {}),
         nullable: Boolean(fieldShape.nullable),
         enumValues: fieldShape.enumValues ? [...fieldShape.enumValues] : undefined,
         ...(fieldShape.derived

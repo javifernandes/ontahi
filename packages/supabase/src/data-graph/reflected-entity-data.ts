@@ -17,6 +17,7 @@ import type { SupabaseLikeClient } from './types.js';
 
 type FieldShape = {
   fieldType?: string;
+  valueType?: string;
   nullable?: boolean;
 };
 
@@ -24,6 +25,7 @@ type EntityDataColumn = {
   field: string;
   column: string;
   type: string;
+  valueType?: string;
   nullable: boolean;
 };
 
@@ -172,6 +174,7 @@ const listEntityDataWithKnownColumns = async <TClient extends SupabaseLikeClient
       field: fieldName,
       column,
       type: fieldShape.fieldType ?? 'unknown',
+      ...(fieldShape.valueType ? { valueType: fieldShape.valueType } : {}),
       nullable: Boolean(fieldShape.nullable),
     };
   });
@@ -251,6 +254,7 @@ const listEntityDataWithKnownColumns = async <TClient extends SupabaseLikeClient
     columns: columns.map(column => ({
       field: column.field,
       type: column.type,
+      ...(column.valueType ? { valueType: column.valueType } : {}),
       nullable: column.nullable,
     })),
     display,

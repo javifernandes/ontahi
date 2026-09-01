@@ -160,6 +160,29 @@ const enumValuesMetadata = (schema: JsonSchemaObject) => {
   return enumValues.length > 0 ? { enumValues } : {};
 };
 
+const schemaFieldTypeMetadata = (
+  schema: JsonSchemaObject,
+  context: JsonSchemaContext,
+): Pick<ExplorerSchemaField, 'type' | 'valueType'> => {
+  const namedScalar = Boolean(
+    schema.title &&
+    !schema.$ref &&
+    !schema.properties &&
+    !isArraySchema(schema) &&
+    getSchemaVariants(schema).length === 0 &&
+    !schema.allOf?.length,
+  );
+
+  return {
+    type: namedScalar
+      ? Array.isArray(schema.type)
+        ? schema.type.join(' | ')
+        : (schema.type ?? describeSchemaType(schema, context))
+      : describeSchemaType(schema, context),
+    ...(namedScalar && schema.title ? { valueType: schema.title } : {}),
+  };
+};
+
 const presentationMetadata = (
   schema: JsonSchemaObject,
 ): Pick<ExplorerSchemaField, 'presentation'> => {
@@ -336,6 +359,7 @@ const mergeSchemaFields = (fields: ExplorerSchemaField[]) => {
     const enumValues = [...new Set([...(current.enumValues ?? []), ...(field.enumValues ?? [])])];
     const variants = mergeSchemaVariants([...(current.variants ?? []), ...(field.variants ?? [])]);
     const presentation = current.presentation ?? field.presentation;
+    const valueType = current.valueType ?? field.valueType;
 
     byPath.set(field.path, {
       path: field.path,
@@ -347,6 +371,7 @@ const mergeSchemaFields = (fields: ExplorerSchemaField[]) => {
       ...(enumValues.length > 0 ? { enumValues } : {}),
       ...(variants.length > 0 ? { variants } : {}),
       ...(presentation ? { presentation } : {}),
+      ...(valueType ? { valueType } : {}),
     });
   }
 
@@ -459,7 +484,7 @@ const flattenSchemaFields = (
         ? [
             {
               path: pathPrefix,
-              type: describeSchemaType(schema, context),
+              ...schemaFieldTypeMetadata(schema, context),
               required,
               ...(schema.description ? { description: schema.description } : {}),
               ...enumValuesMetadata(schema),
@@ -485,7 +510,7 @@ const flattenSchemaFields = (
       ? [
           {
             path: pathPrefix,
-            type: describeSchemaType(schema, context),
+            ...schemaFieldTypeMetadata(schema, context),
             required,
             ...(schema.description ? { description: schema.description } : {}),
             ...enumValuesMetadata(schema),
@@ -504,7 +529,7 @@ const flattenSchemaFields = (
     const selection = selectionMetadata(child);
     const current = {
       path,
-      type: selection?.type ?? describeSchemaType(child, context),
+      ...(selection ? { type: selection.type } : schemaFieldTypeMetadata(child, context)),
       required: childRequired,
       ...(child.description ? { description: child.description } : {}),
       ...enumValuesMetadata(child),

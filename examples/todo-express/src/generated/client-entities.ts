@@ -23,12 +23,12 @@ export const TodoListSchema = defineEntitySchema('TodoList', {
       exclude: 'Archive is reserved for system use.',
     },
   }),
-  color: field.nonEmptyString({ trim: true }),
+  color: field.named('Color', field.nonEmptyString({ trim: true })),
 }).display({ primary: 'name', search: ['name'] });
 export const TagSchema = defineEntitySchema('Tag', {
   id: field.id(),
   name: field.nonEmptyString({ trim: true }),
-  color: field.nonEmptyString({ trim: true }),
+  color: TodoListSchema.fields.color,
 }).display({ primary: 'name', search: ['name'] });
 export const TodoItemSchema = defineEntitySchema('TodoItem', {
   id: field.id(),

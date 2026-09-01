@@ -46,6 +46,7 @@ export const createRuntimeReflectedRelatedEntityDataReader = ({
       columns: Object.entries(targetEntity.fields).map(([field, definition]) => ({
         field,
         type: definition.fieldType,
+        ...(definition.valueType ? { valueType: definition.valueType } : {}),
         nullable: Boolean(definition.nullable),
       })),
       display: describeReflectedEntityDisplay(targetEntity),

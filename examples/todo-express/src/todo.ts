@@ -36,7 +36,7 @@ const todoListFields = {
       exclude: 'Archive is reserved for system use.',
     },
   }),
-  color: field.nonEmptyString({ trim: true }),
+  color: field.named('Color', field.nonEmptyString({ trim: true })),
 };
 
 export const TodoList = entity({
@@ -90,7 +90,7 @@ export const Tag = entity({
   fields: {
     id: field.id(),
     name: field.nonEmptyString({ trim: true }),
-    color: field.nonEmptyString({ trim: true }),
+    color: TodoList.fields.color,
   },
   display: { primary: 'name', search: ['name'] },
 });

@@ -22,6 +22,36 @@ import {
 } from './index.js';
 
 describe('data-graph schema DSL', () => {
+  it('names scalar value types without changing their runtime representation', () => {
+    const Color = field.named('Color', field.nonEmptyString({ trim: true }));
+    const Author = entity('Author', {});
+
+    expect(safeParseGraphSchema(Color, '  #dbe8f4  ')).toEqual({
+      success: true,
+      data: '#dbe8f4',
+    });
+    expect(toGraphSchemaDescriptor(Color)).toMatchObject({
+      kind: 'scalar',
+      type: 'string',
+      valueType: 'Color',
+    });
+    expect(toGraphJsonSchema(Color)).toMatchObject({
+      title: 'Color',
+      type: 'string',
+    });
+    expectTypeOf(Color.valueType).toEqualTypeOf<'Color'>();
+    expectTypeOf(Color.__value).toEqualTypeOf<string | undefined>();
+    expect(() => field.named(' Color ', field.string())).toThrow(
+      'Named Field value types cannot have surrounding whitespace.',
+    );
+    expect(() => field.named('', field.string())).toThrow(
+      'Named Field value types require a non-empty name.',
+    );
+    expect(() => field.named('Author', field.ref(Author))).toThrow(
+      'Named Field value types must wrap a scalar Field definition.',
+    );
+  });
+
   it('declares excluded string values as a reflected constraint', () => {
     const ListName = field.nonEmptyString({
       trim: true,

@@ -70,7 +70,7 @@ export const ExplorerEntityStructurePanel = ({
           <ExplorerFieldRow
             key={field.name}
             name={field.name}
-            type={field.type}
+            type={field.valueType ?? field.type}
             required={!field.nullable}
             derivedDependencies={field.derived?.dependencies.map(dependency =>
               dependency.kind === 'field'

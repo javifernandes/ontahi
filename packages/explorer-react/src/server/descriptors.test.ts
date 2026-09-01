@@ -366,6 +366,7 @@ describe('explorer descriptor builder', () => {
             fields: {
               id: { fieldType: 'id' },
               status: { fieldType: 'enum', enumValues: ['draft', 'published'] },
+              accent: { fieldType: 'string', valueType: 'Color' },
             },
             relations: {
               chapters: {
@@ -388,6 +389,13 @@ describe('explorer descriptor builder', () => {
             type: 'enum',
             nullable: false,
             enumValues: ['draft', 'published'],
+          },
+          {
+            name: 'accent',
+            type: 'string',
+            valueType: 'Color',
+            nullable: false,
+            enumValues: undefined,
           },
         ]),
         relations: [

@@ -176,8 +176,7 @@ const parseCreateDraftValue = (field: ExplorerEntityField, draft: string): unkno
 const defaultMutationDraft = (field: ExplorerEntityField) =>
   field.type === 'boolean' ? 'false' : field.enumValues?.[0] ? String(field.enumValues[0]) : '';
 
-const isColorField = (field: ExplorerEntityField, draft: string) =>
-  field.type === 'string' && (/color/i.test(field.name) || colorValuePattern.test(draft));
+const isColorField = (field: ExplorerEntityField) => field.valueType?.toLowerCase() === 'color';
 
 const MutationValueInput = ({
   autoFocus = true,
@@ -247,7 +246,7 @@ const MutationValueInput = ({
         ))}
       </select>
     );
-  } else if (isColorField(field, draft)) {
+  } else if (isColorField(field)) {
     control = (
       <span className='inline-flex w-full min-w-0 items-center gap-2'>
         <input
@@ -550,7 +549,9 @@ export const ExplorerEditableEntityCell = ({
 
   if (!editing) {
     const colorSwatch =
-      typeof value === 'string' && /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
+      isColorField(field) &&
+      typeof value === 'string' &&
+      /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
         ? value
         : undefined;
 

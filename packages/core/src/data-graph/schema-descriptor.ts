@@ -52,6 +52,7 @@ export type GraphSchemaDescriptor =
 export type GraphSchemaScalarDescriptor = {
   kind: 'scalar';
   type: GraphSchemaScalarType;
+  valueType?: string;
   enumValues?: string[];
   stringConstraints?: {
     minLength?: number;
@@ -314,6 +315,7 @@ const describeField = (
     : {
         kind: 'scalar',
         type: field.fieldType as GraphSchemaScalarType,
+        ...(field.valueType ? { valueType: field.valueType } : {}),
         ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
         ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
         ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
@@ -537,6 +539,7 @@ const scalarJsonSchema = (descriptor: GraphSchemaScalarDescriptor): GraphJsonSch
   const isString = ['id', 'string', 'date', 'enum'].includes(descriptor.type);
 
   return {
+    ...(descriptor.valueType ? { title: descriptor.valueType } : {}),
     type:
       descriptor.type === 'number'
         ? numberConstraints?.integer

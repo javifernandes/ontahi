@@ -178,6 +178,7 @@ export type ReflectedEntityDataQuery = {
 export type ReflectedEntityDataColumn = {
   field: string;
   type: string;
+  valueType?: string;
   nullable: boolean;
 };
 

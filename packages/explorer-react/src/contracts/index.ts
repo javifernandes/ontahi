@@ -53,6 +53,7 @@ export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
   fields: Array<{
     name: string;
     type: string;
+    valueType?: string;
     nullable: boolean;
     enumValues?: string[];
     derived?: {
@@ -109,6 +110,7 @@ export type ExplorerSchemaFieldPresentation = {
 export type ExplorerSchemaField = {
   path: string;
   type: string;
+  valueType?: string;
   required: boolean;
   description?: string;
   enumValues?: string[];

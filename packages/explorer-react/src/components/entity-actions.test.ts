@@ -9,6 +9,7 @@ import {
   getExplorerInstanceOperationBindings,
   getExplorerRelationOperations,
 } from './entity-actions.js';
+import { hasExplorerOperationVisibleInputs } from './operation-executor.js';
 
 const operation = (
   overrides: Partial<ExplorerOperationDescriptor> = {},
@@ -190,5 +191,24 @@ describe('Explorer instance operation bindings', () => {
         candidate => candidate.id,
       ),
     ).toEqual(['TodoItem.create']);
+  });
+
+  it('distinguishes a fully bound action from one that still needs input', () => {
+    expect(hasExplorerOperationVisibleInputs(operation(), ['tag'])).toBe(false);
+    expect(hasExplorerOperationVisibleInputs(operation(), [])).toBe(true);
+    expect(
+      hasExplorerOperationVisibleInputs(
+        operation({
+          inputSchema: {
+            ...operation().inputSchema,
+            fields: [
+              ...operation().inputSchema.fields,
+              { path: 'reason', type: 'string', required: true },
+            ],
+          },
+        }),
+        ['tag'],
+      ),
+    ).toBe(true);
   });
 });

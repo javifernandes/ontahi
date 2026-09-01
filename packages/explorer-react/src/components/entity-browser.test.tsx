@@ -7,7 +7,7 @@ import { OntahiGraphProvider, type ReactGraphExecutor } from '@ontahi/react/grap
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -17,6 +17,7 @@ import type {
   ExplorerTaskDescriptor,
 } from '../contracts/index.js';
 
+import { ExplorerEntityActions } from './entity-actions.js';
 import {
   ExplorerEditableEntityCell,
   ExplorerEntityCreateButton,
@@ -302,17 +303,18 @@ describe('ExplorerEntityBrowser', () => {
     const actionsButton = screen.getByRole('button', { name: 'Actions for Book instances' });
     await user.click(actionsButton);
     expect(actionsButton.getAttribute('aria-expanded')).toBe('true');
-    await user.click(screen.getByRole('button', { name: 'Close actions' }));
+    expect(screen.queryByRole('button', { name: 'Close actions' })).toBeNull();
+    await user.keyboard('{Escape}');
     expect(actionsButton.getAttribute('aria-expanded')).toBe('false');
 
     await user.click(actionsButton);
-    await user.click(screen.getByRole('button', { name: /^Refresh Catalog/ }));
+    await user.click(screen.getByRole('menuitem', { name: /^Refresh Catalog/ }));
     await user.click(screen.getByRole('button', { name: 'Close actions' }));
     expect(actionsButton.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
 
     await user.click(actionsButton);
-    await user.click(screen.getByRole('button', { name: /^Refresh Catalog/ }));
+    await user.click(screen.getByRole('menuitem', { name: /^Refresh Catalog/ }));
     await user.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() =>
@@ -321,6 +323,48 @@ describe('ExplorerEntityBrowser', () => {
       ),
     );
     await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('shows a durable capability only as its reflected Task', async () => {
+    const user = userEvent.setup();
+    const durableOperation: ExplorerOperationDescriptor = {
+      ...operation,
+      id: 'Book.import',
+      name: 'importBook',
+      kind: 'durable',
+      exposure: 'bridge',
+      inputSchema: emptySchema,
+      durable: {
+        taskId: task.id,
+        runtime: 'in-process',
+        hasSubject: false,
+        runRefSchema: emptySchema,
+        progressSchema: emptySchema,
+        finalOutputSchema: emptySchema,
+      },
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        reflectedOperationInvoker: {
+          invokeOperation: vi.fn().mockResolvedValue({ ok: true, kind: 'success', value: {} }),
+        },
+        children: (
+          <ExplorerEntityBrowser
+            entities={entities}
+            operations={[durableOperation]}
+            tasks={[task]}
+            selectedEntityName='Book'
+          />
+        ),
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Book instances' }));
+    const actionMenu = screen.getByRole('menu', { name: 'Actions for Book instances' });
+
+    expect(within(actionMenu).getAllByText('Import Book')).toHaveLength(1);
+    expect(within(actionMenu).getByRole('menuitem', { name: /Import Book\s*Task/ })).toBeTruthy();
   });
 
   it('moves, minimizes, and restores the Entity collection node', async () => {
@@ -540,7 +584,7 @@ describe('ExplorerEntityBrowser', () => {
       fields: [
         { name: 'id', type: 'id', nullable: false },
         { name: 'name', type: 'string', nullable: false },
-        { name: 'color', type: 'string', nullable: false },
+        { name: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       mutations: {
         create: { fields: ['id', 'name', 'color'] },
@@ -553,7 +597,7 @@ describe('ExplorerEntityBrowser', () => {
       columns: [
         { field: 'id', type: 'id', nullable: false },
         { field: 'name', type: 'string', nullable: false },
-        { field: 'color', type: 'string', nullable: false },
+        { field: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       rows: [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }],
       page: 1,
@@ -689,6 +733,53 @@ describe('ExplorerEntityBrowser', () => {
       values: { name: 'Important' },
     });
     expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it('chooses specialized editors from reflected value types instead of field names', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ExplorerEditableEntityCell
+        entityName='Theme'
+        field={{ name: 'color', type: 'string', nullable: false }}
+        onApplied={vi.fn()}
+        runMutation={vi.fn()}
+        target={{ kind: 'entity-ref', entityName: 'Theme', locator: { id: 'theme-1' } }}
+        value='#dbe8f4'
+      >
+        #dbe8f4
+      </ExplorerEditableEntityCell>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit color' }));
+
+    expect(screen.queryByLabelText('Edit color color picker')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Edit color' })).toBeTruthy();
+  });
+
+  it('parses named numeric Fields through their primitive type', async () => {
+    const user = userEvent.setup();
+    const runMutation = vi.fn().mockResolvedValue({ created: [], updated: [], deleted: [] });
+
+    render(
+      <ExplorerEditableEntityCell
+        entityName='Counter'
+        field={{ name: 'count', type: 'number', valueType: 'Count', nullable: false }}
+        onApplied={vi.fn()}
+        runMutation={runMutation}
+        target={{ kind: 'entity-ref', entityName: 'Counter', locator: { id: 'counter-1' } }}
+        value={1}
+      >
+        1
+      </ExplorerEditableEntityCell>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit count' }));
+    await user.clear(screen.getByRole('spinbutton', { name: 'Edit count' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Edit count' }), '12');
+    await user.click(screen.getByRole('button', { name: 'Save count' }));
+
+    expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { count: 12 } }));
   });
 
   it('uses reflected editors for booleans, enums, numbers, dates, JSON, references, and null', async () => {
@@ -1332,7 +1423,7 @@ describe('ExplorerEntityBrowser', () => {
 
     await user.click(await screen.findByRole('row', { name: /book-1 Ontahi/ }));
     await user.click(screen.getByRole('button', { name: 'Actions for Book instance Ontahi' }));
-    await user.click(screen.getByRole('button', { name: 'Rename Book' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename Book' }));
 
     expect(screen.queryByLabelText('book Book')).toBeNull();
     expect(screen.getByText('book: Ontahi')).toBeTruthy();
@@ -1430,13 +1521,72 @@ describe('ExplorerEntityBrowser', () => {
       name: 'Actions for Book instance Ontahi',
     });
     await user.click(actionsButton);
-    await user.click(screen.getByRole('button', { name: 'Delete Book' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Confirm this destructive action.' }));
-    await user.click(screen.getByRole('button', { name: 'Run' }));
+    const actionMenu = screen.getByRole('menu', {
+      name: 'Actions for Book instance Ontahi',
+    });
+    expect(within(actionMenu).queryByRole('heading', { name: 'Actions' })).toBeNull();
+    expect(within(actionMenu).queryByText('Ontahi')).toBeNull();
+    await user.click(screen.getByRole('menuitem', { name: 'Delete Book' }));
+    let confirmation = screen.getByRole('group', { name: 'Confirm Delete Book' });
+    expect(within(confirmation).getByText('Delete Book?')).toBeTruthy();
+    expect(screen.queryByRole('checkbox', { name: 'Confirm this destructive action.' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reset input' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete Book' }));
+    confirmation = screen.getByRole('group', { name: 'Confirm Delete Book' });
+    await user.click(within(confirmation).getByRole('button', { name: 'Confirm' }));
 
     await waitFor(() => expect(invokeOperation).toHaveBeenCalledOnce());
     await waitFor(() => expect(actionsButton.getAttribute('aria-expanded')).toBe('false'));
     expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+  });
+
+  it('disables inline confirmation when a bound locator is locally invalid', async () => {
+    const user = userEvent.setup();
+    const deleteOperation: ExplorerOperationDescriptor = {
+      id: 'Library.deleteBook',
+      entityName: 'Library',
+      name: 'deleteBook',
+      kind: 'domain',
+      authority: 'server',
+      exposure: 'bridge',
+      inputSchema: {
+        source: 'ontahi',
+        summary: 'object',
+        fields: [{ path: 'book', type: 'Book', required: true }],
+      },
+      inputRefs: [
+        {
+          path: 'book',
+          entityName: 'Book',
+          receiver: false,
+          optional: false,
+          locators: [{ name: 'refById', fields: ['book'], sourceFields: ['id'] }],
+        },
+      ],
+      resultSchema: emptySchema,
+    };
+
+    render(
+      withReflectedEntityDataReader({
+        reflectedOperationInvoker: {
+          invokeOperation: vi.fn().mockResolvedValue({ ok: true, kind: 'success', value: {} }),
+        },
+        children: (
+          <ExplorerEntityActions
+            ariaLabel='Actions for invalid Book'
+            operations={[deleteOperation]}
+            source={{ kind: 'entity-ref', entityName: 'Book', locator: { id: '' } }}
+          />
+        ),
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions for invalid Book' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete Book' }));
+
+    expect(screen.getByRole('button', { name: 'Confirm' }).hasAttribute('disabled')).toBe(true);
   });
 
   it('moves, minimizes, restores, and closes independent instance windows', async () => {
@@ -1771,7 +1921,7 @@ describe('ExplorerEntityBrowser', () => {
       fields: [
         { name: 'id', type: 'id', nullable: false },
         { name: 'name', type: 'string', nullable: false },
-        { name: 'color', type: 'string', nullable: false },
+        { name: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       mutations: {
         update: { fields: ['name', 'color'] },
@@ -1782,7 +1932,7 @@ describe('ExplorerEntityBrowser', () => {
       columns: [
         { field: 'id', type: 'id', nullable: false },
         { field: 'name', type: 'string', nullable: false },
-        { field: 'color', type: 'string', nullable: false },
+        { field: 'color', type: 'string', valueType: 'Color', nullable: false },
       ],
       rows: [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }],
       page: 1,
@@ -2155,30 +2305,42 @@ describe('ExplorerEntityBrowser', () => {
     };
 
     render(
-      <ExplorerProvider basePath='/internal/graph'>
-        {withReflectedEntityDataReader({
-          readEntityData: vi.fn().mockResolvedValue({
-            entityName: 'Book',
-            columns: [{ field: 'id', type: 'id', nullable: false }],
-            rows: [{ id: 'book-1' }],
-            page: 1,
-            pageSize: 25,
-            totalCount: 1,
-            hasPreviousPage: false,
-            hasNextPage: false,
-          }),
-          readRelatedEntityData,
-          reflectedOperationInvoker: { invokeOperation },
-          children: (
-            <ExplorerEntityBrowser
-              entities={[relatedBook, profile]}
-              operations={[createProfile, archiveProfile]}
-              tasks={[]}
-              selectedEntityName='Book'
-            />
-          ),
-        })}
-      </ExplorerProvider>,
+      <div
+        data-testid='outer-theme'
+        data-explorer-theme-host
+        style={{ '--popover': '120 20% 10%' } as CSSProperties}
+      >
+        <div
+          data-testid='explorer-theme'
+          data-explorer-theme-host
+          style={{ '--popover': '0 0% 100%' } as CSSProperties}
+        >
+          <ExplorerProvider basePath='/internal/graph'>
+            {withReflectedEntityDataReader({
+              readEntityData: vi.fn().mockResolvedValue({
+                entityName: 'Book',
+                columns: [{ field: 'id', type: 'id', nullable: false }],
+                rows: [{ id: 'book-1' }],
+                page: 1,
+                pageSize: 25,
+                totalCount: 1,
+                hasPreviousPage: false,
+                hasNextPage: false,
+              }),
+              readRelatedEntityData,
+              reflectedOperationInvoker: { invokeOperation },
+              children: (
+                <ExplorerEntityBrowser
+                  entities={[relatedBook, profile]}
+                  operations={[createProfile, archiveProfile]}
+                  tasks={[]}
+                  selectedEntityName='Book'
+                />
+              ),
+            })}
+          </ExplorerProvider>
+        </div>
+      </div>,
     );
 
     await user.click(await screen.findByRole('row', { name: 'book-1' }));
@@ -2188,7 +2350,11 @@ describe('ExplorerEntityBrowser', () => {
     await user.click(
       within(relation).getByRole('button', { name: 'Actions for Profile relation' }),
     );
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    const relationActionMenu = screen.getByRole('menu', {
+      name: 'Actions for Profile relation',
+    });
+    expect(screen.getByTestId('explorer-theme').contains(relationActionMenu)).toBe(true);
+    await user.click(within(relationActionMenu).getByRole('menuitem', { name: 'Create' }));
     expect(screen.getByText('book: book-1')).not.toBeNull();
     expect(screen.queryByLabelText('book Book')).toBeNull();
     await user.type(screen.getByPlaceholderText('name'), 'Grace');
@@ -2212,9 +2378,11 @@ describe('ExplorerEntityBrowser', () => {
     await user.click(screen.getByRole('button', { name: 'Close actions' }));
 
     await user.click(
-      within(relation).getByRole('button', { name: 'Actions for Profile instance Ada' }),
+      within(relation).getByRole('button', {
+        name: 'Archive · Actions for Profile instance Ada',
+      }),
     );
-    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() =>
