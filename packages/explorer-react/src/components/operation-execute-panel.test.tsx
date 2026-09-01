@@ -533,7 +533,9 @@ describe('ExplorerOperationExecutePanel', () => {
       'false',
     );
 
-    await user.click(screen.getByRole('textbox', { name: 'Choose UserNotification' }));
+    await user.click(screen.getByRole('radio', { name: 'All' }));
+    expect(screen.getByRole('radio', { name: 'All' }).getAttribute('aria-checked')).toBe('true');
+    await user.click(screen.getByRole('radio', { name: 'Selected (0)' }));
     await user.click(await screen.findByRole('checkbox', { name: /First notification/ }));
     await user.click(screen.getByRole('checkbox', { name: /Second notification/ }));
     expect(screen.getByRole('radio', { name: 'None' }).getAttribute('aria-checked')).toBe('false');

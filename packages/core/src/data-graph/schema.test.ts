@@ -24,6 +24,7 @@ import {
 describe('data-graph schema DSL', () => {
   it('names scalar value types without changing their runtime representation', () => {
     const Color = field.named('Color', field.nonEmptyString({ trim: true }));
+    const Author = entity('Author', {});
 
     expect(safeParseGraphSchema(Color, '  #dbe8f4  ')).toEqual({
       success: true,
@@ -42,6 +43,12 @@ describe('data-graph schema DSL', () => {
     expectTypeOf(Color.__value).toEqualTypeOf<string | undefined>();
     expect(() => field.named(' Color ', field.string())).toThrow(
       'Named Field value types cannot have surrounding whitespace.',
+    );
+    expect(() => field.named('', field.string())).toThrow(
+      'Named Field value types require a non-empty name.',
+    );
+    expect(() => field.named('Author', field.ref(Author))).toThrow(
+      'Named Field value types must wrap a scalar Field definition.',
     );
   });
 
