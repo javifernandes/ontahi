@@ -44,6 +44,31 @@ describe('PostgreSQL SQL compiler', () => {
     });
   });
 
+  it('compiles a projection containing a selected Relation', () => {
+    const NodeBase = entity('SelectedRelationNode', {
+      id: field.id(),
+      parentId: field.nullable(field.id()),
+    });
+    const Node = NodeBase.belongsTo('parent', NodeBase, { via: 'parentId' });
+    const [mapping] = inferPostgresMappings([Node]);
+
+    expect(
+      compilePostgresQuery(
+        query(Node).select(node => ({
+          id: node.id,
+          parent: node.parent.select(parent => ({ id: parent.id })),
+        })),
+        undefined,
+        mapping!,
+      ),
+    ).toEqual({
+      text:
+        'SELECT "id" AS "id", "parent_id" AS "parentId"' +
+        ' FROM "selected_relation_nodes" WHERE TRUE',
+      values: [],
+    });
+  });
+
   it('compiles selection-based updates with returning fields', () => {
     const command: GraphCommandSpec = {
       kind: 'command',
