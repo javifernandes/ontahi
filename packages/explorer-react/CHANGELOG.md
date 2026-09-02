@@ -1,5 +1,12 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.11
+
+### Patch Changes
+
+- @ontahi/core@1.0.0-alpha.11
+  - @ontahi/react@1.0.0-alpha.11
+
 ## 1.0.0-alpha.10
 
 ### Minor Changes
