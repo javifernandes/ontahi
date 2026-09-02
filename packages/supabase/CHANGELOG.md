@@ -1,5 +1,17 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.10
+
+### Patch Changes
+
+- 36f16e8: Allow scalar Entity fields to declare a reusable semantic value type with `field.named`. Reflected
+  Entity data and operation schemas preserve that type so Explorer controls can be selected from the
+  domain model instead of field-name conventions. The Todo example now declares `Color` this way,
+  and Explorer renders it with a color picker while simplifying required one-Entity selections.
+- Updated dependencies [a389b29]
+- Updated dependencies [36f16e8]
+  - @ontahi/core@1.0.0-alpha.10
+
 ## 1.0.0-alpha.9
 
 ### Minor Changes

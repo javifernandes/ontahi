@@ -1,5 +1,19 @@
 # @ontahi/runtime-nextjs
 
+## 1.0.0-alpha.10
+
+### Minor Changes
+
+- a9e9926: Add an App Router Route Handler adapter for the common Ontahí Runtime Protocol. Hosts inject the
+  transport-neutral dispatcher and derive trusted context from each Web request while the adapter
+  preserves protocol correlation, semantic responses, and established HTTP error statuses.
+
+### Patch Changes
+
+- Updated dependencies [a389b29]
+- Updated dependencies [36f16e8]
+  - @ontahi/core@1.0.0-alpha.10
+
 ## 1.0.0-alpha.9
 
 ### Minor Changes
