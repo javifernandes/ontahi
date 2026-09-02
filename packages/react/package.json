@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/react",
-  "version": "1.0.0-alpha.10",
+  "version": "1.0.0-alpha.11",
   "description": "Non-visual React hooks and bridge adapters for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/react",
   "license": "Apache-2.0",

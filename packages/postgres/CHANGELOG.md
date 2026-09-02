@@ -1,5 +1,12 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.11
+
+### Patch Changes
+
+- 1b62f19: Compile selected Relations without traversing cyclic Entity definitions while discovering derived Fields.
+- @ontahi/core@1.0.0-alpha.11
+
 ## 1.0.0-alpha.10
 
 ### Patch Changes
