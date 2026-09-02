@@ -38,6 +38,10 @@ and operating practices.
 When work discovers or materially changes a durable framework shape, update the smallest useful
 Atlas item and connect it to the relevant plan. Prefer a narrow item over a speculative taxonomy.
 
+When a Pull Request implements a registered Plan or shapes a durable Atlas Item, follow the
+[`Atlas Evidence Binding Guidelines`](./atlas-evidence-binding-guidelines.md). The merged PR body is
+the current assertion surface; commit trailers alone do not create evidence.
+
 ## Canonical source references
 
 Cross-repository relationships use a registered source name as the URI scheme and a logical path:
