@@ -1,4 +1,5 @@
 import {
+  RelationQueryBuilder,
   lowerSelectionReferences,
   lowerEntityReferenceRecord,
   lowerEntityReferenceSelection,
@@ -143,6 +144,8 @@ const selectedDerivedFieldNames = (spec: QuerySpec) => {
       if (value && typeof value === 'object' && (value as { kind?: string }).kind === 'field-ref') {
         const fieldName = (value as { fieldName: string }).fieldName;
         if (isDerivedFieldDefinition(spec.root.fields[fieldName]!)) selected.add(fieldName);
+      } else if (value instanceof RelationQueryBuilder) {
+        continue;
       } else if (value && typeof value === 'object') {
         visit(value as Record<string, unknown>);
       }
