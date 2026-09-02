@@ -11,6 +11,9 @@ These instructions apply throughout the repository. Before changing code, read a
 7. [`RELEASING.md`](./RELEASING.md) when changing a public package or release automation
 8. [`docs/planning-and-atlas.md`](./docs/planning-and-atlas.md) when creating, moving, executing, or
    closing plans, or when changing durable Atlas knowledge
+9. [`docs/atlas-evidence-binding-guidelines.md`](./docs/atlas-evidence-binding-guidelines.md) before
+   preparing commits or Pull Requests; put supported Atlas directives in the PR body because commit
+   trailers alone are not ingested
 
 Repository-wide expectations:
 
