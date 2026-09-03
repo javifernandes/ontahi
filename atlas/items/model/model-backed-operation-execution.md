@@ -14,8 +14,8 @@ typeOf:
   - spec-workstream-atlas.atlas-model.model-item
 relatedPlans:
   - bookops://plans/99-semantic-editorial-workflows
-  - bookops://plans/100f-operation-invocation-capability
-  - bookops://plans/125-ontahi-ai-operations
+  - ontahi://plans/100f-operation-invocation-capability
+  - ontahi://plans/125-ontahi-ai-operations
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---

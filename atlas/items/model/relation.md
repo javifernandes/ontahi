@@ -8,7 +8,7 @@ horizon: now
 supports:
   - ontahi.domain-topology-graphos
 relatedPlans:
-  - bookops://plans/71a-ontahi-relations-model-research
+  - ontahi://plans/71a-ontahi-relations-model-research
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/131-ontahi-relationship-semantics
   - ontahi://plans/131a-relationship-command-delta-core-experiment

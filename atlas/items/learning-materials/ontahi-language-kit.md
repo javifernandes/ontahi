@@ -9,7 +9,7 @@ supports:
   - ontahi.learning-materials
   - bookops.book-styling-customization
 relatedPlans:
-  - bookops://plans/ontahi-language-kit-refinement
+  - ontahi://plans/ontahi-language-kit-refinement
   - bookops://plans/book-scoped-style-system
 migratedFrom: bookops://atlas/learning-materials/ontahi-language-kit
 sourceCommit: 67713696

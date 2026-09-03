@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/134-codegen-analysis-organization-and-semantic-cov
 Related plans:
 
 1. [133. Nominal Model Registry And Codegen Reuse](../done/133-nominal-model-registry-and-codegen-reuse.md)
-2. [128. Data Graph Execution Bridge](../next/128-ontahi-data-graph-execution-bridge.md)
+2. [128. Data Graph Execution Bridge](./128-ontahi-data-graph-execution-bridge.md)
 
 ## Summary
 

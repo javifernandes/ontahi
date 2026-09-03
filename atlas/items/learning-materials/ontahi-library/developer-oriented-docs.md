@@ -9,8 +9,8 @@ supports:
   - ontahi.learning-materials.library
   - ontahi
 relatedPlans:
-  - bookops://plans/100h-ontahi-portability-example-and-developer-guide
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/100h-ontahi-portability-example-and-developer-guide
+  - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/139-relations-lifecycle-release-proof
   - ontahi://plans/139e-relations-developer-documentation
   - ontahi://plans/139f-relations-lifecycle-release-rehearsal

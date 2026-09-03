@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/136e-postgres-relation-participant-eligibility`
 
-Parent plan: [136. Relation Constraints And Eligibility](../current/136-relation-constraints-and-eligibility.md)
+Parent plan: [136. Relation Constraints And Eligibility](./136-relation-constraints-and-eligibility.md)
 
 ## Summary
 

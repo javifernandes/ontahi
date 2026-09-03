@@ -13,7 +13,7 @@ relatedPlans:
   - bookops://plans/74-entity-refs-and-unit-of-work
   - bookops://plans/79-graph-native-schema-dsl
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/identity-and-locator
 sourceCommit: 67713696
 ---

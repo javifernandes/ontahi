@@ -15,11 +15,11 @@ typeOf:
 relatedPlans:
   - ontahi://plans/132-durable-invocation-identity-and-idempotency
   - bookops://plans/75b-canonical-operation-invocation-results
-  - bookops://plans/100f-operation-invocation-capability
-  - bookops://plans/122-ontahi-developer-book
-  - bookops://plans/120-ontahi-environment-resources-and-semantic-bindings
+  - ontahi://plans/100f-operation-invocation-capability
+  - ontahi://plans/122-ontahi-developer-book
+  - ontahi://plans/120-ontahi-environment-resources-and-semantic-bindings
   - bookops://plans/90-event-driven-architecture-runtime
-  - bookops://plans/125-ontahi-ai-operations
+  - ontahi://plans/125-ontahi-ai-operations
 migratedFrom: bookops://atlas/model/operation-invocation
 sourceCommit: 67713696
 ---

@@ -8,8 +8,8 @@ horizon: now
 supports:
   - ontahi.durable-workflows
 relatedPlans:
-  - bookops://plans/100-ontahi-framework-extraction
-  - bookops://plans/100d-ontahi-vercel-workflow-runtime-boundary
+  - ontahi://plans/100-ontahi-framework-extraction
+  - ontahi://plans/100d-ontahi-vercel-workflow-runtime-boundary
 migratedFrom: bookops://atlas/source-code-organization/runtime-vercel-workflows
 sourceCommit: 67713696
 ---

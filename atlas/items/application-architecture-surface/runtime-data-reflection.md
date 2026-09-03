@@ -11,8 +11,8 @@ supports:
   - ontahi.model.selection
 relatedPlans:
   - bookops://plans/91-reflective-architecture-admin-ui
-  - bookops://plans/117-alive-ui-from-reflected-selections
-  - bookops://plans/126-ontahi-runtime-data-reflection
+  - ontahi://plans/117-alive-ui-from-reflected-selections
+  - ontahi://plans/126-ontahi-runtime-data-reflection
   - ontahi://plans/143-instance-first-explorer
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-data-reflection
 sourceCommit: 67713696

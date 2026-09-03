@@ -11,9 +11,9 @@ supports:
 relatedPlans:
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/121-ontahi-direct-postgres-adapter
+  - ontahi://plans/121-ontahi-direct-postgres-adapter
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/query
 sourceCommit: 67713696
 ---

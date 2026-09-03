@@ -9,9 +9,9 @@ supports:
   - ontahi
   - ontahi.domain-topology-graphos
 relatedPlans:
-  - bookops://plans/100a-ontahi-react-graph-provider-spike
-  - bookops://plans/100b-ontahi-react-graph-query-boundary
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/100a-ontahi-react-graph-provider-spike
+  - ontahi://plans/100b-ontahi-react-graph-query-boundary
+  - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/react-graph-surface
 sourceCommit: 67713696
 ---

@@ -3,12 +3,12 @@ id: ontahi.operation-contracts.operation-inputs
 kind: capability
 title: Operation Inputs
 parent: ontahi.operation-contracts
-status: in-progress
+status: active
 horizon: now
 supports:
   - ontahi.operation-contracts
 relatedPlans:
-  - bookops://plans/76a-operation-input-constraints-and-client-validation
+  - ontahi://plans/76a-operation-input-constraints-and-client-validation
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/142d-existing-operation-refs
 migratedFrom: bookops://atlas/operation-contracts/operation-inputs

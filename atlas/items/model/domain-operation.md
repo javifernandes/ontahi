@@ -13,19 +13,19 @@ supports:
 typeOf:
   - spec-workstream-atlas.atlas-model.model-item
 relatedPlans:
-  - bookops://plans/71-ontahi-bookops-semantic-model-convergence
-  - bookops://plans/71c-ontahi-application-module-composition
+  - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
+  - ontahi://plans/71c-ontahi-application-module-composition
   - bookops://plans/59-authority-scoped-domain-operations-over-the-data-graph
   - bookops://plans/68c-domain-operation-and-transport-api
   - bookops://plans/75-operation-result-contracts
   - bookops://plans/70-first-class-workflow-tier-in-architecture
-  - bookops://plans/77-domain-topology-and-graphos-layers
+  - ontahi://plans/77-domain-topology-and-graphos-layers
   - bookops://plans/78-first-class-authorization-and-relationship-policies
   - bookops://plans/79-graph-native-schema-dsl
-  - bookops://plans/100f-operation-invocation-capability
+  - ontahi://plans/100f-operation-invocation-capability
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/122-ontahi-developer-book
-  - bookops://plans/125-ontahi-ai-operations
+  - ontahi://plans/122-ontahi-developer-book
+  - ontahi://plans/125-ontahi-ai-operations
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/142d-existing-operation-refs

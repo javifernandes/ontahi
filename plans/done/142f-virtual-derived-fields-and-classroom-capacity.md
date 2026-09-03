@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/142f-virtual-derived-fields-and-classroom-capacity`
 
-Parent: [142. Declarative Model Semantics And Execution Planning](../current/142-declarative-model-semantics-and-execution-planning.md)
+Parent: [142. Declarative Model Semantics And Execution Planning](./142-declarative-model-semantics-and-execution-planning.md)
 
 Predecessor: [142e. Portable Operation Condition Bridge](../done/142e-portable-operation-condition-bridge.md)
 

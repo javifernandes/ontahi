@@ -9,9 +9,9 @@ supports:
   - ontahi.application-architecture-surface
   - ontahi.independently-usable
 relatedPlans:
-  - bookops://plans/71c-ontahi-application-module-composition
-  - bookops://plans/100h-ontahi-portability-example-and-developer-guide
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/71c-ontahi-application-module-composition
+  - ontahi://plans/100h-ontahi-portability-example-and-developer-guide
+  - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/application
 sourceCommit: 67713696
 ---

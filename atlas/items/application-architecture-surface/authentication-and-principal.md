@@ -10,11 +10,11 @@ supports:
   - bookops
   - ontahi.authority-policies
 relatedPlans:
-  - bookops://plans/130-ontahi-authentication-principal-and-invocation-context
-  - bookops://plans/130a-durable-principal-propagation
+  - ontahi://plans/130-ontahi-authentication-principal-and-invocation-context
+  - ontahi://plans/130a-durable-principal-propagation
   - bookops://plans/68e-auth-and-identity-requirement-api
   - bookops://plans/78-first-class-authorization-and-relationship-policies
-  - bookops://plans/120-ontahi-environment-resources-and-semantic-bindings
+  - ontahi://plans/120-ontahi-environment-resources-and-semantic-bindings
 migratedFrom: bookops://atlas/application-architecture-surface/authentication-and-principal
 sourceCommit: 67713696
 ---

@@ -9,10 +9,10 @@ supports:
   - ontahi.domain-topology-graphos
   - ontahi.operation-contracts
 relatedPlans:
-  - bookops://plans/77-domain-topology-and-graphos-layers
+  - ontahi://plans/77-domain-topology-and-graphos-layers
   - bookops://plans/79-graph-native-schema-dsl
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/74b-schema-native-operation-refs
   - ontahi://plans/142d-existing-operation-refs

@@ -12,14 +12,14 @@ relatedPlans:
   - bookops://plans/53-entity-targets-and-mutations
   - bookops://plans/55-runtime-agnostic-data-graph-and-pluggable-adapters
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/121-ontahi-direct-postgres-adapter
+  - ontahi://plans/121-ontahi-direct-postgres-adapter
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands
   - ontahi://plans/138a-client-entity-mutation-authoring
   - ontahi://plans/138b-conditional-exact-entity-mutations
   - ontahi://plans/146-ontahi-runtime-protocol
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/command
 sourceCommit: 67713696
 ---

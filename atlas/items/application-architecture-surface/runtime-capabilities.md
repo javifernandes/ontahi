@@ -10,15 +10,15 @@ supports:
   - ontahi.durable-workflows
   - ontahi.source-code-organization
 relatedPlans:
-  - bookops://plans/100-ontahi-framework-extraction
-  - bookops://plans/71c-ontahi-application-module-composition
-  - bookops://plans/100e-ontahi-runtime-capabilities-and-repository-topology
-  - bookops://plans/100j-ontahi-in-memory-persistence-runtime
-  - bookops://plans/100f-operation-invocation-capability
-  - bookops://plans/100i-ontahi-observability-adapter-boundary
-  - bookops://plans/125-ontahi-ai-operations
-  - bookops://plans/126-ontahi-runtime-data-reflection
-  - bookops://plans/130-ontahi-authentication-principal-and-invocation-context
+  - ontahi://plans/100-ontahi-framework-extraction
+  - ontahi://plans/71c-ontahi-application-module-composition
+  - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
+  - ontahi://plans/100j-ontahi-in-memory-persistence-runtime
+  - ontahi://plans/100f-operation-invocation-capability
+  - ontahi://plans/100i-ontahi-observability-adapter-boundary
+  - ontahi://plans/125-ontahi-ai-operations
+  - ontahi://plans/126-ontahi-runtime-data-reflection
+  - ontahi://plans/130-ontahi-authentication-principal-and-invocation-context
   - ontahi://plans/142c-reflected-atomic-operation-execution
   - ontahi://plans/128f-remote-identity-scoped-entity-mutation-commands
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands

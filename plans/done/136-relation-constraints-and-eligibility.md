@@ -1,6 +1,6 @@
 # 136. Relation Constraints And Eligibility Semantics
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/136-relation-constraints-and-eligibility`
 
@@ -124,5 +124,17 @@ execution evaluates prospective membership. PostgreSQL starts or reuses an expli
 `READ COMMITTED` transaction, serializes additions on the destination endpoint, and evaluates from
 a fresh statement snapshot; concurrent last-seat admissions therefore yield one commit and one
 stable rejection without implicit retry. Supabase fails closed for the unsupported requirement.
-Many-to-many aggregates, advisory preflight, and a permanent Entity invariant covering generic
-limit/Reference Field writes remain open.
+Many-to-many aggregates and advisory preflight continue in
+[136i. Relation Constraint Evolution](../backlog/136i-relation-constraint-evolution.md). A permanent
+Entity invariant covering generic limit/Reference Field writes belongs to
+[123. Ontahi Declarative Entity Invariants](../next/123-ontahi-declarative-entity-invariants.md)
+rather than keeping this Relation-specific plan open.
+
+## Closure
+
+- Status: done
+- Closed on: 2026-09-03
+- Delivered through: plans 136a–136h
+- Follow-ups:
+  - [136i. Relation Constraint Evolution](../backlog/136i-relation-constraint-evolution.md)
+  - [123. Ontahi Declarative Entity Invariants](../next/123-ontahi-declarative-entity-invariants.md)

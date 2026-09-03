@@ -13,11 +13,11 @@ relatedPlans:
   - bookops://plans/53-entity-targets-and-mutations
   - bookops://plans/74-entity-refs-and-unit-of-work
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/121-ontahi-direct-postgres-adapter
-  - bookops://plans/118-ontahi-selection-language-editor
-  - bookops://plans/119-selection-relation-predicates
-  - bookops://plans/120-named-and-saved-selections
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/121-ontahi-direct-postgres-adapter
+  - ontahi://plans/118-ontahi-selection-language-editor
+  - ontahi://plans/119-selection-relation-predicates
+  - ontahi://plans/120-named-and-saved-selections
+  - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
 migratedFrom: bookops://atlas/model/selection
 sourceCommit: 67713696
