@@ -33,5 +33,8 @@ Repository-wide expectations:
    are stored in Keychain. A sandboxed `gh auth status` can falsely report an invalid token even when
    the host session is valid; verify and execute credentialed `gh` operations with escalated host
    access instead of asking the user to authenticate again.
+10. When work is handed off with an Atlas Session instruction, preserve its exact
+    `Atlas-Session: <uuid>` line once in every PR body for that work, including later PR edits.
+    Never invent or infer a Session ID; omit the directive when no exact ID was provided.
 
 More specific `AGENTS.md` files may refine these instructions for a subtree.
