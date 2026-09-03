@@ -10,10 +10,7 @@ Completed children:
 4. [146d. Versioned Durable Operation Observation Protocol](../done/146d-versioned-durable-operation-observation-protocol.md)
 5. [146e. Runtime Transport Durable Observation](../done/146e-runtime-transport-durable-observation.md)
 6. [146f. Next.js Runtime Protocol Adapter](../done/146f-nextjs-runtime-protocol-adapter.md)
-
-Next child:
-
-1. [146g. Unified Fetch Runtime Protocol Clients](../next/146g-unified-fetch-runtime-protocol-clients.md)
+7. [146g. Unified Fetch Runtime Protocol Clients](../done/146g-unified-fetch-runtime-protocol-clients.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -63,8 +60,10 @@ dispatcher. Core now applies that shape across `operation`, `durable.operation`,
 configured family handler, passes receiver-owned context, and correlates the untouched family
 result. Express can project an injected dispatcher at one path without choosing handlers or
 authority for the host. Next.js can project the same dispatcher through an App Router Route
-Handler with the same prevalidation, authority, correlation, and HTTP status boundary. Migration
-of the remaining clients and legacy paths is extracted as Plan 146g.
+Handler with the same prevalidation, authority, correlation, and HTTP status boundary. Fetch now
+composes one Runtime Transport for Operation, Durable inspection, Graph Read, and Graph Command at
+`/runtime`. Family-specific endpoints require explicit compatibility selection and never receive
+an automatic fallback replay.
 
 ## Proposed Logical Shape
 
@@ -203,18 +202,19 @@ semantic message bodies and diagnostics.
 
 ## Acceptance Checklist
 
-- [ ] Every current remote message and Durable Operation lifecycle request is inventoried.
+- [x] Every current remote message and Durable Operation lifecycle request is inventoried.
 - [x] One versioned envelope covers all registered message families without weakening their
       individual semantics.
 - [ ] Unknown versions, kinds, required guarantees, and capabilities fail before execution.
 - [x] Core dispatch composes existing family dispatchers and policies instead of reimplementing them.
-- [ ] Express defaults to one runtime path and supports explicit per-kind routing configuration.
-- [ ] Existing endpoint users have a documented bounded migration path.
-- [ ] Fetch uses one transport contract while application authoring stays unchanged.
+- [x] Express defaults its common projection to one runtime path and supports explicit
+      family-specific compatibility routes.
+- [x] Existing endpoint users have a documented bounded migration path.
+- [x] Fetch uses one transport contract while application authoring stays unchanged.
 - [ ] Durable progress can be polled or pushed without changing the Durable Operation contract.
 - [ ] Event subscription has explicit authority, delivery, acknowledgement, resume, ordering, and
       overflow semantics.
-- [ ] Atlas and developer documentation distinguish protocol semantics, transport projections, and
+- [x] Atlas and developer documentation distinguish protocol semantics, transport projections, and
       TypeScript implementation details.
 - [ ] A conformance corpus can validate an implementation that does not import Ontahí TypeScript.
 
@@ -222,16 +222,14 @@ semantic message bodies and diagnostics.
 
 1. How does capability negotiation work for unary-only, bidirectional, durable, and subscription
    transports?
-2. Which compatibility guarantees are required before replacing the current Operation invocation,
-   Graph Read, Graph Command, and Task snapshot envelopes?
-3. What enforceable cancellation contract can Task Runtimes share before `durable.operation`
+2. What enforceable cancellation contract can Task Runtimes share before `durable.operation`
    accepts a cancel request?
-4. Which identity belongs in the common envelope beyond exchange correlation, if any, and which
+3. Which identity belongs in the common envelope beyond exchange correlation, if any, and which
    identities remain inside Durable or
    Event messages?
-5. Should the default HTTP projection use one `POST /runtime` path plus a streaming endpoint, or can
+4. Should the default HTTP projection use one `POST /runtime` path plus a streaming endpoint, or can
    SSE/WebSocket upgrade share the same mounted path cleanly?
-6. What is the smallest Event subscription language that reuses Entity Refs, Selections, policy,
+5. What is the smallest Event subscription language that reuses Entity Refs, Selections, policy,
    and portable identity without turning Events into Queries?
 
 ## Settled Foundations
@@ -263,3 +261,24 @@ semantic message bodies and diagnostics.
    It adapts only Web `Request`/`Response`, validates before deriving server context, preserves
    Express HTTP status semantics, and routes every registered family through the injected common
    dispatcher without its own family switch.
+10. Fetch creates one common family exchange per client over a single Runtime Transport. Operation,
+    Graph Read, Graph Command, and Durable inspection all default to `/runtime`; family parsers and
+    semantic result/rejection behavior remain separate. Legacy endpoints are selected explicitly
+    per family before transmission, with no automatic fallback or replay.
+
+## Request/Response Closure Audit
+
+Plan 146g completes the executable TypeScript request/response path for every currently registered
+family across Core, Fetch, Express, and Next.js. The remaining work before the request/response
+portion can be considered specification-complete is bounded to:
+
+1. define capability and required-guarantee negotiation beyond the existing distinction between an
+   unknown family and a registered-but-unavailable family;
+2. publish normative examples and a machine-readable conformance corpus, then validate a minimal
+   implementation that does not import Ontahí TypeScript;
+3. collect downstream migration evidence and define a release boundary before removing the legacy
+   Operation, Graph Read, Graph Command, or raw Task snapshot routes;
+4. add Durable cancellation only after Task Runtimes expose an enforceable cancellation capability.
+
+Durable push and the first-class Event design gate remain later phases. This audit does not start
+Event subscription, delivery, acknowledgement, replay, or transport work.

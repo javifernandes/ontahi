@@ -65,11 +65,20 @@ semantics, and contains no family-specific switch. It likewise installs no handl
 authorization, or capabilities. Hosts choose the App Router path; family-specific Next.js adapters
 remain compatibility surfaces during client migration.
 
-The canonical Fetch direction is one Runtime Transport for `operation`, `durable.operation`,
-`graph.read`, and `graph.command`. Family-specific endpoints remain a bounded, explicitly selected
-compatibility mode during migration. A client must never fall back automatically from `/runtime`
-to a legacy route after transmission because an ambiguous Operation or Command could execute
-twice.
+The canonical Fetch client composes one Runtime Transport for `operation`, `durable.operation`,
+`graph.read`, and `graph.command` at `/runtime`. A shared Core exchange helper creates a fresh
+request identity, preserves correlation and abort/options flow, rejects common errors, and returns
+the untouched response body to the family-owned parser. Family-specific endpoints remain a
+bounded, explicitly selected compatibility mode during migration. A client never falls back
+automatically from `/runtime` to a legacy route after transmission because an ambiguous Operation
+or Command could execute twice.
+
+`createFetchGraphClient` supplies that one transport to Operation hooks and reflected invocation,
+the remote Graph Read/Command runtime, and Durable observation. `compatibility.operation`,
+`compatibility.graphRead`, and `compatibility.graphCommand` select legacy contracts independently;
+unlisted families stay on the common endpoint. Express and Next.js preserve equivalent framing,
+authority, correlation, family results, and HTTP status semantics, and the same client conformance
+proof exercises both projections.
 
 The client-side `RuntimeTransport` exposes unary request exchange plus optional family
 capabilities. Its Durable observer is an asynchronous snapshot sequence. The Fetch implementation

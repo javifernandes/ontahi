@@ -126,5 +126,5 @@ keeping explicit compatibility configuration for `/operations`, `/graph/reads`, 
 5. Runtime Next.js typecheck, lint, build, repository formatting, Changeset status, and clean-room
    artifact install/type/runtime verification pass. The package README, developer transport
    chapter, Atlas item, and parent plan record the new projection and ownership boundary.
-6. [Plan 146g](../next/146g-unified-fetch-runtime-protocol-clients.md) owns migration of the
+6. [Plan 146g](./146g-unified-fetch-runtime-protocol-clients.md) completed migration of the
    remaining Fetch family clients and explicit legacy endpoint compatibility.

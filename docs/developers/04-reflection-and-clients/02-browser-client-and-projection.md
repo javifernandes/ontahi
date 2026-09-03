@@ -150,10 +150,8 @@ const queryClient = new QueryClient();
 
 The provider installs one lazy Fetch client for the conventional routes:
 
-- `/graph/reads` for Queries;
-- `/graph/commands` for explicitly permitted Relationship Commands;
-- `/operations` for Operations;
-- `/runtime` for versioned Durable Operation observation;
+- `/runtime` for Operation invocation and permission, Graph Read, Graph Command, and versioned
+  Durable Operation observation;
 - `/explorer/entities` for reflected Entity data.
 
 Mounting the provider sends no request. A hook uses a capability only when a component asks for
@@ -161,11 +159,6 @@ it. A host with another mount root configures the bundle once:
 
 ```tsx
 const client = createFetchGraphClient({
-  graphRead: {
-    endpoint: '/runtime/ontahi/graph/reads',
-    commandEndpoint: '/runtime/ontahi/graph/commands',
-  },
-  operations: { mountPath: '/runtime/ontahi' },
   runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
@@ -178,8 +171,14 @@ const client = createFetchGraphClient({
 Individual provider props remain available as lower-level overrides. `client={false}` disables the
 conventional bundle for a fully explicit host.
 
+`compatibility.operation`, `compatibility.graphRead`, and `compatibility.graphCommand` can select
+the old `/operations`, `/graph/reads`, and `/graph/commands` contracts independently during
+migration. Unlisted families remain on Runtime Transport, and failures never cause automatic
+fallback or replay.
+
 The client default does not mount server routes or grant data access. The authoritative host must
-still install its Operation bridge and explicitly enable policy-scoped graph reads.
+still install the Operation and Graph family handlers behind its Runtime Protocol dispatcher and
+apply every permission and data policy on that receiver.
 
 ## A Selection becomes an observation
 

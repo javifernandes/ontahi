@@ -4,25 +4,81 @@ import {
   createRuntimeProtocolDispatcher,
   toDurableOperationSnapshotResponse,
 } from '@ontahi/core/runtime/protocol';
+import {
+  createOperationInvocationDispatcher,
+  type GraphCommandableOntahiApplication,
+} from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication } from './graph.js';
-import { todoGraphReadPolicies } from './todo-read-policies.js';
+import { todoGraphReadPolicies, type TodoGraphReadAuthority } from './todo-read-policies.js';
 import { Tag, TodoItem, TodoList } from './todo.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
 };
 
+const todoGraphCommandPolicies = [
+  { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
+  {
+    entity: TodoItem,
+    scope: 'all',
+    actions: {
+      update: {
+        fields: ['list', 'title', 'completed'],
+        if: ['title'],
+        result: ['id', 'list', 'title', 'completed'],
+      },
+    },
+  },
+  {
+    entity: TodoList,
+    scope: 'all',
+    actions: {
+      update: {
+        fields: ['name', 'color'],
+        result: ['id', 'name', 'color'],
+      },
+    },
+  },
+  {
+    entity: Tag,
+    scope: 'all',
+    actions: {
+      create: {
+        fields: ['id', 'name', 'color'],
+        result: ['id', 'name', 'color'],
+      },
+      update: {
+        fields: ['name', 'color'],
+        result: ['id', 'name', 'color'],
+      },
+      delete: { result: ['id', 'name', 'color'] },
+    },
+  },
+] as const;
+
 export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}): Express => {
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
   const authentication = options.authentication ?? createTodoAuthentication();
-  const runtimeProtocolDispatcher = createRuntimeProtocolDispatcher({
+  const operationDispatcher = createOperationInvocationDispatcher(TodoApplication);
+  const graphReadDispatcher =
+    TodoApplication.createGraphReadDispatcher<TodoGraphReadAuthority>(todoGraphReadPolicies);
+  const graphCommandDispatcher = (
+    TodoApplication as unknown as GraphCommandableOntahiApplication
+  ).createGraphCommandDispatcher<TodoGraphReadAuthority>(todoGraphCommandPolicies);
+  const runtimeProtocolDispatcher = createRuntimeProtocolDispatcher<TodoGraphReadAuthority>({
     handlers: {
+      operation: (request, context) =>
+        TodoApplication.app.runtime.withInvocationContext(context, () =>
+          operationDispatcher(request),
+        ),
+      'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
+      'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
       'durable.operation': async request =>
         toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
     },
@@ -51,45 +107,7 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
         policies: todoGraphReadPolicies,
       },
       graphCommand: {
-        policies: [
-          { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
-          {
-            entity: TodoItem,
-            scope: 'all',
-            actions: {
-              update: {
-                fields: ['list', 'title', 'completed'],
-                if: ['title'],
-                result: ['id', 'list', 'title', 'completed'],
-              },
-            },
-          },
-          {
-            entity: TodoList,
-            scope: 'all',
-            actions: {
-              update: {
-                fields: ['name', 'color'],
-                result: ['id', 'name', 'color'],
-              },
-            },
-          },
-          {
-            entity: Tag,
-            scope: 'all',
-            actions: {
-              create: {
-                fields: ['id', 'name', 'color'],
-                result: ['id', 'name', 'color'],
-              },
-              update: {
-                fields: ['name', 'color'],
-                result: ['id', 'name', 'color'],
-              },
-              delete: { result: ['id', 'name', 'color'] },
-            },
-          },
-        ],
+        policies: todoGraphCommandPolicies,
       },
     }),
   );

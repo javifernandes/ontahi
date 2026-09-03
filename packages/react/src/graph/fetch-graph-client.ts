@@ -42,7 +42,7 @@ export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOpt
     RemoteDataGraphError
   >;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
-  runtimeTransport?: RuntimeTransport;
+  runtimeTransport?: RuntimeTransport<TReadOptions | TCommandOptions>;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
   reflectedRelatedEntityDataReader?: ReflectedRelatedEntityDataReader;
@@ -54,15 +54,31 @@ export type FetchGraphClient<TOptions = undefined> = OntahiGraphClient<TOptions,
   graphExecutor: ReactGraphExecutor<TOptions, TOptions>;
 };
 
+export type FetchGraphClientCompatibilityOptions = {
+  operation?: {
+    endpoint?: string;
+    mountPath?: string;
+  };
+  graphRead?: {
+    endpoint?: string;
+  };
+  graphCommand?: {
+    endpoint?: string;
+  };
+};
+
 export type FetchGraphClientOptions<TOptions = undefined> = {
+  compatibility?: FetchGraphClientCompatibilityOptions;
   graphRead?: false | FetchGraphReadExecutorOptions<TOptions>;
-  operations?: false | FetchOperationBridgeOptions;
-  runtimeTransport?: false | FetchRuntimeTransportOptions;
+  operations?: false | FetchOperationBridgeOptions<TOptions>;
+  runtimeTransport?: false | FetchRuntimeTransportOptions<TOptions>;
   reflectedEntityData?: false | FetchReflectedEntityDataReaderOptions;
   reflectedRelatedEntityData?: false | FetchReflectedRelatedEntityDataReaderOptions;
 };
 
-const DEFAULT_OPERATIONS_ENDPOINT = '/operations';
+const DEFAULT_LEGACY_OPERATION_ENDPOINT = '/operations';
+const DEFAULT_LEGACY_GRAPH_READ_ENDPOINT = '/graph/reads';
+const DEFAULT_LEGACY_GRAPH_COMMAND_ENDPOINT = '/graph/commands';
 const DEFAULT_REFLECTED_ENTITY_DATA_ENDPOINT = '/explorer/entities';
 const DEFAULT_REFLECTED_RELATED_ENTITY_DATA_ENDPOINT = '/explorer/related-entities';
 
@@ -86,16 +102,6 @@ const postReflectedEntityDataQuery = async (
 
   return response.json() as Promise<ReflectedEntityDataResult>;
 };
-
-const conventionalOperationOptions = (
-  options: FetchOperationBridgeOptions,
-): FetchOperationBridgeOptions =>
-  options.mountPath === undefined
-    ? {
-        endpoint: DEFAULT_OPERATIONS_ENDPOINT,
-        ...options,
-      }
-    : options;
 
 export const createFetchReflectedEntityDataReader = ({
   endpoint = DEFAULT_REFLECTED_ENTITY_DATA_ENDPOINT,
@@ -121,16 +127,97 @@ export function createFetchGraphClient<TOptions = undefined>(
   },
 ): FetchGraphClient<TOptions>;
 export function createFetchGraphClient<TOptions = undefined>({
+  compatibility = {},
   graphRead = {},
   operations = {},
   runtimeTransport = {},
   reflectedEntityData = {},
   reflectedRelatedEntityData = {},
 }: FetchGraphClientOptions<TOptions> = {}): OntahiGraphClient<TOptions, TOptions> {
-  const operationOptions =
-    operations === false ? undefined : conventionalOperationOptions(operations);
+  const graphReadOptions =
+    graphRead === false
+      ? undefined
+      : {
+          ...graphRead,
+          ...(compatibility.graphRead === undefined
+            ? {}
+            : {
+                endpoint: compatibility.graphRead.endpoint ?? DEFAULT_LEGACY_GRAPH_READ_ENDPOINT,
+              }),
+          ...(compatibility.graphCommand === undefined
+            ? {}
+            : {
+                commandEndpoint:
+                  compatibility.graphCommand.endpoint ?? DEFAULT_LEGACY_GRAPH_COMMAND_ENDPOINT,
+              }),
+        };
+  const operationOptions = (() => {
+    if (operations === false) return undefined;
+    if (compatibility.operation === undefined) return operations;
+    const { endpoint: _endpoint, mountPath: _mountPath, ...sharedOptions } = operations;
+    if (compatibility.operation.endpoint !== undefined) {
+      return { ...sharedOptions, endpoint: compatibility.operation.endpoint };
+    }
+    if (compatibility.operation.mountPath !== undefined) {
+      return { ...sharedOptions, mountPath: compatibility.operation.mountPath };
+    }
+    return { ...sharedOptions, endpoint: DEFAULT_LEGACY_OPERATION_ENDPOINT };
+  })();
+  const commonTransportRequired =
+    (graphReadOptions !== undefined &&
+      (graphReadOptions.endpoint === undefined ||
+        graphReadOptions.commandEndpoint === undefined)) ||
+    (operationOptions !== undefined &&
+      operationOptions.endpoint === undefined &&
+      operationOptions.mountPath === undefined);
+  if (runtimeTransport === false && commonTransportRequired) {
+    throw new TypeError(
+      'runtimeTransport cannot be disabled while a common Runtime Protocol family is enabled.',
+    );
+  }
+  const requestId =
+    runtimeTransport === false
+      ? undefined
+      : (runtimeTransport.requestId ?? graphReadOptions?.requestId ?? operationOptions?.requestId);
+  const runtimeTransportOptions =
+    runtimeTransport === false
+      ? undefined
+      : {
+          ...(graphReadOptions?.fetch ? { fetch: graphReadOptions.fetch } : {}),
+          ...(graphReadOptions?.requestInit ? { requestInit: graphReadOptions.requestInit } : {}),
+          ...runtimeTransport,
+          requestId,
+        };
+  const resolvedRuntimeTransport =
+    runtimeTransportOptions === undefined
+      ? undefined
+      : createFetchRuntimeTransport<TOptions>(runtimeTransportOptions);
   const graphReadCapability =
-    graphRead === false ? undefined : createFetchGraphReadCapability(graphRead);
+    graphReadOptions === undefined
+      ? undefined
+      : createFetchGraphReadCapability({
+          ...graphReadOptions,
+          ...(runtimeTransportOptions?.fetch ? { fetch: runtimeTransportOptions.fetch } : {}),
+          ...(runtimeTransportOptions?.requestInit
+            ? { requestInit: runtimeTransportOptions.requestInit }
+            : {}),
+          ...(resolvedRuntimeTransport
+            ? { runtimeTransport: resolvedRuntimeTransport, requestId }
+            : {}),
+        });
+  const resolvedOperationOptions =
+    operationOptions === undefined
+      ? undefined
+      : {
+          ...operationOptions,
+          ...(runtimeTransportOptions?.fetch ? { fetch: runtimeTransportOptions.fetch } : {}),
+          ...(runtimeTransportOptions?.requestInit
+            ? { requestInit: runtimeTransportOptions.requestInit }
+            : {}),
+          ...(resolvedRuntimeTransport
+            ? { runtimeTransport: resolvedRuntimeTransport, requestId }
+            : {}),
+        };
 
   return {
     ...(graphReadCapability
@@ -139,13 +226,11 @@ export function createFetchGraphClient<TOptions = undefined>({
           graphExecutor: graphReadCapability.graphExecutor,
         }
       : {}),
-    ...(runtimeTransport === false
-      ? {}
-      : { runtimeTransport: createFetchRuntimeTransport(runtimeTransport) }),
-    ...(operationOptions
+    ...(resolvedRuntimeTransport ? { runtimeTransport: resolvedRuntimeTransport } : {}),
+    ...(resolvedOperationOptions
       ? {
-          operationBridgeAdapters: [createFetchOperationBridgeAdapter(operationOptions)],
-          reflectedOperationInvoker: createFetchReflectedOperationInvoker(operationOptions),
+          operationBridgeAdapters: [createFetchOperationBridgeAdapter(resolvedOperationOptions)],
+          reflectedOperationInvoker: createFetchReflectedOperationInvoker(resolvedOperationOptions),
         }
       : {}),
     ...(reflectedEntityData === false

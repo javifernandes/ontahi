@@ -1,4 +1,9 @@
 import { entity, field } from '@ontahi/core/data-graph';
+import {
+  createRuntimeProtocolResponse,
+  runtimeProtocolError,
+  type RuntimeProtocolRequestEnvelope,
+} from '@ontahi/core/runtime/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFetchReflectedOperationInvoker } from './index.js';
@@ -8,24 +13,26 @@ describe('createFetchReflectedOperationInvoker', () => {
     vi.unstubAllGlobals();
   });
 
-  it('invokes a reflected operation through the bridge endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        kind: 'invocation-result',
-        result: {
-          ok: true,
-          kind: 'success',
-          value: {
-            title: 'Ontahi',
-          },
-        },
-      }),
+  it('invokes a reflected operation through the versioned Operation family', async () => {
+    const fetchMock = vi.fn(async (_endpoint: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+      return {
+        ok: true,
+        json: async () =>
+          createRuntimeProtocolResponse(request, {
+            kind: 'invocation-result',
+            result: {
+              ok: true,
+              kind: 'success',
+              value: { title: 'Ontahi' },
+            },
+          }),
+      };
     });
     vi.stubGlobal('fetch', fetchMock);
 
     const invoker = createFetchReflectedOperationInvoker({
-      endpoint: '/internal/reflected-operations',
+      requestId: () => 'reflected-operation-1',
     });
     const Book = entity('Book', { id: field.id(), title: field.string() });
     const BookInfo = Book.view('BookInfo', { title: true });
@@ -46,19 +53,25 @@ describe('createFetchReflectedOperationInvoker', () => {
       },
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/internal/reflected-operations', {
+    expect(fetchMock).toHaveBeenCalledWith('/runtime', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers: new Headers({ 'content-type': 'application/json' }),
       credentials: 'same-origin',
       body: JSON.stringify({
-        kind: 'invoke',
-        operationId: 'Book.fetchInfo',
-        input: {
-          bookSlug: 'ontahi',
+        protocol: 'ontahi.runtime',
+        version: 1,
+        id: 'reflected-operation-1',
+        kind: 'request',
+        family: 'operation',
+        body: {
+          version: 1,
+          kind: 'invoke',
+          operationId: 'Book.fetchInfo',
+          input: {
+            bookSlug: 'ontahi',
+          },
+          view: BookInfo.toJSON(),
         },
-        view: BookInfo.toJSON(),
       }),
     });
   });
@@ -66,16 +79,17 @@ describe('createFetchReflectedOperationInvoker', () => {
   it('surfaces protocol errors as errored invocation results', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        json: vi.fn().mockResolvedValue({
-          kind: 'protocol-error',
-          error: {
-            code: 'invocation_unavailable',
-            message: 'No operation runtime is available.',
-          },
-        }),
+      vi.fn(async (_endpoint: string, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+        return {
+          ok: false,
+          status: 503,
+          json: async () =>
+            runtimeProtocolError('dispatch_unavailable', 'No operation runtime is available.', {
+              id: request.id,
+              family: request.family,
+            }),
+        };
       }),
     );
 
@@ -148,7 +162,7 @@ describe('createFetchReflectedOperationInvoker', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const invoker = createFetchReflectedOperationInvoker({
-      mountPath: '/internal/ontahi/',
+      mountPath: '/internal/ontahi////',
     });
 
     await expect(
