@@ -41,7 +41,9 @@ export type FetchOperationBridgeOptions<TTransportOptions = undefined> = {
 
 const normalizeMountPath = (value: string) => {
   const path = value.startsWith('/') ? value : `/${value}`;
-  return path === '/' ? '' : path.replace(/\/+$/, '');
+  let end = path.length;
+  while (end > 0 && path.charCodeAt(end - 1) === 47) end -= 1;
+  return path.slice(0, end);
 };
 
 const mountedEndpoint = (mountPath: string, endpoint: string) =>

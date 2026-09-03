@@ -162,7 +162,7 @@ describe('createFetchReflectedOperationInvoker', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const invoker = createFetchReflectedOperationInvoker({
-      mountPath: '/internal/ontahi/',
+      mountPath: '/internal/ontahi////',
     });
 
     await expect(
