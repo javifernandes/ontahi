@@ -10,7 +10,14 @@ import {
   isOperationInvocationProtocolResponse,
   type OperationInvocationRequest,
 } from '@ontahi/core/runtime/operation-invocation';
+import {
+  createRuntimeProtocolExchange,
+  toOperationProtocolRequest,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
 import { useMemo } from 'react';
+
+import { createFetchRuntimeTransport } from '../graph/fetch-runtime-transport.js';
 
 import {
   attachOperationBridgeActionRuntime,
@@ -21,12 +28,16 @@ import type * as OperationBridge from './operation-bridge.js';
 import { useServerMutation, useServerQuery } from './react-query.js';
 import type { ActionResultLike } from './use-action.js';
 
-export type FetchOperationBridgeOptions = {
+export type FetchOperationBridgeOptions<TTransportOptions = undefined> = {
+  /** @deprecated Select the legacy Operation route through createFetchGraphClient compatibility. */
   mountPath?: string;
+  /** @deprecated Select the legacy Operation route through createFetchGraphClient compatibility. */
   endpoint?: string;
+  fetch?: typeof globalThis.fetch;
+  requestInit?: (options?: TTransportOptions) => Omit<RequestInit, 'body' | 'method'>;
+  runtimeTransport?: RuntimeTransport<TTransportOptions>;
+  requestId?: () => string;
 };
-
-const DEFAULT_ENDPOINT = '/api/data-graph/domain-operations';
 
 const normalizeMountPath = (value: string) => {
   const path = value.startsWith('/') ? value : `/${value}`;
@@ -36,9 +47,11 @@ const normalizeMountPath = (value: string) => {
 const mountedEndpoint = (mountPath: string, endpoint: string) =>
   `${normalizeMountPath(mountPath)}/${endpoint}`;
 
-const operationEndpoint = (options: FetchOperationBridgeOptions) =>
+const operationEndpoint = <TTransportOptions>(
+  options: FetchOperationBridgeOptions<TTransportOptions>,
+) =>
   options.endpoint ??
-  (options.mountPath ? mountedEndpoint(options.mountPath, 'operations') : DEFAULT_ENDPOINT);
+  (options.mountPath ? mountedEndpoint(options.mountPath, 'operations') : undefined);
 
 const attachFetchBridgeRuntime = <TInput, TData>(
   operation: OperationBridge.BridgedOperationLike<TInput, TData>,
@@ -48,26 +61,77 @@ const attachFetchBridgeRuntime = <TInput, TData>(
     requiresAuth: operation.authority !== 'server' ? false : operation.exposure !== 'bridge',
   });
 
-const postBridgeRequest = async <TData>(
+type OperationRequest = (request: OperationInvocationRequest) => Promise<unknown>;
+
+const postLegacyBridgeRequest = async <TTransportOptions>(
   endpoint: string,
   request: OperationInvocationRequest,
-): Promise<ActionResultLike & { data?: TData }> => {
-  const response = await fetch(endpoint, {
+  fetchRequest: typeof globalThis.fetch,
+  requestInit: ((options?: TTransportOptions) => Omit<RequestInit, 'body' | 'method'>) | undefined,
+): Promise<unknown> => {
+  const init = requestInit?.() ?? {};
+  const headers = new Headers(init.headers);
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  const response = await fetchRequest(endpoint, {
+    ...init,
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    credentials: 'same-origin',
+    headers,
+    credentials: init.credentials ?? 'same-origin',
     body: JSON.stringify(request),
   });
   const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok && !isOperationInvocationProtocolResponse(payload)) {
+    throw new Error(`Graph bridge request failed with status ${response.status}.`);
+  }
+  return payload;
+};
+
+const createOperationRequest = <TTransportOptions>(
+  options: FetchOperationBridgeOptions<TTransportOptions>,
+): OperationRequest => {
+  const endpoint = operationEndpoint(options);
+  if (endpoint) {
+    return request =>
+      postLegacyBridgeRequest(
+        endpoint,
+        request,
+        options.fetch ?? globalThis.fetch,
+        options.requestInit,
+      );
+  }
+
+  const exchange = createRuntimeProtocolExchange({
+    transport:
+      options.runtimeTransport ??
+      createFetchRuntimeTransport<TTransportOptions>({
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+        ...(options.requestInit ? { requestInit: options.requestInit } : {}),
+      }),
+    requestId: options.requestId,
+  });
+  return request =>
+    exchange({
+      family: 'operation',
+      body: toOperationProtocolRequest(request),
+    });
+};
+
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'Graph bridge request failed.';
+
+const postBridgeRequest = async <TData>(
+  requestOperation: OperationRequest,
+  request: OperationInvocationRequest,
+): Promise<ActionResultLike & { data?: TData }> => {
+  let payload: unknown;
+  try {
+    payload = await requestOperation(request);
+  } catch (error) {
+    return { serverError: errorMessage(error) };
+  }
 
   if (!isOperationInvocationProtocolResponse(payload)) {
-    return {
-      serverError: response.ok
-        ? 'Graph bridge returned an invalid response.'
-        : `Graph bridge request failed with status ${response.status}.`,
-    };
+    return { serverError: 'Graph bridge returned an invalid response.' };
   }
 
   if (payload.kind === 'protocol-error') {
@@ -86,11 +150,11 @@ const postBridgeRequest = async <TData>(
 };
 
 const createFetchBridgeAction = <TInput, TData>(
-  endpoint: string,
+  requestOperation: OperationRequest,
   operation: OperationBridge.BridgedOperationLike<TInput, TData>,
 ): OperationBridge.OperationBridgeAction<TInput, TData> =>
   attachFetchBridgeRuntime(operation, (input: TInput) =>
-    postBridgeRequest<OperationInvocationResult<TData>>(endpoint, {
+    postBridgeRequest<OperationInvocationResult<TData>>(requestOperation, {
       kind: 'invoke',
       operationId: operation.id,
       input,
@@ -100,22 +164,22 @@ const createFetchBridgeAction = <TInput, TData>(
 
 const createFetchPermissionAction =
   <TInput, TData>(
-    endpoint: string,
+    requestOperation: OperationRequest,
     operation: OperationBridge.BridgedOperationLike<TInput, TData>,
   ): ((
     input: TInput,
   ) => Promise<OperationBridge.OperationBridgeActionResult<OperationBridge.GraphPermission>>) =>
   (input: TInput) =>
-    postBridgeRequest<OperationBridge.GraphPermission>(endpoint, {
+    postBridgeRequest<OperationBridge.GraphPermission>(requestOperation, {
       kind: 'check-permission',
       operationId: operation.id,
       input,
     });
 
-export const createFetchReflectedOperationInvoker = (
-  options: FetchOperationBridgeOptions = {},
+export const createFetchReflectedOperationInvoker = <TTransportOptions = undefined>(
+  options: FetchOperationBridgeOptions<TTransportOptions> = {},
 ): ReflectedOperationInvoker => {
-  const endpoint = operationEndpoint(options);
+  const requestOperation = createOperationRequest(options);
   const canInvokeOperation: NonNullable<
     ReflectedOperationInvoker['canInvokeOperation']
   > = operation =>
@@ -142,7 +206,7 @@ export const createFetchReflectedOperationInvoker = (
       view,
     }: ReflectedOperationInvocation<TInput>) =>
       toOperationInvocationResult<TData>(
-        await postBridgeRequest<OperationInvocationResult<TData>>(endpoint, {
+        await postBridgeRequest<OperationInvocationResult<TData>>(requestOperation, {
           kind: 'invoke',
           operationId,
           input,
@@ -152,13 +216,13 @@ export const createFetchReflectedOperationInvoker = (
   };
 };
 
-export const createFetchOperationBridgeAdapter = (
-  options: FetchOperationBridgeOptions = {},
+export const createFetchOperationBridgeAdapter = <TTransportOptions = undefined>(
+  options: FetchOperationBridgeOptions<TTransportOptions> = {},
 ): OperationBridge.AnyOperationBridgeAdapter => {
-  const endpoint = operationEndpoint(options);
+  const requestOperation = createOperationRequest(options);
   const buildRuntimeAction = <TInput, TData>(
     operation: OperationBridge.BridgedOperationLike<TInput, TData>,
-  ) => createFetchBridgeAction(endpoint, operation);
+  ) => createFetchBridgeAction(requestOperation, operation);
 
   return {
     name: 'fetch',
@@ -190,7 +254,7 @@ export const createFetchOperationBridgeAdapter = (
     usePermission: (operation, input, args) =>
       useServerQuery({
         enabled: args?.enabled,
-        action: createFetchPermissionAction(endpoint, operation),
+        action: createFetchPermissionAction(requestOperation, operation),
         input,
         key: args?.queryKey ?? ['graph-permission', operation.id, input],
       }),

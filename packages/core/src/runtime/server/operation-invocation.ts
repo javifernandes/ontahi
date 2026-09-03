@@ -98,6 +98,15 @@ const invocationErrored = (message: string): OperationInvocationResult => ({
   message,
 });
 
+const toPortableInvocationResult = (
+  result: OperationInvocationResult,
+): OperationInvocationResult => {
+  if (!result.ok || result.value !== undefined) return result;
+
+  const { value: _value, ...portableResult } = result;
+  return portableResult as OperationInvocationResult;
+};
+
 const resolveInvocationProjection = (
   operation: OperationInvocationOperation,
   request: Extract<OperationInvocationRequest, { kind: 'invoke' }>,
@@ -191,11 +200,12 @@ export const createOperationInvocationDispatcher =
     }
 
     try {
+      const result = projection
+        ? await invokeOperation(operation, validatedInput.data, projection)
+        : await invokeOperation(operation, validatedInput.data);
       return {
         kind: 'invocation-result',
-        result: projection
-          ? await invokeOperation(operation, validatedInput.data, projection)
-          : await invokeOperation(operation, validatedInput.data),
+        result: toPortableInvocationResult(result),
       };
     } catch (error) {
       reportError?.(error, request);

@@ -9,11 +9,8 @@ import {
   Selection,
   toGraphCommandRequest,
 } from '@ontahi/core/data-graph';
-import {
-  createRuntimeProtocolRequest,
-  toDurableOperationProtocolRequest,
-} from '@ontahi/core/runtime/protocol';
-import { createFetchGraphReadExecutor } from '@ontahi/react/graph';
+import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
+import { createFetchGraphClient, createFetchGraphReadExecutor } from '@ontahi/react/graph';
 import { Effect } from 'effect';
 import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -149,10 +146,12 @@ describe('Ontahi todo portability example', () => {
       .as(TodoListItem)
       .orderBy(todo => todo.title);
     const directRuntime = createTodoDataGraphRuntime();
-    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+    const remoteClient = createFetchGraphClient({
+      runtimeTransport: { endpoint: `${origin}/runtime` },
+    });
 
     const direct = await Effect.runPromise(directRuntime.run(visibleTodos, undefined));
-    const remote = await remoteExecutor.run(visibleTodos, undefined);
+    const remote = await remoteClient.graphExecutor.run(visibleTodos, undefined);
 
     expect(remote).toEqual(direct);
     expect(remote).toEqual([
@@ -232,11 +231,10 @@ describe('Ontahi todo portability example', () => {
   });
 
   it('renames one TodoList through the generic remote Entity mutation capability', async () => {
-    const remoteExecutor = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
+    const remoteClient = createFetchGraphClient({
+      runtimeTransport: { endpoint: `${origin}/runtime` },
     });
-    await remoteExecutor.runEntityMutationCommand!(
+    await remoteClient.graphExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoListSchema).update(
         createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
         { name: 'Reading' },
@@ -455,12 +453,12 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
   });
 
-  it('rejects a protected operation over Express without a Principal', async () => {
+  it('derives protected Operation authority on the Express Runtime Protocol receiver', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
     ];
 
-    const response = await invoke('TodoItem.setCompleted', {
+    const input = {
       todos: {
         kind: 'selection',
         entityName: 'TodoItem',
@@ -470,18 +468,36 @@ describe('Ontahi todo portability example', () => {
         },
       },
       completed: true,
+    };
+    const anonymousClient = createFetchGraphClient({
+      runtimeTransport: { endpoint: `${origin}/runtime` },
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: {
-        ok: false,
-        kind: 'failed',
-        failure: { reason: 'not_authenticated' },
-      },
+    await expect(
+      anonymousClient.reflectedOperationInvoker!.invokeOperation({
+        operationId: 'TodoItem.setCompleted',
+        input,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'failed',
+      failure: { reason: 'not_authenticated' },
     });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
+
+    const authenticatedClient = createFetchGraphClient({
+      runtimeTransport: {
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      },
+    });
+    const authenticatedResult =
+      await authenticatedClient.reflectedOperationInvoker!.invokeOperation({
+        operationId: 'TodoItem.setCompleted',
+        input,
+      });
+    expect(authenticatedResult).toMatchObject({ ok: true, kind: 'success' });
+    expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
   });
 
   it('deletes every TodoItem through a void-input operation', async () => {
@@ -878,48 +894,33 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
     ];
 
-    const response = await invoke('TodoItem.completeAll', {});
-
-    expect(response.status).toBe(200);
-    const start = (await response.json()) as {
-      result: { value: { taskId: string; runId: string } };
-    };
-    expect(start).toMatchObject({
-      kind: 'invocation-result',
-      result: {
-        ok: true,
-        kind: 'success',
-        value: { taskId: 'TodoItem.completeAll' },
+    const client = createFetchGraphClient({
+      runtimeTransport: {
+        endpoint: `${origin}/runtime`,
+        durableOperation: { pollIntervalMs: 0 },
       },
     });
-    let inspection = 0;
+    const start = await client.reflectedOperationInvoker!.invokeOperation({
+      operationId: 'TodoItem.completeAll',
+      input: {},
+    });
+    expect(start).toMatchObject({
+      ok: true,
+      kind: 'success',
+      value: { taskId: 'TodoItem.completeAll' },
+    });
+    if (!start.ok) throw new Error('Expected the durable Operation to start.');
 
-    await expect
-      .poll(
-        async () => {
-          inspection += 1;
-          const response = await fetch(`${origin}/runtime`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(
-              createRuntimeProtocolRequest({
-                id: `inspect-${inspection}`,
-                family: 'durable.operation',
-                body: toDurableOperationProtocolRequest(start.result.value),
-              }),
-            ),
-          });
-          const observation = (await response.json()) as {
-            body?: { kind?: string; snapshot?: unknown };
-          };
-          return observation.body?.snapshot;
-        },
-        { timeout: 3_000 },
-      )
-      .toMatchObject({
-        status: 'completed',
-        progress: { phase: 'updating' },
-        result: { completed: 2 },
-      });
+    let terminalSnapshot: unknown;
+    for await (const snapshot of client.runtimeTransport!.durableOperation!.observe(
+      start.value as TaskRunIdentity,
+    )) {
+      terminalSnapshot = snapshot;
+    }
+    expect(terminalSnapshot).toMatchObject({
+      status: 'completed',
+      progress: { phase: 'updating' },
+      result: { completed: 2 },
+    });
   });
 });

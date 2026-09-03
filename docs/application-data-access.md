@@ -123,38 +123,52 @@ server.use(
 );
 ```
 
-With the default mount root this exposes `POST /graph/reads` and `POST /operations`. Omitting
-`graphRead` means no graph-read route exists. `mountPath` can place all Ontahi routes below one
-host-selected prefix.
+These family-specific routes remain available for compatibility. The canonical request/response
+host path adapts the same Operation and Graph dispatchers behind `runtimeProtocol` at the mounted
+`POST /runtime` endpoint. Each adapter supplies receiver-derived context to its existing canonical
+dispatcher; no route changes which policies or server-derived Principal are authoritative, and no
+client body carries either.
 
 See [`@ontahi/runtime-express`](../packages/runtime-express/README.md) for custom paths, Explorer,
 ingress, and lower-level dispatcher composition.
 
 ## Mount Next.js
 
-Next.js uses the same policy dispatcher and trusted invocation context from an App Router Route
+Next.js projects the same common dispatcher and trusted receiver context from one App Router Route
 Handler:
 
 ```ts
-import { createNextGraphReadRouteHandler } from '@ontahi/runtime-nextjs/graph-read';
+import { createRuntimeProtocolDispatcher } from '@ontahi/core/runtime/protocol';
+import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
 
-const dispatcher = TodoApplication.createGraphReadDispatcher([TodoItemReadPolicy]);
+type RuntimeAuthority = {
+  principal: Awaited<ReturnType<typeof authenticate>>;
+};
 
-export const POST = createNextGraphReadRouteHandler({
+const dispatcher = createRuntimeProtocolDispatcher<RuntimeAuthority>({
+  handlers: {
+    operation: (request, authority) =>
+      TodoApplication.app.runtime.withInvocationContext(authority, () =>
+        operationDispatcher(request),
+      ),
+    'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
+    'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
+    'durable.operation': durableObservationHandler,
+  },
+});
+
+export const POST = createNextRuntimeProtocolRouteHandler({
   dispatcher,
-  invocationContext: async request => ({
+  context: async request => ({
     principal: await authenticate(request),
-  }),
-  authority: context => ({
-    principal: requirePrincipal(context.principal),
   }),
 });
 ```
 
-The host chooses the route file and therefore its URL. Mount
-`createNextOperationInvocationRouteHandler(...)` in the host's Operation route when the client also
-invokes Operations; both adapters can derive the same invocation context. Configure the React
-Fetch client when either URL differs from the conventional path.
+The host chooses the route file and therefore its URL. Family-specific Next.js Operation and Graph
+Read handlers remain available only as explicit compatibility surfaces; they derive authority on
+the receiver just like the common route. Configure the React Fetch client once when the common URL
+differs from `/runtime`.
 
 ## Generate the browser Entity facade
 
@@ -265,10 +279,8 @@ authoritative Principal independently.
 
 The default Fetch client is lazy and uses:
 
-- `/graph/reads` for Queries;
-- `/graph/commands` for explicitly permitted Relationship Commands;
-- `/operations` for Operations;
-- `/runtime` for versioned Durable Operation observation;
+- `/runtime` for Operations, Queries, Relationship and Entity Commands, and versioned Durable
+  Operation observation;
 - `/explorer/entities` for reflected Explorer data.
 
 Customize the bundle when the host uses another mount root:
@@ -277,11 +289,6 @@ Customize the bundle when the host uses another mount root:
 import { createFetchGraphClient } from '@ontahi/react/graph';
 
 const graphClient = createFetchGraphClient({
-  graphRead: {
-    endpoint: '/runtime/ontahi/graph/reads',
-    commandEndpoint: '/runtime/ontahi/graph/commands',
-  },
-  operations: { mountPath: '/runtime/ontahi' },
   runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
@@ -291,6 +298,11 @@ const graphClient = createFetchGraphClient({
 
 Individual provider props can replace one capability. `client={false}` disables all conventional
 defaults for a fully explicit host.
+
+Hosts that still expose a family-specific route opt into it through
+`compatibility.operation`, `compatibility.graphRead`, or `compatibility.graphCommand`. This choice
+is made before transmission; the client never retries an ambiguous failed Operation or Command on
+a second route.
 
 ## Execute the same fluent Query outside React
 

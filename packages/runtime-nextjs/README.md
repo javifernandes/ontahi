@@ -24,12 +24,19 @@ Export a `POST` handler from an App Router route such as `app/api/runtime/route.
 import { createRuntimeProtocolDispatcher } from '@ontahi/core/runtime/protocol';
 import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
 
-const dispatcher = createRuntimeProtocolDispatcher({
+type RuntimeAuthority = {
+  principal: Awaited<ReturnType<typeof resolvePrincipal>>;
+};
+
+const dispatcher = createRuntimeProtocolDispatcher<RuntimeAuthority>({
   handlers: {
-    operation: operationDispatcher,
+    operation: (request, authority) =>
+      TodoApplication.app.runtime.withInvocationContext(authority, () =>
+        operationDispatcher(request),
+      ),
     'durable.operation': durableObservationHandler,
-    'graph.read': graphReadDispatcher,
-    'graph.command': graphCommandDispatcher,
+    'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
+    'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
   },
 });
 
@@ -44,13 +51,27 @@ export const POST = createNextRuntimeProtocolRouteHandler({
 The adapter validates JSON, the common envelope, and the canonical family body before calling the
 context factory. It installs no handlers, policies, authorization, or capabilities; the host owns
 the dispatcher and derives trusted context only from the received server request. All registered
-families pass through the same dispatcher without Next.js-specific routing.
+families pass through the same dispatcher without Next.js-specific routing. Family adapters feed
+the server-derived context to the canonical Operation and Graph policy boundaries; clients never
+author authority or policies.
+
+Point the Fetch client at the App Router route once; Operations, Graph Reads, Graph Commands, and
+Durable inspection then share that Runtime Transport:
+
+```ts
+import { createFetchGraphClient } from '@ontahi/react/graph';
+
+const client = createFetchGraphClient({
+  runtimeTransport: { endpoint: '/api/runtime' },
+});
+```
 
 Common invalid requests return `400`, a known family without an installed handler returns `501`,
 unavailable dispatch returns `503`, invalid upstream responses return `502`, and complete family
 responses—including semantic rejections and family protocol errors—return `200`. Existing
-`operation-invocation` and `graph-read` adapters remain available while clients migrate from their
-family-specific paths.
+`operation-invocation` and `graph-read` adapters remain explicit compatibility surfaces. Select
+them with `createFetchGraphClient({ compatibility: ... })` only while a host is migrating; the
+client never falls back or replays a transmitted request against a second endpoint.
 
 ## Operation invocation
 

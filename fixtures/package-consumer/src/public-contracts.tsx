@@ -5,7 +5,11 @@ import {
   type CodegenDiagnostic,
   type OntahiApplicationAnalysis,
 } from '@ontahi/codegen';
+import { createRuntimeProtocolExchange } from '@ontahi/core/runtime/protocol';
+import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
+import { createExpressRuntimeProtocolHandler } from '@ontahi/runtime-express/runtime-protocol';
+import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
 import { createElement, type ReactNode } from 'react';
 
 type PublicModules = [
@@ -13,6 +17,7 @@ type PublicModules = [
   typeof import('@ontahi/core/data-graph'),
   typeof import('@ontahi/core/runtime/browser'),
   typeof import('@ontahi/core/runtime/identity'),
+  typeof import('@ontahi/core/runtime/protocol'),
   typeof import('@ontahi/core/runtime/server'),
   typeof import('@ontahi/core/runtime/server/ingress'),
   typeof import('@ontahi/core/runtime/server/tasks'),
@@ -30,11 +35,13 @@ type PublicModules = [
   typeof import('@ontahi/postgres/data-graph'),
   typeof import('@ontahi/runtime-express'),
   typeof import('@ontahi/runtime-express/explorer'),
+  typeof import('@ontahi/runtime-express/runtime-protocol'),
   typeof import('@ontahi/runtime-nextjs'),
   typeof import('@ontahi/runtime-nextjs/actions'),
   typeof import('@ontahi/runtime-nextjs/actions/server'),
   typeof import('@ontahi/runtime-nextjs/operation-invocation'),
   typeof import('@ontahi/runtime-nextjs/graph-read'),
+  typeof import('@ontahi/runtime-nextjs/runtime-protocol'),
   typeof import('@ontahi/runtime-vercel-workflows'),
   typeof import('@ontahi/runtime-vercel-workflows/runtime'),
   typeof import('@ontahi/runtime-vercel-workflows/executor'),
@@ -50,6 +57,13 @@ type PublicModules = [
 ];
 
 export type PublicModuleCount = PublicModules['length'];
+
+export type UnifiedRuntimeProtocolPublicContracts = [
+  typeof createRuntimeProtocolExchange,
+  typeof createFetchGraphClient,
+  typeof createExpressRuntimeProtocolHandler,
+  typeof createNextRuntimeProtocolRouteHandler,
+];
 
 const diagnostic: CodegenDiagnostic = {
   code: 'fixture',

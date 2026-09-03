@@ -99,11 +99,7 @@ root configures them once:
 const mountPath = '/runtime/ontahi';
 
 const client = createFetchGraphClient({
-  graphRead: {
-    endpoint: `${mountPath}/graph/reads`,
-    commandEndpoint: `${mountPath}/graph/commands`,
-  },
-  operations: { mountPath },
+  runtimeTransport: { endpoint: `${mountPath}/runtime` },
   reflectedEntityData: { endpoint: `${mountPath}/explorer/entities` },
 });
 

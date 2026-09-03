@@ -1,4 +1,5 @@
 import {
+  createRuntimeProtocolExchange,
   createRuntimeProtocolResponse,
   durableOperationProtocolError,
   runtimeProtocolError,
@@ -18,6 +19,48 @@ const jsonResponse = (payload: unknown, options?: { ok?: boolean; status?: numbe
   }) as Response;
 
 describe('Fetch Runtime Transport', () => {
+  it('applies per-exchange request initialization and abort through the shared request path', async () => {
+    const fetchRequest = vi.fn(async (_endpoint: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+      return jsonResponse(createRuntimeProtocolResponse(request, { kind: 'operation-result' }));
+    });
+    const transport = createFetchRuntimeTransport<{ credential: string }>({
+      endpoint: '/internal/runtime',
+      fetch: fetchRequest as typeof fetch,
+      requestInit: options => ({
+        headers: { authorization: `Bearer ${options?.credential}` },
+        credentials: 'include',
+      }),
+    });
+    const exchange = createRuntimeProtocolExchange({
+      transport,
+      requestId: () => 'operation-1',
+    });
+    const controller = new AbortController();
+
+    await exchange(
+      {
+        family: 'operation',
+        body: { version: 1, kind: 'invoke', operationId: 'Todo.complete' },
+      },
+      {
+        signal: controller.signal,
+        transportOptions: { credential: 'browser-session' },
+      },
+    );
+
+    expect(fetchRequest).toHaveBeenCalledWith('/internal/runtime', {
+      method: 'POST',
+      headers: new Headers({
+        authorization: 'Bearer browser-session',
+        'content-type': 'application/json',
+      }),
+      credentials: 'include',
+      body: expect.not.stringContaining('browser-session'),
+      signal: controller.signal,
+    });
+  });
+
   it('sends and validates one correlated Runtime Protocol exchange', async () => {
     const fetchRequest = vi.fn(async (_endpoint: string, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;

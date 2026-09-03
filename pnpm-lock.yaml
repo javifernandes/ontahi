@@ -463,6 +463,12 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
     devDependencies:
+      '@ontahi/react':
+        specifier: workspace:*
+        version: link:../react
+      '@ontahi/runtime-express':
+        specifier: workspace:*
+        version: link:../runtime-express
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.24

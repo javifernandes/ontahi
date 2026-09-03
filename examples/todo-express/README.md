@@ -24,8 +24,9 @@ restarts Express when framework code changes.
 Open `http://localhost:3001` for the React UI. `OntahiGraphProvider` installs the conventional Fetch
 graph client, so the application only supplies runtime identity. It uses `useGraphQuery`,
 `useOperation`, and `useDurableOperation` against the same Express process without repeating
-endpoint wiring. Durable runs start through `/operations`; the Runtime Transport observes them with
-versioned `durable.operation.inspect` messages through `/runtime` and owns the polling cadence.
+endpoint wiring. Operation invocation, Query reads, Entity and Relationship Commands, and Durable
+inspection all use versioned family messages through the single `/runtime` endpoint. The Runtime
+Transport owns the Durable polling cadence.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.setCompleted` has no authentication requirement.
@@ -44,9 +45,10 @@ GitHub mode fails immediately when any required credential is missing, mounts re
 session, callback, and logout routes, and adds `app.require.authenticated()` to
 `TodoItem.setCompleted`. Passport and GitHub OAuth belong to this Express host.
 The host maps Passport's authenticated `request.user` through
-`authentication.principal(request)`. The provider-neutral `@ontahi/runtime-express` adapter invokes
-that single `invocationContext` factory for Operations and remote graph reads. Todo only passes its
-default-deny read policies when enabling `/graph/reads`; the application storage supplies execution.
+`authentication.principal(request)`. The common Runtime Protocol context and the explicit legacy
+adapters derive their trusted authority from that same host function. Todo passes its default-deny
+policies to the server dispatchers; no authorization or policy decision is serialized into the
+browser request. The application storage supplies execution.
 The same protected operation can be invoked from plain Node by establishing that scope explicitly:
 
 ```ts
@@ -105,8 +107,16 @@ recreate the database and reapply every file in `migrations/`. PostgreSQL only r
 scripts when creating the volume, so reset an existing example database after pulling a new
 migration.
 
-You can also create a list and then a todo item directly through Ontahi's transport-neutral invocation
-protocol:
+The browser client needs only the common Runtime Protocol endpoint:
+
+```ts
+const client = createFetchGraphClient({
+  runtimeTransport: { endpoint: '/runtime' },
+});
+```
+
+The family-specific routes remain available for explicit compatibility during migration. For
+example, these calls use the legacy unwrapped Operation route:
 
 ```sh
 curl -X POST http://localhost:3001/operations \
@@ -122,8 +132,8 @@ Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded i
 application. `ontahiExpress(TodoApplication, { explorer: ... })` mounts the operation bridge,
 the explicitly configured Runtime Protocol dispatcher, legacy durable task snapshots, application
 metadata, Explorer snapshot, reflected entity data, and the Explorer SPA. Execute panels use the
-same `/operations` bridge as the Todo UI, while reflected data comes from whichever graph storage
-is active.
+explicit legacy `/operations` bridge, while the Todo UI defaults to `/runtime` and reflected data
+comes from whichever graph storage is active.
 
 ## Entities, Relations, Selections, and Operations
 

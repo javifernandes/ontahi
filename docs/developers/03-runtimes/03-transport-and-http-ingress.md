@@ -123,8 +123,10 @@ neither strategy, and Operation bridge adapters no longer carry Task snapshot me
 
 Express can project an injected common dispatcher at `POST /runtime`. It validates the envelope and
 family body before deriving receiver context, but does not install handlers or authorization. The
-host explicitly chooses which families the dispatcher exposes. The legacy `/operations` HTTP body
-and raw Task GET remain during the bounded endpoint migration.
+host explicitly chooses which families the dispatcher exposes. The Fetch client uses that common
+path for Operation invocation and permission, Graph Read, Graph Command, and Durable inspection.
+The legacy `/operations`, `/graph/reads`, `/graph/commands`, and raw Task GET routes remain bounded
+compatibility surfaces.
 
 Next.js App Router can project that same dispatcher without an application-local protocol route:
 
@@ -143,9 +145,8 @@ The host chooses the route location, conventionally `app/api/runtime/route.ts`. 
 adapter validates before deriving context, installs no family handler or policy, and maps common
 protocol errors to `400`, `501`, `502`, or `503` while preserving complete family responses at
 `200`. The separate Next.js Operation invocation and Graph Read adapters remain compatibility
-surfaces until their Fetch clients move to `RuntimeTransport` and the common path. That migration
-must select legacy `/operations`, `/graph/reads`, and `/graph/commands` routes explicitly; it must
-not replay an ambiguous failed request automatically against a second endpoint.
+surfaces for hosts that select them explicitly. Express and Next.js project the same dispatcher
+and pass the same four-family Fetch client conformance proof.
 
 ## Carry generic operation invocations
 
@@ -156,8 +157,16 @@ const ontahiHttp = {
   mountPath: '/runtime/ontahi',
 };
 
-const runtimeDispatcher = createRuntimeProtocolDispatcher({
+type RuntimeAuthority = { principal: ReturnType<typeof authenticate> };
+
+const runtimeDispatcher = createRuntimeProtocolDispatcher<RuntimeAuthority>({
   handlers: {
+    operation: (request, authority) =>
+      TodoApplication.app.runtime.withInvocationContext(authority, () =>
+        operationDispatcher(request),
+      ),
+    'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
+    'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
     'durable.operation': async request =>
       toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
   },
@@ -188,11 +197,10 @@ server.use(
 
 `mountPath` places every Ontahí-owned HTTP surface below one host-selected root:
 
-- `POST /runtime/ontahi/operations` invokes operations and answers permission checks;
-- `POST /runtime/ontahi/runtime` carries configured Runtime Protocol families, including Durable
-  observation in this example;
-- `POST /runtime/ontahi/graph/reads` executes explicitly permitted Queries;
-- `POST /runtime/ontahi/graph/commands` executes explicitly permitted Relationship Commands;
+- `POST /runtime/ontahi/runtime` carries Operation invocation and permission, Graph Read, Graph
+  Command, and Durable inspection through the handlers above;
+- `POST /runtime/ontahi/operations`, `/graph/reads`, and `/graph/commands` remain legacy routes when
+  their adapters are configured and a client selects them;
 - `GET /runtime/ontahi/operations/tasks/:taskId/:runId` is the legacy Durable observation path;
 - `GET /runtime/ontahi/application` returns reflected application metadata;
 - `/runtime/ontahi/explorer/*` serves inspection endpoints when Explorer is enabled.
@@ -201,11 +209,6 @@ The React host configures the same mount root once:
 
 ```tsx
 const client = createFetchGraphClient({
-  graphRead: {
-    endpoint: '/runtime/ontahi/graph/reads',
-    commandEndpoint: '/runtime/ontahi/graph/commands',
-  },
-  operations: { mountPath: '/runtime/ontahi' },
   runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
   reflectedEntityData: { endpoint: '/runtime/ontahi/explorer/entities' },
 });
@@ -215,10 +218,26 @@ const client = createFetchGraphClient({
 </OntahiGraphProvider>;
 ```
 
-With the default root, `OntahiGraphProvider` installs those conventional endpoints without a
-`client` prop. There is no global discovery step: a non-default mount root is deployment
-configuration supplied once to the client runtime. This also allows one Express application to
-host several Ontahí applications under different roots.
+With the default root, `OntahiGraphProvider` uses `/runtime` without a `client` prop. There is no
+global discovery step: a non-default common path is deployment configuration supplied once to the
+client runtime. This also allows one Express application to host several Ontahí applications under
+different roots.
+
+For a bounded migration, select only the legacy families the host still serves:
+
+```ts
+const client = createFetchGraphClient({
+  runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
+  compatibility: {
+    operation: { endpoint: '/runtime/ontahi/operations' },
+    graphRead: { endpoint: '/runtime/ontahi/graph/reads' },
+    graphCommand: { endpoint: '/runtime/ontahi/graph/commands' },
+  },
+});
+```
+
+Compatibility entries win over the deprecated family endpoint aliases. Routing is selected before
+transmission; a network or server failure never triggers a second request against another route.
 
 > [!MARGIN] **Express configuration stops at the adapter boundary.** Mount and surface paths,
 > Explorer exposure, ingress body limits, and error reporting belong here. CORS, rate limiting, and

@@ -17,8 +17,16 @@ import {
   toDurableOperationSnapshotResponse,
 } from '@ontahi/core/runtime/protocol';
 
-const runtimeDispatcher = createRuntimeProtocolDispatcher({
+type RuntimeAuthority = { principal: ReturnType<typeof authenticate> };
+
+const runtimeDispatcher = createRuntimeProtocolDispatcher<RuntimeAuthority>({
   handlers: {
+    operation: (request, authority) =>
+      TodoApplication.app.runtime.withInvocationContext(authority, () =>
+        operationDispatcher(request),
+      ),
+    'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
+    'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
     'durable.operation': async request =>
       toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
   },
@@ -39,13 +47,10 @@ server.use(
 `mountPath` moves every Ontahi-owned route below one host-selected root. Without it, the root is
 `/`. The mounted runtime above includes:
 
-- `POST /runtime/ontahi/operations` for invocation and permission checks.
-- `POST /runtime/ontahi/runtime` for the Runtime Protocol families explicitly installed by the
-  host; this example installs Durable Operation observation.
-- `POST /runtime/ontahi/graph/reads` when graph-read policies or a lower-level dispatcher are
-  configured.
-- `POST /runtime/ontahi/graph/commands` when Relationship or Entity Mutation Command policies, or a
-  lower-level dispatcher, are configured.
+- `POST /runtime/ontahi/runtime` for Operation invocation and permission, Graph Read, Graph
+  Command, and Durable Operation inspection through the handlers explicitly installed above.
+- `POST /runtime/ontahi/operations`, `/graph/reads`, and `/graph/commands` as family-specific legacy
+  routes when their existing adapters are configured and a client explicitly selects them.
 - `GET /runtime/ontahi/operations/tasks/:taskId/:runId` as the legacy durable snapshot route.
 - `GET /runtime/ontahi/application` for reflected application metadata.
 - `/runtime/ontahi/explorer/*` when Explorer is enabled.
@@ -57,26 +62,36 @@ Explorer composition is an optional subpath. Installing the base Express runtime
 React, Monaco, or Explorer UI dependencies; hosts that import `@ontahi/runtime-express/explorer`
 install `@ontahi/explorer-react` explicitly.
 
-The Fetch Operation bridge accepts the same mount root and derives its Operation endpoint:
-
-```ts
-const bridge = createFetchOperationBridgeAdapter({
-  mountPath: '/runtime/ontahi',
-});
-```
-
-Runtime Transport is configured independently because it can use a different transport strategy:
+The Fetch client points every registered request/response family at the mounted Runtime Protocol
+path:
 
 ```ts
 const client = createFetchGraphClient({
-  operations: { mountPath: '/runtime/ontahi' },
   runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
 });
 ```
 
+During migration, a host can select a legacy route per family without changing the others:
+
+```ts
+const client = createFetchGraphClient({
+  runtimeTransport: { endpoint: '/runtime/ontahi/runtime' },
+  compatibility: {
+    operation: { endpoint: '/runtime/ontahi/operations' },
+    graphRead: { endpoint: '/runtime/ontahi/graph/reads' },
+    graphCommand: { endpoint: '/runtime/ontahi/graph/commands' },
+  },
+});
+```
+
+Compatibility is selected before sending. There is no automatic `/runtime`-to-legacy fallback or
+replay after an ambiguous failure.
+
 `runtimeProtocol` is optional and default-deny by composition: the adapter does not invent a
 Durable handler or authorization policy. It validates the portable envelope before deriving
-trusted request context and dispatches only the family handlers installed by the host.
+trusted request context and dispatches only the family handlers installed by the host. Each family
+adapter above passes that server-derived value into its canonical dispatcher; the portable request
+never carries policies or authority.
 
 There is no global route discovery. A mount root is host and deployment configuration, so each
 client runtime receives it explicitly. This also allows more than one Ontahi application to coexist
@@ -165,5 +180,5 @@ Provider registries and ingress routing remain transport-neutral core contracts.
 other HTTP adapter can consume the same providers while owning its framework-specific request and
 response conversion.
 
-The lower-level Operation invocation, legacy Task snapshot, and Runtime Protocol handlers remain
-available for custom transport composition.
+The lower-level Operation invocation, Graph Read, Graph Command, legacy Task snapshot, and Runtime
+Protocol handlers remain available for explicit compatibility or custom transport composition.

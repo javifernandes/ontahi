@@ -2,7 +2,7 @@
 
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
-  createRuntimeProtocolRequest,
+  createRuntimeProtocolExchange,
   isRuntimeProtocolError,
   parseDurableOperationProtocolResponse,
   parseRuntimeProtocolResponse,
@@ -13,28 +13,24 @@ import {
   type RuntimeTransportRequestOptions,
 } from '@ontahi/core/runtime/protocol';
 
-export type FetchRuntimeTransportOptions = {
+export type FetchRuntimeTransportOptions<TTransportOptions = undefined> = {
   endpoint?: string;
   fetch?: typeof globalThis.fetch;
   requestId?: () => string;
-  requestInit?: () => Omit<RequestInit, 'body' | 'method' | 'signal'>;
+  requestInit?: (options?: TTransportOptions) => Omit<RequestInit, 'body' | 'method'>;
   durableOperation?: {
     pollIntervalMs?: number;
   };
 };
 
-export type FetchRuntimeTransport = RuntimeTransport & {
-  readonly durableOperation: DurableOperationObservationCapability;
-};
+export type FetchRuntimeTransport<TTransportOptions = undefined> =
+  RuntimeTransport<TTransportOptions> & {
+    readonly durableOperation: DurableOperationObservationCapability;
+  };
 
 const DEFAULT_RUNTIME_ENDPOINT = '/runtime';
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const terminalTaskStatuses = new Set(['completed', 'failed', 'cancelled']);
-let fallbackRequestSequence = 0;
-
-const defaultRequestId = () =>
-  globalThis.crypto?.randomUUID?.() ??
-  `ontahi-runtime-${Date.now()}-${(fallbackRequestSequence += 1)}`;
 
 const waitForNextInspection = (
   intervalMs: number,
@@ -58,13 +54,13 @@ const waitForNextInspection = (
   });
 };
 
-export const createFetchRuntimeTransport = ({
+export const createFetchRuntimeTransport = <TTransportOptions = undefined>({
   endpoint = DEFAULT_RUNTIME_ENDPOINT,
   fetch: fetchRequest = globalThis.fetch,
-  requestId = defaultRequestId,
+  requestId,
   requestInit,
   durableOperation = {},
-}: FetchRuntimeTransportOptions = {}): FetchRuntimeTransport => {
+}: FetchRuntimeTransportOptions<TTransportOptions> = {}): FetchRuntimeTransport<TTransportOptions> => {
   const pollIntervalMs = durableOperation.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
     throw new TypeError('Durable Operation poll interval must be a non-negative finite number.');
@@ -72,9 +68,9 @@ export const createFetchRuntimeTransport = ({
 
   const request = async (
     runtimeRequest: RuntimeProtocolRequestEnvelope,
-    options?: RuntimeTransportRequestOptions,
+    options?: RuntimeTransportRequestOptions<TTransportOptions>,
   ) => {
-    const init = requestInit?.() ?? {};
+    const init = requestInit?.(options?.transportOptions) ?? {};
     const headers = new Headers(init.headers);
     if (!headers.has('content-type')) headers.set('content-type', 'application/json');
     const response = await fetchRequest(endpoint, {
@@ -93,23 +89,25 @@ export const createFetchRuntimeTransport = ({
     }
     return parsed.response;
   };
+  const exchange = createRuntimeProtocolExchange({
+    transport: { request },
+    requestId,
+  });
 
   const observe: DurableOperationObservationCapability['observe'] = async function* <TResult>(
     run: TaskRunIdentity,
     options?: RuntimeTransportRequestOptions,
   ): AsyncIterable<TaskSnapshot<TResult>> {
     while (!options?.signal?.aborted) {
-      const runtimeRequest = createRuntimeProtocolRequest({
-        id: requestId(),
-        family: 'durable.operation',
-        body: toDurableOperationProtocolRequest(run),
-      });
-      const runtimeResponse = await request(runtimeRequest, options);
-      if (isRuntimeProtocolError(runtimeResponse)) {
-        throw new Error(runtimeResponse.error.message);
-      }
+      const responseBody = await exchange(
+        {
+          family: 'durable.operation',
+          body: toDurableOperationProtocolRequest(run),
+        },
+        options?.signal ? { signal: options.signal } : undefined,
+      );
 
-      const parsed = parseDurableOperationProtocolResponse(runtimeResponse.body);
+      const parsed = parseDurableOperationProtocolResponse(responseBody);
       if (!parsed.success) throw new Error(parsed.error.error.message);
       if (parsed.response.kind === 'protocol-error') {
         throw new Error(parsed.response.error.message);

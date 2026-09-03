@@ -138,6 +138,33 @@ describe('operation invocation dispatcher', () => {
     expect(invokeOperation).toHaveBeenCalledWith(operation, { title: 'Ontahi' });
   });
 
+  it('omits an undefined success value from the portable Operation response', async () => {
+    const { createOperationInvocationDispatcher } =
+      await import('./server/operation-invocation.js');
+    const dispatcher = createOperationInvocationDispatcher({
+      resolveOperation: () => operation,
+      invokeOperation: async () => ({
+        ok: true as const,
+        kind: 'success' as const,
+        value: undefined,
+      }),
+      checkPermission: async () => ({ allowed: true }),
+    });
+
+    const response = await dispatcher({
+      kind: 'invoke',
+      operationId: operation.id,
+      input: { title: 'Ontahi' },
+    });
+
+    expect(response).toEqual({
+      kind: 'invocation-result',
+      result: { ok: true, kind: 'success' },
+    });
+    expect(response.kind === 'invocation-result' && 'value' in response.result).toBe(false);
+    expect(JSON.parse(JSON.stringify(response))).toEqual(response);
+  });
+
   it('rebuilds a projected Selection result View before invoking an operation', async () => {
     const Trip = entity('Trip', { id: field.id(), status: field.string() });
     const TripList = Trip.view('TripList', { id: true });

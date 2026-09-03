@@ -156,9 +156,9 @@ const client = createFetchGraphClient({
 });
 ```
 
-The conventional same-origin client uses `POST /runtime`. `OntahiGraphProvider` exposes its Runtime
-Transport independently from Operation bridge adapters, so a host can replace observation without
-changing invocation. Express requires an explicitly configured common dispatcher and trusted
+The conventional same-origin client uses `POST /runtime` for invocation, Graph Read, Graph Command,
+and inspection. `OntahiGraphProvider` exposes the same Runtime Transport capability consumed by the
+Durable hook. Express requires an explicitly configured common dispatcher and trusted
 request-context factory before mounting that path; it does not expose Task state automatically.
 The legacy Task snapshot GET remains only as a bounded compatibility surface during endpoint
 migration.

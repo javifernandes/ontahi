@@ -7,6 +7,12 @@ import {
   relationshipSet,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
+import {
+  createRuntimeProtocolResponse,
+  runtimeProtocolError,
+  type RuntimeProtocolRequestEnvelope,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFetchGraphReadExecutor } from './index.js';
@@ -25,6 +31,97 @@ const openTodos = query(Todo)
 describe('Fetch graph read executor', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('executes Graph Reads through the versioned graph.read family', async () => {
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-read-result',
+        value: [{ id: 'todo-1', title: 'Read the protocol' }],
+      }),
+    );
+    const executor = createFetchGraphReadExecutor({
+      runtimeTransport: { request },
+      requestId: () => 'graph-read-1',
+    });
+
+    await expect(executor.run(openTodos, undefined)).resolves.toEqual([
+      { id: 'todo-1', title: 'Read the protocol' },
+    ]);
+    expect(request).toHaveBeenCalledWith(
+      {
+        protocol: 'ontahi.runtime',
+        version: 1,
+        id: 'graph-read-1',
+        kind: 'request',
+        family: 'graph.read',
+        body: expect.objectContaining({
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: { kind: 'selection', entityName: 'Todo', expression: expect.any(Object) },
+          view: expect.objectContaining({ name: 'TodoListItem' }),
+        }),
+      },
+      undefined,
+    );
+  });
+
+  it('executes Entity Commands through graph.command and does not replay common errors', async () => {
+    const command = mutateEntity(Todo).update(createEntityRef(Todo, { id: 'todo-1' }), {
+      title: 'Remote',
+    });
+    const delta = {
+      created: [],
+      updated: [
+        {
+          entityName: 'Todo',
+          ref: createEntityRef(Todo, { id: 'todo-1' }),
+          values: { id: 'todo-1', title: 'Remote', completed: false },
+        },
+      ],
+      deleted: [],
+    };
+    const request = vi
+      .fn<RuntimeTransport['request']>()
+      .mockImplementationOnce(async envelope =>
+        createRuntimeProtocolResponse(envelope, { kind: 'graph-command-result', value: delta }),
+      )
+      .mockImplementationOnce(async envelope =>
+        runtimeProtocolError('dispatch_unavailable', 'Command runtime unavailable.', {
+          id: envelope.id,
+          family: envelope.family,
+        }),
+      );
+    const requestIds = ['graph-command-1', 'graph-command-2'][Symbol.iterator]();
+    const executor = createFetchGraphReadExecutor({
+      runtimeTransport: { request },
+      requestId: () => requestIds.next().value ?? 'unexpected',
+    });
+
+    await expect(executor.runEntityMutationCommand!(command)).resolves.toEqual(delta);
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      id: 'graph-command-1',
+      family: 'graph.command',
+      body: {
+        version: 1,
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'Todo',
+          target: { entityName: 'Todo', locator: { id: 'todo-1' } },
+          values: { title: 'Remote' },
+        },
+      },
+    });
+
+    await expect(executor.runEntityMutationCommand!(command)).rejects.toMatchObject({
+      name: 'RemoteDataGraphError',
+      code: 'transport_failure',
+      cause: expect.objectContaining({ message: 'Command runtime unavailable.' }),
+    });
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it('executes a projected Query through the graph read endpoint', async () => {
@@ -61,10 +158,14 @@ describe('Fetch graph read executor', () => {
   });
 
   it('derives fetch initialization from runtime options without adding it to the graph body', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ kind: 'graph-read-result', value: [] }),
+    const fetchMock = vi.fn(async (_endpoint: string, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+      return {
+        ok: true,
+        status: 200,
+        json: async () =>
+          createRuntimeProtocolResponse(request, { kind: 'graph-read-result', value: [] }),
+      };
     });
     vi.stubGlobal('fetch', fetchMock);
     const executor = createFetchGraphReadExecutor<{ credential: string }>({
@@ -75,26 +176,35 @@ describe('Fetch graph read executor', () => {
 
     await executor.run(openTodos, undefined, { credential: 'server-session' });
 
-    expect(fetchMock.mock.calls[0]![1]).toMatchObject({
+    const sentInit = fetchMock.mock.calls[0]?.[1];
+    expect(sentInit).toMatchObject({
       headers: expect.any(Headers),
     });
-    expect(Object.fromEntries(fetchMock.mock.calls[0]![1].headers.entries())).toEqual({
+    expect(Object.fromEntries(new Headers(sentInit?.headers).entries())).toEqual({
       authorization: 'Bearer server-session',
       'content-type': 'application/json',
     });
-    expect(fetchMock.mock.calls[0]![1].body).not.toContain('server-session');
+    expect(String(sentInit?.body)).not.toContain('server-session');
+    expect(JSON.parse(String(sentInit?.body))).toMatchObject({
+      family: 'graph.read',
+      body: { kind: 'graph-read' },
+    });
   });
 
   it('supports single-result reads through the same endpoint', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: vi.fn().mockResolvedValue({
-          kind: 'graph-read-result',
-          value: { id: 'todo-1', title: 'Read the guide' },
-        }),
+      vi.fn(async (_endpoint: string, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            createRuntimeProtocolResponse(request, {
+              kind: 'graph-read-result',
+              value: { id: 'todo-1', title: 'Read the guide' },
+            }),
+        };
       }),
     );
     const executor = createFetchGraphReadExecutor();
@@ -108,13 +218,17 @@ describe('Fetch graph read executor', () => {
   it('preserves structured graph protocol errors', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 403,
-        json: vi.fn().mockResolvedValue({
-          kind: 'protocol-error',
-          error: { code: 'access_denied', message: 'Data graph read access denied.' },
-        }),
+      vi.fn(async (_endpoint: string, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            createRuntimeProtocolResponse(request, {
+              kind: 'protocol-error',
+              error: { code: 'access_denied', message: 'Data graph read access denied.' },
+            }),
+        };
       }),
     );
     const executor = createFetchGraphReadExecutor();
@@ -269,20 +383,24 @@ describe('Fetch graph read executor', () => {
     ).add(createEntityRef(Tag, { id: 'tag-1' }));
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 409,
-        json: vi.fn().mockResolvedValue({
-          kind: 'graph-command-rejection',
-          diagnostic: {
-            reason: 'relation_constraint_rejected',
-            rejection: {
-              version: 1,
-              code: 'tag_unavailable',
-              message: 'This tag is unavailable.',
-            },
-          },
-        }),
+      vi.fn(async (_endpoint: string, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as RuntimeProtocolRequestEnvelope;
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            createRuntimeProtocolResponse(request, {
+              kind: 'graph-command-rejection',
+              diagnostic: {
+                reason: 'relation_constraint_rejected',
+                rejection: {
+                  version: 1,
+                  code: 'tag_unavailable',
+                  message: 'This tag is unavailable.',
+                },
+              },
+            }),
+        };
       }),
     );
     const executor = createFetchGraphReadExecutor();

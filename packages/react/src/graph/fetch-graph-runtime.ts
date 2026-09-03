@@ -14,14 +14,24 @@ import {
   type RelationshipCommandExecutionRuntime,
 } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
+import {
+  createRuntimeProtocolExchange,
+  type RuntimeTransport,
+  type RuntimeTransportRequestOptions,
+} from '@ontahi/core/runtime/protocol';
 
 import type { ReactGraphExecutor } from './executor.js';
+import { createFetchRuntimeTransport } from './fetch-runtime-transport.js';
 
 export type FetchGraphReadExecutorOptions<TOptions = undefined> = {
+  /** @deprecated Select the legacy Graph Read route through createFetchGraphClient compatibility. */
   endpoint?: string;
+  /** @deprecated Select the legacy Graph Command route through createFetchGraphClient compatibility. */
   commandEndpoint?: string;
   fetch?: typeof globalThis.fetch;
+  requestId?: () => string;
   requestInit?: (options?: TOptions) => Omit<RequestInit, 'body' | 'method'>;
+  runtimeTransport?: RuntimeTransport<TOptions>;
 };
 
 export type FetchGraphRuntime<TOptions = undefined> = DataGraphExecutionRuntime<
@@ -45,21 +55,20 @@ export type FetchGraphReadCapability<TOptions = undefined> = {
   graphExecutor: ReactGraphExecutor<TOptions, TOptions>;
 };
 
-const DEFAULT_GRAPH_READ_ENDPOINT = '/graph/reads';
-const DEFAULT_GRAPH_COMMAND_ENDPOINT = '/graph/commands';
-
 export const createFetchGraphReadCapability = <TOptions = undefined>({
-  endpoint = DEFAULT_GRAPH_READ_ENDPOINT,
-  commandEndpoint = DEFAULT_GRAPH_COMMAND_ENDPOINT,
+  endpoint,
+  commandEndpoint,
   fetch: fetchRequest = globalThis.fetch,
+  requestId,
   requestInit,
+  runtimeTransport,
 }: FetchGraphReadExecutorOptions<TOptions> = {}): FetchGraphReadCapability<TOptions> => {
-  const transport: RemoteGraphReadTransport<TOptions> = async (request, options) => {
+  const legacyReadTransport: RemoteGraphReadTransport<TOptions> = async (request, options) => {
     const init = requestInit?.(options) ?? {};
     const headers = new Headers(init.headers);
     if (!headers.has('content-type')) headers.set('content-type', 'application/json');
 
-    const response = await fetchRequest(endpoint, {
+    const response = await fetchRequest(endpoint!, {
       ...init,
       method: 'POST',
       headers,
@@ -77,11 +86,14 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
       throw new Error(`Graph read request failed with status ${response.status}.`);
     }
   };
-  const commandTransport: RemoteGraphCommandTransport<TOptions> = async (request, options) => {
+  const legacyCommandTransport: RemoteGraphCommandTransport<TOptions> = async (
+    request,
+    options,
+  ) => {
     const init = requestInit?.(options) ?? {};
     const headers = new Headers(init.headers);
     if (!headers.has('content-type')) headers.set('content-type', 'application/json');
-    const response = await fetchRequest(commandEndpoint, {
+    const response = await fetchRequest(commandEndpoint!, {
       ...init,
       method: 'POST',
       headers,
@@ -98,6 +110,27 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
     }
     return payload;
   };
+  const exchange =
+    endpoint && commandEndpoint
+      ? undefined
+      : createRuntimeProtocolExchange({
+          transport:
+            runtimeTransport ??
+            createFetchRuntimeTransport<TOptions>({ fetch: fetchRequest, requestInit }),
+          requestId,
+        });
+  const exchangeOptions = (
+    options: TOptions | undefined,
+  ): RuntimeTransportRequestOptions<TOptions> | undefined =>
+    options === undefined ? undefined : { transportOptions: options };
+  const transport: RemoteGraphReadTransport<TOptions> = endpoint
+    ? legacyReadTransport
+    : (request, options) =>
+        exchange!({ family: 'graph.read', body: request }, exchangeOptions(options));
+  const commandTransport: RemoteGraphCommandTransport<TOptions> = commandEndpoint
+    ? legacyCommandTransport
+    : (request, options) =>
+        exchange!({ family: 'graph.command', body: request }, exchangeOptions(options));
   const runtime = createRemoteDataGraphRuntime({ transport, commandTransport });
 
   return {

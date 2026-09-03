@@ -50,9 +50,10 @@ const total = useGraphQuery(openTodos.count());
 const first = useGraphQuery(openTodos.first());
 ```
 
-`OntahiGraphProvider` installs a conventional same-origin Fetch client by default. It connects
-graph reads to `/graph/reads`, Operations to `/operations`, Durable Operation observation to the
-Runtime Protocol at `/runtime`, and reflected Explorer data to `/explorer/entities`. These
+`OntahiGraphProvider` installs a conventional same-origin Fetch client by default. Operation
+invocation and permission, Graph Read, Graph Command, and Durable Operation inspection all use one
+Runtime Transport at `POST /runtime`. Reflected Explorer data remains outside the registered
+Runtime Protocol families at `/explorer/entities` and `/explorer/related-entities`. These
 capabilities are lazy: declaring the provider does not issue a request until the application uses
 one of them.
 
@@ -123,8 +124,30 @@ const client = createFetchGraphClient({
 });
 ```
 
+The endpoint, Fetch implementation, credentials, headers, per-call request initialization, abort
+signal, and request-id generator configured there serve every common request/response family.
 Hosts can replace `runtimeTransport` independently on `OntahiGraphProvider`; a future push-capable
 transport can yield the same snapshots without changing the hook.
+
+Legacy family routes are opt-in migration surfaces:
+
+```ts
+const client = createFetchGraphClient({
+  runtimeTransport: { endpoint: '/runtime' },
+  compatibility: {
+    operation: { endpoint: '/operations' },
+    graphRead: { endpoint: '/graph/reads' },
+    graphCommand: { endpoint: '/graph/commands' },
+  },
+});
+```
+
+An entry in `compatibility` selects that family’s legacy body and endpoint; every unlisted family
+stays on Runtime Transport. It takes precedence over the deprecated `operations.endpoint`,
+`operations.mountPath`, `graphRead.endpoint`, and `graphRead.commandEndpoint` aliases. Selection is
+deterministic before transmission. A common request is never retried against a legacy endpoint
+after a network or server failure, because replaying an Operation or Command could duplicate its
+effect.
 
 The Fetch executor sends only canonical graph-read and graph-Command requests. Credentials and
 other trusted request state remain in Fetch initialization and are never embedded in a Query AST or
