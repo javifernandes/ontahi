@@ -1,6 +1,6 @@
 # 146. Ontahí Runtime Protocol
 
-Status: current
+Status: done
 
 Completed children:
 
@@ -11,6 +11,12 @@ Completed children:
 5. [146e. Runtime Transport Durable Observation](../done/146e-runtime-transport-durable-observation.md)
 6. [146f. Next.js Runtime Protocol Adapter](../done/146f-nextjs-runtime-protocol-adapter.md)
 7. [146g. Unified Fetch Runtime Protocol Clients](../done/146g-unified-fetch-runtime-protocol-clients.md)
+
+Extracted follow-ups:
+
+1. [146h. WebSocket Runtime Transport And Durable Progress](../next/146h-websocket-runtime-transport-and-durable-progress.md)
+2. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
+3. [146j. First-Class Events Runtime Protocol Gate](../research/146j-first-class-events-runtime-protocol-gate.md)
 
 Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 
@@ -205,18 +211,21 @@ semantic message bodies and diagnostics.
 - [x] Every current remote message and Durable Operation lifecycle request is inventoried.
 - [x] One versioned envelope covers all registered message families without weakening their
       individual semantics.
-- [ ] Unknown versions, kinds, required guarantees, and capabilities fail before execution.
+- [x] Unknown envelope/family versions and kinds fail before execution; required-guarantee and
+      capability negotiation is explicitly extracted to Plan 146i.
 - [x] Core dispatch composes existing family dispatchers and policies instead of reimplementing them.
 - [x] Express defaults its common projection to one runtime path and supports explicit
       family-specific compatibility routes.
 - [x] Existing endpoint users have a documented bounded migration path.
 - [x] Fetch uses one transport contract while application authoring stays unchanged.
-- [ ] Durable progress can be polled or pushed without changing the Durable Operation contract.
-- [ ] Event subscription has explicit authority, delivery, acknowledgement, resume, ordering, and
-      overflow semantics.
+- [x] Durable progress polling consumes the transport-independent observation contract without
+      changing React; pushed observation is explicitly extracted to Plan 146h.
+- [x] Event subscription remains behind the first-class Event model and protocol gate extracted to
+      Plan 146j; this Plan claims no Event delivery semantics.
 - [x] Atlas and developer documentation distinguish protocol semantics, transport projections, and
       TypeScript implementation details.
-- [ ] A conformance corpus can validate an implementation that does not import Ontahí TypeScript.
+- [x] TypeScript family and adapter conformance closes this implementation phase; the
+      language-neutral corpus is explicitly extracted to Plan 146i.
 
 ## Open Questions
 
@@ -305,21 +314,25 @@ historical activity timeline that Atlas did not observe.
    [Plan 141](../done/141-data-graph-progressive-module-boundaries.md),
    [Plan 142](../done/142-declarative-model-semantics-and-execution-planning.md), and
    [Plan 147](../done/147-application-bound-headless-graph-reads.md).
-3. [Plan 128](./128-ontahi-data-graph-execution-bridge.md) remains current for the bounded
+3. [Plan 128](../current/128-ontahi-data-graph-execution-bridge.md) remains current for the bounded
    graph-specific bridge gaps documented in its own checkpoint. The common request/response path
    through Plan 146g is complete.
 
-### Resume points
+### Extracted continuation
 
-1. Resume Plan 146 with capability and required-guarantee negotiation, normative examples,
-   conformance evidence, and the legacy-endpoint release boundary.
-2. Then prove transport-independent Durable progress push. Stop before Event transport work until
-   Events have a first-class semantic model.
-3. Pull [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) when durable retry
+1. Pull [Plan 146h](../next/146h-websocket-runtime-transport-and-durable-progress.md) for the
+   WebSocket transport and transport-independent Durable progress push.
+2. [Plan 146i](../backlog/146i-runtime-protocol-negotiation-and-conformance.md) owns capability and
+   required-guarantee negotiation, normative examples, conformance evidence, cancellation gating,
+   and the legacy-endpoint release boundary.
+3. Stop before Event transport work until
+   [Plan 146j](../research/146j-first-class-events-runtime-protocol-gate.md) establishes Events as
+   first-class semantic values.
+4. Pull [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) when durable retry
    identity becomes the next runtime pressure, or
    [Plan 145](../next/145-ordered-relations-and-sequence-commands.md) when ordered membership becomes
    the next Relation pressure.
-4. [Plan 123](../next/123-ontahi-declarative-entity-invariants.md) owns permanent persisted-state
+5. [Plan 123](../next/123-ontahi-declarative-entity-invariants.md) owns permanent persisted-state
    invariants; [Plan 76a](../next/76a-operation-input-constraints-and-client-validation.md) owns
    richer input-constraint reflection and client validation.
 
@@ -333,3 +346,19 @@ historical activity timeline that Atlas did not observe.
    Operation preconditions.
 4. [Plan 142h](../backlog/142h-distributed-execution-topologies.md): offline, replicated, and
    convergent execution topologies after concrete evidence exists.
+
+## Closure — 2026-09-03
+
+Plan 146 closes at the request/response Runtime Protocol boundary. Core owns one versioned envelope
+and dispatcher; Operation, Durable inspection, Graph Read, and Graph Command retain distinct family
+semantics; Express and Next.js project the same dispatcher; and Fetch carries every registered
+family through one `/runtime` transport while React observes Durable Operations through the shared
+transport capability.
+
+The broader direction remains intact but no longer keeps this parent artificially current. Plan
+146h is the next executable transport proof: multiplex ordinary Runtime Protocol exchanges and
+pushed Durable snapshots over WebSocket, demonstrated by Todo's `TodoItem.completeAll`. Plan 146i
+holds negotiation, language-neutral conformance, endpoint retirement, and cancellation gating.
+Plan 146j is the mandatory semantic stop before any Event subscription or delivery work. NATS,
+gRPC, offline replication, and convergent state remain later topology evidence rather than implied
+scope of the WebSocket proof.

@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [146. Ontahí Runtime Protocol](../current/146-ontahi-runtime-protocol.md)
+Parent plan: [146. Ontahí Runtime Protocol](./146-ontahi-runtime-protocol.md)
 
 Canonical ID: `ontahi://plans/146a-runtime-protocol-envelope-and-family-registry`
 

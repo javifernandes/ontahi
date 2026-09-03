@@ -525,7 +525,7 @@ This checkpoint records execution provenance for Atlas Sessions; it does not cha
 status or reopen completed child Plans.
 
 The remote read path, Relationship Command bridge, and exact-identity Entity Mutation Command
-bridge are delivered through Plans 128a–128g. [Plan 146](./146-ontahi-runtime-protocol.md) now owns
+bridge are delivered through Plans 128a–128g. [Plan 146](../done/146-ontahi-runtime-protocol.md) owns
 their common distributed envelope, dispatcher, adapters, and transport evolution.
 
 Plan 128 remains current only for the graph-specific gaps that were deliberately left behind:
