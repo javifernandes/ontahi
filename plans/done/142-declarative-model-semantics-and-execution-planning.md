@@ -1,6 +1,6 @@
 # 142. Declarative Model Semantics And Execution Planning
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/142-declarative-model-semantics-and-execution-planning`
 
@@ -8,7 +8,7 @@ Related plans:
 
 1. [74b. Schema-Native Operation Refs](../done/74b-schema-native-operation-refs.md)
 2. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
-3. [136. Relation Constraints And Eligibility Semantics](../current/136-relation-constraints-and-eligibility.md)
+3. [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
 4. [139a. Composable Data Graph Transactions](../done/139a-composable-data-graph-transactions.md)
 5. [139b. Transaction-Scoped Unit Of Work](../done/139b-transaction-scoped-unit-of-work.md)
 6. [139d. PostgreSQL Classroom Transfer](../done/139d-postgres-classroom-transfer.md)
@@ -522,9 +522,10 @@ projection or advisory evaluation is unavailable/`unknown`; it must never return
    `Student.currentCourse` and inverse `Course.students` APIs. Preserve unlink repair and concurrent
    conflict semantics. Extracted as
    [136h. Authority-Serialized Relation Count Constraints](../done/136h-authority-serialized-relation-count-constraints.md).
-8. **Distribution follow-up:** only after runtime planning is real, specify storage topology,
-   offline queueing, replication, convergence evidence, and authority-serialized versus merge-safe
-   invariant requirements in a separate plan.
+8. **Distribution follow-up (extracted):** only after runtime planning is real, specify storage
+   topology, offline queueing, replication, convergence evidence, and authority-serialized versus
+   merge-safe invariant requirements in
+   [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md).
 
 Each slice requires TDD, semantic runtime assertions, compile-time contract coverage when public
 types change, proportional provider integration evidence, and a Changeset for public package
@@ -550,7 +551,7 @@ surfaces.
 
 ## Acceptance Checklist
 
-- [ ] One Classroom sketch distinguishes input constraints, Ref resolution requirements,
+- [x] One Classroom sketch distinguishes input constraints, Ref resolution requirements,
       preconditions, permanent invariants, postconditions, and derived Fields without manual
       counter maintenance.
 - [x] Existing `contracts.pre` / `contracts.post` behavior and real repository adoption are covered
@@ -564,10 +565,11 @@ surfaces.
       separately from authorized resolved data.
 - [x] Client condition evaluation is reflected as satisfied, rejected, or unknown and never skips
       authoritative validation after a local success.
-- [ ] State preconditions compile into one guarded Command when possible; otherwise their required
-      atomic Operation boundary is explicit.
-- [ ] Permanent invariants apply to every relevant mutation path and distinguish
-      authority-serialized requirements from future merge-safe execution.
+- [x] Extract state-precondition lowering and explicit atomic fallback to
+      [142g. Guarded State Preconditions](../backlog/142g-guarded-state-preconditions.md).
+- [x] Extract permanent invariants across every mutation path to
+      [123. Ontahi Declarative Entity Invariants](../next/123-ontahi-declarative-entity-invariants.md),
+      preserving the distinction between authority-serialized and future merge-safe execution.
 - [x] Forward assignment and inverse has-many mutation produce one canonical prospective delta and
       enforce the same aggregate invariant, rejection, rollback, and Applied Mutation Outcome rules.
 - [x] Derived Fields share the ordinary Field reflection/query surface, remain read-only to
@@ -596,3 +598,16 @@ surfaces.
    Field surface without a parallel computed-field query language?
 6. How should generated clients expose execution availability while keeping the ordinary invocation
    spelling unchanged?
+
+## Closure
+
+- Status: done
+- Closed on: 2026-09-03
+- Delivered through: plans 142a–142f and 136h
+- Outcome: Ontahi now has one portable Model Expression IR, schema-native existing Refs, reflected
+  atomic Operation requirements, portable input conditions, virtual derived Fields, and an
+  authority-serialized aggregate Relation constraint proof.
+- Follow-ups:
+  - [142g. Guarded State Preconditions](../backlog/142g-guarded-state-preconditions.md)
+  - [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
+  - [123. Ontahi Declarative Entity Invariants](../next/123-ontahi-declarative-entity-invariants.md)

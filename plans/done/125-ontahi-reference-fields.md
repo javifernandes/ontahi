@@ -1,6 +1,6 @@
 # 125. Ontahi Reference Fields
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/125-ontahi-reference-fields`
 
@@ -8,15 +8,13 @@ Migrated from: `bookops://plans/125-ontahi-reference-fields`
 Original path: `plans/current/125-ontahi-reference-fields.md`
 Source commit: `67713696`
 
-Advances goal: [`Ontahi Independently Usable`](../../atlas/items/independently-usable.md)
-
-Source plan: [`71. Ontahi / BookOps Semantic Model Convergence`](bookops://plans/71-ontahi-bookops-semantic-model-convergence)
+Source plan: [`71. Ontahi / BookOps Semantic Model Convergence`](./71-ontahi-bookops-semantic-model-convergence.md)
 
 Source plans:
 
-1. [`71a. Experimental Entity Relations Bridge`](bookops://plans/71a-ontahi-relations-model-research)
+1. [`71a. Experimental Entity Relations Bridge`](./71a-ontahi-relations-model-research.md)
 2. [`116. Ontahi Selection Model`](../done/116-ontahi-selection-model.md)
-3. [`122. Ontahi Developer Book`](bookops://plans/122-ontahi-developer-book)
+3. [`122. Ontahi Developer Book`](./122-ontahi-developer-book.md)
 
 ## Summary
 
@@ -155,19 +153,21 @@ Entity at a time.
 - [x] Replace reference fields with materialized values in typed Query includes.
 - [x] Lift and lower reference values in the in-memory runtime.
 - [x] Add PostgreSQL and Supabase mapping, predicate, payload, returning, and include support.
-- [ ] Reflect the target Entity and locator contract in schema and Explorer descriptors. The schema
-      descriptor is implemented; the Explorer presentation remains.
+- [x] Reflect the target Entity and locator contract in schema descriptors; extract the remaining
+      Explorer presentation to
+      [125a. Reference Field Projection Follow-Ups](../backlog/125a-reference-field-projection-follow-ups.md).
 - [x] Generate browser-safe direct reference field declarations and types.
-- [ ] Project deferred or cyclic Reference Fields through browser codegen without introducing
-      declaration-order or temporal-dead-zone failures.
+- [x] Extract deferred or cyclic Reference Field browser codegen to
+      [125a. Reference Field Projection Follow-Ups](../backlog/125a-reference-field-projection-follow-ups.md).
 - [x] Add `relation.inverse(referenceField)` with ambiguity-free mapping.
 - [x] Let relation-root navigation consume a semantic Selection directly and infer its unique
       connecting relation; require `through` only for ambiguous topology.
 - [x] Migrate `TodoItem.list` in the Todo portability example to a Reference Field and unique
       relation traversal.
-- [ ] Replace the legacy scalar-FK `TodoTag` declaration when Plan 135 proves anonymous
-      many-to-many Relation storage.
-- [ ] Migrate one representative BookOps relation.
+- [x] Extract the legacy scalar-FK `TodoTag` cleanup to
+      [125a. Reference Field Projection Follow-Ups](../backlog/125a-reference-field-projection-follow-ups.md).
+- [x] Return representative BookOps adoption to BookOps as
+      [125b. BookOps Reference Field Adoption](bookops://plans/125b-bookops-reference-field-adoption).
 - [x] Update the developer book for direct Reference Fields after adapter conformance tests.
 
 ## Verification
@@ -214,3 +214,14 @@ Entity at a time.
    state with the Entity value?
 4. Does a cross-graph reference use the same field kind with routing metadata, or a distinct
    distributed reference contract?
+
+## Closure
+
+- Status: done
+- Closed on: 2026-09-03
+- Outcome: direct Reference Fields are implemented across the model, Selection AST, Query includes,
+  in-memory/PostgreSQL/Supabase adapters, reflection, browser codegen, relation inference, and the
+  Todo portability example.
+- Follow-ups:
+  - [125a. Reference Field Projection Follow-Ups](../backlog/125a-reference-field-projection-follow-ups.md)
+  - [125b. BookOps Reference Field Adoption](bookops://plans/125b-bookops-reference-field-adoption)

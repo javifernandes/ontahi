@@ -9,12 +9,12 @@ supports:
   - ontahi
   - bookops.model
 relatedPlans:
-  - bookops://plans/71-ontahi-bookops-semantic-model-convergence
-  - bookops://plans/77-domain-topology-and-graphos-layers
+  - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
+  - ontahi://plans/77-domain-topology-and-graphos-layers
   - bookops://plans/78-first-class-authorization-and-relationship-policies
   - bookops://plans/79-graph-native-schema-dsl
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
 migratedFrom: bookops://atlas/model
 sourceCommit: 67713696

@@ -8,7 +8,7 @@ Migrated from: `bookops://plans/128b-projectable-operation-client-bridge`
 Original path: `plans/done/128b-ontahi-projectable-operation-client-bridge.md`
 Source commit: `67713696`
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](../next/128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
 
 ## Summary
 
@@ -115,6 +115,6 @@ both packages pass typecheck and lint, and all packages build.
 - Closed on: 2026-08-16
 - Effective effort: ~2h focused work
 - Follow-ups:
-  - [128. Ontahi Data Graph Execution Bridge](../next/128-ontahi-data-graph-execution-bridge.md)
+  - [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
   - Pilot the released API in Nahue's Trips application before freezing the generic remote Query
     protocol.

@@ -8,12 +8,12 @@ horizon: now
 supports:
   - ontahi.domain-topology-graphos
 relatedPlans:
-  - bookops://plans/100-ontahi-framework-extraction
-  - bookops://plans/100c-ontahi-explorer-react-boundary
+  - ontahi://plans/100-ontahi-framework-extraction
+  - ontahi://plans/100c-ontahi-explorer-react-boundary
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/118-ontahi-selection-language-editor
-  - bookops://plans/117-alive-ui-from-reflected-selections
-  - bookops://plans/126-ontahi-runtime-data-reflection
+  - ontahi://plans/118-ontahi-selection-language-editor
+  - ontahi://plans/117-alive-ui-from-reflected-selections
+  - ontahi://plans/126-ontahi-runtime-data-reflection
   - ontahi://plans/137-reflected-relation-affordances
   - ontahi://plans/137b-instance-first-explorer-workspace
 migratedFrom: bookops://atlas/source-code-organization/explorer-react

@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/136g-portable-relationship-command-outcomes`
 
-Parent plan: [136. Relation Constraints And Eligibility](../current/136-relation-constraints-and-eligibility.md)
+Parent plan: [136. Relation Constraints And Eligibility](./136-relation-constraints-and-eligibility.md)
 
 Advances: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
 and [139. Relations Lifecycle Release Proof](./139-relations-lifecycle-release-proof.md)

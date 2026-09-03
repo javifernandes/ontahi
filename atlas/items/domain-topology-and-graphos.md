@@ -9,11 +9,11 @@ supports:
   - ontahi
   - bookops
 relatedPlans:
-  - bookops://plans/71-ontahi-bookops-semantic-model-convergence
-  - bookops://plans/71a-ontahi-relations-model-research
+  - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
+  - ontahi://plans/71a-ontahi-relations-model-research
   - bookops://plans/71b-unified-entity-capability-lift
-  - bookops://plans/77-domain-topology-and-graphos-layers
-  - bookops://plans/100c-ontahi-explorer-react-boundary
+  - ontahi://plans/77-domain-topology-and-graphos-layers
+  - ontahi://plans/100c-ontahi-explorer-react-boundary
   - bookops://plans/68b-data-graph-engine-api
   - ontahi://plans/116-ontahi-selection-model
   - bookops://plans/52-typed-entity-graph-v0

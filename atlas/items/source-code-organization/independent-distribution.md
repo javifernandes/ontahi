@@ -9,12 +9,12 @@ supports:
   - ontahi.independently-usable
   - ontahi.source-code-organization
 relatedPlans:
-  - bookops://plans/100-ontahi-framework-extraction
-  - bookops://plans/129-ontahi-independent-repository-and-release-readiness
-  - bookops://plans/129a-ontahi-public-package-artifact-hardening
+  - ontahi://plans/100-ontahi-framework-extraction
+  - ontahi://plans/129-ontahi-independent-repository-and-release-readiness
+  - ontahi://plans/129a-ontahi-public-package-artifact-hardening
   - bookops://plans/129b-ontahi-bookops-versioned-consumer-loop
-  - bookops://plans/129c-ontahi-public-repository-and-prerelease-proof
-  - bookops://plans/129d-ontahi-stable-release-lifecycle
+  - ontahi://plans/129c-ontahi-public-repository-and-prerelease-proof
+  - ontahi://plans/129d-ontahi-stable-release-lifecycle
   - ontahi://plans/139-relations-lifecycle-release-proof
   - ontahi://plans/139f-relations-lifecycle-release-rehearsal
 migratedFrom: bookops://atlas/source-code-organization/independent-distribution

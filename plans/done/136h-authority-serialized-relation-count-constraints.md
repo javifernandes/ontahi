@@ -4,9 +4,9 @@ Status: done
 
 Canonical ID: `ontahi://plans/136h-authority-serialized-relation-count-constraints`
 
-Parent: [136. Relation Constraints And Eligibility Semantics](../current/136-relation-constraints-and-eligibility.md)
+Parent: [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
 
-Advances: [142. Declarative Model Semantics And Execution Planning](../current/142-declarative-model-semantics-and-execution-planning.md)
+Advances: [142. Declarative Model Semantics And Execution Planning](./142-declarative-model-semantics-and-execution-planning.md)
 
 Predecessor: [142f. Virtual Derived Fields And Classroom Capacity](./142f-virtual-derived-fields-and-classroom-capacity.md)
 

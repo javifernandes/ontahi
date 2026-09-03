@@ -10,9 +10,9 @@ supports:
   - ontahi.operation-contracts.operation-inputs
 relatedPlans:
   - bookops://plans/79-graph-native-schema-dsl
-  - bookops://plans/76a-operation-input-constraints-and-client-validation
+  - ontahi://plans/76a-operation-input-constraints-and-client-validation
   - ontahi://plans/125-ontahi-reference-fields
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/142f-virtual-derived-fields-and-classroom-capacity
 migratedFrom: bookops://atlas/model/field
 sourceCommit: 67713696

@@ -1,13 +1,13 @@
 # 141. Data Graph Progressive Module Boundaries
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/141-data-graph-progressive-module-boundaries`
 
 Related plans:
 
 1. [140. Colocated Test Topology](../done/140-colocated-test-topology.md)
-2. [134. Semantic Codegen Pipeline, Organization, And Coverage](./134-codegen-analysis-organization-and-semantic-coverage.md)
+2. [134. Semantic Codegen Pipeline, Organization, And Coverage](../current/134-codegen-analysis-organization-and-semantic-coverage.md)
 3. [139. Relations Lifecycle Release Proof](../done/139-relations-lifecycle-release-proof.md)
 
 ## Summary
@@ -151,6 +151,13 @@ Verification for the slice:
 5. repository formatting passed;
 6. clean-room package artifact installation, typechecking, and runtime verification passed.
 
-Plan 141 remains current for the later module-boundary slices listed above. The next candidate is a
-separate extraction of portable Field, Entity, Relation, and mapping definitions from authoring
-factories; it must not be folded into this Ref pull request.
+Later module-boundary work continues in
+[141a. Data Graph Module Boundary Follow-Ups](../backlog/141a-data-graph-module-boundary-follow-ups.md).
+It is independent cleanup rather than unfinished scope of the delivered Ref slice.
+
+## Closure
+
+- Status: done
+- Closed on: 2026-09-03
+- Delivered in: the Ref module-boundary slice
+- Follow-up: [141a. Data Graph Module Boundary Follow-Ups](../backlog/141a-data-graph-module-boundary-follow-ups.md)

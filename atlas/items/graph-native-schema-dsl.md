@@ -1,12 +1,14 @@
 ---
-id: ontahi.operation-contracts.graph-native-schema-dsl
+id: ontahi.graph-native-schema-dsl
 kind: capability
 title: Graph-Native Schema DSL
-parent: ontahi.operation-contracts
-status: in-progress
+parent: ontahi
+status: active
 horizon: now
 supports:
+  - ontahi.model
   - ontahi.operation-contracts
+  - ontahi.durable-workflows
 relatedPlans:
   - bookops://plans/79-graph-native-schema-dsl
   - bookops://plans/75d-graph-native-durable-operation-lifecycle-contracts
@@ -14,9 +16,47 @@ migratedFrom: bookops://atlas/operation-contracts/graph-native-schema-dsl
 sourceCommit: 67713696
 ---
 
-Graph-Native Schema DSL covers the broader contract language: expressing operation inputs, outputs, refs, schemas, validation, and graph semantics without coupling the conceptual model to Zod.
+Graph-Native Schema DSL is Ontahi's declarative schema language for Entities, Fields, Values,
+Views, Refs, Selections, operation inputs and outputs, validation, and reflected lifecycle shapes.
+Operation contracts are an important consumer, but they do not own the language. Zod and other
+validators remain generated adapters rather than the conceptual model.
 
 The same language should describe every reflected durable lifecycle boundary, including progress snapshots and task-step outputs, without introducing a second task-specific schema system.
+
+This item was promoted from the historical identity
+`ontahi.operation-contracts.graph-native-schema-dsl` after the language proved broader than its
+first Operation Contract use cases.
+
+## Established Language
+
+The completed Plan 79 established the graph model as the semantic source of truth:
+
+1. Entities declare identity-bearing shapes and can serve directly as complete result contracts.
+2. Views declare identity-preserving projections over Entities.
+3. Values declare named shapes without independent Entity identity.
+4. Fields, Refs, composition, constraints, and refinements retain semantic and validation meaning.
+5. Reflection and generated clients consume stable graph-native descriptors.
+6. Runtime validators are compiled from those descriptors; Zod is not exposed as the operation
+   contract.
+
+The language remains open to evidence-driven extensions. That does not make its completed
+graph-native foundation or Operation Contract migration active implementation work.
+
+## Boundary With Other Ontahi Languages
+
+The schema DSL declares the shape and semantics of values. It is adjacent to, but distinct from:
+
+1. [[ontahi.model.selection|Selection]], whose canonical AST describes Entity membership and can be
+   edited textually or structurally;
+2. [[ontahi.model.model-expression|Model Expression]], whose canonical IR describes portable
+   calculations and conditions; and
+3. [[ontahi.runtime-protocol|Ontahí Runtime Protocol]], which transports independently versioned
+   operation, durable-operation, graph-read, and graph-command families.
+
+Those forms should share Ontahi names, reflection, diagnostics, and tooling where useful. They
+should not be collapsed into one AST merely because a future textual surface may expose several of
+them. The first rich filtering surface belongs to the Selection language and its canonical AST,
+not to schema declaration or to the Runtime Protocol envelope.
 
 ## Defining contracts from existing concepts
 

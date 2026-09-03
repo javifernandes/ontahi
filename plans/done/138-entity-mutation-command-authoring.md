@@ -90,6 +90,6 @@ identity.
 - Outcome: generated client Entity facades and canonical Refs author typed exact lifecycle Commands;
   runtime binding adds transparent execution; conditional update/delete now preserve one atomic,
   authority-safe concurrency contract through local and remote runtimes.
-- Follow-up: [Plan 146](../next/146-ontahi-runtime-protocol.md) owns the shared distributed runtime
+- Follow-up: [Plan 146](../current/146-ontahi-runtime-protocol.md) owns the shared distributed runtime
   message model; future lifecycle ergonomics should extend the canonical Command family rather than
   create another transport contract.

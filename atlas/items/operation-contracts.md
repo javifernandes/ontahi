@@ -3,7 +3,7 @@ id: ontahi.operation-contracts
 kind: system-primitive
 title: Operation Contracts
 parent: ontahi
-status: in-progress
+status: active
 horizon: now
 supports:
   - ontahi
@@ -17,7 +17,10 @@ migratedFrom: bookops://atlas/operation-contracts
 sourceCommit: 67713696
 ---
 
-Operation Contracts cover inputs, results, validation, schemas, operation invocation, and the way UI, server, and LLM agents can talk about executable work.
+Operation Contracts cover inputs, results, validation, operation invocation, and the way UI,
+server, and LLM agents can talk about executable work. Their shapes are authored through the
+top-level [[ontahi.graph-native-schema-dsl|Graph-Native Schema DSL]], but the language is not owned
+by Operation Contracts.
 
 Plan 142e replaced callback-valued top-level contracts during the alpha. `contracts.pre` now owns
 an object of named portable input conditions. Codegen analyzes their natural TypeScript expressions
@@ -42,4 +45,3 @@ Graph transaction and can roll it back.
 
 1. [`Operation Inputs`](./operation-contracts/operation-inputs.md)
 2. [`Operation Results`](./operation-contracts/operation-results.md)
-3. [`Graph-Native Schema DSL`](./operation-contracts/graph-native-schema-dsl.md)

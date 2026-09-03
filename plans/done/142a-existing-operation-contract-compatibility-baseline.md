@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/142a-existing-operation-contract-compatibility-baseline`
 
-Parent: [142. Declarative Model Semantics And Execution Planning](../current/142-declarative-model-semantics-and-execution-planning.md)
+Parent: [142. Declarative Model Semantics And Execution Planning](./142-declarative-model-semantics-and-execution-planning.md)
 
 ## Summary
 

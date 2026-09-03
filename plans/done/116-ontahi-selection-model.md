@@ -13,9 +13,9 @@ Related plans:
 1. [53 Selection-Centric Data Language](bookops://plans/53-entity-targets-and-mutations)
 2. [74 Entity Refs And Unit Of Work](bookops://plans/74-entity-refs-and-unit-of-work)
 3. [79 Graph-Native Schema DSL](bookops://plans/79-graph-native-schema-dsl)
-4. [118 Ontahí Selection Language Editor Research](bookops://plans/118-ontahi-selection-language-editor)
-5. [119 Relation Predicates In Selection](bookops://plans/119-selection-relation-predicates)
-6. [120 Named And Saved Selections](bookops://plans/120-named-and-saved-selections)
+4. [118 Ontahí Selection Language Editor Research](../research/118-ontahi-selection-language-editor.md)
+5. [119 Relation Predicates In Selection](../backlog/119-selection-relation-predicates.md)
+6. [120 Named And Saved Selections](../backlog/120-named-and-saved-selections.md)
 
 ## Summary
 

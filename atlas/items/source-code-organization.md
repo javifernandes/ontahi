@@ -8,13 +8,13 @@ horizon: now
 supports:
   - ontahi
 relatedPlans:
-  - bookops://plans/100-ontahi-framework-extraction
-  - bookops://plans/100e-ontahi-runtime-capabilities-and-repository-topology
-  - bookops://plans/100f-operation-invocation-capability
-  - bookops://plans/100g-ontahi-codegen-and-application-tooling-boundary
-  - bookops://plans/100h-ontahi-portability-example-and-developer-guide
-  - bookops://plans/100i-ontahi-observability-adapter-boundary
-  - bookops://plans/129-ontahi-independent-repository-and-release-readiness
+  - ontahi://plans/100-ontahi-framework-extraction
+  - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
+  - ontahi://plans/100f-operation-invocation-capability
+  - ontahi://plans/100g-ontahi-codegen-and-application-tooling-boundary
+  - ontahi://plans/100h-ontahi-portability-example-and-developer-guide
+  - ontahi://plans/100i-ontahi-observability-adapter-boundary
+  - ontahi://plans/129-ontahi-independent-repository-and-release-readiness
   - ontahi://plans/134-codegen-analysis-organization-and-semantic-coverage
   - ontahi://plans/140-colocated-test-topology
   - ontahi://plans/141-data-graph-progressive-module-boundaries

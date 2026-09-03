@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/142e-portable-operation-condition-bridge`
 
-Parent: [142. Declarative Model Semantics And Execution Planning](../current/142-declarative-model-semantics-and-execution-planning.md)
+Parent: [142. Declarative Model Semantics And Execution Planning](./142-declarative-model-semantics-and-execution-planning.md)
 
 Predecessor: [142d. Existing Operation Refs](../done/142d-existing-operation-refs.md)
 

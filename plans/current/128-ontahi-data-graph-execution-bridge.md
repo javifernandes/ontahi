@@ -47,7 +47,7 @@ Related work:
 2. [57. Client Runtime Bridge And Server Dispatch](bookops://plans/57-client-runtime-bridge-and-server-dispatch)
 3. [68j. Graph Execution Authority API](bookops://plans/68j-graph-execution-authority-api)
 4. [116. Ontahi Selection Model](../done/116-ontahi-selection-model.md)
-5. [118. Ontahi Selection Language Editor](bookops://plans/118-ontahi-selection-language-editor)
+5. [118. Ontahi Selection Language Editor](../research/118-ontahi-selection-language-editor.md)
 6. [128a. Recursive Views And Projectable Operation Results](../done/128a-ontahi-recursive-views-and-projectable-operation-results.md)
 7. [128b. Projectable Operation Client Bridge](../done/128b-ontahi-projectable-operation-client-bridge.md)
 8. [134. Semantic Codegen Pipeline, Organization, And Coverage](./134-codegen-analysis-organization-and-semantic-coverage.md)

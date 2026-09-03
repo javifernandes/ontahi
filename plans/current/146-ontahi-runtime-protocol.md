@@ -17,9 +17,9 @@ Canonical ID: `ontahi://plans/146-ontahi-runtime-protocol`
 Related plans:
 
 1. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
-2. [132. Durable Invocation Identity And Idempotency](./132-durable-invocation-identity-and-idempotency.md)
+2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [138b. Conditional Exact Entity Mutations](../done/138b-conditional-exact-entity-mutations.md)
-4. [145. Ordered Relations And Sequence Commands](./145-ordered-relations-and-sequence-commands.md)
+4. [145. Ordered Relations And Sequence Commands](../next/145-ordered-relations-and-sequence-commands.md)
 
 ## Summary
 

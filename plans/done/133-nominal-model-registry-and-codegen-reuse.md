@@ -6,10 +6,10 @@ Canonical ID: `ontahi://plans/133-nominal-model-registry-and-codegen-reuse`
 
 Related plans:
 
-1. [128. Data Graph Execution Bridge](../next/128-ontahi-data-graph-execution-bridge.md)
+1. [128. Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
 2. [128a. Recursive Views And Projectable Operation Results](../done/128a-ontahi-recursive-views-and-projectable-operation-results.md)
 3. [128b. Projectable Operation Client Bridge](../done/128b-ontahi-projectable-operation-client-bridge.md)
-4. [134. Codegen Analysis Organization And Semantic Coverage](../next/134-codegen-analysis-organization-and-semantic-coverage.md)
+4. [134. Codegen Analysis Organization And Semantic Coverage](../current/134-codegen-analysis-organization-and-semantic-coverage.md)
 
 ## Summary
 
@@ -127,5 +127,5 @@ Consequences:
 - Abandoned server View registry: Ontahi PR #38, closed without merge
 - Caller-owned View ergonomic correction: Ontahi PR #39
 - Follow-ups:
-  - [128. Data Graph Execution Bridge](../next/128-ontahi-data-graph-execution-bridge.md)
-  - [134. Codegen Analysis Organization And Semantic Coverage](../next/134-codegen-analysis-organization-and-semantic-coverage.md)
+  - [128. Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
+  - [134. Codegen Analysis Organization And Semantic Coverage](../current/134-codegen-analysis-organization-and-semantic-coverage.md)

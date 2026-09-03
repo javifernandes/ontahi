@@ -11,8 +11,8 @@ supports:
 relatedPlans:
   - bookops://plans/46c-durable-workflow-runtime
   - bookops://plans/70-first-class-workflow-tier-in-architecture
-  - bookops://plans/100d-ontahi-vercel-workflow-runtime-boundary
-  - bookops://plans/100e-ontahi-runtime-capabilities-and-repository-topology
+  - ontahi://plans/100d-ontahi-vercel-workflow-runtime-boundary
+  - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
   - bookops://plans/90-event-driven-architecture-runtime
 migratedFrom: bookops://atlas/durable-workflows
 sourceCommit: 67713696

@@ -4,7 +4,7 @@ Status: done
 
 Canonical ID: `ontahi://plans/137-reflected-relation-affordances`
 
-Depends on: [136. Relation Constraints And Eligibility Semantics](../current/136-relation-constraints-and-eligibility.md)
+Depends on: [136. Relation Constraints And Eligibility Semantics](./136-relation-constraints-and-eligibility.md)
 
 Completed child: [137a. Read-Only Relation Explorer](./137a-read-only-relation-explorer.md)
 
@@ -50,7 +50,7 @@ eligibility constraints, and the distinction between direct Relations and Associ
 2. [137b. Instance-First Explorer Workspace](./137b-instance-first-explorer-workspace.md) makes
    authorized instances and graph traversal the primary automatic application surface while
    keeping access scope under runtime policy.
-3. [Plan 136](../current/136-relation-constraints-and-eligibility.md) contributes portable
+3. [Plan 136](./136-relation-constraints-and-eligibility.md) contributes portable
    eligibility, stable rejection metadata, provider enforcement, and exact Relationship outcomes.
 4. Plan 78 contributes authority decisions; Plan 128 contributes remote execution; Plan 135 and
    Plan 132 contribute optimistic outcome reconciliation.

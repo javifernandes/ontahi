@@ -9,10 +9,10 @@ supports:
   - ontahi
   - ontahi.independently-usable
 relatedPlans:
-  - bookops://plans/127-ontahi-storage-schema-contract-validation
-  - bookops://plans/127a-ontahi-storage-schema-contract-depth
-  - bookops://plans/121-ontahi-direct-postgres-adapter
-  - bookops://plans/123-ontahi-declarative-entity-invariants
+  - ontahi://plans/127-ontahi-storage-schema-contract-validation
+  - ontahi://plans/127a-ontahi-storage-schema-contract-depth
+  - ontahi://plans/121-ontahi-direct-postgres-adapter
+  - ontahi://plans/123-ontahi-declarative-entity-invariants
 migratedFrom: bookops://atlas/application-architecture-surface/storage-schema-contract-validation
 sourceCommit: 67713696
 ---

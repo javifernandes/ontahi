@@ -9,12 +9,12 @@ supports:
   - ontahi
   - bookops
 relatedPlans:
-  - bookops://plans/71-ontahi-bookops-semantic-model-convergence
+  - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
   - bookops://plans/68-unified-application-architecture-surface
   - bookops://plans/68k-graph-native-application-composition-model
   - bookops://plans/68a-architecture-factory-and-app-facade
   - bookops://plans/architecture-facade-completion
-  - bookops://plans/100e-ontahi-runtime-capabilities-and-repository-topology
+  - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
 migratedFrom: bookops://atlas/application-architecture-surface
 sourceCommit: 67713696
 ---

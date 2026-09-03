@@ -11,13 +11,13 @@ supports:
 typeOf:
   - spec-workstream-atlas.atlas-model.model-item
 relatedPlans:
-  - bookops://plans/71-ontahi-bookops-semantic-model-convergence
-  - bookops://plans/71a-ontahi-relations-model-research
+  - ontahi://plans/71-ontahi-bookops-semantic-model-convergence
+  - ontahi://plans/71a-ontahi-relations-model-research
   - bookops://plans/71b-unified-entity-capability-lift
-  - bookops://plans/77-domain-topology-and-graphos-layers
+  - ontahi://plans/77-domain-topology-and-graphos-layers
   - bookops://plans/79-graph-native-schema-dsl
   - ontahi://plans/116-ontahi-selection-model
-  - bookops://plans/122-ontahi-developer-book
+  - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/131-ontahi-relationship-semantics
   - ontahi://plans/131a-relationship-command-delta-core-experiment

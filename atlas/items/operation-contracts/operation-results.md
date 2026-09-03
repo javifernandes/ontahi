@@ -3,14 +3,14 @@ id: ontahi.operation-contracts.operation-results
 kind: capability
 title: Operation Results
 parent: ontahi.operation-contracts
-status: in-progress
+status: active
 horizon: now
 supports:
   - ontahi.operation-contracts
 relatedPlans:
   - bookops://plans/75-operation-result-contracts
   - bookops://plans/75b-canonical-operation-invocation-results
-  - bookops://plans/100f-operation-invocation-capability
+  - ontahi://plans/100f-operation-invocation-capability
   - bookops://plans/75c-durable-operation-result-contracts
   - bookops://plans/75d-graph-native-durable-operation-lifecycle-contracts
   - ontahi://plans/128a-ontahi-recursive-views-and-projectable-operation-results

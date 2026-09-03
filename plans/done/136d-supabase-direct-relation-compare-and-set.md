@@ -2,7 +2,7 @@
 
 Status: done
 
-Source plan: [136. Relation Constraints And Eligibility](../current/136-relation-constraints-and-eligibility.md)
+Source plan: [136. Relation Constraints And Eligibility](./136-relation-constraints-and-eligibility.md)
 
 Canonical ID: `ontahi://plans/136d-supabase-direct-relation-compare-and-set`
 

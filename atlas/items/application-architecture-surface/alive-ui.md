@@ -11,9 +11,9 @@ supports:
   - ontahi.react-graph-surface
 relatedPlans:
   - bookops://plans/76-operation-input-metadata-and-ui
-  - bookops://plans/117-alive-ui-from-reflected-selections
-  - bookops://plans/118-ontahi-selection-language-editor
-  - bookops://plans/126-ontahi-runtime-data-reflection
+  - ontahi://plans/117-alive-ui-from-reflected-selections
+  - ontahi://plans/118-ontahi-selection-language-editor
+  - ontahi://plans/126-ontahi-runtime-data-reflection
 migratedFrom: bookops://atlas/application-architecture-surface/alive-ui
 sourceCommit: 67713696
 ---
