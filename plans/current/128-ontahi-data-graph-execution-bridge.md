@@ -518,3 +518,23 @@ left to the next slice.
 This plan is ready to pull. Its first completion signal is narrower than the full direction: a
 reviewable read protocol, credible default-deny read policy, and Todo proof in which the same client
 read code runs through both direct and remote storage topologies without wrapper Operations.
+
+## Workstream Backtracking Checkpoint — 2026-09-03
+
+This checkpoint records execution provenance for Atlas Sessions; it does not change this Plan's
+status or reopen completed child Plans.
+
+The remote read path, Relationship Command bridge, and exact-identity Entity Mutation Command
+bridge are delivered through Plans 128a–128g. [Plan 146](./146-ontahi-runtime-protocol.md) now owns
+their common distributed envelope, dispatcher, adapters, and transport evolution.
+
+Plan 128 remains current only for the graph-specific gaps that were deliberately left behind:
+
+1. integrate read cache identity, telemetry, and Explorer reflection;
+2. add first-class generated-client and React execution ergonomics for bound Relationship Commands;
+3. shape authority-derived atomic scopes before generic bulk update, upsert, or delete variants;
+4. evaluate hybrid graph routing when a concrete segmented topology exists.
+
+[Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) owns durable invocation
+identity and idempotency. [Plan 145](../next/145-ordered-relations-and-sequence-commands.md) owns
+ordered Relation mutations. Neither is hidden completion work for this Plan.
