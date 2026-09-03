@@ -282,3 +282,54 @@ portion can be considered specification-complete is bounded to:
 
 Durable push and the first-class Event design gate remain later phases. This audit does not start
 Event subscription, delivery, acknowledgement, replay, or transport work.
+
+## Workstream Backtracking Checkpoint — 2026-09-03
+
+This checkpoint seeds the current Atlas Execution Stream with the workstream reconstructed from the
+completed Plans and extracted follow-ups. It changes no lifecycle status and does not claim a
+historical activity timeline that Atlas did not observe.
+
+### Completed foundation
+
+1. Relation semantics and execution lifecycle are established by
+   [Plan 131](../done/131-ontahi-relationship-semantics.md),
+   [Plan 135](../done/135-applied-mutation-outcomes-and-reactions.md),
+   [Plan 136](../done/136-relation-constraints-and-eligibility.md),
+   [Plan 137](../done/137-reflected-relation-affordances.md),
+   [Plan 138](../done/138-entity-mutation-command-authoring.md), and
+   [Plan 139](../done/139-relations-lifecycle-release-proof.md).
+2. UnitOfWork, schema-native Operation Refs, progressive Data Graph boundaries, declarative model
+   semantics, and headless application reads are established by
+   [Plan 74a](../done/74a-unit-of-work-runtime-scope.md),
+   [Plan 74b](../done/74b-schema-native-operation-refs.md),
+   [Plan 141](../done/141-data-graph-progressive-module-boundaries.md),
+   [Plan 142](../done/142-declarative-model-semantics-and-execution-planning.md), and
+   [Plan 147](../done/147-application-bound-headless-graph-reads.md).
+3. [Plan 128](./128-ontahi-data-graph-execution-bridge.md) remains current for the bounded
+   graph-specific bridge gaps documented in its own checkpoint. The common request/response path
+   through Plan 146g is complete.
+
+### Resume points
+
+1. Resume Plan 146 with capability and required-guarantee negotiation, normative examples,
+   conformance evidence, and the legacy-endpoint release boundary.
+2. Then prove transport-independent Durable progress push. Stop before Event transport work until
+   Events have a first-class semantic model.
+3. Pull [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) when durable retry
+   identity becomes the next runtime pressure, or
+   [Plan 145](../next/145-ordered-relations-and-sequence-commands.md) when ordered membership becomes
+   the next Relation pressure.
+4. [Plan 123](../next/123-ontahi-declarative-entity-invariants.md) owns permanent persisted-state
+   invariants; [Plan 76a](../next/76a-operation-input-constraints-and-client-validation.md) owns
+   richer input-constraint reflection and client validation.
+
+### Deliberately parked follow-ups
+
+1. [Plan 136i](../backlog/136i-relation-constraint-evolution.md): many-to-many aggregate constraints
+   and advisory preflight.
+2. [Plan 141a](../backlog/141a-data-graph-module-boundary-follow-ups.md): further Data Graph module
+   boundaries driven by concrete maintenance pressure.
+3. [Plan 142g](../backlog/142g-guarded-state-preconditions.md): atomic lowering of state-dependent
+   Operation preconditions.
+4. [Plan 142h](../backlog/142h-distributed-execution-topologies.md): offline, replicated, and
+   convergent execution topologies after concrete evidence exists.
