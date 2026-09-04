@@ -3,6 +3,7 @@ import {
   useGraphExecutorCapability,
   useGraphQuery,
   useManyToManyRelationshipCommand,
+  useDurableOperation,
   useOperation,
 } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
@@ -88,6 +89,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const createTodoOperation = useOperation(TodoItem.domain.createItem);
   const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
   const deleteTodoOperation = useOperation(TodoItem.domain.delete);
+  const completeAllOperation = useDurableOperation(TodoItem.domain.completeAll);
   const linkTags = useManyToManyRelationshipCommand(
     (input: TodoTagMutation) => createTodoTagCommand('add', input),
     { onSuccess: () => todos.refetch() },
@@ -328,6 +330,19 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
+  const completeAllTodos = async () => {
+    setActionError(undefined);
+    try {
+      const result = await completeAllOperation.executeAsync();
+      const message = operationMessage(result, 'The durable operation could not be started.');
+      setActionError(message);
+      return !message;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The durable operation could not be started.'));
+      return false;
+    }
+  };
+
   const signOut = async () => {
     const response = await fetch('/auth/logout', { method: 'POST' });
     if (!response.ok) return;
@@ -343,6 +358,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
           }
         : current,
     );
+    globalThis.location.reload();
   };
 
   const authenticationSession =
@@ -355,6 +371,16 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       runtime,
       authentication,
       signOut,
+      canComplete,
+      completeAllTodos,
+      completeAll: {
+        isExecuting: completeAllOperation.isExecuting,
+        isQueued: completeAllOperation.isQueued,
+        isRunning: completeAllOperation.isRunning,
+        isCompleted: completeAllOperation.isCompleted,
+        progress: completeAllOperation.progress,
+        finalValue: completeAllOperation.finalValue,
+      },
     },
     dashboard: {
       lists: dashboardLists,

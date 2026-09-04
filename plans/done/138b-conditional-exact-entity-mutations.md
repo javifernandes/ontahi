@@ -39,7 +39,7 @@ authorized stored Fields rather than require one provider-specific revision mech
    target. It intentionally does not reveal whether the target is missing, stale, replaced, or
    hidden by policy.
 6. Keep this as an Entity Mutation Command in the Data Graph Command message family described by
-   [Plan 146](../current/146-ontahi-runtime-protocol.md); do not create another endpoint or protocol.
+   [Plan 146](./146-ontahi-runtime-protocol.md); do not create another endpoint or protocol.
 7. Update Plan 138, Atlas, developer guidance, and a public Changeset.
 
 ## Non-Goals
@@ -94,5 +94,5 @@ version-1 Commands remain accepted during the transition.
   unit tests, repository typecheck, touched lint, formatting, package builds, clean-room artifact
   verification, Changeset status, and diff checks passed. Provider integration suites remain covered
   by CI because no local container runtime was available.
-- Follow-up: [Plan 146](../current/146-ontahi-runtime-protocol.md) generalizes the versioned Graph Command
+- Follow-up: [Plan 146](./146-ontahi-runtime-protocol.md) generalizes the versioned Graph Command
   evidence into one transport-independent runtime protocol.

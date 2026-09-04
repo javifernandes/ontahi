@@ -93,6 +93,47 @@ trusted request context and dispatches only the family handlers installed by the
 adapter above passes that server-derived value into its canonical dispatcher; the portable request
 never carries policies or authority.
 
+The same dispatcher can be projected as a WebSocket session on a host-owned HTTP server:
+
+```ts
+import { createServer } from 'node:http';
+import { createPollingDurableOperationObserver } from '@ontahi/core/runtime/protocol';
+import { createExpressRuntimeProtocolWebSocketServer } from '@ontahi/runtime-express/runtime-protocol';
+
+const httpServer = createServer(server);
+
+createExpressRuntimeProtocolWebSocketServer({
+  server: httpServer,
+  path: '/runtime/ontahi/runtime',
+  dispatcher: runtimeDispatcher,
+  authorizeUpgrade: request => {
+    const origin = request.headers.origin;
+    return Boolean(origin && request.headers.host && new URL(origin).host === request.headers.host);
+  },
+  context: async request => ({ principal: await authenticateUpgrade(request) }),
+  observeDurableOperation: createPollingDurableOperationObserver({
+    inspect: run => TodoApplication.getTaskSnapshot(run),
+  }),
+});
+```
+
+The upgrade `context` is receiver-owned and runs once for the session; authority is never accepted
+from a session frame. One connection carries all registered request/response families and pushed
+Durable snapshots. The polling observer is an honest server-side compatibility adapter for Task
+Runtimes that only expose inspection: it suppresses unchanged snapshots and never makes the browser
+poll. Hosts with a native task observer can supply that `AsyncIterable` directly. Unsubscribe and
+disconnect abort active iterators. The session does not promise replay, automatic resubscription,
+or exactly-once snapshot delivery.
+
+Browser WebSockets send matching cookies during the HTTP upgrade but do not use CORS as an access
+control boundary. A credentialed host should use `authorizeUpgrade` to validate the browser
+`Origin` against its canonical public origin before `context` restores the shared HTTP session.
+The callback is optional because non-browser clients and reverse-proxy deployments need
+host-specific trust rules; when supplied, `false` or an exception fails closed with `403`. Deploy
+over TLS (`wss:`), use a production session store, and close or revalidate long-lived sessions when
+logout, revocation, or permission changes must take effect immediately. The context is a snapshot
+for one socket, not a substitute for application authorization.
+
 There is no global route discovery. A mount root is host and deployment configuration, so each
 client runtime receives it explicitly. This also allows more than one Ontahi application to coexist
 under different roots.

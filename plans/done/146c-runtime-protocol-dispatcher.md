@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [146. Ontahí Runtime Protocol](../current/146-ontahi-runtime-protocol.md)
+Parent plan: [146. Ontahí Runtime Protocol](./146-ontahi-runtime-protocol.md)
 
 Predecessor:
 [146b. Versioned Operation Protocol Family](../done/146b-versioned-operation-protocol-family.md)

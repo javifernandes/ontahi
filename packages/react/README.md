@@ -126,8 +126,25 @@ const client = createFetchGraphClient({
 
 The endpoint, Fetch implementation, credentials, headers, per-call request initialization, abort
 signal, and request-id generator configured there serve every common request/response family.
-Hosts can replace `runtimeTransport` independently on `OntahiGraphProvider`; a future push-capable
-transport can yield the same snapshots without changing the hook.
+For a WebSocket host, compose the same graph client around the push-capable transport:
+
+```ts
+const runtimeTransport = createWebSocketRuntimeTransport({ url: 'wss://app.example/runtime' });
+const client = createRuntimeGraphClient({ runtimeTransport });
+```
+
+The transport opens one lazy session, correlates concurrent Runtime Protocol requests, and sends
+one Durable observation control frame per run. Sequenced snapshots are pushed over that socket;
+the browser does not issue repeated `inspect` requests. Aborting the hook sends an unsubscribe and
+releases both sides. A disconnected observation fails and is not silently resumed; a later request
+may open a new connection, but the application or a future resume contract must explicitly
+re-establish observation. `useDurableOperation` itself is unchanged.
+
+An application may compose Fetch and WebSocket behind its own `RuntimeTransport` and route each
+request from `request.family`; it can select the Durable observer independently. Operation bridge
+inputs backed by a Graph schema are converted to their portable Selection AST before strict
+Runtime Protocol validation, so the same `useOperation(Entity.domain.operation)` authoring works
+through either transport. The Todo example includes an interactive per-family routing lab.
 
 Legacy family routes are opt-in migration surfaces:
 

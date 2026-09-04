@@ -2,7 +2,7 @@
 
 Status: done
 
-Parent plan: [146. Ontahí Runtime Protocol](../current/146-ontahi-runtime-protocol.md)
+Parent plan: [146. Ontahí Runtime Protocol](./146-ontahi-runtime-protocol.md)
 
 Predecessor:
 [146f. Next.js Runtime Protocol Adapter](./146f-nextjs-runtime-protocol-adapter.md)

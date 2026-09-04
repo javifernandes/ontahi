@@ -11,3 +11,5 @@ export * from './operation-hooks.js';
 export * from './operation-types.js';
 export * from './reflected-entity-data-hooks.js';
 export * from './reflected-operation-invoker.js';
+export * from './runtime-graph-client.js';
+export * from './websocket-runtime-transport.js';

@@ -24,6 +24,7 @@ relatedPlans:
   - ontahi://plans/146e-runtime-transport-durable-observation
   - ontahi://plans/146f-nextjs-runtime-protocol-adapter
   - ontahi://plans/146g-unified-fetch-runtime-protocol-clients
+  - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -83,10 +84,25 @@ proof exercises both projections.
 The client-side `RuntimeTransport` exposes unary request exchange plus optional family
 capabilities. Its Durable observer is an asynchronous snapshot sequence. The Fetch implementation
 produces that sequence by repeatedly sending versioned `inspect` envelopes; React consumes the
-sequence without owning polling cadence. A later push transport may produce the same sequence
-without changing the hook or protocol. Cancellation remains only an observable status because no
-current Task Runtime exposes a truthful cancellation capability. Event intents are internal and no
-remote subscription contract exists.
+sequence without owning polling cadence. The WebSocket implementation multiplexes the same request
+envelopes and pushed Durable snapshot bodies over one lazy session. Observation controls retain a
+distinct identity, while a session-local sequence lets the client discard duplicate, out-of-order,
+and post-terminal snapshots. Abort and disconnect release observation resources; disconnect never
+implies replay, resubscription, or exactly-once delivery. A bounded server-side inspection observer
+supports Task Runtimes without native push while keeping polling out of the browser. Cancellation
+remains only an observable status because no current Task Runtime exposes a truthful cancellation
+capability. Event intents are internal and no remote subscription contract exists.
+
+Transport selection may be composed per complete Runtime Protocol family without changing family
+bodies or hook authoring. Durable observation is routed as a separate transport capability, which
+allows HTTP request/response with WebSocket push. Selection happens before transmission and never
+implies automatic retry through another transport after an ambiguous failure.
+
+For credentialed browsers, the WebSocket HTTP upgrade can restore the same host session cookie as
+ordinary HTTP. That convenience also creates a Cross-Site WebSocket Hijacking boundary: the host
+must validate the browser `Origin`, derive authority outside portable frames, and enforce family
+policy after connection. A session-scoped context is an authorization snapshot; immediate logout
+or permission revocation requires socket closure or host-owned revalidation.
 
 Events are an explicit design gate. Before Event subscription or delivery joins this protocol,
 Ontahí must define first-class Event declaration, identity, emission, authority, lifecycle,
