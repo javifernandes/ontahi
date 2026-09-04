@@ -90,6 +90,7 @@ describe('Express Runtime Protocol WebSocket server', () => {
     const adapter = createExpressRuntimeProtocolWebSocketServer({
       server,
       dispatcher,
+      path: '/runtime////',
       context: request => ({
         principal:
           request.headers['x-test-principal'] === 'github-user-123' ? 'github-user-123' : null,
