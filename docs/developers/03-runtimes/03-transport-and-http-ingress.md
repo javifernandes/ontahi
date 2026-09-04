@@ -117,9 +117,10 @@ must install authority-aware observation explicitly. A cancelled snapshot is val
 `cancel` request exists until Task Runtimes expose an enforceable cancellation capability.
 
 React consumes this through a Runtime Transport observer. The Fetch implementation repeats
-`inspect` at its configured cadence and yields snapshots until terminal state; a future
-push-capable transport can produce the same asynchronous sequence. `useDurableOperation` selects
-neither strategy, and Operation bridge adapters no longer carry Task snapshot methods.
+`inspect` at its configured cadence and yields snapshots until terminal state. The WebSocket
+implementation sends one observation control frame and receives the same snapshot bodies by push.
+`useDurableOperation` selects neither strategy, and Operation bridge adapters no longer carry Task
+snapshot methods.
 
 Express can project an injected common dispatcher at `POST /runtime`. It validates the envelope and
 family body before deriving receiver context, but does not install handlers or authorization. The
@@ -127,6 +128,40 @@ host explicitly chooses which families the dispatcher exposes. The Fetch client 
 path for Operation invocation and permission, Graph Read, Graph Command, and Durable inspection.
 The legacy `/operations`, `/graph/reads`, `/graph/commands`, and raw Task GET routes remain bounded
 compatibility surfaces.
+
+WebSocket adds a versioned `ontahi.runtime.session` frame around, rather than inside, those Runtime
+Protocol messages. `request` frames contain the complete existing request envelope; `response`
+frames contain its correlated response. `durable-observe` and `durable-unobserve` use a distinct
+observation identity. Pushed `durable-observation` frames retain the versioned Durable family body
+and add a session-local monotonic sequence so a client can ignore duplicates and out-of-order or
+post-terminal delivery without claiming exactly-once semantics.
+
+```ts
+const runtimeTransport = createWebSocketRuntimeTransport({ url: '/runtime' });
+const client = createRuntimeGraphClient({ runtimeTransport });
+```
+
+One lazy socket multiplexes Operation, Graph Read, Graph Command, and ordinary Durable inspection
+requests alongside pushed progress. An aborted observer unsubscribes. Disconnect fails active work
+and does not automatically resubscribe it; a later request can create a new session, while replay
+and resume remain explicit future guarantees. Fetch polling remains the fallback when a host does
+not project WebSocket.
+
+A host application may compose Fetch and WebSocket transports and route each complete envelope by
+its `family`. Durable observation is selected separately because it is an asynchronous transport
+capability rather than a new family body. This permits Graph reads and Operation invocation over
+HTTP while Durable snapshots arrive by WebSocket push, or sends all current families through one
+socket. The hook and Entity authoring stay unchanged; routing is chosen before transmission, and a
+failure never causes an automatic replay through the other transport.
+
+The WebSocket handshake is an HTTP request, so a same-origin browser automatically includes the
+same applicable session cookie used by Fetch. WebSocket does not make CORS an authorization
+boundary: credentialed hosts must validate `Origin` during upgrade, restore the server-owned
+session, derive a narrow invocation context, and continue enforcing family policy for every
+message. Production deployments use WSS and a session store shared by all accepting instances.
+Because the current session context is resolved once per connection, immediate logout or
+permission revocation also requires closing affected sockets or a host-specific revalidation
+strategy.
 
 Next.js App Router can project that same dispatcher without an application-local protocol route:
 

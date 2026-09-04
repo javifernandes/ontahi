@@ -1,3 +1,4 @@
+import { createEntityRef, entity, field, graphSchema, Selection } from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolResponse,
   type RuntimeProtocolRequestEnvelope,
@@ -114,5 +115,56 @@ describe('Fetch Operation bridge adapter', () => {
       },
     ]);
     expect(JSON.stringify(requests)).not.toContain('authority');
+  });
+
+  it('turns schema Selection inputs into portable ASTs before Runtime Protocol validation', async () => {
+    const Todo = entity('Todo', { id: field.id() }).locators({ refById: 'id' }).identity('refById');
+    const selectionOperation = {
+      kind: 'domain-operation',
+      authority: 'server',
+      exposure: 'bridge',
+      entityName: 'Todo',
+      name: 'complete',
+      id: 'Todo.complete',
+      bridge: {},
+      input: graphSchema.object({
+        todos: graphSchema.selection(Todo, { cardinality: 'many' }),
+      }),
+    } as unknown as BridgedOperationLike<{ todos: Selection<typeof Todo> }, null>;
+    const requests: RuntimeProtocolRequestEnvelope[] = [];
+    const adapter = createFetchOperationBridgeAdapter({
+      runtimeTransport: {
+        request: async envelope => {
+          requests.push(envelope);
+          return createRuntimeProtocolResponse(envelope, {
+            kind: 'invocation-result',
+            result: { ok: true, kind: 'success', value: null },
+          });
+        },
+      },
+    });
+    const { result } = renderHook(() => adapter.useBridgeAction(selectionOperation));
+
+    await act(async () => {
+      await result.current({
+        todos: Selection.references(Todo, [createEntityRef(Todo, { id: 'todo-1' })]),
+      });
+    });
+
+    expect(requests[0]?.body).toEqual({
+      version: 1,
+      kind: 'invoke',
+      operationId: 'Todo.complete',
+      input: {
+        todos: {
+          kind: 'selection',
+          entityName: 'Todo',
+          expression: {
+            kind: 'references',
+            refs: [{ kind: 'entity-ref', entityName: 'Todo', locator: { id: 'todo-1' } }],
+          },
+        },
+      },
+    });
   });
 });

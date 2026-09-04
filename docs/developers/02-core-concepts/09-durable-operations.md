@@ -142,8 +142,8 @@ commands. Repeating `inspect` is the portable polling primitive.
 The React boundary is one Runtime Transport observer. `useDurableOperation` consumes its
 asynchronous snapshot sequence; the transport chooses how to produce it from its capabilities. The
 Fetch transport polls with repeated `inspect` requests and stops at `completed`, `failed`, or
-`cancelled`. A future push-capable transport can produce the same sequence without changing
-component code, lifecycle state, or completion-time cache invalidation.
+`cancelled`. The WebSocket transport subscribes once and receives the same snapshots by push,
+without changing component code, lifecycle state, or completion-time cache invalidation.
 
 Polling cadence belongs to Fetch configuration, not the hook:
 
@@ -155,6 +155,20 @@ const client = createFetchGraphClient({
   },
 });
 ```
+
+Or select pushed observation explicitly:
+
+```ts
+const runtimeTransport = createWebSocketRuntimeTransport({ url: '/runtime' });
+const client = createRuntimeGraphClient({ runtimeTransport });
+```
+
+The WebSocket observer releases the session subscription when the hook aborts or a terminal
+snapshot arrives. It ignores duplicate, out-of-order, mismatched-run, and post-terminal delivery.
+A disconnect ends active observation without replay or automatic resubscription; WebSocket alone
+does not imply durability or exactly-once delivery. A host whose Task Runtime only supports
+inspection may poll on the server and push changed snapshots, while the browser still performs no
+polling.
 
 The conventional same-origin client uses `POST /runtime` for invocation, Graph Read, Graph Command,
 and inspection. `OntahiGraphProvider` exposes the same Runtime Transport capability consumed by the

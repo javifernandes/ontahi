@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/132-durable-invocation-identity-and-idempotency
   - ontahi://plans/146d-versioned-durable-operation-observation-protocol
   - ontahi://plans/146e-runtime-transport-durable-observation
+  - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - bookops://plans/75c-durable-operation-result-contracts
   - bookops://plans/75d-graph-native-durable-operation-lifecycle-contracts
   - bookops://plans/70-first-class-workflow-tier-in-architecture
@@ -27,7 +28,7 @@ It should keep the same domain contract discipline as a synchronous [[ontahi.mod
 
 Its reflected lifecycle contract distinguishes start input, immediate `TaskRunRef`, progress snapshots, typed step inputs and outputs, and eventual final output. A runtime `TaskDefinition` is a projection of this contract, not a second semantic source of truth. Runtime adapters validate every declared lifecycle schema before progress or results cross persistence, workflow, or step boundaries.
 
-React consumers use `useDurableOperation` as a lifecycle hook, not merely a start mutation. After receiving the initial `TaskRunRef`, the hook follows task snapshots until `completed`, `failed`, or `cancelled`, exposing status, progress, final result, and error. Runtime Transport owns how those snapshots arrive: the Fetch implementation repeats the versioned `durable.operation.inspect` message, while a future push-capable transport may produce the same asynchronous snapshot sequence without changing the operation contract or component API. Polling cadence is transport configuration, not hook input or Operation bridge behavior.
+React consumers use `useDurableOperation` as a lifecycle hook, not merely a start mutation. After receiving the initial `TaskRunRef`, the hook follows task snapshots until `completed`, `failed`, or `cancelled`, exposing status, progress, final result, and error. Runtime Transport owns how those snapshots arrive: Fetch repeats the versioned `durable.operation.inspect` message, while WebSocket subscribes once and receives the same snapshot bodies by push. The operation contract and component API do not change. Polling cadence belongs to the Fetch transport or to an explicit server-side inspection observer, never to the hook or Operation bridge.
 
 Cache invalidation associated with a durable operation occurs when the run completes, rather than when the runtime merely accepts the start request.
 

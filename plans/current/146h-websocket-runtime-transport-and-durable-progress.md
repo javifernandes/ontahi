@@ -1,6 +1,6 @@
 # 146h. WebSocket Runtime Transport And Durable Progress
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/146h-websocket-runtime-transport-and-durable-progress`
 
@@ -8,7 +8,7 @@ Parent plan: [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol
 
 Related plans:
 
-1. [132. Durable Invocation Identity And Idempotency](./132-durable-invocation-identity-and-idempotency.md)
+1. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 2. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
 3. [146j. First-Class Events Runtime Protocol Gate](../research/146j-first-class-events-runtime-protocol-gate.md)
 
@@ -84,37 +84,37 @@ React hook contract.
 
 ## Execution Slices
 
-1. [ ] Specify session frames, correlation identities, close/error behavior, and the exact boundary
+1. [x] Specify session frames, correlation identities, close/error behavior, and the exact boundary
        between Runtime Protocol envelopes and transport control frames.
-2. [ ] Add focused client/server session conformance tests before choosing framework integration.
-3. [ ] Implement the WebSocket client `RuntimeTransport.request(...)` path for all currently
+2. [x] Add focused client/server session conformance tests before choosing framework integration.
+3. [x] Implement the WebSocket client `RuntimeTransport.request(...)` path for all currently
        registered request/response families.
-4. [ ] Implement pushed Durable observation with abort and terminal cleanup.
-5. [ ] Add the transport-neutral server session adapter over the existing dispatcher and task
+4. [x] Implement pushed Durable observation with abort and terminal cleanup.
+5. [x] Add the transport-neutral server session adapter over the existing dispatcher and task
        runtime.
-6. [ ] Add the Todo Express WebSocket projection and configure the existing React provider.
-7. [ ] Prove `TodoItem.completeAll` progress without Fetch polling and without application-specific
+6. [x] Add the Todo Express WebSocket projection and configure the existing React provider.
+7. [x] Prove `TodoItem.completeAll` progress without Fetch polling and without application-specific
        transport code.
-8. [ ] Publish developer documentation and extract any reconnection or negotiation work that the
+8. [x] Publish developer documentation and extract any reconnection or negotiation work that the
        bounded proof cannot settle.
 
 ## Acceptance Checklist
 
-- [ ] One WebSocket connection carries concurrent Runtime Protocol request/response exchanges with
+- [x] One WebSocket connection carries concurrent Runtime Protocol request/response exchanges with
       exact correlation.
-- [ ] Operation, Graph Read, Graph Command, and Durable inspection family bodies remain unchanged.
-- [ ] `useDurableOperation` consumes pushed snapshots through the existing transport capability.
-- [ ] Todo starts and observes `TodoItem.completeAll` without client polling.
-- [ ] Receiver authority comes from the WebSocket host/session context, never from a portable
+- [x] Operation, Graph Read, Graph Command, and Durable inspection family bodies remain unchanged.
+- [x] `useDurableOperation` consumes pushed snapshots through the existing transport capability.
+- [x] Todo starts and observes `TodoItem.completeAll` without client polling.
+- [x] Receiver authority comes from the WebSocket host/session context, never from a portable
       message body.
-- [ ] Abort/unsubscribe releases server and client observation resources.
-- [ ] Disconnect and reconnect behavior is explicit; no progress or exactly-once guarantee is
+- [x] Abort/unsubscribe releases server and client observation resources.
+- [x] Disconnect and reconnect behavior is explicit; no progress or exactly-once guarantee is
       inferred from the socket.
-- [ ] Duplicate, out-of-order, malformed, mismatched-run, and post-terminal snapshots are covered by
+- [x] Duplicate, out-of-order, malformed, mismatched-run, and post-terminal snapshots are covered by
       semantic tests.
-- [ ] A runtime without WebSocket support can continue using Fetch polling with unchanged
+- [x] A runtime without WebSocket support can continue using Fetch polling with unchanged
       application authoring.
-- [ ] No Event protocol or Todo-specific transport contract is introduced.
+- [x] No Event protocol or Todo-specific transport contract is introduced.
 
 ## Verification
 
@@ -136,14 +136,39 @@ React hook contract.
 4. Focus remains a bounded Durable progress proof; Events require Plan 146j first.
 5. NATS may later serve backend distribution, but it is not the browser transport in this slice.
 
-## Open Questions
+## Resolved Questions
 
-1. Should the first server projection live in a dedicated runtime package or compose through the
-   Express package with an injected WebSocket server?
-2. Does the session handshake advertise only `durable-operation-push`, or a minimal set of all
-   available transport capabilities?
-3. Should reconnection automatically re-observe active run identities, or should the React owner
-   re-establish observation from retained operation state?
-4. What ordering/deduplication key, if any, belongs on snapshots beyond run identity and status?
-5. Can server-side polling honestly power the first push proof, or must the reference Task Runtime
-   expose an observable snapshot source first?
+1. The transport-neutral session boundary lives in Core. The first network projection composes
+   through `@ontahi/runtime-express/runtime-protocol` and an injected host-owned HTTP server.
+2. The version 1 ready frame advertises only `request-response` and optional
+   `durable-operation-push`. Broader negotiation remains Plan 146i.
+3. Disconnect fails active exchanges and observations without resuming them. A later request may
+   open a new socket, but re-observation remains explicit until a truthful resume contract exists.
+4. Durable frames add a session-local monotonic sequence. It detects duplicate, out-of-order, and
+   post-terminal delivery without changing the Durable snapshot body or claiming replay.
+5. A reusable server observer may poll existing Task inspection and push only changed snapshots.
+   This is documented as server-side compatibility, not native Task Runtime push; the browser never
+   polls. A host can inject a native `AsyncIterable` when its Task Runtime provides one.
+
+## Implementation Checkpoint — 2026-09-04
+
+Core now owns strict version 1 session frames, the server session lifecycle, and the bounded
+inspection observer. React exposes a lazy, multiplexed WebSocket Runtime Transport plus generic
+Runtime Graph Client composition. Express projects a host-owned HTTP server through `ws`, derives
+trusted context from the upgrade request once, and aborts observation on unsubscribe or disconnect.
+
+Todo uses that transport for Graph Read, Graph Command, Operation invocation, and pushed Durable
+progress on one `/runtime` socket. `TodoItem.completeAll` exposes its existing progress and final
+result through the unchanged `useDurableOperation` API. The UI proof observed “Durable progress:
+updating todos” followed by “Completed 3 todos” with no browser console warnings or errors. Fetch
+polling remains available and its existing suite is unchanged.
+
+The Todo Runtime transport lab additionally demonstrates per-family composition: reads, commands,
+Operation calls, and Durable observation can independently select HTTP or WebSocket, including the
+common HTTP-plus-WebSocket-push deployment shape. The Express projection exposes a host-owned
+upgrade authorization callback; Todo validates same-origin browser handshakes before restoring the
+same Passport session cookie used by HTTP. Session authority remains fixed for that socket, so
+logout reloads the example and production revocation remains an explicit host responsibility.
+The mixed-mode browser proof also exposed and fixed schema Selection inputs reaching the strict
+Operation family as class values; the React bridge now converts them to portable Selection ASTs
+before either HTTP or WebSocket transmission.

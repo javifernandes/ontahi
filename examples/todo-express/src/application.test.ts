@@ -10,12 +10,19 @@ import {
   toGraphCommandRequest,
 } from '@ontahi/core/data-graph';
 import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
-import { createFetchGraphClient, createFetchGraphReadExecutor } from '@ontahi/react/graph';
+import {
+  createFetchGraphClient,
+  createFetchGraphReadExecutor,
+  createRuntimeGraphClient,
+  createWebSocketRuntimeTransport,
+  type RuntimeWebSocket,
+} from '@ontahi/react/graph';
 import { Effect } from 'effect';
 import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WebSocket } from 'ws';
 
-import { createTodoExpressApp } from './application.js';
+import { createTodoExpressServer } from './application.js';
 import type { TodoAuthenticationAdapter } from './authentication.js';
 import {
   TodoItem as ClientTodoItem,
@@ -38,6 +45,8 @@ const testAuthentication: TodoAuthenticationAdapter = {
   mount: () => undefined,
   principal: (request: Request) =>
     request.header('x-test-principal') === testPrincipal.subject ? testPrincipal : null,
+  webSocketPrincipal: request =>
+    request.headers['x-test-principal'] === testPrincipal.subject ? testPrincipal : null,
 };
 
 const getTodoDataset = () => {
@@ -65,18 +74,16 @@ describe('Ontahi todo portability example', () => {
     getTodoDataset().Tag = [];
     getTodoRelationships().length = 0;
     getTodoDataset().TodoItem = [];
+    const runtimeServer = createTodoExpressServer({ authentication: testAuthentication });
     const server = await new Promise<Server>(resolve => {
-      const started = createTodoExpressApp({ authentication: testAuthentication }).listen(
-        0,
-        '127.0.0.1',
-        () => resolve(started),
-      );
+      const started = runtimeServer.listen(0, '127.0.0.1', () => resolve(started));
     });
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     endpoint = `${origin}/operations`;
     closeServer = async () => {
+      await runtimeServer.runtimeProtocolWebSocket.close();
       server.closeAllConnections();
-      server.close();
+      await new Promise<void>(resolve => server.close(() => resolve()));
     };
   });
 
@@ -500,6 +507,76 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
   });
 
+  it('derives protected Operation authority from the WebSocket upgrade session', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'Authenticate the socket', completed: false },
+    ];
+    const input = {
+      todos: {
+        kind: 'selection',
+        entityName: 'TodoItem',
+        expression: {
+          kind: 'references',
+          refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
+        },
+      },
+      completed: true,
+    };
+    const createClient = (authenticated: boolean) => {
+      const runtimeTransport = createWebSocketRuntimeTransport({
+        url: `${origin.replace(/^http/, 'ws')}/runtime`,
+        createWebSocket: url =>
+          new WebSocket(url, {
+            origin,
+            ...(authenticated ? { headers: { 'x-test-principal': testPrincipal.subject } } : {}),
+          }) as unknown as RuntimeWebSocket,
+      });
+      return { runtimeTransport, client: createRuntimeGraphClient({ runtimeTransport }) };
+    };
+    const anonymous = createClient(false);
+
+    await expect(
+      anonymous.client.reflectedOperationInvoker!.invokeOperation({
+        operationId: 'TodoItem.setCompleted',
+        input,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      kind: 'failed',
+      failure: { reason: 'not_authenticated' },
+    });
+    anonymous.runtimeTransport.close();
+    expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
+
+    const authenticated = createClient(true);
+    await expect(
+      authenticated.client.reflectedOperationInvoker!.invokeOperation({
+        operationId: 'TodoItem.setCompleted',
+        input,
+      }),
+    ).resolves.toMatchObject({ ok: true, kind: 'success' });
+    authenticated.runtimeTransport.close();
+    expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
+  });
+
+  it('rejects a cross-origin browser WebSocket before creating a Runtime session', async () => {
+    const webSocket = new WebSocket(`${origin.replace(/^http/, 'ws')}/runtime`, {
+      origin: 'https://attacker.example',
+    });
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      webSocket.once('unexpected-response', (_request, response) => {
+        response.resume();
+        resolve(response.statusCode);
+      });
+      webSocket.once('open', () => reject(new Error('Expected the WebSocket upgrade to fail.')));
+      webSocket.once('error', error => {
+        if (webSocket.readyState !== WebSocket.CLOSED) reject(error);
+      });
+    });
+
+    expect(status).toBe(403);
+  });
+
   it('deletes every TodoItem through a void-input operation', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
@@ -888,17 +965,43 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoRelationships()).toEqual([]);
   });
 
-  it('starts and completes the durable operation through the same transport', async () => {
+  it('starts and observes TodoItem.completeAll progress through one WebSocket without browser polling', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
     ];
 
-    const client = createFetchGraphClient({
-      runtimeTransport: {
-        endpoint: `${origin}/runtime`,
-        durableOperation: { pollIntervalMs: 0 },
+    let socketCount = 0;
+    const runtimeTransport = createWebSocketRuntimeTransport({
+      url: `${origin.replace(/^http/, 'ws')}/runtime`,
+      createWebSocket: url => {
+        socketCount += 1;
+        return new WebSocket(url, { origin }) as unknown as RuntimeWebSocket;
       },
+    });
+    const client = createRuntimeGraphClient({ runtimeTransport });
+    const TodoSocketRow = ClientTodoItem.view('TodoSocketRow', {
+      id: true,
+      title: true,
+      completed: true,
+    });
+    await expect(
+      client.graphExecutor.run(query(ClientTodoItemSchema).as(TodoSocketRow), undefined),
+    ).resolves.toHaveLength(2);
+    await expect(
+      client.graphExecutor.runEntityMutationCommand!(
+        mutateEntity(ClientTodoListSchema).update(
+          createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
+          { name: 'WebSocket inbox' },
+        ),
+      ),
+    ).resolves.toMatchObject({
+      updated: [
+        {
+          entityName: 'TodoList',
+          values: { id: 'list-1', name: 'WebSocket inbox' },
+        },
+      ],
     });
     const start = await client.reflectedOperationInvoker!.invokeOperation({
       operationId: 'TodoItem.completeAll',
@@ -911,16 +1014,26 @@ describe('Ontahi todo portability example', () => {
     });
     if (!start.ok) throw new Error('Expected the durable Operation to start.');
 
-    let terminalSnapshot: unknown;
+    const snapshots = [];
     for await (const snapshot of client.runtimeTransport!.durableOperation!.observe(
       start.value as TaskRunIdentity,
     )) {
-      terminalSnapshot = snapshot;
+      snapshots.push(snapshot);
     }
-    expect(terminalSnapshot).toMatchObject({
+    expect(snapshots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: 'running',
+          progress: { phase: 'updating' },
+        }),
+      ]),
+    );
+    expect(snapshots.at(-1)).toMatchObject({
       status: 'completed',
       progress: { phase: 'updating' },
       result: { completed: 2 },
     });
+    expect(socketCount).toBe(1);
+    runtimeTransport.close();
   });
 });

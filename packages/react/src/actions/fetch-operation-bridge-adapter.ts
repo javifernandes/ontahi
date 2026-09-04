@@ -4,7 +4,10 @@ import type {
   ReflectedOperationInvocation,
   ReflectedOperationInvoker,
 } from '@ontahi/core/data-graph';
-import { resolveOperationExecutionAffordance } from '@ontahi/core/data-graph';
+import {
+  normalizeGraphSchemaClientInput,
+  resolveOperationExecutionAffordance,
+} from '@ontahi/core/data-graph';
 import type { OperationInvocationResult } from '@ontahi/core/runtime/contracts';
 import {
   isOperationInvocationProtocolResponse,
@@ -155,14 +158,19 @@ const createFetchBridgeAction = <TInput, TData>(
   requestOperation: OperationRequest,
   operation: OperationBridge.BridgedOperationLike<TInput, TData>,
 ): OperationBridge.OperationBridgeAction<TInput, TData> =>
-  attachFetchBridgeRuntime(operation, (input: TInput) =>
-    postBridgeRequest<OperationInvocationResult<TData>>(requestOperation, {
+  attachFetchBridgeRuntime(operation, (input: TInput) => {
+    const portableInput = operation.input
+      ? normalizeGraphSchemaClientInput(operation.input, input, {
+          bindSelection: selection => selection.toAst(),
+        })
+      : input;
+    return postBridgeRequest<OperationInvocationResult<TData>>(requestOperation, {
       kind: 'invoke',
       operationId: operation.id,
-      input,
+      input: portableInput,
       ...(operation.view ? { view: operation.view } : {}),
-    }),
-  ) as OperationBridge.OperationBridgeAction<TInput, TData>;
+    });
+  }) as OperationBridge.OperationBridgeAction<TInput, TData>;
 
 const createFetchPermissionAction =
   <TInput, TData>(
@@ -175,7 +183,11 @@ const createFetchPermissionAction =
     postBridgeRequest<OperationBridge.GraphPermission>(requestOperation, {
       kind: 'check-permission',
       operationId: operation.id,
-      input,
+      input: operation.input
+        ? normalizeGraphSchemaClientInput(operation.input, input, {
+            bindSelection: selection => selection.toAst(),
+          })
+        : input,
     });
 
 export const createFetchReflectedOperationInvoker = <TTransportOptions = undefined>(

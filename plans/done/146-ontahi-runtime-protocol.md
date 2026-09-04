@@ -14,7 +14,7 @@ Completed children:
 
 Extracted follow-ups:
 
-1. [146h. WebSocket Runtime Transport And Durable Progress](../next/146h-websocket-runtime-transport-and-durable-progress.md)
+1. [146h. WebSocket Runtime Transport And Durable Progress](../current/146h-websocket-runtime-transport-and-durable-progress.md)
 2. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
 3. [146j. First-Class Events Runtime Protocol Gate](../research/146j-first-class-events-runtime-protocol-gate.md)
 
@@ -320,7 +320,7 @@ historical activity timeline that Atlas did not observe.
 
 ### Extracted continuation
 
-1. Pull [Plan 146h](../next/146h-websocket-runtime-transport-and-durable-progress.md) for the
+1. Execute [Plan 146h](../current/146h-websocket-runtime-transport-and-durable-progress.md) for the
    WebSocket transport and transport-independent Durable progress push.
 2. [Plan 146i](../backlog/146i-runtime-protocol-negotiation-and-conformance.md) owns capability and
    required-guarantee negotiation, normative examples, conformance evidence, cancellation gating,

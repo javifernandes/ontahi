@@ -1,5 +1,7 @@
+import { ServerResponse, type IncomingMessage } from 'node:http';
+
 import type { Principal } from '@ontahi/core/runtime/server';
-import type { Express, Request } from 'express';
+import type { Express, Request, RequestHandler, Response } from 'express';
 import session from 'express-session';
 import { Passport } from 'passport';
 import { Strategy as GitHubStrategy, type Profile } from 'passport-github2';
@@ -20,6 +22,7 @@ export type TodoAuthenticationAdapter = {
   mode: TodoAuthenticationMode;
   mount(server: Express): void;
   principal(request: Request): Principal | null;
+  webSocketPrincipal(request: IncomingMessage): Principal | null | Promise<Principal | null>;
 };
 
 export type TodoPassportAuthenticationOptions = {
@@ -74,13 +77,37 @@ export const createDisabledTodoAuthentication = (): TodoAuthenticationAdapter =>
     );
   },
   principal: () => null,
+  webSocketPrincipal: () => null,
 });
+
+const runUpgradeMiddleware = (
+  middleware: RequestHandler,
+  request: IncomingMessage,
+  response: ServerResponse,
+) =>
+  new Promise<void>((resolve, reject) =>
+    middleware(request as Request, response as unknown as Response, error =>
+      error ? reject(error) : resolve(),
+    ),
+  );
 
 export const createTodoPassportAuthentication = (
   options: TodoPassportAuthenticationOptions,
 ): TodoAuthenticationAdapter => {
   const { github } = options;
   const passport = new Passport();
+  const sessionMiddleware = session({
+    secret: options.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    },
+  });
+  const initializePassport = passport.initialize();
+  const restorePassportSession = passport.session();
 
   passport.serializeUser((user, done) => done(null, user));
   passport.deserializeUser((user: TodoAuthenticatedUser, done) => done(null, user));
@@ -109,20 +136,9 @@ export const createTodoPassportAuthentication = (
   return {
     mode: 'github',
     mount: server => {
-      server.use(
-        session({
-          secret: options.sessionSecret,
-          resave: false,
-          saveUninitialized: false,
-          cookie: {
-            httpOnly: true,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-          },
-        }),
-      );
-      server.use(passport.initialize());
-      server.use(passport.session());
+      server.use(sessionMiddleware);
+      server.use(initializePassport);
+      server.use(restorePassportSession);
 
       server.get('/auth/session', (request, response) => {
         const user = (request as AuthenticatedRequest).user;
@@ -162,6 +178,14 @@ export const createTodoPassportAuthentication = (
     },
     principal: request => {
       const user = (request as AuthenticatedRequest).user;
+      return user ? todoPrincipal(user) : null;
+    },
+    webSocketPrincipal: async request => {
+      const response = new ServerResponse(request);
+      await runUpgradeMiddleware(sessionMiddleware, request, response);
+      await runUpgradeMiddleware(initializePassport, request, response);
+      await runUpgradeMiddleware(restorePassportSession, request, response);
+      const user = (request as IncomingMessage & { user?: TodoAuthenticatedUser }).user;
       return user ? todoPrincipal(user) : null;
     },
   };

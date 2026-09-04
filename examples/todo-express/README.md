@@ -21,12 +21,17 @@ pnpm todo:dev:local
 dependencies, regenerates the client, builds the browser bundle, watches package output, and
 restarts Express when framework code changes.
 
-Open `http://localhost:3001` for the React UI. `OntahiGraphProvider` installs the conventional Fetch
-graph client, so the application only supplies runtime identity. It uses `useGraphQuery`,
-`useOperation`, and `useDurableOperation` against the same Express process without repeating
-endpoint wiring. Operation invocation, Query reads, Entity and Relationship Commands, and Durable
-inspection all use versioned family messages through the single `/runtime` endpoint. The Runtime
-Transport owns the Durable polling cadence.
+Open `http://localhost:3001` for the React UI. The **Runtime transport lab** section routes Graph
+reads, Graph Commands, Operation calls, and Durable progress independently between the common HTTP
+endpoint and WebSocket. It persists the selection locally and includes WebSocket-only, HTTP-only,
+and HTTP-requests-plus-WebSocket-push presets. The default sends all four paths through one
+`/runtime` WebSocket session. Selecting HTTP for Durable progress demonstrates the Fetch polling
+fallback; selecting WebSocket receives pushed snapshots without browser polling. The same
+`useGraphQuery`, `useOperation`, and `useDurableOperation` authoring is used for every combination.
+
+Todo's in-process Task Runtime currently exposes inspection, so the Express host uses a bounded
+server-side observer that pushes only changed snapshots. This compatibility polling remains on the
+server and is not browser polling.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.setCompleted` has no authentication requirement.
@@ -59,6 +64,14 @@ await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
 
 The default `express-session` memory store is intentional for this local example. A deployed host
 must choose its own persistent session store and cookie policy.
+
+The browser automatically presents the same signed `express-session` cookie when it upgrades the
+same-origin `/runtime` URL to WebSocket. Todo runs the session and Passport restore middleware on
+that upgrade, derives the Principal once, and rejects a missing or cross-origin browser `Origin`
+before creating the Runtime session. A real deployment must use HTTPS/WSS, a shared production
+session store across server instances, and a socket-revocation strategy if logout or permission
+changes must invalidate an already-open connection immediately. Todo reloads after logout so its
+current socket is closed.
 
 ## Run it against a published Ontahi version
 
@@ -107,13 +120,20 @@ recreate the database and reapply every file in `migrations/`. PostgreSQL only r
 scripts when creating the volume, so reset an existing example database after pulling a new
 migration.
 
-The browser client needs only the common Runtime Protocol endpoint:
+The browser client needs only the common Runtime Protocol WebSocket endpoint:
 
 ```ts
-const client = createFetchGraphClient({
-  runtimeTransport: { endpoint: '/runtime' },
-});
+const runtimeTransport = createWebSocketRuntimeTransport();
+const client = createRuntimeGraphClient({ runtimeTransport });
 ```
+
+Todo's transport lab composes this transport with `createFetchRuntimeTransport()` and routes the
+existing envelope by `family`; Durable observation selects either the Fetch observer or the
+WebSocket observer. Neither the generated Entities nor the React hooks know which route was chosen.
+
+Fetch remains the portable fallback for hosts without WebSocket support. Configuring
+`createFetchGraphClient({ runtimeTransport: { endpoint: '/runtime' } })` preserves the same
+application authoring and implements Durable observation with transport-owned polling.
 
 The family-specific routes remain available for explicit compatibility during migration. For
 example, these calls use the legacy unwrapped Operation route:

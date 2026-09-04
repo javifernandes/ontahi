@@ -1,6 +1,8 @@
+import { createServer, type Server } from 'node:http';
 import path from 'node:path';
 
 import {
+  createPollingDurableOperationObserver,
   createRuntimeProtocolDispatcher,
   toDurableOperationSnapshotResponse,
 } from '@ontahi/core/runtime/protocol';
@@ -10,6 +12,10 @@ import {
 } from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
+import {
+  createExpressRuntimeProtocolWebSocketServer,
+  type ExpressRuntimeProtocolWebSocketServer,
+} from '@ontahi/runtime-express/runtime-protocol';
 import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
@@ -61,7 +67,7 @@ const todoGraphCommandPolicies = [
   },
 ] as const;
 
-export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}): Express => {
+const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => {
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
   const authentication = options.authentication ?? createTodoAuthentication();
@@ -120,5 +126,51 @@ export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}):
     response.sendFile(path.join(clientDirectory, 'index.html')),
   );
 
-  return server;
+  return { application: server, authentication, runtimeProtocolDispatcher };
+};
+
+export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}): Express =>
+  createTodoExpressRuntime(options).application;
+
+export type TodoExpressServer = Server & {
+  readonly runtimeProtocolWebSocket: ExpressRuntimeProtocolWebSocketServer;
+};
+
+const isSameOriginBrowserUpgrade = (
+  request: Parameters<TodoAuthenticationAdapter['webSocketPrincipal']>[0],
+) => {
+  const origin = request.headers.origin;
+  const host = request.headers.host;
+  if (!origin || !host) return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    return (
+      (parsedOrigin.protocol === 'http:' || parsedOrigin.protocol === 'https:') &&
+      parsedOrigin.host.toLowerCase() === host.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const createTodoExpressServer = (
+  options: CreateTodoExpressAppOptions = {},
+): TodoExpressServer => {
+  const runtime = createTodoExpressRuntime(options);
+  const server = createServer(runtime.application);
+  const runtimeProtocolWebSocket = createExpressRuntimeProtocolWebSocketServer({
+    server,
+    path: '/runtime',
+    dispatcher: runtime.runtimeProtocolDispatcher,
+    authorizeUpgrade: isSameOriginBrowserUpgrade,
+    context: async request => ({
+      principal: await runtime.authentication.webSocketPrincipal(request),
+    }),
+    observeDurableOperation: createPollingDurableOperationObserver<TodoGraphReadAuthority>({
+      inspect: run => TodoApplication.getTaskSnapshot(run),
+      pollIntervalMs: 100,
+    }),
+  });
+
+  return Object.assign(server, { runtimeProtocolWebSocket });
 };

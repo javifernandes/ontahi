@@ -5,4 +5,5 @@ export * from './envelope.js';
 export * from './families.js';
 export * from './operation.js';
 export * from './registry.js';
+export * from './session.js';
 export * from './transport.js';
