@@ -7,6 +7,7 @@ import {
   createRuntimeProtocolServerSession,
   parseRuntimeProtocolSessionClientFrame,
   parseRuntimeProtocolSessionServerFrame,
+  runtimeProtocolSessionError,
   type RuntimeProtocolSessionClientFrame,
   type RuntimeProtocolSessionRequestFrame,
   type RuntimeProtocolSessionServerFrame,
@@ -121,6 +122,98 @@ describe('Runtime Protocol session frames', () => {
       success: false,
       error: { error: { code: 'invalid_frame' } },
     });
+  });
+
+  it('validates every session frame shape and preserves valid error correlation', () => {
+    expect(() => runtimeProtocolSessionError('request_failed', 'failed', ' ')).toThrow(
+      'session error id is invalid',
+    );
+    expect(parseRuntimeProtocolSessionClientFrame(null)).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        ...requestFrame('request-1'),
+        unexpected: true,
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        ...requestFrame('request-1'),
+        request: { invalid: true },
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'durable-unobserve',
+        id: 'observation-1',
+      }),
+    ).toMatchObject({ success: true, frame: { kind: 'durable-unobserve' } });
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'durable-unobserve',
+        id: '',
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'unknown',
+      }),
+    ).toMatchObject({ success: false });
+
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'ready',
+        capabilities: ['request-response', 'request-response'],
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'response',
+        response: { invalid: true },
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'session-error',
+        id: 'request-1',
+        error: { code: 'request_failed', message: 'failed' },
+      }),
+    ).toEqual({
+      success: true,
+      frame: {
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'session-error',
+        id: 'request-1',
+        error: { code: 'request_failed', message: 'failed' },
+      },
+    });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'session-error',
+        error: { code: 'unknown', message: 'failed' },
+      }),
+    ).toMatchObject({ success: false });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'unknown',
+      }),
+    ).toMatchObject({ success: false });
   });
 });
 
@@ -296,6 +389,99 @@ describe('Runtime Protocol server session', () => {
       { kind: 'response', response: { id: 'request-after-errors' } },
     ]);
   });
+
+  it('reports dispatcher failures and rejects reused request ids', async () => {
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    const reported: unknown[] = [];
+    const failure = new Error('dispatcher exploded');
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: () => Promise.reject(failure),
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+      reportError: error => reported.push(error),
+    });
+
+    await session.receive(requestFrame('request-1'));
+    await session.receive(requestFrame('request-1'));
+    await vi.waitFor(() => expect(sent).toHaveLength(3));
+
+    expect(reported).toEqual([failure]);
+    expect(
+      sent.filter(frame => frame.kind === 'session-error').map(frame => frame.error.code),
+    ).toEqual(expect.arrayContaining(['duplicate_id', 'request_failed']));
+  });
+
+  it('turns invalid observer output into a correlated protocol error', async () => {
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    const reported: unknown[] = [];
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+      observeDurableOperation: () =>
+        (async function* () {
+          yield {
+            taskId: 'Todo.completeAll',
+            runId: 'another-run',
+            status: 'running' as const,
+            updatedAt: '2026-09-04T00:00:00.000Z',
+          };
+        })(),
+      reportError: error => reported.push(error),
+    });
+
+    await session.receive(observeFrame());
+    await vi.waitFor(() =>
+      expect(sent.find(frame => frame.kind === 'durable-observation')).toBeDefined(),
+    );
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toBeInstanceOf(Error);
+    expect(sent.find(frame => frame.kind === 'durable-observation')).toMatchObject({
+      kind: 'durable-observation',
+      id: 'observation-1',
+      sequence: 1,
+      body: { kind: 'protocol-error', error: { code: 'inspection_unavailable' } },
+    });
+  });
+
+  it('closes all active observation resources once and ignores later input', async () => {
+    let observedSignal: AbortSignal | undefined;
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+      observeDurableOperation: (_run, { signal }) =>
+        (async function* () {
+          observedSignal = signal;
+          yield {
+            taskId: 'Todo.completeAll',
+            runId: 'run-1',
+            status: 'running' as const,
+            updatedAt: '2026-09-04T00:00:00.000Z',
+          };
+          await new Promise<void>(resolve =>
+            signal.addEventListener('abort', () => resolve(), { once: true }),
+          );
+        })(),
+    });
+
+    await session.receive(observeFrame());
+    await vi.waitFor(() => expect(observedSignal).toBeDefined());
+    session.close();
+    session.close();
+    await session.receive(requestFrame('ignored-after-close'));
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(sent).toHaveLength(2);
+  });
 });
 
 describe('polling Durable Operation server observer', () => {
@@ -335,5 +521,49 @@ describe('polling Durable Operation server observer', () => {
 
     expect(received.map(snapshot => snapshot.status)).toEqual(['running', 'completed']);
     expect(inspect).toHaveBeenCalledTimes(3);
+  });
+
+  it('waits between inspections and validates the interval', async () => {
+    expect(() =>
+      createPollingDurableOperationObserver({
+        inspect: async () => ({
+          taskId: 'Todo.completeAll',
+          runId: 'run-1',
+          status: 'running',
+          updatedAt: '2026-09-04T00:00:00.000Z',
+        }),
+        pollIntervalMs: -1,
+      }),
+    ).toThrow('poll interval must be a non-negative finite number');
+
+    const snapshots = [
+      {
+        taskId: 'Todo.completeAll',
+        runId: 'run-1',
+        status: 'running' as const,
+        updatedAt: '2026-09-04T00:00:00.000Z',
+      },
+      {
+        taskId: 'Todo.completeAll',
+        runId: 'run-1',
+        status: 'completed' as const,
+        updatedAt: '2026-09-04T00:00:01.000Z',
+        completedAt: '2026-09-04T00:00:01.000Z',
+      },
+    ];
+    const observe = createPollingDurableOperationObserver({
+      inspect: async () => snapshots.shift()!,
+      pollIntervalMs: 1,
+    });
+    const received = [];
+
+    for await (const snapshot of observe(
+      { taskId: 'Todo.completeAll', runId: 'run-1' },
+      { context: undefined, signal: new AbortController().signal },
+    )) {
+      received.push(snapshot.status);
+    }
+
+    expect(received).toEqual(['running', 'completed']);
   });
 });

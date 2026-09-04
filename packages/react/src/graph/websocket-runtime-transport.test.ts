@@ -8,7 +8,7 @@ import {
   type RuntimeProtocolServerSession,
   type RuntimeProtocolSessionServerFrame,
 } from '@ontahi/core/runtime/protocol';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createWebSocketRuntimeTransport,
@@ -85,6 +85,23 @@ const operationRequest = (id: string) =>
     family: 'operation',
     body: { version: 1, kind: 'invoke', operationId: 'Todo.completeAll' },
   });
+
+const readyFrame = (
+  capabilities: Array<'request-response' | 'durable-operation-push'> = [
+    'request-response',
+    'durable-operation-push',
+  ],
+): RuntimeProtocolSessionServerFrame => ({
+  protocol: 'ontahi.runtime.session',
+  version: 1,
+  kind: 'ready',
+  capabilities,
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('WebSocket Runtime Transport', () => {
   it('correlates concurrent request/response families over one lazy session', async () => {
@@ -354,5 +371,228 @@ describe('WebSocket Runtime Transport', () => {
     await vi.waitFor(() => expect(pair.sockets).toHaveLength(2));
     transport.close();
     await expect(reconnected).rejects.toThrow('transport is closed');
+  });
+
+  it('resolves a browser-relative URL, forwards protocols, and validates construction options', async () => {
+    const socket = new MemoryWebSocket();
+    const createWebSocket = vi.fn((..._args: [string, string | string[] | undefined]) => {
+      socket.sendFromServer(readyFrame([]));
+      return socket;
+    });
+    const transport = createWebSocketRuntimeTransport({
+      protocols: ['ontahi.runtime.session.v1'],
+      createWebSocket,
+    });
+
+    await expect(transport.request(operationRequest('request-1'))).rejects.toThrow(
+      'request/response is unavailable',
+    );
+    const [resolvedUrl, protocols] = createWebSocket.mock.calls[0]!;
+    expect(new URL(resolvedUrl)).toMatchObject({ protocol: 'ws:', pathname: '/runtime' });
+    expect(protocols).toEqual(['ontahi.runtime.session.v1']);
+    expect(() => createWebSocketRuntimeTransport({ handshakeTimeoutMs: -1 })).toThrow(
+      'handshake timeout must be non-negative',
+    );
+
+    const closed = createWebSocketRuntimeTransport({ createWebSocket });
+    closed.close();
+    closed.close();
+    await expect(closed.request(operationRequest('closed'))).rejects.toThrow('transport is closed');
+  });
+
+  it('fails when the default WebSocket implementation is unavailable', async () => {
+    vi.stubGlobal('WebSocket', undefined);
+    const transport = createWebSocketRuntimeTransport({ url: 'ws://runtime.test/runtime' });
+
+    await expect(transport.request(operationRequest('request-1'))).rejects.toThrow(
+      'WebSocket is unavailable',
+    );
+  });
+
+  it('times out a session that never completes its handshake', async () => {
+    const socket = new MemoryWebSocket();
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => socket,
+      handshakeTimeoutMs: 0,
+    });
+
+    await expect(transport.request(operationRequest('request-1'))).rejects.toThrow(
+      'handshake timed out',
+    );
+    expect(socket.readyState).toBe(3);
+  });
+
+  it('fails active work on malformed and unexpected session frames', async () => {
+    const malformedSocket = new MemoryWebSocket();
+    const malformedErrors: Error[] = [];
+    const malformedTransport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => {
+        queueMicrotask(() => malformedSocket.emit('message', { data: '{not-json' }));
+        return malformedSocket;
+      },
+      reportError: error => malformedErrors.push(error),
+    });
+
+    await expect(malformedTransport.request(operationRequest('malformed'))).rejects.toThrow(
+      'session frame must be an object',
+    );
+    expect(malformedErrors).toHaveLength(1);
+    expect(malformedSocket.readyState).toBe(3);
+
+    const duplicateReadySocket = new MemoryWebSocket();
+    const duplicateReadyErrors: Error[] = [];
+    const duplicateReadyTransport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => {
+        duplicateReadySocket.sendFromServer(readyFrame());
+        return duplicateReadySocket;
+      },
+      reportError: error => duplicateReadyErrors.push(error),
+    });
+    const pending = duplicateReadyTransport.request(operationRequest('pending'));
+    await vi.waitFor(() => expect(duplicateReadySocket.sent).toHaveLength(1));
+    duplicateReadySocket.sendFromServer(readyFrame());
+
+    await expect(pending).rejects.toThrow('unexpected ready frame');
+    expect(duplicateReadyErrors).toHaveLength(1);
+  });
+
+  it('routes correlated session and observation errors without closing the session', async () => {
+    const socket = new MemoryWebSocket();
+    const reported: Error[] = [];
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      observationId: () => 'observation-1',
+      createWebSocket: () => {
+        socket.sendFromServer(readyFrame());
+        return socket;
+      },
+      reportError: error => reported.push(error),
+    });
+
+    const request = transport.request(operationRequest('request-1'));
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    socket.sendFromServer({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'session-error',
+      id: 'request-1',
+      error: { code: 'request_failed', message: 'request exploded' },
+    });
+    await expect(request).rejects.toThrow('request exploded');
+
+    const iterator = transport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-1' })
+      [Symbol.asyncIterator]();
+    const next = iterator.next();
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(2));
+    socket.sendFromServer({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'session-error',
+      id: 'observation-1',
+      error: { code: 'observation_failed', message: 'observation exploded' },
+    });
+    await expect(next).rejects.toThrow('observation exploded');
+
+    socket.sendFromServer({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'session-error',
+      error: { code: 'request_failed', message: 'uncorrelated failure' },
+    });
+    await vi.waitFor(() => expect(reported).toHaveLength(1));
+    expect(reported[0]?.message).toBe('uncorrelated failure');
+    transport.close();
+  });
+
+  it('propagates a Durable Operation protocol error', async () => {
+    const socket = new MemoryWebSocket();
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      observationId: () => 'observation-1',
+      createWebSocket: () => {
+        socket.sendFromServer(readyFrame());
+        return socket;
+      },
+    });
+    const iterator = transport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-1' })
+      [Symbol.asyncIterator]();
+    const next = iterator.next();
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    socket.sendFromServer({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'durable-observation',
+      id: 'observation-1',
+      sequence: 1,
+      body: {
+        kind: 'protocol-error',
+        error: { code: 'inspection_unavailable', message: 'inspection failed' },
+      },
+    });
+
+    await expect(next).rejects.toThrow('inspection failed');
+  });
+
+  it('enforces unique pending ids and aborts requests locally', async () => {
+    const socket = new MemoryWebSocket();
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => {
+        socket.sendFromServer(readyFrame(['request-response']));
+        return socket;
+      },
+    });
+    const controller = new AbortController();
+    const first = transport.request(operationRequest('shared-id'), { signal: controller.signal });
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+
+    await expect(transport.request(operationRequest('shared-id'))).rejects.toThrow(
+      'already pending',
+    );
+    controller.abort();
+    await expect(first).rejects.toThrow('request was aborted');
+  });
+
+  it('rejects missing push capability and duplicate observation ids', async () => {
+    const noPushSocket = new MemoryWebSocket();
+    const noPushTransport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => {
+        noPushSocket.sendFromServer(readyFrame(['request-response']));
+        return noPushSocket;
+      },
+    });
+    const unavailable = noPushTransport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-1' })
+      [Symbol.asyncIterator]();
+    await expect(unavailable.next()).rejects.toThrow('push is unavailable');
+
+    const socket = new MemoryWebSocket();
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      observationId: () => 'shared-observation',
+      createWebSocket: () => {
+        socket.sendFromServer(readyFrame());
+        return socket;
+      },
+    });
+    const controller = new AbortController();
+    const first = transport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-1' }, { signal: controller.signal })
+      [Symbol.asyncIterator]();
+    const firstNext = first.next();
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    const duplicate = transport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-2' })
+      [Symbol.asyncIterator]();
+    await expect(duplicate.next()).rejects.toThrow('already active');
+
+    controller.abort();
+    await expect(firstNext).resolves.toEqual({ done: true, value: undefined });
   });
 });
