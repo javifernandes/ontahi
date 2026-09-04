@@ -22,6 +22,7 @@ export type CreateExpressRuntimeProtocolWebSocketServerOptions<TContext> = {
   readonly context: ExpressRuntimeProtocolWebSocketContextFactory<TContext>;
   readonly authorizeUpgrade?: ExpressRuntimeProtocolWebSocketUpgradeAuthorization;
   readonly observeDurableOperation?: RuntimeProtocolDurableObserver<TContext>;
+  readonly ownsUpgradeBoundary?: boolean;
   readonly path?: string;
   readonly reportError?: (error: unknown, request: IncomingMessage) => void;
 };
@@ -52,6 +53,7 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
   context,
   authorizeUpgrade,
   observeDurableOperation,
+  ownsUpgradeBoundary = false,
   path = '/runtime',
   reportError,
 }: CreateExpressRuntimeProtocolWebSocketServerOptions<TContext>): ExpressRuntimeProtocolWebSocketServer => {
@@ -64,9 +66,13 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
     try {
       requestPath = new URL(request.url ?? '/', 'http://localhost').pathname;
     } catch {
+      if (ownsUpgradeBoundary) rejectUpgrade(socket, 400, 'Bad Request');
       return;
     }
-    if (normalizePath(requestPath) !== routePath) return;
+    if (normalizePath(requestPath) !== routePath) {
+      if (ownsUpgradeBoundary) rejectUpgrade(socket, 404, 'Not Found');
+      return;
+    }
 
     const establishSession = async () => {
       if (authorizeUpgrade) {

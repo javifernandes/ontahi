@@ -49,6 +49,10 @@ class MemoryWebSocket implements RuntimeWebSocket {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
   }
 
+  listenerCount(type: string) {
+    return this.listeners.get(type)?.size ?? 0;
+  }
+
   sendFromServer(frame: unknown) {
     queueMicrotask(() => this.emit('message', { data: JSON.stringify(frame) }));
   }
@@ -211,7 +215,7 @@ describe('WebSocket Runtime Transport', () => {
     ]);
   });
 
-  it('ignores duplicate, out-of-order, and post-terminal snapshots by session sequence', async () => {
+  it('ignores duplicate, out-of-order, and post-terminal snapshots by observation sequence', async () => {
     const socket = new MemoryWebSocket();
     const snapshotFrame = (
       sequence: number,
@@ -371,6 +375,48 @@ describe('WebSocket Runtime Transport', () => {
     await vi.waitFor(() => expect(pair.sockets).toHaveLength(2));
     transport.close();
     await expect(reconnected).rejects.toThrow('transport is closed');
+  });
+
+  it('detaches a stale closing socket before replacing its session', async () => {
+    const sockets: MemoryWebSocket[] = [];
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: () => {
+        const socket = new MemoryWebSocket();
+        sockets.push(socket);
+        socket.sendFromServer(readyFrame(['request-response']));
+        return socket;
+      },
+    });
+
+    const first = transport.request(operationRequest('request-1'));
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1));
+    const firstRejected = expect(first).rejects.toThrow('active work was not resumed');
+    sockets[0]!.readyState = 2;
+
+    const second = transport.request(operationRequest('request-2'));
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+    await firstRejected;
+    expect(sockets[0]?.listenerCount('message')).toBe(0);
+    expect(sockets[0]?.listenerCount('error')).toBe(0);
+    expect(sockets[0]?.listenerCount('close')).toBe(0);
+
+    sockets[0]?.sendFromServer({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'response',
+      response: createRuntimeProtocolResponse(operationRequest('request-2'), { source: 'stale' }),
+    });
+    await vi.waitFor(() => expect(sockets[1]?.sent).toHaveLength(1));
+    sockets[1]?.sendFromServer({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'response',
+      response: createRuntimeProtocolResponse(operationRequest('request-2'), { source: 'current' }),
+    });
+
+    await expect(second).resolves.toMatchObject({ body: { source: 'current' } });
+    transport.close();
   });
 
   it('resolves a browser-relative URL, forwards protocols, and validates construction options', async () => {

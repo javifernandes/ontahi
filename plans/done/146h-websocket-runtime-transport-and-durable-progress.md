@@ -1,6 +1,6 @@
 # 146h. WebSocket Runtime Transport And Durable Progress
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/146h-websocket-runtime-transport-and-durable-progress`
 
@@ -144,11 +144,28 @@ React hook contract.
    `durable-operation-push`. Broader negotiation remains Plan 146i.
 3. Disconnect fails active exchanges and observations without resuming them. A later request may
    open a new socket, but re-observation remains explicit until a truthful resume contract exists.
-4. Durable frames add a session-local monotonic sequence. It detects duplicate, out-of-order, and
-   post-terminal delivery without changing the Durable snapshot body or claiming replay.
+4. Durable frames add a monotonic sequence scoped to each observation identity. It detects
+   duplicate, out-of-order, and post-terminal delivery without changing the Durable snapshot body
+   or claiming replay.
 5. A reusable server observer may poll existing Task inspection and push only changed snapshots.
    This is documented as server-side compatibility, not native Task Runtime push; the browser never
    polls. A host can inject a native `AsyncIterable` when its Task Runtime provides one.
+
+## Hardening Follow-Up — 2026-09-04
+
+The first merged proof established the vertical slice and exposed a bounded set of long-lived
+session risks during review. Close Plan 146h only after this follow-up completes:
+
+1. [x] Bound completed request-ID retention without weakening duplicate detection for active work.
+2. [x] Report asynchronous ready-frame send failures and finalize observation iterators on every
+       terminal or failed path.
+3. [x] Detach stale client socket listeners before replacement so old sessions cannot touch shared
+       pending work.
+4. [x] Make Express upgrade ownership explicit and reject malformed or unmatched upgrades when the
+       adapter owns the server upgrade boundary.
+5. [x] Bind Todo browser upgrades to the complete canonical origin, including scheme and host.
+6. [x] Correct observation-sequence and Todo proof documentation, add the patch Changeset, run the
+       full release gate, and move this Plan to `done/`.
 
 ## Implementation Checkpoint — 2026-09-04
 
@@ -160,7 +177,7 @@ trusted context from the upgrade request once, and aborts observation on unsubsc
 Todo uses that transport for Graph Read, Graph Command, Operation invocation, and pushed Durable
 progress on one `/runtime` socket. `TodoItem.completeAll` exposes its existing progress and final
 result through the unchanged `useDurableOperation` API. The UI proof observed “Durable progress:
-updating todos” followed by “Completed 3 todos” with no browser console warnings or errors. Fetch
+updating todos” followed by “Completed 2 todos” with no browser console warnings or errors. Fetch
 polling remains available and its existing suite is unchanged.
 
 The Todo Runtime transport lab additionally demonstrates per-family composition: reads, commands,
@@ -172,3 +189,21 @@ logout reloads the example and production revocation remains an explicit host re
 The mixed-mode browser proof also exposed and fixed schema Selection inputs reaching the strict
 Operation family as class values; the React bridge now converts them to portable Selection ASTs
 before either HTTP or WebSocket transmission.
+
+## Hardening Completion — 2026-09-04
+
+The server session now retains only the latest 1,024 completed request identities while protecting
+every active identity, finalizes each observation iterator once, and reports asynchronous handshake
+and cleanup failures. The browser transport removes every listener from a replaced socket before a
+new session can touch shared pending work. Express exposes explicit upgrade-boundary ownership;
+the owning adapter closes malformed upgrades with `400` and unmatched paths with `404`, while the
+default still permits other upgrade routers to coexist.
+
+Todo owns its upgrade boundary and compares the complete browser origin. Direct HTTP and HTTPS
+derive the expected scheme from the receiving socket; deployments behind TLS termination can set
+`TODO_PUBLIC_ORIGIN` to the canonical public origin. The unchanged `useDurableOperation` API and
+the per-family transport lab continue to exercise `TodoItem.completeAll` through WebSocket push.
+
+Verification passed with 821 Core tests, 109 React tests, 42 Runtime Express tests, and 70 example
+tests. Full package coverage, repository typecheck, lint, package build, formatting, Changeset
+status, and clean-room artifact installation/type/runtime checks also passed.

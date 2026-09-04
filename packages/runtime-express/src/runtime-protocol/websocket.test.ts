@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { PassThrough } from 'node:stream';
 
 import {
   createRuntimeProtocolResponse,
@@ -233,5 +234,43 @@ describe('Express Runtime Protocol WebSocket server', () => {
 
     expect(status).toBe(403);
     expect(context).not.toHaveBeenCalled();
+  });
+
+  it('rejects unmatched and malformed upgrades when it owns the upgrade boundary', async () => {
+    const server = createServer();
+    servers.push(server);
+    const adapter = createExpressRuntimeProtocolWebSocketServer({
+      server,
+      dispatcher: async input =>
+        createRuntimeProtocolResponse(input as RuntimeProtocolRequestEnvelope, null),
+      context: () => ({ principal: null }),
+      ownsUpgradeBoundary: true,
+    });
+    adapters.push(adapter);
+    const url = await listen(server);
+    const webSocket = new WebSocket(url.replace('/runtime', '/not-runtime'));
+    sockets.push(webSocket);
+
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      webSocket.once('unexpected-response', (_request, response) => {
+        response.resume();
+        resolve(response.statusCode);
+      });
+      webSocket.once('open', () => reject(new Error('Expected the WebSocket upgrade to fail.')));
+      webSocket.once('error', error => {
+        if (webSocket.readyState !== WebSocket.CLOSED) reject(error);
+      });
+    });
+    expect(status).toBe(404);
+
+    const malformedSocket = new PassThrough();
+    let response = '';
+    malformedSocket.on('data', chunk => {
+      response += chunk.toString();
+    });
+    server.emit('upgrade', { url: 'http://[', headers: {} }, malformedSocket, Buffer.alloc(0));
+
+    expect(response).toContain('400 Bad Request');
+    expect(malformedSocket.destroyed).toBe(true);
   });
 });

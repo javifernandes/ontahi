@@ -559,22 +559,24 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
   });
 
-  it('rejects a cross-origin browser WebSocket before creating a Runtime session', async () => {
-    const webSocket = new WebSocket(`${origin.replace(/^http/, 'ws')}/runtime`, {
-      origin: 'https://attacker.example',
-    });
-    const status = await new Promise<number | undefined>((resolve, reject) => {
-      webSocket.once('unexpected-response', (_request, response) => {
-        response.resume();
-        resolve(response.statusCode);
+  it('rejects cross-origin and wrong-scheme browser WebSockets before creating a Runtime session', async () => {
+    for (const rejectedOrigin of ['https://attacker.example', origin.replace(/^http:/, 'https:')]) {
+      const webSocket = new WebSocket(`${origin.replace(/^http/, 'ws')}/runtime`, {
+        origin: rejectedOrigin,
       });
-      webSocket.once('open', () => reject(new Error('Expected the WebSocket upgrade to fail.')));
-      webSocket.once('error', error => {
-        if (webSocket.readyState !== WebSocket.CLOSED) reject(error);
+      const status = await new Promise<number | undefined>((resolve, reject) => {
+        webSocket.once('unexpected-response', (_request, response) => {
+          response.resume();
+          resolve(response.statusCode);
+        });
+        webSocket.once('open', () => reject(new Error('Expected the WebSocket upgrade to fail.')));
+        webSocket.once('error', error => {
+          if (webSocket.readyState !== WebSocket.CLOSED) reject(error);
+        });
       });
-    });
 
-    expect(status).toBe(403);
+      expect(status).toBe(403);
+    }
   });
 
   it('deletes every TodoItem through a void-input operation', async () => {

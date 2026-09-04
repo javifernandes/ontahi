@@ -25,6 +25,7 @@ import { Tag, TodoItem, TodoList } from './todo.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
+  publicOrigin?: string;
 };
 
 const todoGraphCommandPolicies = [
@@ -138,19 +139,33 @@ export type TodoExpressServer = Server & {
 
 const isSameOriginBrowserUpgrade = (
   request: Parameters<TodoAuthenticationAdapter['webSocketPrincipal']>[0],
+  configuredPublicOrigin?: string,
 ) => {
   const origin = request.headers.origin;
   const host = request.headers.host;
   if (!origin || !host) return false;
   try {
     const parsedOrigin = new URL(origin);
+    const publicOrigin =
+      configuredPublicOrigin ??
+      new URL(
+        `${(request.socket as { encrypted?: boolean }).encrypted ? 'https:' : 'http:'}//${host}`,
+      ).origin;
     return (
       (parsedOrigin.protocol === 'http:' || parsedOrigin.protocol === 'https:') &&
-      parsedOrigin.host.toLowerCase() === host.toLowerCase()
+      parsedOrigin.origin === publicOrigin
     );
   } catch {
     return false;
   }
+};
+
+const normalizePublicOrigin = (value: string) => {
+  const parsed = new URL(value);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new TypeError('Todo public origin must use http or https.');
+  }
+  return parsed.origin;
 };
 
 export const createTodoExpressServer = (
@@ -158,11 +173,14 @@ export const createTodoExpressServer = (
 ): TodoExpressServer => {
   const runtime = createTodoExpressRuntime(options);
   const server = createServer(runtime.application);
+  const publicOrigin =
+    options.publicOrigin === undefined ? undefined : normalizePublicOrigin(options.publicOrigin);
   const runtimeProtocolWebSocket = createExpressRuntimeProtocolWebSocketServer({
     server,
     path: '/runtime',
+    ownsUpgradeBoundary: true,
     dispatcher: runtime.runtimeProtocolDispatcher,
-    authorizeUpgrade: isSameOriginBrowserUpgrade,
+    authorizeUpgrade: request => isSameOriginBrowserUpgrade(request, publicOrigin),
     context: async request => ({
       principal: await runtime.authentication.webSocketPrincipal(request),
     }),

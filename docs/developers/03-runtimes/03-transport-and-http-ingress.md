@@ -133,8 +133,8 @@ WebSocket adds a versioned `ontahi.runtime.session` frame around, rather than in
 Protocol messages. `request` frames contain the complete existing request envelope; `response`
 frames contain its correlated response. `durable-observe` and `durable-unobserve` use a distinct
 observation identity. Pushed `durable-observation` frames retain the versioned Durable family body
-and add a session-local monotonic sequence so a client can ignore duplicates and out-of-order or
-post-terminal delivery without claiming exactly-once semantics.
+and add a monotonic sequence scoped to that observation identity so a client can ignore duplicates
+and out-of-order or post-terminal delivery without claiming exactly-once semantics.
 
 ```ts
 const runtimeTransport = createWebSocketRuntimeTransport({ url: '/runtime' });
@@ -156,9 +156,10 @@ failure never causes an automatic replay through the other transport.
 
 The WebSocket handshake is an HTTP request, so a same-origin browser automatically includes the
 same applicable session cookie used by Fetch. WebSocket does not make CORS an authorization
-boundary: credentialed hosts must validate `Origin` during upgrade, restore the server-owned
-session, derive a narrow invocation context, and continue enforcing family policy for every
-message. Production deployments use WSS and a session store shared by all accepting instances.
+boundary: credentialed hosts must validate the complete canonical `Origin`, including scheme and
+host, during upgrade, restore the server-owned session, derive a narrow invocation context, and
+continue enforcing family policy for every message. Production deployments use WSS and a session
+store shared by all accepting instances.
 Because the current session context is resolved once per connection, immediate logout or
 permission revocation also requires closing affected sockets or a host-specific revalidation
 strategy.

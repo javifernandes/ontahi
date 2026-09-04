@@ -68,10 +68,12 @@ must choose its own persistent session store and cookie policy.
 The browser automatically presents the same signed `express-session` cookie when it upgrades the
 same-origin `/runtime` URL to WebSocket. Todo runs the session and Passport restore middleware on
 that upgrade, derives the Principal once, and rejects a missing or cross-origin browser `Origin`
-before creating the Runtime session. A real deployment must use HTTPS/WSS, a shared production
-session store across server instances, and a socket-revocation strategy if logout or permission
-changes must invalidate an already-open connection immediately. Todo reloads after logout so its
-current socket is closed.
+before creating the Runtime session. It compares the complete origin, including scheme and host;
+set `TODO_PUBLIC_ORIGIN=https://todo.example` when a TLS-terminating proxy makes that public origin
+different from the direct server connection. A real deployment must use HTTPS/WSS, a shared
+production session store across server instances, and a socket-revocation strategy if logout or
+permission changes must invalidate an already-open connection immediately. Todo reloads after
+logout so its current socket is closed.
 
 ## Run it against a published Ontahi version
 
