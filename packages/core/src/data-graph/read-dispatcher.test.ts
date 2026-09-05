@@ -852,9 +852,7 @@ describe('graph read dispatcher', () => {
         error: expect.objectContaining({ code: 'access_denied' }),
       }),
     ]);
-    await expect(
-      collect(toGraphReadRequest(query(client.Trip), 'count')),
-    ).resolves.toEqual([
+    await expect(collect(toGraphReadRequest(query(client.Trip), 'count'))).resolves.toEqual([
       expect.objectContaining({
         kind: 'protocol-error',
         error: expect.objectContaining({ code: 'invalid_request' }),

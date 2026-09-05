@@ -1,9 +1,6 @@
 import { isRecord } from '../../../value/object.js';
 import type { AnyEntityDefinition } from '../../definitions.js';
-import {
-  getGraphReadOutputDescriptor,
-  type GraphOutputDescriptor,
-} from '../../output/index.js';
+import { getGraphReadOutputDescriptor, type GraphOutputDescriptor } from '../../output/index.js';
 import type { QueryOrView } from '../../query.js';
 import {
   createEntityIdentityRef,

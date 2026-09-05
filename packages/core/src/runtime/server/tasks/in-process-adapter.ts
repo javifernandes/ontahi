@@ -1,7 +1,7 @@
 import { Effect, Stream } from 'effect';
 
 import { missingTaskStepFailure, toTaskFailure } from './failures.js';
-import { createInMemoryTaskRunProjection } from './task-run-observation.js';
+import { getInMemoryTaskRunProjection } from './task-run-observation.js';
 import type {
   InProcessTaskExecutorOptions,
   InProcessTaskRuntimeOptions,
@@ -41,7 +41,7 @@ export const createInProcessTaskRuntime = ({
   createRunId: createConfiguredRunId = createRunId,
   onBackgroundError,
 }: InProcessTaskRuntimeOptions): TaskRuntime => {
-  const taskRuns = createInMemoryTaskRunProjection();
+  const taskRuns = getInMemoryTaskRunProjection(storage);
   const update = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     storage.update(ref, patch).pipe(Effect.tap(taskRuns.publish));
 

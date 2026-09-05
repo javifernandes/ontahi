@@ -16,6 +16,8 @@ export type TaskRunProjection = {
   observe(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
 };
 
+const projectionsByStorage = new WeakMap<object, TaskRunProjection>();
+
 type TaskRunMutationRecord = InferEntityMutationRecord<(typeof TaskRun)['fields']>;
 
 const toTaskRunEntity = (snapshot: TaskSnapshot): TaskRunMutationRecord => ({
@@ -69,4 +71,13 @@ export const createInMemoryTaskRunProjection = (): TaskRunProjection => {
         Stream.filter((snapshot): snapshot is TaskRunEntity => snapshot !== undefined),
       ),
   };
+};
+
+export const getInMemoryTaskRunProjection = (storage: object): TaskRunProjection => {
+  const existing = projectionsByStorage.get(storage);
+  if (existing) return existing;
+
+  const projection = createInMemoryTaskRunProjection();
+  projectionsByStorage.set(storage, projection);
+  return projection;
 };

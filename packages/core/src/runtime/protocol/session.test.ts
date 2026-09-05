@@ -1,3 +1,4 @@
+import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeProtocolDispatcher, RuntimeProtocolDispatchResult } from './dispatcher.js';
@@ -5,6 +6,7 @@ import { createRuntimeProtocolResponse, type RuntimeProtocolRequestEnvelope } fr
 import {
   createPollingDurableOperationObserver,
   createRuntimeProtocolServerSession,
+  createTaskRunDurableOperationObserver,
   parseRuntimeProtocolSessionClientFrame,
   parseRuntimeProtocolSessionServerFrame,
   runtimeProtocolSessionError,
@@ -36,7 +38,9 @@ const observeFrame = (id = 'observation-1'): RuntimeProtocolSessionClientFrame =
   run: { taskId: 'Todo.completeAll', runId: 'run-1' },
 });
 
-const graphObserveFrame = (id = 'graph-observation-1'): RuntimeProtocolSessionGraphObserveFrame => ({
+const graphObserveFrame = (
+  id = 'graph-observation-1',
+): RuntimeProtocolSessionGraphObserveFrame => ({
   protocol: 'ontahi.runtime.session',
   version: 1,
   kind: 'graph-observe',
@@ -129,11 +133,7 @@ describe('Runtime Protocol session frames', () => {
         protocol: 'ontahi.runtime.session',
         version: 1,
         kind: 'ready',
-        capabilities: [
-          'request-response',
-          'durable-operation-push',
-          'graph-observation-push',
-        ],
+        capabilities: ['request-response', 'durable-operation-push', 'graph-observation-push'],
       }),
     ).toMatchObject({ success: true });
   });
@@ -446,10 +446,7 @@ describe('Runtime Protocol server session', () => {
           yield { kind: 'graph-read-result' as const, value: [{ id: 'todo-1' }] };
           yield {
             kind: 'graph-read-result' as const,
-            value: [
-              { id: 'todo-1' },
-              { id: 'todo-2' },
-            ],
+            value: [{ id: 'todo-1' }, { id: 'todo-2' }],
           };
         })(),
     });
@@ -764,6 +761,46 @@ describe('Runtime Protocol server session', () => {
 
     expect(observedSignal?.aborted).toBe(true);
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe('TaskRun Durable Operation server observer', () => {
+  it('projects one native TaskRun Stream and releases it when the session aborts', async () => {
+    const controller = new AbortController();
+    let released = false;
+    const snapshot = {
+      taskId: 'Todo.completeAll',
+      runId: 'run-1',
+      status: 'running' as const,
+      updatedAt: '2026-09-04T00:00:00.000Z',
+    };
+    const observeTaskRun = vi.fn(() =>
+      Stream.asyncScoped<typeof snapshot>(emit =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            void emit.single(snapshot);
+          }),
+          () =>
+            Effect.sync(() => {
+              released = true;
+            }),
+        ),
+      ),
+    );
+    const observe = createTaskRunDurableOperationObserver({ observe: observeTaskRun });
+    const iterator = observe(
+      { taskId: 'Todo.completeAll', runId: 'run-1' },
+      { context: { principal: 'user-1' }, signal: controller.signal },
+    )[Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: snapshot });
+    expect(observeTaskRun).toHaveBeenCalledWith(
+      { taskId: 'Todo.completeAll', runId: 'run-1' },
+      { principal: 'user-1' },
+    );
+    controller.abort();
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
+    expect(released).toBe(true);
   });
 });
 

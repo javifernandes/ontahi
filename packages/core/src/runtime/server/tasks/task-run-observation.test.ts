@@ -17,15 +17,17 @@ const createDeferred = () => {
 };
 
 describe('TaskRun observation', () => {
-  it('emits in-process lifecycle writes through the observable TaskRun projection', async () => {
+  it('emits lifecycle writes across runtimes sharing one Task storage projection', async () => {
     const releaseProgress = createDeferred();
     const releaseCompletion = createDeferred();
     const observedInitial = createDeferred();
     const observedProgress = createDeferred();
+    const storage = createInMemoryTaskStorage();
     const runtime = createInProcessTaskRuntime({
-      storage: createInMemoryTaskStorage(),
+      storage,
       createRunId: () => 'run-1',
     });
+    const observingRuntime = createInProcessTaskRuntime({ storage });
     const task = defineTask({
       id: 'TodoItem.completeAll',
       run: (_input: void, context) =>
@@ -38,7 +40,7 @@ describe('TaskRun observation', () => {
     });
     const run = await Effect.runPromise(runtime.start(task, undefined));
     const observation = Effect.runPromise(
-      observeTaskRun(runtime, run).pipe(
+      observeTaskRun(observingRuntime, run).pipe(
         Stream.tap(snapshot =>
           Effect.sync(() => {
             observedInitial.resolve();

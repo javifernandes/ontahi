@@ -1,14 +1,14 @@
 # 128h. Observable Query Runtime And Durable Progress
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/128h-observable-query-runtime-and-durable-progress`
 
-Parent plan: [128. Ontahi Data Graph Execution Bridge](./128-ontahi-data-graph-execution-bridge.md)
+Parent plan: [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
 
 Related plans:
 
-1. [146h. WebSocket Runtime Transport And Durable Progress](../done/146h-websocket-runtime-transport-and-durable-progress.md)
+1. [146h. WebSocket Runtime Transport And Durable Progress](./146h-websocket-runtime-transport-and-durable-progress.md)
 2. [146j. First-Class Events Runtime Protocol Gate](../research/146j-first-class-events-runtime-protocol-gate.md)
 3. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 
@@ -152,25 +152,25 @@ TodoItem.completeAll
 
 ### Slice 4: Durable Compatibility Projection
 
-- [ ] Route Durable observation through the TaskRun Query observer.
-- [ ] Preserve the existing Durable Protocol snapshot body and `useDurableOperation` API.
-- [ ] Remove Todo's `createPollingDurableOperationObserver` composition.
-- [ ] Prove `TodoItem.completeAll` has no polling in either browser or server.
+- [x] Route Durable observation through the TaskRun Query observer.
+- [x] Preserve the existing Durable Protocol snapshot body and `useDurableOperation` API.
+- [x] Remove Todo's `createPollingDurableOperationObserver` composition.
+- [x] Prove `TodoItem.completeAll` has no polling in either browser or server.
 
 ## Acceptance Checklist
 
-- [ ] One canonical Query can execute once, stream rows once, or observe complete results without
+- [x] One canonical Query can execute once, stream rows once, or observe complete results without
       changing its Selection language.
-- [ ] In-memory observation reacts to successful runtime-owned commits and releases subscribers.
-- [ ] Entity identity normalization remains the Graph Client Cache authority.
-- [ ] TaskRun observation is expressed through framework semantics rather than Todo-specific
+- [x] In-memory observation reacts to successful runtime-owned commits and releases subscribers.
+- [x] Entity identity normalization remains the Graph Client Cache authority.
+- [x] TaskRun observation is expressed through framework semantics rather than Todo-specific
       messages.
-- [ ] Todo receives progress and terminal state without browser-side or server-side polling.
-- [ ] `useDurableOperation` remains source-compatible and transport-neutral.
-- [ ] Query observations remain distinct from durable Events and provider changefeed records.
-- [ ] Unsupported observation, disconnect, duplicate delivery, and authorization behavior are
+- [x] Todo receives progress and terminal state without browser-side or server-side polling.
+- [x] `useDurableOperation` remains source-compatible and transport-neutral.
+- [x] Query observations remain distinct from durable Events and provider changefeed records.
+- [x] Unsupported observation, disconnect, duplicate delivery, and authorization behavior are
       explicit and tested.
-- [ ] Public package changes include a Changeset and artifact verification.
+- [x] Public package changes include a Changeset and artifact verification.
 
 ## Verification
 
@@ -229,8 +229,19 @@ remote sequence back into `Query.observe()`. Runtime Graph clients reconcile eac
 snapshot through the Graph Client Cache by canonical Entity identity before yielding it. A Todo
 integration proof observes a changing authorized Todo Query through the real WebSocket server.
 
-The next slice replaces Todo's Durable polling adapter with native TaskRun observation while
-preserving the existing Durable protocol body and React hook.
+The Durable compatibility projection now adapts a native TaskRun Effect Stream to the unchanged
+Durable snapshot protocol. In-process Task runtimes sharing one Task storage also share their
+TaskRun Query projection; this is required because the Operation facade and server observer may own
+different runtime instances. WebSocket unsubscribe and disconnect interrupt the underlying Stream.
+
+Todo no longer composes `createPollingDurableOperationObserver`. Its `TodoItem.completeAll`
+integration receives running progress and completion from `app.task.observe()`, asserts that the
+application snapshot inspection method was never called, and continues through the unchanged
+Durable Runtime Transport and React API.
+
+Final verification passes the full Core suite with 836 tests and the full React suite with 113
+tests, along with affected-package lint, typecheck, and build. The Changeset is valid, and all public
+packages pass clean-room artifact installation, type, and runtime checks.
 
 ## Open Questions
 

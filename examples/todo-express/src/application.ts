@@ -2,8 +2,8 @@ import { createServer, type Server } from 'node:http';
 import path from 'node:path';
 
 import {
-  createPollingDurableOperationObserver,
   createRuntimeProtocolDispatcher,
+  createTaskRunDurableOperationObserver,
   toDurableOperationSnapshotResponse,
 } from '@ontahi/core/runtime/protocol';
 import {
@@ -186,9 +186,8 @@ export const createTodoExpressServer = (
     context: async request => ({
       principal: await runtime.authentication.webSocketPrincipal(request),
     }),
-    observeDurableOperation: createPollingDurableOperationObserver<TodoGraphReadAuthority>({
-      inspect: run => TodoApplication.getTaskSnapshot(run),
-      pollIntervalMs: 100,
+    observeDurableOperation: createTaskRunDurableOperationObserver<TodoGraphReadAuthority>({
+      observe: run => TodoApplication.app.task.observe(run),
     }),
     observeGraph: (request, { context, signal }) =>
       runtime.graphReadObserver(request, { authority: context, signal }),

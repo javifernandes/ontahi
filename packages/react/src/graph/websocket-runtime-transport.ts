@@ -306,7 +306,8 @@ export const createWebSocketRuntimeTransport = ({
 
     if (frame.kind === 'durable-observation') {
       const observation = durableObservations.get(frame.id);
-      if (!observation || observation.terminal || frame.sequence <= observation.lastSequence) return;
+      if (!observation || observation.terminal || frame.sequence <= observation.lastSequence)
+        return;
       observation.lastSequence = frame.sequence;
       if (frame.body.kind === 'protocol-error') {
         durableObservations.delete(frame.id);
@@ -475,7 +476,9 @@ export const createWebSocketRuntimeTransport = ({
     });
   };
 
-  const observeDurable: DurableOperationObservationCapability['observe'] = async function* <TResult>(
+  const observeDurable: DurableOperationObservationCapability['observe'] = async function* <
+    TResult,
+  >(
     run: TaskRunIdentity,
     options?: RuntimeTransportRequestOptions,
   ): AsyncIterable<TaskSnapshot<TResult>> {

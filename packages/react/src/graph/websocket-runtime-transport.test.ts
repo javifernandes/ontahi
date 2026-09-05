@@ -64,9 +64,7 @@ const createSessionSocketFactory = <TContext>(options: {
   observeDurableOperation?: Parameters<
     typeof createRuntimeProtocolServerSession<TContext>
   >[0]['observeDurableOperation'];
-  observeGraph?: Parameters<
-    typeof createRuntimeProtocolServerSession<TContext>
-  >[0]['observeGraph'];
+  observeGraph?: Parameters<typeof createRuntimeProtocolServerSession<TContext>>[0]['observeGraph'];
 }) => {
   const sockets: MemoryWebSocket[] = [];
   const sessions: RuntimeProtocolServerSession[] = [];
@@ -106,9 +104,7 @@ const graphReadRequest = {
 } as const;
 
 const readyFrame = (
-  capabilities: Array<
-    'request-response' | 'durable-operation-push' | 'graph-observation-push'
-  > = [
+  capabilities: Array<'request-response' | 'durable-operation-push' | 'graph-observation-push'> = [
     'request-response',
     'durable-operation-push',
   ],

@@ -335,6 +335,7 @@ export {
   TaskRun,
   TaskRunByIdentity,
   createInMemoryTaskRunProjection,
+  getInMemoryTaskRunProjection,
   type TaskRunProjection,
 } from './tasks.js';
 export { failIfError, fromNullable, fromValueOrPromise } from './values.js';

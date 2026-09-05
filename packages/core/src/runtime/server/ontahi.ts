@@ -192,27 +192,27 @@ export type ComposedOntahiApplication<
       RuntimeReadOptions<StorageRuntime<TStorage>>
     >
   > & {
-  architecture: RegisteredArchitecture<
-    OntahiCapabilityEvent<TCapabilities>,
-    OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
-  >;
-  storage: TStorage;
-  app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>;
-  registerEntity: <TDeclaration extends AnyOntahiEntityDeclaration>(
-    declaration: TDeclaration,
-  ) => BoundOntahiEntityDeclaration<
-    TDeclaration,
-    StorageRuntime<TStorage>,
-    RelationshipMutationResult
-  >;
-  registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
-    entity: TEntity,
-    boundEntity: TBoundEntity,
-  ) => TBoundEntity;
-  registerBoundEntities: <TBoundEntities extends Record<string, object>>(
-    boundEntities: TBoundEntities,
-  ) => GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>>;
-};
+    architecture: RegisteredArchitecture<
+      OntahiCapabilityEvent<TCapabilities>,
+      OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
+    >;
+    storage: TStorage;
+    app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>;
+    registerEntity: <TDeclaration extends AnyOntahiEntityDeclaration>(
+      declaration: TDeclaration,
+    ) => BoundOntahiEntityDeclaration<
+      TDeclaration,
+      StorageRuntime<TStorage>,
+      RelationshipMutationResult
+    >;
+    registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
+      entity: TEntity,
+      boundEntity: TBoundEntity,
+    ) => TBoundEntity;
+    registerBoundEntities: <TBoundEntities extends Record<string, object>>(
+      boundEntities: TBoundEntities,
+    ) => GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>>;
+  };
 
 export const ontahi = <
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,

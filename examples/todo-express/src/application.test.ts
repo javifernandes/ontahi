@@ -976,8 +976,7 @@ describe('Ontahi todo portability example', () => {
 
     const runtimeTransport = createWebSocketRuntimeTransport({
       url: `${origin.replace(/^http/, 'ws')}/runtime`,
-      createWebSocket: url =>
-        new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
+      createWebSocket: url => new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
     });
     const client = createRuntimeGraphClient({ runtimeTransport });
     const TodoObservationRow = ClientTodoItem.view('TodoObservationRow', {
@@ -1032,6 +1031,7 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
       { id: 'todo-3', list: 'list-2', title: 'Other list', completed: false },
     ];
+    const snapshotInspection = vi.spyOn(TodoApplication, 'getTaskSnapshot');
 
     let socketCount = 0;
     const runtimeTransport = createWebSocketRuntimeTransport({
@@ -1097,6 +1097,8 @@ describe('Ontahi todo portability example', () => {
     });
     expect(getTodoDataset().TodoItem?.find(todo => todo.id === 'todo-3')?.completed).toBe(false);
     expect(socketCount).toBe(1);
+    expect(snapshotInspection).not.toHaveBeenCalled();
+    snapshotInspection.mockRestore();
     runtimeTransport.close();
   });
 });

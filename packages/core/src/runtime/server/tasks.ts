@@ -20,6 +20,7 @@ export { inProcessTasks } from './tasks/presets.js';
 export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
 export {
   createInMemoryTaskRunProjection,
+  getInMemoryTaskRunProjection,
   type TaskRunProjection,
 } from './tasks/task-run-observation.js';
 export {

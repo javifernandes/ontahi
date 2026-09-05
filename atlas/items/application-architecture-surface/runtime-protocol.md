@@ -96,6 +96,12 @@ native push while keeping polling out of the browser. Cancellation remains only 
 status because no current Task Runtime exposes a truthful cancellation capability. Event intents
 are internal and no remote subscription contract exists.
 
+The in-process Task Runtime now uses the native path: runtime instances sharing one Task storage
+also share the framework TaskRun Query projection. A Stream adapter binds WebSocket unsubscribe and
+disconnect to Effect Stream interruption while preserving the Durable snapshot body consumed by
+React. Todo's WebSocket composition therefore performs no browser-side or server-side inspection
+polling; the polling observer remains only an explicit compatibility option.
+
 Graph Query observation is a separate negotiated session capability that reuses the canonical
 versioned `graph.read` body in `run` mode rather than defining another Query language. Observe and
 unobserve controls have their own correlation identity; pushed complete result arrays carry a

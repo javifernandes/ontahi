@@ -28,5 +28,7 @@ Durable operation metadata is the source for task definitions and adapter projec
 Core supplies a standard semantic `TaskRun` Entity with composite `(taskId, runId)` identity and a
 public `TaskSnapshot` projection. Runtime engine input, trigger, and source records remain behind the
 Task storage boundary. The in-process runtime projects committed lifecycle writes into an observable
-TaskRun Query; other execution and storage adapters may provide native observation or explicitly use
-the polling compatibility adapter.
+TaskRun Query. In-process runtime instances over the same Task storage share that projection, so an
+Operation executor and a protocol observer see the same writes without inspecting storage. The
+Runtime Protocol adapts the native Stream to Durable snapshots; other execution and storage adapters
+may provide native observation or explicitly use the polling compatibility adapter.

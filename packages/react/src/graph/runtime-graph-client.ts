@@ -48,9 +48,13 @@ export const createRuntimeGraphClient = <TTransportOptions = unknown>({
       params: TParams,
       options?: TTransportOptions,
     ) =>
-      graph.runtime.observe(read, params, options).pipe(
-        Stream.map(snapshot => reconcileGraphReadSnapshot(clientCache, read, params, snapshot).value),
-      ),
+      graph.runtime
+        .observe(read, params, options)
+        .pipe(
+          Stream.map(
+            snapshot => reconcileGraphReadSnapshot(clientCache, read, params, snapshot).value,
+          ),
+        ),
   };
   const operation = { runtimeTransport, requestId };
 

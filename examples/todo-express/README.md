@@ -29,9 +29,10 @@ and HTTP-requests-plus-WebSocket-push presets. The default sends all four paths 
 fallback; selecting WebSocket receives pushed snapshots without browser polling. The same
 `useGraphQuery`, `useOperation`, and `useDurableOperation` authoring is used for every combination.
 
-Todo's in-process Task Runtime currently exposes inspection, so the Express host uses a bounded
-server-side observer that pushes only changed snapshots. This compatibility polling remains on the
-server and is not browser polling.
+Todo's in-process Task Runtime projects lifecycle writes through the framework `TaskRun` Entity.
+The Express host adapts that native Stream to Durable protocol snapshots, so WebSocket mode has no
+polling in either the browser or server. HTTP Durable progress remains the explicit Fetch polling
+compatibility path.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.setCompleted` has no authentication requirement.

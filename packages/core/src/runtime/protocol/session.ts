@@ -1,3 +1,5 @@
+import { Effect, Stream } from 'effect';
+
 import {
   graphReadProtocolError,
   isGraphReadProtocolError,
@@ -519,6 +521,13 @@ export type RuntimeProtocolGraphObserver<TContext> = (
   options: RuntimeProtocolDurableObservationOptions<TContext>,
 ) => AsyncIterable<RuntimeProtocolGraphObservationBody>;
 
+export type CreateTaskRunDurableOperationObserverOptions<TContext, TError = unknown> = {
+  readonly observe: (
+    run: TaskRunIdentity,
+    context: TContext,
+  ) => Stream.Stream<TaskSnapshot, TError>;
+};
+
 export type CreateRuntimeProtocolServerSessionOptions<TContext> = {
   readonly dispatcher: RuntimeProtocolDispatcher<TContext>;
   readonly context: TContext;
@@ -756,7 +765,9 @@ export const createRuntimeProtocolServerSession = <TContext>({
     }
 
     const observerAvailable =
-      frame.kind === 'durable-observe' ? observeDurableOperation !== undefined : observeGraph !== undefined;
+      frame.kind === 'durable-observe'
+        ? observeDurableOperation !== undefined
+        : observeGraph !== undefined;
     if (!observerAvailable) {
       await sendError(
         'capability_unavailable',
@@ -829,6 +840,29 @@ const waitForNextInspection = (intervalMs: number, signal: AbortSignal): Promise
     signal.addEventListener('abort', abort, { once: true });
   });
 };
+
+const interruptOnAbort = (signal: AbortSignal) =>
+  Effect.async<void>(resume => {
+    if (signal.aborted) {
+      resume(Effect.void);
+      return;
+    }
+    const abort = () => resume(Effect.void);
+    signal.addEventListener('abort', abort, { once: true });
+    return Effect.sync(() => signal.removeEventListener('abort', abort));
+  });
+
+export const createTaskRunDurableOperationObserver =
+  <TContext, TError = unknown>({
+    observe,
+  }: CreateTaskRunDurableOperationObserverOptions<
+    TContext,
+    TError
+  >): RuntimeProtocolDurableObserver<TContext> =>
+  (run, { context, signal }) =>
+    Stream.toAsyncIterable(
+      observe(run, context).pipe(Stream.interruptWhen(interruptOnAbort(signal))),
+    );
 
 export const createPollingDurableOperationObserver = <TContext>({
   inspect,

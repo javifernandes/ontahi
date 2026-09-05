@@ -166,20 +166,18 @@ describe('remote data graph runtime', () => {
 
   it('observes repeated complete results through the remote Graph transport', async () => {
     const { Todo } = defineTodoGraph();
-    const observeTransport = vi.fn(
-      async function* (
-        request: { mode: GraphReadMode },
-        options?: { readonly credential: string },
-      ) {
-        expect(request.mode).toBe('run');
-        expect(options).toEqual({ credential: 'server-session' });
-        yield { kind: 'graph-read-result', value: [{ id: 'todo-1' }] };
-        yield {
-          kind: 'graph-read-result',
-          value: [{ id: 'todo-1' }, { id: 'todo-2' }],
-        };
-      },
-    );
+    const observeTransport = vi.fn(async function* (
+      request: { mode: GraphReadMode },
+      options?: { readonly credential: string },
+    ) {
+      expect(request.mode).toBe('run');
+      expect(options).toEqual({ credential: 'server-session' });
+      yield { kind: 'graph-read-result', value: [{ id: 'todo-1' }] };
+      yield {
+        kind: 'graph-read-result',
+        value: [{ id: 'todo-1' }, { id: 'todo-2' }],
+      };
+    });
     const runtime = createRemoteDataGraphRuntime({
       transport: vi.fn(),
       observeTransport,
@@ -188,14 +186,9 @@ describe('remote data graph runtime', () => {
 
     await expect(
       Effect.runPromise(
-        runCollectArray(
-          runtime.observe(read, undefined, { credential: 'server-session' }),
-        ),
+        runCollectArray(runtime.observe(read, undefined, { credential: 'server-session' })),
       ),
-    ).resolves.toEqual([
-      [{ id: 'todo-1' }],
-      [{ id: 'todo-1' }, { id: 'todo-2' }],
-    ]);
+    ).resolves.toEqual([[{ id: 'todo-1' }], [{ id: 'todo-1' }, { id: 'todo-2' }]]);
     expect(observeTransport).toHaveBeenCalledOnce();
   });
 
