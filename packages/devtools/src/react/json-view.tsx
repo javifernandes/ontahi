@@ -37,8 +37,14 @@ export const JsonView = ({ value, label }: { readonly value: unknown; readonly l
   const [copied, setCopied] = useState(false);
   const serialized = JSON.stringify(value, null, 2) ?? 'undefined';
   const copy = async () => {
-    await globalThis.navigator?.clipboard?.writeText(serialized);
-    setCopied(true);
+    try {
+      const clipboard = globalThis.navigator?.clipboard;
+      if (!clipboard) return;
+      await clipboard.writeText(serialized);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
   };
   return (
     <>

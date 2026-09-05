@@ -61,7 +61,7 @@ export const DevtoolsPanel = ({
         );
       })
     : activities;
-  const selectedActivity = activities.find(activity => activity.id === selected);
+  const selectedActivity = filteredActivities.find(activity => activity.id === selected);
   const activeActivity = selectedActivity ?? filteredActivities[0];
 
   const clear = () => {

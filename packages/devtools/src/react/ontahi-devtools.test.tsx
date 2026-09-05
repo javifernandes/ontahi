@@ -104,6 +104,7 @@ describe('OntahiDevtools', () => {
         target: { value: 'operation' },
       });
       expect(screen.getByText(/Run an Ontahí query/)).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Selected diagnostic detail' })).toBeNull();
       fireEvent.change(screen.getByRole('searchbox', { name: 'Filter diagnostics' }), {
         target: { value: '' },
       });

@@ -196,22 +196,25 @@ const buildExchangeActivities = (
 const buildOperationProgressActivities = (
   events: readonly ObservationDiagnosticEvent[],
 ): OperationProgressActivity[] => {
-  const activities = new Map<string, OperationProgressActivity>();
+  type MutableOperationProgressActivity = {
+    id: string;
+    started?: ObservationStarted;
+    snapshots: ObservationSnapshot[];
+    settled?: ObservationSettled;
+    at: number;
+  };
+
+  const activities = new Map<string, MutableOperationProgressActivity>();
   events.forEach(event => {
-    const current = activities.get(event.observationId) ?? {
-      id: event.observationId,
-      snapshots: [],
-      at: event.at,
-    };
-    activities.set(event.observationId, {
-      ...current,
-      at: Math.max(current.at, event.at),
-      ...(event.kind === 'observation.started'
-        ? { started: event }
-        : event.kind === 'observation.snapshot'
-          ? { snapshots: [...current.snapshots, event] }
-          : { settled: event }),
-    });
+    let current = activities.get(event.observationId);
+    if (!current) {
+      current = { id: event.observationId, snapshots: [], at: event.at };
+      activities.set(event.observationId, current);
+    }
+    current.at = Math.max(current.at, event.at);
+    if (event.kind === 'observation.started') current.started = event;
+    else if (event.kind === 'observation.snapshot') current.snapshots.push(event);
+    else current.settled = event;
   });
   return [...activities.values()].sort((left, right) => right.at - left.at);
 };
@@ -242,7 +245,9 @@ const correlateActivity = (
     const event = observation.started ?? observation.snapshots[0] ?? observation.settled;
     if (!event) return;
     const key = runKey(event.run);
-    observationsByRun.set(key, [...(observationsByRun.get(key) ?? []), observation]);
+    const grouped = observationsByRun.get(key);
+    if (grouped) grouped.push(observation);
+    else observationsByRun.set(key, [observation]);
   });
   const attached = new Set<string>();
   const exchangeEntries = exchanges.map<ActivityEntry>(exchange => {
