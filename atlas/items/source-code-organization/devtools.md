@@ -47,19 +47,20 @@ lifecycle, while individual transports contribute optional HTTP, WebSocket, hand
 connection evidence. The existing Graph Client Cache inspection and subscription boundary supplies
 cache state and events.
 
-The headless diagnostic store and transport decorator live in `@ontahi/devtools`. The floating React
-surface is exported separately from `@ontahi/devtools/react`; it is one projection of that model,
-not the source of runtime truth. This keeps visual tooling and dependencies outside the non-visual
-`@ontahi/react` client. The shipped surface covers correlated Activity with inline Operation
-progress and an optional host-owned Settings projection; Cache and connection-state evidence remain
-Plan 148 work.
+The headless diagnostic store and transport decorator live in `@ontahi/devtools`. The bottom-docked
+React surface is exported separately from `@ontahi/devtools/react`; it is one projection of that
+model, not the source of runtime truth. This keeps visual tooling and dependencies outside the
+non-visual `@ontahi/react` client. The shipped surface covers correlated Activity with inline
+Operation progress and an optional host-owned Settings projection; Cache and connection-state
+evidence remain Plan 148 work.
 
 Activity leads with reconstructed application intent, such as an Entity selection and named View,
 or an Operation's input and returned value with Entity Refs reduced to domain identity. Protocol
-family and transport remain secondary evidence. Its bottom-docked master-detail layout keeps
-traffic at the left and compares Request with Response at the right. Each side uses progressive
-disclosure from a semantic projection to body JSON and finally the complete envelope; the raw
-transport package is never the default explanation of application behavior.
+family and transport remain secondary evidence. Its full-width, vertically resizable bottom drawer
+keeps application context visible above while its master-detail layout keeps traffic at the left
+and compares Request with Response at the right. Each side uses progressive disclosure from a
+semantic projection to body JSON and finally the complete envelope; the raw transport package is
+never the default explanation of application behavior.
 
 Transport routing is likewise a reusable runtime component rather than state owned by the Devtools
 panel. Devtools may discover and operate an explicitly provided controller. Routing changes affect

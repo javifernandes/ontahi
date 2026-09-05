@@ -34,6 +34,10 @@ The default Visual detail projects Operation requests to their input and success
 their returned value, flattening Entity Refs to their locator identity. Body JSON and Envelope keep
 the complete Runtime Protocol evidence available when transport-level inspection is needed.
 
+The React surface opens as a full-width bottom drawer at a compact default height. Drag its top
+handle, or focus the handle and use the arrow keys, to resize it while the application remains
+visible above.
+
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
 ```ts

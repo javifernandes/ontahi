@@ -13,14 +13,23 @@ import {
 import { styles } from './devtools-styles.js';
 import { ExchangeDetail } from './exchange-detail.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
+import { PanelResizer } from './panel-resizer.js';
 
 export type DevtoolsPanelProps = {
   readonly diagnostics: OntahiDiagnostics;
   readonly settings?: ReactNode;
+  readonly height: number;
+  readonly resize: (height: number) => void;
   readonly close: () => void;
 };
 
-export const DevtoolsPanel = ({ diagnostics, settings, close }: DevtoolsPanelProps) => {
+export const DevtoolsPanel = ({
+  diagnostics,
+  settings,
+  height,
+  resize,
+  close,
+}: DevtoolsPanelProps) => {
   const snapshot = useSyncExternalStore(
     diagnostics.subscribe,
     diagnostics.inspect,
@@ -61,7 +70,8 @@ export const DevtoolsPanel = ({ diagnostics, settings, close }: DevtoolsPanelPro
   };
 
   return (
-    <aside style={styles.panel} aria-label='Ontahí Devtools'>
+    <aside style={{ ...styles.panel, height }} aria-label='Ontahí Devtools'>
+      <PanelResizer height={height} resize={resize} />
       <header style={styles.header}>
         <span style={styles.brand}>
           <span style={styles.eyebrow}>Runtime inspector</span>

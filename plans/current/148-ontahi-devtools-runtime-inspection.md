@@ -20,13 +20,13 @@ Related plans:
 
 Deliver the first independently usable Ontahí Devtools component for a web client. A developer
 should see one semantic activity stream for Runtime Protocol work regardless of whether Fetch,
-WebSocket, polling, or push carried it, then inspect Durable lifecycle, Ontahí client-cache state,
+WebSocket, polling, or push carried it, then inspect Operation progress, Ontahí client-cache state,
 transport evidence, and effective routing without reconstructing Ontahí meaning from the browser
 Network panel.
 
-The first proof is an embedded, development-only floating panel in Todo. It observes the existing
-`RuntimeTransport` and Graph Client Cache boundaries without changing application hooks, protocol
-envelopes, dispatch, authority, or execution behavior.
+The first proof is an embedded, development-only, full-width bottom drawer in Todo. It observes the
+existing `RuntimeTransport` and Graph Client Cache boundaries without changing application hooks,
+protocol envelopes, dispatch, authority, or execution behavior.
 
 ## Context
 
@@ -87,8 +87,8 @@ A developer opens one unobtrusive launcher and can:
 7. Project current Graph Client Cache records, aliases, and outputs from
    `GraphClientCacheSnapshot`, alongside its event history, without duplicating TanStack Query
    Devtools.
-8. Add an accessible floating React panel with Activity, Durable, Cache, and Transport views plus a
-   structured detail inspector.
+8. Add an accessible, vertically resizable React bottom drawer with unified Activity, Cache, and
+   Transport views plus a structured detail inspector.
 9. Show effective transport configuration read-only and accept an optional host-owned routing
    controller for development overrides.
 10. Extract only the minimum reusable routing/controller boundary proven by Todo; preserve explicit
@@ -227,7 +227,7 @@ Start with one focused `@ontahi/devtools` package:
 
 1. its default browser-safe entrypoint owns the headless diagnostic store and transport
    instrumentation;
-2. `@ontahi/devtools/react` owns the floating React component and hooks;
+2. `@ontahi/devtools/react` owns the bottom-docked React component and hooks;
 3. React is a peer of the visual subpath and is not loaded by the headless entrypoint;
 4. Core remains technology-independent and receives no Devtools dependency;
 5. `@ontahi/react` exposes only any narrow transport or cache diagnostic ports that prove generally
@@ -367,7 +367,8 @@ but it must not become an arbitrary credentialed endpoint editor.
 
 1. The familiar product/component name is **Ontahí Devtools**; the initial package direction is
    `@ontahi/devtools` with a React subpath.
-2. The first UI is an embedded floating panel, not a browser extension.
+2. The first UI is an embedded, full-width, vertically resizable bottom drawer, not a browser
+   extension.
 3. Instrumentation composes around public Ontahí boundaries and never patches global `fetch`,
    `WebSocket`, React Query, or browser APIs.
 4. Diagnostics are local client evidence, not a Runtime Protocol family or server telemetry

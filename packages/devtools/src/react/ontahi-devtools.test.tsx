@@ -118,6 +118,36 @@ describe('OntahiDevtools', () => {
   );
 
   it(
+    'docks to the viewport and allows its height to be resized',
+    () => {
+      const diagnostics = createOntahiDiagnostics();
+      render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
+
+      const panel = screen.getByRole('complementary', { name: 'Ontahí Devtools' });
+      expect(panel.style.left).toBe('0px');
+      expect(panel.style.right).toBe('0px');
+      expect(panel.style.bottom).toBe('0px');
+      expect(panel.style.width).toBe('100%');
+      expect(panel.style.height).toBe('360px');
+
+      const resizer = screen.getByRole('separator', { name: 'Resize Devtools' });
+      expect(resizer.getAttribute('aria-valuenow')).toBe('360');
+      fireEvent.keyDown(resizer, { key: 'ArrowUp' });
+      expect(panel.style.height).toBe('392px');
+      expect(resizer.getAttribute('aria-valuenow')).toBe('392');
+      fireEvent.keyDown(resizer, { key: 'ArrowDown' });
+      expect(panel.style.height).toBe('360px');
+
+      fireEvent.pointerDown(resizer, { button: 0, pointerId: 1, clientY: 360 });
+      fireEvent.pointerMove(resizer, { pointerId: 1, clientY: 320 });
+      expect(panel.style.height).toBe('400px');
+      fireEvent.pointerUp(resizer, { pointerId: 1, clientY: 320 });
+      fireEvent.click(screen.getByRole('button', { name: 'Close Devtools' }));
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
     'hosts application-owned controls in a dedicated Settings view',
     () => {
       const diagnostics = createOntahiDiagnostics();
