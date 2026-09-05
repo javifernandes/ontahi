@@ -967,7 +967,7 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoRelationships()).toEqual([]);
   });
 
-  it('starts and observes TodoItem.completeAll progress through one WebSocket without browser polling', async () => {
+  it('starts and observes TodoList.completeAll progress through one WebSocket without browser polling', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
@@ -1006,13 +1006,13 @@ describe('Ontahi todo portability example', () => {
       ],
     });
     const start = await client.reflectedOperationInvoker!.invokeOperation({
-      operationId: 'TodoItem.completeAll',
+      operationId: 'TodoList.completeAll',
       input: {},
     });
     expect(start).toMatchObject({
       ok: true,
       kind: 'success',
-      value: { taskId: 'TodoItem.completeAll' },
+      value: { taskId: 'TodoList.completeAll' },
     });
     if (!start.ok) throw new Error('Expected the durable Operation to start.');
 

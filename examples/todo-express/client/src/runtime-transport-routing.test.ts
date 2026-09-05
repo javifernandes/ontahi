@@ -20,7 +20,7 @@ import {
 } from './runtime-transport-routing.js';
 
 const snapshot = (source: string): TaskSnapshot => ({
-  taskId: 'TodoItem.completeAll',
+  taskId: 'TodoList.completeAll',
   runId: 'run-1',
   status: 'running',
   updatedAt: '2026-09-04T00:00:00.000Z',
@@ -61,7 +61,7 @@ describe('Todo Runtime Transport routing', () => {
     await router.transport.request(request('inspect-1', 'durable.operation'));
     const observations = [];
     for await (const value of router.transport.durableOperation.observe({
-      taskId: 'TodoItem.completeAll',
+      taskId: 'TodoList.completeAll',
       runId: 'run-1',
     })) {
       observations.push(value);

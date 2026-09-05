@@ -34,7 +34,9 @@ export const AppHeader = ({
           onClick={() => void completeAllTodos()}
         >
           <CheckCheck aria-hidden='true' />
-          {completeAll.isQueued || completeAll.isRunning ? 'Completing…' : 'Complete all'}
+          {completeAll.isQueued || completeAll.isRunning
+            ? 'Completing durably…'
+            : 'Complete all · Durable'}
         </button>
         <span className='muted' aria-live='polite'>
           {completeAll.isRunning && completeAll.progress?.phase === 'updating'

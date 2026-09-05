@@ -228,7 +228,7 @@ const createTodo = useOperation(TodoItem.domain.createItem);
 const setVisibleCompleted = useOperation(
   TodoItem.domain.setCompleted({ todos: visibleTodos, completed: true }),
 );
-const completeAll = useDurableOperation(TodoItem.domain.completeAll);
+const completeAll = useDurableOperation(TodoList.domain.completeAll);
 
 setVisibleCompleted.execute();
 completeAll.execute();
