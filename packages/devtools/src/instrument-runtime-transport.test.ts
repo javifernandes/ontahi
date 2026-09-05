@@ -1,5 +1,6 @@
 import type { TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
+  createRuntimeTransportRouter,
   createRuntimeProtocolRequest,
   createRuntimeProtocolResponse,
   runtimeProtocolError,
@@ -274,5 +275,29 @@ describe('instrumentRuntimeTransport', () => {
       { kind: 'observation.settled', outcome: 'completed' },
     ]);
     expect(diagnostics.inspect().events[2]).not.toHaveProperty('snapshot.result');
+  });
+
+  it('preserves and delegates configurable routing capabilities', () => {
+    const base = createRuntimeTransportRouter({
+      transports: {
+        http: { request: vi.fn() },
+        websocket: { request: vi.fn() },
+      },
+      routing: { 'graph.read': 'http' },
+    });
+    const transport = instrumentRuntimeTransport({
+      diagnostics: createOntahiDiagnostics(),
+      id: 'runtime',
+      kind: 'router',
+      transport: base,
+    });
+    const listener = vi.fn();
+    transport.routing.subscribe(listener);
+
+    transport.routing.configure('graph.read', 'websocket');
+
+    expect(transport.routing.inspect()).toBe(base.routing.inspect());
+    expect(transport.routing.inspect().assignments['graph.read']).toBe('websocket');
+    expect(listener).toHaveBeenCalledOnce();
   });
 });

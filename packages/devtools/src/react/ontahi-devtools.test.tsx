@@ -1,5 +1,6 @@
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
+  createRuntimeTransportRouter,
   createRuntimeProtocolRequest,
   createRuntimeProtocolResponse,
 } from '@ontahi/core/runtime/protocol';
@@ -149,22 +150,34 @@ describe('OntahiDevtools', () => {
   );
 
   it(
-    'hosts application-owned controls in a dedicated Settings view',
+    'owns a generic Settings view for configurable Runtime transports',
     () => {
       const diagnostics = createOntahiDiagnostics();
+      const runtimeTransport = createRuntimeTransportRouter({
+        transports: {
+          http: { request: vi.fn() },
+          websocket: { request: vi.fn() },
+        },
+        routing: { 'graph.read': 'http' },
+      });
       render(
         <OntahiDevtools
           diagnostics={diagnostics}
           initiallyOpen
-          settings={<button type='button'>Route over HTTP</button>}
+          runtimeTransport={runtimeTransport}
         />,
       );
 
       expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
       expect(screen.getByRole('region', { name: 'Devtools settings' })).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Route over HTTP' })).toBeTruthy();
+      expect(screen.getByRole('combobox', { name: 'Transport for graph reads' })).toBeTruthy();
       expect(screen.queryByRole('region', { name: 'Runtime traffic' })).toBeNull();
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Transport for graph reads' }), {
+        target: { value: 'websocket' },
+      });
+      expect(runtimeTransport.routing.inspect().assignments['graph.read']).toBe('websocket');
 
       fireEvent.click(screen.getByRole('button', { name: /Activity/ }));
       expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();

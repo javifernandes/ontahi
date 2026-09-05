@@ -36,8 +36,8 @@ meaning even when they share a connection or visual timeline.
    Ontahí Graph Client Cache. It complements rather than reproduces generic React Query tooling.
 3. **Transport:** effective routing, connection lifecycle, handshake, negotiated capabilities,
    endpoint projection, protocol/session diagnostics, and HTTP or WebSocket evidence.
-4. **Settings:** read-only effective configuration plus optional development overrides supplied by
-   a host-owned transport-routing controller.
+4. **Settings:** effective configuration and development overrides derived generically from an
+   explicitly provided configurable Runtime Transport.
 
 ## Component Boundary
 
@@ -51,8 +51,8 @@ The headless diagnostic store and transport decorator live in `@ontahi/devtools`
 React surface is exported separately from `@ontahi/devtools/react`; it is one projection of that
 model, not the source of runtime truth. This keeps visual tooling and dependencies outside the
 non-visual `@ontahi/react` client. The shipped surface covers correlated Activity with inline
-Operation progress and an optional host-owned Settings projection; Cache and connection-state
-evidence remain Plan 148 work.
+Operation progress and a runtime-owned Settings projection; Cache and connection-state evidence
+remain Plan 148 work.
 
 Activity leads with reconstructed application intent, such as an Entity selection and named View,
 or an Operation's input and returned value with Entity Refs reduced to domain identity. Protocol
@@ -62,11 +62,13 @@ and compares Request with Response at the right. Each side uses progressive disc
 semantic projection to body JSON and finally the complete envelope; the raw transport package is
 never the default explanation of application behavior.
 
-Transport routing is likewise a reusable runtime component rather than state owned by the Devtools
-panel. Devtools may discover and operate an explicitly provided controller. Routing changes affect
-new work; an active Durable observation remains on the transport where it began. Unknown families
-must fail or use an explicit default, and an ambiguous transmission never falls back automatically
-through another transport.
+Transport routing is likewise a reusable Core runtime component rather than state owned by the
+Devtools panel or application. Devtools discovers and operates the `routing` capability of an
+explicitly provided configurable Runtime Transport, subscribes to its snapshot, and derives both
+selectors and preferred-transport profiles from registered capabilities. Routing changes affect new
+work; an active Durable or Graph observation remains on the transport where it began. Unknown
+families fail, unsupported assignments are rejected, and an ambiguous transmission never falls back
+automatically through another transport.
 
 ## Safety And Scope
 

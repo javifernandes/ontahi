@@ -7,3 +7,14 @@ export const runtimeProtocolFamilies = [
   durableOperationRuntimeProtocolFamily,
   ...dataGraphRuntimeProtocolFamilies,
 ] as const;
+
+export type RuntimeProtocolFamily = (typeof runtimeProtocolFamilies)[number]['name'];
+
+export const runtimeProtocolFamilyNames = runtimeProtocolFamilies.map(
+  family => family.name,
+) as readonly RuntimeProtocolFamily[];
+
+const runtimeProtocolFamilyNameSet = new Set<string>(runtimeProtocolFamilyNames);
+
+export const isRuntimeProtocolFamily = (value: unknown): value is RuntimeProtocolFamily =>
+  typeof value === 'string' && runtimeProtocolFamilyNameSet.has(value);

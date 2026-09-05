@@ -41,9 +41,11 @@ The experience should support at least:
 
 Configuration is part of the experience when it helps a developer understand or test a runtime,
 but application deployment policy remains host-owned. Diagnostic surfaces should always show the
-effective configuration and may offer explicit development-only overrides when the host supplies a
-controller. Changes apply only according to the configured transport contract: they must not imply
-automatic cross-transport retry, replay of effects, or migration of active Durable observations.
+effective configuration and may operate the inspectable routing capability of a configurable
+Runtime Transport. Applications compose initial routing but do not reimplement the settings model,
+controls, synchronization, or presets. Changes apply only according to the configured transport
+contract: they must not imply automatic cross-transport retry, replay of effects, or migration of
+active Durable or Graph observations.
 
 This Experience is not one package or screen. Plans can improve one or more parts of it, and
 multiple implementation components can realize it.

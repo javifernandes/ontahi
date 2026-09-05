@@ -147,12 +147,34 @@ and does not automatically resubscribe it; a later request can create a new sess
 and resume remain explicit future guarantees. Fetch polling remains the fallback when a host does
 not project WebSocket.
 
-A host application may compose Fetch and WebSocket transports and route each complete envelope by
-its `family`. Durable observation is selected separately because it is an asynchronous transport
-capability rather than a new family body. This permits Graph reads and Operation invocation over
-HTTP while Durable snapshots arrive by WebSocket push, or sends all current families through one
-socket. The hook and Entity authoring stay unchanged; routing is chosen before transmission, and a
-failure never causes an automatic replay through the other transport.
+A host application can compose Fetch and WebSocket with Core's configurable router:
+
+```ts
+import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
+
+const runtimeTransport = createRuntimeTransportRouter({
+  transports: {
+    http: createFetchRuntimeTransport(),
+    websocket: createWebSocketRuntimeTransport(),
+  },
+  routing: {
+    'graph.read': 'websocket',
+    'graph.command': 'websocket',
+    operation: 'websocket',
+    'durable.operation.observe': 'websocket',
+  },
+});
+```
+
+Each complete envelope routes by `family`. Durable and Graph observation are distinct asynchronous
+transport capabilities. The router validates configured assignments against registered structural
+capabilities, derives related routes when they are omitted, and exposes stable
+`routing.inspect()`, `routing.subscribe(...)`, and `routing.configure(...)` operations. A UI such as
+Ontahí Devtools can project that contract without owning application routing state. This permits
+Graph reads and Operation invocation over HTTP while Durable snapshots arrive by WebSocket push, or
+sends all supported capabilities through one socket. The hook and Entity authoring stay unchanged;
+routing is chosen before transmission, an active observation remains pinned to that transport, and
+a failure never causes an automatic replay through another transport.
 
 The WebSocket handshake is an HTTP request, so a same-origin browser automatically includes the
 same applicable session cookie used by Fetch. WebSocket does not make CORS an authorization

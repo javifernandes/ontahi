@@ -9,26 +9,48 @@ semantic projection, body JSON, and its complete Runtime Protocol envelope. It d
 `fetch`, `WebSocket`, or browser globals, and it does not persist or upload diagnostic data.
 
 ```tsx
+import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
 import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
+import { createFetchRuntimeTransport, createWebSocketRuntimeTransport } from '@ontahi/react/graph';
 
 const diagnostics = createOntahiDiagnostics();
-const transport = instrumentRuntimeTransport({
-  diagnostics,
-  id: 'http',
-  kind: 'fetch',
-  transport: runtimeTransport,
+const runtimeTransport = createRuntimeTransportRouter({
+  transports: {
+    http: instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: createFetchRuntimeTransport(),
+    }),
+    websocket: instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: createWebSocketRuntimeTransport(),
+    }),
+  },
+  routing: {
+    'graph.read': 'websocket',
+    'graph.command': 'websocket',
+    operation: 'websocket',
+    'durable.operation.observe': 'websocket',
+  },
 });
 
-<OntahiDevtools
-  diagnostics={diagnostics}
-  settings={<RuntimeTransportControls controller={hostOwnedRoutingController} />}
-/>;
+<OntahiDevtools diagnostics={diagnostics} runtimeTransport={runtimeTransport} />;
 ```
 
-The optional `settings` slot keeps routing policy and controls host-owned while presenting them in
-a dedicated Devtools view. Changing a setting must follow the host transport contract; Devtools
-does not replay requests or move an active observation between transports.
+`createRuntimeTransportRouter(...)` owns effective routing, capability validation, inspection, and
+subscription. Devtools recognizes that configurable Runtime Transport and owns its generic Settings
+projection; applications do not provide settings UI, React state, or presets. Profiles are derived
+from the registered transports and their supported capabilities. The host still chooses the
+initial routing and may subscribe for application policies such as cache invalidation or local
+persistence. Changing a setting never replays requests or moves an active observation between
+transports.
+
+`instrumentRuntimeTransport(...)` preserves and delegates this routing capability when it wraps a
+configurable transport.
 
 The default Visual detail projects Operation requests to their input and successful responses to
 their returned value, flattening Entity Refs to their locator identity. Body JSON and Envelope keep

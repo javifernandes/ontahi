@@ -1,5 +1,6 @@
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
+  isConfigurableRuntimeTransport,
   isRuntimeProtocolError,
   type DurableOperationObservationOptions,
   type RuntimeProtocolError,
@@ -237,10 +238,19 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
         },
       }
     : undefined;
+  const routing = isConfigurableRuntimeTransport(transport)
+    ? {
+        inspect: () => transport.routing.inspect(),
+        subscribe: (listener: () => void) => transport.routing.subscribe(listener),
+        configure: (...args: Parameters<typeof transport.routing.configure>) =>
+          transport.routing.configure(...args),
+      }
+    : undefined;
 
   return {
     ...transport,
     request,
     ...(durableOperation ? { durableOperation } : {}),
+    ...(routing ? { routing } : {}),
   } as TTransport;
 };
