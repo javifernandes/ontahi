@@ -21,13 +21,14 @@ pnpm todo:dev:local
 dependencies, regenerates the client, builds the browser bundle, watches package output, and
 restarts Express when framework code changes.
 
-Open `http://localhost:3001` for the React UI. The **Runtime transport lab** section routes Graph
-reads, Graph Commands, Operation calls, and Durable progress independently between the common HTTP
-endpoint and WebSocket. It persists the selection locally and includes WebSocket-only, HTTP-only,
-and HTTP-requests-plus-WebSocket-push presets. The default sends all four paths through one
-`/runtime` WebSocket session. Selecting HTTP for Durable progress demonstrates the Fetch polling
-fallback; selecting WebSocket receives pushed snapshots without browser polling. The same
-`useGraphQuery`, `useOperation`, and `useDurableOperation` authoring is used for every combination.
+Open `http://localhost:3001` for the React UI, open Ontahí Devtools from its ceibo launcher, and
+select **Settings** to configure Runtime transport routing. The controls route Graph reads, Graph
+Commands, Operation calls, and Operation progress independently between the common HTTP endpoint
+and WebSocket. They persist the selection locally and include WebSocket-only, HTTP-only, and
+HTTP-requests-plus-WebSocket-push presets. The default sends all four paths through one `/runtime`
+WebSocket session. Selecting HTTP for Operation progress demonstrates the Fetch polling fallback;
+selecting WebSocket receives pushed snapshots without browser polling. The same `useGraphQuery`,
+`useOperation`, and `useDurableOperation` authoring is used for every combination.
 
 Todo's in-process Task Runtime projects lifecycle writes through the framework `TaskRun` Entity.
 The Express host adapts that native Stream to Durable protocol snapshots, so WebSocket mode has no

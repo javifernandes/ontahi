@@ -20,8 +20,23 @@ const transport = instrumentRuntimeTransport({
   transport: runtimeTransport,
 });
 
-<OntahiDevtools diagnostics={diagnostics} />;
+<OntahiDevtools
+  diagnostics={diagnostics}
+  settings={<RuntimeTransportControls controller={hostOwnedRoutingController} />}
+/>;
 ```
+
+The optional `settings` slot keeps routing policy and controls host-owned while presenting them in
+a dedicated Devtools view. Changing a setting must follow the host transport contract; Devtools
+does not replay requests or move an active observation between transports.
+
+The default Visual detail projects Operation requests to their input and successful responses to
+their returned value, flattening Entity Refs to their locator identity. Body JSON and Envelope keep
+the complete Runtime Protocol evidence available when transport-level inspection is needed.
+
+The React surface opens as a full-width bottom drawer at a compact default height. Drag its top
+handle, or focus the handle and use the arrow keys, to resize it while the application remains
+visible above.
 
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
@@ -32,5 +47,5 @@ createOntahiDiagnostics({
 });
 ```
 
-This first release proves the behavioral boundary in Todo. Cache inspection, transport connection
-state, and mutable routing settings are later Plan 148 slices.
+This first release proves the behavioral boundary in Todo. Cache inspection and transport
+connection state are later Plan 148 slices.

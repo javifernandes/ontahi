@@ -71,7 +71,10 @@ describe('OntahiDevtools', () => {
       await transport.request(runtimeRequest);
       render(<OntahiDevtools diagnostics={diagnostics} />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Open Ontahí Devtools' }));
+      const launcher = screen.getByRole('button', { name: 'Open Ontahí Devtools' });
+      expect(launcher.querySelector('svg')).toBeTruthy();
+      expect(launcher.textContent).toBe('');
+      fireEvent.click(launcher);
       expect(screen.getByRole('complementary', { name: 'Ontahí Devtools' })).toBeTruthy();
       expect(
         screen.getAllByText('TodoItem.all · orderBy title asc · as TodoItemListItem'),
@@ -101,6 +104,7 @@ describe('OntahiDevtools', () => {
         target: { value: 'operation' },
       });
       expect(screen.getByText(/Run an Ontahí query/)).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Selected diagnostic detail' })).toBeNull();
       fireEvent.change(screen.getByRole('searchbox', { name: 'Filter diagnostics' }), {
         target: { value: '' },
       });
@@ -110,6 +114,60 @@ describe('OntahiDevtools', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Close Devtools' }));
       expect(screen.getByRole('button', { name: 'Open Ontahí Devtools' })).toBeTruthy();
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'docks to the viewport and allows its height to be resized',
+    () => {
+      const diagnostics = createOntahiDiagnostics();
+      render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
+
+      const panel = screen.getByRole('complementary', { name: 'Ontahí Devtools' });
+      expect(panel.style.left).toBe('0px');
+      expect(panel.style.right).toBe('0px');
+      expect(panel.style.bottom).toBe('0px');
+      expect(panel.style.width).toBe('100%');
+      expect(panel.style.height).toBe('360px');
+
+      const resizer = screen.getByRole('separator', { name: 'Resize Devtools' });
+      expect(resizer.getAttribute('aria-valuenow')).toBe('360');
+      fireEvent.keyDown(resizer, { key: 'ArrowUp' });
+      expect(panel.style.height).toBe('392px');
+      expect(resizer.getAttribute('aria-valuenow')).toBe('392');
+      fireEvent.keyDown(resizer, { key: 'ArrowDown' });
+      expect(panel.style.height).toBe('360px');
+
+      fireEvent.pointerDown(resizer, { button: 0, pointerId: 1, clientY: 360 });
+      fireEvent.pointerMove(resizer, { pointerId: 1, clientY: 320 });
+      expect(panel.style.height).toBe('400px');
+      fireEvent.pointerUp(resizer, { pointerId: 1, clientY: 320 });
+      fireEvent.click(screen.getByRole('button', { name: 'Close Devtools' }));
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'hosts application-owned controls in a dedicated Settings view',
+    () => {
+      const diagnostics = createOntahiDiagnostics();
+      render(
+        <OntahiDevtools
+          diagnostics={diagnostics}
+          initiallyOpen
+          settings={<button type='button'>Route over HTTP</button>}
+        />,
+      );
+
+      expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      expect(screen.getByRole('region', { name: 'Devtools settings' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Route over HTTP' })).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Runtime traffic' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: /Activity/ }));
+      expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
     },
     uiTestTimeoutMs,
   );
@@ -127,8 +185,15 @@ describe('OntahiDevtools', () => {
         body: {
           version: 1,
           kind: 'invoke',
-          operationId: 'Todo.createItem',
-          input: { title: 'Tune Devtools' },
+          operationId: 'TodoItem.createItem',
+          input: {
+            list: {
+              kind: 'entity-ref',
+              entityName: 'TodoList',
+              locator: { id: 'list-later' },
+            },
+            title: 'nuevo item',
+          },
         },
       });
       const transport = instrumentRuntimeTransport({
@@ -136,7 +201,25 @@ describe('OntahiDevtools', () => {
         id: 'websocket',
         kind: 'websocket',
         transport: {
-          request: vi.fn().mockResolvedValue(createRuntimeProtocolResponse(runtimeRequest, null)),
+          request: vi.fn().mockResolvedValue(
+            createRuntimeProtocolResponse(runtimeRequest, {
+              kind: 'invocation-result',
+              result: {
+                ok: true,
+                kind: 'success',
+                value: {
+                  id: 'todo-new',
+                  list: {
+                    kind: 'entity-ref',
+                    entityName: 'TodoList',
+                    locator: { id: 'list-later' },
+                  },
+                  title: 'nuevo item',
+                  completed: false,
+                },
+              },
+            }),
+          ),
         },
       });
       await transport.request(runtimeRequest);
@@ -144,9 +227,26 @@ describe('OntahiDevtools', () => {
       render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
 
       expect(
-        screen.getByRole('button', { name: 'Todo.createItem() websocket success' }),
+        screen.getByRole('button', { name: 'TodoItem.createItem() websocket success' }),
       ).toBeTruthy();
-      expect(screen.queryByText('Todo.createItem.invoke')).toBeNull();
+      expect(screen.queryByText('TodoItem.createItem.invoke')).toBeNull();
+
+      const request = within(screen.getByRole('region', { name: 'Request detail' }));
+      const response = within(screen.getByRole('region', { name: 'Response detail' }));
+      expect(request.getByText('Input')).toBeTruthy();
+      expect(request.getByText('list-later')).toBeTruthy();
+      expect(request.getByText('nuevo item')).toBeTruthy();
+      expect(request.queryByText('entity-ref')).toBeNull();
+      expect(request.queryByText('operationId')).toBeNull();
+      expect(response.getByText('Returned value')).toBeTruthy();
+      expect(response.getByText('todo-new')).toBeTruthy();
+      expect(response.queryByText('invocation-result')).toBeNull();
+      expect(response.queryByText('ok')).toBeNull();
+
+      fireEvent.click(request.getByRole('button', { name: 'Body JSON' }));
+      expect(request.getByRole('button', { name: 'Copy Request JSON' })).toBeTruthy();
+      expect(request.getByText(/"operationId"/)).toBeTruthy();
+      expect(request.getByText(/"entity-ref"/)).toBeTruthy();
     },
     uiTestTimeoutMs,
   );

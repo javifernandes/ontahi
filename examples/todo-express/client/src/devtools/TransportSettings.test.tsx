@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   defaultTodoTransportRouting,
   splitTodoTransportRouting,
-} from '../../runtime-transport-routing.js';
+} from '../runtime-transport-routing.js';
 
 import { TransportSettings } from './TransportSettings.js';
 

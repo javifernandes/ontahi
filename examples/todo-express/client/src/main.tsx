@@ -11,6 +11,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.js';
+import { TransportSettings } from './devtools/TransportSettings.js';
 import { Explorer } from './Explorer.js';
 import {
   createTodoRuntimeTransportRouter,
@@ -104,14 +105,14 @@ const TodoClient = () => {
       {isExplorer ? (
         <Explorer />
       ) : (
-        <App
-          authentication={authentication}
-          setAuthentication={setAuthentication}
-          transportRouting={transportRouting}
-          setTransportRouting={setTransportRouting}
-        />
+        <App authentication={authentication} setAuthentication={setAuthentication} />
       )}
-      {diagnostics ? <OntahiDevtools diagnostics={diagnostics} /> : null}
+      {diagnostics ? (
+        <OntahiDevtools
+          diagnostics={diagnostics}
+          settings={<TransportSettings routing={transportRouting} onChange={setTransportRouting} />}
+        />
+      ) : null}
     </OntahiGraphProvider>
   );
 };
