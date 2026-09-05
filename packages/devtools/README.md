@@ -3,8 +3,10 @@
 Experimental, development-only diagnostics for Ontahí web clients.
 
 The package currently provides a bounded in-memory diagnostic store, a compositional
-`RuntimeTransport` instrument, and an opt-in React panel. It does not patch `fetch`, `WebSocket`, or
-browser globals, and it does not persist or upload diagnostic data.
+`RuntimeTransport` instrument, and an opt-in React panel. The panel leads with application intent,
+keeps transport families as supporting metadata, and lets each request and response move between a
+semantic projection, body JSON, and its complete Runtime Protocol envelope. It does not patch
+`fetch`, `WebSocket`, or browser globals, and it does not persist or upload diagnostic data.
 
 ```tsx
 import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';

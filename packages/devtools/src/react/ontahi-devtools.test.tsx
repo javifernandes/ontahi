@@ -2,7 +2,7 @@ import {
   createRuntimeProtocolRequest,
   createRuntimeProtocolResponse,
 } from '@ontahi/core/runtime/protocol';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createOntahiDiagnostics } from '../diagnostics.js';
@@ -11,7 +11,7 @@ import { instrumentRuntimeTransport } from '../instrument-runtime-transport.js';
 import { OntahiDevtools } from './ontahi-devtools.js';
 
 describe('OntahiDevtools', () => {
-  it('opens, shows semantic exchanges, reveals detail, clears, and closes', async () => {
+  it('leads with application intent and separates visual, body, and envelope detail', async () => {
     const diagnostics = createOntahiDiagnostics({
       capturePayloads: true,
       redact: value => value,
@@ -19,16 +19,48 @@ describe('OntahiDevtools', () => {
     const runtimeRequest = createRuntimeProtocolRequest({
       id: 'read-1',
       family: 'graph.read',
-      body: { selection: 'TodoList' },
+      body: {
+        version: 1,
+        kind: 'graph-read',
+        mode: 'run',
+        selection: {
+          kind: 'selection',
+          entityName: 'TodoItem',
+          expression: { kind: 'all' },
+        },
+        view: {
+          version: 1,
+          kind: 'entity-view',
+          name: 'TodoItemListItem',
+          entity: 'TodoItem',
+          fields: {
+            id: { kind: 'field-view', field: 'id' },
+            title: { kind: 'field-view', field: 'title' },
+            tags: {
+              kind: 'relation-view',
+              relation: 'TodoItem.tags',
+              view: {
+                kind: 'view-node',
+                entity: 'Tag',
+                fields: { name: { kind: 'field-view', field: 'name' } },
+              },
+            },
+          },
+        },
+        orderBy: [{ fieldName: 'title', direction: 'asc' }],
+      },
     });
     const transport = instrumentRuntimeTransport({
       diagnostics,
       id: 'http',
       kind: 'fetch',
       transport: {
-        request: vi
-          .fn()
-          .mockResolvedValue(createRuntimeProtocolResponse(runtimeRequest, { rows: 1 })),
+        request: vi.fn().mockResolvedValue(
+          createRuntimeProtocolResponse(runtimeRequest, {
+            kind: 'graph-read-result',
+            value: [{ id: 'todo-1', title: 'Try Devtools', tags: ['Work'] }],
+          }),
+        ),
       },
     });
     await transport.request(runtimeRequest);
@@ -36,11 +68,29 @@ describe('OntahiDevtools', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Ontahí Devtools' }));
     expect(screen.getByRole('complementary', { name: 'Ontahí Devtools' })).toBeTruthy();
-    expect(screen.getByText('graph.read')).toBeTruthy();
-    expect(screen.getByText('success')).toBeTruthy();
+    expect(
+      screen.getAllByText('TodoItem.all · orderBy title asc · as TodoItemListItem'),
+    ).toHaveLength(3);
+    expect(screen.getAllByText('graph.read')).toHaveLength(2);
+    expect(screen.getAllByText('success')).toHaveLength(2);
+    expect(screen.getByText('tags.name')).toBeTruthy();
+    expect(screen.getByText('Try Devtools')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('graph.read'));
-    expect(screen.getByText(/TodoList/)).toBeTruthy();
+    const requestDetail = screen.getByRole('region', { name: 'Request detail' });
+    fireEvent.click(within(requestDetail).getByRole('button', { name: 'Body JSON' }));
+    expect(requestDetail.querySelector('pre')?.textContent).toContain('"kind": "graph-read"');
+    fireEvent.click(within(requestDetail).getByRole('button', { name: 'Envelope' }));
+    expect(requestDetail.querySelector('pre')?.textContent).toContain(
+      '"protocol": "ontahi.runtime"',
+    );
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    fireEvent.click(within(requestDetail).getByRole('button', { name: 'Copy Request JSON' }));
+    expect(writeText).toHaveBeenCalledOnce();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter diagnostics' }), {
       target: { value: 'operation' },

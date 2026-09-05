@@ -54,6 +54,12 @@ not the source of runtime truth. This keeps visual tooling and dependencies outs
 `@ontahi/react` client. The first shipped slice covers correlated Activity and grouped Durable
 timelines; Cache, connection-state evidence, and host-controlled Settings remain Plan 148 work.
 
+Activity leads with reconstructed application intent, such as an Entity selection and named View,
+while protocol family and transport remain secondary evidence. Its bottom-docked master-detail
+layout keeps traffic at the left and compares Request with Response at the right. Each side uses
+progressive disclosure from a semantic projection to body JSON and finally the complete envelope;
+the raw transport package is never the default explanation of application behavior.
+
 Transport routing is likewise a reusable runtime component rather than state owned by the Devtools
 panel. Devtools may discover and operate an explicitly provided controller. Routing changes affect
 new work; an active Durable observation remains on the transport where it began. Unknown families
