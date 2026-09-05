@@ -459,17 +459,20 @@ describe('operation hooks', () => {
       },
     });
     const Book = entity('Book', { id: field.id() });
-    const operation = defineClientDomainOperationsForEntity('Book', {
-      importBook: defineClientDomainOperation({
-        authority: 'server',
-        exposure: 'bridge',
-        bridge: {},
-        input: graphSchema.object({ book: graphSchema.ref(Book) }),
-        durable: {
-          runtime: 'vercel-workflow',
-        },
-      }),
-    }).importBook;
+    const ClientBook = defineClientEntity(Book, {
+      domainOperations: {
+        importBook: defineClientDomainOperation({
+          authority: 'server',
+          exposure: 'bridge',
+          bridge: {},
+          input: graphSchema.object({ book: graphSchema.ref(Book) }),
+          durable: {
+            runtime: 'vercel-workflow',
+          },
+        }),
+      },
+    });
+    const operation = ClientBook.domain.importBook;
     const observe = vi.fn(() =>
       (async function* () {
         yield {
@@ -510,7 +513,7 @@ describe('operation hooks', () => {
 
     await act(async () => {
       const run = await result.current.executeAsync({
-        book: createEntityRef(Book, { id: 'book-1' }),
+        book: ClientBook.refById('book-1'),
       });
 
       expect(run).toEqual({

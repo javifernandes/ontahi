@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
+  BridgedOperationLike,
   GraphPermission,
   OperationBridgeAction,
   OperationInvocationResult,
@@ -234,9 +235,10 @@ export function useOperation<TInput, TData>(
         if (currentOptions?.invalidateOnSuccess ?? true) {
           await Promise.all([
             invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
-            ...resolveOperationBridgeInvalidationQueryKeys(operation, transportInput).map(
-              queryKey => queryClient.invalidateQueries({ queryKey }),
-            ),
+            ...resolveOperationBridgeInvalidationQueryKeys(
+              operation as BridgedOperationLike<TInput, TData>,
+              transportInput,
+            ).map(queryKey => queryClient.invalidateQueries({ queryKey })),
           ]);
         }
       } else {
@@ -495,9 +497,10 @@ export function useDurableOperation<TInput, TResult = unknown>(
         ? (normalizeGraphSchemaClientInput(operation.input, mutation.input) as TInput)
         : (mutation.input as TInput);
       void Promise.all(
-        resolveOperationBridgeInvalidationQueryKeys(operation, invalidationInput).map(queryKey =>
-          queryClient.invalidateQueries({ queryKey }),
-        ),
+        resolveOperationBridgeInvalidationQueryKeys(
+          operation as BridgedOperationLike<TInput, TResult>,
+          invalidationInput,
+        ).map(queryKey => queryClient.invalidateQueries({ queryKey })),
       );
     }
   }, [mutation.input, operation, options?.invalidateOnSuccess, queryClient, snapshot]);

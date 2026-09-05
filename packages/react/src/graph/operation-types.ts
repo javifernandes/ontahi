@@ -32,7 +32,7 @@ export type ClientOperationLike<TInput = unknown, TData = unknown> = ClientOpera
 
 export type ClientSchemaOperationLike<TInput = unknown, TData = unknown> = Omit<
   ClientOperationDeclaration<any, any>,
-  '__clientTypes'
+  '__clientTypes' | 'input'
 > & {
   id: string;
   entityName: string;
@@ -56,10 +56,10 @@ export type DurableOperationLike<TInput = unknown, TResult = unknown> = ClientOp
   durable: DurableOperationMetadata<TInput, TResult>;
 };
 
-export type DurableSchemaOperationLike<
-  TInput = unknown,
-  TResult = unknown,
-> = ClientSchemaOperationLike<TInput, TResult> & {
+export type DurableSchemaOperationLike<TInput = unknown, TResult = unknown> = Omit<
+  ClientSchemaOperationLike<TInput, TResult>,
+  'durable'
+> & {
   durable: DurableOperationMetadata<any, TResult>;
 };
 
