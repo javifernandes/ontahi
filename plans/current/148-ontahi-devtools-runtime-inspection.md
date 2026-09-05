@@ -1,6 +1,6 @@
 # 148. Ontahí Devtools Runtime Inspection
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/148-ontahi-devtools-runtime-inspection`
 
@@ -12,7 +12,7 @@ Durable shapes:
 Related plans:
 
 1. [128. Ontahí Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
-2. [132. Durable Invocation Identity And Idempotency](./132-durable-invocation-identity-and-idempotency.md)
+2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [146h. WebSocket Runtime Transport And Durable Progress](../done/146h-websocket-runtime-transport-and-durable-progress.md)
 4. [146i. Runtime Protocol Negotiation And Conformance](../backlog/146i-runtime-protocol-negotiation-and-conformance.md)
 
@@ -289,9 +289,9 @@ but it must not become an arbitrary credentialed endpoint editor.
        redaction, and teardown with focused transport-neutral tests.
 2. [ ] Implement the headless store and `RuntimeTransport` decorator; prove complete unary and
        Durable iterator behavior with an in-memory transport.
-3. [ ] Create the `@ontahi/devtools` package and its React subpath with an Activity list, filters,
+3. [x] Create the `@ontahi/devtools` package and its React subpath with an Activity list, filters,
        outcome states, and structured request/response detail.
-4. [ ] Add Durable grouping and timeline projection without assuming that Fetch polls are distinct
+4. [x] Add Durable grouping and timeline projection without assuming that Fetch polls are distinct
        semantic observations.
 5. [ ] Add optional Fetch/WebSocket evidence and a Transport view that reports connection,
        capabilities, polling/push, close, and failure state.

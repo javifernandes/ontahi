@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 export const packagesRoot = path.join(repositoryRoot, 'packages');
-export const expectedPublicPackageCount = 10;
+export const expectedPublicPackageCount = 11;
 export const prereleaseVersionPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-(alpha|next)\.(0|[1-9]\d*)$/;
 

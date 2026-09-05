@@ -1,6 +1,6 @@
 # Releasing Ontahi
 
-Ontahi publishes all ten `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
+Ontahi publishes all eleven `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
 records its consumer-visible change; merging the generated release pull request publishes that
 immutable version.
 
@@ -90,7 +90,7 @@ The trust can be inspected or restored with npm CLI 11.15 or newer and an intera
 2FA-authenticated npm session:
 
 ```sh
-for package in codegen core explorer-react opentelemetry postgres react \
+for package in codegen core devtools explorer-react opentelemetry postgres react \
   runtime-express runtime-nextjs runtime-vercel-workflows supabase; do
   npm trust github "@ontahi/$package" \
     --file release.yml \

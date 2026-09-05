@@ -6,6 +6,7 @@
     [
       "@ontahi/codegen",
       "@ontahi/core",
+      "@ontahi/devtools",
       "@ontahi/explorer-react",
       "@ontahi/opentelemetry",
       "@ontahi/postgres",
