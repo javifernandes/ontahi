@@ -37,6 +37,7 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 3. [`@ontahi/runtime-vercel-workflows`](./source-code-organization/runtime-vercel-workflows.md)
 4. [`Ontahi Application Codegen`](./source-code-organization/codegen.md)
 5. [`Independent Distribution`](./source-code-organization/independent-distribution.md)
+6. [`Ontahí Devtools`](./source-code-organization/devtools.md)
 
 ## Package Direction
 
@@ -49,6 +50,7 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 7. [`@ontahi/explorer-react`](./source-code-organization/explorer-react.md): reusable Ontahi Explorer React package.
 8. [`@ontahi/runtime-vercel-workflows`](./source-code-organization/runtime-vercel-workflows.md): Vercel Workflow task adapter and durable runtime integration, extracted behind host-supplied registries and stores.
 9. [`@ontahi/codegen`](./source-code-organization/codegen.md): build-time declaration analysis and generic projections, with technology-specific static emitters exposed by runtime adapter packages.
+10. [`Ontahí Devtools`](./source-code-organization/devtools.md): planned browser-resident diagnostics component for semantic Runtime Protocol, Durable lifecycle, client-cache, and transport inspection; its package boundary remains an implementation-plan decision.
 
 ## Repository Topology
 
