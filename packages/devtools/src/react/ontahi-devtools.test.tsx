@@ -72,7 +72,7 @@ describe('OntahiDevtools', () => {
       screen.getAllByText('TodoItem.all · orderBy title asc · as TodoItemListItem'),
     ).toHaveLength(3);
     expect(screen.getAllByText('graph.read')).toHaveLength(2);
-    expect(screen.getAllByText('success')).toHaveLength(2);
+    expect(screen.getByText('success')).toBeTruthy();
     expect(screen.getByText('tags.name')).toBeTruthy();
     expect(screen.getByText('Try Devtools')).toBeTruthy();
 
@@ -105,5 +105,38 @@ describe('OntahiDevtools', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Devtools' }));
     expect(screen.getByRole('button', { name: 'Open Ontahí Devtools' })).toBeTruthy();
+  });
+
+  it('presents an Operation as a remote method invocation', async () => {
+    const diagnostics = createOntahiDiagnostics({
+      capturePayloads: true,
+      redact: value => value,
+    });
+    const runtimeRequest = createRuntimeProtocolRequest({
+      id: 'operation-1',
+      family: 'operation',
+      body: {
+        version: 1,
+        kind: 'invoke',
+        operationId: 'Todo.createItem',
+        input: { title: 'Tune Devtools' },
+      },
+    });
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn().mockResolvedValue(createRuntimeProtocolResponse(runtimeRequest, null)),
+      },
+    });
+    await transport.request(runtimeRequest);
+
+    render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
+
+    expect(
+      screen.getByRole('button', { name: 'Todo.createItem() websocket success' }),
+    ).toBeTruthy();
+    expect(screen.queryByText('Todo.createItem.invoke')).toBeNull();
   });
 });

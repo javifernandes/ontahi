@@ -177,7 +177,7 @@ const styles: Record<string, CSSProperties> = {
     display: 'grid',
     boxSizing: 'border-box',
     width: '100%',
-    gridTemplateColumns: '8px minmax(0, 1fr) auto',
+    gridTemplateColumns: '8px minmax(0, 1fr)',
     gap: 10,
     alignItems: 'center',
     margin: 0,
@@ -214,16 +214,6 @@ const styles: Record<string, CSSProperties> = {
   family: {
     color: '#8eb49f',
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-  },
-  outcome: {
-    padding: '3px 7px',
-    borderRadius: 999,
-    color: '#b4cabe',
-    background: '#1d2c24',
-    fontSize: 9,
-    fontWeight: 800,
-    letterSpacing: '0.03em',
-    textTransform: 'uppercase',
   },
   empty: {
     display: 'grid',
@@ -500,7 +490,9 @@ const semanticSummary = (activity: ExchangeActivity): string => {
     const graphCommand = graphCommandSummary(body);
     if (graphCommand) return graphCommand;
     if (event?.family === 'operation' && typeof body.operationId === 'string') {
-      return `${body.operationId}.${body.kind === 'check-permission' ? 'can?' : 'invoke'}`;
+      return body.kind === 'check-permission'
+        ? `can ${body.operationId}()`
+        : `${body.operationId}()`;
     }
   }
   return event?.family ?? 'Runtime exchange';
@@ -586,7 +578,11 @@ const ActivityList = ({
               onClick={() => select({ kind: 'exchange', id: activity.id })}
               aria-label={`${semanticSummary(activity)} ${event.transportId} ${outcome}`}
             >
-              <span style={{ ...styles.dot, background: outcomeColor(outcome) }} />
+              <span
+                style={{ ...styles.dot, background: outcomeColor(outcome) }}
+                title={outcome}
+                aria-hidden='true'
+              />
               <span style={styles.rowMain}>
                 <span style={styles.rowTitle}>{semanticSummary(activity)}</span>
                 <span style={styles.rowMeta}>
@@ -596,7 +592,6 @@ const ActivityList = ({
                   {activity.settled ? <span>{activity.settled.durationMs} ms</span> : null}
                 </span>
               </span>
-              <span style={styles.outcome}>{outcome}</span>
             </button>
           </li>
         );
@@ -631,7 +626,11 @@ const DurableList = ({
               style={activityButtonStyle(selectedId === activity.id)}
               onClick={() => select({ kind: 'observation', id: activity.id })}
             >
-              <span style={{ ...styles.dot, background: outcomeColor(outcome) }} />
+              <span
+                style={{ ...styles.dot, background: outcomeColor(outcome) }}
+                title={outcome}
+                aria-hidden='true'
+              />
               <span style={styles.rowMain}>
                 <span style={styles.rowTitle}>{event.run.taskId}</span>
                 <span style={styles.rowMeta}>
@@ -640,7 +639,6 @@ const DurableList = ({
                   <span>{activity.snapshots.length} snapshots</span>
                 </span>
               </span>
-              <span style={styles.outcome}>{outcome}</span>
             </button>
           </li>
         );
