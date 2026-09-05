@@ -2,7 +2,7 @@ import { Effect, Stream } from 'effect';
 
 import type { GraphCommandSpec } from './command.js';
 import type { QueryOrView } from './query.js';
-import type { DataGraphExecutionRuntime } from './runtime.js';
+import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from './runtime.js';
 
 export const createDataGraphExecutor = <
   TReadError = never,
@@ -37,6 +37,26 @@ export const createDataGraphExecutor = <
     params: TParams,
     options?: TReadOptions,
   ) => Stream.unwrap(Effect.sync(() => getRuntime().stream(queryOrView, params, options))),
+  observeViewStream: <TParams, TResult>(
+    queryOrView: QueryOrView<TParams, TResult>,
+    params: TParams,
+    options?: TReadOptions,
+  ) =>
+    Stream.suspend(() => {
+      const runtime = getRuntime() as DataGraphExecutionRuntime<
+        TReadError,
+        TReadOptions,
+        TCommandOptions,
+        TCommandError
+      > &
+        Partial<DataGraphObservationRuntime<TReadError, TReadOptions>>;
+
+      return typeof runtime.observe === 'function'
+        ? runtime.observe(queryOrView, params, options)
+        : Stream.die(
+            new TypeError('The current Data Graph runtime does not support Query observation.'),
+          );
+    }),
   runCommandEffect: <TResult = void>(
     command: GraphCommandSpec<any, any, TResult>,
     options?: TCommandOptions,

@@ -1,5 +1,6 @@
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 
+import { taskRunObservationUnavailableFailure } from './failures.js';
 import type {
   TaskConfig,
   TaskDeclarations,
@@ -27,6 +28,9 @@ export const getTaskSnapshot = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
   runtime.getSnapshot(ref);
 
 export const listRecentTasks = (runtime: TaskRuntime, limit?: number) => runtime.listRecent(limit);
+
+export const observeTaskRun = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
+  runtime.observe ? runtime.observe(ref) : Stream.fail(taskRunObservationUnavailableFailure(ref));
 
 export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
   const configuredRuntime =
@@ -59,6 +63,8 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
         const runtime = yield* getRuntime();
         return yield* getTaskSnapshot(runtime, ref);
       }),
+    observe: (ref: TaskRunIdentity) =>
+      Stream.unwrap(Effect.map(getRuntime(), runtime => observeTaskRun(runtime, ref))),
     listRecent: (limit?: number) =>
       Effect.gen(function* () {
         const runtime = yield* getRuntime();

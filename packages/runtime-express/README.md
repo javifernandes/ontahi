@@ -97,7 +97,7 @@ The same dispatcher can be projected as a WebSocket session on a host-owned HTTP
 
 ```ts
 import { createServer } from 'node:http';
-import { createPollingDurableOperationObserver } from '@ontahi/core/runtime/protocol';
+import { createTaskRunDurableOperationObserver } from '@ontahi/core/runtime/protocol';
 import { createExpressRuntimeProtocolWebSocketServer } from '@ontahi/runtime-express/runtime-protocol';
 
 const httpServer = createServer(server);
@@ -110,19 +110,20 @@ createExpressRuntimeProtocolWebSocketServer({
   dispatcher: runtimeDispatcher,
   authorizeUpgrade: request => request.headers.origin === publicOrigin,
   context: async request => ({ principal: await authenticateUpgrade(request) }),
-  observeDurableOperation: createPollingDurableOperationObserver({
-    inspect: run => TodoApplication.getTaskSnapshot(run),
+  observeDurableOperation: createTaskRunDurableOperationObserver({
+    observe: run => TodoApplication.app.task.observe(run),
   }),
 });
 ```
 
 The upgrade `context` is receiver-owned and runs once for the session; authority is never accepted
 from a session frame. One connection carries all registered request/response families and pushed
-Durable snapshots. The polling observer is an honest server-side compatibility adapter for Task
-Runtimes that only expose inspection: it suppresses unchanged snapshots and never makes the browser
-poll. Hosts with a native task observer can supply that `AsyncIterable` directly. Unsubscribe and
-disconnect abort active iterators. The session does not promise replay, automatic resubscription,
-or exactly-once snapshot delivery.
+Durable snapshots. `createTaskRunDurableOperationObserver` projects a native TaskRun Effect Stream
+and binds session abort to Stream interruption. For Task Runtimes that expose inspection only,
+`createPollingDurableOperationObserver` remains an honest server-side compatibility adapter: it
+suppresses unchanged snapshots and never makes the browser poll. Unsubscribe and disconnect abort
+active iterators. The session does not promise replay, automatic resubscription, or exactly-once
+snapshot delivery.
 
 Browser WebSockets send matching cookies during the HTTP upgrade but do not use CORS as an access
 control boundary. A credentialed host should use `authorizeUpgrade` to validate the browser

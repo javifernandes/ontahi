@@ -1,4 +1,4 @@
-import type { Effect, Stream } from 'effect';
+import { Stream, type Effect } from 'effect';
 
 import type { QueryBuilder, QueryOrView, QuerySpec, ViewDefinition } from './query.js';
 import type { RelatedRootReadSpec } from './relation-root.js';
@@ -46,6 +46,11 @@ export type GraphReadExecutor<TError = never, TOptions = undefined> = {
     params: TParams,
     options?: TOptions,
   ): Stream.Stream<TResult, TError>;
+  observe?<TParams, TResult>(
+    queryOrView: QueryOrView<TParams, TResult>,
+    params: TParams,
+    options?: TOptions,
+  ): Stream.Stream<TResult[], TError>;
 };
 
 export type BoundGraphRead<
@@ -64,6 +69,9 @@ export type BoundGraphRead<
   stream: (
     ...args: RuntimeArgs<ReadParams<TRead>, TOptions>
   ) => Stream.Stream<ReadResult<TRead>, TError>;
+  observe: (
+    ...args: RuntimeArgs<ReadParams<TRead>, TOptions>
+  ) => Stream.Stream<ReadResult<TRead>[], TError>;
   pipe: <TValue>(fn: (read: BoundGraphRead<TRead, TError, TOptions>) => TValue) => TValue;
 };
 
@@ -82,6 +90,9 @@ export type ExecutableGraphRead<
   stream: (
     ...args: RuntimeArgs<ReadParams<TRead>, TOptions>
   ) => Stream.Stream<ReadResult<TRead>, TError>;
+  observe: (
+    ...args: RuntimeArgs<ReadParams<TRead>, TOptions>
+  ) => Stream.Stream<ReadResult<TRead>[], TError>;
   pipe: <TValue>(
     fn: (executable: ExecutableGraphRead<TRead, TError, TOptions>) => TValue,
   ) => TValue;
@@ -117,6 +128,14 @@ export const createExecutableGraphRead = <
       const { params, options } = toRuntimeArgs(args);
       return executor.stream(read, params as ReadParams<TRead>, options);
     },
+    observe: (...args: RuntimeArgs<ReadParams<TRead>, TOptions>) => {
+      const { params, options } = toRuntimeArgs(args);
+      return executor.observe
+        ? executor.observe(read, params as ReadParams<TRead>, options)
+        : Stream.die(
+            new TypeError('The current Data Graph runtime does not support Query observation.'),
+          );
+    },
     pipe: fn => fn(executable),
   };
 
@@ -140,6 +159,7 @@ export const bindGraphRead = <
     run: executable.run,
     count: executable.count,
     stream: executable.stream,
+    observe: executable.observe,
     pipe: <TValue>(fn: (value: BoundGraphRead<TRead, TError, TOptions>) => TValue) => fn(bound),
   });
 

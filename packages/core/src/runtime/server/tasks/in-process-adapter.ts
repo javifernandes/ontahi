@@ -1,12 +1,15 @@
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 
 import { missingTaskStepFailure, toTaskFailure } from './failures.js';
+import { getInMemoryTaskRunProjection } from './task-run-observation.js';
 import type {
   InProcessTaskExecutorOptions,
   InProcessTaskRuntimeOptions,
   TaskExecutor,
   TaskContext,
+  TaskRunIdentity,
   TaskRunRef,
+  TaskRunSource,
   TaskRuntime,
   TaskSnapshot,
 } from './types.js';
@@ -37,77 +40,90 @@ export const createInProcessTaskRuntime = ({
   sleep = milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
   createRunId: createConfiguredRunId = createRunId,
   onBackgroundError,
-}: InProcessTaskRuntimeOptions): TaskRuntime => ({
-  start: (task, input, options) =>
-    Effect.gen(function* () {
-      const parsedInput = yield* validateTaskInput(task, input);
-      const runId = options?.runId ?? createConfiguredRunId();
-      const ref = { taskId: task.id, runId };
-      const snapshot = yield* storage.create({
-        ...ref,
-        input: parsedInput,
-        trigger: options?.trigger,
-        subject: options?.subject,
-      });
-      const source = yield* storage.loadSource(ref);
-      const context: TaskContext = {
-        ...ref,
-        ...(source.subject ? { subject: source.subject } : {}),
-        trigger: source.trigger,
-        createdAt: source.createdAt,
-        progress: progress =>
-          Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
-            storage.update(ref, { progress: parsedProgress }),
-          ),
-        sleep: milliseconds =>
-          Effect.tryPromise({
-            try: () => sleep(milliseconds),
-            catch: toTaskFailure,
-          }),
-        step: (stepOrName: string | { id: string }, input: unknown) => {
-          const name = typeof stepOrName === 'string' ? stepOrName : stepOrName.id;
-          const step = task.steps?.[name];
+}: InProcessTaskRuntimeOptions): TaskRuntime => {
+  const taskRuns = getInMemoryTaskRunProjection(storage);
+  const update = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
+    storage.update(ref, patch).pipe(Effect.tap(taskRuns.publish));
 
-          return step
-            ? Effect.flatMap(validateTaskStepInput(task.id, step, input), parsedInput =>
-                Effect.flatMap(step.run(parsedInput, context), output =>
-                  validateTaskStepOutput(task.id, step, output),
-                ),
-              )
-            : Effect.fail(missingTaskStepFailure(task.id, name));
-        },
-      };
-      const background = Effect.gen(function* () {
-        yield* storage.update(ref, {
-          status: 'running',
-          startedAt: now(),
+  return {
+    start: (task, input, options) =>
+      Effect.gen(function* () {
+        const parsedInput = yield* validateTaskInput(task, input);
+        const runId = options?.runId ?? createConfiguredRunId();
+        const ref = { taskId: task.id, runId };
+        const snapshot = yield* storage.create({
+          ...ref,
+          input: parsedInput,
+          trigger: options?.trigger,
+          subject: options?.subject,
         });
-        const result = yield* task.run(parsedInput, context);
-        const parsedResult = yield* validateTaskOutput(task, result);
-        yield* storage.update(ref, {
-          status: 'completed',
-          completedAt: now(),
-          result: parsedResult,
-        });
-      }).pipe(
-        Effect.catchAll(error =>
-          storage.update(ref, {
-            status: 'failed',
+        yield* taskRuns.publish(snapshot);
+        const source = yield* storage.loadSource(ref);
+        const context: TaskContext = {
+          ...ref,
+          ...(source.subject ? { subject: source.subject } : {}),
+          trigger: source.trigger,
+          createdAt: source.createdAt,
+          progress: progress =>
+            Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
+              update(ref, { progress: parsedProgress }),
+            ),
+          sleep: milliseconds =>
+            Effect.tryPromise({
+              try: () => sleep(milliseconds),
+              catch: toTaskFailure,
+            }),
+          step: (stepOrName: string | { id: string }, input: unknown) => {
+            const name = typeof stepOrName === 'string' ? stepOrName : stepOrName.id;
+            const step = task.steps?.[name];
+
+            return step
+              ? Effect.flatMap(validateTaskStepInput(task.id, step, input), parsedInput =>
+                  Effect.flatMap(step.run(parsedInput, context), output =>
+                    validateTaskStepOutput(task.id, step, output),
+                  ),
+                )
+              : Effect.fail(missingTaskStepFailure(task.id, name));
+          },
+        };
+        const background = Effect.gen(function* () {
+          yield* update(ref, {
+            status: 'running',
+            startedAt: now(),
+          });
+          const result = yield* task.run(parsedInput, context);
+          const parsedResult = yield* validateTaskOutput(task, result);
+          yield* update(ref, {
+            status: 'completed',
             completedAt: now(),
-            error: {
-              code: error.reason,
-              message: error.message,
-            },
-          }),
-        ),
-      );
+            result: parsedResult,
+          });
+        }).pipe(
+          Effect.catchAll(error =>
+            update(ref, {
+              status: 'failed',
+              completedAt: now(),
+              error: {
+                code: error.reason,
+                message: error.message,
+              },
+            }),
+          ),
+        );
 
-      void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
-      return toTaskRunRef(snapshot);
-    }),
-  getSnapshot: ref => storage.getSnapshot(ref),
-  listRecent: limit => storage.listRecent(limit),
-});
+        void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
+        return toTaskRunRef(snapshot);
+      }),
+    getSnapshot: ref => storage.getSnapshot(ref).pipe(Effect.tap(taskRuns.publish)),
+    listRecent: limit => storage.listRecent(limit),
+    observe: ref =>
+      Stream.unwrap(
+        storage
+          .getSnapshot(ref)
+          .pipe(Effect.tap(taskRuns.publish), Effect.as(taskRuns.observe(ref))),
+      ),
+  };
+};
 
 export const createInProcessTaskExecutor = (
   options: InProcessTaskExecutorOptions = {},

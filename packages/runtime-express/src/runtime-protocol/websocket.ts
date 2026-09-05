@@ -5,6 +5,7 @@ import {
   createRuntimeProtocolServerSession,
   type RuntimeProtocolDispatcher,
   type RuntimeProtocolDurableObserver,
+  type RuntimeProtocolGraphObserver,
 } from '@ontahi/core/runtime/protocol';
 import { WebSocket, WebSocketServer } from 'ws';
 
@@ -22,6 +23,7 @@ export type CreateExpressRuntimeProtocolWebSocketServerOptions<TContext> = {
   readonly context: ExpressRuntimeProtocolWebSocketContextFactory<TContext>;
   readonly authorizeUpgrade?: ExpressRuntimeProtocolWebSocketUpgradeAuthorization;
   readonly observeDurableOperation?: RuntimeProtocolDurableObserver<TContext>;
+  readonly observeGraph?: RuntimeProtocolGraphObserver<TContext>;
   readonly ownsUpgradeBoundary?: boolean;
   readonly path?: string;
   readonly reportError?: (error: unknown, request: IncomingMessage) => void;
@@ -53,6 +55,7 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
   context,
   authorizeUpgrade,
   observeDurableOperation,
+  observeGraph,
   ownsUpgradeBoundary = false,
   path = '/runtime',
   reportError,
@@ -103,6 +106,7 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
           dispatcher,
           context: receiverContext,
           observeDurableOperation,
+          observeGraph,
           reportError: error => reportError?.(error, request),
           send: frame => {
             if (webSocket.readyState === WebSocket.OPEN) {

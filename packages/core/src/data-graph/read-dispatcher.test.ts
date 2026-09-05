@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createGraphReadDispatcher,
+  createGraphReadObserver,
   createEntityRef,
   entity,
   field,
@@ -760,5 +761,103 @@ describe('graph read dispatcher', () => {
         execute: vi.fn(),
       }),
     ).toThrow('Graph read policy Trip requires an authority scope or explicit "all" scope.');
+  });
+
+  it('observes repeated results through the same policy, scope, and limit boundary as reads', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const controller = new AbortController();
+    const observe = vi.fn(async function* () {
+      yield [{ id: 'trip-1', status: 'available' }];
+      yield [
+        { id: 'trip-1', status: 'available' },
+        { id: 'trip-2', status: 'available' },
+      ];
+    });
+    const observer = createGraphReadObserver({
+      policies: [createTripPolicy(server)],
+      observe,
+    });
+    const request = toGraphReadRequest(
+      query(client.Trip)
+        .where(trip => trip.status.eq('available'))
+        .as(client.Trip.view('TripList', { id: true, status: true })),
+      'run',
+    );
+    const values = [];
+
+    for await (const value of observer(request, {
+      authority: { ownerId: 'owner-1' },
+      signal: controller.signal,
+    })) {
+      values.push(value);
+    }
+
+    expect(values).toEqual([
+      {
+        kind: 'graph-read-result',
+        value: [{ id: 'trip-1', status: 'available' }],
+      },
+      {
+        kind: 'graph-read-result',
+        value: [
+          { id: 'trip-1', status: 'available' },
+          { id: 'trip-2', status: 'available' },
+        ],
+      },
+    ]);
+    expect(observe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 50,
+        selection: {
+          kind: 'and',
+          operands: [
+            expect.objectContaining({ fieldName: 'status', value: 'available' }),
+            expect.objectContaining({ fieldName: 'ownerId', value: 'owner-1' }),
+          ],
+        },
+      }),
+      { signal: controller.signal },
+    );
+  });
+
+  it('returns observation authorization and mode failures without opening an executor', async () => {
+    const client = defineTripGraph();
+    const server = defineTripGraph();
+    const observe = vi.fn(async function* () {
+      yield [];
+    });
+    const observer = createGraphReadObserver({
+      policies: [createTripPolicy(server)],
+      observe,
+    });
+    const controller = new AbortController();
+    const context = { authority: { ownerId: 'owner-1' }, signal: controller.signal };
+    const collect = async (request: unknown) => {
+      const values = [];
+      for await (const value of observer(request, context)) values.push(value);
+      return values;
+    };
+
+    await expect(
+      collect(
+        toGraphReadRequest(
+          query(client.Trip).as(client.Trip.view('ForbiddenTrip', { internalNotes: true })),
+          'run',
+        ),
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        kind: 'protocol-error',
+        error: expect.objectContaining({ code: 'access_denied' }),
+      }),
+    ]);
+    await expect(collect(toGraphReadRequest(query(client.Trip), 'count'))).resolves.toEqual([
+      expect.objectContaining({
+        kind: 'protocol-error',
+        error: expect.objectContaining({ code: 'invalid_request' }),
+      }),
+    ]);
+    expect(observe).not.toHaveBeenCalled();
   });
 });

@@ -56,6 +56,7 @@ Related work:
 11. [128e. Relationship Command Runtime Routing](../done/128e-relationship-command-runtime-routing.md)
 12. [128f. Remote Identity-Scoped Entity Mutation Commands](../done/128f-remote-identity-scoped-entity-mutation-commands.md)
 13. [128g. Supabase Exact Entity Mutation Commands](../done/128g-supabase-exact-entity-mutation-commands.md)
+14. [128h. Observable Query Runtime And Durable Progress](../done/128h-observable-query-runtime-and-durable-progress.md)
 
 ## Architectural Thesis
 

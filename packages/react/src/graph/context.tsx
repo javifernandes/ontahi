@@ -95,7 +95,7 @@ export function OntahiGraphProvider<
     reflectedRelatedEntityDataReader ?? graphClient?.reflectedRelatedEntityDataReader;
   const configuredReflectedOperationInvoker =
     reflectedOperationInvoker ?? graphClient?.reflectedOperationInvoker;
-  const graphClientCache = clientCache ?? defaultClientCache;
+  const graphClientCache = clientCache ?? graphClient?.clientCache ?? defaultClientCache;
   const bridgeAdapterMap = useMemo(
     () => new Map(resolvedOperationBridgeAdapters.map(adapter => [adapter.name, adapter])),
     [resolvedOperationBridgeAdapters],

@@ -19,6 +19,15 @@ export interface DataGraphRuntime<TError = never, TOptions = undefined> {
   ): import('effect').Stream.Stream<TResult, TError>;
 }
 
+export interface DataGraphObservationRuntime<TError = never, TOptions = undefined> {
+  /** Emits complete current results across changes; `stream` yields rows from one execution. */
+  observe<TParams, TResult>(
+    queryOrView: QueryOrView<TParams, TResult>,
+    params: TParams,
+    options?: TOptions,
+  ): import('effect').Stream.Stream<TResult[], TError>;
+}
+
 export interface DataGraphExecutionRuntime<
   TReadError = never,
   TReadOptions = undefined,

@@ -17,7 +17,7 @@ import {
   createWebSocketRuntimeTransport,
   type RuntimeWebSocket,
 } from '@ontahi/react/graph';
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
@@ -968,6 +968,59 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoRelationships()).toEqual([]);
   });
 
+  it('observes authorized Graph Query snapshots through WebSocket and releases the subscription', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
+    ];
+
+    const runtimeTransport = createWebSocketRuntimeTransport({
+      url: `${origin.replace(/^http/, 'ws')}/runtime`,
+      createWebSocket: url => new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
+    });
+    const client = createRuntimeGraphClient({ runtimeTransport });
+    const TodoObservationRow = ClientTodoItem.view('TodoObservationRow', {
+      id: true,
+      completed: true,
+    });
+    const incompleteTodos = query(ClientTodoItemSchema)
+      .where(todo => todo.completed.eq(false))
+      .as(TodoObservationRow);
+    let mutated = false;
+    const observation = client.graph
+      .bindGraphRead(incompleteTodos)
+      .observe()
+      .pipe(
+        Stream.tap(() => {
+          if (mutated) return Effect.void;
+          mutated = true;
+          return Effect.promise(async () => {
+            const result = await client.graphExecutor.runEntityMutationCommand!(
+              mutateEntity(ClientTodoItemSchema).update(
+                createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+                { completed: true },
+              ),
+            );
+            expect(result).toMatchObject({
+              updated: [expect.objectContaining({ entityName: 'TodoItem' })],
+            });
+          });
+        }),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.map(values => Array.from(values)),
+      );
+
+    await expect(Effect.runPromise(observation)).resolves.toEqual([
+      [
+        { id: 'todo-1', completed: false },
+        { id: 'todo-2', completed: false },
+      ],
+      [{ id: 'todo-2', completed: false }],
+    ]);
+    runtimeTransport.close();
+  });
+
   it('starts and observes TodoList.completeAll progress through one WebSocket without browser polling', async () => {
     getTodoDataset().TodoList = [
       { id: 'list-1', name: 'Inbox', color: '#f5ddd5' },
@@ -978,6 +1031,7 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
       { id: 'todo-3', list: 'list-2', title: 'Other list', completed: false },
     ];
+    const snapshotInspection = vi.spyOn(TodoApplication, 'getTaskSnapshot');
 
     let socketCount = 0;
     const runtimeTransport = createWebSocketRuntimeTransport({
@@ -1043,6 +1097,8 @@ describe('Ontahi todo portability example', () => {
     });
     expect(getTodoDataset().TodoItem?.find(todo => todo.id === 'todo-3')?.completed).toBe(false);
     expect(socketCount).toBe(1);
+    expect(snapshotInspection).not.toHaveBeenCalled();
+    snapshotInspection.mockRestore();
     runtimeTransport.close();
   });
 });

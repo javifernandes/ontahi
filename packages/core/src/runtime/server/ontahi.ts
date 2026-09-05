@@ -1,7 +1,8 @@
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 
 import {
   createGraphReadDispatcher as createDataGraphReadDispatcher,
+  createGraphReadObserver as createDataGraphReadObserver,
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   assertMutationReactionConfiguration,
   materializeDerivedFieldDefinitions,
@@ -9,8 +10,10 @@ import {
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
   type DataGraphExecutionRuntime,
+  type DataGraphObservationRuntime,
   type GraphApi,
   type GraphReadDispatcher,
+  type GraphReadObserver,
   type GraphReadPolicy,
   type GraphCommandDispatcher,
   type EntityMutationCommandExecutionRuntime,
@@ -63,6 +66,10 @@ export type ApplicationGraphReadDispatcherFactory = <TAuthority>(
   policies: readonly GraphReadPolicy<any, TAuthority>[],
 ) => GraphReadDispatcher<TAuthority>;
 
+export type ApplicationGraphReadObserverFactory = <TAuthority>(
+  policies: readonly GraphReadPolicy<any, TAuthority>[],
+) => GraphReadObserver<TAuthority>;
+
 export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
   policies: readonly (
     | RelationshipCommandPolicy
@@ -74,6 +81,11 @@ export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
 export type GraphReadableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
   OntahiApplication<TGraph> & {
     createGraphReadDispatcher: ApplicationGraphReadDispatcherFactory;
+  };
+
+export type GraphObservableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
+  OntahiApplication<TGraph> & {
+    createGraphReadObserver: ApplicationGraphReadObserverFactory;
   };
 
 export type GraphCommandableOntahiApplication<TGraph extends GraphApi<any> = GraphApi<any>> =
@@ -173,28 +185,34 @@ export type ComposedOntahiApplication<
     GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>,
     RuntimeReadOptions<StorageRuntime<TStorage>>
   >
-> & {
-  architecture: RegisteredArchitecture<
-    OntahiCapabilityEvent<TCapabilities>,
-    OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
-  >;
-  storage: TStorage;
-  app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>;
-  registerEntity: <TDeclaration extends AnyOntahiEntityDeclaration>(
-    declaration: TDeclaration,
-  ) => BoundOntahiEntityDeclaration<
-    TDeclaration,
-    StorageRuntime<TStorage>,
-    RelationshipMutationResult
-  >;
-  registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
-    entity: TEntity,
-    boundEntity: TBoundEntity,
-  ) => TBoundEntity;
-  registerBoundEntities: <TBoundEntities extends Record<string, object>>(
-    boundEntities: TBoundEntities,
-  ) => GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>>;
-};
+> &
+  GraphObservableOntahiApplication<
+    ApplicationGraph<
+      GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>,
+      RuntimeReadOptions<StorageRuntime<TStorage>>
+    >
+  > & {
+    architecture: RegisteredArchitecture<
+      OntahiCapabilityEvent<TCapabilities>,
+      OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>
+    >;
+    storage: TStorage;
+    app: OntahiApplicationBuilder<TCapabilities, StorageRuntime<TStorage>>;
+    registerEntity: <TDeclaration extends AnyOntahiEntityDeclaration>(
+      declaration: TDeclaration,
+    ) => BoundOntahiEntityDeclaration<
+      TDeclaration,
+      StorageRuntime<TStorage>,
+      RelationshipMutationResult
+    >;
+    registerBoundEntity: <TEntity extends AnyEntityDefinition, TBoundEntity extends object>(
+      entity: TEntity,
+      boundEntity: TBoundEntity,
+    ) => TBoundEntity;
+    registerBoundEntities: <TBoundEntities extends Record<string, object>>(
+      boundEntities: TBoundEntities,
+    ) => GraphApi<BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>>;
+  };
 
 export const ontahi = <
   TStorage extends DataGraphDefaultStorage<AnyDataGraphRuntime>,
@@ -413,6 +431,30 @@ export const ontahi = <
     });
   };
 
+  const createGraphReadObserver: ApplicationGraphReadObserverFactory = policies =>
+    createDataGraphReadObserver({
+      policies,
+      observe: (read, { signal }) => {
+        const runtime = options.storage.createRuntime() as AnyDataGraphRuntime &
+          Partial<DataGraphObservationRuntime<any>>;
+        if (!runtime.observe) {
+          throw new Error('Storage runtime does not support Data Graph observation.');
+        }
+        const aborted = Effect.async<void>(resume => {
+          if (signal.aborted) {
+            resume(Effect.void);
+            return;
+          }
+          const onAbort = () => resume(Effect.void);
+          signal.addEventListener('abort', onAbort, { once: true });
+          return Effect.sync(() => signal.removeEventListener('abort', onAbort));
+        });
+        return Stream.toAsyncIterable(
+          runtime.observe(read, undefined).pipe(Stream.interruptWhen(aborted)),
+        );
+      },
+    });
+
   const createGraphCommandDispatcher: ApplicationGraphCommandDispatcherFactory = policies =>
     createDataGraphCommandDispatcher({
       policies,
@@ -459,6 +501,7 @@ export const ontahi = <
     registerBoundEntity,
     registerEntity,
     createGraphReadDispatcher,
+    createGraphReadObserver,
     createGraphCommandDispatcher,
     storage: options.storage,
   });

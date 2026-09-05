@@ -10,6 +10,7 @@ import {
   field,
   query,
   type DataGraphExecutionRuntime,
+  type DataGraphObservationRuntime,
 } from './index.js';
 
 describe('data-graph executor', () => {
@@ -29,12 +30,14 @@ describe('data-graph executor', () => {
       stream: vi.fn(() =>
         Stream.fromIterable([{ id: 'book-1', slug: 'progbook', title: 'Progbook' }]),
       ),
+      observe: vi.fn(() => Stream.make([{ id: 'book-1', slug: 'progbook', title: 'Progbook' }])),
       runCommand: vi.fn(() => Effect.succeed({ id: 'book-1' })),
     } as unknown as DataGraphExecutionRuntime<
       never,
       { authority: 'viewer' },
       { authority: 'system' }
-    >;
+    > &
+      DataGraphObservationRuntime<never, { authority: 'viewer' }>;
     const getRuntime = vi.fn(() => runtime);
     const executor = createDataGraphExecutor(getRuntime);
 
@@ -58,6 +61,11 @@ describe('data-graph executor', () => {
       ),
     ).resolves.toEqual([{ id: 'book-1', slug: 'progbook', title: 'Progbook' }]);
     await expect(
+      Effect.runPromise(
+        runCollectArray(executor.observeViewStream(read, undefined, { authority: 'viewer' })),
+      ),
+    ).resolves.toEqual([[{ id: 'book-1', slug: 'progbook', title: 'Progbook' }]]);
+    await expect(
       Effect.runPromise(executor.runCommandEffect(command, { authority: 'system' })),
     ).resolves.toEqual({ id: 'book-1' });
 
@@ -65,7 +73,23 @@ describe('data-graph executor', () => {
     expect(runtime.run).toHaveBeenCalledWith(read, undefined, { authority: 'viewer' });
     expect(runtime.count).toHaveBeenCalledWith(read, undefined, { authority: 'viewer' });
     expect(runtime.stream).toHaveBeenCalledWith(read, undefined, { authority: 'viewer' });
+    expect(runtime.observe).toHaveBeenCalledWith(read, undefined, { authority: 'viewer' });
     expect(runtime.runCommand).toHaveBeenCalledWith(command, { authority: 'system' });
-    expect(getRuntime).toHaveBeenCalledTimes(5);
+    expect(getRuntime).toHaveBeenCalledTimes(6);
+  });
+
+  it('fails explicitly when the current runtime has no Query observation capability', async () => {
+    const runtime = {
+      get: () => Effect.succeed(null),
+      run: () => Effect.succeed([]),
+      count: () => Effect.succeed(0),
+      stream: () => Stream.empty,
+      runCommand: () => Effect.succeed(undefined),
+    } as unknown as DataGraphExecutionRuntime<never>;
+    const executor = createDataGraphExecutor(() => runtime);
+
+    await expect(
+      Effect.runPromise(Stream.runDrain(executor.observeViewStream(query(Book), undefined))),
+    ).rejects.toThrow('The current Data Graph runtime does not support Query observation.');
   });
 });

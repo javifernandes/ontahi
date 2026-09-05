@@ -16,6 +16,13 @@ export const missingTaskRunFailure = (ref: TaskRunIdentity): TaskFailure =>
 export const duplicateTaskRunFailure = (ref: TaskRunIdentity): TaskFailure =>
   createTaskFailure('task_run_already_exists', 'Task run already exists.', ref);
 
+export const taskRunObservationUnavailableFailure = (ref: TaskRunIdentity): TaskFailure =>
+  createTaskFailure(
+    'task_run_observation_unavailable',
+    'Task run observation is unavailable.',
+    ref,
+  );
+
 export const missingTaskStepFailure = (taskId: string, stepName: string): TaskFailure =>
   createTaskFailure('task_step_not_found', 'Task step is not registered.', {
     taskId,

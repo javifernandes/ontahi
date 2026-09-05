@@ -1,5 +1,6 @@
 import { Effect, Stream } from 'effect';
 
+import { isJsonValue } from '../../value/json.js';
 import type { GraphCommandSpec } from '../command.js';
 import type { AnyEntityDefinition } from '../definitions.js';
 import type { EntityMutationCommandExecutionRuntime } from '../entity-mutation-command.js';
@@ -25,7 +26,7 @@ import type {
   RelationshipCommandExecutionRuntime,
   RelationshipFact,
 } from '../relationship-command.js';
-import type { DataGraphExecutionRuntime } from '../runtime.js';
+import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from '../runtime.js';
 import { selectionAnd } from '../selection-ast.js';
 import type { DataGraphTransactionCapability } from '../transaction.js';
 
@@ -37,6 +38,7 @@ import {
   materializeRecord,
   type InMemoryDataset,
 } from './materialization.js';
+import { getInMemoryDataGraphObservationHub } from './observation.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
 
@@ -385,6 +387,7 @@ export type InMemoryDataGraphRuntime = DataGraphExecutionRuntime<
   undefined,
   InMemoryDataGraphError
 > &
+  DataGraphObservationRuntime<InMemoryDataGraphError> &
   EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
   ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
   RelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
@@ -396,6 +399,7 @@ export const createInMemoryDataGraphRuntime = (input: {
   relationships?: RelationshipFact[];
 }): InMemoryDataGraphRuntime => {
   const relationships = input.relationships ?? [];
+  const observationHub = getInMemoryDataGraphObservationHub(input.dataset);
   input.relationships = relationships;
   return {
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
@@ -428,6 +432,27 @@ export const createInMemoryDataGraphRuntime = (input: {
                 ),
         }),
       ).pipe(Stream.flatMap(Stream.fromIterable)),
+    observe: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
+      observationHub.changes().pipe(
+        Stream.mapEffect(() =>
+          Effect.try({
+            try: () => executeRead(queryOrView, params, input.dataset, relationships),
+            catch: cause =>
+              cause instanceof InMemoryDataGraphError
+                ? cause
+                : new InMemoryDataGraphError(
+                    'Failed to observe in-memory read.',
+                    'read_failed',
+                    cause,
+                  ),
+          }),
+        ),
+        Stream.changesWith((previous, current) =>
+          isJsonValue(previous) && isJsonValue(current)
+            ? JSON.stringify(previous) === JSON.stringify(current)
+            : false,
+        ),
+      ),
     count: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
         try: () => countRead(queryOrView, params, input.dataset, relationships),
@@ -437,18 +462,24 @@ export const createInMemoryDataGraphRuntime = (input: {
             : new InMemoryDataGraphError('Failed to count in-memory read.', 'read_failed', cause),
       }),
     runCommand: <TResult>(command: GraphCommandSpec<any, any, TResult>) =>
-      executeInMemoryGraphCommandEffect(input.dataset, command),
+      executeInMemoryGraphCommandEffect(input.dataset, command).pipe(
+        Effect.tap(() => Effect.sync(observationHub.publish)),
+      ),
     runEntityMutationCommand: command =>
-      executeInMemoryEntityMutationCommandEffect(input.dataset, input.entities ?? [], command),
+      executeInMemoryEntityMutationCommandEffect(input.dataset, input.entities ?? [], command).pipe(
+        Effect.tap(() => Effect.sync(observationHub.publish)),
+      ),
     runManyToManyRelationshipCommand: command =>
       executeInMemoryManyToManyRelationshipCommandEffect(
         input.dataset,
         input.entities ?? [],
         relationships,
         command,
-      ),
+      ).pipe(Effect.tap(() => Effect.sync(observationHub.publish))),
     runRelationshipCommand: command =>
-      executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command),
+      executeInMemoryRelationshipCommandEffect(input.dataset, input.entities ?? [], command).pipe(
+        Effect.tap(() => Effect.sync(observationHub.publish)),
+      ),
     transaction: work =>
       Effect.suspend(() => {
         const transactionDataset = structuredClone(input.dataset) as InMemoryDataset;
@@ -467,6 +498,7 @@ export const createInMemoryDataGraphRuntime = (input: {
               }
               Object.assign(input.dataset, transactionDataset);
               relationships.splice(0, relationships.length, ...transactionRelationships);
+              observationHub.publish();
             }),
           ),
         );

@@ -1,3 +1,4 @@
+import { isJsonValue, type JsonValue } from '../value/json.js';
 import { hasOwn } from '../value/object.js';
 
 import {
@@ -76,16 +77,36 @@ export type GraphReadDispatchResponse =
   | { readonly kind: 'graph-read-result'; readonly value: unknown }
   | GraphReadProtocolError;
 
+export type GraphReadObservationResponse =
+  | { readonly kind: 'graph-read-result'; readonly value: JsonValue[] }
+  | GraphReadProtocolError;
+
 export type GraphReadDispatchExecutor = (query: QuerySpec, mode: GraphReadMode) => Promise<unknown>;
+
+export type GraphReadObservationExecutor = (
+  query: QuerySpec,
+  options: { readonly signal: AbortSignal },
+) => AsyncIterable<unknown>;
 
 export type GraphReadDispatcher<TAuthority> = (
   request: unknown,
   context: GraphReadDispatchContext<TAuthority>,
 ) => Promise<GraphReadDispatchResponse>;
 
+export type GraphReadObserver<TAuthority> = (
+  request: unknown,
+  context: GraphReadDispatchContext<TAuthority> & { readonly signal: AbortSignal },
+) => AsyncIterable<GraphReadObservationResponse>;
+
 export type CreateGraphReadDispatcherOptions<TAuthority> = {
   readonly policies: readonly GraphReadPolicy<any, TAuthority>[];
   readonly execute: GraphReadDispatchExecutor;
+  readonly reportError?: (error: unknown) => void;
+};
+
+export type CreateGraphReadObserverOptions<TAuthority> = {
+  readonly policies: readonly GraphReadPolicy<any, TAuthority>[];
+  readonly observe: GraphReadObservationExecutor;
   readonly reportError?: (error: unknown) => void;
 };
 
@@ -295,11 +316,9 @@ const resolveScope = <TAuthority>(
   return scoped;
 };
 
-export const createGraphReadDispatcher = <TAuthority = unknown>({
-  policies,
-  execute,
-  reportError,
-}: CreateGraphReadDispatcherOptions<TAuthority>): GraphReadDispatcher<TAuthority> => {
+const createGraphReadPolicyRegistry = <TAuthority>(
+  policies: readonly GraphReadPolicy<any, TAuthority>[],
+) => {
   const policyByEntityName = new Map<string, GraphReadPolicy<any, TAuthority>>();
   for (const policy of policies) {
     if (policyByEntityName.has(policy.entity.name)) {
@@ -308,44 +327,109 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
     validatePolicy(policy);
     policyByEntityName.set(policy.entity.name, policy);
   }
+  return policyByEntityName;
+};
+
+type AuthorizedGraphRead =
+  | { readonly success: true; readonly query: QuerySpec; readonly mode: GraphReadMode }
+  | { readonly success: false; readonly error: GraphReadProtocolError };
+
+const authorizeGraphRead = <TAuthority>(
+  input: unknown,
+  context: GraphReadDispatchContext<TAuthority>,
+  policyByEntityName: ReadonlyMap<string, GraphReadPolicy<any, TAuthority>>,
+  reportError?: (error: unknown) => void,
+): AuthorizedGraphRead => {
+  const parsed = parseGraphReadRequest(input);
+  if (!parsed.success) return parsed;
+
+  const policy = policyByEntityName.get(parsed.request.selection.entityName);
+  if (!policy) return { success: false, error: graphReadAccessDenied() };
+
+  const resolved = resolveGraphReadRequest(parsed.request, { entities: [policy.entity] });
+  if (!resolved.success) return resolved;
+  if (!allowsQuery(resolved.query, parsed.request.mode, policy)) {
+    return { success: false, error: graphReadAccessDenied() };
+  }
+
+  let query = resolved.query;
+  try {
+    const scope = resolveScope(policy, context);
+    if (scope) {
+      const invalidScope = validateGraphReadSelection(scope, policy.entity);
+      if (invalidScope) throw new Error(invalidScope.error.message);
+      query = { ...query, selection: selectionAnd(query.selection, scope) };
+    }
+    if (parsed.request.mode !== 'count' && query.limit === undefined) {
+      query = { ...query, limit: policy.maxLimit };
+    }
+  } catch (error) {
+    reportError?.(error);
+    return { success: false, error: graphReadExecutionUnavailable() };
+  }
+
+  return { success: true, query, mode: parsed.request.mode };
+};
+
+export const createGraphReadDispatcher = <TAuthority = unknown>({
+  policies,
+  execute,
+  reportError,
+}: CreateGraphReadDispatcherOptions<TAuthority>): GraphReadDispatcher<TAuthority> => {
+  const policyByEntityName = createGraphReadPolicyRegistry(policies);
 
   return async (input, context) => {
-    const parsed = parseGraphReadRequest(input);
-    if (!parsed.success) return parsed.error;
-
-    const policy = policyByEntityName.get(parsed.request.selection.entityName);
-    if (!policy) return graphReadAccessDenied();
-
-    const resolved = resolveGraphReadRequest(parsed.request, { entities: [policy.entity] });
-    if (!resolved.success) return resolved.error;
-    if (!allowsQuery(resolved.query, parsed.request.mode, policy)) {
-      return graphReadAccessDenied();
-    }
-
-    let query = resolved.query;
-    try {
-      const scope = resolveScope(policy, context);
-      if (scope) {
-        const invalidScope = validateGraphReadSelection(scope, policy.entity);
-        if (invalidScope) throw new Error(invalidScope.error.message);
-        query = { ...query, selection: selectionAnd(query.selection, scope) };
-      }
-      if (parsed.request.mode !== 'count' && query.limit === undefined) {
-        query = { ...query, limit: policy.maxLimit };
-      }
-    } catch (error) {
-      reportError?.(error);
-      return graphReadExecutionUnavailable();
-    }
+    const authorized = authorizeGraphRead(input, context, policyByEntityName, reportError);
+    if (!authorized.success) return authorized.error;
 
     try {
       return {
         kind: 'graph-read-result',
-        value: await execute(query, parsed.request.mode),
+        value: await execute(authorized.query, authorized.mode),
       };
     } catch (error) {
       reportError?.(error);
       return graphReadExecutionUnavailable();
     }
+  };
+};
+
+export const createGraphReadObserver = <TAuthority = unknown>({
+  policies,
+  observe,
+  reportError,
+}: CreateGraphReadObserverOptions<TAuthority>): GraphReadObserver<TAuthority> => {
+  const policyByEntityName = createGraphReadPolicyRegistry(policies);
+
+  return (input, context) => {
+    const authorized = authorizeGraphRead(input, context, policyByEntityName, reportError);
+
+    return (async function* () {
+      if (!authorized.success) {
+        yield authorized.error;
+        return;
+      }
+      if (authorized.mode !== 'run') {
+        yield graphReadProtocolError(
+          'invalid_request',
+          'Data graph observation requires Graph Read mode run.',
+        );
+        return;
+      }
+
+      try {
+        for await (const value of observe(authorized.query, { signal: context.signal })) {
+          if (context.signal.aborted) return;
+          if (!Array.isArray(value) || !isJsonValue(value)) {
+            throw new Error('Data graph observer produced a non-JSON result array.');
+          }
+          yield { kind: 'graph-read-result', value };
+        }
+      } catch (error) {
+        if (context.signal.aborted) return;
+        reportError?.(error);
+        yield graphReadExecutionUnavailable();
+      }
+    })();
   };
 };

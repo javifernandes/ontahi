@@ -64,6 +64,7 @@ const createSessionSocketFactory = <TContext>(options: {
   observeDurableOperation?: Parameters<
     typeof createRuntimeProtocolServerSession<TContext>
   >[0]['observeDurableOperation'];
+  observeGraph?: Parameters<typeof createRuntimeProtocolServerSession<TContext>>[0]['observeGraph'];
 }) => {
   const sockets: MemoryWebSocket[] = [];
   const sessions: RuntimeProtocolServerSession[] = [];
@@ -90,8 +91,20 @@ const operationRequest = (id: string) =>
     body: { version: 1, kind: 'invoke', operationId: 'Todo.completeAll' },
   });
 
+const graphReadRequest = {
+  version: 1,
+  kind: 'graph-read',
+  mode: 'run',
+  selection: {
+    kind: 'selection',
+    entityName: 'Todo',
+    expression: { kind: 'all' },
+  },
+  orderBy: [],
+} as const;
+
 const readyFrame = (
-  capabilities: Array<'request-response' | 'durable-operation-push'> = [
+  capabilities: Array<'request-response' | 'durable-operation-push' | 'graph-observation-push'> = [
     'request-response',
     'durable-operation-push',
   ],
@@ -213,6 +226,84 @@ describe('WebSocket Runtime Transport', () => {
         run: { taskId: 'Todo.completeAll', runId: 'run-1' },
       },
     ]);
+  });
+
+  it('receives repeated Graph results and their explicit stream completion', async () => {
+    const pair = createSessionSocketFactory({
+      dispatcher: async input =>
+        createRuntimeProtocolResponse(input as RuntimeProtocolRequestEnvelope, null),
+      context: { principal: 'receiver-session' },
+      observeGraph: (_request, { context }) =>
+        (async function* () {
+          expect(context).toEqual({ principal: 'receiver-session' });
+          yield { kind: 'graph-read-result' as const, value: [{ id: 'todo-1' }] };
+          yield {
+            kind: 'graph-read-result' as const,
+            value: [{ id: 'todo-1' }, { id: 'todo-2' }],
+          };
+        })(),
+    });
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: pair.createWebSocket,
+      observationId: () => 'graph-observation-1',
+    });
+    const received = [];
+
+    for await (const body of transport.graph.observe(graphReadRequest)) received.push(body);
+
+    expect(received).toEqual([
+      { kind: 'graph-read-result', value: [{ id: 'todo-1' }] },
+      { kind: 'graph-read-result', value: [{ id: 'todo-1' }, { id: 'todo-2' }] },
+    ]);
+    expect(pair.sockets[0]?.sent).toEqual([
+      {
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'graph-observe',
+        id: 'graph-observation-1',
+        request: graphReadRequest,
+      },
+    ]);
+  });
+
+  it('unsubscribes an aborted Graph observation and releases the server iterator', async () => {
+    let serverSignal: AbortSignal | undefined;
+    const pair = createSessionSocketFactory({
+      dispatcher: async input =>
+        createRuntimeProtocolResponse(input as RuntimeProtocolRequestEnvelope, null),
+      context: undefined,
+      observeGraph: (_request, { signal }) =>
+        (async function* () {
+          serverSignal = signal;
+          yield { kind: 'graph-read-result' as const, value: [{ id: 'todo-1' }] };
+          if (!signal.aborted) {
+            await new Promise<void>(resolve =>
+              signal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+          }
+        })(),
+    });
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      createWebSocket: pair.createWebSocket,
+      observationId: () => 'graph-observation-1',
+    });
+    const controller = new AbortController();
+    const iterator = transport.graph
+      .observe(graphReadRequest, { signal: controller.signal })
+      [Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { kind: 'graph-read-result', value: [{ id: 'todo-1' }] },
+    });
+    controller.abort();
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
+    await vi.waitFor(() => expect(serverSignal?.aborted).toBe(true));
+    expect(pair.sockets[0]?.sent.at(-1)).toMatchObject({
+      kind: 'graph-unobserve',
+      id: 'graph-observation-1',
+    });
   });
 
   it('ignores duplicate, out-of-order, and post-terminal snapshots by observation sequence', async () => {

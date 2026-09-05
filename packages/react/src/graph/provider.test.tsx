@@ -146,6 +146,17 @@ describe('OntahiGraphProvider', () => {
     expect(result.current.clientCache).toBe(clientCache);
   });
 
+  it('uses the Graph client cache when the host does not override it', () => {
+    const clientCache = createGraphClientCache();
+    const client = { clientCache } satisfies OntahiGraphClient;
+
+    const { result } = renderHook(() => useGraphClientCache(), {
+      wrapper: createWrapper({ runtime: { name: 'browser' }, client }),
+    });
+
+    expect(result.current).toBe(clientCache);
+  });
+
   it('creates a default client cache and subscribes to its snapshots', async () => {
     const runtime = { name: 'bookops-runtime' };
     const BookEntity = entity('Book', {

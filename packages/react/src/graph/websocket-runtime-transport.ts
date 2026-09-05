@@ -7,7 +7,9 @@ import {
   RUNTIME_PROTOCOL_SESSION_NAME,
   RUNTIME_PROTOCOL_SESSION_VERSION,
   type DurableOperationObservationCapability,
+  type GraphObservationCapability,
   type RuntimeProtocolRequestEnvelope,
+  type RuntimeProtocolGraphObservationBody,
   type RuntimeProtocolSessionClientFrame,
   type RuntimeProtocolSessionServerFrame,
   type RuntimeTransport,
@@ -39,6 +41,7 @@ export type WebSocketRuntimeTransportOptions = {
 
 export type WebSocketRuntimeTransport = RuntimeTransport<never> & {
   readonly durableOperation: DurableOperationObservationCapability;
+  readonly graph: GraphObservationCapability<never>;
   close(): void;
 };
 
@@ -104,9 +107,15 @@ const createAsyncQueue = <TValue>(): AsyncQueue<TValue> => {
   };
 };
 
-type ActiveObservation = {
+type ActiveDurableObservation = {
   readonly run: TaskRunIdentity;
   readonly queue: AsyncQueue<TaskSnapshot>;
+  lastSequence: number;
+  terminal: boolean;
+};
+
+type ActiveGraphObservation = {
+  readonly queue: AsyncQueue<RuntimeProtocolGraphObservationBody>;
   lastSequence: number;
   terminal: boolean;
 };
@@ -192,7 +201,8 @@ export const createWebSocketRuntimeTransport = ({
   let removeSocketListeners: (() => void) | undefined;
   let disposed = false;
   const pendingRequests = new Map<string, PendingRequest>();
-  const observations = new Map<string, ActiveObservation>();
+  const durableObservations = new Map<string, ActiveDurableObservation>();
+  const graphObservations = new Map<string, ActiveGraphObservation>();
 
   const send = (frame: RuntimeProtocolSessionClientFrame) => {
     if (disposed) throw new Error('Runtime Protocol WebSocket transport is closed.');
@@ -208,8 +218,10 @@ export const createWebSocketRuntimeTransport = ({
       pending.reject(error);
     }
     pendingRequests.clear();
-    for (const observation of observations.values()) observation.queue.fail(error);
-    observations.clear();
+    for (const observation of durableObservations.values()) observation.queue.fail(error);
+    durableObservations.clear();
+    for (const observation of graphObservations.values()) observation.queue.fail(error);
+    graphObservations.clear();
   };
 
   const failConnection = (currentSocket: RuntimeWebSocket, error: Error) => {
@@ -275,10 +287,16 @@ export const createWebSocketRuntimeTransport = ({
           pending.reject(error);
           return;
         }
-        const observation = observations.get(frame.id);
-        if (observation) {
-          observations.delete(frame.id);
-          observation.queue.fail(error);
+        const durableObservation = durableObservations.get(frame.id);
+        if (durableObservation) {
+          durableObservations.delete(frame.id);
+          durableObservation.queue.fail(error);
+          return;
+        }
+        const graphObservation = graphObservations.get(frame.id);
+        if (graphObservation) {
+          graphObservations.delete(frame.id);
+          graphObservation.queue.fail(error);
           return;
         }
       }
@@ -286,37 +304,57 @@ export const createWebSocketRuntimeTransport = ({
       return;
     }
 
-    const observation = observations.get(frame.id);
-    if (!observation || observation.terminal || frame.sequence <= observation.lastSequence) return;
-    observation.lastSequence = frame.sequence;
-    if (frame.body.kind === 'protocol-error') {
-      observations.delete(frame.id);
-      observation.queue.fail(new Error(frame.body.error.message));
-      return;
-    }
+    if (frame.kind === 'durable-observation') {
+      const observation = durableObservations.get(frame.id);
+      if (!observation || observation.terminal || frame.sequence <= observation.lastSequence)
+        return;
+      observation.lastSequence = frame.sequence;
+      if (frame.body.kind === 'protocol-error') {
+        durableObservations.delete(frame.id);
+        observation.queue.fail(new Error(frame.body.error.message));
+        return;
+      }
 
-    const snapshot = frame.body.snapshot;
-    if (snapshot.taskId !== observation.run.taskId || snapshot.runId !== observation.run.runId) {
-      observations.delete(frame.id);
-      observation.queue.fail(
-        new Error('Durable Operation snapshot identity does not match the observed run.'),
-      );
-      try {
-        send({
-          protocol: RUNTIME_PROTOCOL_SESSION_NAME,
-          version: RUNTIME_PROTOCOL_SESSION_VERSION,
-          kind: 'durable-unobserve',
-          id: frame.id,
-        });
-      } catch {
-        // The failed observation is already detached locally.
+      const snapshot = frame.body.snapshot;
+      if (snapshot.taskId !== observation.run.taskId || snapshot.runId !== observation.run.runId) {
+        durableObservations.delete(frame.id);
+        observation.queue.fail(
+          new Error('Durable Operation snapshot identity does not match the observed run.'),
+        );
+        try {
+          send({
+            protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+            version: RUNTIME_PROTOCOL_SESSION_VERSION,
+            kind: 'durable-unobserve',
+            id: frame.id,
+          });
+        } catch {
+          // The failed observation is already detached locally.
+        }
+        return;
+      }
+
+      observation.queue.push(snapshot);
+      if (terminalTaskStatuses.has(snapshot.status)) {
+        observation.terminal = true;
+        observation.queue.end();
       }
       return;
     }
 
-    observation.queue.push(snapshot);
-    if (terminalTaskStatuses.has(snapshot.status)) {
+    const observation = graphObservations.get(frame.id);
+    if (!observation || observation.terminal || frame.sequence <= observation.lastSequence) return;
+    observation.lastSequence = frame.sequence;
+    if (frame.kind === 'graph-observation-complete') {
       observation.terminal = true;
+      graphObservations.delete(frame.id);
+      observation.queue.end();
+      return;
+    }
+    observation.queue.push(frame.body);
+    if (frame.body.kind === 'protocol-error') {
+      observation.terminal = true;
+      graphObservations.delete(frame.id);
       observation.queue.end();
     }
   };
@@ -438,14 +476,21 @@ export const createWebSocketRuntimeTransport = ({
     });
   };
 
-  const observe: DurableOperationObservationCapability['observe'] = async function* <TResult>(
+  const observeDurable: DurableOperationObservationCapability['observe'] = async function* <
+    TResult,
+  >(
     run: TaskRunIdentity,
     options?: RuntimeTransportRequestOptions,
   ): AsyncIterable<TaskSnapshot<TResult>> {
     if (options?.signal?.aborted) return;
     const id = observationId();
     const queue = createAsyncQueue<TaskSnapshot>();
-    const observation: ActiveObservation = { run, queue, lastSequence: 0, terminal: false };
+    const observation: ActiveDurableObservation = {
+      run,
+      queue,
+      lastSequence: 0,
+      terminal: false,
+    };
     let subscribed = false;
     const abort = () => queue.end();
     options?.signal?.addEventListener('abort', abort, { once: true });
@@ -459,10 +504,10 @@ export const createWebSocketRuntimeTransport = ({
       if (!connectedCapabilities.has('durable-operation-push')) {
         throw new Error('Durable Operation push is unavailable in this WebSocket session.');
       }
-      if (observations.has(id)) {
+      if (durableObservations.has(id) || graphObservations.has(id)) {
         throw new Error(`Durable observation id ${id} is already active.`);
       }
-      observations.set(id, observation);
+      durableObservations.set(id, observation);
       send({
         protocol: RUNTIME_PROTOCOL_SESSION_NAME,
         version: RUNTIME_PROTOCOL_SESSION_VERSION,
@@ -481,7 +526,7 @@ export const createWebSocketRuntimeTransport = ({
       if (!options?.signal?.aborted) throw error;
     } finally {
       options?.signal?.removeEventListener('abort', abort);
-      if (observations.get(id) === observation) observations.delete(id);
+      if (durableObservations.get(id) === observation) durableObservations.delete(id);
       if (subscribed && !observation.terminal) {
         try {
           send({
@@ -497,9 +542,73 @@ export const createWebSocketRuntimeTransport = ({
     }
   };
 
+  const observeGraph: GraphObservationCapability<never>['observe'] = async function* (
+    request,
+    options,
+  ) {
+    if (options?.signal?.aborted) return;
+    const id = observationId();
+    const queue = createAsyncQueue<RuntimeProtocolGraphObservationBody>();
+    const observation: ActiveGraphObservation = {
+      queue,
+      lastSequence: 0,
+      terminal: false,
+    };
+    let subscribed = false;
+    const abort = () => queue.end();
+    options?.signal?.addEventListener('abort', abort, { once: true });
+
+    try {
+      const connectedCapabilities = await awaitWithSignal(
+        ensureConnection(),
+        options?.signal,
+        'Data graph WebSocket observation was aborted.',
+      );
+      if (!connectedCapabilities.has('graph-observation-push')) {
+        throw new Error('Data graph push observation is unavailable in this WebSocket session.');
+      }
+      if (durableObservations.has(id) || graphObservations.has(id)) {
+        throw new Error(`Graph observation id ${id} is already active.`);
+      }
+      graphObservations.set(id, observation);
+      send({
+        protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+        version: RUNTIME_PROTOCOL_SESSION_VERSION,
+        kind: 'graph-observe',
+        id,
+        request,
+      });
+      subscribed = true;
+
+      while (true) {
+        const next = await queue.next();
+        if (next.done) return;
+        yield next.value;
+      }
+    } catch (error) {
+      if (!options?.signal?.aborted) throw error;
+    } finally {
+      options?.signal?.removeEventListener('abort', abort);
+      if (graphObservations.get(id) === observation) graphObservations.delete(id);
+      if (subscribed && !observation.terminal) {
+        try {
+          send({
+            protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+            version: RUNTIME_PROTOCOL_SESSION_VERSION,
+            kind: 'graph-unobserve',
+            id,
+          });
+        } catch {
+          // Disconnect already released the server-side session resources.
+        }
+      }
+    }
+  };
+
   return {
     request,
-    durableOperation: { observe },
+    durableOperation: { observe: observeDurable },
+    graph: { observe: observeGraph },
     close: () => {
       if (disposed) return;
       disposed = true;
