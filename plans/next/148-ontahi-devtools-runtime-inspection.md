@@ -74,16 +74,19 @@ A developer opens one unobtrusive launcher and can:
 1. Define a headless, browser-safe diagnostic event model for Runtime Protocol exchange,
    observation, transport, and cache evidence.
 2. Add a bounded in-memory diagnostic store with `inspect`, `subscribe`, and diagnostic-history
-   `clear` operations.
+   `clear` operations. `subscribe` returns an idempotent unsubscribe function, and bindings must
+   invoke it during close or teardown.
 3. Instrument a `RuntimeTransport` through composition so request, response, protocol error,
    thrown transport error, abort, and duration are recorded without changing returned values.
 4. Instrument Durable observation across iterator start, snapshots, terminal state, consumer abort,
    iterator failure, and cleanup.
 5. Attribute each recorded exchange or observation to the actual configured transport instance.
-6. Let Fetch and WebSocket contribute optional transport evidence such as endpoint, connection
-   lifecycle, handshake capabilities, close code, and polling versus push without placing those
-   details in portable Runtime Protocol envelopes.
-7. Project Graph Client Cache snapshots and events without duplicating TanStack Query Devtools.
+6. Let Fetch and WebSocket contribute optional transport evidence such as a sanitized endpoint,
+   connection lifecycle, handshake capabilities, close code, and polling versus push without
+   placing those details in portable Runtime Protocol envelopes.
+7. Project current Graph Client Cache records, aliases, and outputs from
+   `GraphClientCacheSnapshot`, alongside its event history, without duplicating TanStack Query
+   Devtools.
 8. Add an accessible floating React panel with Activity, Durable, Cache, and Transport views plus a
    structured detail inspector.
 9. Show effective transport configuration read-only and accept an optional host-owned routing
@@ -174,29 +177,49 @@ can prove causality.
 One provisional diagnostic vocabulary is:
 
 ```ts
+type ExchangeDiagnosticIdentity = {
+  exchangeId: string;
+  family: string;
+  transportId: string;
+};
+
+type ObservationDiagnosticIdentity = {
+  observationId: string;
+  family: 'durable.operation.observe';
+  run: TaskRunIdentity;
+  transportId: string;
+};
+
 type RuntimeDiagnosticEvent =
-  | { kind: 'exchange.started'; exchangeId: string; family: string; transportId: string }
-  | { kind: 'exchange.settled'; exchangeId: string; outcome: ExchangeOutcome; durationMs: number }
-  | {
-      kind: 'observation.started';
-      observationId: string;
-      run: TaskRunIdentity;
-      transportId: string;
-    }
-  | {
+  | ({ kind: 'exchange.started' } & ExchangeDiagnosticIdentity)
+  | ({
+      kind: 'exchange.settled';
+      outcome: ExchangeOutcome;
+      durationMs: number;
+    } & ExchangeDiagnosticIdentity)
+  | ({ kind: 'observation.started' } & ObservationDiagnosticIdentity)
+  | ({
       kind: 'observation.snapshot';
-      observationId: string;
       sequence: number;
-      snapshot: TaskSnapshot;
-    }
-  | { kind: 'observation.settled'; observationId: string; outcome: ObservationOutcome }
+      snapshot: ProjectedTaskSnapshot;
+    } & ObservationDiagnosticIdentity)
+  | ({ kind: 'observation.settled'; outcome: ObservationOutcome } & ObservationDiagnosticIdentity)
   | { kind: 'transport.state'; transportId: string; state: RuntimeTransportState }
-  | { kind: 'cache.event'; event: GraphClientCacheEvent };
+  | { kind: 'cache.event'; event: ProjectedGraphClientCacheEvent };
+
+type OntahiDiagnosticsSnapshot = {
+  version: number;
+  events: readonly RuntimeDiagnosticEvent[];
+  cache?: ProjectedGraphClientCacheSnapshot;
+};
 ```
 
 Exact public names, payload ownership, and event normalization remain implementation outputs. The
 contract must preserve complete Runtime Protocol and cache types where safe while keeping optional
-transport evidence extensible and non-portable.
+transport evidence extensible and non-portable. Every exchange and observation lifecycle event
+repeats the family, transport, and exchange or run identity required to interpret it after an
+earlier event has been evicted. The Cache projection derives its current records, aliases, and
+outputs from `GraphClientCache.inspect()` and records subsequent `GraphClientCacheEvent` evidence.
 
 ## Package And Runtime Boundary
 
@@ -210,7 +233,10 @@ Start with one focused `@ontahi/devtools` package:
 5. `@ontahi/react` exposes only any narrow transport or cache diagnostic ports that prove generally
    useful; it does not absorb the visual panel;
 6. importing or mounting Devtools remains explicit so production applications do not include it
-   accidentally.
+   accidentally;
+7. every diagnostic and cache subscription returns an idempotent unsubscribe function; React
+   effects and transport/cache bindings own and invoke those functions on close and unmount, with
+   no delivery after teardown.
 
 If package wiring dominates the first behavioral proof, begin the diagnostic model and UI together
 inside the proposed package rather than creating a second temporary implementation in Todo. Todo
@@ -218,15 +244,30 @@ should be a consumer proof, not the source owner.
 
 ## Retention And Sensitive Data
 
-1. History is a ring buffer with a finite default capacity and explicit clearing.
+1. History is a ring buffer with a finite default capacity and explicit clearing. Terminal events
+   remain independently interpretable if their corresponding start event was evicted.
 2. Payload capture is disabled by default; semantic summaries and structural metadata remain
    useful without retaining arbitrary input and result values.
-3. When payload capture is enabled, a host-provided redactor runs before an event enters the store.
-4. Credentials, cookies, headers, receiver context, and host authority never enter portable
-   diagnostic events.
-5. Diagnostic history is not persisted or uploaded in the first version.
-6. Inspecting or clearing diagnostics never clears the Graph Client Cache or alters application
+3. The package boundary builds events from an allowlist instead of spreading source envelopes,
+   snapshots, cache records, or adapter details. When capture is disabled, payload-bearing fields
+   are absent rather than present with raw or placeholder values.
+4. When payload capture is enabled, only allowlisted values enter the capture projection and a
+   host-provided redactor runs before the resulting event reaches either storage or subscriber
+   delivery. This applies equally to request/result values, `TaskSnapshot.result`, and Entity or
+   output values carried by cache snapshots and events.
+5. Credentials, cookies, headers, receiver context, and host authority never enter portable
+   diagnostic events, regardless of capture mode.
+6. Adapter-reported endpoint URLs are non-portable transport evidence. Before redaction or
+   publication, the package parses them and removes username, password, query parameters, and
+   fragments; raw URLs never enter the store or reach subscribers.
+7. Diagnostic history is not persisted or uploaded in the first version.
+8. Inspecting or clearing diagnostics never clears the Graph Client Cache or alters application
    state.
+
+The Cache view initializes from `GraphClientCache.inspect()` so existing records, aliases, and
+outputs are visible before the first event. It uses `GraphClientCache.subscribe()` for subsequent
+changes, refreshes the current snapshot while recording the projected event history, and invokes
+the returned unsubscribe function during teardown.
 
 ## Transport Settings Boundary
 
@@ -244,8 +285,8 @@ but it must not become an arbitrary credentialed endpoint editor.
 
 ## Execution Slices
 
-1. [ ] Specify diagnostic identities, ordering, outcomes, retention, redaction, and teardown with
-       focused transport-neutral tests.
+1. [ ] Specify diagnostic identities, ordering, outcomes, retention, endpoint projection,
+       redaction, and teardown with focused transport-neutral tests.
 2. [ ] Implement the headless store and `RuntimeTransport` decorator; prove complete unary and
        Durable iterator behavior with an in-memory transport.
 3. [ ] Create the `@ontahi/devtools` package and its React subpath with an Activity list, filters,
@@ -290,6 +331,12 @@ but it must not become an arbitrary credentialed endpoint editor.
       after an ambiguous failure.
 - [ ] Diagnostic retention is bounded, payload capture is opt-in, and redaction happens before
       storage.
+- [ ] A terminal lifecycle event retains family, transport, and run identity after capacity
+      eviction removes its corresponding start event.
+- [ ] Credentialed and signed endpoint URLs lose userinfo, query, and fragment data before storage
+      or subscriber delivery.
+- [ ] Cache state initializes from `GraphClientCache.inspect()` and later events refresh records,
+      aliases, and outputs without leaking captured values when payload capture is disabled.
 - [ ] Mounting is explicit, the headless entrypoint does not load React, and an application that
       does not import Devtools gains no production dependency or runtime work.
 - [ ] The launcher, tabs, filters, detail inspector, and settings controls are keyboard-accessible
@@ -302,11 +349,13 @@ but it must not become an arbitrary credentialed endpoint editor.
 ## Verification
 
 1. Headless unit tests with deterministic clock and identity generators for store ordering,
-   capacity, redaction, exchange outcomes, abort, and Durable iterator cleanup.
+   capacity eviction followed by settlement, capture-off field omission, redaction before
+   delivery, exchange outcomes, abort, and Durable iterator cleanup.
 2. Fetch and WebSocket adapter tests proving optional transport evidence without changing existing
-   conformance assertions.
-3. React component tests for filtering, details, grouping, cache projection, settings availability,
-   keyboard operation, and teardown.
+   conformance assertions, including credentialed and signed URL projection.
+3. React component tests for filtering, details, grouping, initial and updated cache projection,
+   settings availability, keyboard operation, repeated mount/unmount, close, idempotent
+   unsubscribe, and absence of post-teardown delivery.
 4. Todo routing tests proving future-work selection, active-observation pinning, explicit default or
    failure for unknown families, and absence of fallback.
 5. Browser proofs for HTTP-only, WebSocket-only, and HTTP plus push, including visible intermediate
