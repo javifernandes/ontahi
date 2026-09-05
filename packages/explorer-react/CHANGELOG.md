@@ -1,5 +1,17 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.12
+
+### Patch Changes
+
+- Updated dependencies [9c9b9b5]
+- Updated dependencies [ced6a65]
+- Updated dependencies [5af84ba]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/react@1.0.0-alpha.12
+  - @ontahi/core@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes

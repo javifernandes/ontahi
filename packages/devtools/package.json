@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/devtools",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "Development-only runtime diagnostics and React tooling for Ontahi clients",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/devtools",
   "license": "Apache-2.0",

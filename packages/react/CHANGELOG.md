@@ -1,5 +1,35 @@
 # @ontahi/react
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- ced6a65: Add transport-neutral Query observation to runtime-bound reads and an in-memory implementation that
+  emits complete current results after successful graph commits. Add a framework-owned TaskRun Entity
+  and native in-process Task lifecycle observation backed by that Query capability. Project authorized
+  Query observations through Runtime Protocol WebSocket sessions, reconcile pushed snapshots through
+  the Graph Client Cache, and let Express hosts install a receiver-owned Graph observer. Adapt native
+  TaskRun streams into Durable Protocol progress so WebSocket hosts can push task lifecycle snapshots
+  without polling while preserving the existing Durable client API. Preserve public EntityRef input
+  inference when a schema-backed durable operation is consumed through React.
+- 5af84ba: Unify Fetch Operation, Graph Read, Graph Command, and Durable inspection clients behind one Runtime Transport and `/runtime` endpoint by default, with correlated family exchanges and explicit per-family legacy endpoint compatibility.
+- 96629f2: Add a versioned WebSocket Runtime Protocol session, a multiplexed browser Runtime Transport with
+  pushed Durable Operation progress, and an Express server projection with receiver-owned session
+  context and host-controlled upgrade authorization. Schema-backed Operation inputs are made
+  portable before either Fetch or WebSocket Runtime Protocol transmission.
+
+### Patch Changes
+
+- 9c9b9b5: Infer portable client input values for schema-backed Durable Operation hooks.
+- 8e627d2: Harden WebSocket Runtime sessions by bounding completed request identity retention, releasing
+  observation and socket resources deterministically, reporting handshake send failures, and making
+  Express upgrade-boundary ownership explicit.
+- Updated dependencies [ced6a65]
+- Updated dependencies [5af84ba]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes
