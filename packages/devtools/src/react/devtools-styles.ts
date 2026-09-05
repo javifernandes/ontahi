@@ -272,6 +272,7 @@ export const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
   },
   semanticGrid: { display: 'grid', gap: 10 },
+  semanticSection: { display: 'grid', gap: 10 },
   semanticCard: {
     padding: 11,
     border: '1px solid #1f3128',

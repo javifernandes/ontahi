@@ -154,8 +154,15 @@ describe('OntahiDevtools', () => {
         body: {
           version: 1,
           kind: 'invoke',
-          operationId: 'Todo.createItem',
-          input: { title: 'Tune Devtools' },
+          operationId: 'TodoItem.createItem',
+          input: {
+            list: {
+              kind: 'entity-ref',
+              entityName: 'TodoList',
+              locator: { id: 'list-later' },
+            },
+            title: 'nuevo item',
+          },
         },
       });
       const transport = instrumentRuntimeTransport({
@@ -163,7 +170,25 @@ describe('OntahiDevtools', () => {
         id: 'websocket',
         kind: 'websocket',
         transport: {
-          request: vi.fn().mockResolvedValue(createRuntimeProtocolResponse(runtimeRequest, null)),
+          request: vi.fn().mockResolvedValue(
+            createRuntimeProtocolResponse(runtimeRequest, {
+              kind: 'invocation-result',
+              result: {
+                ok: true,
+                kind: 'success',
+                value: {
+                  id: 'todo-new',
+                  list: {
+                    kind: 'entity-ref',
+                    entityName: 'TodoList',
+                    locator: { id: 'list-later' },
+                  },
+                  title: 'nuevo item',
+                  completed: false,
+                },
+              },
+            }),
+          ),
         },
       });
       await transport.request(runtimeRequest);
@@ -171,9 +196,26 @@ describe('OntahiDevtools', () => {
       render(<OntahiDevtools diagnostics={diagnostics} initiallyOpen />);
 
       expect(
-        screen.getByRole('button', { name: 'Todo.createItem() websocket success' }),
+        screen.getByRole('button', { name: 'TodoItem.createItem() websocket success' }),
       ).toBeTruthy();
-      expect(screen.queryByText('Todo.createItem.invoke')).toBeNull();
+      expect(screen.queryByText('TodoItem.createItem.invoke')).toBeNull();
+
+      const request = within(screen.getByRole('region', { name: 'Request detail' }));
+      const response = within(screen.getByRole('region', { name: 'Response detail' }));
+      expect(request.getByText('Input')).toBeTruthy();
+      expect(request.getByText('list-later')).toBeTruthy();
+      expect(request.getByText('nuevo item')).toBeTruthy();
+      expect(request.queryByText('entity-ref')).toBeNull();
+      expect(request.queryByText('operationId')).toBeNull();
+      expect(response.getByText('Returned value')).toBeTruthy();
+      expect(response.getByText('todo-new')).toBeTruthy();
+      expect(response.queryByText('invocation-result')).toBeNull();
+      expect(response.queryByText('ok')).toBeNull();
+
+      fireEvent.click(request.getByRole('button', { name: 'Body JSON' }));
+      expect(request.getByRole('button', { name: 'Copy Request JSON' })).toBeTruthy();
+      expect(request.getByText(/"operationId"/)).toBeTruthy();
+      expect(request.getByText(/"entity-ref"/)).toBeTruthy();
     },
     uiTestTimeoutMs,
   );

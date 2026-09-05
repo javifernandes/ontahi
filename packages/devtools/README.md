@@ -30,6 +30,10 @@ The optional `settings` slot keeps routing policy and controls host-owned while 
 a dedicated Devtools view. Changing a setting must follow the host transport contract; Devtools
 does not replay requests or move an active observation between transports.
 
+The default Visual detail projects Operation requests to their input and successful responses to
+their returned value, flattening Entity Refs to their locator identity. Body JSON and Envelope keep
+the complete Runtime Protocol evidence available when transport-level inspection is needed.
+
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
 ```ts
