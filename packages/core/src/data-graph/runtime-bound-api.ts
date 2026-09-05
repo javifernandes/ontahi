@@ -189,6 +189,8 @@ export const createRuntimeBoundDataGraphApi = <
     count: (queryOrView, params, options) => executor.countViewEffect(queryOrView, params, options),
     stream: (queryOrView, params, options) =>
       executor.streamViewEffect(queryOrView, params, options),
+    observe: (queryOrView, params, options) =>
+      executor.observeViewStream(queryOrView, params, options),
   };
 
   const graphCommandExecutor: GraphCommandExecutor<TCommandError, TCommandOptions> = {

@@ -35,6 +35,7 @@ describe('runtime-bound data graph api', () => {
       ),
       count: vi.fn(() => Effect.succeed(1)),
       stream: vi.fn(() => Stream.fromIterable([{ id: 'book-1' }])),
+      observe: vi.fn(() => Stream.make([{ id: 'book-1' }])),
       runCommand: vi.fn((command, options) =>
         Effect.succeed({
           operation: command.operation,
@@ -72,6 +73,9 @@ describe('runtime-bound data graph api', () => {
     await expect(
       Effect.runPromise(runCollectArray(selection.stream({ authority: 'viewer' }))),
     ).resolves.toEqual([{ id: 'book-1' }]);
+    await expect(
+      Effect.runPromise(runCollectArray(selection.observe({ authority: 'viewer' }))),
+    ).resolves.toEqual([[{ id: 'book-1' }]]);
     await expect(Effect.runPromise(selection.exists({ authority: 'viewer' }))).resolves.toBe(true);
     await expect(
       Effect.runPromise(

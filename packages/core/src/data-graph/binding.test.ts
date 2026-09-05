@@ -32,6 +32,9 @@ describe('data-graph read binding', () => {
       stream: vi.fn((_read, _params, options) =>
         Stream.fromIterable([{ mode: 'stream', authority: options?.authority }]),
       ),
+      observe: vi.fn((_read, _params, options) =>
+        Stream.make([{ mode: 'observe', authority: options?.authority }]),
+      ),
     }) as unknown as GraphReadExecutor<never, { authority: 'server' }>;
 
   it('creates executable reads that delegate every operation to the executor', async () => {
@@ -51,11 +54,15 @@ describe('data-graph read binding', () => {
     await expect(
       Effect.runPromise(runCollectArray(executable.stream(undefined, { authority: 'server' }))),
     ).resolves.toEqual([{ mode: 'stream', authority: 'server' }]);
+    await expect(
+      Effect.runPromise(runCollectArray(executable.observe(undefined, { authority: 'server' }))),
+    ).resolves.toEqual([[{ mode: 'observe', authority: 'server' }]]);
     expect(executable.pipe(value => value)).toBe(executable);
     expect(executor.get).toHaveBeenCalledWith(read, undefined, { authority: 'server' });
     expect(executor.run).toHaveBeenCalledWith(read, undefined, { authority: 'server' });
     expect(executor.count).toHaveBeenCalledWith(read, undefined, { authority: 'server' });
     expect(executor.stream).toHaveBeenCalledWith(read, undefined, { authority: 'server' });
+    expect(executor.observe).toHaveBeenCalledWith(read, undefined, { authority: 'server' });
   });
 
   it('binds executable helpers onto the read object while preserving pipe identity', async () => {

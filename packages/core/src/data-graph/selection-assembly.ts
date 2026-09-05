@@ -295,6 +295,11 @@ export type BoundGraphSelectionRuntimeApi<
   ) => ReturnType<
     ExecutableGraphRead<QueryBuilder<TEntity, TResult>, TReadError, TReadOptions>['stream']
   >;
+  observe: (
+    options?: TReadOptions,
+  ) => ReturnType<
+    ExecutableGraphRead<QueryBuilder<TEntity, TResult>, TReadError, TReadOptions>['observe']
+  >;
   exists: (options?: TReadOptions) => BooleanComputation<TReadError>;
   named: (
     name: string,
@@ -817,6 +822,8 @@ export const createGraphSelectionAssembly = <
       createExecutableGraphRead(selection.build()).count(undefined, options),
     stream: (options?: TReadOptions) =>
       createExecutableGraphRead(selection.build()).stream(undefined, options),
+    observe: (options?: TReadOptions) =>
+      createExecutableGraphRead(selection.build()).observe(undefined, options),
     exists: (options?: TReadOptions) =>
       booleanComputation(
         createExecutableGraphRead(selection.build())
@@ -913,6 +920,7 @@ export const createGraphSelectionAssembly = <
       run: (options?: TReadOptions) => asGraphSelection().run(options),
       count: (options?: TReadOptions) => asGraphSelection().count(options),
       stream: (options?: TReadOptions) => asGraphSelection().stream(options),
+      observe: (options?: TReadOptions) => asGraphSelection().observe(options),
       exists: (options?: TReadOptions) => asGraphSelection().exists(options),
     }) as unknown as BoundSelection<
       TEntity,
