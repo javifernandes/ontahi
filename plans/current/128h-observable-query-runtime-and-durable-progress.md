@@ -133,15 +133,15 @@ TodoItem.completeAll
 - [x] Define the runtime observation capability and distinguish it from row streaming.
 - [x] Expose `observe()` on bound reads and Entity Selections.
 - [x] Implement shared in-memory commit notification and Query reevaluation.
-- [ ] Prove initial emission, predicate entry/exit, ordering changes, cleanup, failed commands, and
+- [x] Prove initial emission, predicate entry/exit, ordering changes, cleanup, failed commands, and
       transaction commit behavior.
 
 ### Slice 2: TaskRun As Observable Data
 
-- [ ] Define the framework-owned TaskRun Entity shape and composite identity boundary.
-- [ ] Project Task Runtime snapshots through that Entity without exposing engine-only sources.
-- [ ] Make in-process Task progress, running, completion, and failure writes observable natively.
-- [ ] Keep a polling adapter for runtimes that expose inspection only.
+- [x] Define the framework-owned TaskRun Entity shape and composite identity boundary.
+- [x] Project Task Runtime snapshots through that Entity without exposing engine-only sources.
+- [x] Make in-process Task progress, running, completion, and failure writes observable natively.
+- [x] Keep a polling adapter for runtimes that expose inspection only.
 
 ### Slice 3: Remote Observation
 
@@ -207,7 +207,17 @@ and notify observers only after the outer dataset commits. Tests prove initial d
 entry and exit, ordering changes, cross-runtime notification, rollback isolation, and commit
 delivery. The full Core suite passes with 824 tests, plus Core typecheck and lint.
 
-This checkpoint deliberately stops before TaskRun projection, Runtime Protocol frames, React cache
+Core now also owns a storage-neutral `TaskRun` Entity whose identity is `(taskId, runId)` and whose
+fields are the public `TaskSnapshot`, excluding engine input, trigger, and runtime source records.
+The in-process Task Runtime projects each confirmed queued, running, progress, completed, or failed
+write through the canonical identity Query and exposes its Effect `Stream`. Missing runtime
+observation support fails explicitly; the existing polling observer remains available as a named
+compatibility adapter.
+
+After the TaskRun projection slice, the full Core suite passes with 829 tests; public artifacts also
+pass clean-room installation, type, and runtime verification.
+
+This checkpoint deliberately stops before Runtime Protocol Graph observation frames, React cache
 integration, or changes to the Todo WebSocket observer. Those remain the next slices rather than
 being inferred from the local observation proof.
 

@@ -1,9 +1,14 @@
 export { defineTask, defineTaskStep } from './tasks/definitions.js';
-export { duplicateTaskRunFailure, missingTaskRunFailure } from './tasks/failures.js';
+export {
+  duplicateTaskRunFailure,
+  missingTaskRunFailure,
+  taskRunObservationUnavailableFailure,
+} from './tasks/failures.js';
 export {
   createConfiguredTaskFacade,
   getTaskSnapshot,
   listRecentTasks,
+  observeTaskRun,
   startTask,
 } from './tasks/facade.js';
 export {
@@ -12,6 +17,11 @@ export {
 } from './tasks/in-process-adapter.js';
 export { createInMemoryTaskStorage } from './tasks/memory-store.js';
 export { inProcessTasks } from './tasks/presets.js';
+export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
+export {
+  createInMemoryTaskRunProjection,
+  type TaskRunProjection,
+} from './tasks/task-run-observation.js';
 export {
   createSystemTaskTrigger,
   createUserTaskTrigger,

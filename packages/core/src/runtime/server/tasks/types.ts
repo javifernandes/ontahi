@@ -1,4 +1,4 @@
-import type { Effect } from 'effect';
+import type { Effect, Stream } from 'effect';
 
 import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
 import type {
@@ -138,6 +138,7 @@ export type TaskRuntime = {
   ): Effect.Effect<TaskRunRef, TaskFailure>;
   getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
+  observe?(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
 };
 
 export type TaskExecutor = {

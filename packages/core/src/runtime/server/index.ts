@@ -289,6 +289,7 @@ export {
   createUserTaskTrigger,
   getTaskSnapshot,
   listRecentTasks,
+  observeTaskRun,
   normalizeTaskTrigger,
   inProcessTasks,
   startTask,
@@ -309,6 +310,7 @@ export {
   type TaskMethod,
   type TaskMethods,
   type TaskRunCreateInput,
+  type TaskRunEntity,
   type TaskRunIdentity,
   type TaskRunListItem,
   type TaskRunRef,
@@ -328,6 +330,10 @@ export {
   type TaskSubject,
   type TaskTrigger,
   type TaskRuntime,
+  TaskRun,
+  TaskRunByIdentity,
+  createInMemoryTaskRunProjection,
+  type TaskRunProjection,
 } from './tasks.js';
 export { failIfError, fromNullable, fromValueOrPromise } from './values.js';
 export type {
