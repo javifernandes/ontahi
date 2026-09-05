@@ -38,7 +38,7 @@ import type {
   RelationshipCommand,
   RelationshipCommandExecutionRuntime,
 } from './relationship-command.js';
-import type { DataGraphExecutionRuntime } from './runtime.js';
+import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from './runtime.js';
 
 export type RemoteDataGraphErrorCode =
   | GraphReadProtocolErrorCode
@@ -73,9 +73,15 @@ export type RemoteGraphCommandTransport<TOptions = undefined> = (
   options?: TOptions,
 ) => Promise<unknown>;
 
+export type RemoteGraphObservationTransport<TOptions = undefined> = (
+  request: GraphReadRequestV1,
+  options?: TOptions,
+) => AsyncIterable<unknown>;
+
 export type CreateRemoteDataGraphRuntimeOptions<TOptions = undefined> = {
   readonly transport: RemoteGraphReadTransport<TOptions>;
   readonly commandTransport?: RemoteGraphCommandTransport<TOptions>;
+  readonly observeTransport?: RemoteGraphObservationTransport<TOptions>;
 };
 
 const invalidResponse = (mode: string) =>
@@ -176,12 +182,14 @@ const readEntityMutationResponseValue = (
 export const createRemoteDataGraphRuntime = <TOptions = undefined>({
   transport,
   commandTransport,
+  observeTransport,
 }: CreateRemoteDataGraphRuntimeOptions<TOptions>): DataGraphExecutionRuntime<
   RemoteDataGraphError,
   TOptions,
   TOptions,
   RemoteDataGraphError
 > &
+  DataGraphObservationRuntime<RemoteDataGraphError, TOptions> &
   ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   RelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   EntityMutationCommandExecutionRuntime<RemoteDataGraphError, TOptions> => {
@@ -304,6 +312,41 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
       options?: TOptions,
     ) => executeRead(read, params, 'count', options) as Effect.Effect<number, RemoteDataGraphError>,
     stream: () => Stream.fail(unsupportedCapability('stream')),
+    observe: <TParams, TResult>(
+      read: QueryOrView<TParams, TResult>,
+      params: TParams,
+      options?: TOptions,
+    ) => {
+      if (!observeTransport) return Stream.fail(unsupportedCapability('observation'));
+      return Stream.unwrap(
+        Effect.try({
+          try: () => {
+            let request: GraphReadRequestV1;
+            try {
+              request = toGraphReadRequest(resolveQuerySpec(read, params), 'run');
+            } catch (cause) {
+              throw new RemoteDataGraphError(
+                'invalid_request',
+                'Failed to encode the remote data graph observation.',
+                cause,
+              );
+            }
+            return Stream.fromAsyncIterable(
+              observeTransport(request, options),
+              toRemoteDataGraphError,
+            ).pipe(
+              Stream.mapEffect(response =>
+                Effect.try({
+                  try: () => readResponseValue(response, 'run') as TResult[],
+                  catch: toRemoteDataGraphError,
+                }),
+              ),
+            );
+          },
+          catch: toRemoteDataGraphError,
+        }),
+      );
+    },
     runCommand: <TResult>(_command: GraphCommandSpec<any, any, TResult>, _options?: TOptions) =>
       Effect.fail(unsupportedCapability('Command')),
     runRelationshipCommand: executeRelationshipCommand,

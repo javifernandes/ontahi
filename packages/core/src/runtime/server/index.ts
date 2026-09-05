@@ -14,11 +14,13 @@ export {
 } from './application.js';
 export {
   ontahi,
+  type ApplicationGraphReadObserverFactory,
   type ApplicationGraphReadDispatcherFactory,
   type ApplicationGraphCommandDispatcherFactory,
   type OntahiBinderApp,
   type ComposedOntahiApplication,
   type GraphReadableOntahiApplication,
+  type GraphObservableOntahiApplication,
   type GraphCommandableOntahiApplication,
   type OntahiApplicationBuilder,
   type OntahiCapabilities,

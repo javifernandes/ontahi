@@ -6,9 +6,11 @@ import {
   isGraphCommandProtocolError,
   isGraphReadProtocolError,
   type DataGraphExecutionRuntime,
+  type DataGraphObservationRuntime,
   type EntityMutationCommandExecutionRuntime,
   type RemoteDataGraphError,
   type RemoteGraphCommandTransport,
+  type RemoteGraphObservationTransport,
   type RemoteGraphReadTransport,
   type ManyToManyRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
@@ -39,7 +41,8 @@ export type FetchGraphRuntime<TOptions = undefined> = DataGraphExecutionRuntime<
   TOptions,
   TOptions,
   RemoteDataGraphError
->;
+> &
+  DataGraphObservationRuntime<RemoteDataGraphError, TOptions>;
 export type FetchRelationshipRuntime<TOptions = undefined> = RelationshipCommandExecutionRuntime<
   RemoteDataGraphError,
   TOptions
@@ -131,7 +134,15 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
     ? legacyCommandTransport
     : (request, options) =>
         exchange!({ family: 'graph.command', body: request }, exchangeOptions(options));
-  const runtime = createRemoteDataGraphRuntime({ transport, commandTransport });
+  const observeTransport: RemoteGraphObservationTransport<TOptions> | undefined =
+    runtimeTransport?.graph
+      ? (request, options) => runtimeTransport.graph!.observe(request, exchangeOptions(options))
+      : undefined;
+  const runtime = createRemoteDataGraphRuntime({
+    transport,
+    commandTransport,
+    ...(observeTransport ? { observeTransport } : {}),
+  });
 
   return {
     runtime,

@@ -145,10 +145,10 @@ TodoItem.completeAll
 
 ### Slice 3: Remote Observation
 
-- [ ] Specify versioned Graph observation session frames and capability advertisement.
-- [ ] Preserve Graph Read body validation, receiver authority, correlation, sequence, and cleanup.
-- [ ] Implement WebSocket client observation and cache reconciliation.
-- [ ] Define disconnect behavior without implicit replay or resubscription.
+- [x] Specify versioned Graph observation session frames and capability advertisement.
+- [x] Preserve Graph Read body validation, receiver authority, correlation, sequence, and cleanup.
+- [x] Implement WebSocket client observation and cache reconciliation.
+- [x] Define disconnect behavior without implicit replay or resubscription.
 
 ### Slice 4: Durable Compatibility Projection
 
@@ -217,18 +217,27 @@ compatibility adapter.
 After the TaskRun projection slice, the full Core suite passes with 829 tests; public artifacts also
 pass clean-room installation, type, and runtime verification.
 
-This checkpoint deliberately stops before Runtime Protocol Graph observation frames, React cache
-integration, or changes to the Todo WebSocket observer. Those remain the next slices rather than
-being inferred from the local observation proof.
+Runtime Protocol sessions now advertise `graph-observation-push` and carry the existing versioned
+Graph Read `run` body in explicit observe/unobserve control frames. Each result has a
+per-observation sequence; completion is explicit; abort, malformed output, protocol errors, and
+disconnect clean up without replay or automatic resubscription. Express derives the observer's
+authority from its receiver-owned WebSocket context.
+
+The application-generated Graph observer and ordinary Graph Read dispatcher share one policy,
+scope, limit, and canonical Query-resolution boundary. The WebSocket Runtime Transport projects the
+remote sequence back into `Query.observe()`. Runtime Graph clients reconcile each complete pushed
+snapshot through the Graph Client Cache by canonical Entity identity before yielding it. A Todo
+integration proof observes a changing authorized Todo Query through the real WebSocket server.
+
+The next slice replaces Todo's Durable polling adapter with native TaskRun observation while
+preserving the existing Durable protocol body and React hook.
 
 ## Open Questions
 
-1. Should remote observation reuse `graph.read` inside session control frames or become a new
-   registered Runtime Protocol family?
-2. Which causal fields belong in the common observation envelope before first-class Events exist?
-3. Should `useGraphQuery` require an explicit `observation: 'live'` option or should generated
+1. Which causal fields belong in the common observation envelope before first-class Events exist?
+2. Should `useGraphQuery` require an explicit `observation: 'live'` option or should generated
    clients expose a distinct live hook?
-4. How should dependency-aware invalidation avoid reevaluating unrelated Queries without exposing
+3. How should dependency-aware invalidation avoid reevaluating unrelated Queries without exposing
    provider deltas publicly?
-5. Which Task runtimes can provide truthful native observation, and which must advertise polling
+4. Which Task runtimes can provide truthful native observation, and which must advertise polling
    compatibility?

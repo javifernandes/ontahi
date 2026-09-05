@@ -164,7 +164,42 @@ describe('remote data graph runtime', () => {
     expect(transport.mock.calls.map(([request]) => request.mode)).toEqual(['get', 'run', 'count']);
   });
 
-  it('fails unavailable stream and Command capabilities without invoking transport', async () => {
+  it('observes repeated complete results through the remote Graph transport', async () => {
+    const { Todo } = defineTodoGraph();
+    const observeTransport = vi.fn(
+      async function* (
+        request: { mode: GraphReadMode },
+        options?: { readonly credential: string },
+      ) {
+        expect(request.mode).toBe('run');
+        expect(options).toEqual({ credential: 'server-session' });
+        yield { kind: 'graph-read-result', value: [{ id: 'todo-1' }] };
+        yield {
+          kind: 'graph-read-result',
+          value: [{ id: 'todo-1' }, { id: 'todo-2' }],
+        };
+      },
+    );
+    const runtime = createRemoteDataGraphRuntime({
+      transport: vi.fn(),
+      observeTransport,
+    });
+    const read = query(Todo).where(todo => todo.completed.eq(false));
+
+    await expect(
+      Effect.runPromise(
+        runCollectArray(
+          runtime.observe(read, undefined, { credential: 'server-session' }),
+        ),
+      ),
+    ).resolves.toEqual([
+      [{ id: 'todo-1' }],
+      [{ id: 'todo-1' }, { id: 'todo-2' }],
+    ]);
+    expect(observeTransport).toHaveBeenCalledOnce();
+  });
+
+  it('fails unavailable stream, observation, and Command capabilities without invoking transport', async () => {
     const { Todo } = defineTodoGraph();
     const transport = vi.fn();
     const runtime = createRemoteDataGraphRuntime({ transport });
@@ -179,6 +214,12 @@ describe('remote data graph runtime', () => {
 
     await expect(
       Effect.runPromise(runCollectArray(runtime.stream(read, undefined)).pipe(Effect.either)),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: { _tag: 'RemoteDataGraphError', code: 'unsupported_capability' },
+    });
+    await expect(
+      Effect.runPromise(runCollectArray(runtime.observe(read, undefined)).pipe(Effect.either)),
     ).resolves.toMatchObject({
       _tag: 'Left',
       left: { _tag: 'RemoteDataGraphError', code: 'unsupported_capability' },

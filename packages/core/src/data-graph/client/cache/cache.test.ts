@@ -7,6 +7,8 @@ import {
   entity,
   field,
   graphOutput,
+  query,
+  reconcileGraphReadSnapshot,
 } from '../../index.js';
 
 const defineBookEntity = () =>
@@ -981,5 +983,36 @@ describe('data-graph client cache', () => {
 
     expect(result.writes).toEqual([]);
     expect(cache.readEntity(createEntityRef(Book, { slug: 'progbook' }))).toBeUndefined();
+  });
+
+  it('reconciles each complete Query snapshot through canonical Entity identity', () => {
+    const Book = defineBookEntity();
+    const cache = createGraphClientCache();
+    const books = query(Book);
+
+    const initial = reconcileGraphReadSnapshot(cache, books, undefined, [
+      { id: 'book-1', slug: 'ontahi', title: 'Ontahi' },
+    ]);
+    const changed = reconcileGraphReadSnapshot(cache, books, undefined, [
+      { id: 'book-1', slug: 'ontahi', title: 'Ontahi Runtime' },
+      { id: 'book-2', slug: 'effect', title: 'Effect' },
+    ]);
+
+    expect(initial.writes).toHaveLength(1);
+    expect(changed.writes).toHaveLength(2);
+    expect(changed.value).toEqual([
+      { id: 'book-1', slug: 'ontahi', title: 'Ontahi Runtime' },
+      { id: 'book-2', slug: 'effect', title: 'Effect' },
+    ]);
+    expect(cache.readEntity(createEntityRef(Book, { id: 'book-1' }))).toEqual({
+      id: 'book-1',
+      slug: 'ontahi',
+      title: 'Ontahi Runtime',
+    });
+    expect(cache.readEntity(createEntityRef(Book, { slug: 'effect' }))).toEqual({
+      id: 'book-2',
+      slug: 'effect',
+      title: 'Effect',
+    });
   });
 });

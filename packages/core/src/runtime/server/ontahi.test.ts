@@ -147,6 +147,25 @@ describe('ontahi application composition root', () => {
     await expect(
       dispatcher(toGraphReadRequest(read, 'count'), { authority: undefined }),
     ).resolves.toEqual({ kind: 'graph-read-result', value: 2 });
+
+    const controller = new AbortController();
+    const observer = application.createGraphReadObserver([policy]);
+    const observations = observer(toGraphReadRequest(read, 'run'), {
+      authority: undefined,
+      signal: controller.signal,
+    })[Symbol.asyncIterator]();
+    await expect(observations.next()).resolves.toEqual({
+      done: false,
+      value: {
+        kind: 'graph-read-result',
+        value: [
+          { id: 'todo-1', title: 'First' },
+          { id: 'todo-2', title: 'Second' },
+        ],
+      },
+    });
+    controller.abort();
+    await expect(observations.next()).resolves.toEqual({ done: true, value: undefined });
   });
 
   it('invokes bound entity operations directly and promotes refs to singleton selections', async () => {

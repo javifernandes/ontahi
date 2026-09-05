@@ -1,6 +1,10 @@
 import { isRecord } from '../../../value/object.js';
 import type { AnyEntityDefinition } from '../../definitions.js';
-import type { GraphOutputDescriptor } from '../../output/index.js';
+import {
+  getGraphReadOutputDescriptor,
+  type GraphOutputDescriptor,
+} from '../../output/index.js';
+import type { QueryOrView } from '../../query.js';
 import {
   createEntityIdentityRef,
   createEntityRef,
@@ -941,3 +945,24 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
 };
 
 export type GraphClientCache = ReturnType<typeof createGraphClientCache>;
+
+export type GraphClientCacheQueryReconciliation<TResult> = {
+  readonly value: TResult[];
+  readonly writes: readonly GraphClientCacheWriteResult[];
+};
+
+/** Reconciles one complete Query snapshot through Entity identities before exposing its value. */
+export const reconcileGraphReadSnapshot = <TParams, TResult>(
+  cache: GraphClientCache,
+  read: QueryOrView<TParams, TResult>,
+  params: TParams,
+  value: TResult[],
+): GraphClientCacheQueryReconciliation<TResult> => {
+  const descriptor = getGraphReadOutputDescriptor(read, params);
+  const normalized = cache.normalizeOutput(descriptor, value);
+
+  return {
+    writes: normalized.writes,
+    value: cache.denormalizeOutput(descriptor, normalized.value) as TResult[],
+  };
+};

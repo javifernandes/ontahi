@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  GraphClientCache,
   ReflectedEntityDataReader,
   ReflectedEntityDataResult,
   ReflectedRelatedEntityDataReader,
@@ -9,7 +10,7 @@ import type {
   RemoteDataGraphError,
   RuntimeBoundDataGraphApi,
 } from '@ontahi/core/data-graph';
-import { createRuntimeBoundDataGraphApi } from '@ontahi/core/data-graph';
+import { createGraphClientCache, createRuntimeBoundDataGraphApi } from '@ontahi/core/data-graph';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 
 import {
@@ -42,6 +43,7 @@ export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOpt
     RemoteDataGraphError
   >;
   graphExecutor?: ReactGraphExecutor<TReadOptions, TCommandOptions>;
+  clientCache?: GraphClientCache;
   runtimeTransport?: RuntimeTransport<TReadOptions | TCommandOptions>;
   operationBridgeAdapters?: AnyOperationBridgeAdapter[];
   reflectedEntityDataReader?: ReflectedEntityDataReader;
@@ -52,6 +54,7 @@ export type OntahiGraphClient<TReadOptions = unknown, TCommandOptions = TReadOpt
 export type FetchGraphClient<TOptions = undefined> = OntahiGraphClient<TOptions, TOptions> & {
   graph: RuntimeBoundDataGraphApi<RemoteDataGraphError, TOptions, TOptions, RemoteDataGraphError>;
   graphExecutor: ReactGraphExecutor<TOptions, TOptions>;
+  clientCache: GraphClientCache;
 };
 
 export type FetchGraphClientCompatibilityOptions = {
@@ -151,6 +154,7 @@ export function createFetchGraphClient<TOptions = undefined>({
                   compatibility.graphCommand.endpoint ?? DEFAULT_LEGACY_GRAPH_COMMAND_ENDPOINT,
               }),
         };
+  const clientCache = graphReadOptions ? createGraphClientCache() : undefined;
   const operationOptions = (() => {
     if (operations === false) return undefined;
     if (compatibility.operation === undefined) return operations;
@@ -224,6 +228,7 @@ export function createFetchGraphClient<TOptions = undefined>({
       ? {
           graph: createRuntimeBoundDataGraphApi(() => graphReadCapability.runtime),
           graphExecutor: graphReadCapability.graphExecutor,
+          clientCache: clientCache!,
         }
       : {}),
     ...(resolvedRuntimeTransport ? { runtimeTransport: resolvedRuntimeTransport } : {}),

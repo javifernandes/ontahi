@@ -1,16 +1,16 @@
+import type { GraphReadRequestV1 } from '../../data-graph/read-protocol.js';
 import type { JsonValue } from '../../value/json.js';
 import type { TaskRunIdentity, TaskSnapshot } from '../contracts.js';
 
-import type {
-  RuntimeProtocolError,
-  RuntimeProtocolRequestEnvelope,
-  RuntimeProtocolResponseEnvelope,
-} from './envelope.js';
 import {
   createRuntimeProtocolRequest,
   isRuntimeProtocolError,
   parseRuntimeProtocolResponse,
+  type RuntimeProtocolError,
+  type RuntimeProtocolRequestEnvelope,
+  type RuntimeProtocolResponseEnvelope,
 } from './envelope.js';
+import type { RuntimeProtocolGraphObservationBody } from './session.js';
 
 export type RuntimeTransportRequestOptions<TTransportOptions = unknown> = {
   readonly signal?: AbortSignal;
@@ -26,12 +26,20 @@ export type DurableOperationObservationCapability = {
   ): AsyncIterable<TaskSnapshot<TResult>>;
 };
 
+export type GraphObservationCapability<TTransportOptions = unknown> = {
+  observe(
+    request: GraphReadRequestV1,
+    options?: RuntimeTransportRequestOptions<TTransportOptions>,
+  ): AsyncIterable<RuntimeProtocolGraphObservationBody>;
+};
+
 export type RuntimeTransport<TTransportOptions = unknown> = {
   request(
     request: RuntimeProtocolRequestEnvelope,
     options?: RuntimeTransportRequestOptions<TTransportOptions>,
   ): Promise<RuntimeProtocolResponseEnvelope | RuntimeProtocolError>;
   readonly durableOperation?: DurableOperationObservationCapability;
+  readonly graph?: GraphObservationCapability<TTransportOptions>;
 };
 
 export type RuntimeProtocolExchangeRequest<TFamily extends string, TBody> = {

@@ -15,6 +15,8 @@ import type {
   GraphSchemaFields,
   GraphTransformDefinition,
 } from '../definitions.js';
+import { resolveQuerySpec, type QueryOrView } from '../query.js';
+import type { ViewNode } from '../view.js';
 
 export type GraphOutputDescriptor =
   | GraphOutputOpaqueDescriptor
@@ -228,4 +230,48 @@ export const graphOutput = {
     kind: 'graph-output.optional',
     item,
   }),
+};
+
+const graphReadEntityOutput = (
+  entity: AnyEntityDefinition,
+  view: Pick<ViewNode, 'entity' | 'fields'> | undefined,
+): GraphOutputEntityDescriptor => {
+  if (!view) return graphOutput.entity(entity);
+  if (view.entity !== entity.name) {
+    throw new Error(`Graph read View targets ${view.entity}, not ${entity.name}.`);
+  }
+
+  const fields = Object.fromEntries(
+    Object.entries(view.fields).flatMap(([fieldName, node]) => {
+      if (node.kind !== 'relation-view') return [];
+      const relation = entity.relations[fieldName];
+      if (!relation || relation.target.name !== node.targetEntity) {
+        throw new Error(`Graph read View relation ${entity.name}.${fieldName} is invalid.`);
+      }
+
+      let descriptor: GraphOutputDescriptor = graphReadEntityOutput(relation.target, node.view);
+      if (node.cardinality === 'many') descriptor = graphOutput.array(descriptor);
+      else if (node.nullable) descriptor = graphOutput.nullable(descriptor);
+      return [[fieldName, descriptor] as const];
+    }),
+  );
+
+  return Object.keys(fields).length > 0
+    ? graphOutput.entity(entity, fields)
+    : graphOutput.entity(entity);
+};
+
+/** Describes one complete many-result Query snapshot for Entity identity reconciliation. */
+export const getGraphReadOutputDescriptor = <TParams, TResult>(
+  read: QueryOrView<TParams, TResult>,
+  params: TParams,
+): GraphOutputArrayDescriptor => {
+  const spec = resolveQuerySpec(read, params);
+  const view = spec.view
+    ? ({ entity: spec.view.entity, fields: spec.view.fields } satisfies Pick<
+        ViewNode,
+        'entity' | 'fields'
+      >)
+    : undefined;
+  return graphOutput.array(graphReadEntityOutput(spec.root, view));
 };

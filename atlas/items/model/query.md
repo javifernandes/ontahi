@@ -47,3 +47,9 @@ Query observation describes current state and may coalesce changes before reeval
 an Event declaration, provider changefeed, audit log, or promise that every intermediate mutation
 will be delivered. Remote transports project the observation capability while preserving Query
 identity, authority, cancellation, and source guarantees.
+
+The Runtime Protocol WebSocket projection transports the same Graph Read program in `run` mode and
+pushes sequenced complete arrays. On the browser side, a Runtime Graph client reconciles each array
+through the Graph Client Cache by Entity identity before the observation yields it. Ordinary
+`useGraphQuery` reads remain finite; choosing a public React lifecycle for live Queries is a
+separate API decision rather than an implicit subscription.

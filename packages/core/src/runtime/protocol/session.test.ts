@@ -9,6 +9,7 @@ import {
   parseRuntimeProtocolSessionServerFrame,
   runtimeProtocolSessionError,
   type RuntimeProtocolSessionClientFrame,
+  type RuntimeProtocolSessionGraphObserveFrame,
   type RuntimeProtocolSessionRequestFrame,
   type RuntimeProtocolSessionServerFrame,
 } from './session.js';
@@ -33,6 +34,24 @@ const observeFrame = (id = 'observation-1'): RuntimeProtocolSessionClientFrame =
   kind: 'durable-observe',
   id,
   run: { taskId: 'Todo.completeAll', runId: 'run-1' },
+});
+
+const graphObserveFrame = (id = 'graph-observation-1'): RuntimeProtocolSessionGraphObserveFrame => ({
+  protocol: 'ontahi.runtime.session',
+  version: 1,
+  kind: 'graph-observe',
+  id,
+  request: {
+    version: 1,
+    kind: 'graph-read',
+    mode: 'run',
+    selection: {
+      kind: 'selection',
+      entityName: 'Todo',
+      expression: { kind: 'all' },
+    },
+    orderBy: [],
+  },
 });
 
 const nullDispatcher: RuntimeProtocolDispatcher<undefined> = input => {
@@ -86,12 +105,35 @@ describe('Runtime Protocol session frames', () => {
       success: true,
       frame: observation,
     });
+    const graphObservation = {
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'graph-observation',
+      id: 'graph-observation-1',
+      sequence: 1,
+      body: {
+        kind: 'graph-read-result',
+        value: [{ id: 'todo-1', title: 'Observe me' }],
+      },
+    } as const;
+    expect(parseRuntimeProtocolSessionClientFrame(graphObserveFrame())).toEqual({
+      success: true,
+      frame: graphObserveFrame(),
+    });
+    expect(parseRuntimeProtocolSessionServerFrame(graphObservation)).toEqual({
+      success: true,
+      frame: graphObservation,
+    });
     expect(
       parseRuntimeProtocolSessionServerFrame({
         protocol: 'ontahi.runtime.session',
         version: 1,
         kind: 'ready',
-        capabilities: ['request-response', 'durable-operation-push'],
+        capabilities: [
+          'request-response',
+          'durable-operation-push',
+          'graph-observation-push',
+        ],
       }),
     ).toMatchObject({ success: true });
   });
@@ -109,6 +151,28 @@ describe('Runtime Protocol session frames', () => {
         error: { error: { code: 'unsupported_version' } },
       },
     );
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        ...graphObserveFrame(),
+        request: { ...graphObserveFrame().request, mode: 'get' },
+      }),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_frame' } },
+    });
+    expect(
+      parseRuntimeProtocolSessionServerFrame({
+        protocol: 'ontahi.runtime.session',
+        version: 1,
+        kind: 'graph-observation',
+        id: 'graph-observation-1',
+        sequence: 1,
+        body: { kind: 'graph-read-result', value: 'not-an-array' },
+      }),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_frame' } },
+    });
     expect(
       parseRuntimeProtocolSessionServerFrame({
         protocol: 'ontahi.runtime.session',
@@ -310,7 +374,7 @@ describe('Runtime Protocol server session', () => {
   it('pushes sequenced snapshots, ends at terminal state, and rejects duplicate identities', async () => {
     const sent: RuntimeProtocolSessionServerFrame[] = [];
     const session = createRuntimeProtocolServerSession({
-      dispatcher: nullDispatcher,
+      dispatcher: input => nullDispatcher(input, undefined),
       context: undefined,
       send: frame => {
         sent.push(frame);
@@ -365,6 +429,97 @@ describe('Runtime Protocol server session', () => {
       sequence: 2,
       body: { snapshot: { status: 'completed', result: { completed: 2 } } },
     });
+  });
+
+  it('pushes sequenced Graph result snapshots with receiver-owned context', async () => {
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    const observed: unknown[] = [];
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: input => nullDispatcher(input, undefined),
+      context: { principal: 'receiver-owned' },
+      send: frame => {
+        sent.push(frame);
+      },
+      observeGraph: (request, options) =>
+        (async function* () {
+          observed.push({ request, context: options.context });
+          yield { kind: 'graph-read-result' as const, value: [{ id: 'todo-1' }] };
+          yield {
+            kind: 'graph-read-result' as const,
+            value: [
+              { id: 'todo-1' },
+              { id: 'todo-2' },
+            ],
+          };
+        })(),
+    });
+
+    await session.receive(graphObserveFrame());
+
+    await vi.waitFor(() =>
+      expect(sent.filter(frame => frame.kind === 'graph-observation')).toHaveLength(2),
+    );
+    expect(sent[0]).toMatchObject({
+      kind: 'ready',
+      capabilities: ['request-response', 'graph-observation-push'],
+    });
+    expect(sent.filter(frame => frame.kind === 'graph-observation')).toMatchObject([
+      {
+        id: 'graph-observation-1',
+        sequence: 1,
+        body: { kind: 'graph-read-result', value: [{ id: 'todo-1' }] },
+      },
+      {
+        id: 'graph-observation-1',
+        sequence: 2,
+        body: { kind: 'graph-read-result', value: [{ id: 'todo-1' }, { id: 'todo-2' }] },
+      },
+    ]);
+    expect(observed).toEqual([
+      {
+        request: graphObserveFrame().request,
+        context: { principal: 'receiver-owned' },
+      },
+    ]);
+  });
+
+  it('aborts and releases a Graph observation when the client unsubscribes', async () => {
+    let observedSignal: AbortSignal | undefined;
+    let releaseWait: (() => void) | undefined;
+    const released = new Promise<void>(resolve => {
+      releaseWait = resolve;
+    });
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: () => undefined,
+      observeGraph: (_request, { signal }) =>
+        (async function* () {
+          observedSignal = signal;
+          try {
+            yield { kind: 'graph-read-result' as const, value: [] };
+            if (!signal.aborted) {
+              await new Promise<void>(resolve =>
+                signal.addEventListener('abort', () => resolve(), { once: true }),
+              );
+            }
+          } finally {
+            releaseWait?.();
+          }
+        })(),
+    });
+
+    await session.receive(graphObserveFrame());
+    await vi.waitFor(() => expect(observedSignal).toBeDefined());
+    await session.receive({
+      protocol: 'ontahi.runtime.session',
+      version: 1,
+      kind: 'graph-unobserve',
+      id: 'graph-observation-1',
+    });
+
+    await released;
+    expect(observedSignal?.aborted).toBe(true);
   });
 
   it('finalizes an observation iterator exactly once after a terminal snapshot', async () => {

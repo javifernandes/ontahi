@@ -75,6 +75,8 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   const operationDispatcher = createOperationInvocationDispatcher(TodoApplication);
   const graphReadDispatcher =
     TodoApplication.createGraphReadDispatcher<TodoGraphReadAuthority>(todoGraphReadPolicies);
+  const graphReadObserver =
+    TodoApplication.createGraphReadObserver<TodoGraphReadAuthority>(todoGraphReadPolicies);
   const graphCommandDispatcher = (
     TodoApplication as unknown as GraphCommandableOntahiApplication
   ).createGraphCommandDispatcher<TodoGraphReadAuthority>(todoGraphCommandPolicies);
@@ -127,7 +129,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
     response.sendFile(path.join(clientDirectory, 'index.html')),
   );
 
-  return { application: server, authentication, runtimeProtocolDispatcher };
+  return { application: server, authentication, graphReadObserver, runtimeProtocolDispatcher };
 };
 
 export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}): Express =>
@@ -188,6 +190,8 @@ export const createTodoExpressServer = (
       inspect: run => TodoApplication.getTaskSnapshot(run),
       pollIntervalMs: 100,
     }),
+    observeGraph: (request, { context, signal }) =>
+      runtime.graphReadObserver(request, { authority: context, signal }),
   });
 
   return Object.assign(server, { runtimeProtocolWebSocket });
