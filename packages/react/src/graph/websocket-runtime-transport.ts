@@ -189,6 +189,7 @@ export const createWebSocketRuntimeTransport = ({
       }
     | undefined;
   let capabilities: ReadonlySet<string> | undefined;
+  let removeSocketListeners: (() => void) | undefined;
   let disposed = false;
   const pendingRequests = new Map<string, PendingRequest>();
   const observations = new Map<string, ActiveObservation>();
@@ -213,6 +214,8 @@ export const createWebSocketRuntimeTransport = ({
 
   const failConnection = (currentSocket: RuntimeWebSocket, error: Error) => {
     if (socket !== currentSocket) return;
+    removeSocketListeners?.();
+    removeSocketListeners = undefined;
     connection?.reject(error);
     if (connection) clearTimeout(connection.timeout);
     connection = undefined;
@@ -324,6 +327,13 @@ export const createWebSocketRuntimeTransport = ({
     if (capabilities && socket?.readyState === SOCKET_OPEN) return Promise.resolve(capabilities);
     if (connection) return connection.promise;
 
+    if (socket) {
+      failConnection(
+        socket,
+        new Error('Runtime Protocol WebSocket session was replaced; active work was not resumed.'),
+      );
+    }
+
     const currentSocket = createWebSocket(resolveWebSocketUrl(url), protocols);
     socket = currentSocket;
     let resolveConnection!: (value: ReadonlySet<string>) => void;
@@ -369,6 +379,11 @@ export const createWebSocketRuntimeTransport = ({
     currentSocket.addEventListener('message', onMessage);
     currentSocket.addEventListener('error', onError);
     currentSocket.addEventListener('close', onClose);
+    removeSocketListeners = () => {
+      currentSocket.removeEventListener('message', onMessage);
+      currentSocket.removeEventListener('error', onError);
+      currentSocket.removeEventListener('close', onClose);
+    };
 
     return promise;
   };

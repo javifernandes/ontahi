@@ -260,6 +260,53 @@ describe('Runtime Protocol server session', () => {
     ]);
   });
 
+  it('bounds completed request identity retention without evicting active requests', async () => {
+    const sent: RuntimeProtocolSessionServerFrame[] = [];
+    let resolveActive!: (result: RuntimeProtocolDispatchResult) => void;
+    const dispatcher: RuntimeProtocolDispatcher<undefined> = input => {
+      const request = input as RuntimeProtocolRequestEnvelope;
+      if (request.id !== 'active-request') return nullDispatcher(input, undefined);
+      return new Promise(resolve => {
+        resolveActive = resolve;
+      });
+    };
+    const session = createRuntimeProtocolServerSession({
+      dispatcher,
+      context: undefined,
+      send: frame => {
+        sent.push(frame);
+      },
+    });
+    const completedWindow = 1_024;
+
+    await session.receive(requestFrame('active-request'));
+    await Promise.all(
+      Array.from({ length: completedWindow + 1 }, (_, index) =>
+        session.receive(requestFrame(`request-${index}`)),
+      ),
+    );
+    await vi.waitFor(() => expect(sent).toHaveLength(completedWindow + 2));
+
+    await session.receive(requestFrame('active-request'));
+    expect(sent.at(-1)).toMatchObject({
+      kind: 'session-error',
+      id: 'active-request',
+      error: { code: 'duplicate_id' },
+    });
+
+    await session.receive(requestFrame('request-0'));
+    await vi.waitFor(() => expect(sent).toHaveLength(completedWindow + 4));
+
+    expect(sent.at(-1)).toMatchObject({ kind: 'response', response: { id: 'request-0' } });
+    resolveActive(
+      createRuntimeProtocolResponse(
+        requestFrame('active-request').request,
+        null,
+      ) as RuntimeProtocolDispatchResult,
+    );
+    await vi.waitFor(() => expect(sent).toHaveLength(completedWindow + 5));
+  });
+
   it('pushes sequenced snapshots, ends at terminal state, and rejects duplicate identities', async () => {
     const sent: RuntimeProtocolSessionServerFrame[] = [];
     const session = createRuntimeProtocolServerSession({
@@ -318,6 +365,87 @@ describe('Runtime Protocol server session', () => {
       sequence: 2,
       body: { snapshot: { status: 'completed', result: { completed: 2 } } },
     });
+  });
+
+  it('finalizes an observation iterator exactly once after a terminal snapshot', async () => {
+    const iteratorReturn = vi.fn(() => Promise.resolve({ done: true as const, value: undefined }));
+    let emitted = false;
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: () => undefined,
+      observeDurableOperation: () => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () => {
+            if (emitted) return Promise.resolve({ done: true, value: undefined });
+            emitted = true;
+            return Promise.resolve({
+              done: false,
+              value: {
+                taskId: 'Todo.completeAll',
+                runId: 'run-1',
+                status: 'completed' as const,
+                updatedAt: '2026-09-04T00:00:01.000Z',
+                completedAt: '2026-09-04T00:00:01.000Z',
+                result: { completed: 2 },
+              },
+            });
+          },
+          return: iteratorReturn,
+        }),
+      }),
+    });
+
+    await session.receive(observeFrame());
+
+    await vi.waitFor(() => expect(iteratorReturn).toHaveBeenCalledTimes(1));
+    session.close();
+    expect(iteratorReturn).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an asynchronous ready-frame send failure', async () => {
+    const failure = new Error('ready send failed');
+    const reportError = vi.fn();
+
+    createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: () => Promise.reject(failure),
+      reportError,
+    });
+
+    await vi.waitFor(() => expect(reportError).toHaveBeenCalledWith(failure));
+  });
+
+  it('reports an observation iterator finalization failure without leaking it', async () => {
+    const failure = new Error('iterator cleanup failed');
+    const reportError = vi.fn();
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: nullDispatcher,
+      context: undefined,
+      send: () => undefined,
+      reportError,
+      observeDurableOperation: () => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () =>
+            Promise.resolve({
+              done: false as const,
+              value: {
+                taskId: 'Todo.completeAll',
+                runId: 'run-1',
+                status: 'completed' as const,
+                updatedAt: '2026-09-04T00:00:01.000Z',
+                completedAt: '2026-09-04T00:00:01.000Z',
+              },
+            }),
+          return: () => Promise.reject(failure),
+        }),
+      }),
+    });
+
+    await session.receive(observeFrame());
+
+    await vi.waitFor(() => expect(reportError).toHaveBeenCalledWith(failure));
   });
 
   it('aborts and releases an active observation when the client unsubscribes', async () => {

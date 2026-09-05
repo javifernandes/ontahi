@@ -378,9 +378,11 @@ export type RuntimeProtocolServerSession = {
 type ActiveObservation = {
   readonly controller: AbortController;
   iterator?: AsyncIterator<TaskSnapshot>;
+  finalization?: Promise<void>;
 };
 
 const terminalTaskStatuses = new Set(['completed', 'failed', 'cancelled']);
+const MAX_COMPLETED_REQUEST_IDS = 1_024;
 
 export const createRuntimeProtocolServerSession = <TContext>({
   dispatcher,
@@ -390,13 +392,35 @@ export const createRuntimeProtocolServerSession = <TContext>({
   reportError,
 }: CreateRuntimeProtocolServerSessionOptions<TContext>): RuntimeProtocolServerSession => {
   let closed = false;
-  const seenRequestIds = new Set<string>();
+  const activeRequestIds = new Set<string>();
+  const completedRequestIds = new Set<string>();
   const observations = new Map<string, ActiveObservation>();
   const send = async (frame: RuntimeProtocolSessionServerFrame) => {
     if (!closed) await sendFrame(frame);
   };
   const sendError = (code: RuntimeProtocolSessionErrorCode, message: string, id?: string) =>
     send(runtimeProtocolSessionError(code, message, id));
+
+  const rememberCompletedRequestId = (id: string) => {
+    completedRequestIds.add(id);
+    if (completedRequestIds.size <= MAX_COMPLETED_REQUEST_IDS) return;
+    const oldestId = completedRequestIds.values().next().value;
+    if (oldestId !== undefined) completedRequestIds.delete(oldestId);
+  };
+
+  const finalizeObservation = (active: ActiveObservation) => {
+    if (active.finalization) return active.finalization;
+    active.controller.abort();
+    active.finalization = (async () => {
+      try {
+        await active.iterator?.return?.();
+      } catch (error) {
+        reportError?.(error);
+        // Observation cleanup must not escape the owning session lifecycle.
+      }
+    })();
+    return active.finalization;
+  };
 
   const runRequest = async (frame: RuntimeProtocolSessionRequestFrame) => {
     const { request } = frame;
@@ -415,6 +439,9 @@ export const createRuntimeProtocolServerSession = <TContext>({
         'Runtime Protocol session request dispatch failed.',
         request.id,
       );
+    } finally {
+      activeRequestIds.delete(request.id);
+      rememberCompletedRequestId(request.id);
     }
   };
 
@@ -472,7 +499,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       }
     } finally {
       if (observations.get(frame.id) === active) observations.delete(frame.id);
-      active.controller.abort();
+      await finalizeObservation(active);
     }
   };
 
@@ -486,7 +513,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
 
     const frame = parsed.frame;
     if (frame.kind === 'request') {
-      if (seenRequestIds.has(frame.request.id)) {
+      if (activeRequestIds.has(frame.request.id) || completedRequestIds.has(frame.request.id)) {
         await sendError(
           'duplicate_id',
           `Runtime Protocol request id ${frame.request.id} was already used in this session.`,
@@ -494,7 +521,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
         );
         return;
       }
-      seenRequestIds.add(frame.request.id);
+      activeRequestIds.add(frame.request.id);
       void runRequest(frame);
       return;
     }
@@ -503,8 +530,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       const active = observations.get(frame.id);
       if (!active) return;
       observations.delete(frame.id);
-      active.controller.abort();
-      await active.iterator?.return?.();
+      await finalizeObservation(active);
       return;
     }
 
@@ -538,7 +564,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       'request-response',
       ...(observeDurableOperation ? (['durable-operation-push'] as const) : []),
     ],
-  });
+  }).catch(error => reportError?.(error));
 
   return {
     receive,
@@ -546,8 +572,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       if (closed) return;
       closed = true;
       for (const active of observations.values()) {
-        active.controller.abort();
-        void active.iterator?.return?.();
+        void finalizeObservation(active);
       }
       observations.clear();
     },

@@ -101,15 +101,14 @@ import { createPollingDurableOperationObserver } from '@ontahi/core/runtime/prot
 import { createExpressRuntimeProtocolWebSocketServer } from '@ontahi/runtime-express/runtime-protocol';
 
 const httpServer = createServer(server);
+const publicOrigin = 'https://todo.example';
 
 createExpressRuntimeProtocolWebSocketServer({
   server: httpServer,
   path: '/runtime/ontahi/runtime',
+  ownsUpgradeBoundary: true,
   dispatcher: runtimeDispatcher,
-  authorizeUpgrade: request => {
-    const origin = request.headers.origin;
-    return Boolean(origin && request.headers.host && new URL(origin).host === request.headers.host);
-  },
+  authorizeUpgrade: request => request.headers.origin === publicOrigin,
   context: async request => ({ principal: await authenticateUpgrade(request) }),
   observeDurableOperation: createPollingDurableOperationObserver({
     inspect: run => TodoApplication.getTaskSnapshot(run),
@@ -133,6 +132,10 @@ host-specific trust rules; when supplied, `false` or an exception fails closed w
 over TLS (`wss:`), use a production session store, and close or revalidate long-lived sessions when
 logout, revocation, or permission changes must take effect immediately. The context is a snapshot
 for one socket, not a substitute for application authorization.
+
+Set `ownsUpgradeBoundary: true` only when this adapter is the final upgrade router for the HTTP
+server. In that mode it closes malformed upgrades with `400` and unmatched paths with `404`, so no
+socket is left hanging. Leave it `false` when another `upgrade` listener may own a different path.
 
 There is no global route discovery. A mount root is host and deployment configuration, so each
 client runtime receives it explicitly. This also allows more than one Ontahi application to coexist
