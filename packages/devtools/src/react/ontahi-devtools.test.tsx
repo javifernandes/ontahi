@@ -71,7 +71,10 @@ describe('OntahiDevtools', () => {
       await transport.request(runtimeRequest);
       render(<OntahiDevtools diagnostics={diagnostics} />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Open Ontahí Devtools' }));
+      const launcher = screen.getByRole('button', { name: 'Open Ontahí Devtools' });
+      expect(launcher.querySelector('svg')).toBeTruthy();
+      expect(launcher.textContent).toBe('');
+      fireEvent.click(launcher);
       expect(screen.getByRole('complementary', { name: 'Ontahí Devtools' })).toBeTruthy();
       expect(
         screen.getAllByText('TodoItem.all · orderBy title asc · as TodoItemListItem'),
@@ -110,6 +113,30 @@ describe('OntahiDevtools', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Close Devtools' }));
       expect(screen.getByRole('button', { name: 'Open Ontahí Devtools' })).toBeTruthy();
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'hosts application-owned controls in a dedicated Settings view',
+    () => {
+      const diagnostics = createOntahiDiagnostics();
+      render(
+        <OntahiDevtools
+          diagnostics={diagnostics}
+          initiallyOpen
+          settings={<button type='button'>Route over HTTP</button>}
+        />,
+      );
+
+      expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      expect(screen.getByRole('region', { name: 'Devtools settings' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Route over HTTP' })).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Runtime traffic' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: /Activity/ }));
+      expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
     },
     uiTestTimeoutMs,
   );

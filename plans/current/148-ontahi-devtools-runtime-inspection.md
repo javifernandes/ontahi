@@ -297,8 +297,8 @@ but it must not become an arbitrary credentialed endpoint editor.
        capabilities, polling/push, close, and failure state.
 6. [ ] Project the existing Graph Client Cache snapshot and event stream in a Cache view without
        taking ownership of TanStack Query state.
-7. [ ] Generalize Todo's minimum transport router/controller boundary and add read-only plus
-       explicitly mutable Settings projection.
+7. [x] Project Todo's existing host-owned transport router/controller as an explicitly mutable
+       Settings view while keeping routing ownership outside the panel.
 8. [ ] Mount Devtools in Todo, exercise all three routing presets, and verify that unmount/close
        releases listeners and observations.
 9. [ ] Document the component and update the Developer Experience, Devtools, Runtime Protocol, and
@@ -380,6 +380,8 @@ but it must not become an arbitrary credentialed endpoint editor.
    only bounded opt-in in-memory capture belongs to this Plan.
 8. The first package must be independently consumable rather than a Todo-local panel or an Explorer
    mode.
+9. The React panel accepts host-owned Settings content rather than prematurely standardizing one
+   routing-controller UI contract from a single consumer.
 
 ## Open Questions
 

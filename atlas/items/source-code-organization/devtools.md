@@ -30,14 +30,13 @@ meaning even when they share a connection or visual timeline.
 ## Intended Surfaces
 
 1. **Activity:** correlated Runtime Protocol exchanges with family, intent, transport, duration,
-   status, concise semantic interpretation, and expandable portable envelopes.
-2. **Durable:** Task/run identity, ordered snapshots, progress, terminal state, push versus polling,
-   observation cleanup, and disconnect behavior.
-3. **Cache:** normalized Entity records, aliases, cached outputs, writes, and invalidations from the
+   status, concise semantic interpretation, expandable portable envelopes, and inline Operation
+   progress timelines with Task/run identity and ordered snapshots.
+2. **Cache:** normalized Entity records, aliases, cached outputs, writes, and invalidations from the
    Ontahí Graph Client Cache. It complements rather than reproduces generic React Query tooling.
-4. **Transport:** effective routing, connection lifecycle, handshake, negotiated capabilities,
+3. **Transport:** effective routing, connection lifecycle, handshake, negotiated capabilities,
    endpoint projection, protocol/session diagnostics, and HTTP or WebSocket evidence.
-5. **Settings:** read-only effective configuration plus optional development overrides supplied by
+4. **Settings:** read-only effective configuration plus optional development overrides supplied by
    a host-owned transport-routing controller.
 
 ## Component Boundary
@@ -51,8 +50,9 @@ cache state and events.
 The headless diagnostic store and transport decorator live in `@ontahi/devtools`. The floating React
 surface is exported separately from `@ontahi/devtools/react`; it is one projection of that model,
 not the source of runtime truth. This keeps visual tooling and dependencies outside the non-visual
-`@ontahi/react` client. The first shipped slice covers correlated Activity and grouped Durable
-timelines; Cache, connection-state evidence, and host-controlled Settings remain Plan 148 work.
+`@ontahi/react` client. The shipped surface covers correlated Activity with inline Operation
+progress and an optional host-owned Settings projection; Cache and connection-state evidence remain
+Plan 148 work.
 
 Activity leads with reconstructed application intent, such as an Entity selection and named View,
 while protocol family and transport remain secondary evidence. Its bottom-docked master-detail

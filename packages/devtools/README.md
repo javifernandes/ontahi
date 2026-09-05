@@ -20,8 +20,15 @@ const transport = instrumentRuntimeTransport({
   transport: runtimeTransport,
 });
 
-<OntahiDevtools diagnostics={diagnostics} />;
+<OntahiDevtools
+  diagnostics={diagnostics}
+  settings={<RuntimeTransportControls controller={hostOwnedRoutingController} />}
+/>;
 ```
+
+The optional `settings` slot keeps routing policy and controls host-owned while presenting them in
+a dedicated Devtools view. Changing a setting must follow the host transport contract; Devtools
+does not replay requests or move an active observation between transports.
 
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
@@ -32,5 +39,5 @@ createOntahiDiagnostics({
 });
 ```
 
-This first release proves the behavioral boundary in Todo. Cache inspection, transport connection
-state, and mutable routing settings are later Plan 148 slices.
+This first release proves the behavioral boundary in Todo. Cache inspection and transport
+connection state are later Plan 148 slices.
