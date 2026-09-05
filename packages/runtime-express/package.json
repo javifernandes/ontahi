@@ -73,11 +73,11 @@
     "@ontahi/explorer-react": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.0.18",
-    "effect": "3.21.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "effect": "3.22.1",
     "express": "^4.22.2",
     "typescript": "^5.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@ontahi/explorer-react": "workspace:*",
