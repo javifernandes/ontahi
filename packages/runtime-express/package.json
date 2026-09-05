@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/runtime-express",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "Express runtime and transport adapters for Ontahi applications",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/runtime-express",
   "license": "Apache-2.0",
