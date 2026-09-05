@@ -86,6 +86,7 @@ export const TodoBoard = ({
   renamingListId,
   recoloringListId,
   deletingListId,
+  completingListId,
   completingTodoId,
   renamingTodoId,
   deletingTodoId,
@@ -96,6 +97,8 @@ export const TodoBoard = ({
   renameList,
   recolorList,
   deleteList,
+  completeAllTodos,
+  completeAll,
   createTodo,
   setTodoCompleted,
   renameTodo,
@@ -373,6 +376,16 @@ export const TodoBoard = ({
                 isRenaming={renamingListId === list.id}
                 isRecoloring={recoloringListId === list.id}
                 isDeleting={deletingListId === list.id}
+                isCompletingAll={completingListId === list.id && completeAll.isExecuting}
+                completeAllStatus={
+                  completingListId === list.id
+                    ? {
+                        isCompleted: completeAll.isCompleted,
+                        progress: completeAll.progress,
+                        finalValue: completeAll.finalValue,
+                      }
+                    : undefined
+                }
                 isDragging={draggingListId === list.id}
                 completingTodoId={completingTodoId}
                 renamingTodoId={renamingTodoId}
@@ -396,6 +409,8 @@ export const TodoBoard = ({
                 renameList={renameList}
                 recolorList={recolorList}
                 deleteList={deleteList}
+                completeAllTodos={completeAllTodos}
+                completeAllDisabled={completeAll.isExecuting}
                 createTodo={createTodo}
                 setTodoCompleted={setTodoCompleted}
                 renameTodo={renameTodo}

@@ -3,8 +3,8 @@ id: ontahi.source-code-organization.devtools
 kind: artifact
 title: Ontahí Devtools
 parent: ontahi.source-code-organization
-status: idea
-horizon: next
+status: active
+horizon: now
 supports:
   - ontahi.developer-experience
   - ontahi.runtime-protocol
@@ -17,9 +17,9 @@ relatedPlans:
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
 ---
 
-Ontahí Devtools is the proposed browser-resident implementation component for inspecting an
-Ontahí web client. The familiar name follows Redux DevTools and TanStack Query Devtools: it should
-be immediately recognizable as development tooling while remaining specific to Ontahí semantics.
+Ontahí Devtools is the browser-resident implementation component for inspecting an Ontahí web
+client. The familiar name follows Redux DevTools and TanStack Query Devtools: it is immediately
+recognizable as development tooling while remaining specific to Ontahí semantics.
 
 The component presents one semantic activity stream across HTTP, WebSocket, and future Runtime
 Transports. It interprets strict Runtime Protocol envelopes instead of asking a developer to infer
@@ -48,10 +48,17 @@ lifecycle, while individual transports contribute optional HTTP, WebSocket, hand
 connection evidence. The existing Graph Client Cache inspection and subscription boundary supplies
 cache state and events.
 
-The floating React surface is one projection of that diagnostic model, not the source of runtime
-truth. The exact package boundary remains a future implementation-plan decision; a dedicated
-development-only React package is preferable to adding visual tooling and dependencies to the
-non-visual `@ontahi/react` client.
+The headless diagnostic store and transport decorator live in `@ontahi/devtools`. The floating React
+surface is exported separately from `@ontahi/devtools/react`; it is one projection of that model,
+not the source of runtime truth. This keeps visual tooling and dependencies outside the non-visual
+`@ontahi/react` client. The first shipped slice covers correlated Activity and grouped Durable
+timelines; Cache, connection-state evidence, and host-controlled Settings remain Plan 148 work.
+
+Activity leads with reconstructed application intent, such as an Entity selection and named View,
+while protocol family and transport remain secondary evidence. Its bottom-docked master-detail
+layout keeps traffic at the left and compares Request with Response at the right. Each side uses
+progressive disclosure from a semantic projection to body JSON and finally the complete envelope;
+the raw transport package is never the default explanation of application behavior.
 
 Transport routing is likewise a reusable runtime component rather than state owned by the Devtools
 panel. Devtools may discover and operate an explicitly provided controller. Routing changes affect

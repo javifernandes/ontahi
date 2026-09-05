@@ -1,4 +1,11 @@
-import { createRuntimeGraphClient, OntahiGraphProvider } from '@ontahi/react/graph';
+import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
+import { OntahiDevtools } from '@ontahi/devtools/react';
+import {
+  createFetchRuntimeTransport,
+  createRuntimeGraphClient,
+  createWebSocketRuntimeTransport,
+  OntahiGraphProvider,
+} from '@ontahi/react/graph';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -18,8 +25,46 @@ import {
 import './styles.css';
 
 const queryClient = new QueryClient();
+const diagnosticsHostnames = new Set(['localhost', '127.0.0.1', '[::1]']);
+const sensitiveDiagnosticKey = /authorization|cookie|credential|password|secret|token/i;
+const redactTodoDiagnosticValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(redactTodoDiagnosticValue);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      sensitiveDiagnosticKey.test(key) ? '[redacted]' : redactTodoDiagnosticValue(item),
+    ]),
+  );
+};
+const diagnostics =
+  import.meta.env.DEV || diagnosticsHostnames.has(globalThis.location.hostname)
+    ? createOntahiDiagnostics({
+        capacity: 500,
+        capturePayloads: true,
+        redact: redactTodoDiagnosticValue,
+      })
+    : undefined;
+const baseHttpTransport = createFetchRuntimeTransport<never>();
+const baseWebSocketTransport = createWebSocketRuntimeTransport();
 const transportRouter = createTodoRuntimeTransportRouter({
   initialRouting: loadTodoTransportRouting(globalThis.localStorage),
+  http: diagnostics
+    ? instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: baseHttpTransport,
+      })
+    : baseHttpTransport,
+  websocket: diagnostics
+    ? instrumentRuntimeTransport({
+        diagnostics,
+        id: 'websocket',
+        kind: 'websocket',
+        transport: baseWebSocketTransport,
+      })
+    : baseWebSocketTransport,
 });
 const graphClient = createRuntimeGraphClient({ runtimeTransport: transportRouter.transport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
@@ -66,6 +111,7 @@ const TodoClient = () => {
           setTransportRouting={setTransportRouting}
         />
       )}
+      {diagnostics ? <OntahiDevtools diagnostics={diagnostics} /> : null}
     </OntahiGraphProvider>
   );
 };

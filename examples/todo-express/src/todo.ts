@@ -1,4 +1,10 @@
-import { field, graphSchema, mapRelation, type RelationConstraint } from '@ontahi/core/data-graph';
+import {
+  field,
+  graphSchema,
+  mapRelation,
+  type InferGraphSchemaValue,
+  type RelationConstraint,
+} from '@ontahi/core/data-graph';
 import { entity, relation, relationConstraint } from '@ontahi/core/entity';
 import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
@@ -39,6 +45,14 @@ const todoListFields = {
   color: field.named('Color', field.nonEmptyString({ trim: true })),
 };
 
+const TodoItemCommandRef = entity.ref('TodoItem', {
+  fields: {
+    id: field.id(),
+    list: field.ref(entity.ref('TodoList')),
+    completed: field.boolean(),
+  },
+});
+
 export const TodoList = entity({
   name: 'TodoList',
   fields: todoListFields,
@@ -47,24 +61,64 @@ export const TodoList = entity({
   uses: {
     capabilities: {} as TodoCapabilities,
   },
-  operations: ({ self, commands, operation, app }) => ({
-    createList: operation({
-      input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
-      output: self,
-      bridge: { invalidate: [['TodoList']] },
-      run: input =>
-        Effect.gen(function* () {
-          const created = yield* commands.insertReturning(input, ['id', 'name', 'color']).run();
+  operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
+    const todoCommands = commandsFor(TodoItemCommandRef);
+    const CompleteAllInput = graphSchema.object({
+      list: graphSchema.ref(self),
+    });
+    const runCompleteAll = createRunCompleteAll<InferGraphSchemaValue<typeof CompleteAllInput>>(
+      ({ list }) =>
+        todoCommands
+          .where(todo => todo.list.eq(list))
+          .where(todo => todo.completed.eq(false))
+          .updateReturning({ completed: true }, ['id'])
+          .run()
+          .pipe(
+            Effect.orDie,
+            Effect.map(completed => completed.length),
+          ),
+    );
 
-          yield* app.runtime.notifications.todoListCreated({
-            listId: created.id,
-            name: created.name,
-          });
+    return {
+      createList: operation({
+        input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
+        output: self,
+        bridge: { invalidate: [['TodoList']] },
+        run: input =>
+          Effect.gen(function* () {
+            const created = yield* commands.insertReturning(input, ['id', 'name', 'color']).run();
 
-          return created;
+            yield* app.runtime.notifications.todoListCreated({
+              listId: created.id,
+              name: created.name,
+            });
+
+            return created;
+          }),
+      }),
+      completeAll: operation({
+        input: graphSchema.object({
+          list: graphSchema.ref(self),
         }),
-    }),
-  }),
+        graphOps: { receiver: 'list' },
+        output: CompleteAllOutput,
+        bridge: { invalidate: [['TodoItem']] },
+        ingress: [
+          ingress.http({
+            method: 'POST',
+            route: '/operations/TodoList.completeAll',
+            provider: 'express',
+            channel: 'todo.complete-all',
+          }),
+        ],
+        durable: {
+          runtime: 'in-process',
+          progress: CompleteAllProgress,
+        },
+        run: runCompleteAll,
+      }),
+    };
+  },
 });
 
 export const Tag = entity({
@@ -102,7 +156,7 @@ export const TodoItem = entity({
     entities: () => ({ TodoList }),
   },
   domainOperationDefaults: entityDefaults,
-  operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
+  operations: ({ self, commands, commandsFor, operation, app }) => {
     const todoEntities = app.graph.defineEntity(self);
     const tagEntities = app.graph.defineEntity(Tag);
     const tagCommands = commandsFor(Tag);
@@ -121,17 +175,6 @@ export const TodoItem = entity({
           yield* todoEntities.refById(todoId).tags.remove(tagEntities.refById(tag.id)).run();
         }
       });
-    const runCompleteAll = createRunCompleteAll(() =>
-      commands
-        .where(todo => todo.completed.eq(false))
-        .updateReturning({ completed: true }, ['id'])
-        .run()
-        .pipe(
-          Effect.orDie,
-          Effect.map(completed => completed.length),
-        ),
-    );
-
     return {
       createItem: operation({
         input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
@@ -227,23 +270,6 @@ export const TodoItem = entity({
       deleteAll: operation({
         bridge: { invalidate: [['TodoItem']] },
         run: () => commands.all().delete(),
-      }),
-      completeAll: operation({
-        output: CompleteAllOutput,
-        bridge: { invalidate: [['TodoItem']] },
-        ingress: [
-          ingress.http({
-            method: 'POST',
-            route: '/operations/TodoItem.completeAll',
-            provider: 'express',
-            channel: 'todo.complete-all',
-          }),
-        ],
-        durable: {
-          runtime: 'in-process',
-          progress: CompleteAllProgress,
-        },
-        run: runCompleteAll,
       }),
     };
   },

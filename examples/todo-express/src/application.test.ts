@@ -640,6 +640,7 @@ describe('Ontahi todo portability example', () => {
             inputRefs: [expect.objectContaining({ path: 'list', receiver: true })],
           }),
           expect.objectContaining({ id: 'TodoItem.setCompleted', receiverPath: 'todos' }),
+          expect.objectContaining({ id: 'TodoList.completeAll', receiverPath: 'list' }),
           expect.objectContaining({ id: 'TodoItem.deleteAll' }),
         ]),
       },
@@ -967,10 +968,15 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoRelationships()).toEqual([]);
   });
 
-  it('starts and observes TodoItem.completeAll progress through one WebSocket without browser polling', async () => {
+  it('starts and observes TodoList.completeAll progress through one WebSocket without browser polling', async () => {
+    getTodoDataset().TodoList = [
+      { id: 'list-1', name: 'Inbox', color: '#f5ddd5' },
+      { id: 'list-2', name: 'Later', color: '#dbe8f4' },
+    ];
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
+      { id: 'todo-3', list: 'list-2', title: 'Other list', completed: false },
     ];
 
     let socketCount = 0;
@@ -989,7 +995,7 @@ describe('Ontahi todo portability example', () => {
     });
     await expect(
       client.graphExecutor.run(query(ClientTodoItemSchema).as(TodoSocketRow), undefined),
-    ).resolves.toHaveLength(2);
+    ).resolves.toHaveLength(3);
     await expect(
       client.graphExecutor.runEntityMutationCommand!(
         mutateEntity(ClientTodoListSchema).update(
@@ -1006,13 +1012,13 @@ describe('Ontahi todo portability example', () => {
       ],
     });
     const start = await client.reflectedOperationInvoker!.invokeOperation({
-      operationId: 'TodoItem.completeAll',
-      input: {},
+      operationId: 'TodoList.completeAll',
+      input: { list: createEntityRef(ClientTodoListSchema, { id: 'list-1' }) },
     });
     expect(start).toMatchObject({
       ok: true,
       kind: 'success',
-      value: { taskId: 'TodoItem.completeAll' },
+      value: { taskId: 'TodoList.completeAll' },
     });
     if (!start.ok) throw new Error('Expected the durable Operation to start.');
 
@@ -1035,6 +1041,7 @@ describe('Ontahi todo portability example', () => {
       progress: { phase: 'updating' },
       result: { completed: 2 },
     });
+    expect(getTodoDataset().TodoItem?.find(todo => todo.id === 'todo-3')?.completed).toBe(false);
     expect(socketCount).toBe(1);
     runtimeTransport.close();
   });

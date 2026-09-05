@@ -54,6 +54,20 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       input: graphSchema.pick(TodoListSchema, ['id', 'name', 'color']).named('CreateTodoListInput'),
       output: TodoListSchema,
     }),
+    completeAll: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoItem']],
+      },
+      input: graphSchema.object({
+        list: graphSchema.ref(TodoListSchema),
+      }),
+      output: CompleteAllOutputValue,
+      durable: {
+        runtime: 'in-process',
+      },
+    }),
   },
 });
 
@@ -121,18 +135,6 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
         invalidate: [['TodoItem']],
       },
       input: graphSchema.void(),
-    }),
-    completeAll: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoItem']],
-      },
-      input: graphSchema.void(),
-      output: CompleteAllOutputValue,
-      durable: {
-        runtime: 'in-process',
-      },
     }),
   },
 });

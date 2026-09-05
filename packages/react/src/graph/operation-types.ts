@@ -56,6 +56,13 @@ export type DurableOperationLike<TInput = unknown, TResult = unknown> = ClientOp
   durable: DurableOperationMetadata<TInput, TResult>;
 };
 
+export type DurableSchemaOperationLike<
+  TInput = unknown,
+  TResult = unknown,
+> = ClientSchemaOperationLike<TInput, TResult> & {
+  durable: DurableOperationMetadata<any, TResult>;
+};
+
 export type DurableOperationHookResult<TInput, TResult> = OperationHookResult<
   TInput,
   TaskRunRef

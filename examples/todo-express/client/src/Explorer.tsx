@@ -3,7 +3,12 @@ import {
   ExplorerProvider,
   isExplorerEntityBrowserTab,
 } from '@ontahi/explorer-react/components';
-import type { ExplorerEntityDetail, ExplorerSnapshot } from '@ontahi/explorer-react/contracts';
+import type {
+  ExplorerEntityDetail,
+  ExplorerSnapshot,
+  ExplorerTaskRunSource,
+  ExplorerTaskRunSourceLoader,
+} from '@ontahi/explorer-react/contracts';
 import { useEffect, useState } from 'react';
 
 type TodoExplorerSnapshot = {
@@ -15,6 +20,19 @@ const selectedPathSegment = (prefix: string) => {
   if (!globalThis.location.pathname.startsWith(prefix)) return undefined;
   const value = globalThis.location.pathname.slice(prefix.length).split('/')[0];
   return value ? decodeURIComponent(value) : undefined;
+};
+
+const loadTaskRunSource: ExplorerTaskRunSourceLoader = async ({ taskId, runId }) => {
+  const response = await fetch(
+    `/operations/tasks/${encodeURIComponent(taskId)}/${encodeURIComponent(runId)}`,
+  );
+  if (!response.ok) throw new Error('Could not load the task run.');
+  const snapshot = (await response.json()) as Omit<ExplorerTaskRunSource, 'input' | 'trigger'>;
+  return {
+    ...snapshot,
+    input: {},
+    trigger: { cause: 'user_request' },
+  };
 };
 
 export const Explorer = () => {
@@ -47,7 +65,7 @@ export const Explorer = () => {
 
   return (
     <div className='explorer-host' data-explorer-theme-host>
-      <ExplorerProvider basePath='/explorer'>
+      <ExplorerProvider basePath='/explorer' loadTaskRunSource={loadTaskRunSource}>
         <a className='explorer-exit' href='/'>
           ← Todo
         </a>

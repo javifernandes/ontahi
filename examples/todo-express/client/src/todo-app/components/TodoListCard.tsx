@@ -1,4 +1,14 @@
-import { Check, ChevronDown, LoaderCircle, Palette, Pencil, Plus, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  CheckCheck,
+  ChevronDown,
+  LoaderCircle,
+  Palette,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CSSProperties,
@@ -23,6 +33,9 @@ type TodoListCardProps = {
   isRenaming: boolean;
   isRecoloring: boolean;
   isDeleting: boolean;
+  isCompletingAll: boolean;
+  completeAllDisabled: boolean;
+  completeAllStatus?: Pick<Dashboard['completeAll'], 'isCompleted' | 'progress' | 'finalValue'>;
   isDragging: boolean;
   completingTodoId?: string;
   renamingTodoId?: string;
@@ -38,6 +51,7 @@ type TodoListCardProps = {
   renameList: Dashboard['renameList'];
   recolorList: Dashboard['recolorList'];
   deleteList: Dashboard['deleteList'];
+  completeAllTodos: Dashboard['completeAllTodos'];
   createTodo: Dashboard['createTodo'];
   setTodoCompleted: Dashboard['setTodoCompleted'];
   renameTodo: Dashboard['renameTodo'];
@@ -81,6 +95,9 @@ export const TodoListCard = ({
   isRenaming,
   isRecoloring,
   isDeleting,
+  isCompletingAll,
+  completeAllDisabled,
+  completeAllStatus,
   isDragging,
   completingTodoId,
   renamingTodoId,
@@ -96,6 +113,7 @@ export const TodoListCard = ({
   renameList,
   recolorList,
   deleteList,
+  completeAllTodos,
   createTodo,
   setTodoCompleted,
   renameTodo,
@@ -407,98 +425,124 @@ export const TodoListCard = ({
             </p>
           </div>
 
-          <div className='list-card-controls'>
-            <div className='color-control' ref={colorControl}>
-              <button
-                type='button'
-                className='icon-button color-list'
-                onClick={toggleColorPicker}
-                aria-label={`Change ${list.name} color`}
-                aria-expanded={isColorPickerOpen}
-              >
-                {isRecoloring ? (
-                  <LoaderCircle className='spin' aria-hidden='true' />
-                ) : (
-                  <Palette aria-hidden='true' />
-                )}
-              </button>
-              {isColorPickerOpen ? (
-                <div className='color-popover' aria-label={`Colors for ${list.name}`}>
-                  {listPastelColors.map(color => (
-                    <button
-                      key={color}
-                      type='button'
-                      className={`color-swatch${list.color === color ? ' selected' : ''}`}
-                      style={{ backgroundColor: color }}
-                      onClick={async () => {
-                        if (await recolorList(list.id, color)) closePopovers();
-                      }}
-                      aria-label={`Use ${color}`}
-                      aria-pressed={list.color === color}
-                    >
-                      {list.color === color ? <Check aria-hidden='true' /> : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-
+          <div className='list-header-actions'>
             <button
               type='button'
-              className='icon-button collapse-list'
-              onClick={() => {
-                closePopovers();
-                setIsCollapsed(current => !current);
-              }}
-              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${list.name}`}
-              aria-expanded={!isCollapsed}
+              className='complete-list-action'
+              onClick={() => void completeAllTodos(list.id)}
+              disabled={!canComplete || completeAllDisabled || completedCount === list.items.length}
+              title='Run TodoList.completeAll()'
             >
-              <ChevronDown aria-hidden='true' />
+              {isCompletingAll ? (
+                <LoaderCircle className='spin' aria-hidden='true' />
+              ) : (
+                <CheckCheck aria-hidden='true' />
+              )}
+              <span>{isCompletingAll ? 'Completing…' : 'Complete all'}</span>
             </button>
+            {completeAllStatus?.isCompleted && completeAllStatus.finalValue ? (
+              <span className='complete-list-result' aria-live='polite'>
+                {completeAllStatus.finalValue.completed} completed
+              </span>
+            ) : completeAllStatus?.progress?.phase === 'updating' ? (
+              <span className='complete-list-result' aria-live='polite'>
+                Updating…
+              </span>
+            ) : null}
 
-            {isConfirmingDelete ? (
-              <div className='delete-confirmation'>
-                <span>
-                  {list.items.length > 0
-                    ? `Delete ${list.items.length} ${list.items.length === 1 ? 'item' : 'items'}?`
-                    : 'Delete?'}
-                </span>
+            <div className='list-card-controls'>
+              <div className='color-control' ref={colorControl}>
                 <button
                   type='button'
-                  className='icon-button danger-icon'
-                  aria-label={`Confirm delete ${list.name}`}
-                  onClick={async () => {
-                    if (await deleteList(list.id)) setIsConfirmingDelete(false);
-                  }}
-                  disabled={isDeleting}
+                  className='icon-button color-list'
+                  onClick={toggleColorPicker}
+                  aria-label={`Change ${list.name} color`}
+                  aria-expanded={isColorPickerOpen}
                 >
-                  {isDeleting ? (
+                  {isRecoloring ? (
                     <LoaderCircle className='spin' aria-hidden='true' />
                   ) : (
-                    <Check aria-hidden='true' />
+                    <Palette aria-hidden='true' />
                   )}
                 </button>
-                <button
-                  type='button'
-                  className='icon-button'
-                  onClick={() => setIsConfirmingDelete(false)}
-                  aria-label='Cancel list deletion'
-                >
-                  <X aria-hidden='true' />
-                </button>
+                {isColorPickerOpen ? (
+                  <div className='color-popover' aria-label={`Colors for ${list.name}`}>
+                    {listPastelColors.map(color => (
+                      <button
+                        key={color}
+                        type='button'
+                        className={`color-swatch${list.color === color ? ' selected' : ''}`}
+                        style={{ backgroundColor: color }}
+                        onClick={async () => {
+                          if (await recolorList(list.id, color)) closePopovers();
+                        }}
+                        aria-label={`Use ${color}`}
+                        aria-pressed={list.color === color}
+                      >
+                        {list.color === color ? <Check aria-hidden='true' /> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : (
+
               <button
                 type='button'
-                className='icon-button delete-list'
-                onClick={() => setIsConfirmingDelete(true)}
-                disabled={isDeleting}
-                aria-label={`Delete ${list.name}`}
-                title='Delete list and its items'
+                className='icon-button collapse-list'
+                onClick={() => {
+                  closePopovers();
+                  setIsCollapsed(current => !current);
+                }}
+                aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${list.name}`}
+                aria-expanded={!isCollapsed}
               >
-                <Trash2 aria-hidden='true' />
+                <ChevronDown aria-hidden='true' />
               </button>
-            )}
+
+              {isConfirmingDelete ? (
+                <div className='delete-confirmation'>
+                  <span>
+                    {list.items.length > 0
+                      ? `Delete ${list.items.length} ${list.items.length === 1 ? 'item' : 'items'}?`
+                      : 'Delete?'}
+                  </span>
+                  <button
+                    type='button'
+                    className='icon-button danger-icon'
+                    aria-label={`Confirm delete ${list.name}`}
+                    onClick={async () => {
+                      if (await deleteList(list.id)) setIsConfirmingDelete(false);
+                    }}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <LoaderCircle className='spin' aria-hidden='true' />
+                    ) : (
+                      <Check aria-hidden='true' />
+                    )}
+                  </button>
+                  <button
+                    type='button'
+                    className='icon-button'
+                    onClick={() => setIsConfirmingDelete(false)}
+                    aria-label='Cancel list deletion'
+                  >
+                    <X aria-hidden='true' />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type='button'
+                  className='icon-button delete-list'
+                  onClick={() => setIsConfirmingDelete(true)}
+                  disabled={isDeleting}
+                  aria-label={`Delete ${list.name}`}
+                  title='Delete list and its items'
+                >
+                  <Trash2 aria-hidden='true' />
+                </button>
+              )}
+            </div>
           </div>
         </header>
 

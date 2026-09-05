@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@ontahi/core": "workspace:*",
+    "@ontahi/devtools": "workspace:*",
     "@ontahi/explorer-react": "workspace:*",
     "@ontahi/postgres": "workspace:*",
     "@ontahi/react": "workspace:*",

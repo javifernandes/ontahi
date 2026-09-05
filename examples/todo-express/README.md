@@ -228,10 +228,10 @@ const createTodo = useOperation(TodoItem.domain.createItem);
 const setVisibleCompleted = useOperation(
   TodoItem.domain.setCompleted({ todos: visibleTodos, completed: true }),
 );
-const completeAll = useDurableOperation(TodoItem.domain.completeAll);
+const completeAll = useDurableOperation(TodoList.domain.completeAll);
 
 setVisibleCompleted.execute();
-completeAll.execute();
+completeAll.execute({ list: TodoList.refById(selectedListId) });
 ```
 
 The generated client Entity owns the portable Query entry point. `useGraphQuery` infers both the

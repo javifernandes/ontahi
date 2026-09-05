@@ -73,6 +73,8 @@ const createProps = (
   isRenaming: false,
   isRecoloring: false,
   isDeleting: false,
+  isCompletingAll: false,
+  completeAllDisabled: false,
   isDragging: false,
   isColorPickerOpen: false,
   closePopovers: vi.fn(),
@@ -82,6 +84,7 @@ const createProps = (
   renameList: vi.fn().mockResolvedValue(true),
   recolorList: vi.fn().mockResolvedValue(true),
   deleteList: vi.fn().mockResolvedValue(true),
+  completeAllTodos: vi.fn().mockResolvedValue(true),
   createTodo: vi.fn().mockResolvedValue(true),
   setTodoCompleted: vi.fn().mockResolvedValue(true),
   renameTodo,
@@ -128,6 +131,21 @@ describe('TodoListCard item reordering', () => {
     Reflect.deleteProperty(HTMLElement.prototype, 'setPointerCapture');
     Reflect.deleteProperty(HTMLElement.prototype, 'hasPointerCapture');
     Reflect.deleteProperty(HTMLElement.prototype, 'releasePointerCapture');
+  });
+
+  it('exposes TodoList.completeAll as a visible per-list action', () => {
+    const completeAllTodos = vi.fn().mockResolvedValue(true);
+    act(() =>
+      root.render(<TodoListCard {...createProps(vi.fn(), undefined, { completeAllTodos })} />),
+    );
+
+    const action = container.querySelector<HTMLButtonElement>('.complete-list-action')!;
+    expect(action.textContent).toContain('Complete all');
+    expect(action.textContent).not.toContain('Durable');
+    expect(action.title).toBe('Run TodoList.completeAll()');
+
+    act(() => action.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(completeAllTodos).toHaveBeenCalledWith('list-1');
   });
 
   it('previews the destination slot and commits the move only when released', () => {
