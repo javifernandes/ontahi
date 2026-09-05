@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146e-runtime-transport-durable-observation
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
+  - ontahi://plans/148-ontahi-devtools-runtime-inspection
 ---
 
 Ontahí Devtools is the proposed browser-resident implementation component for inspecting an

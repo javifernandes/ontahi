@@ -13,6 +13,7 @@ relatedPlans:
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
+  - ontahi://plans/148-ontahi-devtools-runtime-inspection
 ---
 
 Ontahí Developer Experience is the experience of building, understanding, inspecting, and
