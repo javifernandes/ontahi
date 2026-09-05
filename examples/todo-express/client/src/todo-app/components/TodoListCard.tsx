@@ -431,7 +431,7 @@ export const TodoListCard = ({
               className='complete-list-action'
               onClick={() => void completeAllTodos(list.id)}
               disabled={!canComplete || completeAllDisabled || completedCount === list.items.length}
-              title='Run TodoList.completeAll() as a Durable Operation'
+              title='Run TodoList.completeAll()'
             >
               {isCompletingAll ? (
                 <LoaderCircle className='spin' aria-hidden='true' />
@@ -439,7 +439,6 @@ export const TodoListCard = ({
                 <CheckCheck aria-hidden='true' />
               )}
               <span>{isCompletingAll ? 'Completing…' : 'Complete all'}</span>
-              <small>Durable</small>
             </button>
             {completeAllStatus?.isCompleted && completeAllStatus.finalValue ? (
               <span className='complete-list-result' aria-live='polite'>

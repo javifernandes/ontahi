@@ -593,17 +593,6 @@ a {
   height: 14px;
 }
 
-.complete-list-action small {
-  padding: 2px 5px;
-  border-radius: 999px;
-  color: #fff;
-  background: #286449;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .complete-list-result {
   flex-basis: 100%;
   color: #5b6c62;

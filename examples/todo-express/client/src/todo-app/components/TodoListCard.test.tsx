@@ -133,7 +133,7 @@ describe('TodoListCard item reordering', () => {
     Reflect.deleteProperty(HTMLElement.prototype, 'releasePointerCapture');
   });
 
-  it('exposes TodoList.completeAll as a visible per-list Durable action', () => {
+  it('exposes TodoList.completeAll as a visible per-list action', () => {
     const completeAllTodos = vi.fn().mockResolvedValue(true);
     act(() =>
       root.render(<TodoListCard {...createProps(vi.fn(), undefined, { completeAllTodos })} />),
@@ -141,8 +141,8 @@ describe('TodoListCard item reordering', () => {
 
     const action = container.querySelector<HTMLButtonElement>('.complete-list-action')!;
     expect(action.textContent).toContain('Complete all');
-    expect(action.textContent).toContain('Durable');
-    expect(action.title).toBe('Run TodoList.completeAll() as a Durable Operation');
+    expect(action.textContent).not.toContain('Durable');
+    expect(action.title).toBe('Run TodoList.completeAll()');
 
     act(() => action.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(completeAllTodos).toHaveBeenCalledWith('list-1');

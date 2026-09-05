@@ -38,9 +38,20 @@ type DurableActivity = {
   readonly at: number;
 };
 
-type SelectedActivity =
-  | { readonly kind: 'exchange'; readonly id: string }
-  | { readonly kind: 'observation'; readonly id: string };
+type ActivityEntry =
+  | {
+      readonly kind: 'exchange';
+      readonly id: string;
+      readonly at: number;
+      readonly exchange: ExchangeActivity;
+      readonly observation?: DurableActivity;
+    }
+  | {
+      readonly kind: 'observation';
+      readonly id: string;
+      readonly at: number;
+      readonly observation: DurableActivity;
+    };
 
 const styles: Record<string, CSSProperties> = {
   launcher: {
@@ -114,19 +125,16 @@ const styles: Record<string, CSSProperties> = {
     font: 'inherit',
     fontWeight: 700,
   },
-  tabs: { display: 'flex', gap: 4 },
-  tab: {
+  activityHeading: {
+    display: 'flex',
     minHeight: 32,
+    alignItems: 'center',
     padding: '0 12px',
-    border: 0,
     borderRadius: 9,
-    color: '#80978b',
-    background: 'transparent',
-    cursor: 'pointer',
-    font: 'inherit',
+    color: '#dffbea',
+    background: '#193226',
     fontWeight: 750,
   },
-  activeTab: { color: '#dffbea', background: '#193226' },
   count: {
     display: 'inline-grid',
     minWidth: 18,
@@ -357,6 +365,64 @@ const styles: Record<string, CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  runBody: {
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'auto',
+    padding: 16,
+    background: '#09100d',
+    scrollbarGutter: 'stable',
+  },
+  runSummary: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: 8,
+    marginBottom: 14,
+  },
+  messageList: {
+    display: 'grid',
+    gap: 7,
+    margin: 0,
+    padding: 0,
+    listStyle: 'none',
+  },
+  message: {
+    overflow: 'hidden',
+    border: '1px solid #1f3128',
+    borderRadius: 10,
+    background: '#0d1712',
+  },
+  messageSummary: {
+    display: 'grid',
+    gridTemplateColumns: '24px 8px minmax(0, 1fr) auto',
+    gap: 9,
+    alignItems: 'center',
+    padding: '10px 11px',
+    cursor: 'pointer',
+    listStyle: 'none',
+  },
+  messageDirection: {
+    color: '#6f9581',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  messageMain: { display: 'grid', minWidth: 0, gap: 3 },
+  messageTitle: {
+    overflow: 'hidden',
+    color: '#d8e9e0',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 11,
+    fontWeight: 750,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  messageMeta: { color: '#6f897c', fontSize: 9 },
+  messagePayload: {
+    padding: 12,
+    borderTop: '1px solid #1f3128',
+    background: '#09110d',
+  },
   pre: {
     margin: 0,
     color: '#bcd4c7',
@@ -546,6 +612,79 @@ const buildDurableActivities = (
   return [...activities.values()].sort((left, right) => right.at - left.at);
 };
 
+const runKey = (run: { readonly taskId: string; readonly runId: string }) =>
+  `${run.taskId}:${run.runId}`;
+
+const exchangeTaskRun = (
+  activity: ExchangeActivity,
+): { readonly taskId: string; readonly runId: string } | undefined => {
+  const body = activity.settled?.response?.body;
+  if (!isRecord(body) || body.kind !== 'invocation-result' || !isRecord(body.result)) {
+    return undefined;
+  }
+  const value =
+    body.result.ok === true && isRecord(body.result.value) ? body.result.value : undefined;
+  return value && typeof value.taskId === 'string' && typeof value.runId === 'string'
+    ? { taskId: value.taskId, runId: value.runId }
+    : undefined;
+};
+
+const buildActivityEntries = (
+  exchanges: readonly ExchangeActivity[],
+  observations: readonly DurableActivity[],
+): ActivityEntry[] => {
+  const observationsByRun = new Map<string, DurableActivity[]>();
+  observations.forEach(observation => {
+    const event = observation.started ?? observation.snapshots[0] ?? observation.settled;
+    if (!event) return;
+    const key = runKey(event.run);
+    observationsByRun.set(key, [...(observationsByRun.get(key) ?? []), observation]);
+  });
+  const attached = new Set<string>();
+  const exchangeEntries = exchanges.map<ActivityEntry>(exchange => {
+    const run = exchangeTaskRun(exchange);
+    const observation = run ? observationsByRun.get(runKey(run))?.[0] : undefined;
+    if (observation) attached.add(observation.id);
+    return {
+      kind: 'exchange',
+      id: `exchange:${exchange.id}`,
+      at: Math.max(exchange.at, observation?.at ?? 0),
+      exchange,
+      ...(observation ? { observation } : {}),
+    };
+  });
+  const observationEntries = observations
+    .filter(observation => !attached.has(observation.id))
+    .map<ActivityEntry>(observation => ({
+      kind: 'observation',
+      id: `observation:${observation.id}`,
+      at: observation.at,
+      observation,
+    }));
+  return [...exchangeEntries, ...observationEntries].sort((left, right) => right.at - left.at);
+};
+
+const activityEntryEvent = (entry: ActivityEntry) =>
+  entry.kind === 'exchange'
+    ? (entry.exchange.settled ?? entry.exchange.started)
+    : (entry.observation.settled ??
+      entry.observation.snapshots[entry.observation.snapshots.length - 1] ??
+      entry.observation.started);
+
+const activityEntryOutcome = (entry: ActivityEntry): RuntimeDiagnosticOutcome | 'pending' =>
+  entry.observation?.settled?.outcome ??
+  (entry.kind === 'exchange' ? entry.exchange.settled?.outcome : undefined) ??
+  'pending';
+
+const activityEntryTitle = (entry: ActivityEntry) => {
+  if (entry.kind === 'exchange') return semanticSummary(entry.exchange);
+  const event =
+    entry.observation.settled ??
+    entry.observation.snapshots[entry.observation.snapshots.length - 1] ??
+    entry.observation.started;
+  return event ? `${event.run.taskId}()` : 'Runtime activity';
+};
+
 const activityButtonStyle = (selected: boolean): CSSProperties => ({
   ...styles.row,
   ...(selected ? styles.selectedRow : {}),
@@ -556,9 +695,9 @@ const ActivityList = ({
   selectedId,
   select,
 }: {
-  readonly activities: readonly ExchangeActivity[];
+  readonly activities: readonly ActivityEntry[];
   readonly selectedId?: string;
-  readonly select: (selection: SelectedActivity) => void;
+  readonly select: (id: string) => void;
 }) =>
   activities.length === 0 ? (
     <div style={styles.empty}>
@@ -567,16 +706,18 @@ const ActivityList = ({
   ) : (
     <ol style={styles.list}>
       {activities.map(activity => {
-        const event = activity.settled ?? activity.started;
+        const event = activityEntryEvent(activity);
         if (!event) return null;
-        const outcome = activity.settled?.outcome ?? 'pending';
+        const outcome = activityEntryOutcome(activity);
+        const observation = activity.observation;
+        const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
         return (
           <li key={activity.id}>
             <button
               type='button'
               style={activityButtonStyle(selectedId === activity.id)}
-              onClick={() => select({ kind: 'exchange', id: activity.id })}
-              aria-label={`${semanticSummary(activity)} ${event.transportId} ${outcome}`}
+              onClick={() => select(activity.id)}
+              aria-label={`${activityEntryTitle(activity)} ${event.transportId} ${outcome}`}
             >
               <span
                 style={{ ...styles.dot, background: outcomeColor(outcome) }}
@@ -584,59 +725,19 @@ const ActivityList = ({
                 aria-hidden='true'
               />
               <span style={styles.rowMain}>
-                <span style={styles.rowTitle}>{semanticSummary(activity)}</span>
+                <span style={styles.rowTitle}>{activityEntryTitle(activity)}</span>
                 <span style={styles.rowMeta}>
-                  <span style={styles.family}>{event.family}</span>
+                  <span style={styles.family}>
+                    {exchange ? event.family : 'operation progress'}
+                  </span>
                   <span>{event.transportId}</span>
                   <span>{formatClock(activity.at)}</span>
-                  {activity.settled ? <span>{activity.settled.durationMs} ms</span> : null}
-                </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-
-const DurableList = ({
-  activities,
-  selectedId,
-  select,
-}: {
-  readonly activities: readonly DurableActivity[];
-  readonly selectedId?: string;
-  readonly select: (selection: SelectedActivity) => void;
-}) =>
-  activities.length === 0 ? (
-    <div style={styles.empty}>
-      Durable observation snapshots will appear here as one semantic run.
-    </div>
-  ) : (
-    <ol style={styles.list}>
-      {activities.map(activity => {
-        const event =
-          activity.settled ?? activity.snapshots[activity.snapshots.length - 1] ?? activity.started;
-        if (!event) return null;
-        const outcome = activity.settled?.outcome ?? 'pending';
-        return (
-          <li key={activity.id}>
-            <button
-              type='button'
-              style={activityButtonStyle(selectedId === activity.id)}
-              onClick={() => select({ kind: 'observation', id: activity.id })}
-            >
-              <span
-                style={{ ...styles.dot, background: outcomeColor(outcome) }}
-                title={outcome}
-                aria-hidden='true'
-              />
-              <span style={styles.rowMain}>
-                <span style={styles.rowTitle}>{event.run.taskId}</span>
-                <span style={styles.rowMeta}>
-                  <span style={styles.family}>durable.observe</span>
-                  <span>{event.transportId}</span>
-                  <span>{activity.snapshots.length} snapshots</span>
+                  {observation ? <span>{observation.snapshots.length} updates</span> : null}
+                  {observation?.settled ? (
+                    <span>{observation.settled.durationMs} ms</span>
+                  ) : exchange?.settled ? (
+                    <span>{exchange.settled.durationMs} ms</span>
+                  ) : null}
                 </span>
               </span>
             </button>
@@ -898,33 +999,139 @@ const ExchangeDetail = ({ activity }: { readonly activity: ExchangeActivity }) =
   );
 };
 
-const DurableDetail = ({ activity }: { readonly activity: DurableActivity }) => {
+const snapshotOutcome = (
+  status: ObservationSnapshot['snapshot']['status'],
+): RuntimeDiagnosticOutcome | 'pending' => {
+  if (status === 'completed' || status === 'failed' || status === 'cancelled') return status;
+  return 'pending';
+};
+
+const ActivityMessage = ({
+  direction,
+  outcome,
+  title,
+  meta,
+  value,
+  label,
+}: {
+  readonly direction: string;
+  readonly outcome: RuntimeDiagnosticOutcome | 'pending';
+  readonly title: string;
+  readonly meta: string;
+  readonly value: unknown;
+  readonly label: string;
+}) => (
+  <li style={styles.message}>
+    <details>
+      <summary style={styles.messageSummary}>
+        <span style={styles.messageDirection}>{direction}</span>
+        <span style={{ ...styles.dot, background: outcomeColor(outcome) }} aria-hidden='true' />
+        <span style={styles.messageMain}>
+          <span style={styles.messageTitle}>{title}</span>
+          <span style={styles.messageMeta}>{meta}</span>
+        </span>
+        <span style={styles.family}>JSON</span>
+      </summary>
+      <div style={styles.messagePayload}>
+        <JsonView value={value} label={label} />
+      </div>
+    </details>
+  </li>
+);
+
+const DurableDetail = ({
+  activity,
+  exchange,
+}: {
+  readonly activity: DurableActivity;
+  readonly exchange?: ExchangeActivity;
+}) => {
   const event =
     activity.settled ?? activity.snapshots[activity.snapshots.length - 1] ?? activity.started;
   if (!event) return null;
   const outcome = activity.settled?.outcome ?? 'pending';
+  const title = exchange ? semanticSummary(exchange) : `${event.run.taskId}()`;
   return (
     <section style={styles.detail} aria-label='Selected diagnostic detail'>
       <header style={styles.detailHeader}>
         <span style={{ ...styles.dot, background: outcomeColor(outcome) }} />
         <span style={styles.detailHeadingGroup}>
-          <h3 style={styles.detailTitle}>{event.run.taskId}</h3>
+          <h3 style={styles.detailTitle}>{title}</h3>
           <span style={styles.detailMeta}>
-            <span style={styles.family}>durable.operation.observe</span>
+            <span style={styles.family}>operation progress</span>
             <span>{event.transportId}</span>
-            <span>{activity.snapshots.length} snapshots</span>
+            <span>{activity.snapshots.length} updates</span>
+            <span>{activity.settled?.durationMs ?? '…'} ms</span>
             <span>{outcome}</span>
           </span>
         </span>
       </header>
-      <div style={{ ...styles.payloadBody, padding: 16 }}>
-        <GenericVisual
-          value={{
-            run: event.run,
-            snapshots: activity.snapshots.map(snapshot => snapshot.snapshot),
-            settlement: activity.settled,
-          }}
-        />
+      <div style={styles.runBody}>
+        <div style={styles.runSummary}>
+          <div style={styles.semanticCard}>
+            <span style={styles.semanticLabel}>Operation</span>
+            <span style={styles.semanticValue}>{event.run.taskId}()</span>
+          </div>
+          <div style={styles.semanticCard}>
+            <span style={styles.semanticLabel}>Run</span>
+            <span style={styles.semanticValue}>{event.run.runId}</span>
+          </div>
+          <div style={styles.semanticCard}>
+            <span style={styles.semanticLabel}>Progress</span>
+            <span style={styles.semanticValue}>
+              {activity.snapshots.length} updates · {outcome}
+            </span>
+          </div>
+        </div>
+        <ol style={styles.messageList} aria-label='Operation progress messages'>
+          {exchange?.started ? (
+            <ActivityMessage
+              direction='→'
+              outcome={exchange.settled?.outcome ?? 'pending'}
+              title='invoke'
+              meta={`${formatClock(exchange.started.at)} · ${exchange.started.transportId}`}
+              value={{ request: exchange.started.request, response: exchange.settled?.response }}
+              label='Invocation JSON'
+            />
+          ) : null}
+          {activity.started ? (
+            <ActivityMessage
+              direction='←'
+              outcome='pending'
+              title='progress stream opened'
+              meta={`${formatClock(activity.started.at)} · ${activity.started.transportId}`}
+              value={activity.started}
+              label='Progress start JSON'
+            />
+          ) : null}
+          {activity.snapshots.map(snapshot => {
+            const progress = snapshot.snapshot.progress;
+            const detail = progress?.message ?? progress?.phase;
+            return (
+              <ActivityMessage
+                key={`${snapshot.observationId}:${snapshot.sequence}`}
+                direction='←'
+                outcome={snapshotOutcome(snapshot.snapshot.status)}
+                title={`${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`}
+                meta={`update #${snapshot.sequence} · ${formatClock(snapshot.at)}${
+                  typeof progress?.percent === 'number' ? ` · ${progress.percent}%` : ''
+                }`}
+                value={snapshot.snapshot}
+                label={`Progress update ${snapshot.sequence} JSON`}
+              />
+            );
+          })}
+          {activity.settled ? (
+            <ActivityMessage
+              direction='—'
+              outcome={activity.settled.outcome}
+              title={activity.settled.outcome}
+              meta={`${formatClock(activity.settled.at)} · ${activity.settled.durationMs} ms`}
+              value={activity.settled}
+              label='Progress settlement JSON'
+            />
+          ) : null}
+        </ol>
       </div>
     </section>
   );
@@ -936,9 +1143,8 @@ const DevtoolsPanel = ({ diagnostics, close }: OntahiDevtoolsProps & { close: ()
     diagnostics.inspect,
     diagnostics.inspect,
   );
-  const [tab, setTab] = useState<'activity' | 'durable'>('activity');
   const [filter, setFilter] = useState('');
-  const [selected, setSelected] = useState<SelectedActivity>();
+  const [selected, setSelected] = useState<string>();
   const exchanges = useMemo(
     () =>
       buildExchangeActivities(
@@ -957,49 +1163,34 @@ const DevtoolsPanel = ({ diagnostics, close }: OntahiDevtoolsProps & { close: ()
       ),
     [snapshot],
   );
+  const activities = useMemo(
+    () => buildActivityEntries(exchanges, observations),
+    [exchanges, observations],
+  );
   const normalizedFilter = filter.trim().toLowerCase();
-  const filteredExchanges = normalizedFilter
-    ? exchanges.filter(activity => {
-        const event = activity.settled ?? activity.started;
+  const filteredActivities = normalizedFilter
+    ? activities.filter(activity => {
+        const event = activityEntryEvent(activity);
+        const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
         return (
           event &&
           matchesFilter(
             [
-              semanticSummary(activity),
+              activityEntryTitle(activity),
               event.family,
               event.transportId,
-              activity.settled?.outcome,
-              event.requestId,
+              activityEntryOutcome(activity),
+              exchange?.started?.requestId,
+              activity.observation?.started?.run.taskId,
+              activity.observation?.started?.run.runId,
             ],
             normalizedFilter,
           )
         );
       })
-    : exchanges;
-  const filteredObservations = normalizedFilter
-    ? observations.filter(activity => {
-        const event = activity.settled ?? activity.snapshots[0] ?? activity.started;
-        return (
-          event &&
-          matchesFilter(
-            [event.run.taskId, event.run.runId, event.transportId, activity.settled?.outcome],
-            normalizedFilter,
-          )
-        );
-      })
-    : observations;
-  const selectedExchange =
-    selected?.kind === 'exchange'
-      ? exchanges.find(activity => activity.id === selected.id)
-      : undefined;
-  const selectedObservation =
-    selected?.kind === 'observation'
-      ? observations.find(activity => activity.id === selected.id)
-      : undefined;
-  const activeExchange =
-    tab === 'activity' ? (selectedExchange ?? filteredExchanges[0]) : undefined;
-  const activeObservation =
-    tab === 'durable' ? (selectedObservation ?? filteredObservations[0]) : undefined;
+    : activities;
+  const selectedActivity = activities.find(activity => activity.id === selected);
+  const activeActivity = selectedActivity ?? filteredActivities[0];
 
   const clear = () => {
     diagnostics.clear();
@@ -1013,22 +1204,9 @@ const DevtoolsPanel = ({ diagnostics, close }: OntahiDevtoolsProps & { close: ()
           <span style={styles.eyebrow}>Runtime inspector</span>
           <h2 style={styles.title}>Ontahí Devtools</h2>
         </span>
-        <nav style={styles.tabs} aria-label='Devtools views'>
-          <button
-            type='button'
-            style={{ ...styles.tab, ...(tab === 'activity' ? styles.activeTab : {}) }}
-            onClick={() => setTab('activity')}
-          >
-            Activity <span style={styles.count}>{filteredExchanges.length}</span>
-          </button>
-          <button
-            type='button'
-            style={{ ...styles.tab, ...(tab === 'durable' ? styles.activeTab : {}) }}
-            onClick={() => setTab('durable')}
-          >
-            Durable <span style={styles.count}>{filteredObservations.length}</span>
-          </button>
-        </nav>
+        <span style={styles.activityHeading}>
+          Activity <span style={styles.count}>{filteredActivities.length}</span>
+        </span>
         <span style={styles.headerActions}>
           <button type='button' style={styles.subtleButton} onClick={clear}>
             Clear
@@ -1055,24 +1233,19 @@ const DevtoolsPanel = ({ diagnostics, close }: OntahiDevtoolsProps & { close: ()
               placeholder='Filter intent, family, transport, outcome…'
             />
           </div>
-          {tab === 'activity' ? (
-            <ActivityList
-              activities={filteredExchanges}
-              selectedId={activeExchange?.id}
-              select={setSelected}
-            />
-          ) : (
-            <DurableList
-              activities={filteredObservations}
-              selectedId={activeObservation?.id}
-              select={setSelected}
-            />
-          )}
+          <ActivityList
+            activities={filteredActivities}
+            selectedId={activeActivity?.id}
+            select={setSelected}
+          />
         </section>
-        {activeExchange ? (
-          <ExchangeDetail activity={activeExchange} />
-        ) : activeObservation ? (
-          <DurableDetail activity={activeObservation} />
+        {activeActivity?.observation ? (
+          <DurableDetail
+            activity={activeActivity.observation}
+            exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
+          />
+        ) : activeActivity?.kind === 'exchange' ? (
+          <ExchangeDetail activity={activeActivity.exchange} />
         ) : (
           <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
         )}
