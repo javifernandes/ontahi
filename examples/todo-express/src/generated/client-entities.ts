@@ -60,7 +60,9 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       bridge: {
         invalidate: [['TodoItem']],
       },
-      input: graphSchema.void(),
+      input: graphSchema.object({
+        list: graphSchema.ref(TodoListSchema),
+      }),
       output: CompleteAllOutputValue,
       durable: {
         runtime: 'in-process',

@@ -73,6 +73,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [renamingListId, setRenamingListId] = useState<string>();
   const [recoloringListId, setRecoloringListId] = useState<string>();
   const [deletingListId, setDeletingListId] = useState<string>();
+  const [completingListId, setCompletingListId] = useState<string>();
   const [completingTodoId, setCompletingTodoId] = useState<string>();
   const [renamingTodoId, setRenamingTodoId] = useState<string>();
   const [deletingTodoId, setDeletingTodoId] = useState<string>();
@@ -330,10 +331,11 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
-  const completeAllTodos = async () => {
+  const completeAllTodos = async (listId: string) => {
     setActionError(undefined);
+    setCompletingListId(listId);
     try {
-      const result = await completeAllOperation.executeAsync();
+      const result = await completeAllOperation.executeAsync({ list: TodoList.refById(listId) });
       const message = operationMessage(result, 'The durable operation could not be started.');
       setActionError(message);
       return !message;
@@ -371,16 +373,6 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       runtime,
       authentication,
       signOut,
-      canComplete,
-      completeAllTodos,
-      completeAll: {
-        isExecuting: completeAllOperation.isExecuting,
-        isQueued: completeAllOperation.isQueued,
-        isRunning: completeAllOperation.isRunning,
-        isCompleted: completeAllOperation.isCompleted,
-        progress: completeAllOperation.progress,
-        finalValue: completeAllOperation.finalValue,
-      },
     },
     dashboard: {
       lists: dashboardLists,
@@ -394,6 +386,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       renamingListId,
       recoloringListId,
       deletingListId,
+      completingListId,
       completingTodoId,
       renamingTodoId,
       deletingTodoId,
@@ -404,6 +397,15 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       renameList,
       recolorList,
       deleteList,
+      completeAllTodos,
+      completeAll: {
+        isExecuting: completeAllOperation.isExecuting,
+        isQueued: completeAllOperation.isQueued,
+        isRunning: completeAllOperation.isRunning,
+        isCompleted: completeAllOperation.isCompleted,
+        progress: completeAllOperation.progress,
+        finalValue: completeAllOperation.finalValue,
+      },
       createTodo,
       setTodoCompleted,
       renameTodo,

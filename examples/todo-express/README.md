@@ -231,7 +231,7 @@ const setVisibleCompleted = useOperation(
 const completeAll = useDurableOperation(TodoList.domain.completeAll);
 
 setVisibleCompleted.execute();
-completeAll.execute();
+completeAll.execute({ list: TodoList.refById(selectedListId) });
 ```
 
 The generated client Entity owns the portable Query entry point. `useGraphQuery` infers both the

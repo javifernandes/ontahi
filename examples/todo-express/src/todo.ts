@@ -1,4 +1,10 @@
-import { field, graphSchema, mapRelation, type RelationConstraint } from '@ontahi/core/data-graph';
+import {
+  field,
+  graphSchema,
+  mapRelation,
+  type InferGraphSchemaValue,
+  type RelationConstraint,
+} from '@ontahi/core/data-graph';
 import { entity, relation, relationConstraint } from '@ontahi/core/entity';
 import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
@@ -39,6 +45,14 @@ const todoListFields = {
   color: field.named('Color', field.nonEmptyString({ trim: true })),
 };
 
+const TodoItemCommandRef = entity.ref('TodoItem', {
+  fields: {
+    id: field.id(),
+    list: field.ref(entity.ref('TodoList')),
+    completed: field.boolean(),
+  },
+});
+
 export const TodoList = entity({
   name: 'TodoList',
   fields: todoListFields,
@@ -48,16 +62,21 @@ export const TodoList = entity({
     capabilities: {} as TodoCapabilities,
   },
   operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
-    const todoCommands = commandsFor(TodoItem);
-    const runCompleteAll = createRunCompleteAll(() =>
-      todoCommands
-        .where(todo => todo.completed.eq(false))
-        .updateReturning({ completed: true }, ['id'])
-        .run()
-        .pipe(
-          Effect.orDie,
-          Effect.map(completed => completed.length),
-        ),
+    const todoCommands = commandsFor(TodoItemCommandRef);
+    const CompleteAllInput = graphSchema.object({
+      list: graphSchema.ref(self),
+    });
+    const runCompleteAll = createRunCompleteAll<InferGraphSchemaValue<typeof CompleteAllInput>>(
+      ({ list }) =>
+        todoCommands
+          .where(todo => todo.list.eq(list))
+          .where(todo => todo.completed.eq(false))
+          .updateReturning({ completed: true }, ['id'])
+          .run()
+          .pipe(
+            Effect.orDie,
+            Effect.map(completed => completed.length),
+          ),
     );
 
     return {
@@ -78,6 +97,10 @@ export const TodoList = entity({
           }),
       }),
       completeAll: operation({
+        input: graphSchema.object({
+          list: graphSchema.ref(self),
+        }),
+        graphOps: { receiver: 'list' },
         output: CompleteAllOutput,
         bridge: { invalidate: [['TodoItem']] },
         ingress: [

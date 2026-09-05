@@ -458,17 +458,15 @@ describe('operation hooks', () => {
         status: 'queued',
       },
     });
+    const Book = entity('Book', { id: field.id() });
     const operation = defineClientDomainOperationsForEntity('Book', {
       importBook: defineClientDomainOperation({
         authority: 'server',
         exposure: 'bridge',
         bridge: {},
+        input: graphSchema.object({ book: graphSchema.ref(Book) }),
         durable: {
           runtime: 'vercel-workflow',
-          subject: (input: { slug: string }) => ({
-            type: 'book',
-            id: input.slug,
-          }),
         },
       }),
     }).importBook;
@@ -512,7 +510,7 @@ describe('operation hooks', () => {
 
     await act(async () => {
       const run = await result.current.executeAsync({
-        slug: 'ontahi',
+        book: createEntityRef(Book, { id: 'book-1' }),
       });
 
       expect(run).toEqual({

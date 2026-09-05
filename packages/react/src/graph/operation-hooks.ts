@@ -58,6 +58,7 @@ import type {
   DurableOperationHookOptions,
   DurableOperationHookResult,
   DurableOperationLike,
+  DurableSchemaOperationLike,
   GraphClientCache,
   OperationHookOptions,
   OperationHookResult,
@@ -408,7 +409,15 @@ export function useOperation<TInput, TData>(
 }
 
 export function useDurableOperation<TInput, TResult = unknown>(
+  operation: DurableSchemaOperationLike<TInput, TResult>,
+  options?: DurableOperationHookOptions<TInput>,
+): DurableOperationHookResult<TInput, TResult>;
+export function useDurableOperation<TInput, TResult = unknown>(
   operation: DurableOperationLike<TInput, TResult>,
+  options?: DurableOperationHookOptions<TInput>,
+): DurableOperationHookResult<TInput, TResult>;
+export function useDurableOperation<TInput, TResult = unknown>(
+  operation: DurableOperationLike<TInput, TResult> | DurableSchemaOperationLike<TInput, TResult>,
   options?: DurableOperationHookOptions<TInput>,
 ): DurableOperationHookResult<TInput, TResult> {
   const runtimeTransport = useRuntimeTransportCapability();

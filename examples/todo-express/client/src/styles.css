@@ -553,6 +553,68 @@ a {
   pointer-events: none;
 }
 
+.list-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  max-width: 190px;
+  margin: -4px -5px 0 0;
+}
+
+.complete-list-action {
+  display: inline-flex;
+  min-height: 31px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid rgba(40, 100, 73, 0.22) !important;
+  border-radius: 9px;
+  color: #245a42;
+  background: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  font-weight: 760;
+  box-shadow: 0 4px 12px rgba(35, 96, 71, 0.06);
+}
+
+.complete-list-action:hover:not(:disabled) {
+  border-color: rgba(40, 100, 73, 0.38) !important;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.complete-list-action:disabled {
+  opacity: 0.45;
+}
+
+.complete-list-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.complete-list-action small {
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: #fff;
+  background: #286449;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.complete-list-result {
+  flex-basis: 100%;
+  color: #5b6c62;
+  font-size: 10px;
+  text-align: right;
+}
+
+.list-header-actions .list-card-controls {
+  margin: 0;
+}
+
 .list-card:hover .list-card-controls,
 .list-card:focus-within .list-card-controls,
 .list-card-controls:has(.color-popover),

@@ -1,15 +1,8 @@
-import { Boxes, CheckCheck, Database, LogOut, MemoryStick } from 'lucide-react';
+import { Boxes, Database, LogOut, MemoryStick } from 'lucide-react';
 
 import type { TodoAppModel } from '../use-todo-app.js';
 
-export const AppHeader = ({
-  runtime,
-  authentication,
-  signOut,
-  canComplete,
-  completeAllTodos,
-  completeAll,
-}: TodoAppModel['header']) => {
+export const AppHeader = ({ runtime, authentication, signOut }: TodoAppModel['header']) => {
   const storage = runtime.status === 'ready' ? runtime.value.storage : undefined;
   const authenticationSession =
     authentication.status === 'ready' ? authentication.value : undefined;
@@ -27,24 +20,6 @@ export const AppHeader = ({
       </div>
 
       <div className='app-tools'>
-        <button
-          type='button'
-          className='text-button auth-action'
-          disabled={!canComplete || completeAll.isExecuting}
-          onClick={() => void completeAllTodos()}
-        >
-          <CheckCheck aria-hidden='true' />
-          {completeAll.isQueued || completeAll.isRunning
-            ? 'Completing durably…'
-            : 'Complete all · Durable'}
-        </button>
-        <span className='muted' aria-live='polite'>
-          {completeAll.isRunning && completeAll.progress?.phase === 'updating'
-            ? 'Durable progress: updating todos'
-            : completeAll.isCompleted && completeAll.finalValue
-              ? `Completed ${completeAll.finalValue.completed} todos`
-              : ''}
-        </span>
         <span className='runtime-chip' aria-label={`Express with ${storage ?? 'graph runtime'}`}>
           {storage === 'in-memory' ? (
             <MemoryStick aria-hidden='true' />

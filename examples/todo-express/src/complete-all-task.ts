@@ -10,7 +10,8 @@ export const CompleteAllOutput = value('CompleteAllOutput', {
 });
 
 export const createRunCompleteAll =
-  (completeTodos: () => Effect.Effect<number>) => (_input: {}, context?: TaskContext) => {
+  <TInput>(completeTodos: (input: TInput) => Effect.Effect<number>) =>
+  (input: TInput, context?: TaskContext) => {
     const reportProgress = context
       ? context.progress({ phase: 'updating' }).pipe(Effect.orDie, Effect.asVoid)
       : Effect.void;
@@ -21,6 +22,6 @@ export const createRunCompleteAll =
     return Effect.gen(function* () {
       yield* reportProgress;
       yield* demonstrateDurableProgress;
-      return { completed: yield* completeTodos() };
+      return { completed: yield* completeTodos(input) };
     });
   };
