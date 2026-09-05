@@ -160,6 +160,65 @@ describe('instrumentRuntimeTransport', () => {
     });
   });
 
+  it('isolates failing subscribers from the transport and other subscribers', async () => {
+    const diagnostics = createOntahiDiagnostics();
+    const failingListener = vi.fn(() => {
+      throw new Error('subscriber failed');
+    });
+    const healthyListener = vi.fn();
+    diagnostics.subscribe(failingListener);
+    diagnostics.subscribe(healthyListener);
+    const runtimeRequest = request('request-subscriber-failure');
+    const response = createRuntimeProtocolResponse(runtimeRequest, { rows: 1 });
+    const baseRequest = vi.fn().mockResolvedValue(response);
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: { request: baseRequest },
+    });
+
+    await expect(transport.request(runtimeRequest)).resolves.toBe(response);
+
+    expect(baseRequest).toHaveBeenCalledOnce();
+    expect(failingListener).toHaveBeenCalledTimes(2);
+    expect(healthyListener).toHaveBeenCalledTimes(2);
+    expect(diagnostics.inspect().events).toHaveLength(2);
+  });
+
+  it('omits payloads when redaction or cloning fails without affecting the exchange', async () => {
+    const redact = vi.fn(() => {
+      throw new Error('redaction failed');
+    });
+    const diagnostics = createOntahiDiagnostics({ capturePayloads: true, redact });
+    const runtimeRequest = request('request-redaction-failure');
+    const response = createRuntimeProtocolResponse(runtimeRequest, { rows: 1 });
+    Object.defineProperty(response.body, 'rows', {
+      enumerable: true,
+      get: () => {
+        throw new Error('cloning failed');
+      },
+    });
+    const baseRequest = vi.fn().mockResolvedValue(response);
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'http',
+      kind: 'fetch',
+      transport: { request: baseRequest },
+    });
+
+    await expect(transport.request(runtimeRequest)).resolves.toBe(response);
+
+    expect(baseRequest).toHaveBeenCalledOnce();
+    expect(redact).toHaveBeenCalledOnce();
+    expect(diagnostics.inspect().events).toMatchObject([
+      { kind: 'exchange.started' },
+      { kind: 'exchange.settled', outcome: 'success' },
+    ]);
+    expect(diagnostics.inspect().events[0]).not.toHaveProperty('request');
+    expect(diagnostics.inspect().events[1]).not.toHaveProperty('response');
+  });
+
   it('groups Durable snapshots under one observation and preserves iterator values', async () => {
     const snapshots: TaskSnapshot[] = [
       {

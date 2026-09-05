@@ -159,6 +159,17 @@ const cloneDiagnosticValue = (value: unknown, seen: WeakSet<object> = new WeakSe
   );
 };
 
+const projectDiagnosticPayload = (
+  value: unknown,
+  redact: (value: unknown) => unknown,
+): unknown | undefined => {
+  try {
+    return cloneDiagnosticValue(redact(cloneDiagnosticValue(value)));
+  } catch {
+    return undefined;
+  }
+};
+
 export const createOntahiDiagnostics = ({
   capacity = 500,
   capturePayloads = false,
@@ -176,7 +187,15 @@ export const createOntahiDiagnostics = ({
   const listeners = new Set<() => void>();
   let events: OntahiDiagnosticEvent[] = [];
   let snapshot: OntahiDiagnosticsSnapshot = { version: 0, events };
-  const notify = () => listeners.forEach(listener => listener());
+  const notify = () => {
+    listeners.forEach(listener => {
+      try {
+        listener();
+      } catch {
+        // Diagnostics observers must not affect the instrumented application or peer observers.
+      }
+    });
+  };
   const update = (nextEvents: OntahiDiagnosticEvent[]) => {
     events = nextEvents;
     snapshot = { version: snapshot.version + 1, events };
@@ -200,7 +219,7 @@ export const createOntahiDiagnostics = ({
     now,
     createId,
     projectPayload: capturePayloads
-      ? value => cloneDiagnosticValue(redact!(cloneDiagnosticValue(value)))
+      ? value => projectDiagnosticPayload(value, redact!)
       : () => undefined,
     publish: event => update([...events, event].slice(-capacity)),
   });
