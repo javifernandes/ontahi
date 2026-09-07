@@ -177,7 +177,7 @@ const createHoverDom = (titleText: string, detailText: string, documentationText
   return dom;
 };
 
-export const selectionExpressionHoverSource: HoverTooltipSource = (view, position) => {
+export const selectionExpressionHoverSource: HoverTooltipSource = (view, position, _side) => {
   const entity = view.state.facet(selectionExpressionEntity);
   if (!entity) return null;
   const hover = hoverSelectionDocument(view.state.doc.toString(), position, entity);
