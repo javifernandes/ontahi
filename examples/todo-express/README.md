@@ -23,12 +23,14 @@ restarts Express when framework code changes.
 
 Open `http://localhost:3001` for the React UI, open Ontahí Devtools from its ceibo launcher, and
 select **Settings** to configure Runtime transport routing. The controls route Graph reads, Graph
-Commands, Operation calls, and Operation progress independently between the common HTTP endpoint
-and WebSocket. They persist the selection locally and include WebSocket-only, HTTP-only, and
-HTTP-requests-plus-WebSocket-push presets. The default sends all four paths through one `/runtime`
-WebSocket session. Selecting HTTP for Operation progress demonstrates the Fetch polling fallback;
-selecting WebSocket receives pushed snapshots without browser polling. The same `useGraphQuery`,
-`useOperation`, and `useDurableOperation` authoring is used for every combination.
+Commands, Operation calls, Durable status and progress, and Graph observation independently between
+the common HTTP endpoint and WebSocket. `@ontahi/devtools/react` derives the controls and preferred
+transport profiles from the Runtime Transport router; Todo carries no settings component, presets,
+or routing state. The default sends every supported capability through one `/runtime` WebSocket
+session. The HTTP profile keeps Graph observation on WebSocket because the Fetch adapter does not
+claim that capability. Selecting HTTP for Operation progress demonstrates the Fetch polling
+fallback; selecting WebSocket receives pushed snapshots without browser polling. The same
+`useGraphQuery`, `useOperation`, and `useDurableOperation` authoring is used for every combination.
 
 Todo's in-process Task Runtime projects lifecycle writes through the framework `TaskRun` Entity.
 The Express host adapts that native Stream to Durable protocol snapshots, so WebSocket mode has no
@@ -131,9 +133,10 @@ const runtimeTransport = createWebSocketRuntimeTransport();
 const client = createRuntimeGraphClient({ runtimeTransport });
 ```
 
-Todo's transport lab composes this transport with `createFetchRuntimeTransport()` and routes the
-existing envelope by `family`; Durable observation selects either the Fetch observer or the
-WebSocket observer. Neither the generated Entities nor the React hooks know which route was chosen.
+Todo composes this transport with `createFetchRuntimeTransport()` through Core's
+`createRuntimeTransportRouter(...)`. The router routes existing envelopes by family and selects the
+Fetch or WebSocket capability for Durable and Graph observation. Neither the generated Entities nor
+the React hooks know which route was chosen.
 
 Fetch remains the portable fallback for hosts without WebSocket support. Configuring
 `createFetchGraphClient({ runtimeTransport: { endpoint: '/runtime' } })` preserves the same

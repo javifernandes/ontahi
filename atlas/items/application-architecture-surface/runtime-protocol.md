@@ -115,6 +115,14 @@ bodies or hook authoring. Durable observation is routed as a separate transport 
 allows HTTP request/response with WebSocket push. Selection happens before transmission and never
 implies automatic retry through another transport after an ambiguous failure.
 
+Core's `createRuntimeTransportRouter(...)` composes registered transports into one
+`ConfigurableRuntimeTransport`. Its `routing` capability exposes stable `inspect`, `subscribe`, and
+per-capability `configure` operations covering the canonical protocol families plus
+`durable.operation.observe` and `graph.observe`. The router derives structural support from each
+transport, rejects missing or unsupported assignments, and pins an observation to the selected
+transport when that observation begins. Devtools can therefore project configuration without
+owning routing state or requiring application-specific controls.
+
 For credentialed browsers, the WebSocket HTTP upgrade can restore the same host session cookie as
 ordinary HTTP. That convenience also creates a Cross-Site WebSocket Hijacking boundary: the host
 must validate the complete canonical browser `Origin`, including scheme and host, derive authority

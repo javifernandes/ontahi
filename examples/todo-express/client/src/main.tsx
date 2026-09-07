@@ -1,3 +1,4 @@
+import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
 import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
 import {
@@ -11,13 +12,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App.js';
-import { TransportSettings } from './devtools/TransportSettings.js';
 import { Explorer } from './Explorer.js';
-import {
-  createTodoRuntimeTransportRouter,
-  loadTodoTransportRouting,
-  saveTodoTransportRouting,
-} from './runtime-transport-routing.js';
 import {
   loadAuthenticationSession,
   type AuthenticationSession,
@@ -48,34 +43,39 @@ const diagnostics =
     : undefined;
 const baseHttpTransport = createFetchRuntimeTransport<never>();
 const baseWebSocketTransport = createWebSocketRuntimeTransport();
-const transportRouter = createTodoRuntimeTransportRouter({
-  initialRouting: loadTodoTransportRouting(globalThis.localStorage),
-  http: diagnostics
-    ? instrumentRuntimeTransport({
-        diagnostics,
-        id: 'http',
-        kind: 'fetch',
-        transport: baseHttpTransport,
-      })
-    : baseHttpTransport,
-  websocket: diagnostics
-    ? instrumentRuntimeTransport({
-        diagnostics,
-        id: 'websocket',
-        kind: 'websocket',
-        transport: baseWebSocketTransport,
-      })
-    : baseWebSocketTransport,
+const runtimeTransport = createRuntimeTransportRouter({
+  transports: {
+    http: diagnostics
+      ? instrumentRuntimeTransport({
+          diagnostics,
+          id: 'http',
+          kind: 'fetch',
+          transport: baseHttpTransport,
+        })
+      : baseHttpTransport,
+    websocket: diagnostics
+      ? instrumentRuntimeTransport({
+          diagnostics,
+          id: 'websocket',
+          kind: 'websocket',
+          transport: baseWebSocketTransport,
+        })
+      : baseWebSocketTransport,
+  },
+  routing: {
+    'graph.read': 'websocket',
+    'graph.command': 'websocket',
+    operation: 'websocket',
+    'durable.operation.observe': 'websocket',
+  },
 });
-const graphClient = createRuntimeGraphClient({ runtimeTransport: transportRouter.transport });
+const graphClient = createRuntimeGraphClient({ runtimeTransport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 
 const TodoClient = () => {
   const [authentication, setAuthentication] = useState<BootstrapState<AuthenticationSession>>({
     status: 'loading',
   });
-  const [transportRouting, setTransportRoutingState] = useState(transportRouter.routing);
-
   useEffect(() => {
     void loadAuthenticationSession().then(setAuthentication);
   }, []);
@@ -90,12 +90,6 @@ const TodoClient = () => {
           },
     [authentication],
   );
-  const setTransportRouting = (routing: typeof transportRouting) => {
-    transportRouter.configure(routing);
-    saveTodoTransportRouting(globalThis.localStorage, routing);
-    setTransportRoutingState(routing);
-    void queryClient.invalidateQueries();
-  };
   return (
     <OntahiGraphProvider
       runtime={{ name: 'todo-browser' }}
@@ -108,10 +102,7 @@ const TodoClient = () => {
         <App authentication={authentication} setAuthentication={setAuthentication} />
       )}
       {diagnostics ? (
-        <OntahiDevtools
-          diagnostics={diagnostics}
-          settings={<TransportSettings routing={transportRouting} onChange={setTransportRouting} />}
-        />
+        <OntahiDevtools diagnostics={diagnostics} runtimeTransport={runtimeTransport} />
       ) : null}
     </OntahiGraphProvider>
   );

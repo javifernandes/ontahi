@@ -1,4 +1,8 @@
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  isConfigurableRuntimeTransport,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
 
@@ -14,10 +18,11 @@ import { styles } from './devtools-styles.js';
 import { ExchangeDetail } from './exchange-detail.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
 import { PanelResizer } from './panel-resizer.js';
+import { RuntimeTransportSettings } from './runtime-transport-settings.js';
 
 export type DevtoolsPanelProps = {
   readonly diagnostics: OntahiDiagnostics;
-  readonly settings?: ReactNode;
+  readonly runtimeTransport?: RuntimeTransport<any>;
   readonly height: number;
   readonly resize: (height: number) => void;
   readonly close: () => void;
@@ -25,7 +30,7 @@ export type DevtoolsPanelProps = {
 
 export const DevtoolsPanel = ({
   diagnostics,
-  settings,
+  runtimeTransport,
   height,
   resize,
   close,
@@ -38,6 +43,10 @@ export const DevtoolsPanel = ({
   const [view, setView] = useState<'activity' | 'settings'>('activity');
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
+  const configurableRuntimeTransport =
+    runtimeTransport && isConfigurableRuntimeTransport(runtimeTransport)
+      ? runtimeTransport
+      : undefined;
   const activities = useMemo(() => buildActivityEntries(snapshot.events), [snapshot]);
   const normalizedFilter = filter.trim().toLowerCase();
   const filteredActivities = normalizedFilter
@@ -86,7 +95,7 @@ export const DevtoolsPanel = ({
           >
             Activity <span style={styles.count}>{filteredActivities.length}</span>
           </button>
-          {settings ? (
+          {configurableRuntimeTransport ? (
             <button
               type='button'
               style={{ ...styles.view, ...(view === 'settings' ? styles.activeView : {}) }}
@@ -111,9 +120,9 @@ export const DevtoolsPanel = ({
           </button>
         </span>
       </header>
-      {view === 'settings' && settings ? (
+      {view === 'settings' && configurableRuntimeTransport ? (
         <section style={styles.settingsPage} aria-label='Devtools settings'>
-          {settings}
+          <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
         </section>
       ) : (
         <div style={styles.workspace}>

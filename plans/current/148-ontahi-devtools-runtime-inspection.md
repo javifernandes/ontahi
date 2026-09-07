@@ -45,8 +45,8 @@ This creates a better inspection boundary than browser infrastructure exposes:
 
 The missing boundary is diagnostic rather than protocol. Ontahí has no structured client event
 stream for exchange lifecycle, actual transport selection, session state, Durable observation, or
-cache activity. The Todo transport lab owns routing state locally, and the WebSocket client exposes
-only an error callback rather than an inspectable connection lifecycle.
+cache activity. Core now owns an inspectable, capability-validating Runtime Transport router;
+connection lifecycle evidence remains limited to the WebSocket client's error callback.
 
 The implementation risk is not drawing a panel. It is observing these boundaries without changing
 their timing or failure semantics, inventing false causality between independent state changes,
@@ -89,12 +89,12 @@ A developer opens one unobtrusive launcher and can:
    Devtools.
 8. Add an accessible, vertically resizable React bottom drawer with unified Activity, Cache, and
    Transport views plus a structured detail inspector.
-9. Show effective transport configuration read-only and accept an optional host-owned routing
-   controller for development overrides.
-10. Extract only the minimum reusable routing/controller boundary proven by Todo; preserve explicit
-    routing per complete protocol family and a distinct Durable observation route.
-11. Integrate the published component into Todo and prove WebSocket-only, HTTP-only, and HTTP plus
-    WebSocket push configurations.
+9. Show and edit effective transport configuration when Devtools receives a configurable Runtime
+   Transport; the generic UI subscribes to the runtime rather than accepting application UI.
+10. Own the reusable router in Core, preserving explicit routing per complete protocol family plus
+    distinct Durable and Graph observation capabilities with assignment validation.
+11. Integrate the published component into Todo and prove WebSocket-preferred and HTTP-preferred
+    profiles while retaining WebSocket for capabilities the Fetch transport does not support.
 12. Document development mounting, production exclusion, payload capture, redaction, retention,
     routing changes, and teardown.
 
@@ -142,9 +142,9 @@ const websocket = instrumentRuntimeTransport({
   diagnostics,
 });
 
-const router = createRuntimeTransportRouter({
+const runtimeTransport = createRuntimeTransportRouter({
   transports: { http, websocket },
-  routes: {
+  routing: {
     'graph.read': 'http',
     'graph.command': 'http',
     operation: 'http',
@@ -152,9 +152,9 @@ const router = createRuntimeTransportRouter({
   },
 });
 
-<OntahiGraphProvider runtime={runtime} runtimeTransport={router.transport}>
+<OntahiGraphProvider runtime={runtime} runtimeTransport={runtimeTransport}>
   <TodoApp />
-  <OntahiDevtools diagnostics={diagnostics} routing={router.controller} />
+  <OntahiDevtools diagnostics={diagnostics} runtimeTransport={runtimeTransport} />
 </OntahiGraphProvider>;
 ```
 
@@ -271,13 +271,16 @@ the returned unsubscribe function during teardown.
 
 ## Transport Settings Boundary
 
-The panel always shows effective configuration when a transport can describe it. Mutable controls
-appear only when the host passes an explicit development controller.
+The panel shows effective configuration when it receives a `ConfigurableRuntimeTransport`. Core's
+router owns the inspect/subscribe/configure contract and validates every assignment against the
+selected transport's structural capabilities. Devtools owns the generic visual projection and
+derives preferred-transport profiles from registered transports; an application supplies neither
+React state nor settings UI.
 
-The controller owns routing policy; Devtools is merely one control projection. A change selects the
-route for future exchanges. An active Durable observation remains pinned to its starting
-transport. Unknown families fail or follow an explicit configured default. No selection change can
-cause an already transmitted Operation or Command to execute again.
+The host owns initial routing and optional policies around configuration changes. A change selects
+the route for future exchanges. An active Durable or Graph observation remains pinned to its
+starting transport. Unknown families fail. No selection change can cause an already transmitted
+Operation or Command to execute again.
 
 Endpoint URLs, authentication, origin policy, secure-cookie behavior, and production routing remain
 host configuration. The first settings surface may expose route selection and safe timing options,
@@ -297,8 +300,8 @@ but it must not become an arbitrary credentialed endpoint editor.
        capabilities, polling/push, close, and failure state.
 6. [ ] Project the existing Graph Client Cache snapshot and event stream in a Cache view without
        taking ownership of TanStack Query state.
-7. [x] Project Todo's existing host-owned transport router/controller as an explicitly mutable
-       Settings view while keeping routing ownership outside the panel.
+7. [x] Move Todo's router to Core and let Devtools own a generic Settings view over the configurable
+       Runtime Transport contract.
 8. [ ] Mount Devtools in Todo, exercise all three routing presets, and verify that unmount/close
        releases listeners and observations.
 9. [ ] Document the component and update the Developer Experience, Devtools, Runtime Protocol, and
@@ -323,8 +326,8 @@ but it must not become an arbitrary credentialed endpoint editor.
 - [ ] The Cache view shows normalized records, aliases, outputs, writes, invalidations, and clear
       events without mutating either Ontahí or TanStack Query caches.
 - [ ] Cache events are not attributed to an exchange without an explicit correlation source.
-- [ ] Effective transport routing and capabilities are visible even when no mutable controller is
-      supplied.
+- [ ] Effective transport routing and capabilities are visible whenever Devtools receives a
+      configurable Runtime Transport.
 - [ ] Development routing controls affect only subsequent work and keep active Durable observation
       on its starting transport.
 - [ ] No UI action retries, replays, resubscribes, or sends a request through another transport
@@ -341,7 +344,7 @@ but it must not become an arbitrary credentialed endpoint editor.
       does not import Devtools gains no production dependency or runtime work.
 - [ ] The launcher, tabs, filters, detail inspector, and settings controls are keyboard-accessible
       and usable at narrow browser widths.
-- [ ] Todo proves WebSocket-only, HTTP-only, and HTTP plus WebSocket push without application hook
+- [ ] Todo proves WebSocket-preferred and capability-valid mixed routing without application hook
       changes.
 - [ ] Package artifacts expose only documented entrypoints and install in the clean consumer
       fixture.
@@ -358,8 +361,8 @@ but it must not become an arbitrary credentialed endpoint editor.
    unsubscribe, and absence of post-teardown delivery.
 4. Todo routing tests proving future-work selection, active-observation pinning, explicit default or
    failure for unknown families, and absence of fallback.
-5. Browser proofs for HTTP-only, WebSocket-only, and HTTP plus push, including visible intermediate
-   Durable progress and connection failure.
+5. Browser proofs for WebSocket-preferred and capability-valid mixed routing, including visible
+   intermediate Durable progress and connection failure.
 6. Package coverage, typecheck, lint, formatting, package build, Todo build, Changeset status, and
    clean-room artifact installation/type/runtime verification.
 
@@ -375,14 +378,14 @@ but it must not become an arbitrary credentialed endpoint editor.
    replacement.
 5. Semantic activity, transport evidence, and cache state share a timeline but retain distinct
    identities and causality rules.
-6. Settings belong in Devtools as an optional projection; routing ownership remains outside the
-   panel and host-controlled.
+6. Settings belong in Devtools as a projection of a configurable Runtime Transport; the host owns
+   initial composition while Core owns routing state, validation, and observation.
 7. Payload capture, persistence, export, replay, and remote collection are separate capabilities;
    only bounded opt-in in-memory capture belongs to this Plan.
 8. The first package must be independently consumable rather than a Todo-local panel or an Explorer
    mode.
-9. The React panel accepts host-owned Settings content rather than prematurely standardizing one
-   routing-controller UI contract from a single consumer.
+9. The React panel accepts the Runtime Transport itself. It never accepts application-owned
+   Settings content, routing state, or presets.
 
 ## Open Questions
 
@@ -390,8 +393,8 @@ but it must not become an arbitrary credentialed endpoint editor.
    states justify a narrow optional diagnostic port on the concrete adapter?
 2. Should family-aware summaries live in the Devtools package initially or become family-owned
    portable interpreters after repeated non-Devtools consumers appear?
-3. Does the reusable router belong in Core as generic `RuntimeTransport` composition or beside the
-   current Fetch/WebSocket clients in `@ontahi/react/graph`?
+3. Resolved: the reusable router belongs in Core as generic `RuntimeTransport` composition; Fetch
+   and WebSocket remain concrete transports in `@ontahi/react/graph`.
 4. Which payload fields can be summarized safely without enabling complete payload capture?
 5. Should the panel reuse Explorer's JSON and theme primitives through a narrow dependency, or keep
    its first rendering independent until a genuinely shared UI surface emerges?

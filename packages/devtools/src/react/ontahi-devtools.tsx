@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
+import { useState } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
 
@@ -12,20 +13,20 @@ import { defaultDevtoolsPanelHeight } from './panel-resizer.js';
 export type OntahiDevtoolsProps = {
   readonly diagnostics: OntahiDiagnostics;
   readonly initiallyOpen?: boolean;
-  readonly settings?: ReactNode;
+  readonly runtimeTransport?: RuntimeTransport<any>;
 };
 
 export const OntahiDevtools = ({
   diagnostics,
   initiallyOpen = false,
-  settings,
+  runtimeTransport,
 }: OntahiDevtoolsProps) => {
   const [open, setOpen] = useState(initiallyOpen);
   const [height, setHeight] = useState(defaultDevtoolsPanelHeight);
   return open ? (
     <DevtoolsPanel
       diagnostics={diagnostics}
-      settings={settings}
+      runtimeTransport={runtimeTransport}
       height={height}
       resize={setHeight}
       close={() => setOpen(false)}
