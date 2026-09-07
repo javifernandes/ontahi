@@ -1,6 +1,5 @@
 import {
   ExplorerEntityBrowser,
-  ExplorerEntityDataPanel,
   ExplorerProvider,
   ExplorerSelectionLanguageDataPanel,
   isExplorerEntityBrowserTab,
@@ -17,6 +16,9 @@ type TodoExplorerSnapshot = {
   snapshot: ExplorerSnapshot;
   entityDetails: ExplorerEntityDetail[];
 };
+
+export const todoSelectionInitialDocument = (entityName: string) =>
+  entityName === 'TodoItem' ? 'completed = false' : 'all';
 
 const selectedPathSegment = (prefix: string) => {
   if (!globalThis.location.pathname.startsWith(prefix)) return undefined;
@@ -60,22 +62,13 @@ export const Explorer = () => {
       entities={data.entityDetails}
       operations={data.snapshot.operations}
       tasks={data.snapshot.tasks}
-      renderDataPanel={({ entity }) =>
-        entity.name === 'TodoItem' ? (
-          <ExplorerSelectionLanguageDataPanel
-            embedded
-            entity={entity}
-            initialDocument='completed = false'
-          />
-        ) : (
-          <ExplorerEntityDataPanel
-            embedded
-            entity={entity}
-            operations={data.snapshot.operations}
-            showHeader={false}
-          />
-        )
-      }
+      renderDataPanel={({ entity }) => (
+        <ExplorerSelectionLanguageDataPanel
+          embedded
+          entity={entity}
+          initialDocument={todoSelectionInitialDocument(entity.name)}
+        />
+      )}
       selectedEntityName={selectedPathSegment('/explorer/entities/')}
       selectedTab={selectedTab}
     />
