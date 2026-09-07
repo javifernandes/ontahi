@@ -146,4 +146,13 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
     expect(error.getAttribute('data-diagnostic-channel')).toBe('execution');
     expect(screen.queryByText('Unknown Field')).toBeNull();
   });
+
+  it('does not show a running state when an invalid initial document blocks execution', () => {
+    const request = vi.fn<RuntimeTransport['request']>();
+    renderPanel(request, 'completed =');
+
+    expect(screen.getByText('Expected the Boolean literal true or false.')).toBeTruthy();
+    expect(screen.queryByText('Running Selection…')).toBeNull();
+    expect(request).not.toHaveBeenCalled();
+  });
 });

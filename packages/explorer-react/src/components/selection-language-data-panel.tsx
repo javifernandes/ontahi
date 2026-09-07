@@ -228,7 +228,7 @@ export function ExplorerSelectionLanguageDataPanel({
                 </td>
               </tr>
             ) : null}
-            {!rows && !executionError ? (
+            {isExecuting && !rows && !executionError ? (
               <tr>
                 <td
                   colSpan={Math.max(1, entity.fields.length)}
