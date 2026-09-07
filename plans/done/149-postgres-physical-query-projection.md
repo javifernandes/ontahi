@@ -147,4 +147,5 @@ join Fields for internal Entity-row and related-root modes, while public materia
 `resolveEntityRows()` keep their established contracts. A patch Changeset targets
 `@ontahi/postgres`; the current release automation candidate is `1.0.0-alpha.12`.
 
-Implementation PR: pending. No Atlas application change is included.
+Implementation PR: [javifernandes/ontahi#139](https://github.com/javifernandes/ontahi/pull/139).
+No Atlas application change is included.
