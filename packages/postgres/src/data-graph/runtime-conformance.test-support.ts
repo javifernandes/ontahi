@@ -158,6 +158,7 @@ export const dataGraphRuntimeConformance = (
                     title: book.title,
                     published: book.published,
                   },
+                  repeatedIdentifier: book.id,
                 })),
               undefined,
             ),
@@ -166,8 +167,59 @@ export const dataGraphRuntimeConformance = (
           {
             identifier: 'book-1',
             details: { title: 'Alpha', published: false },
+            repeatedIdentifier: 'book-1',
           },
         ]);
+      }));
+
+    it('keeps auxiliary has-many source keys out of projected results', async () =>
+      withHarness(async ({ runtime }) => {
+        const { BookWithChapters } = conformanceGraph;
+
+        await expect(
+          Effect.runPromise(
+            runtime.get(
+              query(BookWithChapters)
+                .where(book => book.id.eq('book-1'))
+                .select(book => ({ title: book.title }))
+                .include(book => ({
+                  chapters: book.chapters
+                    .orderBy(chapter => chapter.position)
+                    .select(chapter => ({ title: chapter.title }))
+                    .include(chapter => ({
+                      blocks: chapter.blocks
+                        .orderBy(block => block.position)
+                        .select(block => ({ content: block.content })),
+                    })),
+                })),
+              undefined,
+            ),
+          ),
+        ).resolves.toEqual({
+          title: 'Alpha',
+          chapters: [
+            { title: 'First', blocks: [{ content: 'hello' }, { content: 'world' }] },
+            { title: 'Second', blocks: [] },
+          ],
+        });
+        await expect(
+          Effect.runPromise(
+            runtime.get(
+              query(BookWithChapters)
+                .where(book => book.id.eq('book-1'))
+                .select(book => ({
+                  title: book.title,
+                  chapterSummaries: book.chapters
+                    .orderBy(chapter => chapter.position)
+                    .select(chapter => ({ title: chapter.title })),
+                })),
+              undefined,
+            ),
+          ),
+        ).resolves.toEqual({
+          title: 'Alpha',
+          chapterSummaries: [{ title: 'First' }, { title: 'Second' }],
+        });
       }));
 
     it('inserts, updates, deletes and returns affected rows', async () =>
@@ -462,7 +514,6 @@ export const dataGraphRuntimeConformance = (
         const Chapters = api.bindSelectionEntity(ChapterWithBlocks);
         const relatedBooks = Books.relatedTo(
           Chapters.where(chapter => chapter.title.eq('First')).select(chapter => ({
-            bookId: chapter.bookId,
             title: chapter.title,
           })),
           { through: 'chapters' },
@@ -474,12 +525,15 @@ export const dataGraphRuntimeConformance = (
           { id: 'book-1', title: 'Alpha' },
         ]);
         await expect(Effect.runPromise(relatedBooks.count())).resolves.toBe(1);
+        await expect(Effect.runPromise(relatedBooks.resolveEntityRows())).resolves.toEqual([
+          { id: 'book-1', slug: 'alpha', title: 'Alpha', published: false, note: null },
+        ]);
         await expect(Effect.runPromise(relatedBooks.resolve())).resolves.toEqual({
-          sourceRows: [{ bookId: 'book-1', title: 'First' }],
+          sourceRows: [{ title: 'First' }],
           rows: [{ id: 'book-1', title: 'Alpha' }],
         });
         const counted = await Effect.runPromise(relatedBooks.countBySource());
-        expect(counted.sourceRows).toEqual([{ bookId: 'book-1', title: 'First' }]);
+        expect(counted.sourceRows).toEqual([{ title: 'First' }]);
         expect([...counted.countsBySource.entries()]).toEqual([['book-1', 1]]);
       }));
   });

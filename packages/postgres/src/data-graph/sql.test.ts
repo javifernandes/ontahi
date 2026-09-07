@@ -26,6 +26,57 @@ import {
 } from './index.js';
 
 describe('PostgreSQL SQL compiler', () => {
+  it('physically excludes unselected wide columns from a projection', () => {
+    const Article = entity('ProjectionArticle', {
+      id: field.id(),
+      title: field.string(),
+      content: field.string(),
+    });
+    const [mapping] = inferPostgresMappings([Article]);
+
+    expect(
+      compilePostgresQuery(
+        query(Article)
+          .where(article => article.title.eq('Published'))
+          .orderBy(article => article.content.desc())
+          .select(article => ({ id: article.id })),
+        undefined,
+        mapping!,
+      ),
+    ).toEqual({
+      text:
+        'SELECT "id" AS "id" FROM "projection_articles"' +
+        ' WHERE "title" = $1 ORDER BY "content" DESC NULLS LAST',
+      values: ['Published'],
+    });
+  });
+
+  it('deduplicates selected fields while preserving public aliases', () => {
+    const Article = entity('AliasedProjectionArticle', {
+      id: field.id(),
+      title: field.string(),
+      content: field.string(),
+    });
+    const [mapping] = inferPostgresMappings([Article]);
+
+    expect(
+      compilePostgresQuery(
+        query(Article).select(article => ({
+          identifier: article.id,
+          details: { headline: article.title },
+          repeatedIdentifier: article.id,
+        })),
+        undefined,
+        mapping!,
+      ),
+    ).toEqual({
+      text:
+        'SELECT "id" AS "id", "title" AS "title"' +
+        ' FROM "aliased_projection_articles" WHERE TRUE',
+      values: [],
+    });
+  });
+
   it('compiles selections, ordering and limits with parameters', () => {
     expect(
       compilePostgresQuery(
@@ -69,6 +120,39 @@ describe('PostgreSQL SQL compiler', () => {
     });
   });
 
+  it('adds only the source key required by an included has-many Relation', () => {
+    const Chapter = entity('ProjectedChapter', {
+      id: field.id(),
+      articleId: field.id(),
+    });
+    const Article = entity('ProjectedArticle', {
+      id: field.id(),
+      title: field.string(),
+      content: field.string(),
+    }).hasMany('chapters', Chapter);
+    mapRelation(Article, 'chapters', {
+      type: 'one-to-many',
+      from: 'projected_articles.id',
+      to: 'projected_chapters.article_id',
+    });
+    const [mapping] = inferPostgresMappings([Article, Chapter]);
+
+    expect(
+      compilePostgresQuery(
+        query(Article)
+          .select(article => ({ title: article.title }))
+          .include(article => ({
+            chapters: article.chapters.select(chapter => ({ id: chapter.id })),
+          })),
+        undefined,
+        mapping!,
+      ),
+    ).toEqual({
+      text: 'SELECT "title" AS "title", "id" AS "id"' + ' FROM "projected_articles" WHERE TRUE',
+      values: [],
+    });
+  });
+
   it('compiles selection-based updates with returning fields', () => {
     const command: GraphCommandSpec = {
       kind: 'command',
@@ -98,7 +182,7 @@ describe('PostgreSQL SQL compiler', () => {
       ),
     ).toEqual({
       text:
-        'SELECT "id" AS "id", "capacity" AS "capacity", ' +
+        'SELECT "id" AS "id", ' +
         '("derived_courses"."capacity" - (SELECT COUNT(*)::int FROM "derived_students" AS "__ontahi_students_rows"' +
         ' WHERE "__ontahi_students_rows"."course_id" = "derived_courses"."id")) AS "availableSeats"' +
         ' FROM "derived_courses" WHERE TRUE',
@@ -186,6 +270,7 @@ describe('PostgreSQL SQL compiler', () => {
     });
     const [listMapping, todoMapping] = inferPostgresMappings([TodoList, Todo]);
     const research = createEntityRef(TodoList, { id: 'list-research' });
+    const TodoReference = Todo.view('TodoReference', { id: true, list: true });
 
     expect(listMapping?.columns.id).toBe('id');
     expect(todoMapping?.columns.list).toBe('list_id');
@@ -196,6 +281,10 @@ describe('PostgreSQL SQL compiler', () => {
         todoMapping!,
       ).values,
     ).toEqual(['list-research']);
+    expect(compilePostgresQuery(query(Todo).as(TodoReference), undefined, todoMapping!)).toEqual({
+      text: 'SELECT "id" AS "id", "list_id" AS "list" FROM "todos" WHERE TRUE',
+      values: [],
+    });
     expect(
       compilePostgresCommand(
         {

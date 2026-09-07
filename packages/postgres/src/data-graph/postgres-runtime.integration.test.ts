@@ -36,6 +36,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   conformanceDataset,
   conformanceGraph,
+  DerivedCourse,
+  DerivedCourseCapacity,
+  DerivedCourseMapping,
   TodoEntity,
   TodoMapping,
 } from './fixtures.test-support.js';
@@ -221,6 +224,14 @@ describe('PostgreSQL data graph runtime', () => {
       CREATE TABLE capacity_students (
         id text PRIMARY KEY,
         course_id text REFERENCES capacity_courses(id)
+      );
+      CREATE TABLE derived_courses (
+        id text PRIMARY KEY,
+        capacity integer NOT NULL CHECK (capacity >= 0)
+      );
+      CREATE TABLE derived_students (
+        id text PRIMARY KEY,
+        course_id text NOT NULL REFERENCES derived_courses(id)
       )
     `);
   }, 180_000);
@@ -261,6 +272,94 @@ describe('PostgreSQL data graph runtime', () => {
         mappings: conformanceGraph.mappings,
       }),
     };
+  });
+
+  it('executes a narrow SQL projection without selecting a wide TEXT column', async () => {
+    await resetPostgres();
+    await pool.query('UPDATE blocks SET content = $1 WHERE id = $2', [
+      'x'.repeat(1_000_000),
+      'block-1',
+    ]);
+    const statements: string[] = [];
+    const recordingPool = {
+      query: ((text: string, values: unknown[]) => {
+        statements.push(text);
+        return pool.query(text, values);
+      }) as Pool['query'],
+    };
+    const runtime = createPostgresDataGraphRuntime({
+      pool: recordingPool,
+      mappings: conformanceGraph.mappings,
+    });
+
+    await expect(
+      Effect.runPromise(
+        runtime.run(
+          query(conformanceGraph.Block)
+            .where(block => block.id.eq('block-1'))
+            .select(block => ({ id: block.id })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual([{ id: 'block-1' }]);
+    expect(statements).toEqual(['SELECT "id" AS "id" FROM "blocks" WHERE "id" = $1']);
+  });
+
+  it('lifts selected references and preserves belongs-to includes with internal join keys', async () => {
+    await pool.query('TRUNCATE TABLE relationship_students, relationship_courses CASCADE');
+    await pool.query(
+      `INSERT INTO relationship_courses (id, name, is_open)
+       VALUES ('course-1', 'PostgreSQL', true);
+       INSERT INTO relationship_students (id, is_active, course_id)
+       VALUES ('student-1', true, 'course-1')`,
+    );
+    const runtime = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [RelationshipStudentMapping, RelationshipCourseMapping],
+    });
+    const StudentCourseReference = RelationshipStudent.view('StudentCourseReference', {
+      course: true,
+    });
+
+    await expect(
+      Effect.runPromise(
+        runtime.get(
+          query(RelationshipStudent)
+            .where(student => student.id.eq('student-1'))
+            .as(StudentCourseReference),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual({
+      course: createEntityRef(RelationshipCourse, { id: 'course-1' }),
+    });
+    await expect(
+      Effect.runPromise(
+        runtime.get(
+          query(RelationshipStudent)
+            .where(student => student.id.eq('student-1'))
+            .select(student => ({ active: student.active }))
+            .include(student => ({
+              course: student.course.select(course => ({ name: course.name })),
+            })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual({ active: true, course: { name: 'PostgreSQL' } });
+  });
+
+  it('materializes selected virtual derived Fields without returning their dependencies', async () => {
+    await pool.query('TRUNCATE TABLE derived_students, derived_courses CASCADE');
+    await pool.query(
+      `INSERT INTO derived_courses (id, capacity) VALUES ('course-1', 3);
+       INSERT INTO derived_students (id, course_id)
+       VALUES ('student-1', 'course-1'), ('student-2', 'course-1')`,
+    );
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings: [DerivedCourseMapping] });
+
+    await expect(
+      Effect.runPromise(runtime.run(query(DerivedCourse).as(DerivedCourseCapacity), undefined)),
+    ).resolves.toEqual([{ id: 'course-1', availableSeats: 1 }]);
   });
 
   it('persists data through a recreated PostgreSQL runtime', async () => {
@@ -497,6 +596,17 @@ describe('PostgreSQL data graph runtime', () => {
     const graph = createRuntimeBoundDataGraphApi(() => runtime);
     const Todos = graph.bindSelectionEntity(RelationshipTodo);
     const Tags = graph.bindSelectionEntity(RelationshipTag);
+    await expect(
+      Effect.runPromise(
+        runtime.get(
+          query(RelationshipTodo)
+            .where(todo => todo.id.eq('todo-1'))
+            .select(todo => ({ title: todo.title }))
+            .include(todo => ({ tags: todo.tags.select(tag => ({ label: tag.label })) })),
+          undefined,
+        ),
+      ),
+    ).resolves.toEqual({ title: 'Selected', tags: [{ label: 'Core' }] });
     await expect(
       Effect.runPromise(
         Tags.relatedTo(
