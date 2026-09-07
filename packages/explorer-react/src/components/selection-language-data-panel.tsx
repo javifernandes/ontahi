@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } fro
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
-import { formatExplorerEntityValue, getExplorerRowRef } from './entity-instance-values.js';
+import { ExplorerEntityValue, getExplorerRowRef } from './entity-instance-values.js';
 import {
   explorerInstanceWindowKey,
   useExplorerEntityInstanceWorkspace,
@@ -110,6 +110,7 @@ export function ExplorerSelectionLanguageDataPanel({
   const executionError =
     executionFailure?.entityName === entity.name ? executionFailure.value : undefined;
   const [executionState, setExecutionState] = useState<EntityValue<boolean>>();
+  const [retryVersion, setRetryVersion] = useState(0);
   const isExecuting = executionState?.entityName === entity.name ? executionState.value : false;
   const analysis = useMemo(
     () => analyzeSelectionDocument(document, reflection),
@@ -125,6 +126,7 @@ export function ExplorerSelectionLanguageDataPanel({
 
   useEffect(() => {
     if (!selection || !selectionKey) {
+      setExecutionFailure(undefined);
       setExecutionState({ entityName: entity.name, value: false });
       return;
     }
@@ -170,7 +172,7 @@ export function ExplorerSelectionLanguageDataPanel({
       active = false;
       controller.abort();
     };
-  }, [entity.name, exchange, selectionKey]);
+  }, [entity.name, exchange, retryVersion, selectionKey]);
 
   const documentDiagnostics = diagnostics(analysis);
 
@@ -213,12 +215,18 @@ export function ExplorerSelectionLanguageDataPanel({
           </div>
         )}
         {executionError ? (
-          <div
-            data-diagnostic-channel='execution'
-            role='alert'
-            className='text-xs text-destructive'
-          >
-            {executionError}
+          <div className='flex flex-wrap items-center gap-2 text-xs text-destructive'>
+            <div data-diagnostic-channel='execution' role='alert'>
+              {executionError}
+            </div>
+            <button
+              type='button'
+              aria-label='Retry Selection'
+              onClick={() => setRetryVersion(version => version + 1)}
+              className='rounded-md border border-destructive/25 px-2 py-1 font-medium transition hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30'
+            >
+              Retry
+            </button>
           </div>
         ) : null}
       </div>
@@ -271,7 +279,7 @@ export function ExplorerSelectionLanguageDataPanel({
                   {entity.fields.map(field => (
                     <td key={field.name} className='max-w-[280px] px-3 py-2.5 align-top'>
                       <div className='truncate font-mono text-xs text-foreground'>
-                        {formatExplorerEntityValue(row[field.name])}
+                        <ExplorerEntityValue field={field} value={row[field.name]} />
                       </div>
                     </td>
                   ))}
@@ -301,7 +309,11 @@ export function ExplorerSelectionLanguageDataPanel({
           </tbody>
         </table>
         <div className='border-t px-3 py-2 text-xs text-muted-foreground' aria-live='polite'>
-          {isExecuting ? 'Updating rows…' : `${rows?.length ?? 0} row(s) from a fixed limit of 25.`}
+          {isExecuting
+            ? 'Updating rows…'
+            : executionError && rows
+              ? `Showing ${rows.length} row(s) from the last successful Selection.`
+              : `${rows?.length ?? 0} row(s) from a fixed limit of 25.`}
         </div>
       </div>
     </section>

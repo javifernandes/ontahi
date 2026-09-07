@@ -100,9 +100,15 @@ References, and an explicit null control for nullable Fields. Saving re-reads au
 display labels and window values do not retain a stale local draft. Identity, derived, and
 non-authorized fields remain read-only.
 
-Until reflection carries semantic value or presentation metadata, a string Field named like a
-color (or containing a six-digit hex color) receives a provisional color picker paired with its
-text value. This is a UI heuristic, not a `Color` domain type or validation guarantee.
+Fields reflected with the named `Color` value type retain one shared swatch-plus-text presentation
+in collection results, Selection results, and instance windows. Editable Color Fields add the
+native color picker without changing that read-only presentation. Legacy Operation inputs without
+value-type metadata may still use a provisional field-name/value heuristic.
+
+The experimental Selection result panel keeps the last successful rows while a draft is invalid,
+clears an obsolete execution error as soon as editing resumes, and offers an explicit retry after
+a transport or runtime failure. Its table uses the same reflected value presentation as the rest
+of Explorer.
 
 When the server snapshot reflects an authorized Entity mutation policy and the React graph client
 can execute Commands, allowed Fields become editable inline and deletable rows receive an

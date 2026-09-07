@@ -118,18 +118,22 @@ semantic boundary.
 4. Explorer exposes the assistance on every reflected Entity Data page. Both the editor and the
    result state are Entity-keyed: switching from `TodoItem` to `Tag` removes old suggestions,
    diagnostics, rows, failures, and in-flight presentation immediately while retaining the normal
-   last-successful result behavior for an invalid draft within one Entity. Selection result rows
-   preserve the standard Explorer click and keyboard path into the instance workspace.
+   last-successful result behavior for an invalid draft within one Entity. Execution failures can
+   be retried without rewriting the Selection and are cleared when editing resumes. Selection
+   result rows preserve the standard Explorer click and keyboard path into the instance workspace
+   plus the shared reflected `Color` presentation.
 5. A Todo browser journey proved `compl` → `completed`, operator and Boolean suggestions,
    ordinary completion insertion, highlighting, lowering, and Graph Read execution. Switching to
    `Tag` then offered `color` and no `completed`; this journey exposed and drove the fix for stale
-   Todo rows under the new Entity.
+   Todo rows under the new Entity. A later `TodoList` journey proved that
+   `color in ["#f5ddd5"]` is authorized by the example's public read policy and retains its pastel
+   swatch in the filtered result.
 6. Completion and hover consume only supplied static reflection. Their synchronous headless tests
    have no transport, and the browser journey performed no runtime data lookup for assistance;
    only the pre-existing Graph Read ran after a complete valid expression.
 7. `@ontahi/language` has 72 passing tests with 97.07% statements, 89.48% branches, 100% functions,
    and 98.19% lines. `@ontahi/language-codemirror` has 11 passing tests with 100% statements,
-   functions, and lines plus 88.88% branches. Explorer has 177 passing tests and Todo has 63.
+   functions, and lines plus 88.88% branches. Explorer has 180 passing tests and Todo has 64.
 8. All 13 package suites, repository typecheck and package build, format/lint, Changeset status,
    Todo production build, and clean-room package artifact checks passed.
 

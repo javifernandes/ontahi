@@ -5,5 +5,5 @@
 ---
 
 Add reflection-powered Selection completions, host-themed completion UI, semantic highlighting,
-hover help, and reliable Backspace editing while completions are open, without dynamic runtime
-data queries.
+hover help, reliable Backspace editing, recoverable execution failures, and typed Color result
+cells, without dynamic runtime data queries.

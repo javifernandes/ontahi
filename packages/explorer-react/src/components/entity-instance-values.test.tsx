@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 
 import {
+  ExplorerEntityValue,
   formatExplorerEntityValue,
   getExplorerEntityInstanceLabel,
   getExplorerReferenceLocator,
@@ -25,6 +26,18 @@ describe('Explorer instance values', () => {
     expect(screen.getByTestId('null').textContent).toBe('null');
     expect(screen.getByTestId('boolean').textContent).toBe('false');
     expect(screen.getByTestId('object').textContent).toBe('{"rank":2}');
+  });
+
+  it('renders a named Color with its swatch and portable string value', () => {
+    const rendered = render(
+      <ExplorerEntityValue
+        field={{ name: 'color', type: 'string', valueType: 'Color', nullable: false }}
+        value='#f5ddd5'
+      />,
+    );
+
+    expect(screen.getByText('#f5ddd5')).toBeTruthy();
+    expect(rendered.container.querySelector('[data-explorer-color-swatch="#f5ddd5"]')).toBeTruthy();
   });
 
   it('normalizes portable and scalar Reference values through reflected identity', () => {

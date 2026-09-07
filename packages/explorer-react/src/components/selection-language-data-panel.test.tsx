@@ -50,14 +50,21 @@ const entity: ExplorerEntityDetail = {
   relations: [],
 };
 
-const renderPanel = (request: RuntimeTransport['request'], initialDocument = 'completed = false') =>
+const renderPanel = (
+  request: RuntimeTransport['request'],
+  initialDocument = 'completed = false',
+  selectedEntity = entity,
+) =>
   render(
     <OntahiGraphProvider
       runtime={{ name: 'test-runtime' }}
       runtimeTransport={{ request }}
       client={false}
     >
-      <ExplorerSelectionLanguageDataPanel entity={entity} initialDocument={initialDocument} />
+      <ExplorerSelectionLanguageDataPanel
+        entity={selectedEntity}
+        initialDocument={initialDocument}
+      />
     </OntahiGraphProvider>,
   );
 
@@ -342,6 +349,29 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
     ).toBeTruthy();
   });
 
+  it('preserves the reflected Color presentation in Selection result cells', async () => {
+    const colorEntity: ExplorerEntityDetail = {
+      ...entity,
+      name: 'TodoList',
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+        { name: 'color', type: 'string', valueType: 'Color', nullable: false },
+      ],
+    };
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-read-result',
+        value: [{ id: 'list-inbox', name: 'Inbox', color: '#f5ddd5' }],
+      }),
+    );
+
+    const rendered = renderPanel(request, 'color in ["#f5ddd5"]', colorEntity);
+
+    await screen.findByText('#f5ddd5');
+    expect(rendered.container.querySelector('[data-explorer-color-swatch="#f5ddd5"]')).toBeTruthy();
+  });
+
   it('renders protocol rejection only through the execution channel', async () => {
     const request = vi.fn<RuntimeTransport['request']>(async envelope =>
       createRuntimeProtocolResponse(envelope, {
@@ -355,6 +385,44 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
     expect(error.textContent).toBe('Selection is not allowed.');
     expect(error.getAttribute('data-diagnostic-channel')).toBe('execution');
     expect(screen.queryByText('Unknown Field')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Selection expression for TodoItem'), {
+      target: { value: 'completed =' },
+    });
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getByText('Expected a string, number, or Boolean literal.')).toBeTruthy();
+  });
+
+  it('can retry a transient execution failure without rewriting the Selection', async () => {
+    const user = userEvent.setup();
+    let attempt = 0;
+    const request = vi.fn<RuntimeTransport['request']>(async envelope => {
+      attempt += 1;
+      if (attempt === 1) {
+        return createRuntimeProtocolResponse(envelope, {
+          kind: 'protocol-error',
+          error: {
+            code: 'execution_unavailable',
+            message: 'Selection execution is temporarily unavailable.',
+          },
+        });
+      }
+      return createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-read-result',
+        value: [{ id: 'todo-1', title: 'Recovered', completed: false }],
+      });
+    });
+    renderPanel(request);
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Selection execution is temporarily unavailable.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Retry Selection' }));
+
+    expect(await screen.findByText('Recovered')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it('does not show a running state when an invalid initial document blocks execution', () => {

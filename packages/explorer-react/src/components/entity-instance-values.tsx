@@ -23,6 +23,37 @@ export const formatExplorerEntityValue = (value: unknown): ReactNode => {
   return String(value);
 };
 
+const explorerColorPattern = /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i;
+
+export const ExplorerEntityValue = ({
+  field,
+  value,
+}: {
+  field: ExplorerEntityDetail['fields'][number];
+  value: unknown;
+}) => {
+  const colorSwatch =
+    field.valueType?.toLowerCase() === 'color' &&
+    typeof value === 'string' &&
+    explorerColorPattern.test(value)
+      ? value
+      : undefined;
+
+  return colorSwatch ? (
+    <span className='inline-flex items-center gap-2'>
+      <span
+        aria-hidden='true'
+        data-explorer-color-swatch={colorSwatch}
+        className='size-3.5 shrink-0 rounded-full border border-black/10 shadow-sm'
+        style={{ backgroundColor: colorSwatch }}
+      />
+      <span>{colorSwatch}</span>
+    </span>
+  ) : (
+    formatExplorerEntityValue(value)
+  );
+};
+
 export const getExplorerReferenceLocator = (
   value: unknown,
   identity: { fields: string[] } | undefined,
