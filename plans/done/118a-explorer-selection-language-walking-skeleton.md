@@ -10,7 +10,7 @@ Depends on: [118 Ontahí Selection Language Editor Research](../done/118-ontahi-
 
 Followed by:
 
-1. [118b Selection Expression Algebra](../next/118b-selection-expression-algebra.md)
+1. [118b Selection Expression Algebra](118b-selection-expression-algebra.md)
 2. [118c Reflection-Powered Selection Language Service](../backlog/118c-reflection-powered-selection-language-service.md)
 3. [118d Projectional Selection Editor Experiment](../backlog/118d-projectional-selection-editor-experiment.md)
 

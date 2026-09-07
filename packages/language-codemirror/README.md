@@ -13,4 +13,5 @@ const extensions = selectionExpressionExtensions({
 
 The adapter owns CodeMirror language support and lint projection. Parsing, semantic resolution,
 diagnostic meaning, and lowering remain in `@ontahi/language`; Explorer and other hosts own editor
-lifecycle and execution.
+lifecycle and execution. Highlighting covers Selection keywords, Boolean composition, scalar and
+list literals, comparison operators, and grouping punctuation.

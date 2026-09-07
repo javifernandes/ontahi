@@ -1,6 +1,6 @@
 # 118b. Selection Expression Algebra
 
-Status: next
+Status: done
 
 Canonical ID: `ontahi://plans/118b-selection-expression-algebra`
 
@@ -70,18 +70,18 @@ existing `SelectionExpression` nodes and their existing normalization behavior.
 
 ## Acceptance Checklist
 
-- [ ] Grammar fixtures recover usefully from a missing operand, unmatched parenthesis, incomplete
+- [x] Grammar fixtures recover usefully from a missing operand, unmatched parenthesis, incomplete
       list, and missing value while retaining precise ranges.
-- [ ] Precedence fixtures lower `not a = true and b = true or c = true` exactly as documented.
-- [ ] Every supported spelling lowers to the corresponding existing Selection operator.
-- [ ] Boolean composition lowers only to existing `and`, `or`, and `not` nodes; parentheses never
+- [x] Precedence fixtures lower `not a = true and b = true or c = true` exactly as documented.
+- [x] Every supported spelling lowers to the corresponding existing Selection operator.
+- [x] Boolean composition lowers only to existing `and`, `or`, and `not` nodes; parentheses never
       appear in `SelectionAst`.
-- [ ] Semantic diagnostics identify the exact Field/operator/value range for unknown Fields,
+- [x] Semantic diagnostics identify the exact Field/operator/value range for unknown Fields,
       incompatible values, non-null Fields using `is null`, and comparisons on unsupported types.
-- [ ] Valid nested expressions survive canonical Graph Read transport and execute in the in-memory
+- [x] Valid nested expressions survive canonical Graph Read transport and execute in the in-memory
       runtime plus one external adapter already supporting the same operators.
-- [ ] Explorer still sends one canonical Graph Read request and does not reconstruct ad hoc filters.
-- [ ] Date, datetime, JSON, Reference, and relation expressions fail explicitly rather than lower
+- [x] Explorer still sends one canonical Graph Read request and does not reconstruct ad hoc filters.
+- [x] Date, datetime, JSON, Reference, and relation expressions fail explicitly rather than lower
       approximately.
 
 ## Verification
@@ -98,3 +98,28 @@ Plan 118c may start when all supported expressions lower without a second semant
 document syntax tree demonstrably retains the authorial information omitted by canonical
 normalization. Any unresolved provider/type mismatch becomes a focused Core follow-up, not an
 editor heuristic.
+
+## Delivery Evidence
+
+1. The generated Lezer grammar now covers `all`, `none`, Boolean composition, parentheses, scalar
+   predicates, JSON strings, finite numbers, Booleans, and lists. Contextual keyword specialization
+   preserves identifiers such as `note`, `notable`, and `trueish`.
+2. `@ontahi/language` exposes recoverable, source-positioned syntax while recursively lowering
+   valid meaning only through Core's existing Selection constructors. Parentheses remain syntax;
+   Core normalization remains canonical.
+3. Semantic analysis uses structural reflection to enforce the initial operator/type matrix,
+   enum membership, nullability, finite numbers, and explicit rejection of date, datetime, JSON,
+   Reference, and relation expressions.
+4. Tests prove exact precedence, every supported operator, incomplete-document recovery, multiple
+   semantic diagnostics, canonical in-memory execution, and compilation through the Supabase
+   adapter. Explorer sends the resulting nested Selection in one `graph.read` request.
+5. `@ontahi/language` has 44 passing focused tests with 97.57% statements, 90.79% branches, 100%
+   functions, and 98.57% lines. `@ontahi/language-codemirror` has 3 passing tests and 100% coverage.
+6. All 13 package suites, repository format/lint/typecheck/build, Changeset status, Todo's 60 tests
+   and production build, and clean-room package artifact installation/type/runtime checks passed.
+
+## Closure / Evolution
+
+Completed on 2026-09-07. Text now expresses the established scalar and Boolean Selection algebra
+without adding a semantic grouping node or a parallel filter model. Plan 118c can add
+reflection-powered language assistance on top of this stable syntax/semantic boundary.

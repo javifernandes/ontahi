@@ -6,7 +6,7 @@ Canonical ID: `ontahi://plans/118c-reflection-powered-selection-language-service
 
 Shapes: [Ontahí Semantic Interaction Language](../../atlas/items/semantic-interaction-language.md)
 
-Depends on: [118b Selection Expression Algebra](../next/118b-selection-expression-algebra.md)
+Depends on: [118b Selection Expression Algebra](../done/118b-selection-expression-algebra.md)
 
 Related plan: [126 Ontahí Runtime Data Reflection](../research/126-ontahi-runtime-data-reflection.md)
 

@@ -24,7 +24,7 @@ describe('Selection CodeMirror adapter', () => {
     });
 
     expect(syntaxTree(state).toString()).toBe(
-      'SelectionDocument(BooleanEquality(FieldName(Identifier),Equals,BooleanLiteral(False)))',
+      'SelectionDocument(OrExpression(AndExpression(NotExpression(PrimaryExpression(Predicate(EqualityPredicate(FieldName(Identifier),Equals,ScalarLiteral(BooleanLiteral(False)))))))))',
     );
   });
 
@@ -36,7 +36,7 @@ describe('Selection CodeMirror adapter', () => {
           {
             channel: 'syntax',
             code: 'selection.syntax.invalid',
-            message: 'Expected the Boolean literal true or false.',
+            message: 'Expected a string, number, or Boolean literal.',
             from: 11,
             to: 11,
           },
@@ -49,7 +49,7 @@ describe('Selection CodeMirror adapter', () => {
         to: 11,
         severity: 'error',
         source: 'Ontahí syntax',
-        message: 'Expected the Boolean literal true or false.',
+        message: 'Expected a string, number, or Boolean literal.',
       },
     ]);
   });

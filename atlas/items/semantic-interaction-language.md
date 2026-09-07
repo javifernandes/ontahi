@@ -106,16 +106,20 @@ an editor affordance is never an authorization decision.
 
 ## First Proof And Evolution
 
-The first proof is intentionally only a contextual Boolean equality in Explorer's Entity Data
-surface. It must demonstrate the complete path from text through the existing Selection AST and
-the existing `graph.read` Runtime Protocol family. It must not translate the expression into
-Explorer's current `ReflectedEntityDataFilter`, because that side contract contains different
-operators and would preserve two filtering languages.
+The first proof was intentionally only a contextual Boolean equality in Explorer's Entity Data
+surface. It demonstrated the complete path from text through the existing Selection AST and the
+existing `graph.read` Runtime Protocol family without translating the expression into Explorer's
+`ReflectedEntityDataFilter` side contract.
 
-Later slices add the established Boolean Selection algebra, reflection-powered assistance, and one
-projectional widget experiment. Parentheses remain in document syntax even when canonical
-Selection normalization makes them unnecessary. Widgets edit the underlying text through editor
-transactions; they do not become a parallel source of state.
+The established textual projection now covers `all`, `none`, Boolean `and` / `or` / `not`,
+parentheses, equality, membership lists, null checks, and scalar ordering comparisons. Parentheses
+remain in recoverable document syntax while lowering delegates normalization to Core's existing
+Selection constructors. The initial compatibility matrix admits matching Boolean, number, string,
+id, and enum literals; ordering remains number-only; and date, datetime, JSON, Reference, and
+relation meanings fail explicitly until their portable semantics are designed.
+
+Later slices add reflection-powered assistance and one projectional widget experiment. Widgets edit
+the underlying text through editor transactions; they do not become a parallel source of state.
 
 Only after the Selection proof is sound should a new plan investigate complete Query text such as
 `order by` or `limit`. Relation quantifiers wait for the canonical Selection work in Plan 119.
