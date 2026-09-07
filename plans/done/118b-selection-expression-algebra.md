@@ -8,7 +8,7 @@ Shapes: [Ontahí Semantic Interaction Language](../../atlas/items/semantic-inter
 
 Depends on: [118a Explorer Selection Language Walking Skeleton](../done/118a-explorer-selection-language-walking-skeleton.md)
 
-Followed by: [118c Reflection-Powered Selection Language Service](../backlog/118c-reflection-powered-selection-language-service.md)
+Followed by: [118c Reflection-Powered Selection Language Service](118c-reflection-powered-selection-language-service.md)
 
 ## Architectural Question
 

@@ -11,7 +11,18 @@ const extensions = selectionExpressionExtensions({
 });
 ```
 
-The adapter owns CodeMirror language support and lint projection. Parsing, semantic resolution,
-diagnostic meaning, and lowering remain in `@ontahi/language`; Explorer and other hosts own editor
-lifecycle and execution. Highlighting covers Selection keywords, Boolean composition, scalar and
-list literals, comparison operators, and grouping punctuation.
+The adapter owns CodeMirror language support, completion UI, syntax and semantic highlighting,
+hover UI, and lint projection. Parsing, cursor context, reflection lookup, diagnostic meaning, and
+lowering remain in `@ontahi/language`; Explorer and other hosts own editor lifecycle and execution.
+
+Typing activates contextual suggestions; `Ctrl-Space` opens them explicitly. Field identifiers,
+unsupported or unresolved names, operators, keywords, and values receive stable semantic classes.
+Hovering a Field shows its reflected type/nullability and hovering an operator explains its
+canonical Selection meaning. Reconfiguring the extension with another Entity discards the previous
+reflection immediately.
+
+The completion surface uses the host's `--popover`, `--border`, `--accent`, and related theme
+variables with neutral fallbacks, so Explorer can integrate it without adapter-specific CSS.
+
+Backspace is bound to CodeMirror's document command so deletion remains an ordinary transaction
+even while a completion popup and semantic marks are active.

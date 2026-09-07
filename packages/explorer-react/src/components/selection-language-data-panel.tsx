@@ -8,12 +8,16 @@ import {
   type SelectionLanguageEntityReflection,
 } from '@ontahi/language';
 import { useRuntimeTransportCapability } from '@ontahi/react/graph';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
-import { formatExplorerEntityValue } from './entity-instance-values.js';
+import { ExplorerEntityValue, getExplorerRowRef } from './entity-instance-values.js';
+import {
+  explorerInstanceWindowKey,
+  useExplorerEntityInstanceWorkspace,
+} from './entity-instance-workspace.js';
 import { ExplorerSelectionLanguageEditor } from './selection-language-editor.js';
 
 export type ExplorerSelectionLanguageDataPanelProps = {
@@ -23,6 +27,26 @@ export type ExplorerSelectionLanguageDataPanelProps = {
 };
 
 type ExplorerSelectionLanguageRows = readonly Record<string, unknown>[];
+
+type EntityValue<TValue> = {
+  readonly entityName: string;
+  readonly value: TValue;
+};
+
+const entityScopedValue = <TValue,>(current: EntityValue<TValue> | undefined, entityName: string) =>
+  current?.entityName === entityName ? current.value : undefined;
+
+const selectionRowsStatus = (
+  rows: ExplorerSelectionLanguageRows | undefined,
+  executionError: string | undefined,
+  isExecuting: boolean,
+) => {
+  if (isExecuting) return 'Updating rows…';
+  if (executionError && rows) {
+    return `Showing ${rows.length} row(s) from the last successful Selection.`;
+  }
+  return `${rows?.length ?? 0} row(s) from a fixed limit of 25.`;
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -80,17 +104,28 @@ const diagnostics = (analysis: SelectionDocumentAnalysis) => [
   ...analysis.semanticDiagnostics,
 ];
 
+const isInteractiveRowTarget = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('a, button, input, select, textarea'));
+
 export function ExplorerSelectionLanguageDataPanel({
   embedded = false,
   entity,
   initialDocument = '',
 }: ExplorerSelectionLanguageDataPanelProps) {
   const runtimeTransport = useRuntimeTransportCapability();
+  const instanceWorkspace = useExplorerEntityInstanceWorkspace();
   const reflection = useMemo(() => toSelectionLanguageEntityReflection(entity), [entity]);
-  const [document, setDocument] = useState(initialDocument);
-  const [rows, setRows] = useState<ExplorerSelectionLanguageRows>();
-  const [executionError, setExecutionError] = useState<string>();
-  const [isExecuting, setIsExecuting] = useState(false);
+  const documentKey = `${entity.name}\u0000${initialDocument}`;
+  const [documentState, setDocumentState] = useState({ key: documentKey, value: initialDocument });
+  const document = documentState.key === documentKey ? documentState.value : initialDocument;
+  const setDocument = (value: string) => setDocumentState({ key: documentKey, value });
+  const [rowResult, setRowResult] = useState<EntityValue<ExplorerSelectionLanguageRows>>();
+  const rows = entityScopedValue(rowResult, entity.name);
+  const [executionFailure, setExecutionFailure] = useState<EntityValue<string>>();
+  const executionError = entityScopedValue(executionFailure, entity.name);
+  const [executionState, setExecutionState] = useState<EntityValue<boolean>>();
+  const [retryVersion, setRetryVersion] = useState(0);
+  const isExecuting = entityScopedValue(executionState, entity.name) ?? false;
   const analysis = useMemo(
     () => analyzeSelectionDocument(document, reflection),
     [document, reflection],
@@ -105,12 +140,16 @@ export function ExplorerSelectionLanguageDataPanel({
 
   useEffect(() => {
     if (!selection || !selectionKey) {
-      setIsExecuting(false);
+      setExecutionFailure(undefined);
+      setExecutionState({ entityName: entity.name, value: false });
       return;
     }
     if (!exchange) {
-      setExecutionError('Selection execution requires a configured Runtime Transport.');
-      setIsExecuting(false);
+      setExecutionFailure({
+        entityName: entity.name,
+        value: 'Selection execution requires a configured Runtime Transport.',
+      });
+      setExecutionState({ entityName: entity.name, value: false });
       return;
     }
 
@@ -124,27 +163,30 @@ export function ExplorerSelectionLanguageDataPanel({
       orderBy: [],
       limit: 25,
     };
-    setExecutionError(undefined);
-    setIsExecuting(true);
+    setExecutionFailure(undefined);
+    setExecutionState({ entityName: entity.name, value: true });
     void exchange({ family: 'graph.read', body: request }, { signal: controller.signal })
       .then(readGraphRows)
       .then(nextRows => {
-        if (active) setRows(nextRows);
+        if (active) setRowResult({ entityName: entity.name, value: nextRows });
       })
       .catch((error: unknown) => {
         if (active && !controller.signal.aborted) {
-          setExecutionError(error instanceof Error ? error.message : 'Graph Read failed.');
+          setExecutionFailure({
+            entityName: entity.name,
+            value: error instanceof Error ? error.message : 'Graph Read failed.',
+          });
         }
       })
       .finally(() => {
-        if (active) setIsExecuting(false);
+        if (active) setExecutionState({ entityName: entity.name, value: false });
       });
 
     return () => {
       active = false;
       controller.abort();
     };
-  }, [exchange, selectionKey]);
+  }, [entity.name, exchange, retryVersion, selectionKey]);
 
   const documentDiagnostics = diagnostics(analysis);
 
@@ -166,6 +208,9 @@ export function ExplorerSelectionLanguageDataPanel({
           entity={reflection}
           onChange={setDocument}
         />
+        <div className='text-xs text-muted-foreground'>
+          Ctrl-Space for suggestions · hover a Field or operator for help.
+        </div>
         {documentDiagnostics.length > 0 ? (
           <div className='grid gap-1' aria-live='polite'>
             {documentDiagnostics.map(diagnostic => (
@@ -184,12 +229,18 @@ export function ExplorerSelectionLanguageDataPanel({
           </div>
         )}
         {executionError ? (
-          <div
-            data-diagnostic-channel='execution'
-            role='alert'
-            className='text-xs text-destructive'
-          >
-            {executionError}
+          <div className='flex flex-wrap items-center gap-2 text-xs text-destructive'>
+            <div data-diagnostic-channel='execution' role='alert'>
+              {executionError}
+            </div>
+            <button
+              type='button'
+              aria-label='Retry Selection'
+              onClick={() => setRetryVersion(version => version + 1)}
+              className='rounded-md border border-destructive/25 px-2 py-1 font-medium transition hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30'
+            >
+              Retry
+            </button>
           </div>
         ) : null}
       </div>
@@ -211,17 +262,44 @@ export function ExplorerSelectionLanguageDataPanel({
             </tr>
           </thead>
           <tbody className='divide-y'>
-            {rows?.map((row, rowIndex) => (
-              <tr key={`${entity.name}-${JSON.stringify(row)}-${rowIndex}`}>
-                {entity.fields.map(field => (
-                  <td key={field.name} className='max-w-[280px] px-3 py-2.5 align-top'>
-                    <div className='truncate font-mono text-xs text-foreground'>
-                      {formatExplorerEntityValue(row[field.name])}
-                    </div>
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {rows?.map((row, rowIndex) => {
+              const source = getExplorerRowRef(entity, row);
+              const rowKey = source ? JSON.stringify(source.locator) : String(rowIndex);
+              const windowKey = source ? explorerInstanceWindowKey(source) : undefined;
+              const canOpen = Boolean(source && instanceWorkspace);
+              const selected = windowKey === instanceWorkspace?.activeKey;
+              const selectInstance = (
+                event: MouseEvent<HTMLTableRowElement> | KeyboardEvent<HTMLTableRowElement>,
+              ) => {
+                if (!source || !instanceWorkspace || isInteractiveRowTarget(event.target)) return;
+                if ('key' in event && !['Enter', ' '].includes(event.key)) return;
+                if ('key' in event) event.preventDefault();
+                instanceWorkspace.open({ entity, row, source });
+              };
+
+              return (
+                <tr
+                  key={`${entity.name}-${rowKey}`}
+                  tabIndex={canOpen ? 0 : undefined}
+                  onClick={selectInstance}
+                  onKeyDown={selectInstance}
+                  className={cx(
+                    'group',
+                    canOpen &&
+                      'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30',
+                    selected ? 'bg-primary/10' : 'hover:bg-muted/25',
+                  )}
+                >
+                  {entity.fields.map(field => (
+                    <td key={field.name} className='max-w-[280px] px-3 py-2.5 align-top'>
+                      <div className='truncate font-mono text-xs text-foreground'>
+                        <ExplorerEntityValue field={field} value={row[field.name]} />
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
             {!isExecuting && rows?.length === 0 ? (
               <tr>
                 <td
@@ -245,7 +323,7 @@ export function ExplorerSelectionLanguageDataPanel({
           </tbody>
         </table>
         <div className='border-t px-3 py-2 text-xs text-muted-foreground' aria-live='polite'>
-          {isExecuting ? 'Updating rows…' : `${rows?.length ?? 0} row(s) from a fixed limit of 25.`}
+          {selectionRowsStatus(rows, executionError, isExecuting)}
         </div>
       </div>
     </section>

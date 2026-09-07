@@ -104,6 +104,12 @@ Refs. It is not required to parse or lower the first Boolean predicate. Runtime 
 authority may narrow what can execute without changing the intrinsic meaning of a valid Selection;
 an editor affordance is never an authorization decision.
 
+That static boundary now also produces cursor context, structural completions, semantic
+classifications, and hover help from the same recovered syntax and resolver facts. Boolean and enum
+values are finite reflection facts; string and number suggestions are syntax placeholders, not
+observed data. The CodeMirror adapter projects those results and replaces its Entity reflection as
+one compartment, so assistance from a previously selected Entity cannot survive a context switch.
+
 ## First Proof And Evolution
 
 The first proof was intentionally only a contextual Boolean equality in Explorer's Entity Data
@@ -118,8 +124,8 @@ Selection constructors. The initial compatibility matrix admits matching Boolean
 id, and enum literals; ordering remains number-only; and date, datetime, JSON, Reference, and
 relation meanings fail explicitly until their portable semantics are designed.
 
-Later slices add reflection-powered assistance and one projectional widget experiment. Widgets edit
-the underlying text through editor transactions; they do not become a parallel source of state.
+The next slice is one projectional widget experiment. Widgets edit the underlying text through
+editor transactions; they do not become a parallel source of state.
 
 Only after the Selection proof is sound should a new plan investigate complete Query text such as
 `order by` or `limit`. Relation quantifiers wait for the canonical Selection work in Plan 119.

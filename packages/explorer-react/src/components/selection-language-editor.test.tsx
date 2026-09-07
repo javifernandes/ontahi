@@ -40,4 +40,40 @@ describe('ExplorerSelectionLanguageEditor', () => {
     });
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('reconfigures semantic assistance when the selected Entity changes', async () => {
+    const onChange = vi.fn();
+    const rendered = render(
+      <ExplorerSelectionLanguageEditor
+        label='Selection expression for TodoItem'
+        value='completed = false'
+        entity={TodoItem}
+        onChange={onChange}
+      />,
+    );
+
+    expect(rendered.container.querySelector('.cm-ontahi-semantic-field')?.textContent).toBe(
+      'completed',
+    );
+
+    rendered.rerender(
+      <ExplorerSelectionLanguageEditor
+        label='Selection expression for ArchiveItem'
+        value='completed = false'
+        entity={{
+          name: 'ArchiveItem',
+          fields: [{ name: 'archived', type: 'boolean', nullable: false }],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(rendered.container.querySelector('.cm-ontahi-semantic-invalid')?.textContent).toBe(
+        'completed',
+      );
+    });
+    expect(rendered.container.querySelector('.cm-ontahi-semantic-field')).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

@@ -17,8 +17,8 @@ const TodoListReadPolicy = {
   maxLimit: 200,
   fields: {
     id: { select: true, filter: ['eq', 'in'] },
-    name: { select: true, filter: ['eq'], order: true },
-    color: { select: true },
+    name: { select: true, filter: ['eq', 'in'], order: true },
+    color: { select: true, filter: ['eq', 'in'] },
   },
   scope: 'all',
 } satisfies GraphReadPolicy<typeof TodoList, TodoGraphReadAuthority>;
@@ -30,8 +30,8 @@ const TagReadPolicy = {
   maxLimit: 200,
   fields: {
     id: { select: true, filter: ['eq', 'in'] },
-    name: { select: true, filter: ['eq'], order: true },
-    color: { select: true },
+    name: { select: true, filter: ['eq', 'in'], order: true },
+    color: { select: true, filter: ['eq', 'in'] },
   },
   scope: 'all',
 } satisfies GraphReadPolicy<typeof Tag, TodoGraphReadAuthority>;
@@ -44,8 +44,8 @@ const TodoItemReadPolicy = {
   fields: {
     id: { select: true, filter: ['eq', 'in'] },
     list: { select: true, filter: ['eq', 'in'] },
-    title: { select: true, filter: ['eq'], order: true },
-    completed: { select: true, filter: ['eq'] },
+    title: { select: true, filter: ['eq', 'in'], order: true },
+    completed: { select: true, filter: ['eq', 'in'] },
   },
   relations: {
     tags: TagReadPolicy,

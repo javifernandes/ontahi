@@ -167,6 +167,21 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
+  it('allows the Selection language string operators on public TodoList fields', async () => {
+    getTodoDataset().TodoList = [
+      { id: 'list-inbox', name: 'Inbox', color: '#f5ddd5' },
+      { id: 'list-later', name: 'Later', color: '#dbe8f4' },
+    ];
+    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+    const matchingLists = query(ClientTodoListSchema)
+      .where(list => list.name.in(['Inbox', 'Archive']))
+      .where(list => list.color.in(['#f5ddd5']));
+
+    await expect(remoteExecutor.run(matchingLists, undefined)).resolves.toEqual([
+      { id: 'list-inbox', name: 'Inbox', color: '#f5ddd5' },
+    ]);
+  });
+
   it('reads direct tags without exposing the physical join row', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Read relation', completed: false },

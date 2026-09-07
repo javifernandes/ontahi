@@ -39,6 +39,7 @@ export type SelectionLanguageFieldReflection = {
   readonly valueType?: string;
   readonly enumValues?: readonly string[];
   readonly reference?: { readonly entityName: string };
+  readonly documentation?: string;
 };
 
 export type SelectionLanguageEntityReflection<TEntityName extends string = string> = {
@@ -135,6 +136,54 @@ export type SelectionDocumentAnalysis<TEntityName extends string = string> =
     readonly semanticDiagnostics: readonly SelectionLanguageDiagnostic[];
     readonly selection?: SelectionAst<TEntityName>;
   };
+
+export type SelectionLanguageCursorContext =
+  | 'expression'
+  | 'operator'
+  | 'value'
+  | 'list-value'
+  | 'list-continuation'
+  | 'continuation';
+
+export type SelectionLanguageCompletionItem = {
+  readonly label: string;
+  readonly apply: string;
+  readonly kind: 'field' | 'keyword' | 'operator' | 'value' | 'punctuation';
+  readonly detail: string;
+};
+
+export type SelectionLanguageCompletionResult = SelectionLanguageRange & {
+  readonly context: SelectionLanguageCursorContext;
+  readonly items: readonly SelectionLanguageCompletionItem[];
+};
+
+export type SelectionLanguageCursorContextResult = SelectionLanguageRange & {
+  readonly kind: SelectionLanguageCursorContext;
+};
+
+export type SelectionLanguageExecutionAffordances = {
+  readonly fields?: readonly {
+    readonly name: string;
+    readonly operators: readonly SelectionLanguagePredicateOperator[];
+  }[];
+};
+
+export type SelectionLanguageSemanticClassification = SelectionLanguageRange & {
+  readonly kind:
+    | 'field'
+    | 'unsupported-field'
+    | 'unsupported-relation'
+    | 'invalid-identifier'
+    | 'operator'
+    | 'value'
+    | 'keyword';
+};
+
+export type SelectionLanguageHover = SelectionLanguageRange & {
+  readonly title: string;
+  readonly detail: string;
+  readonly documentation: string;
+};
 
 const rangeOf = (node: SyntaxNode | SyntaxNodeRef): SelectionLanguageRange => ({
   from: node.from,
@@ -762,4 +811,606 @@ export const analyzeSelectionDocument = <TEntityName extends string>(
         }
       : {}),
   };
+};
+
+const operatorDocumentation: Record<
+  SelectionLanguagePredicateOperator,
+  { readonly title: string; readonly documentation: string }
+> = {
+  eq: {
+    title: 'Equality',
+    documentation: 'Matches when the Field value equals the supplied scalar value.',
+  },
+  in: {
+    title: 'Membership',
+    documentation: 'Matches when the Field value equals any value in the supplied list.',
+  },
+  isNull: {
+    title: 'Null check',
+    documentation: 'Matches when the nullable Field has no value.',
+  },
+  lt: {
+    title: 'Less than',
+    documentation: 'Matches when the number Field is less than the supplied number.',
+  },
+  lte: {
+    title: 'Less than or equal',
+    documentation: 'Matches when the number Field is less than or equal to the supplied number.',
+  },
+  gt: {
+    title: 'Greater than',
+    documentation: 'Matches when the number Field is greater than the supplied number.',
+  },
+  gte: {
+    title: 'Greater than or equal',
+    documentation: 'Matches when the number Field is greater than or equal to the supplied number.',
+  },
+};
+
+const completionTokenNames = new Set([
+  'Identifier',
+  'StringLiteral',
+  'NumberLiteral',
+  'True',
+  'False',
+  'Null',
+  'All',
+  'None',
+]);
+
+const clampDocumentPosition = (document: string, position: number) =>
+  Math.max(0, Math.min(document.length, position));
+
+const completionRangeFromTree = (
+  document: string,
+  tree: Tree,
+  position: number,
+  includeOpeningQuote = false,
+): SelectionLanguageRange => {
+  let node: SyntaxNode | null = tree.resolveInner(position, -1);
+  while (node && !completionTokenNames.has(node.name)) node = node.parent;
+  if (!node || node.from > position || node.to < position) {
+    return includeOpeningQuote && position > 0 && document[position - 1] === '"'
+      ? { from: position - 1, to: position }
+      : { from: position, to: position };
+  }
+
+  let from = node.from;
+  if (includeOpeningQuote && node.name === 'Identifier' && from > 0 && document[from - 1] === '"') {
+    from -= 1;
+  }
+  return { from, to: node.to };
+};
+
+const ancestorNamed = (
+  node: SyntaxNode | null,
+  names: readonly string[],
+): SyntaxNode | undefined => {
+  for (let candidate = node; candidate; candidate = candidate.parent) {
+    if (names.includes(candidate.name)) return candidate;
+  }
+  return undefined;
+};
+
+const expressionChildren = (
+  expression: SelectionExpressionSyntax,
+): readonly SelectionExpressionSyntax[] => {
+  switch (expression.kind) {
+    case 'and':
+    case 'or':
+      return expression.operands;
+    case 'not':
+      return expression.operand ? [expression.operand] : [];
+    case 'parenthesized':
+      return expression.expression ? [expression.expression] : [];
+    default:
+      return [];
+  }
+};
+
+const expressionAtPosition = (
+  expression: SelectionExpressionSyntax | undefined,
+  position: number,
+): SelectionExpressionSyntax | undefined => {
+  if (!expression || position < expression.from || position > expression.to) return undefined;
+
+  for (const child of expressionChildren(expression)) {
+    const nested = expressionAtPosition(child, position);
+    if (nested) return nested;
+  }
+  return expression;
+};
+
+const fieldCompletionDetail = (field: SelectionLanguageFieldReflection) =>
+  `${field.valueType ?? field.type}${field.nullable ? ' · nullable' : ''}`;
+
+const expressionCompletionItems = (
+  entity: SelectionLanguageEntityReflection,
+  applyPrefix = '',
+): readonly SelectionLanguageCompletionItem[] => [
+  ...entity.fields.flatMap(field =>
+    supportedFieldType(field)
+      ? [
+          {
+            label: field.name,
+            apply: `${applyPrefix}${field.name}`,
+            kind: 'field' as const,
+            detail: fieldCompletionDetail(field),
+          },
+        ]
+      : [],
+  ),
+  ...['all', 'none', 'not'].map(label => ({
+    label,
+    apply: `${applyPrefix}${label}`,
+    kind: 'keyword' as const,
+    detail: 'Selection keyword',
+  })),
+  {
+    label: '(',
+    apply: `${applyPrefix}(`,
+    kind: 'punctuation',
+    detail: 'Grouped Selection expression',
+  },
+];
+
+const operatorCompletionItems = (
+  field: SelectionLanguageFieldReflection,
+): readonly SelectionLanguageCompletionItem[] => {
+  const fieldType = supportedFieldType(field);
+  if (!fieldType) return [];
+  const items: SelectionLanguageCompletionItem[] = [
+    { label: '=', apply: '=', kind: 'operator', detail: 'Equality · eq' },
+    { label: 'in', apply: 'in', kind: 'operator', detail: 'Membership · in' },
+  ];
+  if (field.nullable) {
+    items.push({
+      label: 'is null',
+      apply: 'is null',
+      kind: 'operator',
+      detail: 'Null check · isNull',
+    });
+  }
+  if (fieldType === 'number') {
+    items.push(
+      { label: '<', apply: '<', kind: 'operator', detail: 'Less than · lt' },
+      { label: '<=', apply: '<=', kind: 'operator', detail: 'Less than or equal · lte' },
+      { label: '>', apply: '>', kind: 'operator', detail: 'Greater than · gt' },
+      { label: '>=', apply: '>=', kind: 'operator', detail: 'Greater than or equal · gte' },
+    );
+  }
+  return items;
+};
+
+const completionOperatorByLabel: Readonly<Record<string, SelectionLanguagePredicateOperator>> = {
+  '=': 'eq',
+  in: 'in',
+  'is null': 'isNull',
+  '<': 'lt',
+  '<=': 'lte',
+  '>': 'gt',
+  '>=': 'gte',
+};
+
+const affordedOperatorCompletionItems = (
+  field: SelectionLanguageFieldReflection,
+  affordances: SelectionLanguageExecutionAffordances | undefined,
+) => {
+  const items = operatorCompletionItems(field);
+  const fieldAffordance = affordances?.fields?.find(candidate => candidate.name === field.name);
+  return fieldAffordance
+    ? items.filter(item =>
+        fieldAffordance.operators.includes(completionOperatorByLabel[item.label]!),
+      )
+    : items;
+};
+
+const valueCompletionItems = (
+  field: SelectionLanguageFieldReflection,
+): readonly SelectionLanguageCompletionItem[] => {
+  const fieldType = supportedFieldType(field);
+  if (fieldType === 'boolean') {
+    return ['true', 'false'].map(label => ({
+      label,
+      apply: label,
+      kind: 'value' as const,
+      detail: 'Boolean value',
+    }));
+  }
+  if (fieldType === 'enum') {
+    return (field.enumValues ?? []).map(value => {
+      const literal = JSON.stringify(value);
+      return {
+        label: literal,
+        apply: literal,
+        kind: 'value' as const,
+        detail: `${field.valueType ?? field.type} value`,
+      };
+    });
+  }
+  if (fieldType === 'number') {
+    return [{ label: '0', apply: '0', kind: 'value', detail: 'Number literal' }];
+  }
+  return fieldType === 'string' || fieldType === 'id'
+    ? [{ label: '""', apply: '""', kind: 'value', detail: 'String literal' }]
+    : [];
+};
+
+const continuationCompletionItems = (
+  closeParenthesis: boolean,
+  applyPrefix = '',
+): readonly SelectionLanguageCompletionItem[] => [
+  {
+    label: 'and',
+    apply: `${applyPrefix}and`,
+    kind: 'keyword',
+    detail: 'Boolean conjunction',
+  },
+  {
+    label: 'or',
+    apply: `${applyPrefix}or`,
+    kind: 'keyword',
+    detail: 'Boolean disjunction',
+  },
+  ...(closeParenthesis
+    ? [
+        {
+          label: ')',
+          apply: ')',
+          kind: 'punctuation' as const,
+          detail: 'Close grouped expression',
+        },
+      ]
+    : []),
+];
+
+const hasUnclosedParenthesisAt = (
+  expression: SelectionExpressionSyntax | undefined,
+  position: number,
+) => {
+  let found = false;
+  visitExpression(expression, candidate => {
+    if (
+      candidate.kind === 'parenthesized' &&
+      !candidate.close &&
+      candidate.from <= position &&
+      candidate.to >= position
+    ) {
+      found = true;
+    }
+  });
+  return found;
+};
+
+const fieldForPredicate = (
+  predicate: SelectionPredicateSyntax,
+  entity: SelectionLanguageEntityReflection,
+) => entity.fields.find(field => field.name === predicate.field?.text);
+
+type SelectionCompletionResultBuilder = (
+  context: SelectionLanguageCursorContext,
+  items: readonly SelectionLanguageCompletionItem[],
+  includeOpeningQuote?: boolean,
+  insertAtCursor?: boolean,
+) => SelectionLanguageCompletionResult;
+
+const continuationItemsAt = (syntax: SelectionDocumentSyntax, position: number, applyPrefix = '') =>
+  continuationCompletionItems(hasUnclosedParenthesisAt(syntax.expression, position), applyPrefix);
+
+const completeNonPredicateExpression = (
+  expression: SelectionExpressionSyntax,
+  position: number,
+  entity: SelectionLanguageEntityReflection,
+  syntax: SelectionDocumentSyntax,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult | undefined => {
+  switch (expression.kind) {
+    case 'all':
+    case 'none':
+      return position <= expression.to
+        ? result('expression', expressionCompletionItems(entity))
+        : result('continuation', continuationCompletionItems(false));
+    case 'not': {
+      if (expression.operand) return result('continuation', continuationItemsAt(syntax, position));
+      const prefix = expression.operator.to === position ? ' ' : '';
+      return result('expression', expressionCompletionItems(entity, prefix));
+    }
+    case 'and':
+    case 'or': {
+      if (expression.operands.length > expression.operators.length) {
+        return result('continuation', continuationItemsAt(syntax, position));
+      }
+      const prefix = expression.operators.at(-1)?.to === position ? ' ' : '';
+      return result('expression', expressionCompletionItems(entity, prefix));
+    }
+    case 'parenthesized':
+      return expression.expression
+        ? result('continuation', continuationCompletionItems(!expression.close))
+        : result('expression', expressionCompletionItems(entity));
+    default:
+      return undefined;
+  }
+};
+
+const completeMembershipPredicate = (
+  predicate: SelectionPredicateSyntax,
+  reflectedField: SelectionLanguageFieldReflection,
+  position: number,
+  syntax: SelectionDocumentSyntax,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult => {
+  if (predicate.value?.kind !== 'list-literal') {
+    return result('value', [
+      { label: '[', apply: '[', kind: 'punctuation', detail: 'Start membership list' },
+    ]);
+  }
+
+  const list = predicate.value;
+  if (list.close && position >= list.close.from) {
+    return result('continuation', continuationItemsAt(syntax, position));
+  }
+
+  const cursorIsOnValue = list.values.some(value => value.from <= position && value.to >= position);
+  const expectsValue =
+    cursorIsOnValue || list.values.length === list.commas.length || list.values.length === 0;
+  if (expectsValue) {
+    return result(
+      'list-value',
+      [
+        ...valueCompletionItems(reflectedField),
+        { label: ']', apply: ']', kind: 'punctuation', detail: 'Close membership list' },
+      ],
+      true,
+    );
+  }
+
+  return result('list-continuation', [
+    { label: ',', apply: ',', kind: 'punctuation', detail: 'Add another value' },
+    { label: ']', apply: ']', kind: 'punctuation', detail: 'Close membership list' },
+  ]);
+};
+
+const completeScalarPredicate = (
+  predicate: SelectionPredicateSyntax,
+  reflectedField: SelectionLanguageFieldReflection,
+  position: number,
+  syntax: SelectionDocumentSyntax,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult => {
+  const value = predicate.value;
+  if (!value || value.kind === 'list-literal') {
+    return result('value', valueCompletionItems(reflectedField), true);
+  }
+  if (value.from <= position && value.to >= position) {
+    return result('value', valueCompletionItems(reflectedField), true);
+  }
+  return result('continuation', continuationItemsAt(syntax, position));
+};
+
+const completePredicateExpression = (
+  predicate: SelectionPredicateSyntax,
+  position: number,
+  entity: SelectionLanguageEntityReflection,
+  affordances: SelectionLanguageExecutionAffordances | undefined,
+  syntax: SelectionDocumentSyntax,
+  cursorNode: SyntaxNode,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult => {
+  if (position <= (predicate.field?.to ?? predicate.from)) {
+    return result('expression', expressionCompletionItems(entity));
+  }
+
+  const reflectedField = fieldForPredicate(predicate, entity);
+  if (!reflectedField) return result('operator', []);
+
+  if (!predicate.operator) {
+    const nullPredicate = ancestorNamed(cursorNode, ['NullPredicate']);
+    return nullPredicate?.getChild('Is')
+      ? result('value', [
+          {
+            label: 'null',
+            apply: 'null',
+            kind: 'value',
+            detail: 'Complete the null check',
+          },
+        ])
+      : result('operator', affordedOperatorCompletionItems(reflectedField, affordances));
+  }
+
+  if (position >= predicate.operator.from && position < predicate.operator.to) {
+    return {
+      context: 'operator',
+      from: predicate.operator.from,
+      to: predicate.operator.to,
+      items: affordedOperatorCompletionItems(reflectedField, affordances),
+    };
+  }
+
+  if (predicate.operator.operator === 'isNull') {
+    const prefix = predicate.operator.to === position ? ' ' : '';
+    return result('continuation', continuationItemsAt(syntax, position, prefix), false, true);
+  }
+  if (predicate.operator.operator === 'in') {
+    return completeMembershipPredicate(predicate, reflectedField, position, syntax, result);
+  }
+  return completeScalarPredicate(predicate, reflectedField, position, syntax, result);
+};
+
+export const completeSelectionDocument = (
+  document: string,
+  requestedPosition: number,
+  entity: SelectionLanguageEntityReflection,
+  affordances?: SelectionLanguageExecutionAffordances,
+): SelectionLanguageCompletionResult => {
+  const position = clampDocumentPosition(document, requestedPosition);
+  const tree = parser.parse(document);
+  const syntax = syntaxFromTree(document, tree);
+  const expression = expressionAtPosition(syntax.expression, position);
+  const cursorNode = tree.resolveInner(position, -1);
+  const range = (includeOpeningQuote = false) =>
+    completionRangeFromTree(document, tree, position, includeOpeningQuote);
+  const result = (
+    context: SelectionLanguageCursorContext,
+    items: readonly SelectionLanguageCompletionItem[],
+    includeOpeningQuote = false,
+    insertAtCursor = false,
+  ): SelectionLanguageCompletionResult => ({
+    context,
+    ...(insertAtCursor ? { from: position, to: position } : range(includeOpeningQuote)),
+    items,
+  });
+
+  if (!syntax.expression) return result('expression', expressionCompletionItems(entity));
+  if (!expression) {
+    return result('continuation', continuationItemsAt(syntax, position));
+  }
+
+  const nonPredicate = completeNonPredicateExpression(expression, position, entity, syntax, result);
+  if (nonPredicate) return nonPredicate;
+  return completePredicateExpression(
+    expression as SelectionPredicateSyntax,
+    position,
+    entity,
+    affordances,
+    syntax,
+    cursorNode,
+    result,
+  );
+};
+
+export const getSelectionDocumentCursorContext = (
+  document: string,
+  position: number,
+  entity: SelectionLanguageEntityReflection,
+): SelectionLanguageCursorContextResult => {
+  const completion = completeSelectionDocument(document, position, entity);
+  return { kind: completion.context, from: completion.from, to: completion.to };
+};
+
+const semanticFieldClassification = (
+  fieldName: string,
+  entity: SelectionLanguageEntityReflection,
+): SelectionLanguageSemanticClassification['kind'] => {
+  const field = entity.fields.find(candidate => candidate.name === fieldName);
+  if (field) return supportedFieldType(field) ? 'field' : 'unsupported-field';
+  return entity.relations?.some(relation => relation.name === fieldName)
+    ? 'unsupported-relation'
+    : 'invalid-identifier';
+};
+
+export const classifySelectionDocument = (
+  document: string,
+  entity: SelectionLanguageEntityReflection,
+): readonly SelectionLanguageSemanticClassification[] => {
+  const syntax = parseSelectionDocument(document).syntax;
+  const classifications: SelectionLanguageSemanticClassification[] = [];
+  visitExpression(syntax.expression, expression => {
+    if (expression.kind === 'all' || expression.kind === 'none') {
+      classifications.push({ kind: 'keyword', from: expression.from, to: expression.to });
+      return;
+    }
+    if (expression.kind === 'not') {
+      classifications.push({
+        kind: 'keyword',
+        from: expression.operator.from,
+        to: expression.operator.to,
+      });
+      return;
+    }
+    if (expression.kind === 'and' || expression.kind === 'or') {
+      expression.operators.forEach(operator =>
+        classifications.push({ kind: 'keyword', from: operator.from, to: operator.to }),
+      );
+      return;
+    }
+    if (expression.kind !== 'predicate') return;
+    if (expression.field) {
+      classifications.push({
+        kind: semanticFieldClassification(expression.field.text, entity),
+        from: expression.field.from,
+        to: expression.field.to,
+      });
+    }
+    if (expression.operator) {
+      classifications.push({
+        kind: 'operator',
+        from: expression.operator.from,
+        to: expression.operator.to,
+      });
+    }
+    if (expression.value?.kind === 'list-literal') {
+      expression.value.values.forEach(value =>
+        classifications.push({ kind: 'value', from: value.from, to: value.to }),
+      );
+    } else if (expression.value) {
+      classifications.push({ kind: 'value', from: expression.value.from, to: expression.value.to });
+    }
+  });
+  return classifications.sort((left, right) => left.from - right.from || left.to - right.to);
+};
+
+const positionTouches = (range: SelectionLanguageRange, position: number) =>
+  position >= range.from && position <= range.to;
+
+const fieldOperatorLabels = (field: SelectionLanguageFieldReflection) =>
+  operatorCompletionItems(field)
+    .map(item => item.label)
+    .join(', ');
+
+export const hoverSelectionDocument = (
+  document: string,
+  requestedPosition: number,
+  entity: SelectionLanguageEntityReflection,
+): SelectionLanguageHover | undefined => {
+  const position = clampDocumentPosition(document, requestedPosition);
+  const syntax = parseSelectionDocument(document).syntax;
+  let hover: SelectionLanguageHover | undefined;
+  visitExpression(syntax.expression, expression => {
+    if (hover || expression.kind !== 'predicate') return;
+    if (expression.field && positionTouches(expression.field, position)) {
+      const field = entity.fields.find(candidate => candidate.name === expression.field?.text);
+      if (field) {
+        const operators = fieldOperatorLabels(field);
+        hover = {
+          from: expression.field.from,
+          to: expression.field.to,
+          title: `${entity.name}.${field.name}`,
+          detail: `${field.valueType ?? field.type} · ${field.nullable ? 'nullable' : 'required'}`,
+          documentation:
+            field.documentation ??
+            (operators
+              ? `Supported Selection operators: ${operators}.`
+              : 'This Field type is not supported by the Selection language yet.'),
+        };
+      } else if (entity.relations?.some(relation => relation.name === expression.field?.text)) {
+        hover = {
+          from: expression.field.from,
+          to: expression.field.to,
+          title: `${entity.name}.${expression.field.text}`,
+          detail: 'relation · unsupported',
+          documentation: 'Relation predicates are not supported by this language version.',
+        };
+      } else {
+        hover = {
+          from: expression.field.from,
+          to: expression.field.to,
+          title: `Unknown Field ${expression.field.text}`,
+          detail: entity.name,
+          documentation: 'This identifier does not resolve in the selected Entity reflection.',
+        };
+      }
+      return;
+    }
+    if (expression.operator && positionTouches(expression.operator, position)) {
+      const operator = operatorDocumentation[expression.operator.operator];
+      hover = {
+        from: expression.operator.from,
+        to: expression.operator.to,
+        title: operator.title,
+        detail: `Selection operator · ${expression.operator.operator}`,
+        documentation: operator.documentation,
+      };
+    }
+  });
+  return hover;
 };

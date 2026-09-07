@@ -15,6 +15,7 @@ import {
 } from './entity-data-mutations.js';
 import { ExplorerInstanceRelation } from './entity-instance-relation.js';
 import {
+  ExplorerEntityValue,
   formatExplorerEntityValue,
   getExplorerEntityInstanceLabel,
   getExplorerReferenceLocator,
@@ -24,34 +25,6 @@ import { ExplorerEntityReferenceValue } from './entity-reference-value.js';
 import type { ExplorerOperationExecutePanelRenderer } from './operation-detail.js';
 import type { ExplorerOperationRefInputRenderer } from './operation-execute-panel.js';
 import { shouldHandleExplorerNavigation } from './routes.js';
-
-const ExplorerInspectorValue = ({
-  field,
-  value,
-}: {
-  field: ExplorerEntityDetail['fields'][number];
-  value: unknown;
-}) => {
-  const colorSwatch =
-    field.valueType?.toLowerCase() === 'color' &&
-    typeof value === 'string' &&
-    /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)
-      ? value
-      : undefined;
-
-  return colorSwatch ? (
-    <span className='inline-flex items-center gap-2'>
-      <span
-        aria-hidden='true'
-        className='size-3.5 shrink-0 rounded-full border border-black/10 shadow-sm'
-        style={{ backgroundColor: colorSwatch }}
-      />
-      <span>{colorSwatch}</span>
-    </span>
-  ) : (
-    formatExplorerEntityValue(value)
-  );
-};
 
 export const ExplorerEntityInstanceInspector = ({
   active,
@@ -222,7 +195,7 @@ export const ExplorerEntityInstanceInspector = ({
                       <ArrowUpRight className='size-3 shrink-0' />
                     </a>
                   ) : (
-                    <ExplorerInspectorValue field={field} value={value} />
+                    <ExplorerEntityValue field={field} value={value} />
                   )}
                 </dd>
               </div>

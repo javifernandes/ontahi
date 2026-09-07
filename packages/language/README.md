@@ -34,5 +34,29 @@ Valid meaning lowers to the canonical `SelectionAst` from `@ontahi/core`. Incomp
 source ranges remain language-document state. Hosts own execution and keep runtime failures
 separate from syntax and semantic diagnostics.
 
+The same reflection also powers editor-neutral assistance:
+
+```ts
+import {
+  classifySelectionDocument,
+  completeSelectionDocument,
+  hoverSelectionDocument,
+} from '@ontahi/language';
+
+const completion = completeSelectionDocument('completed = ', 12, entityReflection);
+// completion.items: true, false
+
+const classifications = classifySelectionDocument('completed = false', entityReflection);
+const hover = hoverSelectionDocument('completed = false', 2, entityReflection);
+```
+
+Completions come from the recovered syntax tree and static Entity reflection. They cover valid
+Fields, operators, Boolean and enum values, structural scalar placeholders, and grouping/list
+continuations. Optional execution-affordance metadata may hide operators that a host already knows
+it cannot execute; it never changes whether the Selection is intrinsically valid.
+
+No completion or hover performs a runtime query. Dynamic values, Reference lookup, statistics, and
+authority discovery remain outside this package and require an explicit runtime-reflection design.
+
 `@ontahi/language/lezer` exposes the generated parser for editor adapters. Lezer syntax nodes are
 not the package's semantic Selection model.
