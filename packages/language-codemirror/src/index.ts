@@ -13,8 +13,14 @@ const parser = selectionDocumentParser.configure({
   props: [
     styleTags({
       FieldName: tags.variableName,
-      Equals: tags.operator,
+      'Equals ComparisonOperator In Is': tags.operator,
+      'And Or Not': tags.keyword,
+      'All None': tags.atom,
       'True False': tags.bool,
+      Null: tags.null,
+      NumberLiteral: tags.number,
+      StringLiteral: tags.string,
+      'OpenParen CloseParen OpenBracket CloseBracket Comma': tags.punctuation,
     }),
   ],
 });

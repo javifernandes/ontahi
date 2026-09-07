@@ -55,7 +55,11 @@ export const toSelectionLanguageEntityReflection = (
     name: field.name,
     type: field.type,
     nullable: field.nullable,
+    ...(field.valueType ? { valueType: field.valueType } : {}),
+    ...(field.enumValues ? { enumValues: field.enumValues } : {}),
+    ...(field.reference ? { reference: { entityName: field.reference.entityName } } : {}),
   })),
+  relations: entity.relations.map(relation => ({ name: relation.name })),
 });
 
 const hostSelection = (

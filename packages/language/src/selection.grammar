@@ -1,14 +1,49 @@
-@top SelectionDocument { BooleanEquality? }
+@top SelectionDocument { OrExpression? }
 
-BooleanEquality { FieldName Equals BooleanLiteral }
+OrExpression { AndExpression (Or AndExpression)* }
+AndExpression { NotExpression (And NotExpression)* }
+NotExpression { Not* PrimaryExpression }
+PrimaryExpression { All | None | Predicate | ParenthesizedExpression }
+ParenthesizedExpression { OpenParen OrExpression CloseParen }
+
+Predicate { EqualityPredicate | MembershipPredicate | NullPredicate | ComparisonPredicate }
+EqualityPredicate { FieldName Equals ScalarLiteral }
+MembershipPredicate { FieldName In ListLiteral }
+NullPredicate { FieldName Is Null }
+ComparisonPredicate { FieldName ComparisonOperator ScalarLiteral }
+
 FieldName { Identifier }
-Equals { "=" }
+ScalarLiteral { StringLiteral | NumberLiteral | BooleanLiteral }
 BooleanLiteral { True | False }
-True { "true" }
-False { "false" }
+ListLiteral { OpenBracket (ScalarLiteral (Comma ScalarLiteral)*)? CloseBracket }
+
+All { @specialize<Identifier, "all"> }
+None { @specialize<Identifier, "none"> }
+And { @specialize<Identifier, "and"> }
+Or { @specialize<Identifier, "or"> }
+Not { @specialize<Identifier, "not"> }
+In { @specialize<Identifier, "in"> }
+Is { @specialize<Identifier, "is"> }
+Null { @specialize<Identifier, "null"> }
+True { @specialize<Identifier, "true"> }
+False { @specialize<Identifier, "false"> }
+
+Equals { "=" }
+ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }
+LessThanOrEqual { "<=" }
+GreaterThanOrEqual { ">=" }
+LessThan { "<" }
+GreaterThan { ">" }
+OpenParen { "(" }
+CloseParen { ")" }
+OpenBracket { "[" }
+CloseBracket { "]" }
+Comma { "," }
 
 @tokens {
   Identifier { $[A-Za-z_] $[A-Za-z0-9_]* }
+  NumberLiteral { "-"? ("0" | $[1-9] $[0-9]*) ("." $[0-9]+)? ($[eE] ("+" | "-")? $[0-9]+)? }
+  StringLiteral { "\"" (!["\\\n\r] | "\\" _)* "\"" }
   whitespace { std.whitespace+ }
 }
 

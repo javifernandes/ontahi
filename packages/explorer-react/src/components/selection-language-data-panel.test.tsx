@@ -8,7 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 
-import { ExplorerSelectionLanguageDataPanel } from './selection-language-data-panel.js';
+import {
+  ExplorerSelectionLanguageDataPanel,
+  toSelectionLanguageEntityReflection,
+} from './selection-language-data-panel.js';
 
 vi.mock('./selection-language-editor.js', () => ({
   ExplorerSelectionLanguageEditor: ({
@@ -55,6 +58,48 @@ const renderPanel = (request: RuntimeTransport['request'], initialDocument = 'co
 afterEach(cleanup);
 
 describe('ExplorerSelectionLanguageDataPanel', () => {
+  it('projects structural Field semantics without exposing Explorer contracts', () => {
+    expect(
+      toSelectionLanguageEntityReflection({
+        ...entity,
+        fields: [
+          {
+            name: 'status',
+            type: 'enum',
+            nullable: false,
+            enumValues: ['open', 'closed'],
+          },
+          {
+            name: 'owner',
+            type: 'reference',
+            valueType: 'PersonRef',
+            nullable: true,
+            reference: { entityName: 'Person' },
+          },
+        ],
+        relations: [{ name: 'assignee', kind: 'belongsTo', target: 'Person' }],
+      }),
+    ).toEqual({
+      name: 'TodoItem',
+      fields: [
+        {
+          name: 'status',
+          type: 'enum',
+          nullable: false,
+          enumValues: ['open', 'closed'],
+        },
+        {
+          name: 'owner',
+          type: 'reference',
+          valueType: 'PersonRef',
+          nullable: true,
+          reference: { entityName: 'Person' },
+        },
+      ],
+      relations: [{ name: 'assignee' }],
+    });
+  });
+
   it('lowers a valid document into graph.read and keeps the last rows for an invalid draft', async () => {
     const request = vi.fn<RuntimeTransport['request']>(async envelope =>
       createRuntimeProtocolResponse(envelope, {
@@ -92,12 +137,12 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
       target: { value: 'completed =' },
     });
 
-    expect(await screen.findByText('Expected the Boolean literal true or false.')).toBeTruthy();
+    expect(await screen.findByText('Expected a string, number, or Boolean literal.')).toBeTruthy();
     expect(screen.getByText('Stable parser')).toBeTruthy();
     expect(request).toHaveBeenCalledOnce();
     expect(
       screen
-        .getByText('Expected the Boolean literal true or false.')
+        .getByText('Expected a string, number, or Boolean literal.')
         .getAttribute('data-diagnostic-channel'),
     ).toBe('syntax');
   });
@@ -123,13 +168,50 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
       target: { value: 'title = false' },
     });
 
-    expect(await screen.findByText('Field TodoItem.title is string, not Boolean.')).toBeTruthy();
+    expect(
+      await screen.findByText('Field TodoItem.title expects a string value, received Boolean.'),
+    ).toBeTruthy();
     expect(request).toHaveBeenCalledOnce();
     expect(
       screen
-        .getByText('Field TodoItem.title is string, not Boolean.')
+        .getByText('Field TodoItem.title expects a string value, received Boolean.')
         .getAttribute('data-diagnostic-channel'),
     ).toBe('semantic');
+  });
+
+  it('sends composed expressions through the same canonical graph.read request', async () => {
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(envelope, { kind: 'graph-read-result', value: [] }),
+    );
+    renderPanel(request, 'completed = false or completed = true');
+
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      family: 'graph.read',
+      body: {
+        selection: {
+          kind: 'selection',
+          entityName: 'TodoItem',
+          expression: {
+            kind: 'or',
+            operands: [
+              {
+                kind: 'predicate',
+                fieldName: 'completed',
+                operator: 'eq',
+                value: false,
+              },
+              {
+                kind: 'predicate',
+                fieldName: 'completed',
+                operator: 'eq',
+                value: true,
+              },
+            ],
+          },
+        },
+      },
+    });
   });
 
   it('renders protocol rejection only through the execution channel', async () => {
@@ -151,7 +233,7 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
     const request = vi.fn<RuntimeTransport['request']>();
     renderPanel(request, 'completed =');
 
-    expect(screen.getByText('Expected the Boolean literal true or false.')).toBeTruthy();
+    expect(screen.getByText('Expected a string, number, or Boolean literal.')).toBeTruthy();
     expect(screen.queryByText('Running Selection…')).toBeNull();
     expect(request).not.toHaveBeenCalled();
   });

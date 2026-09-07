@@ -14,7 +14,7 @@ Related plans:
 2. [117 Alive UI From Reflected Selections](../backlog/117-alive-ui-from-reflected-selections.md)
 3. [76 Operation Input Metadata And UI](bookops://plans/76-operation-input-metadata-and-ui)
 4. [118a Explorer Selection Language Walking Skeleton](./118a-explorer-selection-language-walking-skeleton.md)
-5. [118b Selection Expression Algebra](../next/118b-selection-expression-algebra.md)
+5. [118b Selection Expression Algebra](118b-selection-expression-algebra.md)
 6. [118c Reflection-Powered Selection Language Service](../backlog/118c-reflection-powered-selection-language-service.md)
 7. [118d Projectional Selection Editor Experiment](../backlog/118d-projectional-selection-editor-experiment.md)
 8. [119 Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
