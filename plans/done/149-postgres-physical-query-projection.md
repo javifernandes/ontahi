@@ -113,8 +113,8 @@ Final verification:
 - `pnpm --filter @ontahi/postgres test:integration` — 42 passed against PostgreSQL.
 - `pnpm --filter @ontahi/postgres typecheck` and `pnpm --filter @ontahi/postgres lint` — passed.
 - `pnpm test:packages` — all 11 package suites passed; PostgreSQL passed 96 tests.
-- `pnpm test:coverage:packages` — all package coverage suites passed; PostgreSQL finished at 90.18%
-  statements, 80.89% branches, 96.17% functions, and 91.16% lines.
+- `pnpm test:coverage:packages` — all package coverage suites passed. A final focused rerun after
+  review left PostgreSQL at 90.22% statements, 80.92% branches, 96.19% functions, and 91.2% lines.
 - `pnpm test:examples` — 67 passed; the five optional Classroom PostgreSQL tests were skipped
   because `ONTAHI_POSTGRES_TEST_URL` was not configured.
 - `pnpm format:check`, `pnpm lint`, `pnpm build`, `pnpm typecheck`, and `pnpm todo:build` — passed.

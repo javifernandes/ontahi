@@ -280,6 +280,14 @@ const createPostgresBaseDataGraphRuntime = (
           projectedFields,
         });
 
+  const projectedEntityRowFields = (
+    projectedFields: readonly string[] | undefined,
+    fallbackField: string,
+  ) => {
+    if (projectedFields === undefined) return undefined;
+    return projectedFields.length > 0 ? projectedFields : [fallbackField];
+  };
+
   const executeRelatedRootRead = async (
     spec: RelatedRootReadSpec<any, any, any, any, any>,
     projectedFields?: readonly string[],
@@ -351,12 +359,7 @@ const createPostgresBaseDataGraphRuntime = (
       if (spec.mode === 'entityRows') {
         return readSpec(targetSpec, {
           entityRows: true,
-          projectedFields:
-            projectedFields === undefined
-              ? undefined
-              : projectedFields.length > 0
-                ? projectedFields
-                : [targetField],
+          projectedFields: projectedEntityRowFields(projectedFields, targetField),
         });
       }
       if (spec.mode === 'countBySource') {
@@ -405,12 +408,7 @@ const createPostgresBaseDataGraphRuntime = (
     if (spec.mode === 'entityRows') {
       return readSpec(targetSpec, {
         entityRows: true,
-        projectedFields:
-          projectedFields === undefined
-            ? undefined
-            : projectedFields.length > 0
-              ? projectedFields
-              : [targetField],
+        projectedFields: projectedEntityRowFields(projectedFields, targetField),
       });
     }
     if (spec.mode === 'countBySource') {
