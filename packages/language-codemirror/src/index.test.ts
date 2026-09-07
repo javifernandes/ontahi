@@ -475,7 +475,7 @@ describe('Selection CodeMirror adapter', () => {
     parent.remove();
   });
 
-  it('keeps unresolved or denied Reference identities as ordinary source text', async () => {
+  it('keeps unavailable Reference identities as source and retries transient failures', async () => {
     const parent = document.createElement('div');
     document.body.append(parent);
     const provider = referenceProvider();
@@ -497,12 +497,29 @@ describe('Selection CodeMirror adapter', () => {
     expect(view.state.doc.toString()).toBe(source);
     expect(parent.querySelector('.cm-content')?.textContent).toContain('private-list');
 
+    view.dispatch({ changes: { from: view.state.doc.length, insert: ' ' } });
+    await vi.waitFor(() => expect(provider.resolve).toHaveBeenCalledTimes(2));
+    expect(parent.querySelector('.cm-ontahi-reference-value')).toBeNull();
+
+    view.dispatch({ changes: { from: view.state.doc.length, insert: ' ' } });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(provider.resolve).toHaveBeenCalledTimes(2);
+
+    const searchSource = 'list = ';
+    const searchState = EditorState.create({
+      doc: searchSource,
+      selection: { anchor: searchSource.length },
+      extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+        referenceValues: provider,
+      }),
+    });
     vi.mocked(provider.search).mockRejectedValueOnce(new Error('access denied'));
     expect(
       await selectionReferenceValueCompletionSource(
-        new CompletionContext(view.state, view.state.doc.length, true),
+        new CompletionContext(searchState, searchSource.length, true),
       ),
     ).toBeNull();
+    expect(provider.search).toHaveBeenCalledOnce();
 
     view.destroy();
     parent.remove();

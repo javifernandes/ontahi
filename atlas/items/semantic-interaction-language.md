@@ -122,8 +122,9 @@ The established textual projection now covers `all`, `none`, Boolean `and` / `or
 parentheses, equality, membership lists, null checks, and scalar ordering comparisons. Parentheses
 remain in recoverable document syntax while lowering delegates normalization to Core's existing
 Selection constructors. The initial compatibility matrix admits matching Boolean, number, string,
-id, and enum literals; ordering remains number-only; and date, datetime, JSON, Reference, and
-relation meanings fail explicitly until their portable semantics are designed.
+id, and enum literals plus quoted single-field Reference identities; ordering remains number-only;
+and date, datetime, JSON, composite Reference identity, and relation meanings fail explicitly until
+their portable semantics are designed.
 
 The first hybrid projection is an opt-in CodeMirror adapter policy for finite Boolean and enum
 literals. It derives replacement controls only from a complete, semantically resolved document;

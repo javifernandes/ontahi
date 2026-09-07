@@ -453,7 +453,7 @@ export const selectionReferenceValueProjectionExtensions = (
             })
             .catch(() => {
               if (!this.destroyed && !controller.signal.aborted) {
-                this.view.dispatch({ effects: resolvedReferenceValue.of({ key }) });
+                this.pending.delete(key);
               }
             });
         }

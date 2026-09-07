@@ -11,7 +11,7 @@ import {
   type SelectionReferenceValueProvider,
 } from '@ontahi/language-codemirror';
 import { CircleHelp } from 'lucide-react';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { cx } from '../internal/cx.js';
 
@@ -107,6 +107,7 @@ export function ExplorerSelectionLanguageEditor({
   value,
 }: ExplorerSelectionLanguageEditorProps) {
   const helpId = useId();
+  const [helpDismissed, setHelpDismissed] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
   const languageCompartmentRef = useRef(new Compartment());
@@ -191,11 +192,22 @@ export function ExplorerSelectionLanguageEditor({
       )}
     >
       <div ref={hostRef} className='overflow-hidden rounded-md' />
-      <div className='group/help absolute right-2 top-1/2 z-20 -translate-y-1/2'>
+      <div
+        className='group/help absolute right-2 top-1/2 z-20 -translate-y-1/2'
+        onFocus={() => setHelpDismissed(false)}
+        onMouseEnter={() => setHelpDismissed(false)}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            setHelpDismissed(true);
+          }
+        }}
+      >
         <button
           type='button'
           aria-label='Selection editor help'
-          aria-describedby={helpId}
+          aria-describedby={helpDismissed ? undefined : helpId}
           className='flex size-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
         >
           <CircleHelp aria-hidden='true' className='size-4' />
@@ -203,7 +215,12 @@ export function ExplorerSelectionLanguageEditor({
         <div
           id={helpId}
           role='tooltip'
-          className='pointer-events-none invisible absolute right-0 top-full mt-2 w-72 rounded-lg border bg-popover px-3 py-2 text-xs leading-relaxed text-popover-foreground opacity-0 shadow-lg transition group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100'
+          aria-hidden={helpDismissed}
+          className={cx(
+            'pointer-events-none invisible absolute right-0 top-full mt-2 w-72 rounded-lg border bg-popover px-3 py-2 text-xs leading-relaxed text-popover-foreground opacity-0 shadow-lg transition',
+            !helpDismissed &&
+              'group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100',
+          )}
         >
           Ctrl-Space for suggestions. Hover a Field or operator for details. Press Escape on a value
           control to edit its source text.

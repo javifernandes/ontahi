@@ -125,6 +125,13 @@ describe('ExplorerSelectionLanguageEditor', () => {
     expect(screen.getByRole('tooltip').textContent).toBe(
       'Ctrl-Space for suggestions. Hover a Field or operator for details. Press Escape on a value control to edit its source text.',
     );
+    fireEvent.focus(help);
+    fireEvent.keyDown(help, { key: 'Escape' });
+    expect(help.getAttribute('aria-describedby')).toBeNull();
+    expect(screen.getByRole('tooltip', { hidden: true }).getAttribute('aria-hidden')).toBe('true');
+    fireEvent.mouseEnter(help.parentElement!);
+    expect(help.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByRole('tooltip').getAttribute('aria-hidden')).toBe('false');
     expect((control as HTMLSelectElement).value).toBe('false');
     fireEvent.change(control, { target: { value: 'true' } });
     expect(onChange).toHaveBeenCalledOnce();
