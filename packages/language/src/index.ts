@@ -28,6 +28,7 @@ export type SelectionLanguageDiagnostic = SelectionLanguageRange & {
     | 'selection.semantic.non-nullable-field'
     | 'selection.semantic.unknown-enum-value'
     | 'selection.semantic.non-finite-number'
+    | 'selection.semantic.unsupported-reference-identity'
     | 'selection.semantic.unsupported-relation';
   readonly message: string;
 };
@@ -38,7 +39,10 @@ export type SelectionLanguageFieldReflection = {
   readonly nullable: boolean;
   readonly valueType?: string;
   readonly enumValues?: readonly string[];
-  readonly reference?: { readonly entityName: string };
+  readonly reference?: {
+    readonly entityName: string;
+    readonly identity?: { readonly name: string; readonly fields: readonly string[] };
+  };
   readonly documentation?: string;
 };
 
@@ -159,6 +163,13 @@ export type SelectionLanguageCompletionResult = SelectionLanguageRange & {
 
 export type SelectionLanguageCursorContextResult = SelectionLanguageRange & {
   readonly kind: SelectionLanguageCursorContext;
+};
+
+export type SelectionReferenceValueContext = SelectionLanguageRange & {
+  readonly fieldName: string;
+  readonly targetEntityName: string;
+  readonly identityField: string;
+  readonly value?: string;
 };
 
 export type SelectionLanguageExecutionAffordances = {
@@ -572,6 +583,7 @@ const semanticDiagnostic = (
 const supportedFieldType = (field: SelectionLanguageFieldReflection) => {
   const valueType = field.valueType?.toLowerCase();
   if (valueType === 'date' || valueType === 'datetime') return undefined;
+  if (field.reference?.identity?.fields.length === 1) return 'reference' as const;
   if (field.type === 'enum' || (field.enumValues?.length ?? 0) > 0) return 'enum' as const;
   if (
     field.type === 'boolean' ||
@@ -603,7 +615,29 @@ const expectedLiteralKind = (fieldType: NonNullable<ReturnType<typeof supportedF
       : 'string-literal';
 
 const expectedLiteralLabel = (fieldType: NonNullable<ReturnType<typeof supportedFieldType>>) =>
-  fieldType === 'boolean' ? 'Boolean' : fieldType === 'number' ? 'number' : 'string';
+  fieldType === 'boolean'
+    ? 'Boolean'
+    : fieldType === 'number'
+      ? 'number'
+      : fieldType === 'reference'
+        ? 'quoted Reference identity'
+        : 'string';
+
+const resolvedLiteralValue = (
+  literal: SelectionScalarLiteralSyntax,
+  field: SelectionLanguageFieldReflection,
+  fieldType: NonNullable<ReturnType<typeof supportedFieldType>>,
+): unknown => {
+  if (fieldType !== 'reference') return literalValue(literal);
+  const identityField = field.reference?.identity?.fields[0];
+  return identityField && literal.kind === 'string-literal' && literal.value !== undefined
+    ? {
+        kind: 'entity-ref',
+        entityName: field.reference!.entityName,
+        locator: { [identityField]: literal.value },
+      }
+    : undefined;
+};
 
 const validateLiteral = (
   literal: SelectionScalarLiteralSyntax,
@@ -678,6 +712,19 @@ const resolvePredicate = (
     };
   }
 
+  if (reflectedField.reference && reflectedField.reference.identity?.fields.length !== 1) {
+    const identityFields = reflectedField.reference.identity?.fields ?? [];
+    return {
+      diagnostics: [
+        semanticDiagnostic(
+          'selection.semantic.unsupported-reference-identity',
+          `Reference Field ${entity.name}.${field.text} requires exactly one reflected target identity Field; received ${identityFields.length}.`,
+          field,
+        ),
+      ],
+    };
+  }
+
   const fieldType = supportedFieldType(reflectedField);
   if (!fieldType) {
     return {
@@ -734,7 +781,7 @@ const resolvePredicate = (
     return { diagnostics };
   }
 
-  const values = literals.map(literalValue);
+  const values = literals.map(literal => resolvedLiteralValue(literal, reflectedField, fieldType));
   if (values.some(value => value === undefined)) return { diagnostics };
 
   if (operator.operator === 'in') {
@@ -861,6 +908,22 @@ const completionTokenNames = new Set([
 const clampDocumentPosition = (document: string, position: number) =>
   Math.max(0, Math.min(document.length, position));
 
+const unclosedStringStartAt = (document: string, position: number) => {
+  let start: number | undefined;
+  let escaped = false;
+  for (let index = 0; index < position; index += 1) {
+    const character = document[index];
+    if (escaped) {
+      escaped = false;
+    } else if (character === '\\') {
+      escaped = true;
+    } else if (character === '"') {
+      start = start === undefined ? index : undefined;
+    }
+  }
+  return start;
+};
+
 const completionRangeFromTree = (
   document: string,
   tree: Tree,
@@ -870,6 +933,12 @@ const completionRangeFromTree = (
   let node: SyntaxNode | null = tree.resolveInner(position, -1);
   while (node && !completionTokenNames.has(node.name)) node = node.parent;
   if (!node || node.from > position || node.to < position) {
+    const unclosedStringStart = includeOpeningQuote
+      ? unclosedStringStartAt(document, position)
+      : undefined;
+    if (unclosedStringStart !== undefined) {
+      return { from: unclosedStringStart, to: position };
+    }
     return includeOpeningQuote && position > 0 && document[position - 1] === '"'
       ? { from: position - 1, to: position }
       : { from: position, to: position };
@@ -1031,8 +1100,15 @@ const valueCompletionItems = (
   if (fieldType === 'number') {
     return [{ label: '0', apply: '0', kind: 'value', detail: 'Number literal' }];
   }
-  return fieldType === 'string' || fieldType === 'id'
-    ? [{ label: '""', apply: '""', kind: 'value', detail: 'String literal' }]
+  return fieldType === 'string' || fieldType === 'id' || fieldType === 'reference'
+    ? [
+        {
+          label: '""',
+          apply: '""',
+          kind: 'value',
+          detail: fieldType === 'reference' ? 'Reference identity' : 'String literal',
+        },
+      ]
     : [];
 };
 
@@ -1285,6 +1361,47 @@ export const getSelectionDocumentCursorContext = (
 ): SelectionLanguageCursorContextResult => {
   const completion = completeSelectionDocument(document, position, entity);
   return { kind: completion.context, from: completion.from, to: completion.to };
+};
+
+export const getSelectionReferenceValueContext = (
+  document: string,
+  requestedPosition: number,
+  entity: SelectionLanguageEntityReflection,
+): SelectionReferenceValueContext | undefined => {
+  const position = clampDocumentPosition(document, requestedPosition);
+  const parsed = parseSelectionDocument(document);
+  const expression = expressionAtPosition(parsed.syntax.expression, position);
+  if (!expression || expression.kind !== 'predicate' || !expression.field) return undefined;
+
+  const field = entity.fields.find(candidate => candidate.name === expression.field?.text);
+  const identityField = field?.reference?.identity?.fields[0];
+  if (
+    !field?.reference ||
+    field.reference.identity?.fields.length !== 1 ||
+    !identityField ||
+    !expression.operator ||
+    !['eq', 'in'].includes(expression.operator.operator)
+  ) {
+    return undefined;
+  }
+
+  const completion = completeSelectionDocument(document, position, entity);
+  if (completion.context !== 'value' && completion.context !== 'list-value') return undefined;
+  const literal =
+    expression.value?.kind === 'list-literal'
+      ? expression.value.values.find(value => position >= value.from && position <= value.to)
+      : expression.value;
+
+  return {
+    from: completion.from,
+    to: completion.to,
+    fieldName: field.name,
+    targetEntityName: field.reference.entityName,
+    identityField,
+    ...(literal?.kind === 'string-literal' && literal.value !== undefined
+      ? { value: literal.value }
+      : {}),
+  };
 };
 
 const semanticFieldClassification = (

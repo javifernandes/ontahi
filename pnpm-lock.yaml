@@ -302,6 +302,9 @@ importers:
 
   packages/explorer-react:
     dependencies:
+      '@codemirror/commands':
+        specifier: ^6.0.0
+        version: 6.11.0
       '@codemirror/state':
         specifier: ^6.0.0
         version: 6.7.4

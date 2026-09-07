@@ -1,12 +1,25 @@
 'use client';
 
+import { history, historyKeymap } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
+import type { ReflectedEntityDataReader } from '@ontahi/core/data-graph';
 import type { SelectionLanguageEntityReflection } from '@ontahi/language';
-import { selectionExpressionExtensions } from '@ontahi/language-codemirror';
-import { useEffect, useRef } from 'react';
+import {
+  selectionExpressionExtensions,
+  type SelectionReferenceValueOption,
+  type SelectionReferenceValueProvider,
+} from '@ontahi/language-codemirror';
+import { CircleHelp } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { cx } from '../internal/cx.js';
+
+import {
+  getExplorerReferenceRowPrimaryLabel,
+  getExplorerReferenceRowSecondaryLabel,
+  toExplorerReferenceDisplayString,
+} from './entity-reference-presentation.js';
 
 export type ExplorerSelectionLanguageEditorProps = {
   readonly label: string;
@@ -14,7 +27,49 @@ export type ExplorerSelectionLanguageEditorProps = {
   readonly entity: SelectionLanguageEntityReflection;
   readonly className?: string;
   readonly onChange: (value: string) => void;
+  readonly referenceValues?: SelectionReferenceValueProvider;
 };
+
+const referenceOption = (
+  row: Record<string, unknown>,
+  identityField: string,
+  display: Parameters<typeof getExplorerReferenceRowPrimaryLabel>[1],
+): SelectionReferenceValueOption | undefined => {
+  const value = toExplorerReferenceDisplayString(row[identityField]);
+  if (!value) return undefined;
+  const label = getExplorerReferenceRowPrimaryLabel(row, display);
+  const detail = getExplorerReferenceRowSecondaryLabel(row, display);
+  return { value, label, ...(detail && detail !== label ? { detail } : {}) };
+};
+
+export const createExplorerSelectionReferenceValueProvider = (
+  reader: ReflectedEntityDataReader,
+): SelectionReferenceValueProvider => ({
+  search: async ({ identityField, query, signal, targetEntityName }) => {
+    if (signal.aborted) return [];
+    const result = await reader.readEntityData({
+      entityName: targetEntityName,
+      search: query,
+      page: 1,
+      pageSize: 6,
+    });
+    return signal.aborted
+      ? []
+      : result.rows.flatMap(row => referenceOption(row, identityField, result.display) ?? []);
+  },
+  resolve: async ({ identityField, signal, targetEntityName, value }) => {
+    if (signal.aborted) return undefined;
+    const result = await reader.readEntityData({
+      entityName: targetEntityName,
+      filters: [{ field: identityField, operator: 'equals', value }],
+      page: 1,
+      pageSize: 1,
+    });
+    return signal.aborted
+      ? undefined
+      : referenceOption(result.rows[0] ?? {}, identityField, result.display);
+  },
+});
 
 const explorerSelectionEditorTheme = EditorView.theme({
   '&': {
@@ -28,7 +83,7 @@ const explorerSelectionEditorTheme = EditorView.theme({
     caretColor: 'currentColor',
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     minHeight: '2.5rem',
-    padding: '0.625rem 0.75rem',
+    padding: '0.625rem 2.75rem 0.625rem 0.75rem',
   },
   '.cm-line': {
     padding: '0',
@@ -48,8 +103,11 @@ export function ExplorerSelectionLanguageEditor({
   entity,
   label,
   onChange,
+  referenceValues,
   value,
 }: ExplorerSelectionLanguageEditorProps) {
+  const helpId = useId();
+  const [helpDismissed, setHelpDismissed] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
   const languageCompartmentRef = useRef(new Compartment());
@@ -66,7 +124,14 @@ export function ExplorerSelectionLanguageEditor({
       state: EditorState.create({
         doc: value,
         extensions: [
-          languageCompartmentRef.current.of(selectionExpressionExtensions(entity)),
+          history(),
+          keymap.of(historyKeymap),
+          languageCompartmentRef.current.of(
+            selectionExpressionExtensions(entity, {
+              finiteValueProjections: true,
+              ...(referenceValues ? { referenceValues } : {}),
+            }),
+          ),
           labelCompartmentRef.current.of(EditorView.contentAttributes.of({ 'aria-label': label })),
           EditorView.lineWrapping,
           explorerSelectionEditorTheme,
@@ -93,9 +158,14 @@ export function ExplorerSelectionLanguageEditor({
 
   useEffect(() => {
     viewRef.current?.dispatch({
-      effects: languageCompartmentRef.current.reconfigure(selectionExpressionExtensions(entity)),
+      effects: languageCompartmentRef.current.reconfigure(
+        selectionExpressionExtensions(entity, {
+          finiteValueProjections: true,
+          ...(referenceValues ? { referenceValues } : {}),
+        }),
+      ),
     });
-  }, [entity]);
+  }, [entity, referenceValues]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
@@ -116,11 +186,46 @@ export function ExplorerSelectionLanguageEditor({
 
   return (
     <div
-      ref={hostRef}
       className={cx(
-        'overflow-hidden rounded-md border bg-background text-foreground focus-within:border-primary',
+        'relative rounded-md border bg-background text-foreground focus-within:border-primary',
         className,
       )}
-    />
+    >
+      <div ref={hostRef} className='overflow-hidden rounded-md' />
+      <div
+        className='group/help absolute right-2 top-1/2 z-20 -translate-y-1/2'
+        onFocus={() => setHelpDismissed(false)}
+        onMouseEnter={() => setHelpDismissed(false)}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            setHelpDismissed(true);
+          }
+        }}
+      >
+        <button
+          type='button'
+          aria-label='Selection editor help'
+          aria-describedby={helpDismissed ? undefined : helpId}
+          className='flex size-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
+        >
+          <CircleHelp aria-hidden='true' className='size-4' />
+        </button>
+        <div
+          id={helpId}
+          role='tooltip'
+          aria-hidden={helpDismissed}
+          className={cx(
+            'pointer-events-none invisible absolute right-0 top-full mt-2 w-72 rounded-lg border bg-popover px-3 py-2 text-xs leading-relaxed text-popover-foreground opacity-0 shadow-lg transition',
+            !helpDismissed &&
+              'group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100',
+          )}
+        >
+          Ctrl-Space for suggestions. Hover a Field or operator for details. Press Escape on a value
+          control to edit its source text.
+        </div>
+      </div>
+    </div>
   );
 }

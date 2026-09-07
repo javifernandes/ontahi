@@ -12,7 +12,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { linter, type Diagnostic, type LintSource } from '@codemirror/lint';
-import { Facet, type Extension } from '@codemirror/state';
+import type { Extension } from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -35,6 +35,32 @@ import {
 } from '@ontahi/language';
 import { selectionDocumentParser } from '@ontahi/language/lezer';
 
+import { selectionFiniteValueProjectionExtensions } from './finite-value-projection.js';
+import {
+  selectionReferenceValueCompletionSource,
+  selectionReferenceValuePasteExtension,
+  selectionReferenceValueProjectionExtensions,
+  selectionReferenceValueProvider,
+  type SelectionReferenceValueProvider,
+} from './reference-value-projection.js';
+import { selectionExpressionEntity } from './selection-state.js';
+
+export {
+  deriveSelectionFiniteValueProjections,
+  type SelectionFiniteValueProjection,
+  type SelectionFiniteValueProjectionChoice,
+} from './finite-value-projection.js';
+export {
+  deriveSelectionReferenceValueProjections,
+  selectionReferenceValueCompletionSource,
+  type SelectionReferenceValueOption,
+  type SelectionReferenceValueProjection,
+  type SelectionReferenceValueProvider,
+  type SelectionReferenceValueRequest,
+  type SelectionReferenceValueResolveRequest,
+  type SelectionReferenceValueSearchRequest,
+} from './reference-value-projection.js';
+
 const parser = selectionDocumentParser.configure({
   props: [
     styleTags({
@@ -55,11 +81,6 @@ export const selectionExpressionLanguage = LRLanguage.define({ parser });
 
 export const selectionExpressionLanguageSupport = () =>
   new LanguageSupport(selectionExpressionLanguage);
-
-const selectionExpressionEntity = Facet.define<
-  SelectionLanguageEntityReflection,
-  SelectionLanguageEntityReflection | undefined
->({ combine: values => values.at(-1) });
 
 const completionType = (kind: SelectionLanguageCompletionItem['kind']): Completion['type'] =>
   ({
@@ -280,10 +301,17 @@ export const selectionExpressionLinter =
   view =>
     toCodeMirrorDiagnostics(analyzeSelectionDocument(view.state.doc.toString(), entity));
 
+export type SelectionExpressionExtensionOptions = {
+  readonly finiteValueProjections?: boolean;
+  readonly referenceValues?: SelectionReferenceValueProvider;
+};
+
 export const selectionExpressionExtensions = (
   entity: SelectionLanguageEntityReflection,
+  options: SelectionExpressionExtensionOptions = {},
 ): readonly Extension[] => [
   selectionExpressionEntity.of(entity),
+  ...(options.referenceValues ? [selectionReferenceValueProvider.of(options.referenceValues)] : []),
   selectionExpressionLanguageSupport(),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
   keymap.of([
@@ -294,8 +322,14 @@ export const selectionExpressionExtensions = (
       preventDefault: true,
     },
   ]),
-  autocompletion({ override: [selectionExpressionCompletionSource], icons: false }),
+  autocompletion({
+    override: [selectionReferenceValueCompletionSource, selectionExpressionCompletionSource],
+    icons: false,
+  }),
+  selectionReferenceValuePasteExtension,
   selectionExpressionSemanticHighlighting(entity),
+  ...(options.finiteValueProjections ? selectionFiniteValueProjectionExtensions(entity) : []),
+  ...(options.referenceValues ? selectionReferenceValueProjectionExtensions(entity) : []),
   hoverTooltip(selectionExpressionHoverSource, { hideOnChange: true }),
   selectionExpressionAssistanceTheme,
   linter(selectionExpressionLinter(entity), { delay: 0 }),

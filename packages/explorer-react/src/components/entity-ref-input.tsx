@@ -4,12 +4,14 @@ import { useReflectedEntityDataQuery } from '@ontahi/react/graph';
 import { Loader2, Search } from 'lucide-react';
 import { useDeferredValue, useEffect, useRef, useState } from 'react';
 
-import type {
-  ExplorerEntityDisplayDescriptor,
-  ExplorerOperationInputRefDescriptor,
-} from '../contracts/index.js';
+import type { ExplorerOperationInputRefDescriptor } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
+import {
+  getExplorerReferenceRowPrimaryLabel,
+  getExplorerReferenceRowSecondaryLabel,
+  toExplorerReferenceDisplayString,
+} from './entity-reference-presentation.js';
 import {
   getExplorerEntityRefInputFieldValue,
   updateExplorerEntityRefInputDraft,
@@ -25,49 +27,15 @@ export type ExplorerEntityRefInputProps = {
   variant?: ExplorerEntityRefInputVariant;
 };
 
-const toDisplayString = (value: unknown) => {
-  if (value == null) {
-    return '';
-  }
-
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-    ? String(value)
-    : JSON.stringify(value);
-};
-
 const getEntityRowDisplayValues = (row: Record<string, unknown>, fields: readonly string[] = []) =>
-  fields.map(field => toDisplayString(row[field])).filter(Boolean);
-
-const getEntityRowDisplayValue = (row: Record<string, unknown>, fields: readonly string[] = []) =>
-  getEntityRowDisplayValues(row, fields)[0] ?? '';
-
-const getFallbackEntityRowPrimaryLabel = (row: Record<string, unknown>) =>
-  toDisplayString(row.title) ||
-  toDisplayString(row.displayName) ||
-  toDisplayString(row.email) ||
-  toDisplayString(row.slug) ||
-  toDisplayString(row.id) ||
-  Object.values(row).map(toDisplayString).find(Boolean) ||
-  'Untitled row';
-
-const getEntityRowPrimaryLabel = (
-  row: Record<string, unknown>,
-  display?: ExplorerEntityDisplayDescriptor,
-) =>
-  getEntityRowDisplayValue(row, display?.primary ? [display.primary] : []) ||
-  getFallbackEntityRowPrimaryLabel(row);
-
-const getEntityRowSecondaryLabel = (
-  row: Record<string, unknown>,
-  display?: ExplorerEntityDisplayDescriptor,
-) => [...new Set(getEntityRowDisplayValues(row, display?.secondary))].join(' · ');
+  fields.map(field => toExplorerReferenceDisplayString(row[field])).filter(Boolean);
 
 const getEntityRowLocatorLabel = (
   row: Record<string, unknown>,
   locator: ExplorerOperationInputRefDescriptor['locators'][number],
 ) =>
   locator.sourceFields
-    .map(field => toDisplayString(row[field]))
+    .map(field => toExplorerReferenceDisplayString(row[field]))
     .filter(Boolean)
     .join(' · ');
 
@@ -161,9 +129,9 @@ export function ExplorerEntityRefInput({
   const selectRow = (row: Record<string, unknown>) => {
     cancelScheduledClose();
     const locatorValues = resolveLocatorValuesFromRow(row, locator, query);
-    const nextValue = toDisplayString(locatorValues[locatorField]);
-    const nextLabel = getEntityRowPrimaryLabel(row, display);
-    const nextSecondary = getEntityRowSecondaryLabel(row, display);
+    const nextValue = toExplorerReferenceDisplayString(locatorValues[locatorField]);
+    const nextLabel = getExplorerReferenceRowPrimaryLabel(row, display);
+    const nextSecondary = getExplorerReferenceRowSecondaryLabel(row, display);
 
     setSelectedDisplay({
       label: nextLabel,
@@ -258,9 +226,9 @@ export function ExplorerEntityRefInput({
               ) : null}
               {!isLoading
                 ? rows.map((row, index) => {
-                    const primary = getEntityRowPrimaryLabel(row, display);
+                    const primary = getExplorerReferenceRowPrimaryLabel(row, display);
                     const locatorLabel = getEntityRowLocatorLabel(row, locator);
-                    const displaySecondary = getEntityRowSecondaryLabel(row, display);
+                    const displaySecondary = getExplorerReferenceRowSecondaryLabel(row, display);
                     const secondary = [...new Set([displaySecondary, locatorLabel])]
                       .filter(value => value && value !== primary)
                       .join(' · ');

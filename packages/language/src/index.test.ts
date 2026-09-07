@@ -31,6 +31,15 @@ const Item = {
       nullable: false,
       reference: { entityName: 'Person' },
     },
+    {
+      name: 'list',
+      type: 'reference',
+      nullable: true,
+      reference: {
+        entityName: 'TodoList',
+        identity: { name: 'refById', fields: ['id'] },
+      },
+    },
   ],
   relations: [{ name: 'comments' }],
 } as const;
@@ -240,6 +249,40 @@ describe('Selection expression lowering', () => {
     ['score in [1, 3]', { kind: 'predicate', fieldName: 'score', operator: 'in', values: [1, 3] }],
     ['score in []', { kind: 'predicate', fieldName: 'score', operator: 'in', values: [] }],
     ['score = -1.5e2', { kind: 'predicate', fieldName: 'score', operator: 'eq', value: -150 }],
+    [
+      'list = "list-inbox"',
+      {
+        kind: 'predicate',
+        fieldName: 'list',
+        operator: 'eq',
+        value: {
+          kind: 'entity-ref',
+          entityName: 'TodoList',
+          locator: { id: 'list-inbox' },
+        },
+      },
+    ],
+    [
+      'list in ["list-inbox", "list-later"]',
+      {
+        kind: 'predicate',
+        fieldName: 'list',
+        operator: 'in',
+        values: [
+          {
+            kind: 'entity-ref',
+            entityName: 'TodoList',
+            locator: { id: 'list-inbox' },
+          },
+          {
+            kind: 'entity-ref',
+            entityName: 'TodoList',
+            locator: { id: 'list-later' },
+          },
+        ],
+      },
+    ],
+    ['list is null', { kind: 'predicate', fieldName: 'list', operator: 'isNull' }],
   ] as const)('lowers %s to the established Selection operator', (document, expected) => {
     expect(expressionOf(document)).toEqual(expected);
   });
@@ -371,7 +414,6 @@ describe('Selection expression semantics', () => {
     ['createdAt = "2026-01-01"', 'createdAt', 'date'],
     ['startsAt = "2026-01-01T00:00:00Z"', 'startsAt', 'DateTime'],
     ['metadata = "{}"', 'metadata', 'json'],
-    ['owner = "person-1"', 'owner', 'reference'],
   ] as const)('rejects unsettled semantics for %s', (document, fieldName, type) => {
     expect(analyzeSelectionDocument(document, Item).semanticDiagnostics).toEqual([
       {
@@ -380,6 +422,44 @@ describe('Selection expression semantics', () => {
         message: `Field Item.${fieldName} has unsupported ${type} semantics in this language version.`,
         from: 0,
         to: fieldName.length,
+      },
+    ]);
+  });
+
+  it('rejects a Reference Field without exactly one reflected identity Field', () => {
+    expect(analyzeSelectionDocument('owner = "person-1"', Item).semanticDiagnostics).toEqual([
+      {
+        channel: 'semantic',
+        code: 'selection.semantic.unsupported-reference-identity',
+        message:
+          'Reference Field Item.owner requires exactly one reflected target identity Field; received 0.',
+        from: 0,
+        to: 5,
+      },
+    ]);
+    expect(
+      analyzeSelectionDocument('owner = "person-1"', {
+        name: 'Item',
+        fields: [
+          {
+            name: 'owner',
+            type: 'reference',
+            nullable: false,
+            reference: {
+              entityName: 'Person',
+              identity: { name: 'refByTenantAndId', fields: ['tenantId', 'id'] },
+            },
+          },
+        ],
+      }).semanticDiagnostics,
+    ).toEqual([
+      {
+        channel: 'semantic',
+        code: 'selection.semantic.unsupported-reference-identity',
+        message:
+          'Reference Field Item.owner requires exactly one reflected target identity Field; received 2.',
+        from: 0,
+        to: 5,
       },
     ]);
   });

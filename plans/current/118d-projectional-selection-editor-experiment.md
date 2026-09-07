@@ -1,6 +1,6 @@
 # 118d. Projectional Selection Editor Experiment
 
-Status: backlog
+Status: current
 
 Canonical ID: `ontahi://plans/118d-projectional-selection-editor-experiment`
 
@@ -29,6 +29,11 @@ There is no widget-owned semantic Selection state.
 Use an enum Field for the primary experiment because its choices are finite in static reflection.
 A Boolean toggle may be included only if it does not expand the interaction model. Dates and Refs
 remain deferred because their encoding and runtime lookup introduce different risks.
+
+The executable Todo domain has no Entity enum Field. The first host demonstration therefore uses
+the existing `TodoItem.completed` Boolean as a two-choice finite projection, while adapter tests
+exercise the same mechanism with enum reflection. This keeps the experiment focused on reversible
+projection behavior instead of expanding the example domain solely to manufacture a demo value.
 
 ## Scope
 
@@ -59,19 +64,19 @@ remain deferred because their encoding and runtime lookup introduce different ri
 
 ## Acceptance Checklist
 
-- [ ] The widget is derived only for a syntactically complete, semantically resolved enum literal.
-- [ ] Selecting a value changes the underlying quoted text, reparses, and lowers to the expected
+- [x] The widget is derived only for a syntactically complete, semantically resolved finite literal.
+- [x] Selecting a value changes the underlying quoted text, reparses, and lowers to the expected
       existing `eq` or `in` predicate.
-- [ ] Undo and redo traverse the widget-originated change as an ordinary document edit.
-- [ ] Copying the expression produces valid text, not a widget label or hidden object payload.
-- [ ] Deleting or partially editing the range removes the widget and exposes recoverable syntax
+- [x] Undo and redo traverse the widget-originated change as an ordinary document edit.
+- [x] Copying the expression produces valid text, not a widget label or hidden object payload.
+- [x] Deleting or partially editing the range removes the widget and exposes recoverable syntax
       with ordinary diagnostics.
 - [ ] Keyboard-only users can enter, operate, leave, reveal, and delete the projection without a
       pointer; screen-reader output has an explicit tested label/value path.
-- [ ] Switching Entity reflection or editing the Field removes stale choices immediately.
-- [ ] The headless language service and canonical Selection AST contain no decoration or widget
+- [x] Switching Entity reflection or editing the Field removes stale choices immediately.
+- [x] The headless language service and canonical Selection AST contain no decoration or widget
       types.
-- [ ] The plan records whether CodeMirror replacement decorations are sufficient before any date,
+- [x] The plan records whether CodeMirror replacement decorations are sufficient before any date,
       Ref, or structural-group widget plan is created.
 
 ## Verification
@@ -90,3 +95,33 @@ remain deferred because their encoding and runtime lookup introduce different ri
 Do not plan richer projectional editing until this experiment shows that a widget can remain a
 reversible projection over text. If CodeMirror cannot preserve the acceptance path, retain the
 headless language service and replace only the editor adapter; do not redesign Selection.
+
+## Delivery Evidence
+
+The adapter derives Boolean and enum controls from resolved syntax ranges and exposes them only when
+the host opts in. Explorer enables the experiment for its Selection editor; the executable Todo
+proof therefore projects `TodoItem.completed` without adding a demonstration-only enum to the
+domain. Choosing a control value, including a member of an `in` list, replaces the source literal
+and reparses through the existing language service.
+
+CodeMirror DOM tests cover finite derivation, `eq` and `in` transactions, canonical Selection
+lowering, atomic cursor motion, native focus, source-text copy, undo/redo, Escape reveal,
+Backspace/Delete recovery, and stale reflection removal. A manual browser pass on Todo Explorer
+confirmed the Boolean control, Graph Read result changes, undo, source reveal, and recoverable
+diagnostics. The control exposes the accessible name `Value for <Entity>.<Field>`, its selected
+native option, and keyboard shortcut metadata. A manual screen-reader pass remains before closure.
+
+The provisional decision is to continue using CodeMirror replacement decorations for finite
+values. They materially shorten a reflected finite-value edit while keeping document text,
+history, diagnostics, lowering, and execution truthful. This evidence does not generalize to dates,
+Refs, runtime-backed choices, or structural groups.
+
+Verification on 2026-09-07:
+
+1. `@ontahi/language-codemirror`: 18 tests; 98.77% statements, 86.25% branches, 98.11%
+   functions, and 99.32% lines; typecheck, lint, and build passed.
+2. `@ontahi/explorer-react`: 181 tests; typecheck, lint, coverage gate, and build passed.
+3. Repository format and Changeset status passed.
+4. All thirteen packages passed clean-room artifact install, type, and runtime verification.
+5. Todo Explorer passed the manual pointer, keyboard, undo, Graph Read, and diagnostic-recovery
+   browser path.

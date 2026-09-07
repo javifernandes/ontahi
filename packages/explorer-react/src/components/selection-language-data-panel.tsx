@@ -7,18 +7,31 @@ import {
   type SelectionDocumentAnalysis,
   type SelectionLanguageEntityReflection,
 } from '@ontahi/language';
-import { useRuntimeTransportCapability } from '@ontahi/react/graph';
+import {
+  useHasReflectedEntityDataReader,
+  useReflectedEntityDataReader,
+  useRuntimeTransportCapability,
+} from '@ontahi/react/graph';
 import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 import { cx } from '../internal/cx.js';
 
-import { ExplorerEntityValue, getExplorerRowRef } from './entity-instance-values.js';
+import {
+  ExplorerEntityValue,
+  getExplorerReferenceLocator,
+  getExplorerRowRef,
+} from './entity-instance-values.js';
 import {
   explorerInstanceWindowKey,
   useExplorerEntityInstanceWorkspace,
 } from './entity-instance-workspace.js';
-import { ExplorerSelectionLanguageEditor } from './selection-language-editor.js';
+import { ExplorerEntityReferenceValue } from './entity-reference-value.js';
+import {
+  createExplorerSelectionReferenceValueProvider,
+  ExplorerSelectionLanguageEditor,
+  type ExplorerSelectionLanguageEditorProps,
+} from './selection-language-editor.js';
 
 export type ExplorerSelectionLanguageDataPanelProps = {
   readonly entity: ExplorerEntityDetail;
@@ -81,7 +94,14 @@ export const toSelectionLanguageEntityReflection = (
     nullable: field.nullable,
     ...(field.valueType ? { valueType: field.valueType } : {}),
     ...(field.enumValues ? { enumValues: field.enumValues } : {}),
-    ...(field.reference ? { reference: { entityName: field.reference.entityName } } : {}),
+    ...(field.reference
+      ? {
+          reference: {
+            entityName: field.reference.entityName,
+            ...(field.reference.identity ? { identity: field.reference.identity } : {}),
+          },
+        }
+      : {}),
   })),
   relations: entity.relations.map(relation => ({ name: relation.name })),
 });
@@ -107,12 +127,24 @@ const diagnostics = (analysis: SelectionDocumentAnalysis) => [
 const isInteractiveRowTarget = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('a, button, input, select, textarea'));
 
+const ExplorerSelectionLanguageEditorWithReferences = (
+  props: ExplorerSelectionLanguageEditorProps,
+) => {
+  const reader = useReflectedEntityDataReader();
+  const referenceValues = useMemo(
+    () => createExplorerSelectionReferenceValueProvider(reader),
+    [reader],
+  );
+  return <ExplorerSelectionLanguageEditor {...props} referenceValues={referenceValues} />;
+};
+
 export function ExplorerSelectionLanguageDataPanel({
   embedded = false,
   entity,
   initialDocument = '',
 }: ExplorerSelectionLanguageDataPanelProps) {
   const runtimeTransport = useRuntimeTransportCapability();
+  const hasReflectedEntityDataReader = useHasReflectedEntityDataReader();
   const instanceWorkspace = useExplorerEntityInstanceWorkspace();
   const reflection = useMemo(() => toSelectionLanguageEntityReflection(entity), [entity]);
   const documentKey = `${entity.name}\u0000${initialDocument}`;
@@ -191,26 +223,25 @@ export function ExplorerSelectionLanguageDataPanel({
   const documentDiagnostics = diagnostics(analysis);
 
   return (
-    <section className={cx('grid content-start gap-3', !embedded && 'rounded-lg border p-5')}>
-      <div className='grid gap-2 border-b bg-muted/10 p-3'>
-        <div className='flex flex-wrap items-center justify-between gap-2'>
-          <div>
-            <div className='text-sm font-medium text-foreground'>Selection language</div>
-            <div className='text-xs text-muted-foreground'>
-              Experimental · {entity.name} · first 25 matches
-            </div>
-          </div>
-          <code className='text-xs text-muted-foreground'>graph.read</code>
-        </div>
-        <ExplorerSelectionLanguageEditor
-          label={`Selection expression for ${entity.name}`}
-          value={document}
-          entity={reflection}
-          onChange={setDocument}
-        />
-        <div className='text-xs text-muted-foreground'>
-          Ctrl-Space for suggestions · hover a Field or operator for help.
-        </div>
+    <section
+      className={cx('grid content-start', embedded ? 'gap-0' : 'gap-3 rounded-lg border p-5')}
+    >
+      <div className='grid gap-2 bg-muted/10 p-3'>
+        {hasReflectedEntityDataReader ? (
+          <ExplorerSelectionLanguageEditorWithReferences
+            label={`Selection expression for ${entity.name}`}
+            value={document}
+            entity={reflection}
+            onChange={setDocument}
+          />
+        ) : (
+          <ExplorerSelectionLanguageEditor
+            label={`Selection expression for ${entity.name}`}
+            value={document}
+            entity={reflection}
+            onChange={setDocument}
+          />
+        )}
         {documentDiagnostics.length > 0 ? (
           <div className='grid gap-1' aria-live='polite'>
             {documentDiagnostics.map(diagnostic => (
@@ -223,11 +254,7 @@ export function ExplorerSelectionLanguageDataPanel({
               </div>
             ))}
           </div>
-        ) : (
-          <div className='text-xs text-muted-foreground'>
-            {document.trim() ? 'Valid Selection.' : 'Empty expression selects all rows.'}
-          </div>
-        )}
+        ) : null}
         {executionError ? (
           <div className='flex flex-wrap items-center gap-2 text-xs text-destructive'>
             <div data-diagnostic-channel='execution' role='alert'>
@@ -290,13 +317,26 @@ export function ExplorerSelectionLanguageDataPanel({
                     selected ? 'bg-primary/10' : 'hover:bg-muted/25',
                   )}
                 >
-                  {entity.fields.map(field => (
-                    <td key={field.name} className='max-w-[280px] px-3 py-2.5 align-top'>
-                      <div className='truncate font-mono text-xs text-foreground'>
-                        <ExplorerEntityValue field={field} value={row[field.name]} />
-                      </div>
-                    </td>
-                  ))}
+                  {entity.fields.map(field => {
+                    const value = row[field.name];
+                    const locator = field.reference
+                      ? getExplorerReferenceLocator(value, field.reference.identity)
+                      : undefined;
+                    return (
+                      <td key={field.name} className='max-w-[280px] px-3 py-2.5 align-top'>
+                        <div className='truncate font-mono text-xs text-foreground'>
+                          {hasReflectedEntityDataReader && field.reference && locator ? (
+                            <ExplorerEntityReferenceValue
+                              locator={locator}
+                              reference={field.reference}
+                            />
+                          ) : (
+                            <ExplorerEntityValue field={field} value={value} />
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
