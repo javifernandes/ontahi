@@ -911,6 +911,62 @@ describe('ontahi application composition root', () => {
     );
   });
 
+  it('materializes ordered semantic has-many only over a required inverse Reference Field', () => {
+    const List = entity({
+      name: 'SemanticOrderedList',
+      fields: { id: field.id() },
+      relations: () => ({
+        items: relation.hasMany(entity.ref('SemanticOrderedItem'), {
+          via: 'list',
+          ordered: true,
+        }),
+      }),
+    });
+    const Item = entity({
+      name: 'SemanticOrderedItem',
+      fields: { id: field.id(), list: field.ref(List) },
+    });
+
+    ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: { SemanticOrderedList: [], SemanticOrderedItem: [] },
+      }),
+      entities: [List, Item],
+    });
+
+    expect((List.relations as Record<string, any>).items).toMatchObject({
+      relationKind: 'hasMany',
+      ordered: true,
+      targetField: 'list',
+      target: Item,
+    });
+
+    const InvalidList = entity({
+      name: 'InvalidSemanticOrderedList',
+      fields: { id: field.id() },
+      relations: () => ({
+        items: relation.hasMany(entity.ref('InvalidSemanticOrderedItem'), {
+          via: 'list',
+          ordered: true,
+        }),
+      }),
+    });
+    const InvalidItem = entity({
+      name: 'InvalidSemanticOrderedItem',
+      fields: { id: field.id(), list: field.nullable(field.ref(InvalidList)) },
+    });
+    expect(() =>
+      ontahi({
+        storage: createInMemoryDataGraphStorage({
+          dataset: { InvalidSemanticOrderedList: [], InvalidSemanticOrderedItem: [] },
+        }),
+        entities: [InvalidList, InvalidItem],
+      }),
+    ).toThrow(
+      'Ordered Relation InvalidSemanticOrderedList.items requires a direct hasMany via a required Reference Field',
+    );
+  });
+
   it('scopes reusable semantic refs to each application entity registry', () => {
     const TargetFields = { id: field.id() };
     const TargetRef = entity.ref('Target', { fields: TargetFields });

@@ -70,6 +70,7 @@ export type OntahiRelationDeclaration<
   sourceField?: string;
   targetField?: string;
   inverseTarget?: OntahiSemanticEntityTarget<AnyEntityDefinition>;
+  ordered?: true;
   constraints?: OntahiRelationConstraints;
 };
 
@@ -139,7 +140,8 @@ type EntityRelationsFrom<TDeclarations extends OntahiRelationDeclarations> = {
       ? TName
       : never
     : never]: TDeclarations[TName] extends OntahiRelationDeclaration<infer TKind, infer TTarget>
-    ? RelationDefinition<TKind, TTarget>
+    ? RelationDefinition<TKind, TTarget> &
+        (TDeclarations[TName] extends { ordered: true } ? { ordered: true } : {})
     : never;
 };
 
@@ -206,15 +208,15 @@ const resolveSemanticEntityTarget = <TEntity extends AnyEntityDefinition>(
 
 function belongsTo<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options?: OntahiRelationOptions,
+  options?: Omit<OntahiRelationOptions, 'ordered'>,
 ): OntahiRelationDeclaration<'belongsTo', TTarget, TTyped>;
 function belongsTo<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: OntahiRelationOptions,
+  options?: Omit<OntahiRelationOptions, 'ordered'>,
 ): OntahiRelationDeclaration<'belongsTo', TTarget, true>;
 function belongsTo(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
-  options?: OntahiRelationOptions,
+  options?: Omit<OntahiRelationOptions, 'ordered'>,
 ) {
   assertDeclaredRelationConstraints(options?.constraints);
   return {
@@ -225,6 +227,14 @@ function belongsTo(
     ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
+function hasMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
+  target: OntahiSemanticEntityRef<TTarget, TTyped>,
+  options: OntahiRelationOptions & { ordered: true },
+): OntahiRelationDeclaration<'hasMany', TTarget, TTyped> & { ordered: true };
+function hasMany<TTarget extends AnyEntityDefinition>(
+  target: TTarget,
+  options: OntahiRelationOptions & { ordered: true },
+): OntahiRelationDeclaration<'hasMany', TTarget, true> & { ordered: true };
 function hasMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
   options?: OntahiRelationOptions,
@@ -243,21 +253,22 @@ function hasMany(
     target,
     typed: !isSemanticEntityRef(target) || target.typed,
     ...(options?.via ? { targetField: options.via } : {}),
+    ...(options?.ordered ? { ordered: true as const } : {}),
     ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
 
 function manyToMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options?: Omit<OntahiRelationOptions, 'via'>,
+  options?: Omit<OntahiRelationOptions, 'via' | 'ordered'>,
 ): OntahiRelationDeclaration<'manyToMany', TTarget, TTyped>;
 function manyToMany<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: Omit<OntahiRelationOptions, 'via'>,
+  options?: Omit<OntahiRelationOptions, 'via' | 'ordered'>,
 ): OntahiRelationDeclaration<'manyToMany', TTarget, true>;
 function manyToMany(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
-  options?: Omit<OntahiRelationOptions, 'via'>,
+  options?: Omit<OntahiRelationOptions, 'via' | 'ordered'>,
 ) {
   assertDeclaredRelationConstraints(options?.constraints);
   return {
@@ -278,20 +289,44 @@ type EntityFromReferenceFieldSource<TSource extends EntityReferenceFieldSource> 
     ? EntityDefinition<TName, TFields, TRelations, TLocators>
     : never;
 
-const inverse = <TSource extends EntityReferenceFieldSource>(
+function inverse<TSource extends EntityReferenceFieldSource>(
   referenceField: AnyFieldDefinition & {
     fieldType: 'reference';
     source: TSource;
     fieldName: keyof TSource['fields'] & string;
     target: OntahiSemanticEntityTarget<AnyEntityDefinition>;
   },
-): OntahiRelationDeclaration<'hasMany', EntityFromReferenceFieldSource<TSource>, true> => ({
-  relationKind: 'hasMany',
-  target: referenceField.source as unknown as EntityFromReferenceFieldSource<TSource>,
-  typed: true,
-  targetField: referenceField.fieldName,
-  inverseTarget: referenceField.target,
-});
+  options: { ordered: true },
+): OntahiRelationDeclaration<'hasMany', EntityFromReferenceFieldSource<TSource>, true> & {
+  ordered: true;
+};
+function inverse<TSource extends EntityReferenceFieldSource>(
+  referenceField: AnyFieldDefinition & {
+    fieldType: 'reference';
+    source: TSource;
+    fieldName: keyof TSource['fields'] & string;
+    target: OntahiSemanticEntityTarget<AnyEntityDefinition>;
+  },
+  options?: { ordered?: true },
+): OntahiRelationDeclaration<'hasMany', EntityFromReferenceFieldSource<TSource>, true>;
+function inverse<TSource extends EntityReferenceFieldSource>(
+  referenceField: AnyFieldDefinition & {
+    fieldType: 'reference';
+    source: TSource;
+    fieldName: keyof TSource['fields'] & string;
+    target: OntahiSemanticEntityTarget<AnyEntityDefinition>;
+  },
+  options?: { ordered?: true },
+): OntahiRelationDeclaration<'hasMany', EntityFromReferenceFieldSource<TSource>, true> {
+  return {
+    relationKind: 'hasMany',
+    target: referenceField.source as unknown as EntityFromReferenceFieldSource<TSource>,
+    typed: true,
+    targetField: referenceField.fieldName,
+    inverseTarget: referenceField.target,
+    ...(options?.ordered ? { ordered: true } : {}),
+  };
+}
 
 export const relation = {
   belongsTo,
@@ -1001,8 +1036,27 @@ const defineOntahiEntity = <
         target,
         ...(declaration.sourceField ? { sourceField: declaration.sourceField } : {}),
         ...(declaration.targetField ? { targetField: declaration.targetField } : {}),
+        ...(declaration.ordered ? { ordered: true } : {}),
         ...(constraints ? { constraints } : {}),
       };
+
+      if (declaration.ordered) {
+        const targetField = declaration.targetField
+          ? target.fields[declaration.targetField]
+          : undefined;
+        if (
+          declaration.relationKind !== 'hasMany' ||
+          !targetField ||
+          !isReferenceFieldDefinition(targetField) ||
+          targetField.target.name !== schema.name ||
+          targetField.nullable ||
+          targetField.optional
+        ) {
+          throw new Error(
+            `Ordered Relation ${schema.name}.${name} requires a direct hasMany via a required Reference Field back to ${schema.name}.`,
+          );
+        }
+      }
     });
   };
   const resolveReferences = (entitiesByName: ReadonlyMap<string, AnyEntityDefinition>) => {

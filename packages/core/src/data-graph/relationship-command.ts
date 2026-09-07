@@ -28,6 +28,13 @@ export type CanonicalManyToManyRelationIdentity = {
   cardinality: 'many-to-many';
 };
 
+export type CanonicalOrderedRelationIdentity = {
+  sourceEntityName: string;
+  relationName: string;
+  targetEntityName: string;
+  cardinality: 'ordered-many';
+};
+
 export type RelationshipEndpointSelection = {
   entityName: string;
   selection: SelectionExpression;
@@ -64,13 +71,58 @@ export type ManyToManyRelationshipCommand = {
   targets: RelationshipEndpointSelection;
 };
 
+export type OrderedRelationshipPosition = {
+  before: AnyEntityRef | null;
+  after: AnyEntityRef | null;
+};
+
+export type OrderedRelationshipPlacement =
+  | { at: 'start' | 'end' }
+  | { before: AnyEntityRef }
+  | { after: AnyEntityRef };
+
+export type OrderedRelationshipMoveOptions = {
+  ifPosition?: OrderedRelationshipPosition;
+  onMismatch?: 'fail' | 'skip';
+};
+
+export type OrderedRelationshipCommand = {
+  kind: 'ordered-relationship-command';
+  action: 'move';
+  relation: CanonicalOrderedRelationIdentity;
+  source: AnyEntityRef;
+  member: AnyEntityRef;
+  position: OrderedRelationshipPlacement;
+  precondition?: {
+    position: OrderedRelationshipPosition;
+    onMismatch?: 'fail' | 'skip';
+  };
+};
+
+export type OrderedRelationshipMove = {
+  relation: CanonicalOrderedRelationIdentity;
+  source: AnyEntityRef;
+  member: AnyEntityRef;
+  from: OrderedRelationshipPosition;
+  to: OrderedRelationshipPosition;
+};
+
+export type OrderedRelationshipDelta = RelationshipDelta & {
+  moved: OrderedRelationshipMove[];
+};
+
+type AnyRelationshipCommand =
+  | RelationshipCommand
+  | ManyToManyRelationshipCommand
+  | OrderedRelationshipCommand;
+
 export type RelationshipDelta = {
   added: RelationshipFact[];
   removed: RelationshipFact[];
 };
 
 export type ExecutableRelationshipCommand<
-  TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
+  TCommand extends AnyRelationshipCommand,
   TError = never,
   TOptions = undefined,
   TResult = RelationshipCommandResult,
@@ -86,6 +138,7 @@ export type BoundRelationshipCommandOperations<
   TRelation extends RelationDefinition,
   TDirectCommand extends RelationshipCommand = RelationshipCommand,
   TManyToManyCommand extends ManyToManyRelationshipCommand = ManyToManyRelationshipCommand,
+  TOrderedCommand extends OrderedRelationshipCommand = OrderedRelationshipCommand,
 > =
   TRelation extends RelationDefinition<'belongsTo'>
     ? {
@@ -96,10 +149,36 @@ export type BoundRelationshipCommandOperations<
         clear: () => TDirectCommand;
       }
     : TRelation extends RelationDefinition<'hasMany'>
-      ? {
-          add: (source: RelationTargetRef<TRelation>) => TDirectCommand;
-          remove: (source: RelationTargetRef<TRelation>) => TDirectCommand;
-        }
+      ? TRelation extends { ordered: true }
+        ? {
+            move: (
+              member: RelationTargetRef<TRelation>,
+              position: OrderedRelationshipPlacement,
+              options?: OrderedRelationshipMoveOptions,
+            ) => TOrderedCommand;
+            append: (
+              member: RelationTargetRef<TRelation>,
+              options?: OrderedRelationshipMoveOptions,
+            ) => TOrderedCommand;
+            prepend: (
+              member: RelationTargetRef<TRelation>,
+              options?: OrderedRelationshipMoveOptions,
+            ) => TOrderedCommand;
+            before: (
+              member: RelationTargetRef<TRelation>,
+              anchor: RelationTargetRef<TRelation>,
+              options?: OrderedRelationshipMoveOptions,
+            ) => TOrderedCommand;
+            after: (
+              member: RelationTargetRef<TRelation>,
+              anchor: RelationTargetRef<TRelation>,
+              options?: OrderedRelationshipMoveOptions,
+            ) => TOrderedCommand;
+          }
+        : {
+            add: (source: RelationTargetRef<TRelation>) => TDirectCommand;
+            remove: (source: RelationTargetRef<TRelation>) => TDirectCommand;
+          }
       : TRelation extends RelationDefinition<'manyToMany'>
         ? {
             add: (target: RelationTargetRef<TRelation>) => TManyToManyCommand;
@@ -111,11 +190,13 @@ export type BoundEntityRefRelationshipCommands<
   TEntity extends AnyEntityDefinition,
   TDirectCommand extends RelationshipCommand = RelationshipCommand,
   TManyToManyCommand extends ManyToManyRelationshipCommand = ManyToManyRelationshipCommand,
+  TOrderedCommand extends OrderedRelationshipCommand = OrderedRelationshipCommand,
 > = {
   [TRelationName in keyof TEntity['relations']]: BoundRelationshipCommandOperations<
     TEntity['relations'][TRelationName],
     TDirectCommand,
-    TManyToManyCommand
+    TManyToManyCommand,
+    TOrderedCommand
   >;
 };
 
@@ -127,7 +208,8 @@ export type RuntimeBoundEntityRefRelationshipCommands<
 > = BoundEntityRefRelationshipCommands<
   TEntity,
   ExecutableRelationshipCommand<RelationshipCommand, TError, TOptions, TResult>,
-  ExecutableRelationshipCommand<ManyToManyRelationshipCommand, TError, TOptions, TResult>
+  ExecutableRelationshipCommand<ManyToManyRelationshipCommand, TError, TOptions, TResult>,
+  ExecutableRelationshipCommand<OrderedRelationshipCommand, TError, TOptions, TResult>
 >;
 
 export interface RelationshipCommandExecutionRuntime<
@@ -152,12 +234,24 @@ export interface ManyToManyRelationshipCommandExecutionRuntime<
   ): import('effect').Effect.Effect<TResult, TError>;
 }
 
+export interface OrderedRelationshipCommandExecutionRuntime<
+  TError = never,
+  TOptions = undefined,
+  TResult = RelationshipCommandResult,
+> {
+  runOrderedRelationshipCommand(
+    command: OrderedRelationshipCommand,
+    options?: TOptions,
+  ): import('effect').Effect.Effect<TResult, TError>;
+}
+
 export type RelationshipCommandExecutor<
   TError = never,
   TOptions = undefined,
   TResult = RelationshipCommandResult,
 > = RelationshipCommandExecutionRuntime<TError, TOptions, TResult> &
-  ManyToManyRelationshipCommandExecutionRuntime<TError, TOptions, TResult>;
+  ManyToManyRelationshipCommandExecutionRuntime<TError, TOptions, TResult> &
+  Partial<OrderedRelationshipCommandExecutionRuntime<TError, TOptions, TResult>>;
 
 type RelationshipSelectionInput = AnyEntityRef | EntitySelectionSource<AnyEntityDefinition>;
 
@@ -264,8 +358,19 @@ const resolveRelation = (entity: AnyEntityDefinition, relationName: string): Res
 export const resolveCanonicalRelationshipIdentity = (
   entity: AnyEntityDefinition,
   relationName: string,
-): CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity => {
+):
+  | CanonicalRelationIdentity
+  | CanonicalManyToManyRelationIdentity
+  | CanonicalOrderedRelationIdentity => {
   const definition = entity.relations[relationName];
+  if (definition?.relationKind === 'hasMany' && definition.ordered) {
+    return {
+      sourceEntityName: entity.name,
+      relationName,
+      targetEntityName: definition.target.name,
+      cardinality: 'ordered-many',
+    } as CanonicalOrderedRelationIdentity;
+  }
   if (definition?.relationKind === 'manyToMany') {
     return {
       sourceEntityName: entity.name,
@@ -277,17 +382,132 @@ export const resolveCanonicalRelationshipIdentity = (
   return resolveRelation(entity, relationName).identity;
 };
 
+const orderedRelationship = (
+  entity: AnyEntityDefinition,
+  relationName: string,
+  source: AnyEntityRef,
+) => {
+  const definition = entity.relations[relationName];
+  if (definition?.relationKind !== 'hasMany' || !definition.ordered) {
+    throw new Error(`Relation ${entity.name}.${relationName} is not an ordered hasMany.`);
+  }
+  assertRefEntity(source, entity, 'relationship subject');
+  const relation: CanonicalOrderedRelationIdentity = {
+    sourceEntityName: entity.name,
+    relationName,
+    targetEntityName: definition.target.name,
+    cardinality: 'ordered-many',
+  };
+  const move = (
+    member: AnyEntityRef,
+    position: OrderedRelationshipPlacement,
+    options?: OrderedRelationshipMoveOptions,
+  ): OrderedRelationshipCommand => {
+    assertRefEntity(member, definition.target, 'ordered member');
+    const anchor =
+      'before' in position ? position.before : 'after' in position ? position.after : undefined;
+    if (anchor) assertRefEntity(anchor, definition.target, 'ordered anchor');
+    if (options?.onMismatch && !options.ifPosition) {
+      throw new Error('Ordered Relationship onMismatch requires ifPosition.');
+    }
+    for (const neighbor of options?.ifPosition
+      ? [options.ifPosition.before, options.ifPosition.after]
+      : []) {
+      if (neighbor) assertRefEntity(neighbor, definition.target, 'ordered precondition neighbor');
+    }
+    return {
+      kind: 'ordered-relationship-command',
+      action: 'move',
+      relation,
+      source,
+      member,
+      position,
+      ...(options?.ifPosition
+        ? {
+            precondition: {
+              position: options.ifPosition,
+              ...(options.onMismatch ? { onMismatch: options.onMismatch } : {}),
+            },
+          }
+        : {}),
+    };
+  };
+
+  return {
+    move,
+    append: (member: AnyEntityRef, options?: OrderedRelationshipMoveOptions) =>
+      move(member, { at: 'end' }, options),
+    prepend: (member: AnyEntityRef, options?: OrderedRelationshipMoveOptions) =>
+      move(member, { at: 'start' }, options),
+    before: (
+      member: AnyEntityRef,
+      anchor: AnyEntityRef,
+      options?: OrderedRelationshipMoveOptions,
+    ) => move(member, { before: anchor }, options),
+    after: (member: AnyEntityRef, anchor: AnyEntityRef, options?: OrderedRelationshipMoveOptions) =>
+      move(member, { after: anchor }, options),
+  };
+};
+
 const assertRefEntity = (ref: AnyEntityRef, entity: AnyEntityDefinition, role: string) => {
   if (ref.entityName !== entity.name) {
     throw new Error(`Expected ${role} Ref for ${entity.name}, got ${ref.entityName}.`);
   }
 };
 
-export const relationship = (
+type DynamicRelationshipCommandOperations = {
+  assign: (
+    target: AnyEntityRef,
+    options?: { ifCurrent: AnyEntityRef; onMismatch?: 'fail' | 'skip' },
+  ) => RelationshipCommand;
+  clear: () => RelationshipCommand;
+  add: (source: AnyEntityRef) => RelationshipCommand;
+  remove: (source: AnyEntityRef) => RelationshipCommand;
+  move: (
+    member: AnyEntityRef,
+    position: OrderedRelationshipPlacement,
+    options?: OrderedRelationshipMoveOptions,
+  ) => OrderedRelationshipCommand;
+  append: (
+    member: AnyEntityRef,
+    options?: OrderedRelationshipMoveOptions,
+  ) => OrderedRelationshipCommand;
+  prepend: (
+    member: AnyEntityRef,
+    options?: OrderedRelationshipMoveOptions,
+  ) => OrderedRelationshipCommand;
+  before: (
+    member: AnyEntityRef,
+    anchor: AnyEntityRef,
+    options?: OrderedRelationshipMoveOptions,
+  ) => OrderedRelationshipCommand;
+  after: (
+    member: AnyEntityRef,
+    anchor: AnyEntityRef,
+    options?: OrderedRelationshipMoveOptions,
+  ) => OrderedRelationshipCommand;
+};
+
+type RelationshipCommandOperationsFor<
+  TEntity extends AnyEntityDefinition,
+  TRelationName extends string,
+> = TRelationName extends keyof TEntity['relations']
+  ? BoundRelationshipCommandOperations<TEntity['relations'][TRelationName]>
+  : DynamicRelationshipCommandOperations;
+
+export function relationship<TEntity extends AnyEntityDefinition, TRelationName extends string>(
+  entity: TEntity,
+  relationName: TRelationName,
+  subject: AnyEntityRef,
+): RelationshipCommandOperationsFor<TEntity, TRelationName>;
+export function relationship(
   entity: AnyEntityDefinition,
   relationName: string,
   subject: AnyEntityRef,
-) => {
+) {
+  if (entity.relations[relationName]?.ordered) {
+    return orderedRelationship(entity, relationName, subject);
+  }
   const resolved = resolveRelation(entity, relationName);
   assertRefEntity(subject, entity, 'relationship subject');
 
@@ -356,7 +576,7 @@ export const relationship = (
       return command('unlink', source);
     },
   };
-};
+}
 
 type EntityRefRelationshipCommandsForExecutor<TEntity extends AnyEntityDefinition, TExecutor> = [
   TExecutor,
@@ -374,7 +594,7 @@ type EntityRefRelationshipCommandsForExecutor<TEntity extends AnyEntityDefinitio
     >;
 
 const bindExecutableRelationshipCommand = <
-  TCommand extends RelationshipCommand | ManyToManyRelationshipCommand,
+  TCommand extends AnyRelationshipCommand,
   TError,
   TOptions,
   TResult,
@@ -385,10 +605,20 @@ const bindExecutableRelationshipCommand = <
   Object.defineProperty(command, 'run', {
     configurable: true,
     enumerable: false,
-    value: (options?: TOptions) =>
-      command.kind === 'relationship-command'
-        ? executor.runRelationshipCommand(command, options)
-        : executor.runManyToManyRelationshipCommand(command, options),
+    value: (options?: TOptions) => {
+      if (command.kind === 'relationship-command') {
+        return executor.runRelationshipCommand(command, options);
+      }
+      if (command.kind === 'many-to-many-relationship-command') {
+        return executor.runManyToManyRelationshipCommand(command, options);
+      }
+      if (!executor.runOrderedRelationshipCommand) {
+        throw new Error(
+          'The current Data Graph runtime does not support ordered Relationship Commands.',
+        );
+      }
+      return executor.runOrderedRelationshipCommand(command, options);
+    },
     writable: true,
   });
 
@@ -404,11 +634,10 @@ export const bindEntityRefRelationshipCommands = <
   entity: TEntity,
   executor?: TExecutor,
 ): TRef & EntityRefRelationshipCommandsForExecutor<TEntity, TExecutor> => {
-  const bindCommand = <TCommand extends RelationshipCommand | ManyToManyRelationshipCommand>(
-    command: TCommand,
-  ) => (executor ? bindExecutableRelationshipCommand(command, executor) : command);
+  const bindCommand = <TCommand extends AnyRelationshipCommand>(command: TCommand) =>
+    executor ? bindExecutableRelationshipCommand(command, executor) : command;
   const bindDirectOperations = (relationName: string) => {
-    const direct = relationship(entity, relationName, ref);
+    const direct = relationship(entity, relationName, ref) as DynamicRelationshipCommandOperations;
 
     return {
       assign: (
@@ -418,6 +647,31 @@ export const bindEntityRefRelationshipCommands = <
       clear: () => bindCommand(direct.clear()),
       add: (source: AnyEntityRef) => bindCommand(direct.add(source)),
       remove: (source: AnyEntityRef) => bindCommand(direct.remove(source)),
+    };
+  };
+  const bindOrderedOperations = (relationName: string) => {
+    const ordered = relationship(entity, relationName, ref) as DynamicRelationshipCommandOperations;
+
+    return {
+      move: (
+        member: AnyEntityRef,
+        position: OrderedRelationshipPlacement,
+        options?: OrderedRelationshipMoveOptions,
+      ) => bindCommand(ordered.move(member, position, options)),
+      append: (member: AnyEntityRef, options?: OrderedRelationshipMoveOptions) =>
+        bindCommand(ordered.append(member, options)),
+      prepend: (member: AnyEntityRef, options?: OrderedRelationshipMoveOptions) =>
+        bindCommand(ordered.prepend(member, options)),
+      before: (
+        member: AnyEntityRef,
+        anchor: AnyEntityRef,
+        options?: OrderedRelationshipMoveOptions,
+      ) => bindCommand(ordered.before(member, anchor, options)),
+      after: (
+        member: AnyEntityRef,
+        anchor: AnyEntityRef,
+        options?: OrderedRelationshipMoveOptions,
+      ) => bindCommand(ordered.after(member, anchor, options)),
     };
   };
 
@@ -430,7 +684,9 @@ export const bindEntityRefRelationshipCommands = <
             remove: (target: AnyEntityRef) =>
               bindCommand(relationshipSet(entity, relationName, ref).remove(target)),
           }
-        : bindDirectOperations(relationName);
+        : definition.ordered
+          ? bindOrderedOperations(relationName)
+          : bindDirectOperations(relationName);
 
     Object.defineProperty(ref, relationName, {
       configurable: true,

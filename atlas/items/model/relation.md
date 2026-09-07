@@ -371,6 +371,26 @@ transfer must preserve the distinction between structural reparenting and Entity
 first implementation remains server-authoritative and leaves general replicated-sequence or CRDT
 semantics to a later evidence-driven plan.
 
+The first ordered Relation slice declares `ordered: true` only on a direct inverse `hasMany` backed
+by a required target Reference Field. `move`, `append`, `prepend`, `before`, and `after` authoring
+forms normalize to one version-2 `ordered-relationship-command` carrying one member and a stable
+relative anchor (or a sequence boundary), never a numeric index or collection snapshot. These
+verbs reposition an existing member; a member outside the source Relation is a structured
+rejection rather than an implicit transfer.
+
+An applied ordered result retains ordinary `added`/`removed` fact buckets and adds exact `moved`
+evidence with the resolved previous and next neighbors before and after the command. An idempotent
+move is applied with an empty `moved` list. Callers may carry an exact-neighborhood precondition to
+detect concurrent movement; mismatch fails unless `skip` was requested explicitly.
+
+Natural ordering belongs to Relation traversal, not to root Entity selection. A traversal with no
+explicit sort uses the Relation sequence; an explicit Query `orderBy` replaces natural ordering.
+In-memory storage uses its stable target-row order. PostgreSQL initially uses a mapped,
+provider-private dense integer position and serializes moves by locking the source inside one
+transaction. That physical choice is replaceable without changing the semantic declaration or
+wire protocol. Cross-source transfer, ordered nullable/many-to-many membership, durable command
+identity, and replicated sequence conflict resolution remain follow-up work.
+
 The generated `1.0.0-alpha.8` release candidate was rehearsed at its exact commit with all ten
 package tarballs, a tarball-only Todo consumer, and Classroom's real PostgreSQL commit/rollback
 suite. That candidate is the first release boundary teaching this lifecycle as one coherent model.

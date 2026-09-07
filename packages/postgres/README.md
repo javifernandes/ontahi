@@ -63,6 +63,14 @@ The first failed constraint is exposed as `relation_constraint_rejected` with it
 rejection descriptor; `unlink` continues to bypass link eligibility so invalid current state can be
 repaired.
 
+Ordered `hasMany` Relations map a private order column on the target table. Natural nested and
+relation-root reads use that column only when the Query has no explicit `orderBy`. A move locks the
+source row and its current members in one transaction, verifies optional before/after neighbors,
+and rewrites a dense sequence atomically; concurrent stale moves cannot both commit. Hosts remain
+responsible for adding the private column in a migration and assigning new members an append
+position. Schema inspection reports a missing order column as `<Source>.<relation>.__order` on the
+target Entity table.
+
 Selection-valued many-to-many `link` uses the same contract. PostgreSQL locks the complete selected
 participant sets, verifies every row without filtering the affected set, and only then inserts the
 Cartesian edge delta. One ineligible participant rejects the whole command without partial edges.

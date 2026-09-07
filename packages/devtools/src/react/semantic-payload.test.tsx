@@ -122,4 +122,46 @@ describe('SemanticPayload', () => {
     ui.rerender(<SemanticPayload value='done' />);
     expect(screen.getByText('done')).toBeTruthy();
   });
+
+  it('renders ordered movement as source, member, and destination cards', () => {
+    render(
+      <SemanticPayload
+        value={{
+          kind: 'graph-command',
+          command: {
+            kind: 'ordered-relationship-command',
+            action: 'move',
+            relation: {
+              sourceEntityName: 'TodoList',
+              relationName: 'items',
+              targetEntityName: 'TodoItem',
+              cardinality: 'ordered-many',
+            },
+            source: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-inbox' } },
+            member: {
+              kind: 'entity-ref',
+              entityName: 'TodoItem',
+              locator: { id: 'todo-explorer' },
+            },
+            position: {
+              before: {
+                kind: 'entity-ref',
+                entityName: 'TodoItem',
+                locator: { id: 'todo-inline-editing' },
+              },
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText('TodoList.items.move(todo-explorer, before: todo-inline-editing)'),
+    ).toBeTruthy();
+    expect(screen.getByText('Source / List')).toBeTruthy();
+    expect(screen.getByText('Moving item')).toBeTruthy();
+    expect(screen.getByText('todo-explorer')).toBeTruthy();
+    expect(screen.getByText('Destination')).toBeTruthy();
+    expect(screen.getByText('Before todo-inline-editing')).toBeTruthy();
+  });
 });

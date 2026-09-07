@@ -107,6 +107,7 @@ const createRelationModel = (relation, projectedNames) => ({
   name: relation.name,
   targetLocalName: projectedNames.get(relation.targetName) ?? relation.targetName,
   via: relation.via,
+  ...(relation.ordered ? { ordered: true } : {}),
 });
 
 export const createClientEntitySchemaModuleModel = ({
@@ -125,16 +126,35 @@ export const createClientEntitySchemaModuleModel = ({
       }),
   );
   const orderedSchemaEntities = orderSchemaProjections(schemaEntities);
+  const deferredSchemaLocalNames = new Set(
+    orderedSchemaEntities
+      .filter(entity =>
+        entity.entitySchemaProjection?.relations?.some(relation => relation.deferred),
+      )
+      .map(entity => entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`),
+  );
+  const initializationNames = new Map(projectedNames);
+  for (const entity of orderedSchemaEntities) {
+    const localName = entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
+    if (!deferredSchemaLocalNames.has(localName)) continue;
+    const baseLocalName = `${localName}Base`;
+    if (entity.entityDefinitionName)
+      initializationNames.set(entity.entityDefinitionName, baseLocalName);
+    if (entity.entityName) initializationNames.set(entity.entityName, baseLocalName);
+  }
   const entitySchemas = orderedSchemaEntities
     .filter(entity => entity.entitySchemaProjection)
     .map(entity => {
       const projection = entity.entitySchemaProjection;
+      const localName = entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
+      const deferred = deferredSchemaLocalNames.has(localName);
 
       return {
-        localName: entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`,
+        localName,
+        ...(deferred ? { declarationLocalName: `${localName}Base`, deferred: true } : {}),
         entityName: projection.name,
         fields: sourceExpression(
-          replaceProjectedEntityNames(projection.fieldsText, projectedNames),
+          replaceProjectedEntityNames(projection.fieldsText, initializationNames),
         ),
         display: projection.displayText ? sourceExpression(projection.displayText) : undefined,
         freshness: projection.freshnessText
@@ -144,7 +164,7 @@ export const createClientEntitySchemaModuleModel = ({
         identity: projection.identityText ? sourceExpression(projection.identityText) : undefined,
         relations: (projection.relations ?? [])
           .filter(relation => !relation.deferred)
-          .map(relation => createRelationModel(relation, projectedNames)),
+          .map(relation => createRelationModel(relation, initializationNames)),
       };
     });
   const diagnostics = entitySchemas.flatMap(schema =>
@@ -168,7 +188,8 @@ export const createClientEntitySchemaModuleModel = ({
       .filter(relation => relation.deferred)
       .map(relation => ({
         sourceLocalName,
-        ...createRelationModel(relation, projectedNames),
+        sourceDeclarationLocalName: `${sourceLocalName}Base`,
+        ...createRelationModel(relation, initializationNames),
       }));
   });
 
@@ -223,20 +244,31 @@ const readExpression = expression => {
   return parsed.expression;
 };
 
-const createRelationArguments = relation => [
-  ts.factory.createStringLiteral(relation.name),
-  ts.factory.createIdentifier(relation.targetLocalName),
-  ...(relation.via
-    ? [
-        ts.factory.createObjectLiteralExpression([
+const createRelationArguments = relation => {
+  const options = [
+    ...(relation.via
+      ? [
           ts.factory.createPropertyAssignment(
             ts.factory.createIdentifier('via'),
             ts.factory.createStringLiteral(relation.via),
           ),
-        ]),
-      ]
-    : []),
-];
+        ]
+      : []),
+    ...(relation.ordered
+      ? [
+          ts.factory.createPropertyAssignment(
+            ts.factory.createIdentifier('ordered'),
+            ts.factory.createTrue(),
+          ),
+        ]
+      : []),
+  ];
+  return [
+    ts.factory.createStringLiteral(relation.name),
+    ts.factory.createIdentifier(relation.targetLocalName),
+    ...(options.length > 0 ? [ts.factory.createObjectLiteralExpression(options)] : []),
+  ];
+};
 
 const createRelationCall = (receiver, relation) =>
   ts.factory.createCallExpression(
@@ -266,11 +298,11 @@ const createEntitySchemaDeclaration = schema => {
   }
 
   return ts.factory.createVariableStatement(
-    [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+    schema.deferred ? undefined : [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
     ts.factory.createVariableDeclarationList(
       [
         ts.factory.createVariableDeclaration(
-          ts.factory.createIdentifier(schema.localName),
+          ts.factory.createIdentifier(schema.declarationLocalName ?? schema.localName),
           undefined,
           undefined,
           initializer,
@@ -281,10 +313,32 @@ const createEntitySchemaDeclaration = schema => {
   );
 };
 
-const createDeferredRelationStatement = relation =>
-  ts.factory.createExpressionStatement(
-    createRelationCall(ts.factory.createIdentifier(relation.sourceLocalName), relation),
-  );
+const createDeferredRelationStatements = deferredRelations => {
+  const relationsBySource = new Map();
+  for (const relation of deferredRelations) {
+    const relations = relationsBySource.get(relation.sourceLocalName) ?? [];
+    relations.push(relation);
+    relationsBySource.set(relation.sourceLocalName, relations);
+  }
+  return Array.from(relationsBySource.entries()).map(([sourceLocalName, relations]) => {
+    let initializer = ts.factory.createIdentifier(relations[0].sourceDeclarationLocalName);
+    for (const relation of relations) initializer = createRelationCall(initializer, relation);
+    return ts.factory.createVariableStatement(
+      [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+      ts.factory.createVariableDeclarationList(
+        [
+          ts.factory.createVariableDeclaration(
+            ts.factory.createIdentifier(sourceLocalName),
+            undefined,
+            undefined,
+            initializer,
+          ),
+        ],
+        ts.NodeFlags.Const,
+      ),
+    );
+  });
+};
 
 const printStatements = statements => {
   if (statements.length === 0) return '';
@@ -303,7 +357,7 @@ export const printClientEntitySchemaImports = model =>
 export const printClientEntitySchemaStatements = model =>
   printStatements([
     ...model.entitySchemas.map(createEntitySchemaDeclaration),
-    ...model.deferredRelations.map(createDeferredRelationStatement),
+    ...createDeferredRelationStatements(model.deferredRelations),
   ]);
 
 export const printClientEntitySchemaModule = model => {
@@ -320,7 +374,7 @@ export const printClientEntitySchemaModule = model => {
       coreImport,
       ...model.schemaImports.map(createNamedImport),
       ...model.entitySchemas.map(createEntitySchemaDeclaration),
-      ...model.deferredRelations.map(createDeferredRelationStatement),
+      ...createDeferredRelationStatements(model.deferredRelations),
     ],
     ts.factory.createToken(ts.SyntaxKind.EndOfFileToken),
     ts.NodeFlags.None,

@@ -1,5 +1,5 @@
 import { cloneJson, isJsonValue } from '../value/json.js';
-import { isRecord } from '../value/object.js';
+import { hasOwn, isRecord } from '../value/object.js';
 
 import {
   graphSchema,
@@ -15,12 +15,19 @@ import { validateGraphReadSelection } from './read-protocol.js';
 import { isEntityRef, type AnyEntityRef } from './ref/index.js';
 import type {
   ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
+  OrderedRelationshipPlacement,
+  OrderedRelationshipPosition,
   RelationshipCommand,
   RelationshipEndpointSelection,
 } from './relationship-command.js';
 import { safeParseGraphSchema } from './schema.js';
 
-type AnyGraphCommand = EntityMutationCommand | RelationshipCommand | ManyToManyRelationshipCommand;
+type AnyGraphCommand =
+  | EntityMutationCommand
+  | RelationshipCommand
+  | ManyToManyRelationshipCommand
+  | OrderedRelationshipCommand;
 
 export type GraphCommandRequestV1 = {
   readonly version: 1;
@@ -97,7 +104,10 @@ export const graphCommandProtocolError = (
 export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandRequest => {
   const request = {
     version:
-      command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command) ? 2 : 1,
+      command.kind === 'ordered-relationship-command' ||
+      (command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command))
+        ? 2
+        : 1,
     kind: 'graph-command',
     command,
   } satisfies GraphCommandRequest;
@@ -249,6 +259,69 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
     };
   }
 
+  if (command.kind === 'ordered-relationship-command') {
+    const relation = command.relation;
+    const position = parseOrderedPlacement(command.position);
+    const preconditionPosition = isRecord(command.precondition)
+      ? parseOrderedPosition(command.precondition.position)
+      : undefined;
+    if (
+      value.version !== 2 ||
+      command.action !== 'move' ||
+      !isRecord(relation) ||
+      relation.cardinality !== 'ordered-many' ||
+      typeof relation.sourceEntityName !== 'string' ||
+      typeof relation.relationName !== 'string' ||
+      typeof relation.targetEntityName !== 'string' ||
+      !isEntityRef(command.source) ||
+      !isEntityRef(command.member) ||
+      !position ||
+      (command.precondition !== undefined &&
+        (!isRecord(command.precondition) ||
+          !preconditionPosition ||
+          (command.precondition.onMismatch !== undefined &&
+            command.precondition.onMismatch !== 'fail' &&
+            command.precondition.onMismatch !== 'skip'))) ||
+      !isJsonValue(value)
+    ) {
+      return {
+        success: false,
+        error: graphCommandProtocolError(
+          'invalid_request',
+          'Ordered Relationship Command request is invalid.',
+        ),
+      };
+    }
+
+    const canonicalCommand: OrderedRelationshipCommand = {
+      kind: 'ordered-relationship-command',
+      action: 'move',
+      relation: {
+        sourceEntityName: relation.sourceEntityName as string,
+        relationName: relation.relationName as string,
+        targetEntityName: relation.targetEntityName as string,
+        cardinality: 'ordered-many',
+      },
+      source: command.source,
+      member: command.member,
+      position,
+      ...(preconditionPosition
+        ? {
+            precondition: {
+              position: preconditionPosition,
+              ...(command.precondition!.onMismatch === undefined
+                ? {}
+                : { onMismatch: command.precondition!.onMismatch as 'fail' | 'skip' }),
+            },
+          }
+        : {}),
+    };
+    return {
+      success: true,
+      request: cloneJson({ version: 2, kind: 'graph-command', command: canonicalCommand }),
+    };
+  }
+
   if (
     command.kind !== 'many-to-many-relationship-command' ||
     (command.action !== 'link' && command.action !== 'unlink') ||
@@ -299,6 +372,33 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       },
     }) as GraphCommandRequest,
   };
+};
+
+const parseOrderedPosition = (value: unknown): OrderedRelationshipPosition | undefined => {
+  if (
+    !isRecord(value) ||
+    !hasOwn(value, 'before') ||
+    !hasOwn(value, 'after') ||
+    (value.before !== null && !isEntityRef(value.before)) ||
+    (value.after !== null && !isEntityRef(value.after))
+  ) {
+    return undefined;
+  }
+  return { before: value.before, after: value.after };
+};
+
+const parseOrderedPlacement = (value: unknown): OrderedRelationshipPlacement | undefined => {
+  if (!isRecord(value)) return undefined;
+  if (value.at === 'start' || value.at === 'end') {
+    return Object.keys(value).length === 1 ? { at: value.at } : undefined;
+  }
+  if (isEntityRef(value.before)) {
+    return Object.keys(value).length === 1 ? { before: value.before } : undefined;
+  }
+  if (isEntityRef(value.after)) {
+    return Object.keys(value).length === 1 ? { after: value.after } : undefined;
+  }
+  return undefined;
 };
 
 const findEntity = (entities: readonly AnyEntityDefinition[], name: string) =>
@@ -435,6 +535,60 @@ const resolveDirectRelationshipCommand = (
   return targetError || preconditionError
     ? { success: false, error: targetError ?? preconditionError! }
     : { success: true, request, command };
+};
+
+const resolveOrderedRelationshipCommand = (
+  request: GraphCommandRequest,
+  command: OrderedRelationshipCommand,
+  entities: readonly AnyEntityDefinition[],
+): GraphCommandRequestResolveResult => {
+  const resolvedEntities = resolveEntities(
+    entities,
+    command.relation.sourceEntityName,
+    command.relation.targetEntityName,
+  );
+  if ('success' in resolvedEntities) return resolvedEntities;
+  const { sourceEntity, targetEntity } = resolvedEntities;
+  const relation = sourceEntity.relations[command.relation.relationName];
+  const targetField = relation?.targetField ? targetEntity.fields[relation.targetField] : undefined;
+  if (
+    !relation ||
+    relation.relationKind !== 'hasMany' ||
+    !relation.ordered ||
+    relation.target.name !== targetEntity.name ||
+    !relation.targetField ||
+    !targetField ||
+    !isReferenceFieldDefinition(targetField) ||
+    targetField.target.name !== sourceEntity.name ||
+    targetField.nullable ||
+    targetField.optional
+  ) {
+    return resolutionFailure(
+      'invalid_relation',
+      `Unknown ordered Relation ${sourceEntity.name}.${command.relation.relationName} -> ${targetEntity.name}.`,
+    );
+  }
+
+  const refs: Array<{ ref: AnyEntityRef; role: string; entity: AnyEntityDefinition }> = [
+    { ref: command.source, role: 'source', entity: sourceEntity },
+    { ref: command.member, role: 'member', entity: targetEntity },
+  ];
+  if ('before' in command.position) {
+    refs.push({ ref: command.position.before, role: 'anchor', entity: targetEntity });
+  } else if ('after' in command.position) {
+    refs.push({ ref: command.position.after, role: 'anchor', entity: targetEntity });
+  }
+  for (const [role, ref] of [
+    ['previous neighbor', command.precondition?.position.after],
+    ['next neighbor', command.precondition?.position.before],
+  ] as const) {
+    if (ref) refs.push({ ref, role, entity: targetEntity });
+  }
+  for (const candidate of refs) {
+    const error = validateRef(candidate.ref, candidate.entity, candidate.role);
+    if (error) return { success: false, error };
+  }
+  return { success: true, request, command };
 };
 
 const validateRef = (
@@ -595,6 +749,9 @@ export const resolveGraphCommandRequest = (
   const { command } = request;
   if (command.kind === 'entity-mutation-command') {
     return resolveEntityMutationCommand(request, command, options.entities);
+  }
+  if (command.kind === 'ordered-relationship-command') {
+    return resolveOrderedRelationshipCommand(request, command, options.entities);
   }
   return command.kind === 'many-to-many-relationship-command'
     ? resolveManyToManyCommand(request, command, options.entities)

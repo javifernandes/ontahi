@@ -196,6 +196,61 @@ describe('data graph Relationship Command protocol', () => {
   });
 });
 
+describe('data graph ordered Relationship Command protocol', () => {
+  const defineOrderedGraph = () => {
+    const List = entity('ProtocolList', { id: field.id() });
+    const Item = entity('ProtocolItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    return { List, Item };
+  };
+
+  it('round-trips only through protocol v2 and resolves the declared ordered endpoint', () => {
+    const graph = defineOrderedGraph();
+    const list = createEntityRef(graph.List, { id: 'list-1' });
+    const member = createEntityRef(graph.Item, { id: 'item-2' });
+    const anchor = createEntityRef(graph.Item, { id: 'item-1' });
+    const command = relationship(graph.List, 'items', list).after(member, anchor, {
+      ifPosition: { before: null, after: anchor },
+      onMismatch: 'skip',
+    });
+    const request = JSON.parse(JSON.stringify(toGraphCommandRequest(command)));
+
+    expect(request).toEqual({ version: 2, kind: 'graph-command', command });
+    const parsed = parseGraphCommandRequest(request);
+    expect(parsed).toEqual({ success: true, request });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+    expect(
+      resolveGraphCommandRequest(parsed.request, { entities: [graph.List, graph.Item] }),
+    ).toEqual({ success: true, request: parsed.request, command });
+  });
+
+  it('rejects v1, ambiguous placement, and a non-ordered server Relation', () => {
+    const graph = defineOrderedGraph();
+    const command = relationship(
+      graph.List,
+      'items',
+      createEntityRef(graph.List, { id: 'list-1' }),
+    ).prepend(createEntityRef(graph.Item, { id: 'item-1' }));
+
+    expect(
+      parseGraphCommandRequest({ ...toGraphCommandRequest(command), version: 1 }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+    expect(
+      parseGraphCommandRequest({
+        ...toGraphCommandRequest(command),
+        command: { ...command, position: { at: 'start', before: command.member } },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+
+    const List = entity('ProtocolList', { id: field.id() });
+    const Item = entity('ProtocolItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list' });
+    expect(
+      resolveGraphCommandRequest(toGraphCommandRequest(command), { entities: [List, Item] }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_relation' } } });
+  });
+});
+
 describe('data graph Entity Mutation Command protocol', () => {
   const defineBookGraph = () =>
     entity('Book', {

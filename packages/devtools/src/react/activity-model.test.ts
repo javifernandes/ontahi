@@ -139,6 +139,36 @@ describe('Devtools activity model', () => {
       ),
     ).toBe('TodoItem.tags.change');
     expect(
+      semanticSummary(
+        exchangeActivity({
+          kind: 'graph-command',
+          command: {
+            kind: 'ordered-relationship-command',
+            action: 'move',
+            relation: {
+              sourceEntityName: 'TodoList',
+              relationName: 'items',
+              targetEntityName: 'TodoItem',
+              cardinality: 'ordered-many',
+            },
+            source: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-inbox' } },
+            member: {
+              kind: 'entity-ref',
+              entityName: 'TodoItem',
+              locator: { id: 'todo-explorer' },
+            },
+            position: {
+              before: {
+                kind: 'entity-ref',
+                entityName: 'TodoItem',
+                locator: { id: 'todo-inline-editing' },
+              },
+            },
+          },
+        }),
+      ),
+    ).toBe('TodoList.items.move(todo-explorer, before: todo-inline-editing)');
+    expect(
       semanticSummary(exchangeActivity({ kind: 'check-permission', operationId: 'Todo.remove' })),
     ).toBe('can Todo.remove()');
     expect(semanticSummary(exchangeActivity({ kind: 'invoke', operationId: 'Todo.add' }))).toBe(

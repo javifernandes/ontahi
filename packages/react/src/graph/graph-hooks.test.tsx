@@ -1,9 +1,11 @@
 import {
   defineClientEntity,
+  createEntityRef,
   entity,
   field,
   graphSchema,
   query,
+  relationship,
   view,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
@@ -19,6 +21,7 @@ import {
   useGraphCommand,
   useGraphOperation,
   useGraphQuery,
+  useOrderedRelationshipCommand,
 } from './index.js';
 
 const BookEntity = entity('Book', {
@@ -351,5 +354,27 @@ describe('graph query and command hooks', () => {
       }),
       undefined,
     );
+  });
+
+  it('executes ordered Relationship Commands through the dedicated hook capability', async () => {
+    const List = entity('HookList', { id: field.id() });
+    const Item = entity('HookItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    const command = relationship(List, 'items', createEntityRef(List, { id: 'list-1' })).prepend(
+      createEntityRef(Item, { id: 'item-2' }),
+    );
+    const graphExecutor = createExecutorMock();
+    graphExecutor.runOrderedRelationshipCommand = vi
+      .fn()
+      .mockResolvedValue({ status: 'applied', delta: { added: [], removed: [], moved: [] } });
+
+    const { result } = renderHook(() => useOrderedRelationshipCommand(() => command), {
+      wrapper: createWrapper(graphExecutor),
+    });
+    await act(async () => {
+      await result.current.mutateAsync(undefined);
+    });
+
+    expect(graphExecutor.runOrderedRelationshipCommand).toHaveBeenCalledWith(command, undefined);
   });
 });

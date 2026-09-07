@@ -96,6 +96,26 @@ describe('data-graph mapping', () => {
     });
   });
 
+  it('maps ordered has-many with provider-private position evidence', () => {
+    const List = entity('OrderedListMapping', { id: field.id() });
+    const Item = entity('OrderedItemMapping', { id: field.id(), list: field.ref(List) });
+    const ListWithItems = List.hasMany('items', Item, { via: 'list', ordered: true });
+
+    applyConventionalDataGraphMappings({
+      entities: [ListWithItems, Item],
+      naming: {
+        table: name => name.toLowerCase(),
+        column: name => name.toLowerCase(),
+      },
+    });
+
+    expect(ListWithItems.relations.items.mapping).toMatchObject({
+      type: 'one-to-many',
+      toColumn: 'listid',
+      orderColumn: 'listposition',
+    });
+  });
+
   it('resolves effective has-many target fields from unique belongs-to and reverse mapping', () => {
     const Course = entity('MappedCourse', { id: field.id() });
     const Advisor = entity('Advisor', { id: field.id() });

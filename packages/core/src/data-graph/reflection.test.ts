@@ -206,4 +206,20 @@ describe('schema relation reflection', () => {
       }),
     ]);
   });
+
+  it('reflects ordered cardinality and move as the only structural verb', () => {
+    const List = entity('ReflectedOrderedList', { id: field.id() });
+    const Item = entity('ReflectedOrderedItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+
+    expect(
+      reflectSchemaRelations([List, Item]).find(
+        relation => relation.relationId === 'ReflectedOrderedList.items',
+      ),
+    ).toMatchObject({
+      ordered: true,
+      cardinality: 'many',
+      structuralVerbs: ['move'],
+    });
+  });
 });

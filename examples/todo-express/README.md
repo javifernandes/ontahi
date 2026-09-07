@@ -169,18 +169,25 @@ The example deliberately exercises two different domain structures:
 - `TodoItem.list: field.ref(TodoList)` expresses composition: every todo item lives in one list. The same
   declaration is a Ref-valued field and the `belongsTo` relation; PostgreSQL lowers it to
   `list_id` only at the storage boundary.
+- `TodoList.items` is the ordered inverse of that required Ref. Drag and keyboard reordering send a
+  native ordered Relationship Command; the browser reads the authoritative nested sequence and
+  keeps only the in-flight optimistic projection locally.
 - `TodoItem.tags` expresses an attribute-free many-to-many association directly. `todo_tags` remains
   physical edge storage; it is not reflected, generated, authorized, or manipulated as a semantic
   Entity.
 
-The browser expresses the inverse membership as an ordinary Query rather than a wrapper Operation:
+The browser reads list membership and sequence as one nested ordered Relation rather than a wrapper
+Operation or a second root Query:
 
 ```ts
-const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
-const todos = TodoItem.all()
-  .where(visibleTodos)
-  .as(TodoItemListItem)
-  .orderBy(item => item.title);
+const TodoListItem = TodoList.view('TodoListItem', {
+  id: true,
+  name: true,
+  items: { id: true, title: true, completed: true, tags: { id: true, name: true } },
+});
+const lists = TodoList.all()
+  .as(TodoListItem)
+  .orderBy(list => list.name);
 ```
 
 The generated schema authors the selection, while the caller-owned View chooses its result shape.
@@ -268,7 +275,8 @@ composition refines that same value without creating a UI-only filter language.
 2. [`src/todo.ts`](./src/todo.ts) exports the `TodoList`, `TodoItem`, and `Tag`
    declarations, including their identities, relations, write Operations, and durable Operation.
    [`src/todo-read-policies.ts`](./src/todo-read-policies.ts) separately declares the browser-visible
-   read surface and the Relationship Command policy exposes only `TodoItem.tags` link/unlink.
+   read surface and the Relationship Command policy exposes only `TodoItem.tags` link/unlink plus
+   `TodoList.items` move.
 3. [`src/graph.ts`](./src/graph.ts) is the single composition root. `ontahi(...)` binds storage,
    `inProcessTasks()`, the notification Capability, and the public entities into the complete
    `TodoApplication` used by reflection, execution, tasks, ingress, and code generation. Task
@@ -279,8 +287,9 @@ composition refines that same value without creating a UI-only filter language.
 5. The `ontahi-codegen` command analyzes the conventional `src/graph.ts` composition root and
    reproducibly emits `src/generated/client-entities.ts`; the app carries no custom generation
    script.
-6. [`client/src/App.tsx`](./client/src/App.tsx) consumes caller-authored Queries and the remaining
-   domain Operations exclusively through `@ontahi/react` hooks.
+6. [`client/src/App.tsx`](./client/src/App.tsx) consumes caller-authored Queries, native ordered and
+   many-to-many Relationship Commands, and the remaining domain Operations exclusively through
+   `@ontahi/react` hooks.
 7. [`client/src/Explorer.tsx`](./client/src/Explorer.tsx) embeds the reusable Explorer components;
    the Express adapter derives their server endpoints from `TodoApplication`.
 

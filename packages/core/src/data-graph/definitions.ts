@@ -499,6 +499,8 @@ export type DirectRelationMapping = {
   fromColumn: string;
   toTable: string;
   toColumn: string;
+  /** Provider-private position evidence for an ordered one-to-many Relation. */
+  orderColumn?: string;
 };
 
 export type ManyToManyRelationMapping = {
@@ -579,6 +581,7 @@ export const assertPortableRelationConstraints = (
 export type RelationOptions = {
   via?: string;
   constraints?: readonly RelationConstraint[];
+  ordered?: true;
 };
 
 export type RelationDefinition<
@@ -592,6 +595,7 @@ export type RelationDefinition<
   sourceField?: string;
   targetField?: string;
   nullable?: TNullable;
+  ordered?: true;
   mapping?: ParsedRelationMapping;
   constraints?: readonly RelationConstraint[];
 };
@@ -704,20 +708,29 @@ export type EntityDefinition<
     >,
     TRelations
   >;
-  hasMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
+  hasMany: <
+    TRelationName extends string,
+    TTarget extends AnyEntityDefinition,
+    const TOptions extends Omit<RelationOptions, 'via'> & {
+      via?: keyof TTarget['fields'] & string;
+    } = {},
+  >(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via'> & { via?: keyof TTarget['fields'] & string },
+    options?: TOptions,
   ) => EntityDefinition<
     TName,
     TFields,
-    TRelations & { [TKey in TRelationName]: RelationDefinition<'hasMany', TTarget> },
+    TRelations & {
+      [TKey in TRelationName]: RelationDefinition<'hasMany', TTarget> &
+        (TOptions extends { ordered: true } ? { ordered: true } : {});
+    },
     TLocators
   >;
   belongsTo: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via'> & { via?: keyof TFields & string },
+    options?: Omit<RelationOptions, 'via' | 'ordered'> & { via?: keyof TFields & string },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -727,7 +740,7 @@ export type EntityDefinition<
   manyToMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via'>,
+    options?: Omit<RelationOptions, 'via' | 'ordered'>,
   ) => EntityDefinition<
     TName,
     TFields,
@@ -1094,11 +1107,16 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
         relationKind: 'hasMany',
         target,
         ...(options?.via ? { targetField: options.via } : {}),
+        ...(options?.ordered ? { ordered: true as const } : {}),
         ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
     },
-    belongsTo(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
+    belongsTo(
+      relationName: string,
+      target: AnyEntityDefinition,
+      options?: Omit<RelationOptions, 'ordered'>,
+    ) {
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
@@ -1112,7 +1130,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     manyToMany(
       relationName: string,
       target: AnyEntityDefinition,
-      options?: Omit<RelationOptions, 'via'>,
+      options?: Omit<RelationOptions, 'via' | 'ordered'>,
     ) {
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
@@ -1420,6 +1438,7 @@ export const mapRelation = <TEntity extends AnyEntityDefinition>(
         type: 'one-to-many' | 'many-to-one';
         from: string;
         to: string;
+        orderBy?: string;
       }
     | {
         type: 'many-to-many';
@@ -1460,12 +1479,26 @@ export const mapRelation = <TEntity extends AnyEntityDefinition>(
         `Relation ${entityDefinition.name}.${relationName} requires a many-to-many mapping.`,
       );
     }
+    if (Boolean(relation.ordered) !== Boolean(input.orderBy)) {
+      throw new Error(
+        relation.ordered
+          ? `Ordered Relation ${entityDefinition.name}.${relationName} requires an orderBy mapping.`
+          : `Unordered Relation ${entityDefinition.name}.${relationName} cannot declare an orderBy mapping.`,
+      );
+    }
+    const order = input.orderBy ? parseTableColumnPath(input.orderBy) : undefined;
+    if (order && order.tableName !== getEntityMapping(relation.target).tableName) {
+      throw new Error(
+        `Ordered Relation ${entityDefinition.name}.${relationName} position must be stored on ${getEntityMapping(relation.target).tableName}.`,
+      );
+    }
     relation.mapping = {
       type: input.type,
       fromTable: from.tableName,
       fromColumn: from.columnName,
       toTable: to.tableName,
       toColumn: to.columnName,
+      ...(order ? { orderColumn: order.columnName } : {}),
     };
   }
 

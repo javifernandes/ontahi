@@ -127,7 +127,17 @@ export const graphReadSummary = (body: RecordValue): string | undefined => {
   return clauses.join(' · ');
 };
 
-const graphCommandSummary = (body: RecordValue): string | undefined => {
+const refIdentity = (value: unknown) => {
+  if (!isRecord(value) || !isRecord(value.locator)) return 'unknown';
+  if (Object.keys(value.locator).length === 1 && 'id' in value.locator) {
+    return String(value.locator.id);
+  }
+  return Object.entries(value.locator)
+    .map(([key, item]) => `${key}: ${String(item)}`)
+    .join(', ');
+};
+
+export const graphCommandSummary = (body: RecordValue): string | undefined => {
   if (body.kind !== 'graph-command' || !isRecord(body.command)) return undefined;
   const command = body.command;
   if (command.kind === 'entity-mutation-command') {
@@ -147,6 +157,21 @@ const graphCommandSummary = (body: RecordValue): string | undefined => {
           ? command.relation.relationName
           : 'relation';
     return `${relation}.${String(command.action ?? 'change')}`;
+  }
+  if (command.kind === 'ordered-relationship-command' && isRecord(command.relation)) {
+    const entity = String(command.relation.sourceEntityName ?? 'Entity');
+    const relation = String(command.relation.relationName ?? 'relation');
+    const member = refIdentity(command.member);
+    const position = isRecord(command.position)
+      ? command.position.before
+        ? `before: ${refIdentity(command.position.before)}`
+        : command.position.after
+          ? `after: ${refIdentity(command.position.after)}`
+          : command.position.at === 'start' || command.position.at === 'end'
+            ? `at: ${command.position.at}`
+            : 'destination: unknown'
+      : 'destination: unknown';
+    return `${entity}.${relation}.move(${member}, ${position})`;
   }
   return typeof command.kind === 'string' ? command.kind : 'Graph command';
 };

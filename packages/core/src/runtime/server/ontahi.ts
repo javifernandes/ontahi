@@ -21,6 +21,8 @@ import {
   type RelationshipCommandPolicy,
   type ManyToManyRelationshipCommandPolicy,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type OrderedRelationshipCommandPolicy,
+  type OrderedRelationshipCommandExecutionRuntime,
   type MutationReaction,
   type PortableDerivedFieldRegistry,
   type PortableOperationConditionRegistry,
@@ -74,6 +76,7 @@ export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
   policies: readonly (
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
+    | OrderedRelationshipCommandPolicy
     | EntityMutationCommandPolicy<any>
   )[],
 ) => GraphCommandDispatcher<TAuthority>;
@@ -478,6 +481,17 @@ export const ontahi = <
           (
             runtime as unknown as ManyToManyRelationshipCommandExecutionRuntime<unknown>
           ).runManyToManyRelationshipCommand(command),
+        );
+      },
+      executeOrdered: command => {
+        const runtime = options.storage.createRuntime();
+        if (!('runOrderedRelationshipCommand' in runtime)) {
+          throw new Error('Storage runtime does not support ordered Relationship Commands.');
+        }
+        return Effect.runPromise(
+          (
+            runtime as unknown as OrderedRelationshipCommandExecutionRuntime<unknown>
+          ).runOrderedRelationshipCommand(command),
         );
       },
       executeEntityMutation: command => {

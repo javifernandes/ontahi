@@ -56,6 +56,9 @@ const TodoItemCommandRef = entity.ref('TodoItem', {
 export const TodoList = entity({
   name: 'TodoList',
   fields: todoListFields,
+  relations: () => ({
+    items: relation.hasMany(entity.ref('TodoItem'), { via: 'list', ordered: true }),
+  }),
   display: { primary: 'name', search: ['name'] },
   domainOperationDefaults: entityDefaults,
   uses: {
@@ -102,7 +105,7 @@ export const TodoList = entity({
         }),
         graphOps: { receiver: 'list' },
         output: CompleteAllOutput,
-        bridge: { invalidate: [['TodoItem']] },
+        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         ingress: [
           ingress.http({
             method: 'POST',
@@ -179,7 +182,7 @@ export const TodoItem = entity({
       createItem: operation({
         input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
         output: self,
-        bridge: { invalidate: [['TodoItem']] },
+        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         run: ({ id, list, title }) =>
           Effect.gen(function* () {
             const existingList = yield* list.resolve();
@@ -207,7 +210,7 @@ export const TodoItem = entity({
         }),
         graphOps: { receiver: 'todos' },
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
-        bridge: { invalidate: [['TodoItem']] },
+        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         run: ({ todos, completed }) => todos.update({ completed }),
       }),
       delete: operation({
@@ -215,7 +218,7 @@ export const TodoItem = entity({
           todo: graphSchema.existingRef(self),
         }),
         graphOps: { receiver: 'todo' },
-        bridge: { invalidate: [['TodoItem']] },
+        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         *run({ todo }) {
           yield* unlinkTodoTags(todo.id);
           yield* commands
@@ -248,7 +251,7 @@ export const TodoItem = entity({
           tag: graphSchema.existingRef(Tag),
         }),
         graphOps: { receiver: 'tag' },
-        bridge: { invalidate: [['Tag'], ['TodoItem']] },
+        bridge: { invalidate: [['TodoList'], ['Tag'], ['TodoItem']] },
         *run({ tag }) {
           const todos = yield* todoEntities
             .relatedTo(
@@ -268,7 +271,7 @@ export const TodoItem = entity({
         },
       }),
       deleteAll: operation({
-        bridge: { invalidate: [['TodoItem']] },
+        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
         run: () => commands.all().delete(),
       }),
     };

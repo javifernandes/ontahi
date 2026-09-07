@@ -887,9 +887,12 @@ describe('Ontahi application declaration analysis', () => {
         export const Folder = entity({
           name: 'Folder',
           fields: { id: field.id() },
-          relations: {
-            entries: relation.hasMany(entity.ref('FolderEntry'), { via: 'folderId' }),
-          },
+          relations: () => ({
+            entries: relation.hasMany(entity.ref('FolderEntry'), {
+              via: 'folderId',
+              ordered: true,
+            }),
+          }),
           domainOperationDefaults: {
             authority: 'server',
             exposure: 'bridge',
@@ -909,6 +912,7 @@ describe('Ontahi application declaration analysis', () => {
         kind: 'hasMany',
         targetName: 'FolderEntry',
         via: 'folderId',
+        ordered: true,
         deferred: true,
       },
     ]);

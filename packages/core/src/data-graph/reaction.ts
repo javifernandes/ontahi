@@ -11,6 +11,7 @@ import type {
 import {
   resolveCanonicalRelationshipIdentity,
   type ManyToManyRelationshipCommand,
+  type OrderedRelationshipCommand,
   type RelationshipCommand,
 } from './relationship-command.js';
 
@@ -23,12 +24,18 @@ type AppliedManyToManyRelationshipMutationOutcome = Omit<
   AppliedRelationshipMutationOutcome,
   'command'
 > & { command: ManyToManyRelationshipCommand };
+type AppliedOrderedRelationshipMutationOutcome = Omit<
+  AppliedRelationshipMutationOutcome,
+  'command'
+> & { command: OrderedRelationshipCommand };
 type RelationshipOutcomeFor<
   TEntity extends AnyEntityDefinition,
   TRelationName extends keyof TEntity['relations'] & string,
-> = TEntity['relations'][TRelationName]['relationKind'] extends 'manyToMany'
-  ? AppliedManyToManyRelationshipMutationOutcome
-  : AppliedDirectRelationshipMutationOutcome;
+> = TEntity['relations'][TRelationName] extends { ordered: true }
+  ? AppliedOrderedRelationshipMutationOutcome
+  : TEntity['relations'][TRelationName]['relationKind'] extends 'manyToMany'
+    ? AppliedManyToManyRelationshipMutationOutcome
+    : AppliedDirectRelationshipMutationOutcome;
 type RelationshipOutcomeProjector<TOutcome, TValue> = (outcome: TOutcome) => TValue;
 type RelationshipEventAuthoring<TOutcome> = {
   (project: RelationshipOutcomeProjector<TOutcome, unknown>): MutationReaction;
@@ -50,13 +57,20 @@ const invoke = (
 });
 
 const execute = (
-  command: RelationshipCommand | ManyToManyRelationshipCommand | EntityMutationCommand,
+  command:
+    | RelationshipCommand
+    | ManyToManyRelationshipCommand
+    | OrderedRelationshipCommand
+    | EntityMutationCommand,
 ): MutationReactionIntent => {
   if (command.kind === 'relationship-command') {
     return { kind: 'execute-relationship-command', command };
   }
   if (command.kind === 'many-to-many-relationship-command') {
     return { kind: 'execute-many-to-many-relationship-command', command };
+  }
+  if (command.kind === 'ordered-relationship-command') {
+    return { kind: 'execute-ordered-relationship-command', command };
   }
   return { kind: 'execute-entity-mutation-command', command };
 };
@@ -67,7 +81,7 @@ const defineRelationshipReaction = <
 >(
   entity: TEntity,
   relationName: TRelationName,
-  action: RelationshipCommand['action'],
+  action: RelationshipCommand['action'] | OrderedRelationshipCommand['action'],
   config: ReactionConfig,
 ) => {
   const react = (
@@ -110,6 +124,8 @@ const relationship = <
     defineRelationshipReaction(entity, relationName, 'link', config),
   removed: (config: ReactionConfig) =>
     defineRelationshipReaction(entity, relationName, 'unlink', config),
+  moved: (config: ReactionConfig) =>
+    defineRelationshipReaction(entity, relationName, 'move', config),
 });
 
 export const reaction = {

@@ -5,9 +5,7 @@ import type { CSSProperties, FormEvent, PointerEvent } from 'react';
 import {
   bringDeskCardToFront,
   defaultDeskCardPosition,
-  moveTodoItem,
   reconcileDeskLayout,
-  reconcileTodoItemOrder,
   reconcileTodoListOrder,
   type DeskLayout,
 } from '../todo-list-state.js';
@@ -16,7 +14,6 @@ import type { TodoAppModel } from '../use-todo-app.js';
 import { TodoListCard } from './TodoListCard.js';
 
 const listOrderStorageKey = 'ontahi.todo.list-order';
-const itemOrderStorageKey = 'ontahi.todo.item-order';
 const deskLayoutStorageKey = 'ontahi.todo.desk-layout';
 
 const storedStringArray = (key: string) => {
@@ -25,23 +22,6 @@ const storedStringArray = (key: string) => {
     return Array.isArray(stored) ? stored.filter(id => typeof id === 'string') : [];
   } catch {
     return [];
-  }
-};
-
-const storedItemOrder = () => {
-  try {
-    const stored = JSON.parse(globalThis.localStorage.getItem(itemOrderStorageKey) ?? '{}');
-    if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
-
-    return Object.fromEntries(
-      Object.entries(stored).flatMap(([listId, itemIds]) =>
-        Array.isArray(itemIds)
-          ? [[listId, itemIds.filter(itemId => typeof itemId === 'string')]]
-          : [],
-      ),
-    ) as Record<string, string[]>;
-  } catch {
-    return {};
   }
 };
 
@@ -92,6 +72,7 @@ export const TodoBoard = ({
   deletingTodoId,
   taggingTodoId,
   deletingTagId,
+  reorderingTodoId,
   clearActionError,
   createList,
   renameList,
@@ -106,6 +87,7 @@ export const TodoBoard = ({
   toggleTodoTag,
   createTagForTodo,
   deleteTag,
+  moveTodo,
 }: TodoAppModel['dashboard']) => {
   const [isAddingList, setIsAddingList] = useState(false);
   const [listName, setListName] = useState('');
@@ -113,7 +95,6 @@ export const TodoBoard = ({
   const [orderedListIds, setOrderedListIds] = useState(() =>
     storedStringArray(listOrderStorageKey),
   );
-  const [itemOrderByList, setItemOrderByList] = useState(storedItemOrder);
   const [deskLayout, setDeskLayout] = useState(storedDeskLayout);
   const [canvasWidth, setCanvasWidth] = useState(1380);
   const [canvasHeight, setCanvasHeight] = useState(600);
@@ -131,20 +112,9 @@ export const TodoBoard = ({
     () =>
       reconciledListIds.flatMap(id => {
         const list = lists.find(candidate => candidate.id === id);
-        if (!list) return [];
-        const availableItemIds = list.items.map(todo => todo.id);
-        const itemIds = reconcileTodoItemOrder(itemOrderByList[id] ?? [], availableItemIds);
-        return [
-          {
-            ...list,
-            items: itemIds.flatMap(itemId => {
-              const todo = list.items.find(candidate => candidate.id === itemId);
-              return todo ? [todo] : [];
-            }),
-          },
-        ];
+        return list ? [list] : [];
       }),
-    [itemOrderByList, lists, reconciledListIds],
+    [lists, reconciledListIds],
   );
   const reconciledDeskLayout = useMemo(
     () => reconcileDeskLayout(deskLayout, reconciledListIds, canvasWidth),
@@ -166,27 +136,9 @@ export const TodoBoard = ({
 
   useEffect(() => {
     if (isLoading) return;
-
-    const reconciledItemOrder = Object.fromEntries(
-      lists.map(list => [
-        list.id,
-        reconcileTodoItemOrder(
-          itemOrderByList[list.id] ?? [],
-          list.items.map(todo => todo.id),
-        ),
-      ]),
-    );
-    if (!sameValue(itemOrderByList, reconciledItemOrder)) {
-      setItemOrderByList(reconciledItemOrder);
-    }
-  }, [isLoading, itemOrderByList, lists]);
-
-  useEffect(() => {
-    if (isLoading) return;
     globalThis.localStorage.setItem(listOrderStorageKey, JSON.stringify(orderedListIds));
-    globalThis.localStorage.setItem(itemOrderStorageKey, JSON.stringify(itemOrderByList));
     globalThis.localStorage.setItem(deskLayoutStorageKey, JSON.stringify(deskLayout));
-  }, [deskLayout, isLoading, itemOrderByList, orderedListIds]);
+  }, [deskLayout, isLoading, orderedListIds]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -280,22 +232,6 @@ export const TodoBoard = ({
     }
     cardDrag.current = undefined;
     setDraggingListId(undefined);
-  };
-
-  const moveTodo = (listId: string, movingTodoId: string, beforeTodoId?: string) => {
-    const list = lists.find(candidate => candidate.id === listId);
-    if (!list) return;
-    setItemOrderByList(current => ({
-      ...current,
-      [listId]: moveTodoItem(
-        reconcileTodoItemOrder(
-          current[listId] ?? [],
-          list.items.map(todo => todo.id),
-        ),
-        movingTodoId,
-        beforeTodoId,
-      ),
-    }));
   };
 
   const moveCardByKeyboard = (
@@ -392,6 +328,7 @@ export const TodoBoard = ({
                 deletingTodoId={deletingTodoId}
                 taggingTodoId={taggingTodoId}
                 deletingTagId={deletingTagId}
+                reorderingTodoId={reorderingTodoId}
                 openTagPickerTodoId={openTagPickerTodoId}
                 isColorPickerOpen={openColorPickerListId === list.id}
                 closePopovers={closePopovers}
@@ -404,7 +341,7 @@ export const TodoBoard = ({
                   setOpenColorPickerListId(current => (current === list.id ? undefined : list.id));
                 }}
                 moveTodo={(movingTodoId, beforeTodoId) =>
-                  moveTodo(list.id, movingTodoId, beforeTodoId)
+                  void moveTodo(list.id, movingTodoId, beforeTodoId)
                 }
                 renameList={renameList}
                 recolorList={recolorList}

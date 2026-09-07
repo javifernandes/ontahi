@@ -319,6 +319,7 @@ describe('semantic client Entity schema emitter', () => {
         deferredRelations: [
           {
             sourceLocalName: 'BookSchema',
+            sourceDeclarationLocalName: 'BookSchemaBase',
             kind: 'belongsTo',
             name: 'publisher',
             targetLocalName: 'PublisherSchema',
@@ -448,6 +449,7 @@ describe('semantic client Entity schema emitter', () => {
         deferredRelations: [
           {
             sourceLocalName: 'NoteSchema',
+            sourceDeclarationLocalName: 'NoteSchemaBase',
             kind: 'hasMany',
             name: 'tags',
             targetLocalName: 'TagEntity',

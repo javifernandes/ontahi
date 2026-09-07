@@ -23,6 +23,7 @@ import {
 } from '../relation-root.js';
 import type {
   ManyToManyRelationshipCommandExecutionRuntime,
+  OrderedRelationshipCommandExecutionRuntime,
   RelationshipCommandExecutionRuntime,
   RelationshipFact,
 } from '../relationship-command.js';
@@ -39,6 +40,7 @@ import {
   type InMemoryDataset,
 } from './materialization.js';
 import { getInMemoryDataGraphObservationHub } from './observation.js';
+import { executeInMemoryOrderedRelationshipCommandEffect } from './ordered-relationship-command.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
 
@@ -390,6 +392,7 @@ export type InMemoryDataGraphRuntime = DataGraphExecutionRuntime<
   DataGraphObservationRuntime<InMemoryDataGraphError> &
   EntityMutationCommandExecutionRuntime<InMemoryDataGraphError> &
   ManyToManyRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
+  OrderedRelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
   RelationshipCommandExecutionRuntime<InMemoryDataGraphError> &
   DataGraphTransactionCapability<InMemoryDataGraphRuntime>;
 
@@ -474,6 +477,12 @@ export const createInMemoryDataGraphRuntime = (input: {
         input.dataset,
         input.entities ?? [],
         relationships,
+        command,
+      ).pipe(Effect.tap(() => Effect.sync(observationHub.publish))),
+    runOrderedRelationshipCommand: command =>
+      executeInMemoryOrderedRelationshipCommandEffect(
+        input.dataset,
+        input.entities ?? [],
         command,
       ).pipe(Effect.tap(() => Effect.sync(observationHub.publish))),
     runRelationshipCommand: command =>

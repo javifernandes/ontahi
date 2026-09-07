@@ -79,6 +79,48 @@ describe('Relationship Command results', () => {
     ).toBe(false);
   });
 
+  it('validates ordered move endpoint and neighbor Entity identities', () => {
+    const List = entity('ResultList', { id: field.id() });
+    const Item = entity('ResultItem', {
+      id: field.id(),
+      list: field.ref(List),
+    });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    const source = createEntityRef(List, { id: 'list-1' });
+    const first = createEntityRef(Item, { id: 'item-1' });
+    const second = createEntityRef(Item, { id: 'item-2' });
+    const command = relationship(List, 'items', source).prepend(second);
+    const move = {
+      relation: command.relation,
+      source,
+      member: second,
+      from: { before: null, after: first },
+      to: { before: first, after: null },
+    };
+
+    expect(
+      isRelationshipCommandResult({
+        status: 'applied',
+        delta: { added: [], removed: [], moved: [move] },
+      }),
+    ).toBe(true);
+    expect(
+      isRelationshipCommandResult({
+        status: 'applied',
+        delta: {
+          added: [],
+          removed: [],
+          moved: [
+            {
+              ...move,
+              to: { before: createEntityRef(List, { id: 'wrong-entity' }), after: null },
+            },
+          ],
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('extracts only canonical safe diagnostics from nested provider failures', () => {
     const graph = defineSchoolGraph();
     const command = relationship(

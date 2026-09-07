@@ -1,31 +1,26 @@
-import type { Selection } from '@ontahi/core/data-graph';
+import { defineClientEntity } from '@ontahi/core/data-graph';
 
-import { Tag, TodoItem, TodoItemSchema, TodoList } from '../../src/generated/client-entities.js';
+import { Tag, TodoListSchema } from '../../src/generated/client-entities.js';
 
-const TodoListItem = TodoList.view('TodoListItem', { id: true, name: true, color: true });
-const TagItem = Tag.view('TagItem', { id: true, name: true, color: true });
-const TodoItemListItem = TodoItem.view('TodoItemListItem', {
+const OrderedTodoList = defineClientEntity(TodoListSchema);
+const TodoListItem = OrderedTodoList.view('TodoListItem', {
   id: true,
-  list: true,
-  title: true,
-  completed: true,
-  tags: { id: true, name: true, color: true },
+  name: true,
+  color: true,
+  items: {
+    id: true,
+    list: true,
+    title: true,
+    completed: true,
+    tags: { id: true, name: true, color: true },
+  },
 });
+const TagItem = Tag.view('TagItem', { id: true, name: true, color: true });
 
-export const todoListsQuery = TodoList.all()
+export const todoListsQuery = OrderedTodoList.all()
   .as(TodoListItem)
   .orderBy(list => list.name);
 
 export const tagsQuery = Tag.all()
   .as(TagItem)
   .orderBy(tag => tag.name);
-
-export const allTodoItemsQuery = TodoItem.all()
-  .as(TodoItemListItem)
-  .orderBy(todo => todo.title);
-
-export const todoItemsQuery = (todos: Selection<typeof TodoItemSchema>) =>
-  TodoItem.all()
-    .where(todos)
-    .as(TodoItemListItem)
-    .orderBy(todo => todo.title);

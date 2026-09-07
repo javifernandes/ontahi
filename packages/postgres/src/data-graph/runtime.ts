@@ -17,6 +17,7 @@ import {
   type EntityMutationCommandExecutionRuntime,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type OrderedRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
   type PlainGraphRead,
   type QueryOrView,
@@ -31,6 +32,7 @@ import {
   executePostgresCommand,
   executePostgresEntityMutationCommand,
   executePostgresManyToManyCommand,
+  executePostgresOrderedRelationshipCommandEffect,
   executePostgresRelationshipCommand,
 } from './command-runtime.js';
 import { createPostgresMappingRegistry, type PostgresEntityMapping } from './mapping.js';
@@ -60,6 +62,7 @@ type PostgresDataGraphRuntime = DataGraphExecutionRuntime<
   PostgresDataGraphError
 > &
   ManyToManyRelationshipCommandExecutionRuntime<PostgresDataGraphError> &
+  OrderedRelationshipCommandExecutionRuntime<PostgresDataGraphError> &
   RelationshipCommandExecutionRuntime<PostgresDataGraphError> &
   EntityMutationCommandExecutionRuntime<PostgresDataGraphError>;
 
@@ -144,20 +147,34 @@ const createPostgresBaseDataGraphRuntime = (
       });
     }
     const fields = resolveRelationFields(sourceEntity, node.relationName, node);
-    const related = await readSpec({
-      kind: 'query',
-      root: node.entity,
-      selection: {
-        kind: 'predicate',
-        operator: 'eq',
-        fieldName: fields.targetField,
-        value: row[fields.sourceField],
+    const targetReferenceField = getEntityReferenceField(node.entity, fields.targetField);
+    const targetValue = targetReferenceField
+      ? liftEntityReferenceValue(targetReferenceField, row[fields.sourceField])
+      : row[fields.sourceField];
+    const related = await readSpec(
+      {
+        kind: 'query',
+        root: node.entity,
+        selection: {
+          kind: 'predicate',
+          operator: 'eq',
+          fieldName: fields.targetField,
+          value: targetValue,
+        },
+        select: node.select,
+        includes: node.includes,
+        orderBy: [...node.orderBy],
+        limit: node.limit,
       },
-      select: node.select,
-      includes: node.includes,
-      orderBy: [...node.orderBy],
-      limit: node.limit,
-    });
+      {
+        physicalOrderBy:
+          definition?.ordered &&
+          node.orderBy.length === 0 &&
+          definition.mapping?.type === 'one-to-many'
+            ? [definition.mapping.orderColumn!]
+            : undefined,
+      },
+    );
     return node.relationKind === 'belongsTo' ? (related[0] ?? null) : related;
   };
 
@@ -213,6 +230,7 @@ const createPostgresBaseDataGraphRuntime = (
       entityRows?: boolean;
       applyLimit?: boolean;
       projectedFields?: readonly string[];
+      physicalOrderBy?: readonly string[];
     } = {},
   ): Promise<Record<string, unknown>[]> => {
     const effectiveSpec =
@@ -227,6 +245,7 @@ const createPostgresBaseDataGraphRuntime = (
         ...(options.entityRows
           ? { projectedFields: options.projectedFields ?? Object.keys(spec.root.fields) }
           : {}),
+        ...(options.physicalOrderBy ? { physicalOrderBy: options.physicalOrderBy } : {}),
       }),
     );
     if (spec.cardinality === 'one' && result.rows.length !== 1) {
@@ -405,16 +424,25 @@ const createPostgresBaseDataGraphRuntime = (
     }
 
     const targetSpec = withRelatedTargetPredicate(spec, targetField, sourceValues);
+    const physicalOrderBy =
+      spec.relationOwner === 'source' &&
+      relationDefinition?.ordered &&
+      spec.target.orderBy.length === 0 &&
+      relationDefinition.mapping?.type === 'one-to-many'
+        ? [relationDefinition.mapping.orderColumn!]
+        : undefined;
     if (spec.mode === 'entityRows') {
       return readSpec(targetSpec, {
         entityRows: true,
         projectedFields: projectedEntityRowFields(projectedFields, targetField),
+        ...(physicalOrderBy ? { physicalOrderBy } : {}),
       });
     }
     if (spec.mode === 'countBySource') {
       const entityRows = await readSpec(targetSpec, {
         entityRows: true,
         projectedFields: [targetField],
+        ...(physicalOrderBy ? { physicalOrderBy } : {}),
       });
       const countsBySource = new Map<unknown, number>(sourceValues.map(value => [value, 0]));
       for (const row of entityRows) {
@@ -428,7 +456,9 @@ const createPostgresBaseDataGraphRuntime = (
       return [{ sourceRows, countsBySource }];
     }
 
-    const rows = await readSpec(targetSpec);
+    const rows = await readSpec(targetSpec, {
+      ...(physicalOrderBy ? { physicalOrderBy } : {}),
+    });
     return spec.mode === 'resolve' ? [{ sourceRows, rows }] : rows;
   };
 
@@ -520,6 +550,20 @@ const createPostgresBaseDataGraphRuntime = (
     },
     runManyToManyRelationshipCommand: command =>
       executePostgresManyToManyCommand({ command, executeQuery, mappings: input.mappings }),
+    runOrderedRelationshipCommand: command =>
+      Effect.suspend(() => {
+        if (!execution.transactionScoped && execution.transactionCapability) {
+          return execution.transactionCapability.transaction(runtime =>
+            runtime.runOrderedRelationshipCommand(command),
+          );
+        }
+        return executePostgresOrderedRelationshipCommandEffect({
+          command,
+          executeQuery,
+          mappings: input.mappings,
+          authoritySerialized: execution.transactionScoped,
+        });
+      }),
     runRelationshipCommand: command =>
       Effect.suspend(() => {
         const source = input.mappings.find(

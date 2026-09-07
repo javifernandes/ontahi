@@ -12,6 +12,7 @@ relatedPlans:
   - ontahi://plans/100a-ontahi-react-graph-provider-spike
   - ontahi://plans/100b-ontahi-react-graph-query-boundary
   - ontahi://plans/122-ontahi-developer-book
+  - ontahi://plans/145-ordered-relations-and-sequence-commands
 migratedFrom: bookops://atlas/react-graph-surface
 sourceCommit: 67713696
 ---
@@ -43,10 +44,10 @@ preserve explicit composition for non-conventional hosts.
 The package-side materialization lives under [`@ontahi/react`](./source-code-organization/react.md), which supports this framework-facing React graph surface.
 
 Graph Query and Command hooks live in `@ontahi/react/graph` behind one executor contract. The
-current Fetch client implements remote Queries and the graph transport implements explicitly
-permitted Relationship Commands. A first-class React execution facade for Entity-bound
-Relationship Commands remains pending; generic Entity Commands still require their own protocol
-and write-policy boundary.
+current Fetch and Runtime Transport clients implement remote Queries plus explicitly permitted
+Relationship and Entity Commands. `useOrderedRelationshipCommand` preserves one-member move intent
+and stable Ref anchors; optimistic projection and authoritative reconciliation remain
+application-owned choices rather than a hidden array replacement inside the hook.
 
 Dynamic reflected operation execution now goes through a host-supplied invoker instead of directly reaching for the operation bridge adapter. That is a deliberate intermediate step toward modeling framework metadata as graph entities and operations.
 

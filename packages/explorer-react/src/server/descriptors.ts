@@ -306,6 +306,7 @@ const describeReflectedRelation = (
     targetDisplay: describeExplorerEntityDisplay(target),
     direction: relation.direction,
     cardinality: relation.cardinality,
+    ...(relation.ordered ? { ordered: true as const } : {}),
     nullable: relation.nullable,
     required: relation.required,
     structuralVerbs: relation.structuralVerbs,

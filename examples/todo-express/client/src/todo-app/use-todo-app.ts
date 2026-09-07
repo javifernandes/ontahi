@@ -1,8 +1,16 @@
-import { createEntityRef, mutateEntity, relationshipSet, Selection } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  mutateEntity,
+  relationship,
+  relationshipSet,
+  Selection,
+  type OrderedRelationshipPosition,
+} from '@ontahi/core/data-graph';
 import {
   useGraphExecutorCapability,
   useGraphQuery,
   useManyToManyRelationshipCommand,
+  useOrderedRelationshipCommand,
   useDurableOperation,
   useOperation,
 } from '@ontahi/react/graph';
@@ -17,11 +25,11 @@ import {
   TodoList,
   TodoListSchema,
 } from '../../../src/generated/client-entities.js';
-import { allTodoItemsQuery, tagsQuery, todoListsQuery } from '../todo-queries.js';
+import { tagsQuery, todoListsQuery } from '../todo-queries.js';
 
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
-import { groupTodoLists } from './todo-list-state.js';
+import { moveTodoItem } from './todo-list-state.js';
 import { renameTodoItem } from './todo-mutations.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
@@ -36,6 +44,12 @@ export const listPastelColors = [
 ] as const;
 
 type TodoTagMutation = { todoId: string; tagId: string };
+type TodoOrderMutation = {
+  listId: string;
+  todoId: string;
+  beforeTodoId?: string;
+  ifPosition: OrderedRelationshipPosition;
+};
 
 const createTodoTagCommand = (action: 'add' | 'remove', { todoId, tagId }: TodoTagMutation) => {
   const todos = Selection.references(TodoItemSchema, [
@@ -45,6 +59,15 @@ const createTodoTagCommand = (action: 'add' | 'remove', { todoId, tagId }: TodoT
   const relation = relationshipSet(TodoItemSchema, 'tags', todos);
   return action === 'add' ? relation.add(tag) : relation.remove(tag);
 };
+
+const createTodoOrderCommand = ({ listId, todoId, beforeTodoId, ifPosition }: TodoOrderMutation) =>
+  relationship(TodoListSchema, 'items', createEntityRef(TodoListSchema, { id: listId })).move(
+    createEntityRef(TodoItemSchema, { id: todoId }),
+    beforeTodoId
+      ? { before: createEntityRef(TodoItemSchema, { id: beforeTodoId }) }
+      : { at: 'end' },
+    { ifPosition, onMismatch: 'fail' },
+  );
 
 const thrownMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
@@ -79,10 +102,11 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const [deletingTodoId, setDeletingTodoId] = useState<string>();
   const [taggingTodoId, setTaggingTodoId] = useState<string>();
   const [deletingTagId, setDeletingTagId] = useState<string>();
+  const [reorderingTodoId, setReorderingTodoId] = useState<string>();
+  const [optimisticOrder, setOptimisticOrder] = useState<TodoOrderMutation>();
 
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
-  const todos = useGraphQuery(allTodoItemsQuery);
   const graphExecutor = useGraphExecutorCapability();
   const createListOperation = useOperation(TodoList.domain.createList);
   const deleteListOperation = useOperation(TodoItem.domain.deleteList);
@@ -91,23 +115,39 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
   const deleteTodoOperation = useOperation(TodoItem.domain.delete);
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
+  const reorderTodo = useOrderedRelationshipCommand(createTodoOrderCommand);
   const linkTags = useManyToManyRelationshipCommand(
     (input: TodoTagMutation) => createTodoTagCommand('add', input),
-    { onSuccess: () => todos.refetch() },
+    { onSuccess: () => lists.refetch() },
   );
   const unlinkTags = useManyToManyRelationshipCommand(
     (input: TodoTagMutation) => createTodoTagCommand('remove', input),
-    { onSuccess: () => todos.refetch() },
+    { onSuccess: () => lists.refetch() },
   );
 
   useEffect(() => {
     void loadTodoRuntime().then(setRuntime);
   }, []);
 
-  const dashboardLists = useMemo(
-    () => groupTodoLists(lists.data ?? [], todos.data ?? [], todo => todo.list.locator.id),
-    [lists.data, todos.data],
-  );
+  const dashboardLists = useMemo(() => {
+    const current = lists.data ?? [];
+    if (!optimisticOrder) return current;
+    return current.map(list => {
+      if (list.id !== optimisticOrder.listId) return list;
+      const ids = moveTodoItem(
+        list.items.map(todo => todo.id),
+        optimisticOrder.todoId,
+        optimisticOrder.beforeTodoId,
+      );
+      return {
+        ...list,
+        items: ids.flatMap(id => {
+          const todo = list.items.find(candidate => candidate.id === id);
+          return todo ? [todo] : [];
+        }),
+      };
+    });
+  }, [lists.data, optimisticOrder]);
 
   const createList = async (rawName: string) => {
     const name = rawName.trim();
@@ -207,10 +247,13 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
         list: TodoList.refById(listId),
         title,
       });
-      if (result.ok) return true;
+      if (result.ok) {
+        await lists.refetch();
+        return true;
+      }
 
       if (todoFailureReason(result) === 'todo_list_not_found') {
-        await Promise.all([lists.refetch(), todos.refetch()]);
+        await lists.refetch();
         setActionError('That list no longer exists. The board has been refreshed.');
         return false;
       }
@@ -232,6 +275,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       const result = await setTodoCompletedOperation.executeAsync({ todos: [todoId], completed });
       const message = operationMessage(result, 'The todo completion could not be changed.');
       setActionError(message);
+      if (!message) await lists.refetch();
       return !message;
     } catch (error) {
       setActionError(thrownMessage(error, 'The todo completion could not be changed.'));
@@ -245,7 +289,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setRenamingTodoId(todoId);
     try {
-      const result = await renameTodoItem(graphExecutor, todos.refetch, todoId, rawTitle);
+      const result = await renameTodoItem(graphExecutor, lists.refetch, todoId, rawTitle);
       setActionError(result.ok ? undefined : result.message);
       return result.ok;
     } finally {
@@ -260,6 +304,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       const result = await deleteTodoOperation.executeAsync({ todo: TodoItem.refById(todoId) });
       const message = operationMessage(result, 'The todo could not be deleted.');
       setActionError(message);
+      if (!message) await lists.refetch();
       return !message;
     } catch (error) {
       setActionError(thrownMessage(error, 'The todo could not be deleted.'));
@@ -345,6 +390,46 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     }
   };
 
+  const moveTodo = async (listId: string, todoId: string, beforeTodoId?: string) => {
+    const list = dashboardLists.find(candidate => candidate.id === listId);
+    const currentIndex = list?.items.findIndex(todo => todo.id === todoId) ?? -1;
+    if (!list || currentIndex < 0 || todoId === beforeTodoId) return false;
+    const currentIds = list.items.map(todo => todo.id);
+    const nextIds = moveTodoItem(currentIds, todoId, beforeTodoId);
+    if (nextIds.every((id, index) => id === currentIds[index])) return true;
+
+    const input: TodoOrderMutation = {
+      listId,
+      todoId,
+      ...(beforeTodoId ? { beforeTodoId } : {}),
+      ifPosition: {
+        before:
+          currentIndex < currentIds.length - 1
+            ? createEntityRef(TodoItemSchema, { id: currentIds[currentIndex + 1]! })
+            : null,
+        after:
+          currentIndex > 0
+            ? createEntityRef(TodoItemSchema, { id: currentIds[currentIndex - 1]! })
+            : null,
+      },
+    };
+    setActionError(undefined);
+    setOptimisticOrder(input);
+    setReorderingTodoId(todoId);
+    try {
+      await reorderTodo.mutateAsync(input);
+      await lists.refetch();
+      return true;
+    } catch (error) {
+      setActionError(thrownMessage(error, 'The todo order could not be changed.'));
+      await lists.refetch();
+      return false;
+    } finally {
+      setOptimisticOrder(undefined);
+      setReorderingTodoId(undefined);
+    }
+  };
+
   const signOut = async () => {
     const response = await fetch('/auth/logout', { method: 'POST' });
     if (!response.ok) return;
@@ -377,8 +462,8 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     dashboard: {
       lists: dashboardLists,
       tags: tags.data ?? [],
-      isLoading: lists.isLoading || todos.isLoading,
-      isError: lists.isError || todos.isError || tags.isError,
+      isLoading: lists.isLoading,
+      isError: lists.isError || tags.isError,
       actionError,
       canComplete,
       isCreatingList: createListOperation.isExecuting,
@@ -392,6 +477,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       deletingTodoId,
       taggingTodoId,
       deletingTagId,
+      reorderingTodoId,
       clearActionError: () => setActionError(undefined),
       createList,
       renameList,
@@ -413,6 +499,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       toggleTodoTag,
       createTagForTodo,
       deleteTag,
+      moveTodo,
     },
   };
 };

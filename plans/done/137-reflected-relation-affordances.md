@@ -108,6 +108,6 @@ Unchecked acceptance items remain deliberate historical evidence of deferred sco
    this Explorer-led intervention speculatively;
 3. optimistic correlation, duplicate suppression, and out-of-order handling continue through
    Plans 135 and 132, with ordered Relation UI and deltas continuing in
-   [Plan 145](../next/145-ordered-relations-and-sequence-commands.md);
+   [Plan 145](../done/145-ordered-relations-and-sequence-commands.md);
 4. direct Relation and composition lifecycle affordances require a new focused plan when their
    runtime contract is ready.

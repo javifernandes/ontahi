@@ -54,6 +54,11 @@ Handler availability is a runtime capability: an unknown protocol family and a r
 without a local handler remain distinct outcomes. Receiver context stays outside portable messages
 and is passed directly to the selected handler.
 
+The `graph.command` family can therefore carry the Data Graph protocol's version-2 ordered
+Relationship Command unchanged through Fetch or WebSocket. The inner body owns move placement,
+preconditions, typed results, and policy; the Runtime Protocol envelope continues to own exchange
+identity, correlation, and routing without duplicating those semantics.
+
 The Express projection can mount an injected common dispatcher at `/runtime`; it never installs an
 authority-free Durable handler. The host derives receiver context and explicitly maps
 `durable.operation.inspect` to its Task runtime. Legacy family-specific routes remain during

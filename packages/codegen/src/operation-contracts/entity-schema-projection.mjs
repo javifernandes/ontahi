@@ -125,6 +125,20 @@ const propertyName = property =>
     ? property.name.text
     : undefined;
 
+const relationObjectLiteral = initializer => {
+  const expression = unwrapExpression(initializer);
+  if (ts.isObjectLiteralExpression(expression)) return expression;
+  if (!ts.isArrowFunction(expression) && !ts.isFunctionExpression(expression)) return undefined;
+  const body = unwrapExpression(expression.body);
+  if (ts.isObjectLiteralExpression(body)) return body;
+  if (!ts.isBlock(expression.body)) return undefined;
+  const returned = expression.body.statements.find(ts.isReturnStatement)?.expression;
+  const returnedExpression = returned ? unwrapExpression(returned) : undefined;
+  return returnedExpression && ts.isObjectLiteralExpression(returnedExpression)
+    ? returnedExpression
+    : undefined;
+};
+
 const formatModelExpressionDiagnostic = diagnostic =>
   `${diagnostic.source.path}:${diagnostic.source.line}:${diagnostic.source.column} [${diagnostic.code}] ${diagnostic.message}`;
 
@@ -211,62 +225,72 @@ export const projectEntitySchemaConfig = (configArg, context) => {
       : [];
 
   const relationsProperty = readObjectLiteralProperty(configArg, 'relations');
-  const relations =
-    relationsProperty &&
-    ts.isPropertyAssignment(relationsProperty) &&
-    ts.isObjectLiteralExpression(relationsProperty.initializer)
-      ? relationsProperty.initializer.properties.flatMap(property => {
-          if (
-            !ts.isPropertyAssignment(property) ||
-            !ts.isIdentifier(property.name) ||
-            !ts.isCallExpression(property.initializer) ||
-            !ts.isPropertyAccessExpression(property.initializer.expression) ||
-            !ts.isIdentifier(property.initializer.expression.expression) ||
-            property.initializer.expression.expression.text !== 'relation'
-          ) {
-            return [];
-          }
-          const relationKind = property.initializer.expression.name.text;
-          const [targetArg, optionsArg] = property.initializer.arguments;
-          const nominalTarget =
-            targetArg &&
-            ts.isCallExpression(targetArg) &&
-            ts.isPropertyAccessExpression(targetArg.expression) &&
-            ts.isIdentifier(targetArg.expression.expression) &&
-            targetArg.expression.expression.text === 'entity' &&
-            targetArg.expression.name.text === 'ref' &&
-            targetArg.arguments[0] &&
-            ts.isStringLiteral(targetArg.arguments[0])
-              ? targetArg.arguments[0].text
-              : undefined;
-          if (
-            (relationKind !== 'hasMany' &&
-              relationKind !== 'belongsTo' &&
-              relationKind !== 'manyToMany') ||
-            !targetArg ||
-            (!ts.isIdentifier(targetArg) && !nominalTarget)
-          ) {
-            return [];
-          }
-          const targetName = nominalTarget ?? targetArg.text;
-          const via =
-            optionsArg && ts.isObjectLiteralExpression(optionsArg)
-              ? readStringLiteralObjectProperty(optionsArg, 'via')
-              : undefined;
-          return [
-            {
-              name: property.name.text,
-              kind: relationKind,
-              targetName,
-              ...(nominalTarget ? { deferred: true } : {}),
-              ...(context?.importMap.get(targetName)
-                ? { targetImportPath: context.importMap.get(targetName) }
-                : {}),
-              ...(via ? { via } : {}),
-            },
-          ];
-        })
-      : [];
+  const relationObject =
+    relationsProperty && ts.isPropertyAssignment(relationsProperty)
+      ? relationObjectLiteral(relationsProperty.initializer)
+      : undefined;
+  const relations = relationObject
+    ? relationObject.properties.flatMap(property => {
+        if (
+          !ts.isPropertyAssignment(property) ||
+          !ts.isIdentifier(property.name) ||
+          !ts.isCallExpression(property.initializer) ||
+          !ts.isPropertyAccessExpression(property.initializer.expression) ||
+          !ts.isIdentifier(property.initializer.expression.expression) ||
+          property.initializer.expression.expression.text !== 'relation'
+        ) {
+          return [];
+        }
+        const relationKind = property.initializer.expression.name.text;
+        const [targetArg, optionsArg] = property.initializer.arguments;
+        const nominalTarget =
+          targetArg &&
+          ts.isCallExpression(targetArg) &&
+          ts.isPropertyAccessExpression(targetArg.expression) &&
+          ts.isIdentifier(targetArg.expression.expression) &&
+          targetArg.expression.expression.text === 'entity' &&
+          targetArg.expression.name.text === 'ref' &&
+          targetArg.arguments[0] &&
+          ts.isStringLiteral(targetArg.arguments[0])
+            ? targetArg.arguments[0].text
+            : undefined;
+        if (
+          (relationKind !== 'hasMany' &&
+            relationKind !== 'belongsTo' &&
+            relationKind !== 'manyToMany') ||
+          !targetArg ||
+          (!ts.isIdentifier(targetArg) && !nominalTarget)
+        ) {
+          return [];
+        }
+        const targetName = nominalTarget ?? targetArg.text;
+        const via =
+          optionsArg && ts.isObjectLiteralExpression(optionsArg)
+            ? readStringLiteralObjectProperty(optionsArg, 'via')
+            : undefined;
+        const ordered =
+          optionsArg && ts.isObjectLiteralExpression(optionsArg)
+            ? readObjectLiteralProperty(optionsArg, 'ordered')
+            : undefined;
+        return [
+          {
+            name: property.name.text,
+            kind: relationKind,
+            targetName,
+            ...(nominalTarget ? { deferred: true } : {}),
+            ...(context?.importMap.get(targetName)
+              ? { targetImportPath: context.importMap.get(targetName) }
+              : {}),
+            ...(via ? { via } : {}),
+            ...(ordered &&
+            ts.isPropertyAssignment(ordered) &&
+            ordered.initializer.kind === ts.SyntaxKind.TrueKeyword
+              ? { ordered: true }
+              : {}),
+          },
+        ];
+      })
+    : [];
 
   const derivedProjection =
     fieldsProperty && ts.isPropertyAssignment(fieldsProperty)

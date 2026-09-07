@@ -397,11 +397,12 @@ A remote Query sends a versioned JSON-safe graph program. The server rebuilds it
 Entities and enforces an explicit default-deny policy over fields, operators, ordering, Relation
 paths, cardinality, limits, and authority-owned row scope before storage executes it.
 
-A remote Relationship Command sends a smaller versioned program: canonical relation identity,
-`link` or `unlink`, and Ref- or Selection-valued endpoints. The server resolves that identity
-against its own Entity catalog and enforces a separate default-deny policy over the Relation and
-allowed actions. Client table names, join columns, SQL, and executable predicates never cross the
-boundary.
+A remote Relationship Command sends a smaller versioned program: canonical relation identity, a
+structural action, and Ref- or Selection-valued participants. Version 1 carries `link`/`unlink`;
+version 2 also carries ordered `move` placement plus an optional exact-neighborhood precondition.
+The server resolves that identity against its own Entity catalog and enforces a separate
+default-deny policy over the Relation and allowed actions. Client table names, join columns, SQL,
+and executable predicates never cross the boundary.
 
 The bridge carries something more abstract: “rename this TodoList” or “complete this Selection.”
 The server operation may combine graph work, Capabilities, requirements, contracts, or durable

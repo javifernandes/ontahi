@@ -17,6 +17,7 @@ export type InMemoryDataGraphFailureReason =
   | 'entity_mutation_condition_not_met'
   | 'invalid_command'
   | 'relation_constraint_rejected'
+  | 'ordered_relationship_rejected'
   | 'relationship_precondition_failed'
   | 'read_failed'
   | 'mutation_failed';

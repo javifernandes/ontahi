@@ -42,6 +42,7 @@ type TodoListCardProps = {
   deletingTodoId?: string;
   taggingTodoId?: string;
   deletingTagId?: string;
+  reorderingTodoId?: string;
   openTagPickerTodoId?: string;
   isColorPickerOpen: boolean;
   closePopovers: () => void;
@@ -104,6 +105,7 @@ export const TodoListCard = ({
   deletingTodoId,
   taggingTodoId,
   deletingTagId,
+  reorderingTodoId,
   openTagPickerTodoId,
   isColorPickerOpen,
   closePopovers,
@@ -265,6 +267,7 @@ export const TodoListCard = ({
 
   const startTodoPointerDrag = (event: ReactPointerEvent<HTMLDivElement>, todoId: string) => {
     if (
+      reorderingTodoId ||
       todoPointerDrag.current ||
       !event.isPrimary ||
       event.button !== 0 ||
@@ -338,6 +341,7 @@ export const TodoListCard = ({
   };
 
   const moveTodoBy = (todoId: string, direction: -1 | 1) => {
+    if (reorderingTodoId) return;
     const currentIndex = list.items.findIndex(todo => todo.id === todoId);
     const nextIndex = currentIndex + direction;
     if (currentIndex < 0 || nextIndex < 0 || nextIndex >= list.items.length) return;
@@ -560,6 +564,7 @@ export const TodoListCard = ({
                     isDeleting={deletingTodoId === todo.id}
                     isDragging={draggingTodoId === todo.id}
                     isTagging={taggingTodoId === todo.id}
+                    isReordering={reorderingTodoId === todo.id}
                     deletingTagId={deletingTagId}
                     isTagPickerOpen={openTagPickerTodoId === todo.id}
                     closeTagPicker={closePopovers}
