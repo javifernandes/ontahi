@@ -116,6 +116,19 @@ describe('Selection language completion', () => {
   });
 
   it.each([
+    ['completed = false', 10, 10, 11, 'in', 'completed in false'],
+    ['note is null', 7, 5, 12, '=', 'note ='],
+  ])(
+    'replaces the whole operator when completion opens inside %s',
+    (document, position, from, to, replacement, expected) => {
+      const completion = completeSelectionDocument(document, position, WorkItem);
+
+      expect(completion).toMatchObject({ context: 'operator', from, to });
+      expect(apply(document, completion, replacement)).toBe(expected);
+    },
+  );
+
+  it.each([
     ['completed = ', ['true', 'false']],
     ['status = ', ['"open"', '"blocked"']],
     ['title = ', ['""']],

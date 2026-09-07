@@ -1165,6 +1165,15 @@ export const completeSelectionDocument = (
     return result('operator', affordedOperatorCompletionItems(reflectedField, affordances));
   }
 
+  if (position >= predicate.operator.from && position < predicate.operator.to) {
+    return {
+      context: 'operator',
+      from: predicate.operator.from,
+      to: predicate.operator.to,
+      items: affordedOperatorCompletionItems(reflectedField, affordances),
+    };
+  }
+
   if (predicate.operator.operator === 'isNull') {
     return result(
       'continuation',
