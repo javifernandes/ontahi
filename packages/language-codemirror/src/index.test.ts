@@ -4,12 +4,15 @@ import {
   currentCompletions,
   startCompletion,
 } from '@codemirror/autocomplete';
+import { cursorCharForward, history, redo, undo } from '@codemirror/commands';
 import { syntaxTree } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { analyzeSelectionDocument } from '@ontahi/language';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  deriveSelectionFiniteValueProjections,
   selectionExpressionCompletionSource,
   selectionExpressionExtensions,
   selectionExpressionHoverSource,
@@ -26,7 +29,76 @@ const TodoItem = {
   ],
 } as const;
 
+const WorkItem = {
+  name: 'WorkItem',
+  fields: [
+    {
+      name: 'status',
+      type: 'enum',
+      nullable: false,
+      enumValues: ['open', 'blocked'],
+    },
+  ],
+} as const;
+
+const projectionExtensions = (entity: typeof TodoItem | typeof WorkItem) => [
+  history(),
+  ...selectionExpressionExtensions(entity, { finiteValueProjections: true }),
+];
+
 describe('Selection CodeMirror adapter', () => {
+  it('derives finite projections only from complete, semantically resolved literals', () => {
+    expect(deriveSelectionFiniteValueProjections('status = "open"', WorkItem)).toEqual([
+      {
+        from: 9,
+        to: 15,
+        fieldName: 'status',
+        value: 'open',
+        choices: [
+          { label: 'open', text: '"open"', value: 'open' },
+          { label: 'blocked', text: '"blocked"', value: 'blocked' },
+        ],
+      },
+    ]);
+    expect(deriveSelectionFiniteValueProjections('completed in [true, false]', TodoItem)).toEqual([
+      {
+        from: 14,
+        to: 18,
+        fieldName: 'completed',
+        value: true,
+        choices: [
+          { label: 'true', text: 'true', value: true },
+          { label: 'false', text: 'false', value: false },
+        ],
+      },
+      {
+        from: 20,
+        to: 25,
+        fieldName: 'completed',
+        value: false,
+        choices: [
+          { label: 'true', text: 'true', value: true },
+          { label: 'false', text: 'false', value: false },
+        ],
+      },
+    ]);
+    expect(deriveSelectionFiniteValueProjections('status = ', WorkItem)).toEqual([]);
+    expect(deriveSelectionFiniteValueProjections('status = "unknown"', WorkItem)).toEqual([]);
+    expect(deriveSelectionFiniteValueProjections('title = "open"', TodoItem)).toEqual([]);
+    expect(
+      deriveSelectionFiniteValueProjections(
+        'not (status = "open" or status = "blocked") and all',
+        WorkItem,
+      ).map(projection => projection.value),
+    ).toEqual(['open', 'blocked']);
+    expect(
+      deriveSelectionFiniteValueProjections('status is null', {
+        ...WorkItem,
+        fields: [{ ...WorkItem.fields[0], nullable: true }],
+      }),
+    ).toEqual([]);
+  });
+
   it('installs the generated language parser without adding Ontahi semantics to editor state', () => {
     const state = EditorState.create({
       doc: 'completed = false',
@@ -250,6 +322,202 @@ describe('Selection CodeMirror adapter', () => {
     expect(view.dom.querySelector('.cm-ontahi-semantic-invalid')?.textContent).toBe('missing');
     view.destroy();
     parent.remove();
+  });
+
+  it('projects a finite literal as an atomic control while text remains the document', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'status = "open"',
+        selection: { anchor: 9 },
+        extensions: projectionExtensions(WorkItem),
+      }),
+    });
+
+    const select = parent.querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select');
+    expect(select?.getAttribute('aria-label')).toBe('Value for WorkItem.status');
+    select?.focus();
+    expect(document.activeElement).toBe(select);
+    expect(select?.value).toBe('"open"');
+    expect(view.state.doc.toString()).toBe('status = "open"');
+    expect(cursorCharForward(view)).toBe(true);
+    expect(view.state.selection.main.head).toBe(15);
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('copies the underlying source text instead of projected labels', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const source = 'status = "open"';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: projectionExtensions(WorkItem),
+      }),
+    });
+    view.dispatch({ selection: { anchor: 0, head: source.length } });
+    view.focus();
+
+    const copied = new Map<string, string>();
+    const copy = new Event('copy', { bubbles: true, cancelable: true });
+    Object.defineProperty(copy, 'clipboardData', {
+      value: {
+        clearData: () => copied.clear(),
+        setData: (type: string, value: string) => copied.set(type, value),
+      },
+    });
+    view.contentDOM.dispatchEvent(copy);
+
+    expect(copied.get('text/plain')).toBe(source);
+    view.destroy();
+    parent.remove();
+  });
+
+  it('writes widget choices as ordinary text transactions with undo and redo', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'status = "open"',
+        extensions: projectionExtensions(WorkItem),
+      }),
+    });
+
+    const select = parent.querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!;
+    select.value = '"blocked"';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(view.state.doc.toString()).toBe('status = "blocked"');
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('status = "open"');
+    expect(redo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('status = "blocked"');
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('reparses a projected membership value into the canonical Selection AST', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'completed in [true, false]',
+        extensions: projectionExtensions(TodoItem),
+      }),
+    });
+
+    const controls = parent.querySelectorAll<HTMLSelectElement>('.cm-ontahi-finite-value-select');
+    controls[0]!.value = 'false';
+    controls[0]!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(view.state.doc.toString()).toBe('completed in [false, false]');
+    expect(analyzeSelectionDocument(view.state.doc.toString(), TodoItem).selection).toEqual({
+      kind: 'selection',
+      entityName: 'TodoItem',
+      expression: {
+        kind: 'predicate',
+        fieldName: 'completed',
+        operator: 'in',
+        values: [false, false],
+      },
+    });
+    view.destroy();
+    parent.remove();
+  });
+
+  it('discards projected choices when Entity reflection is reconfigured', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const compartment = new Compartment();
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'status = "open"',
+        extensions: compartment.of(projectionExtensions(WorkItem)),
+      }),
+    });
+    expect(parent.querySelector('.cm-ontahi-finite-value-select')).toBeTruthy();
+
+    view.dispatch({
+      effects: compartment.reconfigure(
+        selectionExpressionExtensions(
+          {
+            name: 'Note',
+            fields: [{ name: 'status', type: 'string', nullable: false }],
+          },
+          { finiteValueProjections: true },
+        ),
+      ),
+    });
+
+    expect(parent.querySelector('.cm-ontahi-finite-value-select')).toBeNull();
+    view.destroy();
+    parent.remove();
+  });
+
+  it('reveals the selected literal with Escape and deletes it with ordinary diagnostics', () => {
+    const createView = () => {
+      const parent = document.createElement('div');
+      document.body.append(parent);
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: 'completed = false',
+          extensions: projectionExtensions(TodoItem),
+        }),
+      });
+      return { parent, view };
+    };
+
+    const revealed = createView();
+    revealed.parent
+      .querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    expect(revealed.parent.querySelector('.cm-ontahi-finite-value-select')).toBeNull();
+    expect(revealed.view.state.selection.main.from).toBe(12);
+    expect(revealed.view.state.selection.main.to).toBe(17);
+    expect(revealed.view.state.doc.toString()).toBe('completed = false');
+    revealed.view.destroy();
+    revealed.parent.remove();
+
+    const deleted = createView();
+    deleted.parent
+      .querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+      );
+    expect(deleted.view.state.doc.toString()).toBe('completed = ');
+    expect(deleted.parent.querySelector('.cm-ontahi-finite-value-select')).toBeNull();
+    expect(selectionExpressionLinter(TodoItem)(deleted.view)).toEqual([
+      {
+        from: 12,
+        to: 12,
+        severity: 'error',
+        source: 'Ontahí syntax',
+        message: 'Expected a string, number, or Boolean literal.',
+      },
+    ]);
+    deleted.view.destroy();
+    deleted.parent.remove();
+
+    const forwardDeleted = createView();
+    forwardDeleted.parent
+      .querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }),
+      );
+    expect(forwardDeleted.view.state.doc.toString()).toBe('completed = ');
+    forwardDeleted.view.destroy();
+    forwardDeleted.parent.remove();
   });
 
   it('returns no hover without Entity reflection', async () => {

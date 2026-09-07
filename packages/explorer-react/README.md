@@ -105,10 +105,10 @@ in collection results, Selection results, and instance windows. Editable Color F
 native color picker without changing that read-only presentation. Legacy Operation inputs without
 value-type metadata may still use a provisional field-name/value heuristic.
 
-The experimental Selection result panel keeps the last successful rows while a draft is invalid,
-clears an obsolete execution error as soon as editing resumes, and offers an explicit retry after
-a transport or runtime failure. Its table uses the same reflected value presentation as the rest
-of Explorer.
+The Selection filter keeps the last successful rows while a draft is invalid, clears an obsolete
+execution error as soon as editing resumes, and offers an explicit retry after a transport or
+runtime failure. Its table uses the same reflected value presentation as the rest of Explorer.
+Successful documents stay visually quiet; editor help is available from the inline help control.
 
 When the server snapshot reflects an authorized Entity mutation policy and the React graph client
 can execute Commands, allowed Fields become editable inline and deletable rows receive an

@@ -122,9 +122,10 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
     );
     renderPanel(request);
 
-    expect(
-      screen.getByText('Ctrl-Space for suggestions · hover a Field or operator for help.'),
-    ).toBeTruthy();
+    expect(screen.queryByText('Selection language')).toBeNull();
+    expect(screen.queryByText(/Experimental/)).toBeNull();
+    expect(screen.queryByText('graph.read')).toBeNull();
+    expect(screen.queryByText('Valid Selection.')).toBeNull();
 
     await waitFor(() => expect(screen.getByText('Stable parser')).toBeTruthy());
     expect(request).toHaveBeenCalledOnce();

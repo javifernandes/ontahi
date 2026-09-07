@@ -1,10 +1,12 @@
 'use client';
 
+import { history, historyKeymap } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import type { SelectionLanguageEntityReflection } from '@ontahi/language';
 import { selectionExpressionExtensions } from '@ontahi/language-codemirror';
-import { useEffect, useRef } from 'react';
+import { CircleHelp } from 'lucide-react';
+import { useEffect, useId, useRef } from 'react';
 
 import { cx } from '../internal/cx.js';
 
@@ -28,7 +30,7 @@ const explorerSelectionEditorTheme = EditorView.theme({
     caretColor: 'currentColor',
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     minHeight: '2.5rem',
-    padding: '0.625rem 0.75rem',
+    padding: '0.625rem 2.75rem 0.625rem 0.75rem',
   },
   '.cm-line': {
     padding: '0',
@@ -50,6 +52,7 @@ export function ExplorerSelectionLanguageEditor({
   onChange,
   value,
 }: ExplorerSelectionLanguageEditorProps) {
+  const helpId = useId();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
   const languageCompartmentRef = useRef(new Compartment());
@@ -66,7 +69,11 @@ export function ExplorerSelectionLanguageEditor({
       state: EditorState.create({
         doc: value,
         extensions: [
-          languageCompartmentRef.current.of(selectionExpressionExtensions(entity)),
+          history(),
+          keymap.of(historyKeymap),
+          languageCompartmentRef.current.of(
+            selectionExpressionExtensions(entity, { finiteValueProjections: true }),
+          ),
           labelCompartmentRef.current.of(EditorView.contentAttributes.of({ 'aria-label': label })),
           EditorView.lineWrapping,
           explorerSelectionEditorTheme,
@@ -93,7 +100,9 @@ export function ExplorerSelectionLanguageEditor({
 
   useEffect(() => {
     viewRef.current?.dispatch({
-      effects: languageCompartmentRef.current.reconfigure(selectionExpressionExtensions(entity)),
+      effects: languageCompartmentRef.current.reconfigure(
+        selectionExpressionExtensions(entity, { finiteValueProjections: true }),
+      ),
     });
   }, [entity]);
 
@@ -116,11 +125,30 @@ export function ExplorerSelectionLanguageEditor({
 
   return (
     <div
-      ref={hostRef}
       className={cx(
-        'overflow-hidden rounded-md border bg-background text-foreground focus-within:border-primary',
+        'relative rounded-md border bg-background text-foreground focus-within:border-primary',
         className,
       )}
-    />
+    >
+      <div ref={hostRef} className='overflow-hidden rounded-md' />
+      <div className='group/help absolute right-2 top-1/2 z-20 -translate-y-1/2'>
+        <button
+          type='button'
+          aria-label='Selection editor help'
+          aria-describedby={helpId}
+          className='flex size-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30'
+        >
+          <CircleHelp aria-hidden='true' className='size-4' />
+        </button>
+        <div
+          id={helpId}
+          role='tooltip'
+          className='pointer-events-none invisible absolute right-0 top-full mt-2 w-72 rounded-lg border bg-popover px-3 py-2 text-xs leading-relaxed text-popover-foreground opacity-0 shadow-lg transition group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100'
+        >
+          Ctrl-Space for suggestions. Hover a Field or operator for details. Press Escape on a value
+          control to edit its source text.
+        </div>
+      </div>
+    </div>
   );
 }

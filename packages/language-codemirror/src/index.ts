@@ -35,6 +35,14 @@ import {
 } from '@ontahi/language';
 import { selectionDocumentParser } from '@ontahi/language/lezer';
 
+import { selectionFiniteValueProjectionExtensions } from './finite-value-projection.js';
+
+export {
+  deriveSelectionFiniteValueProjections,
+  type SelectionFiniteValueProjection,
+  type SelectionFiniteValueProjectionChoice,
+} from './finite-value-projection.js';
+
 const parser = selectionDocumentParser.configure({
   props: [
     styleTags({
@@ -280,8 +288,13 @@ export const selectionExpressionLinter =
   view =>
     toCodeMirrorDiagnostics(analyzeSelectionDocument(view.state.doc.toString(), entity));
 
+export type SelectionExpressionExtensionOptions = {
+  readonly finiteValueProjections?: boolean;
+};
+
 export const selectionExpressionExtensions = (
   entity: SelectionLanguageEntityReflection,
+  options: SelectionExpressionExtensionOptions = {},
 ): readonly Extension[] => [
   selectionExpressionEntity.of(entity),
   selectionExpressionLanguageSupport(),
@@ -296,6 +309,7 @@ export const selectionExpressionExtensions = (
   ]),
   autocompletion({ override: [selectionExpressionCompletionSource], icons: false }),
   selectionExpressionSemanticHighlighting(entity),
+  ...(options.finiteValueProjections ? selectionFiniteValueProjectionExtensions(entity) : []),
   hoverTooltip(selectionExpressionHoverSource, { hideOnChange: true }),
   selectionExpressionAssistanceTheme,
   linter(selectionExpressionLinter(entity), { delay: 0 }),

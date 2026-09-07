@@ -191,26 +191,16 @@ export function ExplorerSelectionLanguageDataPanel({
   const documentDiagnostics = diagnostics(analysis);
 
   return (
-    <section className={cx('grid content-start gap-3', !embedded && 'rounded-lg border p-5')}>
-      <div className='grid gap-2 border-b bg-muted/10 p-3'>
-        <div className='flex flex-wrap items-center justify-between gap-2'>
-          <div>
-            <div className='text-sm font-medium text-foreground'>Selection language</div>
-            <div className='text-xs text-muted-foreground'>
-              Experimental · {entity.name} · first 25 matches
-            </div>
-          </div>
-          <code className='text-xs text-muted-foreground'>graph.read</code>
-        </div>
+    <section
+      className={cx('grid content-start', embedded ? 'gap-0' : 'gap-3 rounded-lg border p-5')}
+    >
+      <div className='grid gap-2 bg-muted/10 p-3'>
         <ExplorerSelectionLanguageEditor
           label={`Selection expression for ${entity.name}`}
           value={document}
           entity={reflection}
           onChange={setDocument}
         />
-        <div className='text-xs text-muted-foreground'>
-          Ctrl-Space for suggestions · hover a Field or operator for help.
-        </div>
         {documentDiagnostics.length > 0 ? (
           <div className='grid gap-1' aria-live='polite'>
             {documentDiagnostics.map(diagnostic => (
@@ -223,11 +213,7 @@ export function ExplorerSelectionLanguageDataPanel({
               </div>
             ))}
           </div>
-        ) : (
-          <div className='text-xs text-muted-foreground'>
-            {document.trim() ? 'Valid Selection.' : 'Empty expression selects all rows.'}
-          </div>
-        )}
+        ) : null}
         {executionError ? (
           <div className='flex flex-wrap items-center gap-2 text-xs text-destructive'>
             <div data-diagnostic-channel='execution' role='alert'>
