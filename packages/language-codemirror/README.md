@@ -30,6 +30,24 @@ document state. Choosing a value dispatches a normal text transaction, so histor
 ordinary CodeMirror behavior. Escape reveals and selects the source literal; Backspace or Delete on
 the control removes it and restores normal recoverable diagnostics.
 
+Hosts may also provide runtime-backed Reference values without moving queries into the language
+service. Search options have a display label and a portable identity; accepting one writes only the
+quoted identity into the document. A complete identity may resolve into a rich atomic value, while
+failed, missing, denied, or stale resolution leaves the ordinary source text available:
+
+```ts
+selectionExpressionExtensions(entity, {
+  referenceValues: {
+    search: request => searchReferenceValues(request),
+    resolve: request => resolveReferenceValue(request),
+  },
+});
+```
+
+Reference providers receive an `AbortSignal`. They own authority-safe runtime access, result limits,
+and display labels. The adapter owns cancellation and stale-result rejection. Directly pasted
+single-field identities are JSON-encoded into valid source before optional resolution.
+
 The completion surface uses the host's `--popover`, `--border`, `--accent`, and related theme
 variables with neutral fallbacks, so Explorer can integrate it without adapter-specific CSS.
 

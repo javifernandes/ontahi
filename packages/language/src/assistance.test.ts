@@ -5,6 +5,7 @@ import {
   classifySelectionDocument,
   completeSelectionDocument,
   getSelectionDocumentCursorContext,
+  getSelectionReferenceValueContext,
   hoverSelectionDocument,
   type SelectionLanguageCompletionResult,
 } from './index.js';
@@ -37,6 +38,15 @@ const WorkItem = {
       nullable: false,
       reference: { entityName: 'Person' },
     },
+    {
+      name: 'list',
+      type: 'reference',
+      nullable: true,
+      reference: {
+        entityName: 'TodoList',
+        identity: { name: 'refById', fields: ['id'] },
+      },
+    },
   ],
   relations: [{ name: 'tags' }],
 } as const;
@@ -61,6 +71,7 @@ describe('Selection language completion', () => {
       'completed',
       'score',
       'status',
+      'list',
       'all',
       'none',
       'not',
@@ -86,6 +97,7 @@ describe('Selection language completion', () => {
     ['completed ', ['=', 'in']],
     ['note ', ['=', 'in', 'is null']],
     ['score ', ['=', 'in', '<', '<=', '>', '>=']],
+    ['list ', ['=', 'in', 'is null']],
   ])('filters operators for %s through the compatibility matrix', (document, expected) => {
     const completion = completeSelectionDocument(document, document.length, WorkItem);
 
@@ -133,6 +145,7 @@ describe('Selection language completion', () => {
     ['status = ', ['"open"', '"blocked"']],
     ['title = ', ['""']],
     ['score >= ', ['0']],
+    ['list = ', ['""']],
   ])('offers structural values for %s', (document, expected) => {
     const completion = completeSelectionDocument(document, document.length, WorkItem);
 
@@ -153,6 +166,39 @@ describe('Selection language completion', () => {
       operator: 'eq',
       value: 'open',
     });
+  });
+
+  it('exposes Reference value context without querying runtime data', () => {
+    expect(getSelectionReferenceValueContext('list = ', 7, WorkItem)).toEqual({
+      from: 7,
+      to: 7,
+      fieldName: 'list',
+      targetEntityName: 'TodoList',
+      identityField: 'id',
+    });
+    expect(getSelectionReferenceValueContext('list = "list-inbox"', 15, WorkItem)).toEqual({
+      from: 7,
+      to: 19,
+      fieldName: 'list',
+      targetEntityName: 'TodoList',
+      identityField: 'id',
+      value: 'list-inbox',
+    });
+    expect(getSelectionReferenceValueContext('list = "inb', 11, WorkItem)).toEqual({
+      from: 7,
+      to: 11,
+      fieldName: 'list',
+      targetEntityName: 'TodoList',
+      identityField: 'id',
+    });
+    expect(getSelectionReferenceValueContext('list = "in', 10, WorkItem)).toEqual({
+      from: 7,
+      to: 10,
+      fieldName: 'list',
+      targetEntityName: 'TodoList',
+      identityField: 'id',
+    });
+    expect(getSelectionReferenceValueContext('title = "Inbox"', 12, WorkItem)).toBeUndefined();
   });
 
   it('guides membership list opening, values, separators, and closure', () => {

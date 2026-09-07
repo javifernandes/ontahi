@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/118b-selection-expression-algebra
   - ontahi://plans/118c-reflection-powered-selection-language-service
   - ontahi://plans/118d-projectional-selection-editor-experiment
+  - ontahi://plans/118e-runtime-backed-reference-value-projections
   - ontahi://plans/119-selection-relation-predicates
   - ontahi://plans/126-ontahi-runtime-data-reflection
   - ontahi://plans/147-application-bound-headless-graph-reads
@@ -133,8 +134,16 @@ the text document as the only editable truth.
 
 The initial experiment supports continuing with CodeMirror for finite values: the projected control
 reduces literal editing to a reflected choice while Escape exposes the exact source range whenever
-direct text editing is needed. Dates, References, structural groups, and runtime-backed choices
-remain separate design risks rather than implied extensions of this result.
+direct text editing is needed. Dates and structural groups remain separate design risks rather than
+implied extensions of this result; runtime-backed Reference identity is isolated in the next slice.
+
+Reference identity is the first runtime-backed value projection. A quoted identity on a Reference
+Field with one reflected target identity lowers to the existing canonical Entity Ref; the headless
+language service exposes only static target context. An optional CodeMirror provider searches and
+resolves authorized target rows, writes only identity text, and treats richer labels as disposable
+presentation. Missing or denied lookup never invalidates otherwise meaningful source. Explorer
+adapts its existing reflected Entity data reader for this path, so selection editing does not gain a
+provider shortcut or a second authority model.
 
 Only after the Selection proof is sound should a new plan investigate complete Query text such as
 `order by` or `limit`. Relation quantifiers wait for the canonical Selection work in Plan 119.

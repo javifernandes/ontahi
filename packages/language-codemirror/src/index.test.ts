@@ -1,5 +1,6 @@
 import {
   acceptCompletion,
+  closeCompletion,
   CompletionContext,
   currentCompletions,
   startCompletion,
@@ -9,17 +10,40 @@ import { syntaxTree } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { analyzeSelectionDocument } from '@ontahi/language';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   deriveSelectionFiniteValueProjections,
+  deriveSelectionReferenceValueProjections,
   selectionExpressionCompletionSource,
   selectionExpressionExtensions,
   selectionExpressionHoverSource,
   selectionExpressionLinter,
+  selectionReferenceValueCompletionSource,
   toCodeMirrorSemanticRanges,
   toCodeMirrorDiagnostics,
+  type SelectionReferenceValueProvider,
 } from './index.js';
+
+const originalRangeGetClientRects = Range.prototype.getClientRects;
+
+beforeAll(() => {
+  Object.defineProperty(Range.prototype, 'getClientRects', {
+    configurable: true,
+    value: () => [] as unknown as DOMRectList,
+  });
+});
+
+afterAll(() => {
+  if (originalRangeGetClientRects) {
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: originalRangeGetClientRects,
+    });
+  } else {
+    Reflect.deleteProperty(Range.prototype, 'getClientRects');
+  }
+});
 
 const TodoItem = {
   name: 'TodoItem',
@@ -41,12 +65,75 @@ const WorkItem = {
   ],
 } as const;
 
+const ReferencedTodoItem = {
+  name: 'TodoItem',
+  fields: [
+    {
+      name: 'list',
+      type: 'reference',
+      nullable: false,
+      reference: {
+        entityName: 'TodoList',
+        identity: { name: 'refById', fields: ['id'] },
+      },
+    },
+  ],
+} as const;
+
+const referenceProvider = (): SelectionReferenceValueProvider => ({
+  search: vi.fn().mockResolvedValue([
+    { value: 'list-inbox', label: 'Inbox', detail: 'TodoList' },
+    { value: 'list-later', label: 'Later' },
+  ]),
+  resolve: vi
+    .fn()
+    .mockImplementation(async ({ value }: { value: string }) =>
+      value === 'list-inbox'
+        ? { value: 'list-inbox', label: 'Inbox', detail: 'TodoList' }
+        : undefined,
+    ),
+});
+
 const projectionExtensions = (entity: typeof TodoItem | typeof WorkItem) => [
   history(),
   ...selectionExpressionExtensions(entity, { finiteValueProjections: true }),
 ];
 
 describe('Selection CodeMirror adapter', () => {
+  it('derives Reference projections only from resolved identity literals', () => {
+    expect(
+      deriveSelectionReferenceValueProjections('list = "list-inbox"', ReferencedTodoItem),
+    ).toEqual([
+      {
+        from: 7,
+        to: 19,
+        fieldName: 'list',
+        targetEntityName: 'TodoList',
+        identityField: 'id',
+        value: 'list-inbox',
+      },
+    ]);
+    expect(
+      deriveSelectionReferenceValueProjections(
+        'list in ["list-inbox", "list-later"]',
+        ReferencedTodoItem,
+      ).map(projection => projection.value),
+    ).toEqual(['list-inbox', 'list-later']);
+    expect(deriveSelectionReferenceValueProjections('list = ', ReferencedTodoItem)).toEqual([]);
+    expect(
+      deriveSelectionReferenceValueProjections(
+        'not (list = "list-inbox" or list in ["list-later"]) and all',
+        ReferencedTodoItem,
+      ).map(projection => projection.value),
+    ).toEqual(['list-inbox', 'list-later']);
+    expect(
+      deriveSelectionReferenceValueProjections('list is null', {
+        ...ReferencedTodoItem,
+        fields: [{ ...ReferencedTodoItem.fields[0], nullable: true }],
+      }),
+    ).toEqual([]);
+  });
+
   it('derives finite projections only from complete, semantically resolved literals', () => {
     expect(deriveSelectionFiniteValueProjections('status = "open"', WorkItem)).toEqual([
       {
@@ -181,6 +268,368 @@ describe('Selection CodeMirror adapter', () => {
       new CompletionContext(updatedState, updatedDocument.length, false),
     );
     expect(updated?.options.map(option => option.label)).toEqual(['true', 'false']);
+  });
+
+  it('searches Reference values asynchronously and applies only the identity text', async () => {
+    const provider = referenceProvider();
+    const source = 'list = ';
+    const state = EditorState.create({
+      doc: source,
+      selection: { anchor: source.length },
+      extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+        referenceValues: provider,
+      }),
+    });
+    const completion = await selectionReferenceValueCompletionSource(
+      new CompletionContext(state, source.length, true),
+    );
+
+    expect(provider.search).toHaveBeenCalledWith({
+      fieldName: 'list',
+      targetEntityName: 'TodoList',
+      identityField: 'id',
+      query: '',
+      signal: expect.any(AbortSignal),
+    });
+    expect(completion).toMatchObject({ from: 7, to: 7, filter: false });
+    expect(completion?.options).toEqual([
+      expect.objectContaining({
+        label: 'Inbox',
+        displayLabel: 'Inbox',
+        detail: 'TodoList · list-inbox',
+        apply: expect.any(Function),
+        type: 'constant',
+      }),
+      expect.objectContaining({
+        label: 'Later',
+        displayLabel: 'Later',
+        detail: 'list-later',
+        apply: expect.any(Function),
+        type: 'constant',
+      }),
+    ]);
+
+    const withoutProvider = EditorState.create({
+      doc: source,
+      extensions: selectionExpressionExtensions(ReferencedTodoItem),
+    });
+    expect(
+      await selectionReferenceValueCompletionSource(
+        new CompletionContext(withoutProvider, source.length, true),
+      ),
+    ).toBeNull();
+    const outsideReference = EditorState.create({
+      doc: 'all',
+      extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+        referenceValues: provider,
+      }),
+    });
+    expect(
+      await selectionReferenceValueCompletionSource(
+        new CompletionContext(outsideReference, 3, true),
+      ),
+    ).toBeNull();
+  });
+
+  it('accepts a searched Reference label as quoted identity source', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const provider = referenceProvider();
+    const source = 'list = "in';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+          referenceValues: provider,
+        }),
+      }),
+    });
+
+    expect(startCompletion(view)).toBe(true);
+    await vi.waitFor(() =>
+      expect(currentCompletions(view.state).map(completion => completion.label)).toContain('Inbox'),
+    );
+    expect(provider.search).toHaveBeenCalledWith(
+      expect.objectContaining({ targetEntityName: 'TodoList', query: 'in' }),
+    );
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(acceptCompletion(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('list = "list-inbox"');
+    await vi.waitFor(() =>
+      expect(parent.querySelector('.cm-ontahi-reference-value')?.textContent).toBe(
+        'Inboxlist-inbox',
+      ),
+    );
+
+    closeCompletion(view);
+    view.destroy();
+    parent.remove();
+  });
+
+  it('encodes a directly pasted Reference identity as valid source before resolving it', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const provider = referenceProvider();
+    const source = 'list = ';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+          referenceValues: provider,
+        }),
+      }),
+    });
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', {
+      value: { getData: (type: string) => (type === 'text/plain' ? 'list-inbox' : '') },
+    });
+
+    view.contentDOM.dispatchEvent(paste);
+
+    expect(paste.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe('list = "list-inbox"');
+    await vi.waitFor(() =>
+      expect(parent.querySelector('.cm-ontahi-reference-value')?.textContent).toBe(
+        'Inboxlist-inbox',
+      ),
+    );
+
+    parent
+      .querySelector<HTMLButtonElement>('.cm-ontahi-reference-value')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    const quotedPaste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(quotedPaste, 'clipboardData', {
+      value: { getData: (type: string) => (type === 'text/plain' ? '"list-later"' : '') },
+    });
+    view.contentDOM.dispatchEvent(quotedPaste);
+    expect(view.state.doc.toString()).toBe('list = "list-later"');
+
+    const multilinePaste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(multilinePaste, 'clipboardData', {
+      value: { getData: () => 'list-inbox\nlist-later' },
+    });
+    const documentBeforeMultilinePaste = view.state.doc.toString();
+    view.contentDOM.dispatchEvent(multilinePaste);
+    expect(view.state.doc.toString()).toBe(`${documentBeforeMultilinePaste}list-inbox\nlist-later`);
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('resolves authored Reference identities into rich atomic values without changing source', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const provider = referenceProvider();
+    const source = 'list = "list-inbox"';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+          referenceValues: provider,
+        }),
+      }),
+    });
+
+    await vi.waitFor(() =>
+      expect(parent.querySelector('.cm-ontahi-reference-value')?.textContent).toBe(
+        'Inboxlist-inbox',
+      ),
+    );
+    expect(provider.resolve).toHaveBeenCalledWith({
+      fieldName: 'list',
+      targetEntityName: 'TodoList',
+      identityField: 'id',
+      value: 'list-inbox',
+      signal: expect.any(AbortSignal),
+    });
+    expect(view.state.doc.toString()).toBe(source);
+    expect(analyzeSelectionDocument(source, ReferencedTodoItem).selection?.expression).toEqual({
+      kind: 'predicate',
+      fieldName: 'list',
+      operator: 'eq',
+      value: {
+        kind: 'entity-ref',
+        entityName: 'TodoList',
+        locator: { id: 'list-inbox' },
+      },
+    });
+
+    parent
+      .querySelector<HTMLButtonElement>('.cm-ontahi-reference-value')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    expect(parent.querySelector('.cm-ontahi-reference-value')).toBeNull();
+    expect(view.state.selection.main.from).toBe(7);
+    expect(view.state.selection.main.to).toBe(19);
+    expect(view.state.doc.toString()).toBe(source);
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('keeps unresolved or denied Reference identities as ordinary source text', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const provider = referenceProvider();
+    vi.mocked(provider.resolve).mockRejectedValueOnce(new Error('access denied'));
+    const source = 'list = "private-list"';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+          referenceValues: provider,
+        }),
+      }),
+    });
+
+    await vi.waitFor(() => expect(provider.resolve).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(parent.querySelector('.cm-ontahi-reference-value')).toBeNull();
+    expect(view.state.doc.toString()).toBe(source);
+    expect(parent.querySelector('.cm-content')?.textContent).toContain('private-list');
+
+    vi.mocked(provider.search).mockRejectedValueOnce(new Error('access denied'));
+    expect(
+      await selectionReferenceValueCompletionSource(
+        new CompletionContext(view.state, view.state.doc.length, true),
+      ),
+    ).toBeNull();
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('aborts stale Reference resolution when Entity reflection is replaced', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const compartment = new Compartment();
+    let capturedSignal: AbortSignal | undefined;
+    let finishResolution: ((option: { value: string; label: string }) => void) | undefined;
+    const provider: SelectionReferenceValueProvider = {
+      search: vi.fn().mockResolvedValue([]),
+      resolve: vi.fn().mockImplementation(
+        ({ signal }) =>
+          new Promise(resolve => {
+            capturedSignal = signal;
+            finishResolution = resolve;
+          }),
+      ),
+    };
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'list = "list-inbox"',
+        extensions: compartment.of(
+          selectionExpressionExtensions(ReferencedTodoItem, { referenceValues: provider }),
+        ),
+      }),
+    });
+    await vi.waitFor(() => expect(provider.resolve).toHaveBeenCalledOnce());
+
+    view.dispatch({
+      effects: compartment.reconfigure(
+        selectionExpressionExtensions({
+          name: 'ArchiveItem',
+          fields: [{ name: 'archived', type: 'boolean', nullable: false }],
+        }),
+      ),
+    });
+
+    expect(capturedSignal?.aborted).toBe(true);
+    finishResolution?.({ value: 'list-inbox', label: 'Inbox' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(parent.querySelector('.cm-ontahi-reference-value')).toBeNull();
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('aborts an obsolete identity lookup when the source value changes', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const signals: AbortSignal[] = [];
+    const provider: SelectionReferenceValueProvider = {
+      search: vi.fn().mockResolvedValue([]),
+      resolve: vi.fn().mockImplementation(
+        ({ signal }) =>
+          new Promise(() => {
+            signals.push(signal);
+          }),
+      ),
+    };
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'list = "list-inbox"',
+        extensions: selectionExpressionExtensions(ReferencedTodoItem, {
+          referenceValues: provider,
+        }),
+      }),
+    });
+    await vi.waitFor(() => expect(provider.resolve).toHaveBeenCalledOnce());
+
+    view.dispatch({ changes: { from: 7, to: 19, insert: '"list-later"' } });
+
+    await vi.waitFor(() => expect(provider.resolve).toHaveBeenCalledTimes(2));
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+    view.destroy();
+    expect(signals[1]?.aborted).toBe(true);
+    parent.remove();
+  });
+
+  it('copies, deletes, and restores a projected Reference as ordinary source', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const provider = referenceProvider();
+    const source = 'list = "list-inbox"';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: [
+          history(),
+          ...selectionExpressionExtensions(ReferencedTodoItem, { referenceValues: provider }),
+        ],
+      }),
+    });
+    await vi.waitFor(() => expect(parent.querySelector('.cm-ontahi-reference-value')).toBeTruthy());
+
+    view.dispatch({ selection: { anchor: 0, head: source.length } });
+    view.focus();
+    const copied = new Map<string, string>();
+    const copy = new Event('copy', { bubbles: true, cancelable: true });
+    Object.defineProperty(copy, 'clipboardData', {
+      value: {
+        clearData: () => copied.clear(),
+        setData: (type: string, value: string) => copied.set(type, value),
+      },
+    });
+    view.contentDOM.dispatchEvent(copy);
+    expect(copied.get('text/plain')).toBe(source);
+
+    parent
+      .querySelector<HTMLButtonElement>('.cm-ontahi-reference-value')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+      );
+    expect(view.state.doc.toString()).toBe('list = ');
+    expect(parent.querySelector('.cm-ontahi-reference-value')).toBeNull();
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe(source);
+    await vi.waitFor(() => expect(parent.querySelector('.cm-ontahi-reference-value')).toBeTruthy());
+
+    view.destroy();
+    parent.remove();
   });
 
   it('returns no completion when reflection or compatible operators are unavailable', async () => {

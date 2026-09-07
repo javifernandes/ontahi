@@ -17,7 +17,8 @@ import {
   toSelectionLanguageEntityReflection,
 } from './selection-language-data-panel.js';
 
-vi.mock('./selection-language-editor.js', () => ({
+vi.mock('./selection-language-editor.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('./selection-language-editor.js')>()),
   ExplorerSelectionLanguageEditor: ({
     label,
     onChange,
@@ -87,7 +88,10 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
             type: 'reference',
             valueType: 'PersonRef',
             nullable: true,
-            reference: { entityName: 'Person' },
+            reference: {
+              entityName: 'Person',
+              identity: { name: 'refById', fields: ['id'] },
+            },
           },
         ],
         relations: [{ name: 'assignee', kind: 'belongsTo', target: 'Person' }],
@@ -106,7 +110,10 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
           type: 'reference',
           valueType: 'PersonRef',
           nullable: true,
-          reference: { entityName: 'Person' },
+          reference: {
+            entityName: 'Person',
+            identity: { name: 'refById', fields: ['id'] },
+          },
         },
       ],
       relations: [{ name: 'assignee' }],
@@ -226,6 +233,48 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
                 value: true,
               },
             ],
+          },
+        },
+      },
+    });
+  });
+
+  it('sends a Reference identity as the canonical Ref value', async () => {
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(envelope, { kind: 'graph-read-result', value: [] }),
+    );
+    const referencedEntity: ExplorerEntityDetail = {
+      ...entity,
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        {
+          name: 'list',
+          type: 'reference',
+          nullable: false,
+          reference: {
+            entityName: 'TodoList',
+            identity: { name: 'refById', fields: ['id'] },
+            display: { primary: 'name' },
+          },
+        },
+      ],
+    };
+    renderPanel(request, 'list = "list-inbox"', referencedEntity);
+
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      body: {
+        selection: {
+          entityName: 'TodoItem',
+          expression: {
+            kind: 'predicate',
+            fieldName: 'list',
+            operator: 'eq',
+            value: {
+              kind: 'entity-ref',
+              entityName: 'TodoList',
+              locator: { id: 'list-inbox' },
+            },
           },
         },
       },

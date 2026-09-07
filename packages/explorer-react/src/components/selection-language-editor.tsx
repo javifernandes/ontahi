@@ -3,12 +3,23 @@
 import { history, historyKeymap } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import type { ReflectedEntityDataReader } from '@ontahi/core/data-graph';
 import type { SelectionLanguageEntityReflection } from '@ontahi/language';
-import { selectionExpressionExtensions } from '@ontahi/language-codemirror';
+import {
+  selectionExpressionExtensions,
+  type SelectionReferenceValueOption,
+  type SelectionReferenceValueProvider,
+} from '@ontahi/language-codemirror';
 import { CircleHelp } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
 import { cx } from '../internal/cx.js';
+
+import {
+  getExplorerReferenceRowPrimaryLabel,
+  getExplorerReferenceRowSecondaryLabel,
+  toExplorerReferenceDisplayString,
+} from './entity-reference-presentation.js';
 
 export type ExplorerSelectionLanguageEditorProps = {
   readonly label: string;
@@ -16,7 +27,49 @@ export type ExplorerSelectionLanguageEditorProps = {
   readonly entity: SelectionLanguageEntityReflection;
   readonly className?: string;
   readonly onChange: (value: string) => void;
+  readonly referenceValues?: SelectionReferenceValueProvider;
 };
+
+const referenceOption = (
+  row: Record<string, unknown>,
+  identityField: string,
+  display: Parameters<typeof getExplorerReferenceRowPrimaryLabel>[1],
+): SelectionReferenceValueOption | undefined => {
+  const value = toExplorerReferenceDisplayString(row[identityField]);
+  if (!value) return undefined;
+  const label = getExplorerReferenceRowPrimaryLabel(row, display);
+  const detail = getExplorerReferenceRowSecondaryLabel(row, display);
+  return { value, label, ...(detail && detail !== label ? { detail } : {}) };
+};
+
+export const createExplorerSelectionReferenceValueProvider = (
+  reader: ReflectedEntityDataReader,
+): SelectionReferenceValueProvider => ({
+  search: async ({ identityField, query, signal, targetEntityName }) => {
+    if (signal.aborted) return [];
+    const result = await reader.readEntityData({
+      entityName: targetEntityName,
+      search: query,
+      page: 1,
+      pageSize: 6,
+    });
+    return signal.aborted
+      ? []
+      : result.rows.flatMap(row => referenceOption(row, identityField, result.display) ?? []);
+  },
+  resolve: async ({ identityField, signal, targetEntityName, value }) => {
+    if (signal.aborted) return undefined;
+    const result = await reader.readEntityData({
+      entityName: targetEntityName,
+      filters: [{ field: identityField, operator: 'equals', value }],
+      page: 1,
+      pageSize: 1,
+    });
+    return signal.aborted
+      ? undefined
+      : referenceOption(result.rows[0] ?? {}, identityField, result.display);
+  },
+});
 
 const explorerSelectionEditorTheme = EditorView.theme({
   '&': {
@@ -50,6 +103,7 @@ export function ExplorerSelectionLanguageEditor({
   entity,
   label,
   onChange,
+  referenceValues,
   value,
 }: ExplorerSelectionLanguageEditorProps) {
   const helpId = useId();
@@ -72,7 +126,10 @@ export function ExplorerSelectionLanguageEditor({
           history(),
           keymap.of(historyKeymap),
           languageCompartmentRef.current.of(
-            selectionExpressionExtensions(entity, { finiteValueProjections: true }),
+            selectionExpressionExtensions(entity, {
+              finiteValueProjections: true,
+              ...(referenceValues ? { referenceValues } : {}),
+            }),
           ),
           labelCompartmentRef.current.of(EditorView.contentAttributes.of({ 'aria-label': label })),
           EditorView.lineWrapping,
@@ -101,10 +158,13 @@ export function ExplorerSelectionLanguageEditor({
   useEffect(() => {
     viewRef.current?.dispatch({
       effects: languageCompartmentRef.current.reconfigure(
-        selectionExpressionExtensions(entity, { finiteValueProjections: true }),
+        selectionExpressionExtensions(entity, {
+          finiteValueProjections: true,
+          ...(referenceValues ? { referenceValues } : {}),
+        }),
       ),
     });
-  }, [entity]);
+  }, [entity, referenceValues]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
