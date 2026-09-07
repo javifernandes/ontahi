@@ -162,6 +162,33 @@ describe('Selection CodeMirror adapter', () => {
     parent.remove();
   });
 
+  it('keeps Backspace editing while a structural completion is open', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: 'al',
+        selection: { anchor: 2 },
+        extensions: selectionExpressionExtensions(TodoItem),
+      }),
+    });
+
+    expect(startCompletion(view)).toBe(true);
+    await vi.waitFor(() => expect(currentCompletions(view.state)).not.toHaveLength(0));
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    expect(view.state.doc.toString()).toBe('a');
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    );
+    expect(view.state.doc.toString()).toBe('');
+
+    view.destroy();
+    parent.remove();
+  });
+
   it('reads current reflection after an Entity compartment is reconfigured', async () => {
     const compartment = new Compartment();
     let state = EditorState.create({

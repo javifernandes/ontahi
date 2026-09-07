@@ -4,5 +4,5 @@
 '@ontahi/language-codemirror': minor
 ---
 
-Add reflection-powered Selection completions, semantic highlighting, and hover help without dynamic
-runtime data queries.
+Add reflection-powered Selection completions, semantic highlighting, hover help, and reliable
+Backspace editing while completions are open, without dynamic runtime data queries.

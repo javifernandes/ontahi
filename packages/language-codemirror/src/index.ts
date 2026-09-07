@@ -4,6 +4,7 @@ import {
   type CompletionResult,
   type CompletionSource,
 } from '@codemirror/autocomplete';
+import { deleteCharBackward } from '@codemirror/commands';
 import {
   defaultHighlightStyle,
   LRLanguage,
@@ -16,6 +17,7 @@ import {
   Decoration,
   EditorView,
   hoverTooltip,
+  keymap,
   ViewPlugin,
   type DecorationSet,
   type HoverTooltipSource,
@@ -240,6 +242,14 @@ export const selectionExpressionExtensions = (
   selectionExpressionEntity.of(entity),
   selectionExpressionLanguageSupport(),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  keymap.of([
+    {
+      key: 'Backspace',
+      run: deleteCharBackward,
+      shift: deleteCharBackward,
+      preventDefault: true,
+    },
+  ]),
   autocompletion({ override: [selectionExpressionCompletionSource] }),
   selectionExpressionSemanticHighlighting(entity),
   hoverTooltip(selectionExpressionHoverSource, { hideOnChange: true }),

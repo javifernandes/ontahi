@@ -20,3 +20,6 @@ unsupported or unresolved names, operators, keywords, and values receive stable 
 Hovering a Field shows its reflected type/nullability and hovering an operator explains its
 canonical Selection meaning. Reconfiguring the extension with another Entity discards the previous
 reflection immediately.
+
+Backspace is bound to CodeMirror's document command so deletion remains an ordinary transaction
+even while a completion popup and semantic marks are active.

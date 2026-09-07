@@ -112,7 +112,8 @@ semantic boundary.
    without redefining semantic validity.
 3. `@ontahi/language-codemirror` projects those results into explicit completion, stable semantic
    mark classes, and safe text-only hover DOM. Its Entity reflection is a reconfigurable facet, and
-   completion refresh reads the current facet rather than retaining an earlier Entity.
+   completion refresh reads the current facet rather than retaining an earlier Entity. Backspace
+   uses a CodeMirror document command, so popup and mark DOM cannot interrupt continuous deletion.
 4. Explorer exposes the assistance on every reflected Entity Data page. Both the editor and the
    result state are Entity-keyed: switching from `TodoItem` to `Tag` removes old suggestions,
    diagnostics, rows, failures, and in-flight presentation immediately while retaining the normal
@@ -126,7 +127,7 @@ semantic boundary.
    have no transport, and the browser journey performed no runtime data lookup for assistance;
    only the pre-existing Graph Read ran after a complete valid expression.
 7. `@ontahi/language` has 72 passing tests with 97.07% statements, 89.48% branches, 100% functions,
-   and 98.19% lines. `@ontahi/language-codemirror` has 10 passing tests with 100% statements,
+   and 98.19% lines. `@ontahi/language-codemirror` has 11 passing tests with 100% statements,
    functions, and lines plus 88.88% branches. Explorer has 177 passing tests and Todo has 63.
 8. All 13 package suites, repository typecheck and package build, format/lint, Changeset status,
    Todo production build, and clean-room package artifact checks passed.
