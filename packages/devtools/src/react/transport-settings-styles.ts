@@ -86,7 +86,6 @@ export const transportSettingsStyles: Record<string, CSSProperties> = {
     padding: '0 8px',
     border: '1px solid #30463a',
     borderRadius: 8,
-    outline: 0,
     color: '#c7ddd1',
     background: '#0a120e',
     font: 'inherit',

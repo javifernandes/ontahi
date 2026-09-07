@@ -217,7 +217,13 @@ export const createRuntimeTransportRouter = <
         if (assignments[capability] === transportId) return;
         assignments = { ...assignments, [capability]: transportId };
         snapshot = frozenSnapshot(assignments, transports);
-        for (const listener of listeners) listener();
+        for (const listener of [...listeners]) {
+          try {
+            listener();
+          } catch {
+            // Routing observers must not affect the caller or peer observers.
+          }
+        }
       },
     },
   } as ConfigurableRuntimeTransport<RuntimeTransportOptionsOf<TTransports[keyof TTransports]>>;

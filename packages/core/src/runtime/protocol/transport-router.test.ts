@@ -155,6 +155,32 @@ describe('Runtime Transport router', () => {
     );
   });
 
+  it('isolates subscriber failures and notifies a stable listener snapshot', () => {
+    const http = createTransport({ source: 'http' });
+    const websocket = createTransport({ source: 'websocket' });
+    const transport = createRuntimeTransportRouter({ transports: { http, websocket } });
+    const addedDuringNotification = vi.fn();
+    const peer = vi.fn();
+    let unsubscribeFailing = () => {};
+    const failing = vi.fn(() => {
+      unsubscribeFailing();
+      transport.routing.subscribe(addedDuringNotification);
+      throw new Error('observer failure');
+    });
+    unsubscribeFailing = transport.routing.subscribe(failing);
+    transport.routing.subscribe(peer);
+
+    expect(() => transport.routing.configure('graph.read', 'websocket')).not.toThrow();
+    expect(failing).toHaveBeenCalledOnce();
+    expect(peer).toHaveBeenCalledOnce();
+    expect(addedDuringNotification).not.toHaveBeenCalled();
+    expect(transport.routing.inspect().assignments['graph.read']).toBe('websocket');
+
+    transport.routing.configure('graph.read', 'http');
+    expect(peer).toHaveBeenCalledTimes(2);
+    expect(addedDuringNotification).toHaveBeenCalledOnce();
+  });
+
   it('pins an active observation to the route where it started', async () => {
     const http = createTransport({ durable: true, source: 'http' });
     const websocket = createTransport({ durable: true, graph: true, source: 'websocket' });
