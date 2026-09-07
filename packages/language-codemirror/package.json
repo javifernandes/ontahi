@@ -1,0 +1,61 @@
+{
+  "name": "@ontahi/language-codemirror",
+  "version": "1.0.0-alpha.11",
+  "description": "CodeMirror 6 adapter for Ontahi textual languages",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/language-codemirror",
+  "license": "Apache-2.0",
+  "author": "Javier Fernandes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/language-codemirror"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "test:watch": "pnpm exec vitest",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@codemirror/language": "^6.0.0",
+    "@codemirror/lint": "^6.0.0",
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "@lezer/highlight": "^1.0.0",
+    "@ontahi/language": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

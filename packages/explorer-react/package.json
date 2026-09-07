@@ -55,8 +55,12 @@
     "lint:fix": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --fix --max-warnings 0"
   },
   "dependencies": {
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
     "@monaco-editor/react": "^4.6.0",
     "@ontahi/core": "workspace:*",
+    "@ontahi/language": "workspace:*",
+    "@ontahi/language-codemirror": "workspace:*",
     "@ontahi/react": "workspace:*",
     "monaco-editor": "^0.55.1"
   },

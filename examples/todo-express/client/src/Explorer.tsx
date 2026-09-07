@@ -1,6 +1,8 @@
 import {
   ExplorerEntityBrowser,
+  ExplorerEntityDataPanel,
   ExplorerProvider,
+  ExplorerSelectionLanguageDataPanel,
   isExplorerEntityBrowserTab,
 } from '@ontahi/explorer-react/components';
 import type {
@@ -58,6 +60,22 @@ export const Explorer = () => {
       entities={data.entityDetails}
       operations={data.snapshot.operations}
       tasks={data.snapshot.tasks}
+      renderDataPanel={({ entity }) =>
+        entity.name === 'TodoItem' ? (
+          <ExplorerSelectionLanguageDataPanel
+            embedded
+            entity={entity}
+            initialDocument='completed = false'
+          />
+        ) : (
+          <ExplorerEntityDataPanel
+            embedded
+            entity={entity}
+            operations={data.snapshot.operations}
+            showHeader={false}
+          />
+        )
+      }
       selectedEntityName={selectedPathSegment('/explorer/entities/')}
       selectedTab={selectedTab}
     />

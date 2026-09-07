@@ -11,7 +11,7 @@ Source commit: `a27ef5d1`
 Related plans:
 
 1. [116 Ontahí Selection Model](../done/116-ontahi-selection-model.md)
-2. [118 Ontahí Selection Language Editor Research](../research/118-ontahi-selection-language-editor.md)
+2. [118 Ontahí Selection Language Editor Research](../done/118-ontahi-selection-language-editor.md)
 
 ## Proposal
 

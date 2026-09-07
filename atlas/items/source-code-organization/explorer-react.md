@@ -7,6 +7,7 @@ status: in-progress
 horizon: now
 supports:
   - ontahi.domain-topology-graphos
+  - ontahi.semantic-interaction-language
 relatedPlans:
   - ontahi://plans/100-ontahi-framework-extraction
   - ontahi://plans/100c-ontahi-explorer-react-boundary
@@ -30,7 +31,13 @@ runtime reads, policies, and capabilities rather than selected by an Explorer-si
 wrap it in different navigation or operational context, but Explorer must not add an `isAdmin`
 bypass or infer ownership filters locally.
 
-The emerging [[ontahi.model.selection|Selection]] model gives Explorer a shared semantic foundation for entity Data filters, saved selections, operation-target previews, statistics, widgets, and dashboards. A future Selection language editor should edit the canonical Selection AST directly so table filters, visual composition, textual representations, and runtime execution do not become separate query languages. The editor is a reusable language artifact embedded by Explorer, not necessarily a React implementation owned by this package.
+The emerging [[ontahi.model.selection|Selection]] model gives Explorer a shared semantic foundation
+for Entity Data filters, saved selections, operation-target previews, statistics, widgets, and
+dashboards. A future [[ontahi.semantic-interaction-language|Selection language editor]] keeps its
+text and recoverable syntax state distinct, then lowers valid meaning to the canonical Selection
+AST so table filters, visual composition, textual representations, and runtime execution do not
+become separate query languages. The editor is a reusable language artifact embedded by Explorer,
+not a semantic implementation owned by this package.
 
 GraphOS remains useful as the conceptual/model vocabulary for the domain topology and layered graph. The package name should not be `@ontahi/ui-react` because that is too broad; it should name the actual framework surface being extracted.
 
@@ -54,6 +61,13 @@ Boundary inventory:
 14. remaining BookOps GraphOps components should be shells, host adapters, host-specific controls, or compatibility bridges rather than reusable Explorer UI.
 
 Future selection-driven surfaces are directional rather than part of the current extraction boundary: saved-filter persistence, projectional selection editing, aggregate widgets, and dashboards should follow the Selection model instead of being designed as isolated Explorer features.
+
+Explorer's current Entity Data filter is implementation evidence to replace, not a second semantic
+contract to preserve: it sends a one-clause `ReflectedEntityDataFilter` through a dedicated reader,
+whereas the language proof must lower to Selection and execute through the existing Graph Read
+runtime. Query shaping such as search, sort, and pagination remains separate from Selection
+membership and should not be pulled into the first language slice merely to preserve the current
+toolbar wholesale.
 
 Explorer's current reflected Entity data reader is also implementation evidence for
 [[ontahi.runtime-data-reflection|Runtime Data Reflection]]. Future adaptive inputs should consume

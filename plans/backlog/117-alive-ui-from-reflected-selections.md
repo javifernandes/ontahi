@@ -15,7 +15,7 @@ Related plans:
 1. [`76. Operation Input Metadata And UI`](bookops://plans/76-operation-input-metadata-and-ui)
 2. [`91. Reflective Architecture Admin UI`](bookops://plans/91-reflective-architecture-admin-ui)
 3. [`116. Ontahi Selection Model`](../done/116-ontahi-selection-model.md)
-4. [`118. Ontahi Selection Language Editor Research`](../research/118-ontahi-selection-language-editor.md)
+4. [`118. Ontahi Selection Language Editor Research`](../done/118-ontahi-selection-language-editor.md)
 5. [`126. Ontahi Runtime Data Reflection`](../research/126-ontahi-runtime-data-reflection.md)
 
 ## Summary
