@@ -33,6 +33,21 @@ type EntityValue<TValue> = {
   readonly value: TValue;
 };
 
+const entityScopedValue = <TValue,>(current: EntityValue<TValue> | undefined, entityName: string) =>
+  current?.entityName === entityName ? current.value : undefined;
+
+const selectionRowsStatus = (
+  rows: ExplorerSelectionLanguageRows | undefined,
+  executionError: string | undefined,
+  isExecuting: boolean,
+) => {
+  if (isExecuting) return 'Updating rows…';
+  if (executionError && rows) {
+    return `Showing ${rows.length} row(s) from the last successful Selection.`;
+  }
+  return `${rows?.length ?? 0} row(s) from a fixed limit of 25.`;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -105,13 +120,12 @@ export function ExplorerSelectionLanguageDataPanel({
   const document = documentState.key === documentKey ? documentState.value : initialDocument;
   const setDocument = (value: string) => setDocumentState({ key: documentKey, value });
   const [rowResult, setRowResult] = useState<EntityValue<ExplorerSelectionLanguageRows>>();
-  const rows = rowResult?.entityName === entity.name ? rowResult.value : undefined;
+  const rows = entityScopedValue(rowResult, entity.name);
   const [executionFailure, setExecutionFailure] = useState<EntityValue<string>>();
-  const executionError =
-    executionFailure?.entityName === entity.name ? executionFailure.value : undefined;
+  const executionError = entityScopedValue(executionFailure, entity.name);
   const [executionState, setExecutionState] = useState<EntityValue<boolean>>();
   const [retryVersion, setRetryVersion] = useState(0);
-  const isExecuting = executionState?.entityName === entity.name ? executionState.value : false;
+  const isExecuting = entityScopedValue(executionState, entity.name) ?? false;
   const analysis = useMemo(
     () => analyzeSelectionDocument(document, reflection),
     [document, reflection],
@@ -309,11 +323,7 @@ export function ExplorerSelectionLanguageDataPanel({
           </tbody>
         </table>
         <div className='border-t px-3 py-2 text-xs text-muted-foreground' aria-live='polite'>
-          {isExecuting
-            ? 'Updating rows…'
-            : executionError && rows
-              ? `Showing ${rows.length} row(s) from the last successful Selection.`
-              : `${rows?.length ?? 0} row(s) from a fixed limit of 25.`}
+          {selectionRowsStatus(rows, executionError, isExecuting)}
         </div>
       </div>
     </section>

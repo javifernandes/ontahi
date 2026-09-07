@@ -131,8 +131,8 @@ semantic boundary.
 6. Completion and hover consume only supplied static reflection. Their synchronous headless tests
    have no transport, and the browser journey performed no runtime data lookup for assistance;
    only the pre-existing Graph Read ran after a complete valid expression.
-7. `@ontahi/language` has 74 passing tests with 97.08% statements, 89.57% branches, 100% functions,
-   and 98.2% lines. `@ontahi/language-codemirror` has 11 passing tests with 100% statements,
+7. `@ontahi/language` has 74 passing tests with 96.94% statements, 89.09% branches, 100% functions,
+   and 98.25% lines. `@ontahi/language-codemirror` has 11 passing tests with 100% statements,
    functions, and lines plus 88.88% branches. Explorer has 180 passing tests and Todo has 64.
 8. All 13 package suites, repository typecheck and package build, format/lint, Changeset status,
    Todo production build, and clean-room package artifact checks passed.

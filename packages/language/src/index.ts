@@ -892,23 +892,29 @@ const ancestorNamed = (
   return undefined;
 };
 
+const expressionChildren = (
+  expression: SelectionExpressionSyntax,
+): readonly SelectionExpressionSyntax[] => {
+  switch (expression.kind) {
+    case 'and':
+    case 'or':
+      return expression.operands;
+    case 'not':
+      return expression.operand ? [expression.operand] : [];
+    case 'parenthesized':
+      return expression.expression ? [expression.expression] : [];
+    default:
+      return [];
+  }
+};
+
 const expressionAtPosition = (
   expression: SelectionExpressionSyntax | undefined,
   position: number,
 ): SelectionExpressionSyntax | undefined => {
   if (!expression || position < expression.from || position > expression.to) return undefined;
 
-  const children =
-    expression.kind === 'and' || expression.kind === 'or'
-      ? expression.operands
-      : expression.kind === 'not'
-        ? expression.operand
-          ? [expression.operand]
-          : []
-        : expression.kind === 'parenthesized' && expression.expression
-          ? [expression.expression]
-          : [];
-  for (const child of children) {
+  for (const child of expressionChildren(expression)) {
     const nested = expressionAtPosition(child, position);
     if (nested) return nested;
   }
@@ -1081,6 +1087,155 @@ const fieldForPredicate = (
   entity: SelectionLanguageEntityReflection,
 ) => entity.fields.find(field => field.name === predicate.field?.text);
 
+type SelectionCompletionResultBuilder = (
+  context: SelectionLanguageCursorContext,
+  items: readonly SelectionLanguageCompletionItem[],
+  includeOpeningQuote?: boolean,
+  insertAtCursor?: boolean,
+) => SelectionLanguageCompletionResult;
+
+const continuationItemsAt = (syntax: SelectionDocumentSyntax, position: number, applyPrefix = '') =>
+  continuationCompletionItems(hasUnclosedParenthesisAt(syntax.expression, position), applyPrefix);
+
+const completeNonPredicateExpression = (
+  expression: SelectionExpressionSyntax,
+  position: number,
+  entity: SelectionLanguageEntityReflection,
+  syntax: SelectionDocumentSyntax,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult | undefined => {
+  switch (expression.kind) {
+    case 'all':
+    case 'none':
+      return position <= expression.to
+        ? result('expression', expressionCompletionItems(entity))
+        : result('continuation', continuationCompletionItems(false));
+    case 'not': {
+      if (expression.operand) return result('continuation', continuationItemsAt(syntax, position));
+      const prefix = expression.operator.to === position ? ' ' : '';
+      return result('expression', expressionCompletionItems(entity, prefix));
+    }
+    case 'and':
+    case 'or': {
+      if (expression.operands.length > expression.operators.length) {
+        return result('continuation', continuationItemsAt(syntax, position));
+      }
+      const prefix = expression.operators.at(-1)?.to === position ? ' ' : '';
+      return result('expression', expressionCompletionItems(entity, prefix));
+    }
+    case 'parenthesized':
+      return expression.expression
+        ? result('continuation', continuationCompletionItems(!expression.close))
+        : result('expression', expressionCompletionItems(entity));
+    default:
+      return undefined;
+  }
+};
+
+const completeMembershipPredicate = (
+  predicate: SelectionPredicateSyntax,
+  reflectedField: SelectionLanguageFieldReflection,
+  position: number,
+  syntax: SelectionDocumentSyntax,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult => {
+  if (predicate.value?.kind !== 'list-literal') {
+    return result('value', [
+      { label: '[', apply: '[', kind: 'punctuation', detail: 'Start membership list' },
+    ]);
+  }
+
+  const list = predicate.value;
+  if (list.close && position >= list.close.from) {
+    return result('continuation', continuationItemsAt(syntax, position));
+  }
+
+  const cursorIsOnValue = list.values.some(value => value.from <= position && value.to >= position);
+  const expectsValue =
+    cursorIsOnValue || list.values.length === list.commas.length || list.values.length === 0;
+  if (expectsValue) {
+    return result(
+      'list-value',
+      [
+        ...valueCompletionItems(reflectedField),
+        { label: ']', apply: ']', kind: 'punctuation', detail: 'Close membership list' },
+      ],
+      true,
+    );
+  }
+
+  return result('list-continuation', [
+    { label: ',', apply: ',', kind: 'punctuation', detail: 'Add another value' },
+    { label: ']', apply: ']', kind: 'punctuation', detail: 'Close membership list' },
+  ]);
+};
+
+const completeScalarPredicate = (
+  predicate: SelectionPredicateSyntax,
+  reflectedField: SelectionLanguageFieldReflection,
+  position: number,
+  syntax: SelectionDocumentSyntax,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult => {
+  const value = predicate.value;
+  if (!value || value.kind === 'list-literal') {
+    return result('value', valueCompletionItems(reflectedField), true);
+  }
+  if (value.from <= position && value.to >= position) {
+    return result('value', valueCompletionItems(reflectedField), true);
+  }
+  return result('continuation', continuationItemsAt(syntax, position));
+};
+
+const completePredicateExpression = (
+  predicate: SelectionPredicateSyntax,
+  position: number,
+  entity: SelectionLanguageEntityReflection,
+  affordances: SelectionLanguageExecutionAffordances | undefined,
+  syntax: SelectionDocumentSyntax,
+  cursorNode: SyntaxNode,
+  result: SelectionCompletionResultBuilder,
+): SelectionLanguageCompletionResult => {
+  if (position <= (predicate.field?.to ?? predicate.from)) {
+    return result('expression', expressionCompletionItems(entity));
+  }
+
+  const reflectedField = fieldForPredicate(predicate, entity);
+  if (!reflectedField) return result('operator', []);
+
+  if (!predicate.operator) {
+    const nullPredicate = ancestorNamed(cursorNode, ['NullPredicate']);
+    return nullPredicate?.getChild('Is')
+      ? result('value', [
+          {
+            label: 'null',
+            apply: 'null',
+            kind: 'value',
+            detail: 'Complete the null check',
+          },
+        ])
+      : result('operator', affordedOperatorCompletionItems(reflectedField, affordances));
+  }
+
+  if (position >= predicate.operator.from && position < predicate.operator.to) {
+    return {
+      context: 'operator',
+      from: predicate.operator.from,
+      to: predicate.operator.to,
+      items: affordedOperatorCompletionItems(reflectedField, affordances),
+    };
+  }
+
+  if (predicate.operator.operator === 'isNull') {
+    const prefix = predicate.operator.to === position ? ' ' : '';
+    return result('continuation', continuationItemsAt(syntax, position, prefix), false, true);
+  }
+  if (predicate.operator.operator === 'in') {
+    return completeMembershipPredicate(predicate, reflectedField, position, syntax, result);
+  }
+  return completeScalarPredicate(predicate, reflectedField, position, syntax, result);
+};
+
 export const completeSelectionDocument = (
   document: string,
   requestedPosition: number,
@@ -1107,128 +1262,19 @@ export const completeSelectionDocument = (
 
   if (!syntax.expression) return result('expression', expressionCompletionItems(entity));
   if (!expression) {
-    return result(
-      'continuation',
-      continuationCompletionItems(hasUnclosedParenthesisAt(syntax.expression, position)),
-    );
+    return result('continuation', continuationItemsAt(syntax, position));
   }
 
-  if (expression.kind === 'all' || expression.kind === 'none') {
-    return position <= expression.to
-      ? result('expression', expressionCompletionItems(entity))
-      : result('continuation', continuationCompletionItems(false));
-  }
-
-  if (expression.kind === 'not' && !expression.operand) {
-    const prefix = expression.operator.to === position ? ' ' : '';
-    return result('expression', expressionCompletionItems(entity, prefix));
-  }
-  if (
-    (expression.kind === 'and' || expression.kind === 'or') &&
-    expression.operands.length <= expression.operators.length
-  ) {
-    const operator = expression.operators.at(-1);
-    const prefix = operator?.to === position ? ' ' : '';
-    return result('expression', expressionCompletionItems(entity, prefix));
-  }
-  if (expression.kind === 'parenthesized') {
-    if (!expression.expression) return result('expression', expressionCompletionItems(entity));
-    return result('continuation', continuationCompletionItems(!expression.close));
-  }
-  if (expression.kind === 'and' || expression.kind === 'or' || expression.kind === 'not') {
-    return result(
-      'continuation',
-      continuationCompletionItems(hasUnclosedParenthesisAt(syntax.expression, position)),
-    );
-  }
-  const predicate = expression as SelectionPredicateSyntax;
-
-  if (position <= (predicate.field?.to ?? predicate.from)) {
-    return result('expression', expressionCompletionItems(entity));
-  }
-
-  const reflectedField = fieldForPredicate(predicate, entity);
-  if (!reflectedField) return result('operator', []);
-
-  if (!predicate.operator) {
-    const nullPredicate = ancestorNamed(cursorNode, ['NullPredicate']);
-    if (nullPredicate?.getChild('Is')) {
-      return result('value', [
-        {
-          label: 'null',
-          apply: 'null',
-          kind: 'value',
-          detail: 'Complete the null check',
-        },
-      ]);
-    }
-    return result('operator', affordedOperatorCompletionItems(reflectedField, affordances));
-  }
-
-  if (position >= predicate.operator.from && position < predicate.operator.to) {
-    return {
-      context: 'operator',
-      from: predicate.operator.from,
-      to: predicate.operator.to,
-      items: affordedOperatorCompletionItems(reflectedField, affordances),
-    };
-  }
-
-  if (predicate.operator.operator === 'isNull') {
-    return result(
-      'continuation',
-      continuationCompletionItems(
-        hasUnclosedParenthesisAt(syntax.expression, position),
-        predicate.operator.to === position ? ' ' : '',
-      ),
-      false,
-      true,
-    );
-  }
-
-  if (predicate.operator.operator === 'in') {
-    if (!predicate.value || predicate.value.kind !== 'list-literal') {
-      return result('value', [
-        { label: '[', apply: '[', kind: 'punctuation', detail: 'Start membership list' },
-      ]);
-    }
-    const list = predicate.value;
-    if (list.close && position >= list.close.from) {
-      return result(
-        'continuation',
-        continuationCompletionItems(hasUnclosedParenthesisAt(syntax.expression, position)),
-      );
-    }
-    const selectedValue = list.values.find(value => value.from <= position && value.to >= position);
-    const expectsValue =
-      Boolean(selectedValue) ||
-      list.values.length === list.commas.length ||
-      list.values.length === 0;
-    if (expectsValue) {
-      return result(
-        'list-value',
-        [
-          ...valueCompletionItems(reflectedField),
-          { label: ']', apply: ']', kind: 'punctuation', detail: 'Close membership list' },
-        ],
-        true,
-      );
-    }
-    return result('list-continuation', [
-      { label: ',', apply: ',', kind: 'punctuation', detail: 'Add another value' },
-      { label: ']', apply: ']', kind: 'punctuation', detail: 'Close membership list' },
-    ]);
-  }
-
-  if (!predicate.value || predicate.value.kind === 'list-literal') {
-    return result('value', valueCompletionItems(reflectedField), true);
-  }
-  if (predicate.value.from <= position && predicate.value.to >= position) {
-    return result('value', valueCompletionItems(reflectedField), true);
-  }
-  return result(
-    'continuation',
-    continuationCompletionItems(hasUnclosedParenthesisAt(syntax.expression, position)),
+  const nonPredicate = completeNonPredicateExpression(expression, position, entity, syntax, result);
+  if (nonPredicate) return nonPredicate;
+  return completePredicateExpression(
+    expression as SelectionPredicateSyntax,
+    position,
+    entity,
+    affordances,
+    syntax,
+    cursorNode,
+    result,
   );
 };
 
