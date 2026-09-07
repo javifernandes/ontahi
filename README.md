@@ -69,7 +69,7 @@ lives under [`docs/`](./docs/). Automated coding agents must also follow
 
 ## Public alpha policy
 
-The ten framework packages share one exact lockstep prerelease version. They require Node.js
+The thirteen framework packages share one exact lockstep prerelease version. They require Node.js
 `>=20.19.0`, publish publicly with npm provenance, and carry the Apache-2.0 `LICENSE` and `NOTICE`
 in every artifact.
 
@@ -81,7 +81,7 @@ GitHub prerelease. No package version is edited by hand.
 Internal `workspace:*` dependencies are rewritten by `pnpm pack` to the exact lockstep version. A
 public alpha release therefore publishes the complete changed dependency closure.
 
-The workflow validates all ten artifacts and publishes from `main` through npm OIDC trusted
+The workflow validates all thirteen artifacts and publishes from `main` through npm OIDC trusted
 publishing. Its manual dispatch is retained for dry-runs and recovery. See
 [`RELEASING.md`](./RELEASING.md) for the short contributor and maintainer flows.
 

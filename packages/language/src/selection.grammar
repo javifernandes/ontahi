@@ -1,0 +1,15 @@
+@top SelectionDocument { BooleanEquality? }
+
+BooleanEquality { FieldName Equals BooleanLiteral }
+FieldName { Identifier }
+Equals { "=" }
+BooleanLiteral { True | False }
+True { "true" }
+False { "false" }
+
+@tokens {
+  Identifier { $[A-Za-z_] $[A-Za-z0-9_]* }
+  whitespace { std.whitespace+ }
+}
+
+@skip { whitespace }

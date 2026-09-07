@@ -8,6 +8,8 @@
       "@ontahi/core",
       "@ontahi/devtools",
       "@ontahi/explorer-react",
+      "@ontahi/language",
+      "@ontahi/language-codemirror",
       "@ontahi/opentelemetry",
       "@ontahi/postgres",
       "@ontahi/react",

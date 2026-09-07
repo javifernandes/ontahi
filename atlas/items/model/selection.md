@@ -9,6 +9,7 @@ supports:
   - ontahi.domain-topology-graphos
   - ontahi.operation-contracts
   - ontahi.source-code-organization.explorer-react
+  - ontahi.semantic-interaction-language
 relatedPlans:
   - bookops://plans/53-entity-targets-and-mutations
   - bookops://plans/74-entity-refs-and-unit-of-work
@@ -189,9 +190,17 @@ Saved selections make filters first-class rather than incidental UI state. Ontah
 4. the population behind a statistic or dashboard widget,
 5. a previewable target for an operation.
 
-The Selection AST is the source of truth across these projections. A table, widget, dashboard, or editor is a consumer or editor of the selection, not a second selection language.
+The Selection AST is the source of portable membership meaning across these projections. A table,
+widget, dashboard, or editor consumes or produces that meaning rather than defining a second
+Selection algebra. While a person is editing text, the document and its recoverable syntax tree
+remain the source of authorial details such as whitespace, parentheses, incomplete nodes, and
+cursor positions; only a valid semantic resolution lowers to the canonical AST.
 
-The future Selection language editor is a distinct artifact rather than a React component owned by Explorer. It may use textual, structural, or hybrid interaction and may keep recoverable document state while a user types, but persisted and transported meaning remains the canonical Selection AST. Explorer should embed the editor through an adapter.
+The future [[ontahi.semantic-interaction-language|Selection language editor]] is a distinct
+artifact rather than a React component owned by Explorer. It may use textual, structural, or
+hybrid interaction, but persisted and transported membership remains the canonical Selection AST.
+Persisting an editable draft document is a separate product choice and does not promote its syntax
+tree into Ontahí's semantic model. Explorer should embed the editor through an adapter.
 
 Explorer's operation-input projection recognizes reflected selection fields by entity, cardinality, and identity locator. It presents the mutually exclusive scopes `None`, `Selected (n)`, and `All`, defaults bulk selections to `None`, and loads reflected entity data for editing the references behind `Selected`. Single-cardinality inputs use radio semantics and omit `All`; many-cardinality inputs use checkbox semantics. The raw JSON inspector remains available for composed expressions. Predicate and set-composition controls can extend this projection without changing the transported Selection AST.
 

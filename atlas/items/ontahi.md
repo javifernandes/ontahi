@@ -47,3 +47,4 @@ evolution of Ontahi rather than evidence still required to make it independently
 8. [`Durable Workflows`](./durable-workflows.md)
 9. [`Authority And Policies`](./authority-and-policies.md)
 10. [`Learning Materials`](./learning-materials.md)
+11. [`Ontahí Semantic Interaction Language`](./semantic-interaction-language.md)

@@ -109,6 +109,15 @@ export {
   type ExplorerTaskBrowserTab,
 } from './routes.js';
 export { ExplorerSectionNav, type ExplorerSectionNavProps } from './section-nav.js';
+export {
+  ExplorerSelectionLanguageDataPanel,
+  toSelectionLanguageEntityReflection,
+  type ExplorerSelectionLanguageDataPanelProps,
+} from './selection-language-data-panel.js';
+export {
+  ExplorerSelectionLanguageEditor,
+  type ExplorerSelectionLanguageEditorProps,
+} from './selection-language-editor.js';
 export { ExplorerSchemaPanel, type ExplorerSchemaPanelProps } from './schema-panel.js';
 export { ExplorerSelect, type ExplorerSelectOption, type ExplorerSelectProps } from './select.js';
 export {

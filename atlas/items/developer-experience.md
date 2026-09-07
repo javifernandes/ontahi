@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
+  - ontahi://plans/118-ontahi-selection-language-editor
 ---
 
 Ontahí Developer Experience is the experience of building, understanding, inspecting, and
@@ -51,4 +52,7 @@ This Experience is not one package or screen. Plans can improve one or more part
 multiple implementation components can realize it.
 [[ontahi.source-code-organization.devtools|Ontahí Devtools]] is the first proposed component focused
 on runtime inspection and transport tuning; Explorer, documentation, examples, diagnostics, and
-future language tooling may support adjacent parts without being collapsed into Devtools.
+the [[ontahi.semantic-interaction-language|Ontahí Semantic Interaction Language]] support adjacent
+parts without being collapsed into Devtools. Devtools may project the same canonical Selection or
+Graph Read that a language surface produces, while document parsing and semantic resolution remain
+owned by the language capability.

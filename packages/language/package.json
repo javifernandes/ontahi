@@ -1,0 +1,64 @@
+{
+  "name": "@ontahi/language",
+  "version": "1.0.0-alpha.11",
+  "description": "Editor-neutral parsing and semantic analysis for Ontahi textual languages",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/language",
+  "license": "Apache-2.0",
+  "author": "Javier Fernandes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/language"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./lezer": {
+      "types": "./dist/lezer.d.ts",
+      "import": "./dist/lezer.js",
+      "require": "./dist/lezer.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "generate": "pnpm exec lezer-generator --typeScript src/selection.grammar -o src/generated/selection-parser.ts && pnpm exec oxfmt --write src/generated/selection-parser.ts src/generated/selection-parser.terms.ts",
+    "build": "pnpm run generate && pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm run generate && pnpm exec vitest run",
+    "test:coverage": "pnpm run generate && pnpm exec vitest run --coverage",
+    "test:watch": "pnpm run generate && pnpm exec vitest",
+    "typecheck": "pnpm run generate && pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --ignore-pattern \"src/generated/**\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --ignore-pattern \"src/generated/**\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@lezer/common": "^1.2.3",
+    "@lezer/lr": "^1.4.2",
+    "@ontahi/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@lezer/generator": "^1.8.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
