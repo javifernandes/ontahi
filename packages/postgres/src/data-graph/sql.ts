@@ -5,7 +5,9 @@ import {
   lowerEntityReferenceSelection,
   isDerivedFieldDefinition,
   resolveQuerySpec,
+  resolveRelationFields,
   type GraphCommandSpec,
+  type AnyRelationQueryBuilder,
   type QueryOrView,
   type QuerySpec,
   type SelectionExpression,
@@ -131,48 +133,102 @@ export const compilePostgresSelection = (
 ): string =>
   compilePostgresSelectionWith(expression, mapping, values, compilePostgresSelectionLeaf);
 
-const selectedDerivedFieldNames = (spec: QuerySpec) => {
-  if (!spec.select) {
-    return Object.entries(spec.root.fields)
-      .filter(([, field]) => isDerivedFieldDefinition(field))
-      .map(([fieldName]) => fieldName);
-  }
-
+const collectSelectedFieldNames = (selection: Record<string, unknown>) => {
   const selected = new Set<string>();
-  const visit = (selection: Record<string, unknown>) => {
-    for (const value of Object.values(selection)) {
-      if (value && typeof value === 'object' && (value as { kind?: string }).kind === 'field-ref') {
-        const fieldName = (value as { fieldName: string }).fieldName;
-        if (isDerivedFieldDefinition(spec.root.fields[fieldName]!)) selected.add(fieldName);
-      } else if (value instanceof RelationQueryBuilder) {
-        continue;
-      } else if (value && typeof value === 'object') {
-        visit(value as Record<string, unknown>);
-      }
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    if ((value as { kind?: string }).kind === 'field-ref') {
+      selected.add((value as { fieldName: string }).fieldName);
+      return;
     }
+    if (value instanceof RelationQueryBuilder) return;
+    Object.values(value as Record<string, unknown>).forEach(visit);
   };
-  visit(spec.select);
-  return [...selected];
+  Object.values(selection).forEach(visit);
+  return selected;
 };
 
-const columnsFor = (mapping: PostgresEntityMapping, spec: QuerySpec) => [
-  ...Object.entries(mapping.columns).map(
-    ([field, column]) => `${quoteIdentifier(column)} AS ${quoteIdentifier(field)}`,
-  ),
-  ...selectedDerivedFieldNames(spec).map(fieldName => {
-    const field = spec.root.fields[fieldName]!;
-    if (!isDerivedFieldDefinition(field) || !field.derived.expression) {
-      throw new Error(`Derived Field ${spec.root.name}.${fieldName} has no Model Expression.`);
+const collectRelationBuilders = (spec: QuerySpec) => {
+  const relations: AnyRelationQueryBuilder[] = [];
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    if (value instanceof RelationQueryBuilder) {
+      relations.push(value);
+      return;
     }
-    return `${compilePostgresDerivedField(spec.root, mapping, field.derived.expression)} AS ${quoteIdentifier(fieldName)}`;
-  }),
-];
+    Object.values(value as Record<string, unknown>).forEach(visit);
+  };
+  Object.values(spec.select ?? {}).forEach(visit);
+  Object.values(spec.includes ?? {}).forEach(visit);
+  return relations;
+};
+
+const relationSourceField = (mapping: PostgresEntityMapping, relation: AnyRelationQueryBuilder) => {
+  const node = relation.toNodeSpec();
+  const definition = mapping.entity.relations[node.relationName];
+  if (definition?.relationKind !== 'manyToMany') {
+    return resolveRelationFields(mapping.entity, node.relationName, node).sourceField;
+  }
+  if (definition.mapping?.type !== 'many-to-many') {
+    throw new Error(
+      `PostgreSQL many-to-many Relation ${mapping.entity.name}.${node.relationName} is not mapped.`,
+    );
+  }
+  const sourceField = Object.entries(mapping.columns).find(
+    ([, column]) => column === definition.mapping!.fromColumn,
+  )?.[0];
+  if (!sourceField) {
+    throw new Error(
+      `PostgreSQL many-to-many Relation ${mapping.entity.name}.${node.relationName} does not match Entity mappings.`,
+    );
+  }
+  return sourceField;
+};
+
+const columnForField = (mapping: PostgresEntityMapping, spec: QuerySpec, fieldName: string) => {
+  const column = mapping.columns[fieldName];
+  if (column) return `${quoteIdentifier(column)} AS ${quoteIdentifier(fieldName)}`;
+
+  const field = spec.root.fields[fieldName];
+  if (!field || !isDerivedFieldDefinition(field) || !field.derived.expression) {
+    throw new Error(`Field ${spec.root.name}.${fieldName} is not mapped.`);
+  }
+  return `${compilePostgresDerivedField(spec.root, mapping, field.derived.expression)} AS ${quoteIdentifier(fieldName)}`;
+};
+
+const columnsFor = (
+  mapping: PostgresEntityMapping,
+  spec: QuerySpec,
+  projectedFields?: readonly string[],
+) => {
+  if (!spec.select && !projectedFields) {
+    return [
+      ...Object.entries(mapping.columns).map(
+        ([field, column]) => `${quoteIdentifier(column)} AS ${quoteIdentifier(field)}`,
+      ),
+      ...Object.entries(spec.root.fields)
+        .filter(([, field]) => isDerivedFieldDefinition(field))
+        .map(([fieldName]) => columnForField(mapping, spec, fieldName)),
+    ];
+  }
+
+  const selected = projectedFields
+    ? new Set(projectedFields)
+    : collectSelectedFieldNames(spec.select!);
+  if (!projectedFields) {
+    collectRelationBuilders(spec).forEach(relation =>
+      selected.add(relationSourceField(mapping, relation)),
+    );
+  }
+  const columns = [...selected].map(fieldName => columnForField(mapping, spec, fieldName));
+  return columns.length > 0 ? columns : ['1 AS "__ontahi_row"'];
+};
 
 export const compilePostgresQuery = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
   params: TParams,
   mapping: PostgresEntityMapping,
-  options: { count?: boolean } = {},
+  options: { count?: boolean; projectedFields?: readonly string[] } = {},
 ): ParameterizedSql => {
   const spec = resolveQuerySpec(queryOrView, params) as QuerySpec;
   if (spec.root !== mapping.entity) {
@@ -199,7 +255,7 @@ export const compilePostgresQuery = <TParams, TResult>(
 
   return {
     text:
-      `SELECT ${options.count ? 'COUNT(*)::int AS "count"' : columnsFor(mapping, spec).join(', ')}` +
+      `SELECT ${options.count ? 'COUNT(*)::int AS "count"' : columnsFor(mapping, spec, options.projectedFields).join(', ')}` +
       ` FROM ${quoteIdentifier(mapping.table)} WHERE ${selection}` +
       `${order ? ` ORDER BY ${order}` : ''}${limit}`,
     values,

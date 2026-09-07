@@ -209,7 +209,11 @@ const createPostgresBaseDataGraphRuntime = (
 
   const readSpec = async (
     spec: QuerySpec,
-    options: { entityRows?: boolean; applyLimit?: boolean } = {},
+    options: {
+      entityRows?: boolean;
+      applyLimit?: boolean;
+      projectedFields?: readonly string[];
+    } = {},
   ): Promise<Record<string, unknown>[]> => {
     const effectiveSpec =
       options.applyLimit === false
@@ -219,7 +223,11 @@ const createPostgresBaseDataGraphRuntime = (
           }
         : spec;
     const result = await executeQuery<Record<string, unknown> & QueryResultRow>(
-      compilePostgresQuery(effectiveSpec, undefined, mappingFor(registry, spec.root)),
+      compilePostgresQuery(effectiveSpec, undefined, mappingFor(registry, spec.root), {
+        ...(options.entityRows
+          ? { projectedFields: options.projectedFields ?? Object.keys(spec.root.fields) }
+          : {}),
+      }),
     );
     if (spec.cardinality === 'one' && result.rows.length !== 1) {
       throw new PostgresDataGraphError(
@@ -263,15 +271,26 @@ const createPostgresBaseDataGraphRuntime = (
 
   const executeEntityRows = async (
     read: QueryOrView<any, any>,
+    projectedFields: readonly string[],
   ): Promise<Record<string, unknown>[]> =>
     isRelatedRootReadSpec(read)
-      ? executeRelatedRootRead({ ...read, mode: 'entityRows' })
+      ? executeRelatedRootRead({ ...read, mode: 'entityRows' }, projectedFields)
       : readSpec(resolveQuerySpec(read as PlainGraphRead<any, any>, undefined), {
           entityRows: true,
+          projectedFields,
         });
+
+  const projectedEntityRowFields = (
+    projectedFields: readonly string[] | undefined,
+    fallbackField: string,
+  ) => {
+    if (projectedFields === undefined) return undefined;
+    return projectedFields.length > 0 ? projectedFields : [fallbackField];
+  };
 
   const executeRelatedRootRead = async (
     spec: RelatedRootReadSpec<any, any, any, any, any>,
+    projectedFields?: readonly string[],
   ): Promise<any[]> => {
     const relationEntity = spec.relationOwner === 'source' ? spec.sourceEntity : spec.target.root;
     const relationDefinition = relationEntity.relations[spec.relationName];
@@ -307,7 +326,7 @@ const createPostgresBaseDataGraphRuntime = (
         spec.relationOwner === 'source'
           ? relationDefinition.mapping.throughToColumn
           : relationDefinition.mapping.throughFromColumn;
-      const sourceEntityRows = await executeEntityRows(spec.source);
+      const sourceEntityRows = await executeEntityRows(spec.source, [sourceField]);
       const sourceRows =
         spec.mode === 'resolve' || spec.mode === 'countBySource'
           ? await executeRead(spec.source, undefined)
@@ -337,9 +356,17 @@ const createPostgresBaseDataGraphRuntime = (
         targetField,
         edgeResult.rows.map(edge => edge.target_value),
       );
-      const entityRows = await readSpec(targetSpec, { entityRows: true });
-      if (spec.mode === 'entityRows') return entityRows;
+      if (spec.mode === 'entityRows') {
+        return readSpec(targetSpec, {
+          entityRows: true,
+          projectedFields: projectedEntityRowFields(projectedFields, targetField),
+        });
+      }
       if (spec.mode === 'countBySource') {
+        const entityRows = await readSpec(targetSpec, {
+          entityRows: true,
+          projectedFields: [targetField],
+        });
         const selectedTargetValues = new Set<unknown>(
           uniqueNonNullValues(entityRows, spec.target.root, targetField),
         );
@@ -362,7 +389,7 @@ const createPostgresBaseDataGraphRuntime = (
       spec.relationName,
       spec.relationOwner,
     );
-    const sourceEntityRows = await executeEntityRows(spec.source);
+    const sourceEntityRows = await executeEntityRows(spec.source, [sourceField]);
     const sourceRows =
       spec.mode === 'resolve' || spec.mode === 'countBySource'
         ? await executeRead(spec.source, undefined)
@@ -378,9 +405,17 @@ const createPostgresBaseDataGraphRuntime = (
     }
 
     const targetSpec = withRelatedTargetPredicate(spec, targetField, sourceValues);
-    const entityRows = await readSpec(targetSpec, { entityRows: true });
-    if (spec.mode === 'entityRows') return entityRows;
+    if (spec.mode === 'entityRows') {
+      return readSpec(targetSpec, {
+        entityRows: true,
+        projectedFields: projectedEntityRowFields(projectedFields, targetField),
+      });
+    }
     if (spec.mode === 'countBySource') {
+      const entityRows = await readSpec(targetSpec, {
+        entityRows: true,
+        projectedFields: [targetField],
+      });
       const countsBySource = new Map<unknown, number>(sourceValues.map(value => [value, 0]));
       for (const row of entityRows) {
         const value = normalizeEntityReferenceJoinValue(
@@ -430,11 +465,14 @@ const createPostgresBaseDataGraphRuntime = (
       if (isRelatedRootReadSpec(queryOrView)) {
         return Effect.tryPromise({
           try: () =>
-            executeRelatedRootRead({
-              ...queryOrView,
-              mode: 'entityRows',
-              target: { ...queryOrView.target, limit: undefined },
-            }).then(rows => rows.length),
+            executeRelatedRootRead(
+              {
+                ...queryOrView,
+                mode: 'entityRows',
+                target: { ...queryOrView.target, limit: undefined },
+              },
+              [],
+            ).then(rows => rows.length),
           catch: cause =>
             cause instanceof PostgresDataGraphError
               ? cause
