@@ -152,6 +152,8 @@ describe('Selection CodeMirror adapter', () => {
         ]),
       { timeout: 5_000 },
     );
+    expect(parent.querySelector('.cm-tooltip-autocomplete')).toBeTruthy();
+    expect(parent.querySelector('.cm-completionIcon')).toBeNull();
     // CodeMirror deliberately ignores accidental acceptance immediately after a
     // completion opens. Wait past that interaction guard, independently of how
     // busy the test worker was while the completion source resolved.

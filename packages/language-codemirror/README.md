@@ -21,5 +21,8 @@ Hovering a Field shows its reflected type/nullability and hovering an operator e
 canonical Selection meaning. Reconfiguring the extension with another Entity discards the previous
 reflection immediately.
 
+The completion surface uses the host's `--popover`, `--border`, `--accent`, and related theme
+variables with neutral fallbacks, so Explorer can integrate it without adapter-specific CSS.
+
 Backspace is bound to CodeMirror's document command so deletion remains an ordinary transaction
 even while a completion popup and semantic marks are active.

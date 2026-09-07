@@ -110,10 +110,11 @@ semantic boundary.
    recovered-error contexts are covered. The static reflection matrix supplies Fields, types,
    nullability, enum values, and documentation; optional execution affordances may narrow offers
    without redefining semantic validity.
-3. `@ontahi/language-codemirror` projects those results into explicit completion, stable semantic
-   mark classes, and safe text-only hover DOM. Its Entity reflection is a reconfigurable facet, and
-   completion refresh reads the current facet rather than retaining an earlier Entity. Backspace
-   uses a CodeMirror document command, so popup and mark DOM cannot interrupt continuous deletion.
+3. `@ontahi/language-codemirror` projects those results into explicit host-themed completion,
+   stable semantic mark classes, and safe text-only hover DOM. Its Entity reflection is a
+   reconfigurable facet, and completion refresh reads the current facet rather than retaining an
+   earlier Entity. Backspace uses a CodeMirror document command, so popup and mark DOM cannot
+   interrupt continuous deletion.
 4. Explorer exposes the assistance on every reflected Entity Data page. Both the editor and the
    result state are Entity-keyed: switching from `TodoItem` to `Tag` removes old suggestions,
    diagnostics, rows, failures, and in-flight presentation immediately while retaining the normal

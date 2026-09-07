@@ -193,7 +193,51 @@ export const selectionExpressionHoverSource: HoverTooltipSource = (view, positio
     : null;
 };
 
-const selectionExpressionAssistanceTheme = EditorView.baseTheme({
+const selectionExpressionAssistanceTheme = EditorView.theme({
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    overflow: 'hidden',
+    padding: '0.25rem',
+    border: '1px solid hsl(var(--border, 137 14% 82%))',
+    borderRadius: '0.75rem',
+    backgroundColor: 'hsl(var(--popover, 0 0% 100%))',
+    color: 'hsl(var(--popover-foreground, 150 23% 11%))',
+    boxShadow: '0 12px 30px hsl(var(--foreground, 150 23% 11%) / 0.12)',
+  },
+  '.cm-tooltip-autocomplete > ul': {
+    minWidth: '16rem',
+    maxHeight: '15rem',
+    padding: '0.125rem',
+    fontFamily: 'inherit',
+  },
+  '.cm-tooltip-autocomplete > ul > li': {
+    display: 'flex',
+    minHeight: '2.25rem',
+    alignItems: 'center',
+    borderRadius: '0.5rem',
+    padding: '0.4rem 0.625rem',
+    lineHeight: '1.2',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    background: 'hsl(var(--accent, 132 22% 91%))',
+    color: 'hsl(var(--accent-foreground, 151 25% 20%))',
+  },
+  '.cm-completionLabel': {
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: '0.8125rem',
+    fontWeight: '600',
+  },
+  '.cm-completionDetail': {
+    marginLeft: 'auto',
+    paddingLeft: '1rem',
+    color: 'hsl(var(--muted-foreground, 145 9% 43%))',
+    fontSize: '0.6875rem',
+    fontStyle: 'normal',
+  },
+  '.cm-completionMatchedText': {
+    color: 'hsl(var(--primary, 154 43% 28%))',
+    fontWeight: '700',
+    textDecoration: 'none',
+  },
   '.cm-ontahi-semantic-field': {
     color: 'hsl(var(--primary))',
     fontWeight: '600',
@@ -250,7 +294,7 @@ export const selectionExpressionExtensions = (
       preventDefault: true,
     },
   ]),
-  autocompletion({ override: [selectionExpressionCompletionSource] }),
+  autocompletion({ override: [selectionExpressionCompletionSource], icons: false }),
   selectionExpressionSemanticHighlighting(entity),
   hoverTooltip(selectionExpressionHoverSource, { hideOnChange: true }),
   selectionExpressionAssistanceTheme,
