@@ -41,6 +41,7 @@
     "lint:fix": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --fix --max-warnings 0"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.0.0",
     "@codemirror/language": "^6.0.0",
     "@codemirror/lint": "^6.0.0",
     "@codemirror/state": "^6.0.0",

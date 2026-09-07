@@ -6,7 +6,7 @@ Canonical ID: `ontahi://plans/118d-projectional-selection-editor-experiment`
 
 Shapes: [Ontahí Semantic Interaction Language](../../atlas/items/semantic-interaction-language.md)
 
-Depends on: [118c Reflection-Powered Selection Language Service](./118c-reflection-powered-selection-language-service.md)
+Depends on: [118c Reflection-Powered Selection Language Service](../done/118c-reflection-powered-selection-language-service.md)
 
 ## Architectural Question
 

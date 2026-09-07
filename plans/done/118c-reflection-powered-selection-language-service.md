@@ -1,6 +1,6 @@
 # 118c. Reflection-Powered Selection Language Service
 
-Status: backlog
+Status: done
 
 Canonical ID: `ontahi://plans/118c-reflection-powered-selection-language-service`
 
@@ -10,7 +10,7 @@ Depends on: [118b Selection Expression Algebra](../done/118b-selection-expressio
 
 Related plan: [126 Ontahí Runtime Data Reflection](../research/126-ontahi-runtime-data-reflection.md)
 
-Followed by: [118d Projectional Selection Editor Experiment](./118d-projectional-selection-editor-experiment.md)
+Followed by: [118d Projectional Selection Editor Experiment](../backlog/118d-projectional-selection-editor-experiment.md)
 
 ## Architectural Question
 
@@ -69,26 +69,27 @@ completed = |     → true, false
 
 ## Acceptance Checklist
 
-- [ ] Empty/root context suggests only reflected Fields and valid root keywords for the selected
+- [x] Empty/root context suggests only reflected Fields and valid root keywords for the selected
       Entity.
-- [ ] Operator completion is filtered by the compatibility matrix established in Plan 118b.
-- [ ] Boolean and enum value completion inserts syntactically valid text and immediately lowers to
+- [x] Operator completion is filtered by the compatibility matrix established in Plan 118b.
+- [x] Boolean and enum value completion inserts syntactically valid text and immediately lowers to
       the expected Selection.
-- [ ] Suggestions never include Fields from a previously selected Entity after context changes.
-- [ ] Syntax and semantic highlighting remain distinguishable, including an identifier that parses
+- [x] Suggestions never include Fields from a previously selected Entity after context changes.
+- [x] Syntax and semantic highlighting remain distinguishable, including an identifier that parses
       but does not resolve.
-- [ ] Hover reports Field type/nullability and operator meaning without importing Explorer UI.
-- [ ] The same headless completion/diagnostic fixtures run without DOM or CodeMirror.
-- [ ] CodeMirror adapters contain only projection logic and map headless source offsets exactly.
-- [ ] Runtime access rejection remains visible as execution failure and is not cached as a language
+- [x] Hover reports Field type/nullability and operator meaning without importing Explorer UI.
+- [x] The same headless completion/diagnostic fixtures run without DOM or CodeMirror.
+- [x] CodeMirror adapters contain only projection logic and map headless source offsets exactly.
+- [x] Runtime access rejection remains visible as execution failure and is not cached as a language
       diagnostic.
-- [ ] No dynamic data query occurs for the supported Boolean/enum completion journey.
+- [x] No dynamic data query occurs for the supported Boolean/enum completion journey.
 
 ## Verification
 
 1. Cursor-position matrix tests at root, Field, operator, value, list, group, and recovered-error
    positions.
-2. Headless tests for reflection replacement and stale asynchronous results.
+2. Headless tests for reflection replacement plus CodeMirror tests for synchronous recomputation
+   from current editor state, avoiding an asynchronous stale-result channel.
 3. CodeMirror interaction tests for completion insertion, lint refresh, semantic marks, and hover.
 4. Explorer tests that switch Entity context and preserve the correct language-service instance.
 5. A Todo browser demonstration plus affected-package typecheck, lint, test, build, format,
@@ -99,3 +100,39 @@ completed = |     → true, false
 Plan 118d may start when all assistance is demonstrably derived from one recovered syntax tree and
 one semantic resolver, and when no editor or Explorer type has entered the canonical or headless
 semantic boundary.
+
+## Delivery Evidence
+
+1. `@ontahi/language` now exposes editor-neutral cursor context, completion, semantic
+   classification, and hover APIs. Completion context comes from the recovered Lezer tree and the
+   existing semantic resolver; no regular-expression parser or editor type entered the package.
+2. Root, Field, operator, scalar value, list, Boolean-composition, group, incomplete-token, and
+   recovered-error contexts are covered. The static reflection matrix supplies Fields, types,
+   nullability, enum values, and documentation; optional execution affordances may narrow offers
+   without redefining semantic validity.
+3. `@ontahi/language-codemirror` projects those results into explicit completion, stable semantic
+   mark classes, and safe text-only hover DOM. Its Entity reflection is a reconfigurable facet, and
+   completion refresh reads the current facet rather than retaining an earlier Entity.
+4. Explorer exposes the assistance on every reflected Entity Data page. Both the editor and the
+   result state are Entity-keyed: switching from `TodoItem` to `Tag` removes old suggestions,
+   diagnostics, rows, failures, and in-flight presentation immediately while retaining the normal
+   last-successful result behavior for an invalid draft within one Entity. Selection result rows
+   preserve the standard Explorer click and keyboard path into the instance workspace.
+5. A Todo browser journey proved `compl` → `completed`, operator and Boolean suggestions,
+   ordinary completion insertion, highlighting, lowering, and Graph Read execution. Switching to
+   `Tag` then offered `color` and no `completed`; this journey exposed and drove the fix for stale
+   Todo rows under the new Entity.
+6. Completion and hover consume only supplied static reflection. Their synchronous headless tests
+   have no transport, and the browser journey performed no runtime data lookup for assistance;
+   only the pre-existing Graph Read ran after a complete valid expression.
+7. `@ontahi/language` has 72 passing tests with 97.07% statements, 89.48% branches, 100% functions,
+   and 98.19% lines. `@ontahi/language-codemirror` has 10 passing tests with 100% statements,
+   functions, and lines plus 88.88% branches. Explorer has 177 passing tests and Todo has 63.
+8. All 13 package suites, repository typecheck and package build, format/lint, Changeset status,
+   Todo production build, and clean-room package artifact checks passed.
+
+## Closure / Evolution
+
+Completed on 2026-09-07. Static reflection now provides professional textual assistance without
+runtime population queries, editor-owned meaning, or authorization inference. Plan 118d can test
+whether one enum projectional widget materially improves on this ordinary completion baseline.

@@ -3,11 +3,15 @@ import {
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
 import { OntahiGraphProvider } from '@ontahi/react/graph';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExplorerEntityDetail } from '../contracts/index.js';
 
+import { ExplorerProvider } from './config.js';
+import { ExplorerEntityBrowser } from './entity-browser.js';
 import {
   ExplorerSelectionLanguageDataPanel,
   toSelectionLanguageEntityReflection,
@@ -36,6 +40,8 @@ const entity: ExplorerEntityDetail = {
   durableOperationCount: 0,
   taskCount: 0,
   diagram: 'graph TD',
+  identity: { name: 'refById', fields: ['id'] },
+  display: { primary: 'title' },
   fields: [
     { name: 'id', type: 'id', nullable: false },
     { name: 'title', type: 'string', nullable: false },
@@ -108,6 +114,10 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
       }),
     );
     renderPanel(request);
+
+    expect(
+      screen.getByText('Ctrl-Space for suggestions · hover a Field or operator for help.'),
+    ).toBeTruthy();
 
     await waitFor(() => expect(screen.getByText('Stable parser')).toBeTruthy());
     expect(request).toHaveBeenCalledOnce();
@@ -212,6 +222,124 @@ describe('ExplorerSelectionLanguageDataPanel', () => {
         },
       },
     });
+  });
+
+  it('resets draft and successful rows when the selected Entity changes', async () => {
+    let call = 0;
+    const request = vi.fn<RuntimeTransport['request']>(async envelope => {
+      call += 1;
+      return createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-read-result',
+        value:
+          call === 1
+            ? [{ id: 'todo-1', title: 'Stable parser', completed: false }]
+            : [{ id: 'tag-1', name: 'Important' }],
+      });
+    });
+    const rendered = renderPanel(request);
+    await screen.findByText('Stable parser');
+
+    const tag: ExplorerEntityDetail = {
+      ...entity,
+      name: 'Tag',
+      fieldCount: 2,
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+      ],
+      relations: [],
+    };
+    rendered.rerender(
+      <OntahiGraphProvider
+        runtime={{ name: 'test-runtime' }}
+        runtimeTransport={{ request }}
+        client={false}
+      >
+        <ExplorerSelectionLanguageDataPanel entity={tag} initialDocument='all' />
+      </OntahiGraphProvider>,
+    );
+
+    expect(screen.queryByText('Stable parser')).toBeNull();
+    expect(
+      (screen.getByLabelText('Selection expression for Tag') as HTMLTextAreaElement).value,
+    ).toBe('all');
+    await screen.findByText('Important');
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[0]).toMatchObject({
+      body: {
+        selection: {
+          entityName: 'Tag',
+          expression: { kind: 'all' },
+        },
+      },
+    });
+  });
+
+  it('opens a reflected instance workspace from a Selection result row', async () => {
+    const user = userEvent.setup();
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-read-result',
+        value: [{ id: 'todo-1', title: 'Stable parser', completed: false }],
+      }),
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OntahiGraphProvider
+          runtime={{ name: 'test-runtime' }}
+          runtimeTransport={{ request }}
+          reflectedEntityDataReader={{
+            readEntityData: vi.fn().mockResolvedValue({
+              entityName: entity.name,
+              columns: entity.fields,
+              rows: [],
+              page: 1,
+              pageSize: 25,
+              totalCount: 0,
+              hasPreviousPage: false,
+              hasNextPage: false,
+            }),
+          }}
+          client={false}
+        >
+          <ExplorerProvider basePath='/explorer'>
+            <ExplorerEntityBrowser
+              entities={[entity]}
+              operations={[]}
+              tasks={[]}
+              selectedEntityName={entity.name}
+              selectedTab='data'
+              renderDataPanel={({ entity: selectedEntity }) => (
+                <ExplorerSelectionLanguageDataPanel
+                  embedded
+                  entity={selectedEntity}
+                  initialDocument='completed = false'
+                />
+              )}
+            />
+          </ExplorerProvider>
+        </OntahiGraphProvider>
+      </QueryClientProvider>,
+    );
+
+    const row = await screen.findByRole('row', { name: /todo-1 Stable parser false/ });
+    await user.click(row);
+
+    expect(
+      screen.getByRole('complementary', { name: 'TodoItem instance Stable parser' }),
+    ).toBeTruthy();
+    await user.keyboard('{Escape}');
+    expect(
+      screen.queryByRole('complementary', { name: 'TodoItem instance Stable parser' }),
+    ).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(
+      screen.getByRole('complementary', { name: 'TodoItem instance Stable parser' }),
+    ).toBeTruthy();
   });
 
   it('renders protocol rejection only through the execution channel', async () => {
