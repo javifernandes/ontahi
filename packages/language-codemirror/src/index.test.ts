@@ -13,6 +13,8 @@ import { analyzeSelectionDocument } from '@ontahi/language';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  consoleExpressionExtensions,
+  consoleExpressionLinter,
   deriveSelectionFiniteValueProjections,
   deriveSelectionReferenceValueProjections,
   selectionExpressionCompletionSource,
@@ -991,5 +993,41 @@ describe('Selection CodeMirror adapter', () => {
 
     expect(await selectionExpressionHoverSource(view, 2, 1)).toBeNull();
     view.destroy();
+  });
+
+  it('reuses Selection parsing and completion inside a Console Query expression', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const source = 'TodoItem.where(comp).many()';
+    const position = source.indexOf('comp') + 'comp'.length;
+    const application = { entities: [TodoItem] };
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: position },
+        extensions: consoleExpressionExtensions(application),
+      }),
+    });
+
+    expect(syntaxTree(view.state).topNode.type.name).toBe('ConsoleDocument');
+    expect(consoleExpressionLinter(application)(view)).toEqual([
+      {
+        from: position,
+        to: position,
+        severity: 'error',
+        source: 'Ontahí syntax',
+        message: 'Expected a Selection operator after the Field name.',
+      },
+    ]);
+    expect(startCompletion(view)).toBe(true);
+    await vi.waitFor(() =>
+      expect(currentCompletions(view.state).map(completion => completion.label)).toEqual([
+        'completed',
+      ]),
+    );
+
+    view.destroy();
+    parent.remove();
   });
 });

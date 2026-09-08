@@ -1,4 +1,11 @@
 @top SelectionDocument { OrExpression? }
+@top ConsoleDocument { ConsoleExpression? }
+
+ConsoleExpression { GraphReadExpression }
+GraphReadExpression {
+  EntityName Dot Where OpenParen OrExpression CloseParen Dot Many OpenParen CloseParen
+}
+EntityName { Identifier }
 
 OrExpression { AndExpression (Or AndExpression)* }
 AndExpression { NotExpression (And NotExpression)* }
@@ -27,6 +34,8 @@ Is { @specialize<Identifier, "is"> }
 Null { @specialize<Identifier, "null"> }
 True { @specialize<Identifier, "true"> }
 False { @specialize<Identifier, "false"> }
+Where { @specialize<Identifier, "where"> }
+Many { @specialize<Identifier, "many"> }
 
 Equals { "=" }
 ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }
@@ -39,6 +48,7 @@ CloseParen { ")" }
 OpenBracket { "[" }
 CloseBracket { "]" }
 Comma { "," }
+Dot { "." }
 
 @tokens {
   Identifier { $[A-Za-z_] $[A-Za-z0-9_]* }

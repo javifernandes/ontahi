@@ -265,9 +265,24 @@ importers:
 
   packages/devtools:
     dependencies:
+      '@codemirror/commands':
+        specifier: ^6.0.0
+        version: 6.11.0
+      '@codemirror/state':
+        specifier: ^6.0.0
+        version: 6.7.4
+      '@codemirror/view':
+        specifier: ^6.0.0
+        version: 6.43.11
       '@ontahi/core':
         specifier: workspace:*
         version: link:../core
+      '@ontahi/language':
+        specifier: workspace:*
+        version: link:../language
+      '@ontahi/language-codemirror':
+        specifier: workspace:*
+        version: link:../language-codemirror
       react:
         specifier: ^18.3.0 || ^19.0.0
         version: 18.3.1

@@ -5,18 +5,21 @@ import { useState } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
 
+import type { OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { DevtoolsPanel } from './devtools-panel.js';
 import { styles } from './devtools-styles.js';
 import { OntahiMark } from './ontahi-mark.js';
 import { defaultDevtoolsPanelHeight } from './panel-resizer.js';
 
 export type OntahiDevtoolsProps = {
+  readonly console?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly initiallyOpen?: boolean;
   readonly runtimeTransport?: RuntimeTransport<any>;
 };
 
 export const OntahiDevtools = ({
+  console,
   diagnostics,
   initiallyOpen = false,
   runtimeTransport,
@@ -25,6 +28,7 @@ export const OntahiDevtools = ({
   const [height, setHeight] = useState(defaultDevtoolsPanelHeight);
   return open ? (
     <DevtoolsPanel
+      consoleOptions={console}
       diagnostics={diagnostics}
       runtimeTransport={runtimeTransport}
       height={height}

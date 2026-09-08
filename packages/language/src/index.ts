@@ -1,10 +1,13 @@
 import type { SyntaxNode, SyntaxNodeRef, Tree } from '@lezer/common';
 import {
+  isReferenceFieldDefinition,
   selectionAll,
   selectionAnd,
   selectionNone,
   selectionNot,
   selectionOr,
+  type AnyEntityDefinition,
+  type GraphReadRequestV1,
   type SelectionAst,
   type SelectionExpression,
   type SelectionPredicate,
@@ -195,6 +198,63 @@ export type SelectionLanguageHover = SelectionLanguageRange & {
   readonly detail: string;
   readonly documentation: string;
 };
+
+export type ConsoleLanguageApplicationReflection = {
+  readonly entities: readonly SelectionLanguageEntityReflection[];
+};
+
+export type ConsoleLanguageDiagnostic =
+  | SelectionLanguageDiagnostic
+  | (SelectionLanguageRange & {
+      readonly channel: 'syntax' | 'semantic';
+      readonly code: 'console.syntax.invalid' | 'console.semantic.unknown-entity';
+      readonly message: string;
+    });
+
+export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
+  readonly kind: 'graph-read';
+  readonly entity?: SelectionLanguageToken<'entity-name'>;
+  readonly where?: SelectionLanguageToken<'where-member'>;
+  readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
+  readonly selection?: SelectionExpressionSyntax;
+  readonly whereClose?: SelectionLanguageToken<'close-parenthesis'>;
+  readonly terminal?: SelectionLanguageToken<'many-member'>;
+  readonly terminalOpen?: SelectionLanguageToken<'open-parenthesis'>;
+  readonly terminalClose?: SelectionLanguageToken<'close-parenthesis'>;
+};
+
+export type ConsoleDocumentSyntax = SelectionLanguageRange & {
+  readonly kind: 'console-document';
+  readonly expression?: ConsoleGraphReadSyntax;
+};
+
+export type ConsoleDocumentParseResult = {
+  readonly syntax: ConsoleDocumentSyntax;
+  readonly syntaxDiagnostics: readonly ConsoleLanguageDiagnostic[];
+};
+
+export type ConsoleDocumentAnalysis = ConsoleDocumentParseResult & {
+  readonly semanticDiagnostics: readonly ConsoleLanguageDiagnostic[];
+  readonly request?: GraphReadRequestV1;
+};
+
+export type ConsoleDocumentAnalysisOptions = {
+  readonly limit?: number;
+};
+
+export type ConsoleLanguageCompletionItem = {
+  readonly label: string;
+  readonly apply: string;
+  readonly kind: SelectionLanguageCompletionItem['kind'] | 'entity' | 'member';
+  readonly detail: string;
+};
+
+export type ConsoleLanguageCompletionResult = SelectionLanguageRange & {
+  readonly items: readonly ConsoleLanguageCompletionItem[];
+};
+
+const selectionDocumentParser = parser.configure({ top: 'SelectionDocument' });
+const consoleDocumentParser = parser.configure({ top: 'ConsoleDocument' });
 
 const rangeOf = (node: SyntaxNode | SyntaxNodeRef): SelectionLanguageRange => ({
   from: node.from,
@@ -555,7 +615,7 @@ const syntaxDiagnosticsFromTree = (
 };
 
 export const parseSelectionDocument = (document: string): SelectionDocumentParseResult => {
-  const tree = parser.parse(document);
+  const tree = selectionDocumentParser.parse(document);
   const syntax = syntaxFromTree(document, tree);
   return {
     syntax,
@@ -858,6 +918,289 @@ export const analyzeSelectionDocument = <TEntityName extends string>(
         }
       : {}),
   };
+};
+
+export const reflectSelectionLanguageEntity = <TEntity extends AnyEntityDefinition>(
+  entity: TEntity,
+): SelectionLanguageEntityReflection<TEntity['name']> => ({
+  name: entity.name,
+  fields: Object.entries(entity.fields).map(([name, definition]) => {
+    const reference = isReferenceFieldDefinition(definition)
+      ? (() => {
+          const target = definition.target;
+          const identityName = target.identityLocatorName;
+          const identity = identityName ? target.refLocators[identityName] : undefined;
+          const identityFields = identity?.fields;
+          return {
+            entityName: target.name,
+            ...(identityName && identityFields
+              ? { identity: { name: identityName, fields: identityFields } }
+              : {}),
+          };
+        })()
+      : undefined;
+    return {
+      name,
+      type: definition.fieldType,
+      nullable: definition.nullable === true,
+      ...(definition.valueType ? { valueType: definition.valueType } : {}),
+      ...(definition.enumValues ? { enumValues: definition.enumValues } : {}),
+      ...(reference ? { reference } : {}),
+      ...(definition.description ? { documentation: definition.description } : {}),
+    };
+  }),
+  relations: Object.keys(entity.relations).map(name => ({ name })),
+});
+
+const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyntax => {
+  const consoleExpression = tree.topNode.getChild('ConsoleExpression');
+  const graphRead = consoleExpression?.getChild('GraphReadExpression');
+  if (!graphRead) {
+    return { kind: 'console-document', from: 0, to: document.length };
+  }
+
+  const opens = graphRead.getChildren('OpenParen');
+  const closes = graphRead.getChildren('CloseParen');
+  return {
+    kind: 'console-document',
+    from: 0,
+    to: document.length,
+    expression: {
+      kind: 'graph-read',
+      ...rangeOf(graphRead),
+      entity: tokenOf('entity-name', graphRead.getChild('EntityName'), document),
+      where: tokenOf('where-member', graphRead.getChild('Where'), document),
+      whereOpen: tokenOf('open-parenthesis', opens[0] ?? null, document),
+      selection: expressionSyntax(graphRead.getChild('OrExpression'), document),
+      whereClose: tokenOf('close-parenthesis', closes[0] ?? null, document),
+      terminal: tokenOf('many-member', graphRead.getChild('Many'), document),
+      terminalOpen: tokenOf('open-parenthesis', opens[1] ?? null, document),
+      terminalClose: tokenOf('close-parenthesis', closes[1] ?? null, document),
+    },
+  };
+};
+
+const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
+  const expression = syntax.expression;
+  if (!expression?.entity) return 'Expected an Entity name to begin the Console expression.';
+  if (!expression.where) return `Expected .where(...) after ${expression.entity.text}.`;
+  if (!expression.whereOpen) return 'Expected "(" after .where.';
+  if (!expression.whereClose) return 'Expected ")" to close the Selection expression.';
+  if (!expression.terminal) return 'Expected .many() after the Selection expression.';
+  if (!expression.terminalOpen || !expression.terminalClose) {
+    return 'Expected an empty argument list after .many.';
+  }
+  return 'The Console expression is invalid.';
+};
+
+const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
+  const expression = syntax.expression;
+  return Boolean(
+    expression?.entity &&
+    expression.where &&
+    expression.whereOpen &&
+    expression.whereClose &&
+    expression.terminal &&
+    expression.terminalOpen &&
+    expression.terminalClose,
+  );
+};
+
+const firstErrorRange = (tree: Tree): SelectionLanguageRange | undefined => {
+  let error: SelectionLanguageRange | undefined;
+  tree.iterate({
+    enter(node) {
+      if (!error && node.type.isError) error = rangeOf(node);
+    },
+  });
+  return error;
+};
+
+export const parseConsoleDocument = (document: string): ConsoleDocumentParseResult => {
+  const tree = consoleDocumentParser.parse(document);
+  const syntax = consoleSyntaxFromTree(document, tree);
+  if (document.trim().length === 0) return { syntax, syntaxDiagnostics: [] };
+
+  const error = firstErrorRange(tree);
+  const invalidStrings = invalidStringRanges({
+    kind: 'selection-document',
+    from: 0,
+    to: document.length,
+    expression: syntax.expression?.selection,
+  });
+  const syntaxDiagnostics: ConsoleLanguageDiagnostic[] = invalidStrings.map(range => ({
+    channel: 'syntax',
+    code: 'selection.syntax.invalid',
+    message: 'String literals must use valid JSON escaping.',
+    ...range,
+  }));
+
+  if (error) {
+    const selectionSyntax: SelectionDocumentSyntax = {
+      kind: 'selection-document',
+      from: 0,
+      to: document.length,
+      expression: syntax.expression?.selection,
+    };
+    syntaxDiagnostics.unshift({
+      channel: 'syntax',
+      code: consoleStructureComplete(syntax)
+        ? 'selection.syntax.invalid'
+        : 'console.syntax.invalid',
+      message: consoleStructureComplete(syntax)
+        ? syntaxDiagnosticMessage(document, selectionSyntax)
+        : consoleStructureDiagnosticMessage(syntax),
+      ...error,
+    });
+  }
+
+  return { syntax, syntaxDiagnostics };
+};
+
+export const analyzeConsoleDocument = (
+  document: string,
+  application: ConsoleLanguageApplicationReflection,
+  options: ConsoleDocumentAnalysisOptions = {},
+): ConsoleDocumentAnalysis => {
+  const parsed = parseConsoleDocument(document);
+  const expression = parsed.syntax.expression;
+  if (parsed.syntaxDiagnostics.length > 0 || !expression?.entity || !expression.selection) {
+    return { ...parsed, semanticDiagnostics: [] };
+  }
+
+  const entity = application.entities.find(candidate => candidate.name === expression.entity?.text);
+  if (!entity) {
+    return {
+      ...parsed,
+      semanticDiagnostics: [
+        {
+          channel: 'semantic',
+          code: 'console.semantic.unknown-entity',
+          message: `Unknown Entity ${expression.entity.text}.`,
+          from: expression.entity.from,
+          to: expression.entity.to,
+        },
+      ],
+    };
+  }
+
+  const resolved = resolveExpression(expression.selection, entity);
+  return {
+    ...parsed,
+    semanticDiagnostics: resolved.diagnostics,
+    ...(resolved.expression && resolved.diagnostics.length === 0
+      ? {
+          request: {
+            version: 1,
+            kind: 'graph-read',
+            mode: 'run',
+            selection: {
+              kind: 'selection',
+              entityName: entity.name,
+              expression: resolved.expression,
+            },
+            orderBy: [],
+            limit: options.limit ?? 25,
+            cardinality: 'many',
+          } satisfies GraphReadRequestV1,
+        }
+      : {}),
+  };
+};
+
+const completionWordRange = (document: string, position: number): SelectionLanguageRange => {
+  let from = position;
+  while (from > 0 && /[A-Za-z0-9_]/.test(document[from - 1]!)) from -= 1;
+  let to = position;
+  while (to < document.length && /[A-Za-z0-9_]/.test(document[to]!)) to += 1;
+  return { from, to };
+};
+
+export const completeConsoleDocument = (
+  document: string,
+  position: number,
+  application: ConsoleLanguageApplicationReflection,
+): ConsoleLanguageCompletionResult => {
+  const safePosition = Math.max(0, Math.min(position, document.length));
+  const syntax = parseConsoleDocument(document).syntax.expression;
+  const rootPrefix = document.slice(0, safePosition);
+  if (!rootPrefix.includes('.') && /^\s*[A-Za-z0-9_]*$/.test(rootPrefix)) {
+    const range = completionWordRange(document, safePosition);
+    return {
+      ...range,
+      items: application.entities.map(entity => ({
+        label: entity.name,
+        apply: entity.name,
+        kind: 'entity',
+        detail: 'Entity',
+      })),
+    };
+  }
+
+  const entity = application.entities.find(candidate => candidate.name === syntax?.entity?.text);
+  const selectionFrom = syntax?.whereOpen?.to;
+  const selectionTo = syntax?.whereClose?.from;
+  if (
+    entity &&
+    selectionFrom !== undefined &&
+    safePosition >= selectionFrom &&
+    (selectionTo === undefined || safePosition <= selectionTo)
+  ) {
+    const end = selectionTo ?? document.length;
+    const completion = completeSelectionDocument(
+      document.slice(selectionFrom, end),
+      safePosition - selectionFrom,
+      entity,
+    );
+    return {
+      from: selectionFrom + completion.from,
+      to: selectionFrom + completion.to,
+      items: completion.items,
+    };
+  }
+
+  const range = completionWordRange(document, safePosition);
+  const memberPrefix = document.slice(range.from, safePosition);
+  if (
+    syntax?.entity &&
+    !syntax.where &&
+    document.slice(syntax.entity.to, range.from).includes('.')
+  ) {
+    return {
+      ...range,
+      items: (
+        [
+          {
+            label: 'where',
+            apply: 'where(',
+            kind: 'member',
+            detail: 'Selection',
+          },
+        ] satisfies ConsoleLanguageCompletionItem[]
+      ).filter(item => item.label.startsWith(memberPrefix)),
+    };
+  }
+  if (
+    syntax?.whereClose &&
+    !syntax.terminal &&
+    document.slice(syntax.whereClose.to, range.from).includes('.')
+  ) {
+    return {
+      ...range,
+      items: (
+        [
+          {
+            label: 'many',
+            apply: 'many()',
+            kind: 'member',
+            detail: 'Graph Read terminal',
+          },
+        ] satisfies ConsoleLanguageCompletionItem[]
+      ).filter(item => item.label.startsWith(memberPrefix)),
+    };
+  }
+
+  return { ...range, items: [] };
 };
 
 const operatorDocumentation: Record<

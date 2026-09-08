@@ -14,6 +14,7 @@ import {
   buildActivityEntries,
   matchesFilter,
 } from './activity-model.js';
+import { ConsolePanel, type OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { styles } from './devtools-styles.js';
 import { ExchangeDetail } from './exchange-detail.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
@@ -21,6 +22,7 @@ import { PanelResizer } from './panel-resizer.js';
 import { RuntimeTransportSettings } from './runtime-transport-settings.js';
 
 export type DevtoolsPanelProps = {
+  readonly consoleOptions?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly runtimeTransport?: RuntimeTransport<any>;
   readonly height: number;
@@ -29,6 +31,7 @@ export type DevtoolsPanelProps = {
 };
 
 export const DevtoolsPanel = ({
+  consoleOptions,
   diagnostics,
   runtimeTransport,
   height,
@@ -40,7 +43,7 @@ export const DevtoolsPanel = ({
     diagnostics.inspect,
     diagnostics.inspect,
   );
-  const [view, setView] = useState<'activity' | 'settings'>('activity');
+  const [view, setView] = useState<'activity' | 'console' | 'settings'>('activity');
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
   const configurableRuntimeTransport =
@@ -95,6 +98,16 @@ export const DevtoolsPanel = ({
           >
             Activity <span style={styles.count}>{filteredActivities.length}</span>
           </button>
+          {consoleOptions ? (
+            <button
+              type='button'
+              style={{ ...styles.view, ...(view === 'console' ? styles.activeView : {}) }}
+              onClick={() => setView('console')}
+              aria-pressed={view === 'console'}
+            >
+              Console
+            </button>
+          ) : null}
           {configurableRuntimeTransport ? (
             <button
               type='button'
@@ -107,9 +120,11 @@ export const DevtoolsPanel = ({
           ) : null}
         </nav>
         <span style={styles.headerActions}>
-          <button type='button' style={styles.subtleButton} onClick={clear}>
-            Clear
-          </button>
+          {view === 'activity' ? (
+            <button type='button' style={styles.subtleButton} onClick={clear}>
+              Clear
+            </button>
+          ) : null}
           <button
             type='button'
             style={styles.subtleButton}
@@ -120,7 +135,9 @@ export const DevtoolsPanel = ({
           </button>
         </span>
       </header>
-      {view === 'settings' && configurableRuntimeTransport ? (
+      {view === 'console' && consoleOptions ? (
+        <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />
+      ) : view === 'settings' && configurableRuntimeTransport ? (
         <section style={styles.settingsPage} aria-label='Devtools settings'>
           <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
         </section>

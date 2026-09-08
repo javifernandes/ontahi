@@ -92,14 +92,18 @@ Data-table experience, not the language. [[ontahi.source-code-organization.devto
 Devtools]] may later use the same service to explain or author semantic payloads, but runtime
 inspection does not become language ownership.
 
-The proposed Devtools Console is the design gate for a containing interaction expression that can
-resolve to Graph Read, Graph Command, or Operation intent. The source has no leading `read`,
-`command`, or `invoke` discriminator: semantic resolution infers the family from the reflected root
-symbol, selected members, arguments, and terminal meaning. The document may own recoverable call and
-member syntax, but valid meaning must lower to the existing family-owned Query/Selection, Command,
-and Operation request representations. It must not become a universal Console AST or a new Runtime
-Protocol family. Its headless services should remain reusable by a terminal CLI even though the
-first host is React Devtools.
+The Devtools Console is the design gate for a containing interaction expression that can resolve
+Graph Read, Graph Command, or Operation intent without leading family keywords. Its first walking
+skeleton uses a second Lezer top rule around the exact existing Selection productions:
+`TodoItem.where(completed = false).many()`. The root Entity and terminal resolve the family, while
+the nested predicate keeps the established Selection syntax, diagnostics, completions, reflection,
+and lowering. The valid result is the existing `graph.read` body.
+
+Future expressions may add recoverable member and argument syntax, but valid meaning must continue
+to lower to the existing family-owned Query/Selection, Command, and Operation request
+representations. The document must not become a universal Console AST, hide family selection in UI
+state, or define a new Runtime Protocol family. Its headless services remain reusable by a terminal
+CLI even though the first host is React Devtools.
 
 ## Reflection And Assistance
 

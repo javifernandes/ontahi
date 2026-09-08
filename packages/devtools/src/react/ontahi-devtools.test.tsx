@@ -1,11 +1,13 @@
+import { entity, field } from '@ontahi/core/data-graph';
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeTransportRouter,
   createRuntimeProtocolRequest,
   createRuntimeProtocolResponse,
+  type RuntimeProtocolRequestEnvelope,
 } from '@ontahi/core/runtime/protocol';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createOntahiDiagnostics } from '../diagnostics.js';
 import { instrumentRuntimeTransport } from '../instrument-runtime-transport.js';
@@ -13,6 +15,25 @@ import { instrumentRuntimeTransport } from '../instrument-runtime-transport.js';
 import { OntahiDevtools } from './ontahi-devtools.js';
 
 const uiTestTimeoutMs = 15_000;
+const originalRangeGetClientRects = Range.prototype.getClientRects;
+
+beforeAll(() => {
+  Object.defineProperty(Range.prototype, 'getClientRects', {
+    configurable: true,
+    value: () => [] as unknown as DOMRectList,
+  });
+});
+
+afterAll(() => {
+  if (originalRangeGetClientRects) {
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: originalRangeGetClientRects,
+    });
+  } else {
+    Reflect.deleteProperty(Range.prototype, 'getClientRects');
+  }
+});
 
 describe('OntahiDevtools', () => {
   it(
@@ -181,6 +202,83 @@ describe('OntahiDevtools', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Activity/ }));
       expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'executes a keyword-free Selection expression from the Console through Runtime Transport',
+    async () => {
+      const diagnostics = createOntahiDiagnostics({
+        capturePayloads: true,
+        redact: value => value,
+      });
+      const TodoItem = entity('TodoItem', {
+        id: field.id(),
+        title: field.string(),
+        completed: field.boolean(),
+      });
+      const request = vi.fn().mockImplementation(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-read-result',
+          value: [{ id: 'todo-1', title: 'Try semantic Console', completed: false }],
+        }),
+      );
+      const runtimeTransport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: { request },
+      });
+
+      render(
+        <OntahiDevtools
+          console={{
+            entities: [TodoItem],
+            initialDocument: 'TodoItem.where(completed = false).many()',
+          }}
+          diagnostics={diagnostics}
+          initiallyOpen
+          runtimeTransport={runtimeTransport}
+        />,
+      );
+
+      const panel = within(
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Console' }));
+      expect(panel.getByRole('textbox', { name: 'Ontahí Console expression' }).textContent).toBe(
+        'TodoItem.where(completed = false).many()',
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+
+      expect(await panel.findByText('\"Try semantic Console\"')).toBeTruthy();
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        family: 'graph.read',
+        body: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'TodoItem',
+            expression: {
+              kind: 'predicate',
+              fieldName: 'completed',
+              operator: 'eq',
+              value: false,
+            },
+          },
+          orderBy: [],
+          limit: 25,
+          cardinality: 'many',
+        },
+      });
+
+      fireEvent.click(panel.getByRole('button', { name: /Activity/ }));
+      expect(await panel.findAllByText('graph.read')).not.toHaveLength(0);
+      fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
     },
     uiTestTimeoutMs,
   );

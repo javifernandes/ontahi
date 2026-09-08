@@ -63,3 +63,25 @@ capability. Dynamic values, statistics, and authority discovery remain outside t
 
 `@ontahi/language/lezer` exposes the generated parser for editor adapters. Lezer syntax nodes are
 not the package's semantic Selection model.
+
+## Semantic Console Walking Skeleton
+
+The first Console document embeds that exact Selection grammar inside a self-contained,
+keyword-free Query expression:
+
+```ts
+import { analyzeConsoleDocument, reflectSelectionLanguageEntity } from '@ontahi/language';
+
+const analysis = analyzeConsoleDocument('TodoItem.where(completed = false).many()', {
+  entities: [reflectSelectionLanguageEntity(TodoItem)],
+});
+
+analysis.request;
+// canonical graph.read body, or undefined while syntax/semantics are invalid
+```
+
+The shared Lezer grammar exposes independent `SelectionDocument` and `ConsoleDocument` top rules.
+The Console layer resolves the Entity and terminal, while the nested expression keeps the existing
+Selection syntax, diagnostics, completion, reflection, and lowering. This walking skeleton supports
+only `.where(...).many()` Graph Reads; additional Query members, Commands, and Operations extend the
+same expression language rather than adding leading family keywords.

@@ -9,11 +9,16 @@ semantic projection, body JSON, and its complete Runtime Protocol envelope. It d
 `fetch`, `WebSocket`, or browser globals, and it does not persist or upload diagnostic data.
 
 ```tsx
+import { entity, field } from '@ontahi/core/data-graph';
 import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
 import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
 import { createFetchRuntimeTransport, createWebSocketRuntimeTransport } from '@ontahi/react/graph';
 
+const TodoItem = entity('TodoItem', {
+  id: field.id(),
+  completed: field.boolean(),
+});
 const diagnostics = createOntahiDiagnostics();
 const runtimeTransport = createRuntimeTransportRouter({
   transports: {
@@ -38,7 +43,14 @@ const runtimeTransport = createRuntimeTransportRouter({
   },
 });
 
-<OntahiDevtools diagnostics={diagnostics} runtimeTransport={runtimeTransport} />;
+<OntahiDevtools
+  console={{
+    entities: [TodoItem],
+    initialDocument: 'TodoItem.where(completed = false).many()',
+  }}
+  diagnostics={diagnostics}
+  runtimeTransport={runtimeTransport}
+/>;
 ```
 
 `createRuntimeTransportRouter(...)` owns effective routing, capability validation, inspection, and
@@ -59,6 +71,12 @@ the complete Runtime Protocol evidence available when transport-level inspection
 The React surface opens as a full-width bottom drawer at a compact default height. Drag its top
 handle, or focus the handle and use the arrow keys, to resize it while the application remains
 visible above.
+
+When the host supplies Console Entity definitions, Devtools adds a Console panel backed by the
+shared Ontahí Lezer and CodeMirror language packages. The first walking skeleton accepts
+`Entity.where(Selection).many()`, lowers it to the canonical Graph Read body, and sends it through
+the same configured Runtime Transport as application traffic. Submission is explicit through Run
+or `Mod-Enter`; results remain in the panel and the exchange appears in Activity.
 
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 

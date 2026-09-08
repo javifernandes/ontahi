@@ -24,16 +24,21 @@ import {
 } from '@codemirror/view';
 import { styleTags, tags } from '@lezer/highlight';
 import {
+  analyzeConsoleDocument,
   analyzeSelectionDocument,
   classifySelectionDocument,
+  completeConsoleDocument,
   completeSelectionDocument,
   hoverSelectionDocument,
+  type ConsoleDocumentAnalysis,
+  type ConsoleLanguageApplicationReflection,
+  type ConsoleLanguageCompletionItem,
   type SelectionDocumentAnalysis,
   type SelectionLanguageCompletionItem,
   type SelectionLanguageEntityReflection,
   type SelectionLanguageSemanticClassification,
 } from '@ontahi/language';
-import { selectionDocumentParser } from '@ontahi/language/lezer';
+import { consoleDocumentParser, selectionDocumentParser } from '@ontahi/language/lezer';
 
 import { selectionFiniteValueProjectionExtensions } from './finite-value-projection.js';
 import {
@@ -61,7 +66,7 @@ export {
   type SelectionReferenceValueSearchRequest,
 } from './reference-value-projection.js';
 
-const parser = selectionDocumentParser.configure({
+const selectionParser = selectionDocumentParser.configure({
   props: [
     styleTags({
       FieldName: tags.variableName,
@@ -77,15 +82,42 @@ const parser = selectionDocumentParser.configure({
   ],
 });
 
-export const selectionExpressionLanguage = LRLanguage.define({ parser });
+export const selectionExpressionLanguage = LRLanguage.define({ parser: selectionParser });
 
 export const selectionExpressionLanguageSupport = () =>
   new LanguageSupport(selectionExpressionLanguage);
 
-const completionType = (kind: SelectionLanguageCompletionItem['kind']): Completion['type'] =>
+const consoleParser = consoleDocumentParser.configure({
+  props: [
+    styleTags({
+      EntityName: tags.typeName,
+      'Where Many': tags.function(tags.propertyName),
+      FieldName: tags.variableName,
+      'Equals ComparisonOperator In Is': tags.operator,
+      'And Or Not': tags.keyword,
+      'All None': tags.atom,
+      'True False': tags.bool,
+      Null: tags.null,
+      NumberLiteral: tags.number,
+      StringLiteral: tags.string,
+      'Dot OpenParen CloseParen OpenBracket CloseBracket Comma': tags.punctuation,
+    }),
+  ],
+});
+
+export const consoleExpressionLanguage = LRLanguage.define({ parser: consoleParser });
+
+export const consoleExpressionLanguageSupport = () =>
+  new LanguageSupport(consoleExpressionLanguage);
+
+const completionType = (
+  kind: SelectionLanguageCompletionItem['kind'] | ConsoleLanguageCompletionItem['kind'],
+): Completion['type'] =>
   ({
+    entity: 'type',
     field: 'variable',
     keyword: 'keyword',
+    member: 'method',
     operator: 'operator',
     value: 'constant',
     punctuation: 'text',
@@ -121,6 +153,28 @@ export const selectionExpressionCompletionSource: CompletionSource = context => 
   const entity = context.state.facet(selectionExpressionEntity);
   return entity ? completionResult(context.state.doc.toString(), context.pos, entity) : null;
 };
+
+const consoleCompletionSource =
+  (application: ConsoleLanguageApplicationReflection): CompletionSource =>
+  context => {
+    const completion = completeConsoleDocument(
+      context.state.doc.toString(),
+      context.pos,
+      application,
+    );
+    if (completion.items.length === 0) return null;
+    return {
+      from: completion.from,
+      to: completion.to,
+      options: completion.items.map(item => ({
+        label: item.label,
+        apply: item.apply,
+        type: completionType(item.kind),
+        detail: item.detail,
+        ...(item.kind === 'entity' || item.kind === 'field' ? { boost: 10 } : {}),
+      })),
+    };
+  };
 
 const semanticClassName: Record<SelectionLanguageSemanticClassification['kind'], string> = {
   field: 'cm-ontahi-semantic-field',
@@ -286,7 +340,7 @@ const selectionExpressionAssistanceTheme = EditorView.theme({
 });
 
 export const toCodeMirrorDiagnostics = (
-  analysis: SelectionDocumentAnalysis,
+  analysis: SelectionDocumentAnalysis | ConsoleDocumentAnalysis,
 ): readonly Diagnostic[] =>
   [...analysis.syntaxDiagnostics, ...analysis.semanticDiagnostics].map(diagnostic => ({
     from: diagnostic.from,
@@ -333,4 +387,46 @@ export const selectionExpressionExtensions = (
   hoverTooltip(selectionExpressionHoverSource, { hideOnChange: true }),
   selectionExpressionAssistanceTheme,
   linter(selectionExpressionLinter(entity), { delay: 0 }),
+];
+
+export type ConsoleExpressionExtensionOptions = {
+  readonly limit?: number;
+  readonly run?: () => void;
+};
+
+export const consoleExpressionLinter =
+  (
+    application: ConsoleLanguageApplicationReflection,
+    options: ConsoleExpressionExtensionOptions = {},
+  ): LintSource =>
+  view =>
+    toCodeMirrorDiagnostics(
+      analyzeConsoleDocument(view.state.doc.toString(), application, { limit: options.limit }),
+    );
+
+export const consoleExpressionExtensions = (
+  application: ConsoleLanguageApplicationReflection,
+  options: ConsoleExpressionExtensionOptions = {},
+): readonly Extension[] => [
+  consoleExpressionLanguageSupport(),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  ...(options.run
+    ? [
+        keymap.of([
+          {
+            key: 'Mod-Enter',
+            run: () => {
+              options.run?.();
+              return true;
+            },
+          },
+        ]),
+      ]
+    : []),
+  autocompletion({
+    override: [consoleCompletionSource(application)],
+    icons: false,
+  }),
+  selectionExpressionAssistanceTheme,
+  linter(consoleExpressionLinter(application, options), { delay: 0 }),
 ];
