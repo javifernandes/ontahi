@@ -18,8 +18,62 @@ env:
   PNPM_VERSION: '10.33.0'
 
 jobs:
+  changes:
+    name: Detect framework changes
+    runs-on: ubuntu-latest
+    outputs:
+      framework: ${{ steps.scope.outputs.framework }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "framework=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$HEAD_SHA^"
+          fi
+
+          framework=false
+          website_manifest_changed=false
+          lockfile_changed=false
+
+          while IFS= read -r path; do
+            case "$path" in
+              apps/www/package.json)
+                website_manifest_changed=true
+                ;;
+              apps/www/*|*.md|docs/*|books/*|.github/workflows/pages.yml)
+                ;;
+              pnpm-lock.yaml)
+                lockfile_changed=true
+                ;;
+              *)
+                framework=true
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          if [[ "$lockfile_changed" == "true" && "$website_manifest_changed" != "true" ]]; then
+            framework=true
+          fi
+
+          echo "framework=$framework" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Quality and package artifacts
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,7 +99,10 @@ jobs:
       - name: Validate Changesets state
         # The generated version PR has already consumed its changesets into package versions and
         # changelogs. Every source PR and direct main run must still carry a valid changeset.
-        if: github.head_ref != 'changeset-release/main' && github.ref_name != 'changeset-release/main'
+        if: >-
+          needs.changes.outputs.framework == 'true' &&
+          github.head_ref != 'changeset-release/main' &&
+          github.ref_name != 'changeset-release/main'
         run: pnpm exec changeset status --since=origin/main
 
       - name: Validate generated release pull request
@@ -58,22 +115,33 @@ jobs:
         run: pnpm format:check
 
       - name: Lint
-        run: pnpm lint
+        run: >-
+          ${{ needs.changes.outputs.framework == 'true'
+          && 'pnpm lint'
+          || 'pnpm --filter @ontahi/www lint' }}
 
       - name: Build framework and website
-        run: pnpm build
+        run: >-
+          ${{ needs.changes.outputs.framework == 'true'
+          && 'pnpm build'
+          || 'pnpm --filter @ontahi/www build' }}
 
       - name: Typecheck
+        if: needs.changes.outputs.framework == 'true'
         run: pnpm typecheck
 
       - name: Build Todo Express example
+        if: needs.changes.outputs.framework == 'true'
         run: pnpm todo:build
 
       - name: Verify publishable artifacts
+        if: needs.changes.outputs.framework == 'true'
         run: pnpm verify:artifacts -- --skip-build
 
   tests:
     name: Tests (Node ${{ matrix.node-version }})
+    needs: changes
+    if: needs.changes.outputs.framework == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -153,7 +221,7 @@ jobs:
     if: >-
       always() && github.event_name == 'workflow_dispatch' &&
       github.ref_name == 'changeset-release/main'
-    needs: [quality, tests]
+    needs: [changes, quality, tests]
     runs-on: ubuntu-latest
     permissions:
       contents: read

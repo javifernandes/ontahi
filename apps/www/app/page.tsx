@@ -70,6 +70,7 @@ export default function HomePage() {
               <span>Ontahí</span>
             </a>
             <nav className='site-nav' aria-label='Primary'>
+              <a href='/learn/'>Learn</a>
               <a href={essayUrl}>Essay</a>
               <a href={repoUrl}>GitHub</a>
             </nav>
