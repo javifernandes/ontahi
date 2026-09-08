@@ -366,14 +366,16 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 
 1. The existing Lezer grammar now exposes independent `SelectionDocument` and `ConsoleDocument`
    top rules while sharing the exact `OrExpression` Selection productions.
-2. `@ontahi/language` parses and resolves the first self-contained keyword-free expression,
-   `Entity.where(Selection).many()`, and lowers it to a canonical `GraphReadRequestV1`.
+2. `@ontahi/language` parses and resolves the first self-contained keyword-free expressions,
+   `Entity.where(Selection).many()` and exact-cardinality `Entity.where(Selection).one()`, and lowers
+   them to canonical `GraphReadRequestV1` bodies.
 3. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
 4. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and
    `Mod-Enter` execution extensions without copying Selection semantics.
 5. `@ontahi/devtools/react` exposes an opt-in Console panel that submits the lowered Read through
-   the configured Runtime Transport, renders the result, and produces ordinary Activity evidence.
+   the configured Runtime Transport, renders the result through shared Visual or JSON projections,
+   and produces ordinary Activity evidence.
 6. Todo supplies its generated Entity schemas and starts with
    `TodoItem.where(completed = false).many()` as the browser proof.
 7. Named Views, other Query terminals/members, source history, Commands, Operations, reflection

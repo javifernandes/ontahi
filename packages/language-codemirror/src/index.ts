@@ -91,7 +91,7 @@ const consoleParser = consoleDocumentParser.configure({
   props: [
     styleTags({
       EntityName: tags.typeName,
-      'Where Many': tags.function(tags.propertyName),
+      'Where One Many': tags.function(tags.propertyName),
       FieldName: tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,

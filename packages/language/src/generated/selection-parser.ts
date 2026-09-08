@@ -2,33 +2,34 @@
 import { LRParser } from '@lezer/lr';
 const spec_Identifier = {
   __proto__: null,
-  not: 108,
-  all: 110,
-  none: 112,
-  true: 116,
-  false: 118,
-  in: 120,
-  is: 128,
-  null: 130,
-  and: 144,
-  or: 146,
-  where: 150,
-  many: 152,
+  not: 112,
+  all: 114,
+  none: 116,
+  true: 120,
+  false: 122,
+  in: 124,
+  is: 132,
+  null: 134,
+  and: 148,
+  or: 150,
+  where: 154,
+  one: 156,
+  many: 158,
 };
 export const parser = LRParser.deserialize({
   version: 14,
   states:
-    "+dQVQPOOQhQPOOOOQO'#Ca'#CaOOQO'#D]'#D]OVQPO'#C`OOQO'#Cd'#CdOOQO'#Ce'#CeOOQO'#Ch'#ChOmQPO'#CgOOQO'#Cf'#CfOOQO'#DQ'#DQOVQPO'#DPOOQO'#Cc'#CcOOQO'#C`'#C`O!UQPO'#C_O!dQPO'#C^QOQPOOOOQO'#DX'#DXO!oQPO'#DWOOQO'#DV'#DVOOQO-E7Z-E7ZOOQO,58z,58zOOQO'#Ci'#CiO!tQPO,59ROOQO'#Cq'#CqO#SQPO,59[OOQO'#Cw'#CwO#XQPO,59bOOQO'#C{'#C{OOQO'#C|'#C|OOQO'#C}'#C}OOQO'#DO'#DOOOQO'#Cz'#CzO!tQPO,59eO#^QPO,59kOOQO'#DS'#DSOVQPO'#D_O#cQPO,58yOOQO'#DT'#DTOVQPO'#D`O#qQPO,58xOOQO'#DY'#DYO#|QPO,59rOOQO'#Cn'#CnOOQO'#Co'#CoOOQO'#Cm'#CmOOQO'#Cj'#CjOOQO1G.m1G.mOOQO'#Cs'#CsO$RQPO'#CrOOQO1G.v1G.vOOQO'#Cx'#CxOOQO1G.|1G.|OOQO1G/P1G/POOQO'#DR'#DROOQO1G/V1G/VOOQO,59y,59yOOQO-E7]-E7]OOQO,59z,59zOOQO-E7^-E7^OOQO'#DZ'#DZOcQPO1G/^OOQO'#Cu'#CuOOQO,59^,59^O$dQPO,59^OVQPO7+$xOOQO'#Ct'#CtO!tQPO'#D^O$dQPO1G.xOOQO1G.x1G.xO#^QPO<<HdOOQO,59x,59xOOQO-E7[-E7[OOQO7+$d7+$dO!oQPOAN>OO$lQPOG23jOOQO'#D['#D[OcQPOLD)UO#^QPO!$'LpOOQO!)9B[!)9B[",
+    "+pQVQPOOQhQPOOOOQO'#Ca'#CaOOQO'#D_'#D_OVQPO'#C`OOQO'#Cd'#CdOOQO'#Ce'#CeOOQO'#Ch'#ChOmQPO'#CgOOQO'#Cf'#CfOOQO'#DQ'#DQOVQPO'#DPOOQO'#Cc'#CcOOQO'#C`'#C`O!UQPO'#C_O!dQPO'#C^QOQPOOOOQO'#DX'#DXO!oQPO'#DWOOQO'#DV'#DVOOQO-E7]-E7]OOQO,58z,58zOOQO'#Ci'#CiO!tQPO,59ROOQO'#Cq'#CqO#SQPO,59[OOQO'#Cw'#CwO#XQPO,59bOOQO'#C{'#C{OOQO'#C|'#C|OOQO'#C}'#C}OOQO'#DO'#DOOOQO'#Cz'#CzO!tQPO,59eO#^QPO,59kOOQO'#DS'#DSOVQPO'#DaO#cQPO,58yOOQO'#DT'#DTOVQPO'#DbO#qQPO,58xOOQO'#DY'#DYO#|QPO,59rOOQO'#Cn'#CnOOQO'#Co'#CoOOQO'#Cm'#CmOOQO'#Cj'#CjOOQO1G.m1G.mOOQO'#Cs'#CsO$RQPO'#CrOOQO1G.v1G.vOOQO'#Cx'#CxOOQO1G.|1G.|OOQO1G/P1G/POOQO'#DR'#DROOQO1G/V1G/VOOQO,59{,59{OOQO-E7_-E7_OOQO,59|,59|OOQO-E7`-E7`OOQO'#DZ'#DZOcQPO1G/^OOQO'#Cu'#CuOOQO,59^,59^O$dQPO,59^OVQPO7+$xOOQO'#Ct'#CtO!tQPO'#D`O$dQPO1G.xOOQO1G.x1G.xO#^QPO<<HdOOQO,59z,59zOOQO-E7^-E7^OOQO7+$d7+$dO!oQPOAN>OO$lQPOG23jOOQO'#D]'#D]OOQO'#D^'#D^OOQO'#D['#D[OcQPOLD)UO#^QPO!$'LpOOQO!)9B[!)9B[",
   stateData:
-    '$q~O!VOS~OUVO!WQO!XTO!YUO!hYO~OUaO~O!ZfO!^hO!bjO!dlO!emO!fnO!goO~O!jsO!TRX!kRX!iRX~O!kvO!TQX!iQX~O!lyO~O_!OO`!OO![{O!]|O~O!_!QO~O!c!TO~O!i!WO~O!jsO!TRa!kRa!iRa~O!kvO!TQa!iQa~O!m!^O~O_!OO`!OO![{O!]|O!a!`O~O!`!dO!a!`O~O!n!nO~O',
-  goto: '&o!TPP!U!_!g!pP!x#S#S#S#[#d#l#oPP#{$R$R#[$X$[$_$b$f#[$o$r#[$u$x$x$x$x#S${%Z%d%hP%l%o%r%u%{&O&R&]&c&iQ`OQrZR!h!cU_OZ!cR![wW^OZw!cR!Yt]ROSZtw!cY]OZtw!cReS][OSZtw!c]XOSZtw!c]WOSZtw!cRgWQ!PgQ!VqQ!b!RR!i!eX!Ogq!R!eX}gq!R!eRiWR!SiR!RiT!e!b!fQ!a!RQ!g!bR!k!fRkWR!UkRqWRpW[ZOSZtw!cQ!c!_R!p!oQ!XrQ!l!hR!q!pTt^uTw_xR`PRcPRbPQzbR!m!lR!_zR!o!mYSOZtw!cRdSQ!f!bR!j!fQu^R!ZuQx_R!]x',
+    '$t~O!XOS~OUVO!YQO!ZTO![UO!jYO~OUaO~O!]fO!`hO!djO!flO!gmO!hnO!ioO~O!lsO!VRX!mRX!kRX~O!mvO!VQX!kQX~O!nyO~O_!OO`!OO!^{O!_|O~O!a!QO~O!e!TO~O!k!WO~O!lsO!VRa!mRa!kRa~O!mvO!VQa!kQa~O!o!^O~O_!OO`!OO!^{O!_|O!c!`O~O!b!dO!c!`O~O!p!nO!q!oO~O',
+  goto: '&t!VPP!W!a!i!rP!z#U#U#U#^#f#n#qPP#}$T$T#^$Z$^$a$d$h#^$q$t#^$w$z$z$z$z#U$}%]%f%jP%n%q%t%w%}&Q&T&T&W&b&h&nQ`OQrZR!h!cU_OZ!cR![wW^OZw!cR!Yt]ROSZtw!cY]OZtw!cReS][OSZtw!c]XOSZtw!c]WOSZtw!cRgWQ!PgQ!VqQ!b!RR!i!eX!Ogq!R!eX}gq!R!eRiWR!SiR!RiT!e!b!fQ!a!RQ!g!bR!k!fRkWR!UkRqWRpW[ZOSZtw!cQ!c!_R!r!qQ!XrQ!l!hR!s!rTt^uTw_xR`PRcPRbPQzbR!m!lR!_zR!q!mR!p!mYSOZtw!cRdSQ!f!bR!j!fQu^R!ZuQx_R!]x',
   nodeNames:
-    '⚠ SelectionDocument OrExpression AndExpression NotExpression Not Identifier PrimaryExpression All None Predicate EqualityPredicate FieldName Equals ScalarLiteral StringLiteral NumberLiteral BooleanLiteral True False MembershipPredicate In ListLiteral OpenBracket Comma CloseBracket NullPredicate Is Null ComparisonPredicate ComparisonOperator LessThanOrEqual GreaterThanOrEqual LessThan GreaterThan ParenthesizedExpression OpenParen CloseParen And Or ConsoleDocument ConsoleExpression GraphReadExpression EntityName Dot Where Many',
-  maxTerm: 76,
+    '⚠ SelectionDocument OrExpression AndExpression NotExpression Not Identifier PrimaryExpression All None Predicate EqualityPredicate FieldName Equals ScalarLiteral StringLiteral NumberLiteral BooleanLiteral True False MembershipPredicate In ListLiteral OpenBracket Comma CloseBracket NullPredicate Is Null ComparisonPredicate ComparisonOperator LessThanOrEqual GreaterThanOrEqual LessThan GreaterThan ParenthesizedExpression OpenParen CloseParen And Or ConsoleDocument ConsoleExpression GraphReadExpression EntityName Dot Where ReadTerminal One Many',
+  maxTerm: 79,
   skippedNodes: [0],
   repeatNodeCount: 4,
   tokenData:
-    "(|~RjX^!spq!srs#hxy%byz%g|}%l}!O%q!O!P'k!Q!R%z!R!['Y!^!_'p!_!`'}!`!a(S!c!}(a!}#O(r#P#Q(w#R#S(a#T#o(a#y#z!s$f$g!s#BY#BZ!s$IS$I_!s$I|$JO!s$JT$JU!s$KV$KW!s&FU&FV!s~!xY!V~X^!spq!s#y#z!s$f$g!s#BY#BZ!s$IS$I_!s$I|$JO!s$JT$JU!s$KV$KW!s&FU&FV!s~#kXOY#hZ]#h^r#hrs$Ws#O#h#O#P$]#P;'S#h;'S;=`%[<%lO#h~$]O_~~$`RO;'S#h;'S;=`$i;=`O#h~$lYOY#hZ]#h^r#hrs$Ws#O#h#O#P$]#P;'S#h;'S;=`%[;=`<%l#h<%lO#h~%_P;=`<%l#h~%gO!h~~%lO!i~~%qO!`~~%tQ!Q!R%z!R!['Y~&PR`~!O!P&Y!g!h&n#X#Y&n~&]P!Q![&`~&eR`~!Q![&`!g!h&n#X#Y&n~&qR{|&z}!O&z!Q!['Q~&}P!Q!['Q~'VP`~!Q!['Q~'_S`~!O!P&Y!Q!['Y!g!h&n#X#Y&n~'pO!l~~'uP!f~!_!`'x~'}O!d~~(SO!Z~~(XP!g~!_!`([~(aO!e~~(fSU~!Q![(a!c!}(a#R#S(a#T#o(a~(wO!_~~(|O!a~",
+    "(|~RjX^!spq!srs#hxy%byz%g|}%l}!O%q!O!P'k!Q!R%z!R!['Y!^!_'p!_!`'}!`!a(S!c!}(a!}#O(r#P#Q(w#R#S(a#T#o(a#y#z!s$f$g!s#BY#BZ!s$IS$I_!s$I|$JO!s$JT$JU!s$KV$KW!s&FU&FV!s~!xY!X~X^!spq!s#y#z!s$f$g!s#BY#BZ!s$IS$I_!s$I|$JO!s$JT$JU!s$KV$KW!s&FU&FV!s~#kXOY#hZ]#h^r#hrs$Ws#O#h#O#P$]#P;'S#h;'S;=`%[<%lO#h~$]O_~~$`RO;'S#h;'S;=`$i;=`O#h~$lYOY#hZ]#h^r#hrs$Ws#O#h#O#P$]#P;'S#h;'S;=`%[;=`<%l#h<%lO#h~%_P;=`<%l#h~%gO!j~~%lO!k~~%qO!b~~%tQ!Q!R%z!R!['Y~&PR`~!O!P&Y!g!h&n#X#Y&n~&]P!Q![&`~&eR`~!Q![&`!g!h&n#X#Y&n~&qR{|&z}!O&z!Q!['Q~&}P!Q!['Q~'VP`~!Q!['Q~'_S`~!O!P&Y!Q!['Y!g!h&n#X#Y&n~'pO!n~~'uP!h~!_!`'x~'}O!f~~(SO!]~~(XP!i~!_!`([~(aO!g~~(fSU~!Q![(a!c!}(a#R#S(a#T#o(a~(wO!a~~(|O!c~",
   tokenizers: [0],
   topRules: { SelectionDocument: [0, 1], ConsoleDocument: [1, 40] },
   specialized: [

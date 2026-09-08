@@ -44,4 +44,6 @@ export const SelectionDocument = 1,
   EntityName = 43,
   Dot = 44,
   Where = 45,
-  Many = 46;
+  ReadTerminal = 46,
+  One = 47,
+  Many = 48;

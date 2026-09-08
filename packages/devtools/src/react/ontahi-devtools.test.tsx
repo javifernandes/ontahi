@@ -290,6 +290,72 @@ describe('OntahiDevtools', () => {
   );
 
   it(
+    'executes an exact-one Console read and renders its single result',
+    async () => {
+      const diagnostics = createOntahiDiagnostics({
+        capturePayloads: true,
+        redact: value => value,
+      });
+      const TodoItem = entity('TodoItem', {
+        id: field.id(),
+        title: field.string(),
+      });
+      const request = vi.fn().mockImplementation(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-read-result',
+          value: { id: 'todo-1', title: 'One semantic result' },
+        }),
+      );
+      const runtimeTransport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: { request },
+      });
+
+      render(
+        <OntahiDevtools
+          console={{
+            entities: [TodoItem],
+            initialDocument: 'TodoItem.where(id = "todo-1").one()',
+          }}
+          diagnostics={diagnostics}
+          initiallyOpen
+          runtimeTransport={runtimeTransport}
+        />,
+      );
+
+      const panel = within(
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Console' }));
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+
+      expect(await panel.findByText('One semantic result')).toBeTruthy();
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        family: 'graph.read',
+        body: {
+          mode: 'run',
+          cardinality: 'one',
+          selection: {
+            entityName: 'TodoItem',
+            expression: {
+              kind: 'predicate',
+              fieldName: 'id',
+              operator: 'eq',
+              value: 'todo-1',
+            },
+          },
+        },
+      });
+      fireEvent.click(panel.getByRole('button', { name: 'JSON' }));
+      expect(await panel.findByText('"One semantic result"')).toBeTruthy();
+      fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
     'presents an Operation as a remote method invocation',
     async () => {
       const diagnostics = createOntahiDiagnostics({

@@ -95,9 +95,10 @@ inspection does not become language ownership.
 The Devtools Console is the design gate for a containing interaction expression that can resolve
 Graph Read, Graph Command, or Operation intent without leading family keywords. Its first walking
 skeleton uses a second Lezer top rule around the exact existing Selection productions:
-`TodoItem.where(completed = false).many()`. The root Entity and terminal resolve the family, while
-the nested predicate keeps the established Selection syntax, diagnostics, completions, reflection,
-and lowering. The valid result is the existing `graph.read` body.
+`TodoItem.where(completed = false).many()` or exact-cardinality
+`TodoItem.where(id = "todo-1").one()`. The root Entity and terminal resolve the family, while the
+nested predicate keeps the established Selection syntax, diagnostics, completions, reflection, and
+lowering. The valid result is the existing `graph.read` body.
 
 Future expressions may add recoverable member and argument syntax, but valid meaning must continue
 to lower to the existing family-owned Query/Selection, Command, and Operation request

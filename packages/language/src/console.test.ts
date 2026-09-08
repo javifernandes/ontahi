@@ -91,13 +91,29 @@ describe('Console Graph Read language', () => {
     });
   });
 
+  it('lowers one() to the existing exact-one Graph Read cardinality', () => {
+    const analysis = analyzeConsoleDocument('TodoItem.where(id = "todo-1").one()', application);
+
+    expect(analysis.syntaxDiagnostics).toEqual([]);
+    expect(analysis.semanticDiagnostics).toEqual([]);
+    expect(analysis.syntax.expression?.terminal).toMatchObject({
+      kind: 'one-member',
+      text: 'one',
+    });
+    expect(analysis.request).toMatchObject({
+      kind: 'graph-read',
+      mode: 'run',
+      cardinality: 'one',
+    });
+  });
+
   it('reports an incomplete terminal as Console syntax rather than Selection semantics', () => {
     expect(parseConsoleDocument('TodoItem.where(completed = false)')).toMatchObject({
       syntaxDiagnostics: [
         {
           channel: 'syntax',
           code: 'console.syntax.invalid',
-          message: 'Expected .many() after the Selection expression.',
+          message: 'Expected .one() or .many() after the Selection expression.',
         },
       ],
     });
@@ -120,6 +136,11 @@ describe('Console Graph Read language', () => {
     expect(completion.items).toContainEqual(
       expect.objectContaining({ label: 'completed', apply: 'completed', kind: 'field' }),
     );
+
+    const terminalDocument = 'TodoItem.where(all).o';
+    expect(
+      completeConsoleDocument(terminalDocument, terminalDocument.length, application).items,
+    ).toContainEqual(expect.objectContaining({ label: 'one', apply: 'one()', kind: 'member' }));
   });
 
   it('projects Core Entity definitions into the existing Selection reflection input', () => {

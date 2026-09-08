@@ -3,9 +3,10 @@
 
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
-  EntityName Dot Where OpenParen OrExpression CloseParen Dot Many OpenParen CloseParen
+  EntityName Dot Where OpenParen OrExpression CloseParen Dot ReadTerminal OpenParen CloseParen
 }
 EntityName { Identifier }
+ReadTerminal { One | Many }
 
 OrExpression { AndExpression (Or AndExpression)* }
 AndExpression { NotExpression (And NotExpression)* }
@@ -35,6 +36,7 @@ Null { @specialize<Identifier, "null"> }
 True { @specialize<Identifier, "true"> }
 False { @specialize<Identifier, "false"> }
 Where { @specialize<Identifier, "where"> }
+One { @specialize<Identifier, "one"> }
 Many { @specialize<Identifier, "many"> }
 
 Equals { "=" }

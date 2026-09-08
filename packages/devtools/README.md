@@ -74,10 +74,11 @@ visible above.
 
 When the host supplies Console Entity definitions, Devtools adds a Console panel backed by the
 shared Ontahí Lezer and CodeMirror language packages. The first walking skeleton accepts
-`Entity.where(Selection).many()`, lowers it to the canonical Graph Read body, and sends it through
-the same configured Runtime Transport as application traffic. Submission is explicit through Run
-or `Mod-Enter`; results default to the same semantic visual projection used by Activity, can be
-switched to JSON, remain in the panel, and the exchange appears in Activity.
+`Entity.where(Selection).many()` and exact-cardinality `Entity.where(Selection).one()`, lowers them to
+the canonical Graph Read body, and sends them through the same configured Runtime Transport as
+application traffic. Submission is explicit through Run or `Mod-Enter`; results default to the same
+semantic visual projection used by Activity, can be switched to JSON, remain in the panel, and the
+exchange appears in Activity.
 
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 

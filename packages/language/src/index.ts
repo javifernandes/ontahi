@@ -218,7 +218,7 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly selection?: SelectionExpressionSyntax;
   readonly whereClose?: SelectionLanguageToken<'close-parenthesis'>;
-  readonly terminal?: SelectionLanguageToken<'many-member'>;
+  readonly terminal?: SelectionLanguageToken<'one-member' | 'many-member'>;
   readonly terminalOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly terminalClose?: SelectionLanguageToken<'close-parenthesis'>;
 };
@@ -961,6 +961,9 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
 
   const opens = graphRead.getChildren('OpenParen');
   const closes = graphRead.getChildren('CloseParen');
+  const readTerminal = graphRead.getChild('ReadTerminal');
+  const oneTerminal = readTerminal?.getChild('One');
+  const manyTerminal = readTerminal?.getChild('Many');
   return {
     kind: 'console-document',
     from: 0,
@@ -973,7 +976,9 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
       whereOpen: tokenOf('open-parenthesis', opens[0] ?? null, document),
       selection: expressionSyntax(graphRead.getChild('OrExpression'), document),
       whereClose: tokenOf('close-parenthesis', closes[0] ?? null, document),
-      terminal: tokenOf('many-member', graphRead.getChild('Many'), document),
+      terminal: oneTerminal
+        ? tokenOf('one-member', oneTerminal, document)
+        : tokenOf('many-member', manyTerminal ?? null, document),
       terminalOpen: tokenOf('open-parenthesis', opens[1] ?? null, document),
       terminalClose: tokenOf('close-parenthesis', closes[1] ?? null, document),
     },
@@ -986,7 +991,7 @@ const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   if (!expression.where) return `Expected .where(...) after ${expression.entity.text}.`;
   if (!expression.whereOpen) return 'Expected "(" after .where.';
   if (!expression.whereClose) return 'Expected ")" to close the Selection expression.';
-  if (!expression.terminal) return 'Expected .many() after the Selection expression.';
+  if (!expression.terminal) return 'Expected .one() or .many() after the Selection expression.';
   if (!expression.terminalOpen || !expression.terminalClose) {
     return 'Expected an empty argument list after .many.';
   }
@@ -1101,7 +1106,7 @@ export const analyzeConsoleDocument = (
             },
             orderBy: [],
             limit: options.limit ?? 25,
-            cardinality: 'many',
+            cardinality: expression.terminal?.kind === 'one-member' ? 'one' : 'many',
           } satisfies GraphReadRequestV1,
         }
       : {}),
@@ -1190,10 +1195,16 @@ export const completeConsoleDocument = (
       items: (
         [
           {
+            label: 'one',
+            apply: 'one()',
+            kind: 'member',
+            detail: 'Exact-one Graph Read terminal',
+          },
+          {
             label: 'many',
             apply: 'many()',
             kind: 'member',
-            detail: 'Graph Read terminal',
+            detail: 'Many Graph Read terminal',
           },
         ] satisfies ConsoleLanguageCompletionItem[]
       ).filter(item => item.label.startsWith(memberPrefix)),

@@ -168,7 +168,7 @@ const graphReadValue = (response: unknown): unknown => {
         : 'Graph Read was rejected.',
     );
   }
-  if (response.kind !== 'graph-read-result' || !Array.isArray(response.value)) {
+  if (response.kind !== 'graph-read-result' || !('value' in response)) {
     throw new Error('Graph Read returned an invalid result.');
   }
   return response.value;
