@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
+import { SemanticPayload } from './semantic-payload.js';
 
 export type OntahiDevtoolsConsoleOptions = {
   readonly entities: readonly AnyEntityDefinition[];
@@ -34,6 +35,8 @@ type ConsoleResult =
   | { readonly status: 'idle' | 'executing' }
   | { readonly status: 'success'; readonly value: unknown }
   | { readonly status: 'error'; readonly message: string };
+
+type ConsoleResultMode = 'visual' | 'json';
 
 type ConsoleEditorProps = {
   readonly application: ConsoleLanguageApplicationReflection;
@@ -182,6 +185,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     (application.entities[0] ? application.entities[0].name + '.where(all).many()' : '');
   const [document, setDocument] = useState(initialDocument);
   const [result, setResult] = useState<ConsoleResult>({ status: 'idle' });
+  const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
   const exchange = useMemo(
     () =>
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
@@ -270,11 +274,37 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       <div style={styles.consoleResult} aria-label='Console result'>
         <div style={styles.consoleResultHeader}>
           <strong>Result</strong>
-          <span style={styles.consoleResultStatus}>{result.status}</span>
+          <span style={styles.consoleResultControls}>
+            {result.status === 'success' ? (
+              <span style={styles.modes} aria-label='Console result view mode'>
+                {(
+                  [
+                    ['visual', 'Visual'],
+                    ['json', 'JSON'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type='button'
+                    style={{ ...styles.mode, ...(resultMode === value ? styles.activeMode : {}) }}
+                    onClick={() => setResultMode(value)}
+                    aria-pressed={resultMode === value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </span>
+            ) : null}
+            <span style={styles.consoleResultStatus}>{result.status}</span>
+          </span>
         </div>
         <div style={styles.consoleResultBody} aria-live='polite'>
           {result.status === 'success' ? (
-            <JsonView value={result.value} label='Console result JSON' />
+            resultMode === 'visual' ? (
+              <SemanticPayload value={result.value} />
+            ) : (
+              <JsonView value={result.value} label='Console result JSON' />
+            )
           ) : result.status === 'error' ? (
             <span role='alert' style={styles.consoleError}>
               {result.message}

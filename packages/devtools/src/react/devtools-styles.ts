@@ -490,6 +490,11 @@ export const styles: Record<string, CSSProperties> = {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: 9,
   },
+  consoleResultControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
   consoleResultBody: {
     minWidth: 0,
     minHeight: 0,

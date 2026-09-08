@@ -252,6 +252,12 @@ describe('OntahiDevtools', () => {
       );
       fireEvent.click(panel.getByRole('button', { name: 'Run' }));
 
+      expect(await panel.findByRole('table')).toBeTruthy();
+      expect(panel.getByText('Try semantic Console')).toBeTruthy();
+      expect(panel.getByRole('button', { name: 'Visual' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'JSON' }));
       expect(await panel.findByText('\"Try semantic Console\"')).toBeTruthy();
       expect(request).toHaveBeenCalledOnce();
       expect(request.mock.calls[0]?.[0]).toMatchObject({
