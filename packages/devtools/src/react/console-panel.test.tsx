@@ -214,9 +214,9 @@ describe('Console bidirectional Query limit', () => {
     expect(toolbar.getByRole('spinbutton')).toBeTruthy();
   });
 
-  it('edits the current draft limit, preserving filters, order and undo history', async () => {
+  it('resets an unapplied toolbar limit when rerunning the source', async () => {
     const source = '  Tag.where(active = true) .orderBy(name, desc) .many()';
-    const { request, view, replaceSource, result, visibleNames, applyLimit } = mountConsole(source);
+    const { request, view, result } = mountConsole(source);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByRole('table');
     expect(result.getByRole('spinbutton')).toHaveProperty('value', '25');
@@ -226,6 +226,15 @@ describe('Console bidirectional Query limit', () => {
     expect(view.state.doc.toString()).toBe(source);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '25'));
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(view.state.doc.toString()).toBe(source);
+  });
+
+  it('edits the current draft limit, preserving filters, order and undo history', async () => {
+    const source = '  Tag.where(active = true) .orderBy(name, desc) .many()';
+    const { request, view, replaceSource, result, visibleNames, applyLimit } = mountConsole(source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
     request.mockClear();
     const draft = source.replace('desc', 'asc');
     replaceSource(draft);
@@ -249,9 +258,16 @@ describe('Console bidirectional Query limit', () => {
       expect(redo(view)).toBe(true);
     });
     expect(view.state.doc.toString()).toBe(edited);
+  });
+
+  it('applies a zero limit to the source and renders an empty result', async () => {
+    const source = '  Tag.where(active = true) .orderBy(name, asc).limit(2) .many()';
+    const { view, result, applyLimit } = mountConsole(source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
     applyLimit(0);
     await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '0'));
-    expect(view.state.doc.toString()).toBe(edited.replace('limit(2)', 'limit(0)'));
+    expect(view.state.doc.toString()).toBe(source.replace('limit(2)', 'limit(0)'));
     expect(result.getByText('Empty list')).toBeTruthy();
   });
 

@@ -574,8 +574,7 @@ describe('ExplorerEntityBrowser', () => {
     expect(screen.getByText('legacyNotes (legacy_notes)')).toBeTruthy();
   });
 
-  it('edits authorized scalar fields and deletes exact rows through Entity mutation Commands', async () => {
-    const user = userEvent.setup();
+  const mountEditableTag = () => {
     const editableTag: ExplorerEntityDetail = {
       ...entities[1]!,
       name: 'Tag',
@@ -634,6 +633,12 @@ describe('ExplorerEntityBrowser', () => {
       }),
     );
 
+    return { user: userEvent.setup(), readEntityData, runEntityMutationCommand };
+  };
+
+  it('creates an authorized row through an Entity mutation Command and refreshes data', async () => {
+    const { user, readEntityData, runEntityMutationCommand } = mountEditableTag();
+
     await user.click(await screen.findByRole('button', { name: 'New Tag' }));
     await user.type(screen.getByRole('textbox', { name: 'Create name' }), 'Later');
     await user.type(screen.getByRole('textbox', { name: 'Create color' }), '#abc123');
@@ -647,8 +652,12 @@ describe('ExplorerEntityBrowser', () => {
         values: { id: expect.any(String), name: 'Later', color: '#abc123' },
       }),
     );
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Edit color' }));
+  it('updates an authorized color through its rich editor and refreshes data', async () => {
+    const { user, readEntityData, runEntityMutationCommand } = mountEditableTag();
+    await user.click(await screen.findByRole('button', { name: 'Edit color' }));
     fireEvent.change(screen.getByLabelText('Edit color color picker'), {
       target: { value: '#4263eb' },
     });
@@ -666,7 +675,11 @@ describe('ExplorerEntityBrowser', () => {
         values: { color: '#4263eb' },
       }),
     );
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
+  });
 
+  it('updates an authorized scalar field on the exact row and refreshes data', async () => {
+    const { user, readEntityData, runEntityMutationCommand } = mountEditableTag();
     await user.click(await screen.findByRole('button', { name: 'Edit name' }));
     await user.clear(screen.getByRole('textbox', { name: 'Edit name' }));
     await user.type(screen.getByRole('textbox', { name: 'Edit name' }), 'Important');
@@ -681,8 +694,12 @@ describe('ExplorerEntityBrowser', () => {
         values: { name: 'Important' },
       }),
     );
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+  it('deletes the exact row through an Entity mutation Command and refreshes data', async () => {
+    const { user, readEntityData, runEntityMutationCommand } = mountEditableTag();
+    await user.click(await screen.findByRole('button', { name: 'Delete row' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
@@ -693,7 +710,7 @@ describe('ExplorerEntityBrowser', () => {
         target: { kind: 'entity-ref', entityName: 'Tag', locator: { id: 'tag-1' } },
       }),
     );
-    expect(readEntityData.mock.calls.length).toBeGreaterThan(1);
+    await waitFor(() => expect(readEntityData.mock.calls.length).toBeGreaterThan(1));
   });
 
   it('restores cancelled edits and reports remote update failures', async () => {
