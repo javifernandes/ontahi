@@ -40,7 +40,10 @@ import {
 } from '@ontahi/language';
 import { consoleDocumentParser, selectionDocumentParser } from '@ontahi/language/lezer';
 
-import { selectionFiniteValueProjectionExtensions } from './finite-value-projection.js';
+import {
+  consoleFiniteValueProjectionExtensions,
+  selectionFiniteValueProjectionExtensions,
+} from './finite-value-projection.js';
 import {
   selectionReferenceValueCompletionSource,
   selectionReferenceValuePasteExtension,
@@ -51,6 +54,7 @@ import {
 import { selectionExpressionEntity } from './selection-state.js';
 
 export {
+  deriveConsoleFiniteValueProjections,
   deriveSelectionFiniteValueProjections,
   type SelectionFiniteValueProjection,
   type SelectionFiniteValueProjectionChoice,
@@ -390,6 +394,7 @@ export const selectionExpressionExtensions = (
 ];
 
 export type ConsoleExpressionExtensionOptions = {
+  readonly finiteValueProjections?: boolean;
   readonly limit?: number;
   readonly run?: () => void;
 };
@@ -435,6 +440,7 @@ export const consoleExpressionExtensions = (
     override: [consoleCompletionSource(application)],
     icons: false,
   }),
+  ...(options.finiteValueProjections ? consoleFiniteValueProjectionExtensions(application) : []),
   selectionExpressionAssistanceTheme,
   linter(consoleExpressionLinter(application, options), { delay: 0 }),
 ];

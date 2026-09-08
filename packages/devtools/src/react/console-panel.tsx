@@ -51,6 +51,11 @@ const externalDocumentChange = Annotation.define<boolean>();
 
 const consoleEditorTheme = EditorView.theme({
   '&': {
+    '--accent': '145 31% 18%',
+    '--accent-foreground': '139 55% 91%',
+    '--border': '143 20% 28%',
+    '--muted-foreground': '145 12% 58%',
+    '--ring': '151 45% 55%',
     height: '100%',
     color: '#dce8e1',
     backgroundColor: '#09110d',
@@ -97,6 +102,7 @@ const ConsoleEditor = ({ application, label, limit, onChange, run, value }: Cons
           keymap.of(historyKeymap),
           languageCompartmentRef.current.of(
             consoleExpressionExtensions(application, {
+              finiteValueProjections: true,
               limit,
               run: () => runRef.current(),
             }),
@@ -128,6 +134,7 @@ const ConsoleEditor = ({ application, label, limit, onChange, run, value }: Cons
     viewRef.current?.dispatch({
       effects: languageCompartmentRef.current.reconfigure(
         consoleExpressionExtensions(application, {
+          finiteValueProjections: true,
           limit,
           run: () => runRef.current(),
         }),

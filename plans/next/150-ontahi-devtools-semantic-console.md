@@ -372,7 +372,8 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 3. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
 4. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and
-   `Mod-Enter` execution extensions without copying Selection semantics.
+   `Mod-Enter` execution extensions without copying Selection semantics. Its nested Selection also
+   reuses the source-backed finite-value projections for Boolean and enum literals.
 5. `@ontahi/devtools/react` exposes an opt-in Console panel that submits the lowered Read through
    the configured Runtime Transport, renders the result through shared Visual or JSON projections,
    preserves structured exact-one cardinality feedback, and produces ordinary Activity evidence.

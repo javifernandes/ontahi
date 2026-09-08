@@ -13,4 +13,5 @@ reflection, diagnostics, and CodeMirror assistance inside `Entity.where(...).man
 Graph Read requests, and executes them through the configured Runtime Transport. Console results
 can be inspected through the same visual projection used by Activity or as JSON. Exact-one
 cardinality mismatches cross the Graph Read protocol as an authority-safe structured rejection
-rather than an opaque availability failure.
+rather than an opaque availability failure. Boolean and enum literals use the same schema-aware,
+source-backed value controls as the Explorer Selection editor.

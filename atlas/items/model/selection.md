@@ -195,6 +195,9 @@ widget, dashboard, or editor consumes or produces that meaning rather than defin
 Selection algebra. While a person is editing text, the document and its recoverable syntax tree
 remain the source of authorial details such as whitespace, parentheses, incomplete nodes, and
 cursor positions; only a valid semantic resolution lowers to the canonical AST.
+Explorer's contextual editor and the Devtools Console reuse the same CodeMirror finite-value
+projection: reflected Boolean and enum literals render as source-backed controls whose changes edit
+the document before it is resolved again.
 
 The future [[ontahi.semantic-interaction-language|Selection language editor]] is a distinct
 artifact rather than a React component owned by Explorer. It may use textual, structural, or

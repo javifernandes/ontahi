@@ -9,6 +9,8 @@ import {
 } from '@codemirror/view';
 import {
   analyzeSelectionDocument,
+  parseConsoleDocument,
+  type ConsoleLanguageApplicationReflection,
   type SelectionExpressionSyntax,
   type SelectionLanguageEntityReflection,
   type SelectionLanguageFieldReflection,
@@ -68,12 +70,14 @@ const predicateProjections = (
   if (
     !predicate.field ||
     !predicate.operator ||
+    !predicate.value ||
     !['eq', 'in'].includes(predicate.operator.operator)
   ) {
     return [];
   }
-  const field = entity.fields.find(candidate => candidate.name === predicate.field?.text)!;
-  const value = predicate.value!;
+  const field = entity.fields.find(candidate => candidate.name === predicate.field?.text);
+  if (!field) return [];
+  const value = predicate.value;
   const literals = value.kind === 'list-literal' ? value.values : [value];
   return literals.flatMap(literal => projectionForLiteral(literal, field) ?? []);
 };
@@ -106,6 +110,40 @@ export const deriveSelectionFiniteValueProjections = (
     ? expressionProjections(analysis.syntax.expression, entity)
     : [];
 };
+
+type FiniteValueProjectionContext = {
+  readonly entityName: string;
+  readonly projections: readonly SelectionFiniteValueProjection[];
+};
+
+const consoleFiniteValueProjectionContext = (
+  document: string,
+  application: ConsoleLanguageApplicationReflection,
+): FiniteValueProjectionContext | undefined => {
+  const expression = parseConsoleDocument(document).syntax.expression;
+  if (!expression?.entity || !expression.selection) return undefined;
+  const selection = expression.selection;
+  const entity = application.entities.find(candidate => candidate.name === expression.entity?.text);
+  return entity
+    ? {
+        entityName: entity.name,
+        projections: deriveSelectionFiniteValueProjections(
+          document.slice(selection.from, selection.to),
+          entity,
+        ).map(projection => ({
+          ...projection,
+          from: projection.from + selection.from,
+          to: projection.to + selection.from,
+        })),
+      }
+    : undefined;
+};
+
+export const deriveConsoleFiniteValueProjections = (
+  document: string,
+  application: ConsoleLanguageApplicationReflection,
+): readonly SelectionFiniteValueProjection[] =>
+  consoleFiniteValueProjectionContext(document, application)?.projections ?? [];
 
 const revealFiniteValueProjection = StateEffect.define<SelectionLanguageRange>();
 
@@ -246,16 +284,17 @@ const finiteValueProjectionTheme = EditorView.theme({
 
 const finiteValueDecorations = (
   view: EditorView,
-  entity: SelectionLanguageEntityReflection,
+  context: FiniteValueProjectionContext | undefined,
 ): DecorationSet => {
+  if (!context) return Decoration.none;
   const revealed = view.state.field(revealedFiniteValueProjection);
   return Decoration.set(
-    deriveSelectionFiniteValueProjections(view.state.doc.toString(), entity).flatMap(projection =>
+    context.projections.flatMap(projection =>
       sameRange(revealed, projection)
         ? []
         : [
             Decoration.replace({
-              widget: new FiniteValueWidget(entity.name, projection),
+              widget: new FiniteValueWidget(context.entityName, projection),
             }).range(projection.from, projection.to),
           ],
     ),
@@ -263,15 +302,19 @@ const finiteValueDecorations = (
   );
 };
 
-export const selectionFiniteValueProjectionExtensions = (
-  entity: SelectionLanguageEntityReflection,
+type FiniteValueProjectionContextSource = (
+  document: string,
+) => FiniteValueProjectionContext | undefined;
+
+const finiteValueProjectionExtensions = (
+  context: FiniteValueProjectionContextSource,
 ): readonly Extension[] => {
   const projectionPlugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = finiteValueDecorations(view, entity);
+        this.decorations = finiteValueDecorations(view, context(view.state.doc.toString()));
       }
 
       update(update: ViewUpdate) {
@@ -281,7 +324,10 @@ export const selectionFiniteValueProjectionExtensions = (
             transaction.effects.some(effect => effect.is(revealFiniteValueProjection)),
           )
         ) {
-          this.decorations = finiteValueDecorations(update.view, entity);
+          this.decorations = finiteValueDecorations(
+            update.view,
+            context(update.state.doc.toString()),
+          );
         }
       }
     },
@@ -297,3 +343,18 @@ export const selectionFiniteValueProjectionExtensions = (
     finiteValueProjectionTheme,
   ];
 };
+
+export const selectionFiniteValueProjectionExtensions = (
+  entity: SelectionLanguageEntityReflection,
+): readonly Extension[] =>
+  finiteValueProjectionExtensions(document => ({
+    entityName: entity.name,
+    projections: deriveSelectionFiniteValueProjections(document, entity),
+  }));
+
+export const consoleFiniteValueProjectionExtensions = (
+  application: ConsoleLanguageApplicationReflection,
+): readonly Extension[] =>
+  finiteValueProjectionExtensions(document =>
+    consoleFiniteValueProjectionContext(document, application),
+  );

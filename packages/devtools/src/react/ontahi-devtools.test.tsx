@@ -247,9 +247,12 @@ describe('OntahiDevtools', () => {
         screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
       );
       fireEvent.click(panel.getByRole('button', { name: 'Console' }));
-      expect(panel.getByRole('textbox', { name: 'Ontahí Console expression' }).textContent).toBe(
-        'TodoItem.where(completed = false).many()',
-      );
+      expect(panel.getByRole('textbox', { name: 'Ontahí Console expression' })).toBeTruthy();
+      const completedValue = panel.getByRole('combobox', {
+        name: 'Value for TodoItem.completed',
+      }) as HTMLSelectElement;
+      expect(completedValue.value).toBe('false');
+      fireEvent.change(completedValue, { target: { value: 'true' } });
       fireEvent.click(panel.getByRole('button', { name: 'Run' }));
 
       expect(await panel.findByRole('table')).toBeTruthy();
@@ -273,7 +276,7 @@ describe('OntahiDevtools', () => {
               kind: 'predicate',
               fieldName: 'completed',
               operator: 'eq',
-              value: false,
+              value: true,
             },
           },
           orderBy: [],

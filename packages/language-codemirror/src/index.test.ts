@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   consoleExpressionExtensions,
   consoleExpressionLinter,
+  deriveConsoleFiniteValueProjections,
   deriveSelectionFiniteValueProjections,
   deriveSelectionReferenceValueProjections,
   selectionExpressionCompletionSource,
@@ -184,6 +185,34 @@ describe('Selection CodeMirror adapter', () => {
       deriveSelectionFiniteValueProjections('status is null', {
         ...WorkItem,
         fields: [{ ...WorkItem.fields[0], nullable: true }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('derives finite projections from the nested Selection in a Console expression', () => {
+    const booleanSource = 'TodoItem.where(completed = false).many()';
+    expect(deriveConsoleFiniteValueProjections(booleanSource, { entities: [TodoItem] })).toEqual([
+      {
+        from: booleanSource.indexOf('false'),
+        to: booleanSource.indexOf('false') + 'false'.length,
+        fieldName: 'completed',
+        value: false,
+        choices: [
+          { label: 'true', text: 'true', value: true },
+          { label: 'false', text: 'false', value: false },
+        ],
+      },
+    ]);
+
+    const enumSource = 'WorkItem.where(status = "open").one';
+    expect(
+      deriveConsoleFiniteValueProjections(enumSource, { entities: [WorkItem] }).map(
+        projection => projection.value,
+      ),
+    ).toEqual(['open']);
+    expect(
+      deriveConsoleFiniteValueProjections('TodoItem.where(missing = false).many()', {
+        entities: [TodoItem],
       }),
     ).toEqual([]);
   });
@@ -1026,6 +1055,32 @@ describe('Selection CodeMirror adapter', () => {
         'completed',
       ]),
     );
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it('projects and edits finite values inside a Console Query expression', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const source = 'TodoItem.where(completed = false).many()';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: consoleExpressionExtensions(
+          { entities: [TodoItem] },
+          { finiteValueProjections: true },
+        ),
+      }),
+    });
+
+    const select = parent.querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!;
+    expect(select.getAttribute('aria-label')).toBe('Value for TodoItem.completed');
+    expect(select.value).toBe('false');
+    select.value = 'true';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(view.state.doc.toString()).toBe('TodoItem.where(completed = true).many()');
 
     view.destroy();
     parent.remove();
