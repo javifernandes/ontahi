@@ -85,7 +85,16 @@ response also invalidates the previous capabilities. Capabilities describe the s
 not a permanent grant: policy/authentication or routing changes inside the same transport may make
 them stale. Receiver policy remains authoritative on every request, and rejections are shown
 without replacing the successful result data.
-Result-table limit controls and multi-Field ordering remain follow-ups.
+The Visual many-result table also shows the returned row count and executed limit. Its numeric
+Limit control accepts non-negative safe integers, including zero. Apply or Enter edits only the
+existing limit literal (or inserts `.limit(...)`) and runs the current same-Entity draft, preserving
+its filters and ordering as one undoable source transaction. Typing in the control alone does not
+execute. Textual limit changes appear in the result control only after a successful Run; pending
+or rejected reads retain the old result and executed limit. Invalid/non-many/other-Entity drafts,
+pending reads, or a replaced transport disable the control. Server maximum-limit policy remains
+authoritative; the control does not grant a higher limit. Multi-Field ordering and pagination remain
+follow-ups. Returned row count is not a total count, and the existing 50-row visual preview cap is
+reported separately when reached.
 
 `orderBy(...)` autocomplete uses that same capability snapshot for the matching Entity and
 transport, even in incomplete drafts. It suggests only permitted scalar Fields. Before a successful

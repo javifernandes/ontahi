@@ -16,6 +16,7 @@ import {
 import {
   analyzeConsoleDocument,
   editConsoleOrderBy,
+  editConsoleLimit,
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
   type ConsoleLanguageApplicationReflection,
@@ -23,6 +24,7 @@ import {
 import { consoleExpressionExtensions } from '@ontahi/language-codemirror';
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 
+import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
 import { ResultTable, SemanticPayload } from './semantic-payload.js';
@@ -364,6 +366,37 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     runDocument(view.state.doc.toString());
   };
 
+  const limitDisabledReason =
+    result.status === 'executing'
+      ? 'Wait for the current query to finish.'
+      : !exchange || snapshot?.transport !== runtimeTransport
+        ? 'Run the query with the current Runtime Transport before changing its limit.'
+        : !analysis.request
+          ? 'Fix the Console expression before changing its limit.'
+          : analysis.request.mode !== 'run' ||
+              analysis.request.selection.entityName !== snapshot?.request.selection.entityName
+            ? 'Run a many query for the current Entity before changing its limit.'
+            : undefined;
+  const changeLimit = (nextLimit: number) => {
+    const view = viewRef.current;
+    if (limitDisabledReason || !view || executingRef.current) return;
+    const source = view.state.doc.toString();
+    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    if (
+      request?.mode !== 'run' ||
+      request.selection.entityName !== snapshot?.request.selection.entityName
+    )
+      return;
+    const changes = editConsoleLimit(source, application, nextLimit);
+    if (!changes) return;
+    view.dispatch({
+      changes,
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.console-limit',
+    });
+    runDocument(view.state.doc.toString());
+  };
+
   return (
     <section style={styles.consolePage} aria-label='Devtools Console'>
       <div style={styles.consoleComposer}>
@@ -461,18 +494,27 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           {snapshot ? (
             resultMode === 'visual' ? (
               snapshot.request.mode === 'run' && Array.isArray(snapshot.value) ? (
-                <ResultTable
-                  value={snapshot.value}
-                  ordering={{
-                    fields:
-                      resultEntity?.fields
-                        .filter(isConsoleOrderableField)
-                        .map(field => field.name) ?? [],
-                    order: snapshot.request.orderBy[0],
-                    disabledReason: sortDisabledReason,
-                    onSort: sortBy,
-                  }}
-                />
+                <>
+                  <ConsoleResultLimit
+                    request={snapshot.request}
+                    defaultLimit={limit}
+                    rowCount={snapshot.value.length}
+                    disabledReason={limitDisabledReason}
+                    onApply={changeLimit}
+                  />
+                  <ResultTable
+                    value={snapshot.value}
+                    ordering={{
+                      fields:
+                        resultEntity?.fields
+                          .filter(isConsoleOrderableField)
+                          .map(field => field.name) ?? [],
+                      order: snapshot.request.orderBy[0],
+                      disabledReason: sortDisabledReason,
+                      onSort: sortBy,
+                    }}
+                  />
+                </>
               ) : (
                 <SemanticPayload value={snapshot.value} />
               )

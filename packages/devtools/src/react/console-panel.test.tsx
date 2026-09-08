@@ -103,8 +103,145 @@ const mountConsole = (source = 'Tag.where(active = true).limit(2).many()') => {
     );
     return nextRequest;
   };
-  return { request, respond, view, replaceSource, result, visibleNames, switchTransport };
+  const applyLimit = (limit: number | string) => {
+    fireEvent.change(result.getByRole('spinbutton', { name: 'Result limit' }), {
+      target: { value: String(limit) },
+    });
+    fireEvent.submit(result.getByRole('form', { name: 'Query limit' }));
+  };
+  return {
+    request,
+    respond,
+    view,
+    replaceSource,
+    result,
+    visibleNames,
+    switchTransport,
+    applyLimit,
+  };
 };
+
+describe('Console bidirectional Query limit', () => {
+  it('edits the current draft limit, preserving filters, order and undo history', async () => {
+    const source = '  Tag.where(active = true) .orderBy(name, desc) .many()';
+    const { request, view, replaceSource, result, visibleNames, applyLimit } = mountConsole(source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    expect(result.getByText('3 returned rows · executed limit 25')).toBeTruthy();
+    fireEvent.change(result.getByRole('spinbutton'), { target: { value: '7' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(view.state.doc.toString()).toBe(source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '25'));
+    request.mockClear();
+    const draft = source.replace('desc', 'asc');
+    replaceSource(draft);
+    applyLimit(2);
+    await waitFor(() => expect(visibleNames()).toEqual(['Alpha', 'Middle']));
+    const edited = draft.replace(') .many()', ').limit(2) .many()');
+    expect(view.state.doc.toString()).toBe(edited);
+    expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty('value', '2');
+    expect(request.mock.calls[0]![0].body).toMatchObject({
+      limit: 2,
+      orderBy: [{ fieldName: 'name', direction: 'asc' }],
+    });
+    act(() => {
+      expect(undo(view)).toBe(true);
+    });
+    expect(view.state.doc.toString()).toBe(draft);
+    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(request).toHaveBeenCalledOnce();
+    act(() => {
+      expect(redo(view)).toBe(true);
+    });
+    expect(view.state.doc.toString()).toBe(edited);
+    applyLimit(0);
+    await result.findByText('0 returned rows · executed limit 0');
+    expect(view.state.doc.toString()).toBe(edited.replace('limit(2)', 'limit(0)'));
+    expect(result.getByText('Empty list')).toBeTruthy();
+  });
+
+  it('reflects source limits only after Run and guards invalid values and drafts', async () => {
+    const { request, replaceSource, result, applyLimit } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    for (const value of ['', -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) applyLimit(value);
+    expect(request).toHaveBeenCalledOnce();
+    for (const source of [
+      'Tag.limit(',
+      'Other.many()',
+      'Tag.first()',
+      'Tag.one()',
+      'Tag.count()',
+    ]) {
+      replaceSource(source);
+      expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty(
+        'disabled',
+        true,
+      );
+      applyLimit(3);
+      expect(request).toHaveBeenCalledOnce();
+    }
+    replaceSource('Tag.limit(3).many()');
+    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByText('3 returned rows · executed limit 3');
+    expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty('value', '3');
+    replaceSource('Tag.count()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(result.queryByRole('spinbutton')).toBeNull());
+  });
+
+  it('retains executed results and limit on policy or transport failure', async () => {
+    const { request, view, result, visibleNames, applyLimit } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    applyLimit(51);
+    await result.findByRole('alert');
+    expect(view.state.doc.toString()).toBe('Tag.where(active = true).limit(51).many()');
+    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('value', '2');
+    expect(visibleNames()).toEqual(['Zulu', 'Middle']);
+    request.mockRejectedValueOnce(new Error('Connection lost'));
+    applyLimit(1);
+    await waitFor(() => expect(result.getByRole('alert').textContent).toBe('Connection lost'));
+    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    applyLimit(3);
+    await result.findByText('3 returned rows · executed limit 3');
+  });
+
+  it('keeps pending limits truthful, preserves newer editor changes and requires current transport', async () => {
+    const { request, respond, view, replaceSource, result, applyLimit, switchTransport } =
+      mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    request.mockImplementationOnce(async envelope => {
+      await pending;
+      return respond(envelope);
+    });
+    applyLimit(1);
+    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('disabled', true);
+    applyLimit(3);
+    expect(request).toHaveBeenCalledTimes(2);
+    replaceSource('Tag.where(active = false).many()');
+    await act(async () => {
+      release();
+      await pending;
+    });
+    await result.findByText('1 returned rows · executed limit 1');
+    expect(view.state.doc.toString()).toBe('Tag.where(active = false).many()');
+    switchTransport();
+    expect(result.getByRole('spinbutton')).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByText('1 returned rows · executed limit 25');
+    expect(result.getByRole('spinbutton')).toHaveProperty('disabled', false);
+  });
+});
 
 describe('Console bidirectional Query ordering', () => {
   it('uses receiver ordering permissions in autocomplete, without restricting manual source', async () => {

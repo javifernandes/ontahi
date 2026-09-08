@@ -108,6 +108,12 @@ whitespace, and limits; invalid documents or unsupported orders return `undefine
 changes together as one editor transaction. `isConsoleOrderableField` supplies the same intrinsic
 Field capability used by diagnostics and completion; it does not grant execution authority.
 
+`editConsoleLimit(document, application, limit)` similarly returns source-range changes for a valid
+many Query. It replaces only the numeric literal or inserts `.limit(...)` after Selection/ordering,
+preserving other source and whitespace. Zero is supported; invalid drafts, other terminals, and
+negative, fractional, or unsafe integer limits return `undefined`. Apply the changes as one editor
+transaction; ordinary receiver policy still owns the maximum authorized limit.
+
 `completeConsoleDocument(document, position, application, { orderableFields })` optionally narrows
 ordering suggestions with a synchronous `(entityName) => readonly string[]` resolver supplied by
 the host. Return `[]` when unavailable or denied. Omitting the resolver retains schema-only

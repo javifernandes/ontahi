@@ -84,7 +84,7 @@ ordinary Graph Read; the runtime applies ordering before its limit. Text changes
 until explicitly executed. The table retains the last successful request/source/result snapshot,
 so its sort indicator does not claim that an unfinished, pending, or rejected draft produced those
 rows. Invalid or other-Entity drafts disable table actions. This first projection supports one
-ordering Field; table limit controls and multi-Field ordering remain later work. Header availability
+ordering Field; multi-Field ordering remains later work. Header availability
 intersects reflected scalar types with optional ordering capabilities delivered by the successful
 Graph Read. Core owns those policy-derived capabilities; Devtools projects them as enabled controls
 or explanatory inactive headers, never as frontend policy. Missing metadata, replaced transport,
@@ -93,6 +93,12 @@ not durable grants: authorization still runs on every submitted query.
 Console ordering autocomplete consumes the same snapshot through a headless completion resolver.
 It suggests only permitted reflected Fields for the matching Entity and transport, while manual
 authoring and other completion contexts remain independent of that advisory capability.
+
+The many-result limit control is another source-backed projection. Apply/Enter edits only the limit
+through headless source ranges, then submits the current same-Entity draft. Returned row count and
+executed limit describe the retained successful snapshot, including during failures and pending
+reads; they do not imply a total count or pagination. UI draft numbers and source Undo never execute
+implicitly, and the receiver still enforces maximum-limit policy.
 
 Transport routing is likewise a reusable Core runtime component rather than state owned by the
 Devtools panel or application. Devtools discovers and operates the `routing` capability of an

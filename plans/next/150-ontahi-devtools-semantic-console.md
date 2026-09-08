@@ -413,7 +413,13 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
     Fields and offering none when capabilities are unavailable. An optional headless completion
     resolver narrows assistance without restricting manual authoring or changing query semantics;
     CodeMirror reconfiguration drops stale suggestions without changing source or history.
-14. Table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
+14. Visual many-result limits are editable with Apply/Enter. The headless `editConsoleLimit` helper
+    inserts or replaces only the limit's source range, preserving filters, ordering and trivia in
+    one undoable transaction. Textual changes reflect after Run; pending/failing requests retain
+    the executed limit and returned row count. Invalid/other-Entity/non-many drafts and replaced
+    transports disable the control. Zero is supported; server maximum policy remains unchanged.
+    Pagination and total counts are not inferred from this control.
+15. Multiple ordering Fields, named Views, other Query terminals/members,
     source history, Commands, Operations, full reflection
     delivery, and the terminal CLI remain later slices of this plan.
 

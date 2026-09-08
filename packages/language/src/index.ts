@@ -1287,6 +1287,26 @@ export const isConsoleOrderableField = (field: SelectionLanguageFieldReflection)
 
 export type ConsoleDocumentChange = SelectionLanguageRange & { readonly insert: string };
 
+/** Insert or replace a many Query's limit without rewriting unrelated source. */
+export const editConsoleLimit = (
+  document: string,
+  application: ConsoleLanguageApplicationReflection,
+  limit: number,
+): readonly ConsoleDocumentChange[] | undefined => {
+  if (!Number.isSafeInteger(limit) || limit < 0) return undefined;
+  const analysis = analyzeConsoleDocument(document, application);
+  const syntax = analysis.syntax.expression;
+  if (!analysis.request || syntax?.terminal?.kind !== 'many-member' || !syntax.entity)
+    return undefined;
+  if (syntax.limitValue) {
+    return syntax.limitValue.value === limit
+      ? []
+      : [{ from: syntax.limitValue.from, to: syntax.limitValue.to, insert: String(limit) }];
+  }
+  const position = syntax.orderBy?.to ?? syntax.whereClose?.to ?? syntax.entity.to;
+  return [{ from: position, to: position, insert: `.limit(${limit})` }];
+};
+
 /** Source-preserving edits for a valid Query; safe to apply as one editor transaction. */
 export const editConsoleOrderBy = (
   document: string,
