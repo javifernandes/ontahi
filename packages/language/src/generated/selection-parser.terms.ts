@@ -54,4 +54,5 @@ export const SelectionDocument = 1,
   First = 53,
   One = 54,
   Many = 55,
-  Count = 56;
+  Count = 56,
+  Exists = 57;

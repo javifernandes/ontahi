@@ -96,7 +96,7 @@ const consoleParser = consoleDocumentParser.configure({
   props: [
     styleTags({
       EntityName: tags.typeName,
-      'Where OrderBy Limit First One Many Count': tags.function(tags.propertyName),
+      'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
       OrderDirection: tags.keyword,
       FieldName: tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,

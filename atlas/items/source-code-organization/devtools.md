@@ -78,6 +78,12 @@ Ordered Relationship Commands keep that same progression. Activity summarizes a 
 source/list, moving member, and destination. Body and Envelope remain the exact portable evidence;
 Devtools does not synthesize UI drag events or observe presentation storage.
 
+The Console's `exists()` terminal uses the application Graph Read's presence semantics: the
+language lowers to a bounded nullable `get`, and the Console projects a successful record/null to
+a Boolean. The submitted source determines that projection even if the draft changes in flight.
+Read policies and failures are preserved; Activity retains the real exchange rather than a
+synthetic Boolean protocol response. Ordering and display-limit modifiers do not apply to exists.
+
 The Console's Visual many-result table is also a source-backed Query editing projection. A scalar
 Field header edits `.orderBy(...)` through the headless language's source ranges and submits the
 ordinary Graph Read; the runtime applies ordering before its limit. Text changes remain drafts

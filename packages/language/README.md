@@ -90,6 +90,12 @@ than adding leading family keywords.
 Omitting `.where(...)` selects `all`. `.count()` returns the canonical count without a row limit;
 `.limit(nonNegativeInteger)` is supported only with `.many()`.
 
+`Tag.exists()` and `TodoItem.where(completed = false).exists()` lower to nullable `get` with
+`limit: 1`, independent of the Console display limit. The parsed terminal is `exists-member`;
+execution hosts project a successful record to `true` and `null` to `false`, matching the
+application Graph Read intent. Transport/policy failures remain errors, not absence. No new
+protocol mode or permission is introduced: this terminal requires the ordinary `get` policy.
+
 Ordering is a Query modifier, not part of Selection membership:
 
 ```text
@@ -100,7 +106,7 @@ TodoItem.where(completed = false).orderBy(title, desc).first()
 The chain is `Entity` → optional `where` → optional `orderBy` → optional `limit` → terminal.
 This slice supports one reflected scalar Field (`id`, string, number, Boolean, enum), with `asc`
 as the default or explicit `asc`/`desc`. References and structured values are not sortable, and
-ordering with `count()` is rejected. Runtime read policies may reject otherwise valid ordering.
+ordering with `count()` or `exists()` is rejected. Runtime read policies may reject otherwise valid ordering.
 
 `editConsoleOrderBy(document, application, order | undefined)` returns source-range changes to
 insert, update, or remove ordering. It preserves unrelated source, including Selection spelling,

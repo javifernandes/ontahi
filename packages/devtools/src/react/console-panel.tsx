@@ -263,7 +263,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
-    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    const executedAnalysis = analyzeConsoleDocument(source, application, { limit });
+    const request = executedAnalysis.request;
     if (!request) {
       setResult(previous => ({
         snapshot: previous.snapshot,
@@ -286,18 +287,24 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
     void exchange({ family: 'graph.read', body: { ...request, includeCapabilities: true } })
       .then(graphReadResult)
-      .then(result =>
+      .then(result => {
+        const exists = executedAnalysis.syntax.expression?.terminal?.kind === 'exists-member';
+        if (exists && result.value !== null && !isRecord(result.value)) {
+          throw new Error('Graph Read exists expected an Entity record or null.');
+        }
         setResult({
           status: 'success',
           snapshot: {
             document: source,
             request,
             ...result,
+            // Match the application Graph Read exists intent over nullable get.
+            value: exists ? result.value !== null : result.value,
             transport: runtimeTransport,
             durationMs: Math.max(0, performance.now() - startedAt),
           },
-        }),
-      )
+        });
+      })
       .catch((error: unknown) =>
         setResult(previous => ({
           snapshot:
@@ -451,9 +458,11 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
             : [
                 analysis.request?.selection.entityName ?? 'No Entity',
                 'graph.read',
-                analysis.request?.mode === 'count'
-                  ? 'count'
-                  : 'limit ' + (analysis.request?.limit ?? limit),
+                analysis.syntax.expression?.terminal?.kind === 'exists-member'
+                  ? 'exists'
+                  : analysis.request?.mode === 'count'
+                    ? 'count'
+                    : 'limit ' + (analysis.request?.limit ?? limit),
               ].join(' · ')}
         </div>
       </div>

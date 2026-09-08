@@ -121,6 +121,78 @@ const mountConsole = (source = 'Tag.where(active = true).limit(2).many()') => {
   };
 };
 
+describe('Console exists reads', () => {
+  it.each([
+    ['Tag.exists()', true],
+    ['Tag.where(active = true).exists()', true],
+    ['Tag.where(name = "Missing").exists()', false],
+    ['Tag.where(none).exists()', false],
+  ])('renders %s as a Boolean in Visual and JSON', async (source, expected) => {
+    const { request, result } = mountConsole(source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByText(String(expected));
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]![0].body).toMatchObject({ mode: 'get', limit: 1, orderBy: [] });
+    expect(request.mock.calls[0]![0].body).not.toHaveProperty('cardinality');
+    expect(result.queryByRole('table')).toBeNull();
+    expect(result.queryByRole('spinbutton')).toBeNull();
+    fireEvent.click(result.getByRole('button', { name: 'JSON' }));
+    expect(result.getByText(String(expected)).closest('pre')?.textContent).toBe(String(expected));
+  });
+
+  it('keeps the executed exists intent when the editor changes during the read', async () => {
+    const { request, respond, replaceSource, result } = mountConsole('Tag.exists()');
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    request.mockImplementationOnce(async envelope => {
+      await pending;
+      return respond(envelope);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    replaceSource('Tag.first()');
+    await act(async () => {
+      release();
+      await pending;
+    });
+    await result.findByText('true');
+    expect(result.getByRole('status').textContent).toBe('Changes not run');
+  });
+
+  it('preserves policy and transport failures instead of turning them into false', async () => {
+    const { request, replaceSource, result } = mountConsole('Tag.exists()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByText('true');
+    replaceSource('Other.exists()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect((await result.findByRole('alert')).textContent).toBe('Data graph read access denied.');
+    expect(result.getByText('true')).toBeTruthy();
+    request.mockRejectedValueOnce(new Error('Connection lost'));
+    replaceSource('Tag.exists()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(result.getByRole('alert').textContent).toBe('Connection lost'));
+    expect(result.getByText('true')).toBeTruthy();
+  });
+
+  it.each([[], false, 0, 'invalid'])('rejects a malformed nullable get result %j', async value => {
+    const { request, result } = mountConsole('Tag.exists()');
+    request.mockImplementationOnce(async envelope =>
+      createRuntimeProtocolResponse(envelope, {
+        version: 1,
+        kind: 'graph-read-result',
+        value,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect((await result.findByRole('alert')).textContent).toBe(
+      'Graph Read exists expected an Entity record or null.',
+    );
+    expect(result.queryByText('true')).toBeNull();
+    expect(result.queryByText('false')).toBeNull();
+  });
+});
+
 describe('Console bidirectional Query limit', () => {
   it('keeps result chrome in one toolbar without repeating the query or success status', async () => {
     const { result } = mountConsole();
@@ -192,6 +264,7 @@ describe('Console bidirectional Query limit', () => {
       'Tag.first()',
       'Tag.one()',
       'Tag.count()',
+      'Tag.exists()',
     ]) {
       replaceSource(source);
       expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty(

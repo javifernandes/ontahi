@@ -68,6 +68,7 @@ describe('Console Graph Read language', () => {
     ['first', 'first-member', 'get', undefined],
     ['one', 'one-member', 'get', 'one'],
     ['count', 'count-member', 'count', undefined],
+    ['exists', 'exists-member', 'get', undefined],
   ] as const)(
     'defaults %s() to the canonical all Selection',
     (terminal, terminalKind, mode, cardinality) => {
@@ -92,7 +93,7 @@ describe('Console Graph Read language', () => {
           expression: { kind: 'all' },
         },
         orderBy: [],
-        ...(mode === 'count' ? {} : { limit: 25 }),
+        ...(mode === 'count' ? {} : { limit: terminal === 'exists' ? 1 : 25 }),
         ...(cardinality ? { cardinality } : {}),
       });
     },
@@ -172,7 +173,7 @@ describe('Console Graph Read language', () => {
       expect(analysis.request).toBeUndefined();
     }
 
-    for (const terminal of ['first', 'one', 'count']) {
+    for (const terminal of ['first', 'one', 'count', 'exists']) {
       const analysis = analyzeConsoleDocument(`TodoItem.limit(2).${terminal}()`, application);
       expect(analysis.semanticDiagnostics).toEqual([
         expect.objectContaining({
@@ -255,7 +256,7 @@ describe('Console Graph Read language', () => {
           channel: 'syntax',
           code: 'console.syntax.invalid',
           message:
-            'Expected .orderBy(...), .limit(...), .first(), .one(), .many(), or .count() after the Selection expression.',
+            'Expected .orderBy(...), .limit(...), .first(), .one(), .many(), .count(), or .exists() after the Selection expression.',
         },
       ],
     });
@@ -330,6 +331,58 @@ describe('Console Graph Read language', () => {
     expect(
       completeConsoleDocument(firstDocument, firstDocument.length, application).items,
     ).toContainEqual(expect.objectContaining({ label: 'first', apply: 'first()', kind: 'member' }));
+  });
+
+  it('lowers filtered exists to a bounded nullable get, independent of the display limit', () => {
+    const analysis = analyzeConsoleDocument(
+      'TodoItem.where(completed = false).exists()',
+      application,
+      { limit: 0 },
+    );
+    expect(analysis.syntaxDiagnostics).toEqual([]);
+    expect(analysis.semanticDiagnostics).toEqual([]);
+    expect(analysis.request).toEqual({
+      version: 1,
+      kind: 'graph-read',
+      mode: 'get',
+      selection: {
+        kind: 'selection',
+        entityName: 'TodoItem',
+        expression: { kind: 'predicate', fieldName: 'completed', operator: 'eq', value: false },
+      },
+      orderBy: [],
+      limit: 1,
+    });
+  });
+
+  it('offers exists only without row modifiers and diagnoses incomplete arguments', () => {
+    for (const source of ['TodoItem.ex', 'TodoItem.where(completed = false).ex']) {
+      expect(completeConsoleDocument(source, source.length, application).items).toEqual([
+        {
+          label: 'exists',
+          apply: 'exists()',
+          kind: 'member',
+          detail: 'Whether any Entity matches the Selection',
+        },
+      ]);
+    }
+    for (const source of ['TodoItem.orderBy(title).', 'TodoItem.limit(2).']) {
+      expect(
+        completeConsoleDocument(source, source.length, application).items.map(item => item.label),
+      ).not.toContain('exists');
+    }
+    for (const source of ['TodoItem.exists', 'TodoItem.exists(', 'TodoItem.exists(true)']) {
+      expect(analyzeConsoleDocument(source, application).request).toBeUndefined();
+      expect(parseConsoleDocument(source).syntaxDiagnostics.length).toBeGreaterThan(0);
+    }
+    const invalid = analyzeConsoleDocument('TodoItem.orderBy(title).exists()', application);
+    expect(invalid.request).toBeUndefined();
+    expect(invalid.semanticDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'console.semantic.unsupported-order',
+        message: '.orderBy(...) cannot be combined with .exists().',
+      }),
+    ]);
   });
 
   it('projects Core Entity definitions into the existing Selection reflection input', () => {

@@ -240,7 +240,7 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly limitValue?: SelectionNumberLiteralSyntax;
   readonly limitClose?: SelectionLanguageToken<'close-parenthesis'>;
   readonly terminal?: SelectionLanguageToken<
-    'first-member' | 'one-member' | 'many-member' | 'count-member'
+    'first-member' | 'one-member' | 'many-member' | 'count-member' | 'exists-member'
   >;
   readonly terminalOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly terminalClose?: SelectionLanguageToken<'close-parenthesis'>;
@@ -995,6 +995,7 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
   const oneTerminal = readTerminal?.getChild('One');
   const manyTerminal = readTerminal?.getChild('Many');
   const countTerminal = readTerminal?.getChild('Count');
+  const existsTerminal = readTerminal?.getChild('Exists');
   const limitValueToken = tokenOf(
     'number-literal',
     limitClause?.getChild('NumberLiteral') ?? null,
@@ -1042,7 +1043,9 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
           ? tokenOf('one-member', oneTerminal, document)
           : manyTerminal
             ? tokenOf('many-member', manyTerminal, document)
-            : tokenOf('count-member', countTerminal ?? null, document),
+            : countTerminal
+              ? tokenOf('count-member', countTerminal, document)
+              : tokenOf('exists-member', existsTerminal ?? null, document),
       terminalOpen: tokenOf('open-parenthesis', graphRead.getChild('OpenParen'), document),
       terminalClose: tokenOf('close-parenthesis', graphRead.getChild('CloseParen'), document),
     },
@@ -1073,8 +1076,8 @@ const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
     if (order?.close)
       return 'Expected .limit(...), .first(), .one(), or .many() after .orderBy(...).';
     return expression.whereClose
-      ? 'Expected .orderBy(...), .limit(...), .first(), .one(), .many(), or .count() after the Selection expression.'
-      : `Expected .where(...), .orderBy(...), .limit(...), .first(), .one(), .many(), or .count() after ${expression.entity.text}.`;
+      ? 'Expected .orderBy(...), .limit(...), .first(), .one(), .many(), .count(), or .exists() after the Selection expression.'
+      : `Expected .where(...), .orderBy(...), .limit(...), .first(), .one(), .many(), .count(), or .exists() after ${expression.entity.text}.`;
   }
   if (!expression.terminalOpen || !expression.terminalClose) {
     return `Expected an empty argument list after .${expression.terminal.text}.`;
@@ -1209,11 +1212,11 @@ export const analyzeConsoleDocument = (
       to: order.direction.to,
     });
   }
-  if (order && expression.terminal.kind === 'count-member') {
+  if (order && ['count-member', 'exists-member'].includes(expression.terminal.kind)) {
     modifierDiagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.unsupported-order',
-      message: '.orderBy(...) cannot be combined with .count().',
+      message: `.orderBy(...) cannot be combined with .${expression.terminal.text}().`,
       from: order.from,
       to: order.to,
     });
@@ -1269,7 +1272,12 @@ export const analyzeConsoleDocument = (
               : [],
             ...(expression.terminal.kind === 'count-member'
               ? {}
-              : { limit: expression.limitValue?.value ?? options.limit ?? 25 }),
+              : {
+                  limit:
+                    expression.terminal.kind === 'exists-member'
+                      ? 1
+                      : (expression.limitValue?.value ?? options.limit ?? 25),
+                }),
             ...(expression.terminal.kind === 'one-member'
               ? { cardinality: 'one' as const }
               : expression.terminal.kind === 'many-member'
@@ -1315,7 +1323,13 @@ export const editConsoleOrderBy = (
 ): readonly ConsoleDocumentChange[] | undefined => {
   const analysis = analyzeConsoleDocument(document, application);
   const syntax = analysis.syntax.expression;
-  if (!analysis.request || !syntax?.entity || analysis.request.mode === 'count') return undefined;
+  if (
+    !analysis.request ||
+    !syntax?.entity ||
+    analysis.request.mode === 'count' ||
+    syntax.terminal?.kind === 'exists-member'
+  )
+    return undefined;
   const existing = syntax.orderBy;
   const changes: ConsoleDocumentChange[] = [];
   if (!order) {
@@ -1395,6 +1409,12 @@ const consoleReadTerminalCompletionItems: readonly ConsoleLanguageCompletionItem
     apply: 'count()',
     kind: 'member',
     detail: 'Graph Read count terminal',
+  },
+  {
+    label: 'exists',
+    apply: 'exists()',
+    kind: 'member',
+    detail: 'Whether any Entity matches the Selection',
   },
 ];
 
@@ -1545,7 +1565,9 @@ export const completeConsoleDocument = (
       ...range,
       items: [
         consoleLimitCompletionItem,
-        ...consoleReadTerminalCompletionItems.filter(item => item.label !== 'count'),
+        ...consoleReadTerminalCompletionItems.filter(
+          item => item.label !== 'count' && item.label !== 'exists',
+        ),
       ].filter(item => item.label.startsWith(memberPrefix)),
     };
   }

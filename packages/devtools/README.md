@@ -56,6 +56,10 @@ const runtimeTransport = createRuntimeTransportRouter({
 The Console supports filtered and unfiltered read terminals. `Tag.count()` and
 `TodoItem.where(completed = false).count()` lower directly to the canonical Graph Read `count`
 mode; count requests do not inherit the Console row limit or a row cardinality.
+`Tag.exists()` and `TodoItem.where(completed = false).exists()` return a Boolean in both Visual
+and JSON. They reuse nullable `get` with a limit of one and the existing read policy, then project
+the successful result to presence/absence. Errors remain errors, never `false`. `exists()` accepts
+neither `limit` nor `orderBy`, and has no table controls. Activity retains the actual `get` exchange.
 Many reads may override the default row limit in source, for example `Tag.limit(10).many()` or
 `TodoItem.where(completed = false).limit(5).many()`.
 
@@ -70,7 +74,7 @@ Run reflects source ordering in the table header. Clicking a scalar Field header
 ascending, descending, and no explicit order: it edits only the ordering source ranges as one
 undoable transaction and submits a new Graph Read. Sorting happens in the runtime before the
 limit, never just over visible rows. The first slice supports one ordering Field; `first()` and
-`one()` also accept textual ordering, while `count()` does not.
+`one()` also accept textual ordering, while `count()` and `exists()` do not.
 
 Typing or undoing does not execute. The table and arrow describe the last successful execution.
 The result uses one compact toolbar: last successful round-trip duration (including transport),

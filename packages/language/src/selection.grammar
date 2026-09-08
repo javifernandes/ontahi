@@ -14,7 +14,7 @@ OrderByClause { Dot OrderBy OpenParen FieldName (Comma OrderDirection)? ClosePar
 OrderDirection { Identifier }
 LimitClause { Dot Limit OpenParen NumberLiteral CloseParen }
 EntityName { Identifier }
-ReadTerminal { First | One | Many | Count }
+ReadTerminal { First | One | Many | Count | Exists }
 
 OrExpression { AndExpression (Or AndExpression)* }
 AndExpression { NotExpression (And NotExpression)* }
@@ -48,6 +48,7 @@ First { @specialize<Identifier, "first"> }
 One { @specialize<Identifier, "one"> }
 Many { @specialize<Identifier, "many"> }
 Count { @specialize<Identifier, "count"> }
+Exists { @specialize<Identifier, "exists"> }
 Limit { @specialize<Identifier, "limit"> }
 OrderBy { @specialize<Identifier, "orderBy"> }
 

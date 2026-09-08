@@ -373,7 +373,7 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    `.where(...)` resolves to the canonical `all` Selection. Filtered and unfiltered `.count()`
    terminals use the canonical count mode without row cardinality or limit.
 3. Many reads accept `.limit(nonNegativeInteger)` before their terminal and lower that source value
-   to the canonical request limit; combinations with `first()`, `one()`, or `count()` are rejected
+   to the canonical request limit; combinations with `first()`, `one()`, `count()`, or `exists()` are rejected
    as meaningless.
 4. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
@@ -387,7 +387,7 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    `TodoItem.where(completed = false).many()` as the browser proof.
 8. `.orderBy(field[, asc|desc])` reuses canonical Graph Read ordering, with one reflected scalar
    Field and ascending as the default. The grammar orders `where`, `orderBy`, `limit`, then the
-   terminal. Ordering is supported for `many`, `first`, and `one`, not `count`.
+   terminal. Ordering is supported for `many`, `first`, and `one`, not `count` or `exists`.
 9. Visual many-result headers and source are projections of that same Query. Header actions cycle
    ascending/descending/none, apply source-range edits in one undoable CodeMirror transaction, and
    explicitly execute through Runtime Transport. No client-side row sorting or hidden sort state
@@ -423,7 +423,13 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
     and Visual/JSON. The duplicate query disclosure, success message and row/limit summary are
     removed. Apply appears only for a changed numeric draft; stale/pending notices are inline and
     errors remain actionable. Timing belongs to the successful snapshot, not a pending/failed read.
-16. Multiple ordering Fields, named Views, other Query terminals/members,
+16. Filtered and unfiltered `exists()` lower to nullable `get` with `limit: 1`, independent of the
+    Console display limit, matching the application Graph Read intent. The Console projects only
+    successful record/null results to Boolean in Visual/JSON; policy, transport and malformed
+    response failures remain errors. Projection is tied to the submitted source, not an in-flight
+    draft. Completion, highlighting and rich Selection values reuse the shared language. No
+    protocol mode, permission, ordering, or display-limit control is added for existence reads.
+17. Multiple ordering Fields, named Views, other Query terminals/members,
     source history, Commands, Operations, full reflection
     delivery, and the terminal CLI remain later slices of this plan.
 

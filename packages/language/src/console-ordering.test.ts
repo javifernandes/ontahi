@@ -171,6 +171,7 @@ describe('Console ordering', () => {
     for (const source of [
       'Tag.orderBy(',
       'Tag.count()',
+      'Tag.exists()',
       'Missing.many()',
       'Tag.where(missing = 1).many()',
     ]) {

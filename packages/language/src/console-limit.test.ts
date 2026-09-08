@@ -36,6 +36,7 @@ describe('Console limit source edits', () => {
       expect(editConsoleLimit('Tag.many()', application, limit)).toBeUndefined();
     for (const source of [
       'Tag.count()',
+      'Tag.exists()',
       'Tag.first()',
       'Tag.one()',
       'Tag.limit(',

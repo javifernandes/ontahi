@@ -1098,12 +1098,12 @@ describe('Selection CodeMirror adapter', () => {
     parent.remove();
   });
 
-  it.each(['', '.orderBy(title, desc).limit(2)'])(
-    'projects and edits finite values inside a Console Query with modifiers %s',
-    modifiers => {
+  it.each(['.many()', '.orderBy(title, desc).limit(2).many()', '.exists()'])(
+    'projects and edits finite values inside a Console Query ending in %s',
+    suffix => {
       const parent = document.createElement('div');
       document.body.append(parent);
-      const source = `TodoItem.where(completed = false)${modifiers}.many()`;
+      const source = `TodoItem.where(completed = false)${suffix}`;
       const view = new EditorView({
         parent,
         state: EditorState.create({
@@ -1120,7 +1120,7 @@ describe('Selection CodeMirror adapter', () => {
       expect(select.value).toBe('false');
       select.value = 'true';
       select.dispatchEvent(new Event('change', { bubbles: true }));
-      expect(view.state.doc.toString()).toBe(`TodoItem.where(completed = true)${modifiers}.many()`);
+      expect(view.state.doc.toString()).toBe(`TodoItem.where(completed = true)${suffix}`);
 
       view.destroy();
       parent.remove();
@@ -1129,6 +1129,7 @@ describe('Selection CodeMirror adapter', () => {
 
   it.each([
     'TodoItem.where(completed = false).one',
+    'TodoItem.where(completed = false).exists',
     'TodoItem.where(completed = false).orderBy(title, desc',
     'TodoItem.orderBy',
   ])('keeps Backspace editing through incomplete Console syntax %s', source => {
