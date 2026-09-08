@@ -218,7 +218,9 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly selection?: SelectionExpressionSyntax;
   readonly whereClose?: SelectionLanguageToken<'close-parenthesis'>;
-  readonly terminal?: SelectionLanguageToken<'first-member' | 'one-member' | 'many-member'>;
+  readonly terminal?: SelectionLanguageToken<
+    'first-member' | 'one-member' | 'many-member' | 'count-member'
+  >;
   readonly terminalOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly terminalClose?: SelectionLanguageToken<'close-parenthesis'>;
 };
@@ -965,6 +967,7 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
   const firstTerminal = readTerminal?.getChild('First');
   const oneTerminal = readTerminal?.getChild('One');
   const manyTerminal = readTerminal?.getChild('Many');
+  const countTerminal = readTerminal?.getChild('Count');
   const where = graphRead.getChild('Where');
   const terminalParenthesisIndex = where ? 1 : 0;
   return {
@@ -983,7 +986,9 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
         ? tokenOf('first-member', firstTerminal, document)
         : oneTerminal
           ? tokenOf('one-member', oneTerminal, document)
-          : tokenOf('many-member', manyTerminal ?? null, document),
+          : manyTerminal
+            ? tokenOf('many-member', manyTerminal, document)
+            : tokenOf('count-member', countTerminal ?? null, document),
       terminalOpen: tokenOf('open-parenthesis', opens[terminalParenthesisIndex] ?? null, document),
       terminalClose: tokenOf(
         'close-parenthesis',
@@ -1003,8 +1008,8 @@ const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   }
   if (!expression.terminal) {
     return expression.whereClose
-      ? 'Expected .first(), .one(), or .many() after the Selection expression.'
-      : `Expected .where(...), .first(), .one(), or .many() after ${expression.entity.text}.`;
+      ? 'Expected .first(), .one(), .many(), or .count() after the Selection expression.'
+      : `Expected .where(...), .first(), .one(), .many(), or .count() after ${expression.entity.text}.`;
   }
   if (!expression.terminalOpen || !expression.terminalClose) {
     return `Expected an empty argument list after .${expression.terminal.text}.`;
@@ -1112,19 +1117,24 @@ export const analyzeConsoleDocument = (
           request: {
             version: 1,
             kind: 'graph-read',
-            mode: expression.terminal.kind === 'many-member' ? 'run' : 'get',
+            mode:
+              expression.terminal.kind === 'many-member'
+                ? 'run'
+                : expression.terminal.kind === 'count-member'
+                  ? 'count'
+                  : 'get',
             selection: {
               kind: 'selection',
               entityName: entity.name,
               expression: resolved.expression,
             },
             orderBy: [],
-            limit: options.limit ?? 25,
-            ...(expression.terminal.kind === 'first-member'
-              ? {}
-              : {
-                  cardinality: expression.terminal.kind === 'one-member' ? 'one' : 'many',
-                }),
+            ...(expression.terminal.kind === 'count-member' ? {} : { limit: options.limit ?? 25 }),
+            ...(expression.terminal.kind === 'one-member'
+              ? { cardinality: 'one' as const }
+              : expression.terminal.kind === 'many-member'
+                ? { cardinality: 'many' as const }
+                : {}),
           } satisfies GraphReadRequestV1,
         }
       : {}),
@@ -1157,6 +1167,12 @@ const consoleReadTerminalCompletionItems: readonly ConsoleLanguageCompletionItem
     apply: 'many()',
     kind: 'member',
     detail: 'Many Graph Read terminal',
+  },
+  {
+    label: 'count',
+    apply: 'count()',
+    kind: 'member',
+    detail: 'Graph Read count terminal',
   },
 ];
 

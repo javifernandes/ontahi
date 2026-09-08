@@ -47,4 +47,5 @@ export const SelectionDocument = 1,
   ReadTerminal = 46,
   First = 47,
   One = 48,
-  Many = 49;
+  Many = 49,
+  Count = 50;

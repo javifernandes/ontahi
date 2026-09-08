@@ -16,4 +16,5 @@ cardinality mismatches cross the Graph Read protocol as an authority-safe struct
 rather than an opaque availability failure. Boolean and enum literals use the same schema-aware,
 source-backed value controls as the Explorer Selection editor. Omitting `.where(...)` defaults to
 the canonical `all` Selection, so unfiltered reads can use `Entity.many()`, `Entity.first()`, or
-`Entity.one()` directly.
+`Entity.one()` directly. `Entity.count()` and `Entity.where(Selection).count()` use the existing
+Graph Read count mode and render its scalar result without applying a row limit or cardinality.

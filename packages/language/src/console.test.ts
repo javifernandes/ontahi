@@ -67,6 +67,7 @@ describe('Console Graph Read language', () => {
     ['many', 'many-member', 'run', 'many'],
     ['first', 'first-member', 'get', undefined],
     ['one', 'one-member', 'get', 'one'],
+    ['count', 'count-member', 'count', undefined],
   ] as const)(
     'defaults %s() to the canonical all Selection',
     (terminal, terminalKind, mode, cardinality) => {
@@ -91,11 +92,37 @@ describe('Console Graph Read language', () => {
           expression: { kind: 'all' },
         },
         orderBy: [],
-        limit: 25,
+        ...(mode === 'count' ? {} : { limit: 25 }),
         ...(cardinality ? { cardinality } : {}),
       });
     },
   );
+
+  it('counts an explicit Selection without applying row cardinality or limit', () => {
+    const analysis = analyzeConsoleDocument(
+      'TodoItem.where(completed = false).count()',
+      application,
+    );
+
+    expect(analysis.syntaxDiagnostics).toEqual([]);
+    expect(analysis.semanticDiagnostics).toEqual([]);
+    expect(analysis.request).toEqual({
+      version: 1,
+      kind: 'graph-read',
+      mode: 'count',
+      selection: {
+        kind: 'selection',
+        entityName: 'TodoItem',
+        expression: {
+          kind: 'predicate',
+          fieldName: 'completed',
+          operator: 'eq',
+          value: false,
+        },
+      },
+      orderBy: [],
+    });
+  });
 
   it('keeps unknown Entities separate from nested Selection diagnostics', () => {
     expect(analyzeConsoleDocument('Missing.where(all).many()', application)).toMatchObject({
@@ -166,7 +193,8 @@ describe('Console Graph Read language', () => {
         {
           channel: 'syntax',
           code: 'console.syntax.invalid',
-          message: 'Expected .first(), .one(), or .many() after the Selection expression.',
+          message:
+            'Expected .first(), .one(), .many(), or .count() after the Selection expression.',
         },
       ],
     });
@@ -195,6 +223,11 @@ describe('Console Graph Read language', () => {
       completeConsoleDocument(directTerminalDocument, directTerminalDocument.length, application)
         .items,
     ).toEqual([expect.objectContaining({ label: 'many', apply: 'many()', kind: 'member' })]);
+
+    const countDocument = 'TodoItem.c';
+    expect(completeConsoleDocument(countDocument, countDocument.length, application).items).toEqual(
+      [expect.objectContaining({ label: 'count', apply: 'count()', kind: 'member' })],
+    );
 
     const terminalDocument = 'TodoItem.where(all).o';
     expect(

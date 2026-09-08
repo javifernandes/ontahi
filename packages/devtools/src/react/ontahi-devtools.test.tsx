@@ -293,6 +293,66 @@ describe('OntahiDevtools', () => {
   );
 
   it(
+    'executes a Console count and renders its scalar result',
+    async () => {
+      const diagnostics = createOntahiDiagnostics();
+      const Tag = entity('Tag', {
+        id: field.id(),
+        name: field.string(),
+      });
+      const request = vi.fn().mockImplementation(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-read-result',
+          value: 3,
+        }),
+      );
+      const runtimeTransport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: { request },
+      });
+
+      render(
+        <OntahiDevtools
+          console={{ entities: [Tag], initialDocument: 'Tag.count()' }}
+          diagnostics={diagnostics}
+          initiallyOpen
+          runtimeTransport={runtimeTransport}
+        />,
+      );
+
+      const panel = within(
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Console' }));
+      expect(panel.getByText('Tag · graph.read · count')).toBeTruthy();
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+
+      expect(await within(panel.getByLabelText('Console result')).findByText('3')).toBeTruthy();
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        family: 'graph.read',
+        body: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'count',
+          selection: {
+            kind: 'selection',
+            entityName: 'Tag',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+      });
+      expect(request.mock.calls[0]?.[0].body).not.toHaveProperty('limit');
+      expect(request.mock.calls[0]?.[0].body).not.toHaveProperty('cardinality');
+      fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
     'executes an exact-one Console read and renders its single result',
     async () => {
       const diagnostics = createOntahiDiagnostics({

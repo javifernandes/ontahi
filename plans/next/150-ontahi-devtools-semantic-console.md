@@ -370,7 +370,8 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    `Entity.where(Selection).many()`, nullable `Entity.where(Selection).first()`, and exact-cardinality
    `Entity.where(Selection).one()`, plus their unfiltered `Entity.many()`, `Entity.first()`, and
    `Entity.one()` forms, and lowers them to canonical `GraphReadRequestV1` bodies. An omitted
-   `.where(...)` resolves to the canonical `all` Selection.
+   `.where(...)` resolves to the canonical `all` Selection. Filtered and unfiltered `.count()`
+   terminals use the canonical count mode without row cardinality or limit.
 3. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
 4. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and
