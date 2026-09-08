@@ -6,13 +6,11 @@ import { styles } from './devtools-styles.js';
 export const ConsoleResultLimit = ({
   request,
   defaultLimit,
-  rowCount,
   disabledReason,
   onApply,
 }: {
   readonly request: GraphReadRequestV1;
   readonly defaultLimit: number;
-  readonly rowCount: number;
   readonly disabledReason?: string;
   readonly onApply: (limit: number) => void;
 }) => {
@@ -34,13 +32,11 @@ export const ConsoleResultLimit = ({
         setDraft(String(limit));
       }}
     >
-      <span>
-        {rowCount} returned rows · executed limit {limit}
-      </span>
       <label>
         Limit{' '}
         <input
           aria-label='Result limit'
+          title={`Executed limit: ${limit}. Press Enter to apply.`}
           type='number'
           min={0}
           max={Number.MAX_SAFE_INTEGER}
@@ -52,14 +48,16 @@ export const ConsoleResultLimit = ({
           style={styles.consoleLimitInput}
         />
       </label>
-      <button
-        type='submit'
-        aria-label='Apply limit'
-        disabled={disabled}
-        style={{ ...styles.mode, ...(disabled ? styles.disabledButton : {}) }}
-      >
-        Apply
-      </button>
+      {draft !== String(limit) ? (
+        <button
+          type='submit'
+          aria-label='Apply limit'
+          disabled={disabled}
+          style={{ ...styles.mode, ...(disabled ? styles.disabledButton : {}) }}
+        >
+          Apply
+        </button>
+      ) : null}
     </form>
   );
 };

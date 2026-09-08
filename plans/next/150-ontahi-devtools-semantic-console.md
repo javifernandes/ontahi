@@ -416,10 +416,14 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 14. Visual many-result limits are editable with Apply/Enter. The headless `editConsoleLimit` helper
     inserts or replaces only the limit's source range, preserving filters, ordering and trivia in
     one undoable transaction. Textual changes reflect after Run; pending/failing requests retain
-    the executed limit and returned row count. Invalid/other-Entity/non-many drafts and replaced
+    the executed limit and results. Invalid/other-Entity/non-many drafts and replaced
     transports disable the control. Zero is supported; server maximum policy remains unchanged.
     Pagination and total counts are not inferred from this control.
-15. Multiple ordering Fields, named Views, other Query terminals/members,
+15. Result chrome is compacted into one toolbar with last successful round-trip duration, limit
+    and Visual/JSON. The duplicate query disclosure, success message and row/limit summary are
+    removed. Apply appears only for a changed numeric draft; stale/pending notices are inline and
+    errors remain actionable. Timing belongs to the successful snapshot, not a pending/failed read.
+16. Multiple ordering Fields, named Views, other Query terminals/members,
     source history, Commands, Operations, full reflection
     delivery, and the terminal CLI remain later slices of this plan.
 

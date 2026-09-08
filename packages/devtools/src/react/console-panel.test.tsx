@@ -122,12 +122,30 @@ const mountConsole = (source = 'Tag.where(active = true).limit(2).many()') => {
 };
 
 describe('Console bidirectional Query limit', () => {
+  it('keeps result chrome in one toolbar without repeating the query or success status', async () => {
+    const { result } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    const toolbar = within(result.getByRole('group', { name: 'Console result toolbar' }));
+    expect(toolbar.getByRole('spinbutton', { name: 'Result limit' })).toBeTruthy();
+    expect(toolbar.getByRole('button', { name: 'JSON' })).toBeTruthy();
+    expect(toolbar.getByLabelText('Last query duration').textContent).toMatch(/^\d+ ms$/);
+    expect(result.queryByText('Executed query')).toBeNull();
+    expect(result.queryByText('Result matches the executed query.')).toBeNull();
+    expect(result.queryByText('success')).toBeNull();
+    expect(result.queryByText(/returned rows · executed limit/)).toBeNull();
+    expect(toolbar.queryByRole('button', { name: 'Apply limit' })).toBeNull();
+    fireEvent.click(toolbar.getByRole('button', { name: 'JSON' }));
+    expect(toolbar.getByRole('spinbutton')).toBeTruthy();
+  });
+
   it('edits the current draft limit, preserving filters, order and undo history', async () => {
     const source = '  Tag.where(active = true) .orderBy(name, desc) .many()';
     const { request, view, replaceSource, result, visibleNames, applyLimit } = mountConsole(source);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByRole('table');
-    expect(result.getByText('3 returned rows · executed limit 25')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('value', '25');
+    expect(result.getAllByRole('row')).toHaveLength(4);
     fireEvent.change(result.getByRole('spinbutton'), { target: { value: '7' } });
     expect(request).toHaveBeenCalledOnce();
     expect(view.state.doc.toString()).toBe(source);
@@ -149,14 +167,15 @@ describe('Console bidirectional Query limit', () => {
       expect(undo(view)).toBe(true);
     });
     expect(view.state.doc.toString()).toBe(draft);
-    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('value', '2');
+    expect(result.getAllByRole('row')).toHaveLength(3);
     expect(request).toHaveBeenCalledOnce();
     act(() => {
       expect(redo(view)).toBe(true);
     });
     expect(view.state.doc.toString()).toBe(edited);
     applyLimit(0);
-    await result.findByText('0 returned rows · executed limit 0');
+    await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '0'));
     expect(view.state.doc.toString()).toBe(edited.replace('limit(2)', 'limit(0)'));
     expect(result.getByText('Empty list')).toBeTruthy();
   });
@@ -183,9 +202,11 @@ describe('Console bidirectional Query limit', () => {
       expect(request).toHaveBeenCalledOnce();
     }
     replaceSource('Tag.limit(3).many()');
-    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton').getAttribute('title')).toContain('Executed limit: 2.');
+    expect(result.getAllByRole('row')).toHaveLength(3);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
-    await result.findByText('3 returned rows · executed limit 3');
+    await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '3'));
+    expect(result.getAllByRole('row')).toHaveLength(4);
     expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty('value', '3');
     replaceSource('Tag.count()');
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -196,18 +217,21 @@ describe('Console bidirectional Query limit', () => {
     const { request, view, result, visibleNames, applyLimit } = mountConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByRole('table');
+    const duration = result.getByLabelText('Last query duration').textContent;
     applyLimit(51);
     await result.findByRole('alert');
+    expect(result.getByLabelText('Last query duration').textContent).toBe(duration);
     expect(view.state.doc.toString()).toBe('Tag.where(active = true).limit(51).many()');
-    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('value', '2');
     expect(result.getByRole('spinbutton')).toHaveProperty('value', '2');
     expect(visibleNames()).toEqual(['Zulu', 'Middle']);
     request.mockRejectedValueOnce(new Error('Connection lost'));
     applyLimit(1);
     await waitFor(() => expect(result.getByRole('alert').textContent).toBe('Connection lost'));
-    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('value', '2');
     applyLimit(3);
-    await result.findByText('3 returned rows · executed limit 3');
+    await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '3'));
+    expect(result.getAllByRole('row')).toHaveLength(4);
   });
 
   it('keeps pending limits truthful, preserves newer editor changes and requires current transport', async () => {
@@ -224,7 +248,8 @@ describe('Console bidirectional Query limit', () => {
       return respond(envelope);
     });
     applyLimit(1);
-    expect(result.getByText('2 returned rows · executed limit 2')).toBeTruthy();
+    expect(result.getByRole('spinbutton')).toHaveProperty('value', '2');
+    expect(result.getAllByRole('row')).toHaveLength(3);
     expect(result.getByRole('spinbutton')).toHaveProperty('disabled', true);
     applyLimit(3);
     expect(request).toHaveBeenCalledTimes(2);
@@ -233,12 +258,14 @@ describe('Console bidirectional Query limit', () => {
       release();
       await pending;
     });
-    await result.findByText('1 returned rows · executed limit 1');
+    await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '1'));
+    expect(result.getAllByRole('row')).toHaveLength(2);
     expect(view.state.doc.toString()).toBe('Tag.where(active = false).many()');
     switchTransport();
     expect(result.getByRole('spinbutton')).toHaveProperty('disabled', true);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
-    await result.findByText('1 returned rows · executed limit 25');
+    await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '25'));
+    expect(result.getAllByRole('row')).toHaveLength(2);
     expect(result.getByRole('spinbutton')).toHaveProperty('disabled', false);
   });
 });
@@ -364,7 +391,7 @@ describe('Console bidirectional Query ordering', () => {
     );
     fireEvent.click(result.getByRole('button', { name: 'Sort by name' }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(4));
-    await result.findByText('Result matches the executed query.');
+    await waitFor(() => expect(result.getByRole('status').textContent).toBe(''));
     expect(view.state.doc.toString()).toBe(source);
     expect(result.getByRole('columnheader', { name: 'name' }).hasAttribute('aria-sort')).toBe(
       false,
@@ -430,7 +457,7 @@ describe('Console bidirectional Query ordering', () => {
     expect(result.getByRole('columnheader', { name: 'name' }).getAttribute('aria-sort')).toBe(
       'ascending',
     );
-    expect(result.getByText('Tag.where(active = true).orderBy(name).limit(2).many()')).toBeTruthy();
+    expect(result.getByRole('status').textContent).toBe('Changes not run');
   });
 
   it('preserves results and executed ordering when policy or transport rejects a new sort', async () => {
@@ -519,7 +546,7 @@ describe('Console bidirectional Query ordering', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByText('Empty list');
     fireEvent.click(result.getByRole('button', { name: 'Sort by name' }));
-    await result.findByText('Result matches the executed query.');
+    await waitFor(() => expect(result.getByRole('status').textContent).toBe(''));
     expect(view.state.doc.toString()).toBe(
       'Tag.where(name = "Missing").orderBy(name).limit(2).many()',
     );

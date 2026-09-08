@@ -95,9 +95,11 @@ It suggests only permitted reflected Fields for the matching Entity and transpor
 authoring and other completion contexts remain independent of that advisory capability.
 
 The many-result limit control is another source-backed projection. Apply/Enter edits only the limit
-through headless source ranges, then submits the current same-Entity draft. Returned row count and
-executed limit describe the retained successful snapshot, including during failures and pending
-reads; they do not imply a total count or pagination. UI draft numbers and source Undo never execute
+through headless source ranges, then submits the current same-Entity draft. A compact result toolbar
+shows last successful round-trip duration, editable limit and Visual/JSON without duplicating the
+query or success/row summaries. Draft, pending and previous-result notices appear only when needed;
+actionable errors remain visible. The retained result, duration and limit do not imply a total count
+or pagination. UI draft numbers and source Undo never execute
 implicitly, and the receiver still enforces maximum-limit policy.
 
 Transport routing is likewise a reusable Core runtime component rather than state owned by the

@@ -72,9 +72,12 @@ undoable transaction and submits a new Graph Read. Sorting happens in the runtim
 limit, never just over visible rows. The first slice supports one ordering Field; `first()` and
 `one()` also accept textual ordering, while `count()` does not.
 
-Typing or undoing does not execute. The table and arrow describe the last successful execution,
-whose source is available under **Executed query**. Draft changes, pending reads, and failures
-leave that snapshot visible with a status notice. Controls are disabled while running or when the
+Typing or undoing does not execute. The table and arrow describe the last successful execution.
+The result uses one compact toolbar: last successful round-trip duration (including transport),
+editable limit for many reads, and Visual/JSON. It does not repeat the query, success message, or
+row-count/limit summary above the table. Draft changes, pending reads, and failures leave the
+snapshot visible with a short toolbar notice; actionable errors remain visible in the result body.
+Controls are disabled while running or when the
 draft is invalid, targets another Entity, or is no longer a many read. A valid same-Entity draft
 is preserved and submitted with the new sort. Headers intersect intrinsically sortable Fields with
 the receiver's effective ordering capabilities, requested alongside each successful read. Denied
@@ -85,15 +88,16 @@ response also invalidates the previous capabilities. Capabilities describe the s
 not a permanent grant: policy/authentication or routing changes inside the same transport may make
 them stale. Receiver policy remains authoritative on every request, and rejections are shown
 without replacing the successful result data.
-The Visual many-result table also shows the returned row count and executed limit. Its numeric
+The many-result toolbar's numeric
 Limit control accepts non-negative safe integers, including zero. Apply or Enter edits only the
 existing limit literal (or inserts `.limit(...)`) and runs the current same-Entity draft, preserving
 its filters and ordering as one undoable source transaction. Typing in the control alone does not
-execute. Textual limit changes appear in the result control only after a successful Run; pending
+execute; Apply appears only while its numeric draft differs from the executed limit, which is also
+available in the input tooltip. Textual limit changes appear in the control after a successful Run; pending
 or rejected reads retain the old result and executed limit. Invalid/non-many/other-Entity drafts,
 pending reads, or a replaced transport disable the control. Server maximum-limit policy remains
 authoritative; the control does not grant a higher limit. Multi-Field ordering and pagination remain
-follow-ups. Returned row count is not a total count, and the existing 50-row visual preview cap is
+follow-ups. The existing 50-row visual preview cap is
 reported separately when reached.
 
 `orderBy(...)` autocomplete uses that same capability snapshot for the matching Entity and

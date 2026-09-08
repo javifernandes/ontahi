@@ -44,6 +44,7 @@ type ConsoleResultSnapshot = {
   readonly document: string;
   readonly request: GraphReadRequestV1;
   readonly value: unknown;
+  readonly durationMs: number;
   readonly capabilities?: GraphReadCapabilities;
   readonly transport?: RuntimeTransport<any>;
 };
@@ -57,10 +58,10 @@ type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
 type ConsoleResultMode = 'visual' | 'json';
 
 const resultNotice = (result: ConsoleResult, document: string): string => {
-  if (result.status === 'executing') return 'Running · showing previous result.';
-  if (result.status === 'error') return 'Run failed · showing previous result.';
-  if (result.snapshot?.document !== document) return 'Changes not run · showing previous result.';
-  return 'Result matches the executed query.';
+  if (result.status === 'executing') return 'Running…';
+  if (result.status === 'error' && result.snapshot) return 'Previous result';
+  if (result.snapshot && result.snapshot.document !== document) return 'Changes not run';
+  return '';
 };
 
 type ConsoleEditorProps = {
@@ -281,13 +282,20 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     }
 
     executingRef.current = true;
+    const startedAt = performance.now();
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
     void exchange({ family: 'graph.read', body: { ...request, includeCapabilities: true } })
       .then(graphReadResult)
       .then(result =>
         setResult({
           status: 'success',
-          snapshot: { document: source, request, ...result, transport: runtimeTransport },
+          snapshot: {
+            document: source,
+            request,
+            ...result,
+            transport: runtimeTransport,
+            durationMs: Math.max(0, performance.now() - startedAt),
+          },
         }),
       )
       .catch((error: unknown) =>
@@ -450,8 +458,33 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         </div>
       </div>
       <div style={styles.consoleResult} aria-label='Console result'>
-        <div style={styles.consoleResultHeader}>
-          <strong>Result</strong>
+        <div style={styles.consoleResultHeader} role='group' aria-label='Console result toolbar'>
+          <div style={styles.consoleResultControls}>
+            {snapshot ? (
+              <span
+                style={styles.consoleResultStatus}
+                aria-label='Last query duration'
+                title='Last successful round-trip time (including transport)'
+              >
+                {Math.round(snapshot.durationMs)} ms
+              </span>
+            ) : null}
+            {snapshot?.request.mode === 'run' && Array.isArray(snapshot.value) ? (
+              <ConsoleResultLimit
+                request={snapshot.request}
+                defaultLimit={limit}
+                disabledReason={limitDisabledReason}
+                onApply={changeLimit}
+              />
+            ) : null}
+            <span
+              role='status'
+              style={styles.consoleResultStatus}
+              title={snapshot ? 'Showing the last successful result.' : undefined}
+            >
+              {resultNotice(result, document)}
+            </span>
+          </div>
           <span style={styles.consoleResultControls}>
             {snapshot ? (
               <span style={styles.modes} aria-label='Console result view mode'>
@@ -473,19 +506,9 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
                 ))}
               </span>
             ) : null}
-            <span style={styles.consoleResultStatus}>{result.status}</span>
           </span>
         </div>
         <div style={styles.consoleResultBody} aria-live='polite'>
-          {snapshot ? (
-            <div style={styles.consoleSnapshotStatus}>
-              <span>{resultNotice(result, document)}</span>
-              <details>
-                <summary>Executed query</summary>
-                <pre style={{ whiteSpace: 'pre-wrap' }}>{snapshot.document}</pre>
-              </details>
-            </div>
-          ) : null}
           {result.status === 'error' ? (
             <span role='alert' style={styles.consoleError}>
               {result.message}
@@ -494,27 +517,18 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           {snapshot ? (
             resultMode === 'visual' ? (
               snapshot.request.mode === 'run' && Array.isArray(snapshot.value) ? (
-                <>
-                  <ConsoleResultLimit
-                    request={snapshot.request}
-                    defaultLimit={limit}
-                    rowCount={snapshot.value.length}
-                    disabledReason={limitDisabledReason}
-                    onApply={changeLimit}
-                  />
-                  <ResultTable
-                    value={snapshot.value}
-                    ordering={{
-                      fields:
-                        resultEntity?.fields
-                          .filter(isConsoleOrderableField)
-                          .map(field => field.name) ?? [],
-                      order: snapshot.request.orderBy[0],
-                      disabledReason: sortDisabledReason,
-                      onSort: sortBy,
-                    }}
-                  />
-                </>
+                <ResultTable
+                  value={snapshot.value}
+                  ordering={{
+                    fields:
+                      resultEntity?.fields
+                        .filter(isConsoleOrderableField)
+                        .map(field => field.name) ?? [],
+                    order: snapshot.request.orderBy[0],
+                    disabledReason: sortDisabledReason,
+                    onSort: sortBy,
+                  }}
+                />
               ) : (
                 <SemanticPayload value={snapshot.value} />
               )
