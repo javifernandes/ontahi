@@ -1351,6 +1351,25 @@ export const editConsoleLimit = (
   return [{ from: position, to: position, insert: `.limit(${limit})` }];
 };
 
+const consoleOrderReplacementChanges = (
+  field: SelectionLanguageToken<'field-name'>,
+  direction: SelectionLanguageToken<'order-direction'> | undefined,
+  order: GraphReadOrder,
+): ConsoleDocumentChange[] => {
+  const changes: ConsoleDocumentChange[] = [];
+  if (field.text !== order.fieldName) {
+    changes.push({ from: field.from, to: field.to, insert: order.fieldName });
+  }
+  if (direction) {
+    if (direction.text !== order.direction) {
+      changes.push({ from: direction.from, to: direction.to, insert: order.direction });
+    }
+  } else if (order.direction !== 'asc') {
+    changes.push({ from: field.to, to: field.to, insert: `, ${order.direction}` });
+  }
+  return changes;
+};
+
 /** Source-preserving edits for a valid Query; safe to apply as one editor transaction. */
 export const editConsoleOrderBy = (
   document: string,
@@ -1371,24 +1390,7 @@ export const editConsoleOrderBy = (
   if (!order) {
     if (existing) changes.push({ from: existing.from, to: existing.to, insert: '' });
   } else if (existing?.field) {
-    if (existing.field.text !== order.fieldName) {
-      changes.push({ from: existing.field.from, to: existing.field.to, insert: order.fieldName });
-    }
-    if (existing.direction) {
-      if (existing.direction.text !== order.direction) {
-        changes.push({
-          from: existing.direction.from,
-          to: existing.direction.to,
-          insert: order.direction,
-        });
-      }
-    } else if (order.direction !== 'asc') {
-      changes.push({
-        from: existing.field.to,
-        to: existing.field.to,
-        insert: `, ${order.direction}`,
-      });
-    }
+    changes.push(...consoleOrderReplacementChanges(existing.field, existing.direction, order));
   } else {
     const position = syntax.whereClose?.to ?? syntax.entity.to;
     const direction = order.direction === 'asc' ? '' : ', ' + order.direction;
