@@ -21,6 +21,7 @@ relatedPlans:
   - ontahi://plans/119-selection-relation-predicates
   - ontahi://plans/126-ontahi-runtime-data-reflection
   - ontahi://plans/147-application-bound-headless-graph-reads
+  - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
 The [[ontahi.semantic-interaction-language|Ontahí Semantic Interaction Language]] is a family of
@@ -91,6 +92,15 @@ Data-table experience, not the language. [[ontahi.source-code-organization.devto
 Devtools]] may later use the same service to explain or author semantic payloads, but runtime
 inspection does not become language ownership.
 
+The proposed Devtools Console is the design gate for a containing interaction expression that can
+resolve to Graph Read, Graph Command, or Operation intent. The source has no leading `read`,
+`command`, or `invoke` discriminator: semantic resolution infers the family from the reflected root
+symbol, selected members, arguments, and terminal meaning. The document may own recoverable call and
+member syntax, but valid meaning must lower to the existing family-owned Query/Selection, Command,
+and Operation request representations. It must not become a universal Console AST or a new Runtime
+Protocol family. Its headless services should remain reusable by a terminal CLI even though the
+first host is React Devtools.
+
 ## Reflection And Assistance
 
 Initial semantic resolution needs static reflected facts already projected by Explorer: Entity
@@ -147,6 +157,8 @@ adapts its existing reflected Entity data reader for this path, so selection edi
 provider shortcut or a second authority model.
 
 Only after the Selection proof is sound should a new plan investigate complete Query text such as
-`order by` or `limit`. Relation quantifiers wait for the canonical Selection work in Plan 119.
-Commands, saved document lifecycle, LSP transport, collaborative editing, natural-language intent,
-and general visual query builders are intentionally deferred.
+`order by` or `limit`. Relation quantifiers wait for the canonical Selection work in Plan 119. Plan
+150 now owns the explicit design gate for one-expression Read, Command, and Operation authoring; it
+must reuse this language boundary and the family-owned runtime models rather than treating the
+Selection grammar as an accidental universal shell. Saved document lifecycle, LSP transport,
+collaborative editing, natural-language intent, and general visual query builders remain deferred.

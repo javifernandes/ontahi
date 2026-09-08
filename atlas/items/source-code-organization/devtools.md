@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
+  - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
 Ontahí Devtools is the browser-resident implementation component for inspecting an Ontahí web
@@ -39,6 +40,9 @@ meaning even when they share a connection or visual timeline.
    endpoint projection, protocol/session diagnostics, and HTTP or WebSocket evidence.
 4. **Settings:** effective configuration and development overrides derived generically from an
    explicitly provided configurable Runtime Transport.
+5. **Console:** reflection-assisted authoring and explicit execution of Graph Reads, Graph Commands,
+   and Operation invocations through the application's ordinary runtime capabilities, with results
+   correlated back to Activity.
 
 ## Component Boundary
 
@@ -47,6 +51,12 @@ transport-neutral decorator can record `RuntimeTransport.request(...)` and Durab
 lifecycle, while individual transports contribute optional HTTP, WebSocket, handshake, and
 connection evidence. The existing Graph Client Cache inspection and subscription boundary supplies
 cache state and events.
+
+The Console extends that headless boundary with source/history and execution coordination while
+leaving parsing and lowering in the semantic language capability. The host supplies a narrow
+application model and ordinary Read, Command, and Operation execution ports. The Devtools package
+does not import Explorer UI contracts, a storage provider, or a server runtime; its React export
+only projects the headless Console session.
 
 The headless diagnostic store and transport decorator live in `@ontahi/devtools`. The bottom-docked
 React surface is exported separately from `@ontahi/devtools/react`; it is one projection of that
@@ -80,8 +90,10 @@ automatically through another transport.
 
 Diagnostics use bounded in-memory retention, avoid payload persistence by default, and provide
 redaction before values enter the diagnostic store. Production inclusion and mutable controls are
-explicit host choices. Replaying Commands or Operations is outside the first component because it
-could duplicate effects before Ontahí has a truthful invocation identity and idempotency contract.
+explicit host choices. Console history restores source but never executes it automatically. A
+Command or Operation submitted again is a new explicit effect, not a replay guarantee; automatic
+retry, one-click mutation replay, and ambiguous-failure recovery remain outside the component until
+Ontahí has truthful invocation identity and idempotency contracts.
 
 Ontahí Devtools does not create a second protocol, change application hooks, own deployment
 policy, or replace the browser's complete Network tooling. It realizes the runtime-inspection part
