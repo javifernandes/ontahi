@@ -271,28 +271,38 @@ describe('Console bidirectional Query limit', () => {
     expect(result.getByText('Empty list')).toBeTruthy();
   });
 
-  it('reflects source limits only after Run and guards invalid values and drafts', async () => {
-    const { request, replaceSource, result, applyLimit } = mountConsole();
+  it('rejects invalid toolbar limit values without executing a read', async () => {
+    const { request, result, applyLimit } = mountConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByRole('table');
     for (const value of ['', -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) applyLimit(value);
     expect(request).toHaveBeenCalledOnce();
-    for (const source of [
-      'Tag.limit(',
-      'Other.many()',
-      'Tag.first()',
-      'Tag.one()',
-      'Tag.count()',
-      'Tag.exists()',
-    ]) {
-      replaceSource(source);
-      expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty(
-        'disabled',
-        true,
-      );
-      applyLimit(3);
-      expect(request).toHaveBeenCalledOnce();
-    }
+  });
+
+  it.each([
+    'Tag.limit(',
+    'Other.many()',
+    'Tag.first()',
+    'Tag.one()',
+    'Tag.count()',
+    'Tag.exists()',
+  ])('disables toolbar limit edits for the unsafe draft %s', async source => {
+    const { request, replaceSource, result, applyLimit } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    replaceSource(source);
+    expect(result.getByRole('spinbutton', { name: 'Result limit' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    applyLimit(3);
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it('reflects source limits only after Run and removes the control for scalar results', async () => {
+    const { replaceSource, result } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
     replaceSource('Tag.limit(3).many()');
     expect(result.getByRole('spinbutton').getAttribute('title')).toContain('Executed limit: 2.');
     expect(result.getAllByRole('row')).toHaveLength(3);
