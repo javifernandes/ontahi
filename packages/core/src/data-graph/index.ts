@@ -14,6 +14,7 @@ export * from './entity-mutation-authoring.js';
 export * from './in-memory/command.js';
 export * from './in-memory/entity-mutation-command.js';
 export * from './in-memory/relationship-command.js';
+export * from './in-memory/ordered-relationship-command.js';
 export * from './in-memory/materialization.js';
 export * from './in-memory/many-to-many-relationship-command.js';
 export * from './in-memory/query.js';

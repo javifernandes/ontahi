@@ -28,7 +28,11 @@ import {
   type RelationshipCommandDiagnostic,
   type RelationshipCommandResult,
 } from './relationship-command-result.js';
-import type { ManyToManyRelationshipCommand, RelationshipCommand } from './relationship-command.js';
+import type {
+  ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
+  RelationshipCommand,
+} from './relationship-command.js';
 
 export type RelationshipCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   readonly entity: TEntity;
@@ -42,6 +46,14 @@ export type ManyToManyRelationshipCommandPolicy<
   readonly entity: TEntity;
   readonly relationName: keyof TEntity['relations'] & string;
   readonly actions: readonly ManyToManyRelationshipCommand['action'][];
+};
+
+export type OrderedRelationshipCommandPolicy<
+  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
+> = {
+  readonly entity: TEntity;
+  readonly relationName: keyof TEntity['relations'] & string;
+  readonly actions: readonly OrderedRelationshipCommand['action'][];
 };
 
 type EntityMutationPolicyFields<TEntity extends AnyEntityDefinition> = readonly (StoredFieldName<
@@ -74,6 +86,7 @@ type AnyEntityMutationCommandPolicy = EntityMutationCommandPolicy<any>;
 type AnyGraphCommandPolicy =
   | RelationshipCommandPolicy
   | ManyToManyRelationshipCommandPolicy
+  | OrderedRelationshipCommandPolicy
   | AnyEntityMutationCommandPolicy;
 
 export type GraphCommandDispatchContext<TAuthority> = {
@@ -101,6 +114,11 @@ export type ManyToManyGraphCommandDispatchExecutor<TAuthority> = (
   context: GraphCommandDispatchContext<TAuthority>,
 ) => Promise<RelationshipCommandResult>;
 
+export type OrderedGraphCommandDispatchExecutor<TAuthority> = (
+  command: OrderedRelationshipCommand,
+  context: GraphCommandDispatchContext<TAuthority>,
+) => Promise<RelationshipCommandResult>;
+
 export type EntityMutationGraphCommandDispatchExecutor<TAuthority> = (
   command: EntityMutationCommand,
   context: GraphCommandDispatchContext<TAuthority>,
@@ -110,10 +128,12 @@ export type CreateGraphCommandDispatcherOptions<TAuthority> = {
   readonly policies: readonly (
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
+    | OrderedRelationshipCommandPolicy
     | EntityMutationCommandPolicy<any>
   )[];
   readonly execute?: GraphCommandDispatchExecutor<TAuthority>;
   readonly executeManyToMany?: ManyToManyGraphCommandDispatchExecutor<TAuthority>;
+  readonly executeOrdered?: OrderedGraphCommandDispatchExecutor<TAuthority>;
   readonly executeEntityMutation?: EntityMutationGraphCommandDispatchExecutor<TAuthority>;
   readonly reportError?: (error: unknown) => void;
 };
@@ -224,6 +244,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
   policies,
   execute,
   executeManyToMany,
+  executeOrdered,
   executeEntityMutation,
   reportError,
 }: CreateGraphCommandDispatcherOptions<TAuthority>) => {
@@ -234,6 +255,10 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
   const manyToManyPolicyByRelation = new Map<
     string,
     { policy: ManyToManyRelationshipCommandPolicy; target: AnyEntityDefinition }
+  >();
+  const orderedPolicyByRelation = new Map<
+    string,
+    { policy: OrderedRelationshipCommandPolicy; target: AnyEntityDefinition }
   >();
   const entityMutationPolicyByEntity = new Map<string, AnyEntityMutationCommandPolicy>();
   for (const policy of policies) {
@@ -249,26 +274,45 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     }
     if ('relationName' in policy) {
       const relation = policy.entity.relations[policy.relationName];
-      if (relation?.relationKind !== 'manyToMany') {
+      const isManyToMany = relation?.relationKind === 'manyToMany';
+      const isOrdered = relation?.relationKind === 'hasMany' && relation.ordered;
+      if (!isManyToMany && !isOrdered) {
         throw new Error(
-          `Graph Command policy ${policy.entity.name}.${policy.relationName} must target a many-to-many Relation.`,
+          `Graph Command policy ${policy.entity.name}.${policy.relationName} must target a many-to-many or ordered Relation.`,
         );
       }
       if (
         policy.actions.length === 0 ||
-        policy.actions.some(action => action !== 'link' && action !== 'unlink')
+        policy.actions.some(action =>
+          isOrdered ? action !== 'move' : action !== 'link' && action !== 'unlink',
+        )
       ) {
         throw new Error(
           `Graph Command policy ${policy.entity.name}.${policy.relationName} requires valid actions.`,
         );
       }
       const key = policyKey(policy.entity.name, policy.relationName, relation.target.name);
+      if (isOrdered) {
+        if (orderedPolicyByRelation.has(key)) {
+          throw new Error(
+            `Duplicate Graph Command policy for Relation ${policy.entity.name}.${policy.relationName}.`,
+          );
+        }
+        orderedPolicyByRelation.set(key, {
+          policy: policy as OrderedRelationshipCommandPolicy,
+          target: relation.target,
+        });
+        continue;
+      }
       if (manyToManyPolicyByRelation.has(key)) {
         throw new Error(
           `Duplicate Graph Command policy for Relation ${policy.entity.name}.${policy.relationName}.`,
         );
       }
-      manyToManyPolicyByRelation.set(key, { policy, target: relation.target });
+      manyToManyPolicyByRelation.set(key, {
+        policy: policy as ManyToManyRelationshipCommandPolicy,
+        target: relation.target,
+      });
       continue;
     }
     const field = validatePolicy(policy);
@@ -282,7 +326,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
   }
 
   const executeSafely = async (
-    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
     run: () => Promise<RelationshipCommandResult>,
   ): Promise<GraphCommandDispatchResponse> => {
     try {
@@ -415,6 +459,38 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     return executeSafely(resolvedCommand, () => executeManyToMany(resolvedCommand, context));
   };
 
+  const dispatchOrdered = async (
+    request: Parameters<typeof resolveGraphCommandRequest>[0],
+    command: OrderedRelationshipCommand,
+    context: GraphCommandDispatchContext<TAuthority>,
+  ): Promise<GraphCommandDispatchResponse> => {
+    const registered = orderedPolicyByRelation.get(
+      policyKey(
+        command.relation.sourceEntityName,
+        command.relation.relationName,
+        command.relation.targetEntityName,
+      ),
+    );
+    if (!registered?.policy.actions.includes(command.action)) {
+      return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
+    }
+    const resolved = resolveGraphCommandRequest(request, {
+      entities: [registered.policy.entity, registered.target],
+    });
+    if (!resolved.success) return resolved.error;
+    if (resolved.command.kind !== 'ordered-relationship-command') {
+      return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
+    }
+    if (!executeOrdered) {
+      return graphCommandProtocolError(
+        'execution_unavailable',
+        'Ordered Relationship Command execution is unavailable.',
+      );
+    }
+    const resolvedCommand = resolved.command;
+    return executeSafely(resolvedCommand, () => executeOrdered(resolvedCommand, context));
+  };
+
   const dispatchDirect = async (
     request: Parameters<typeof resolveGraphCommandRequest>[0],
     command: RelationshipCommand,
@@ -457,6 +533,9 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     const command = parsed.request.command;
     if (command.kind === 'entity-mutation-command') {
       return dispatchEntityMutation(parsed.request, command, context);
+    }
+    if (command.kind === 'ordered-relationship-command') {
+      return dispatchOrdered(parsed.request, command, context);
     }
     return command.kind === 'many-to-many-relationship-command'
       ? dispatchManyToMany(parsed.request, command, context)

@@ -35,6 +35,8 @@ import {
 import type {
   ManyToManyRelationshipCommand,
   ManyToManyRelationshipCommandExecutionRuntime,
+  OrderedRelationshipCommand,
+  OrderedRelationshipCommandExecutionRuntime,
   RelationshipCommand,
   RelationshipCommandExecutionRuntime,
 } from './relationship-command.js';
@@ -191,6 +193,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
 > &
   DataGraphObservationRuntime<RemoteDataGraphError, TOptions> &
   ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
+  OrderedRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   RelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   EntityMutationCommandExecutionRuntime<RemoteDataGraphError, TOptions> => {
   const executeRead = <TParams, TResult>(
@@ -228,7 +231,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
     });
 
   const executeRelationshipCommand = (
-    command: RelationshipCommand | ManyToManyRelationshipCommand,
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
     options?: TOptions,
   ) => {
     if (!commandTransport) return Effect.fail(unsupportedCapability('Relationship Command'));
@@ -351,6 +354,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
       Effect.fail(unsupportedCapability('Command')),
     runRelationshipCommand: executeRelationshipCommand,
     runManyToManyRelationshipCommand: executeRelationshipCommand,
+    runOrderedRelationshipCommand: executeRelationshipCommand,
     runEntityMutationCommand: executeEntityMutationCommand,
   };
 };

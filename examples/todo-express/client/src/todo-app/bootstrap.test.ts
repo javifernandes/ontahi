@@ -4,32 +4,14 @@ import { loadAuthenticationSession, loadTodoRuntime } from './bootstrap.js';
 import {
   bringDeskCardToFront,
   defaultDeskCardPosition,
-  groupTodoLists,
   moveTodoItem,
   moveTodoList,
   reconcileDeskLayout,
-  reconcileTodoItemOrder,
   reconcileTodoListOrder,
   resolveTodoDropDestination,
 } from './todo-list-state.js';
 
 describe('Todo client bootstrap state', () => {
-  it('groups every todo under its list for the dashboard', () => {
-    const lists = [
-      { id: 'inbox', name: 'Inbox' },
-      { id: 'later', name: 'Later' },
-    ];
-    const todos = [
-      { id: 'todo-2', list: { locator: { id: 'later' } } },
-      { id: 'todo-1', list: { locator: { id: 'inbox' } } },
-    ];
-
-    expect(groupTodoLists(lists, todos, todo => todo.list.locator.id)).toEqual([
-      { ...lists[0], items: [todos[1]] },
-      { ...lists[1], items: [todos[0]] },
-    ]);
-  });
-
   it('appends newly discovered lists and preserves manual list ordering', () => {
     expect(reconcileTodoListOrder(['inbox', 'later'], ['ideas', 'inbox', 'later'])).toEqual([
       'inbox',
@@ -44,12 +26,7 @@ describe('Todo client bootstrap state', () => {
     expect(moveTodoList(['ideas', 'inbox', 'later'], 'ideas')).toEqual(['inbox', 'later', 'ideas']);
   });
 
-  it('persists item ordering independently inside each list', () => {
-    expect(reconcileTodoItemOrder(['todo-2'], ['todo-1', 'todo-2', 'todo-3'])).toEqual([
-      'todo-2',
-      'todo-1',
-      'todo-3',
-    ]);
+  it('projects one optimistic item move without retaining a second item collection', () => {
     expect(moveTodoItem(['todo-1', 'todo-2', 'todo-3'], 'todo-3', 'todo-1')).toEqual([
       'todo-3',
       'todo-1',

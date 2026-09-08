@@ -29,6 +29,7 @@ export type CreateTodoExpressAppOptions = {
 };
 
 const todoGraphCommandPolicies = [
+  { entity: TodoList, relationName: 'items', actions: ['move'] },
   { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
   {
     entity: TodoItem,

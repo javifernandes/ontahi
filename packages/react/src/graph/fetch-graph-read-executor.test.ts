@@ -4,6 +4,7 @@ import {
   field,
   mutateEntity,
   query,
+  relationship,
   relationshipSet,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
@@ -333,6 +334,34 @@ describe('Fetch graph read executor', () => {
       version: 1,
       kind: 'graph-command',
       command: { kind: 'many-to-many-relationship-command', action: 'link' },
+    });
+  });
+
+  it('executes ordered Relationship Commands through graph.command v2', async () => {
+    const List = entity('OrderedList', { id: field.id() });
+    const Item = entity('OrderedItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    const command = relationship(List, 'items', createEntityRef(List, { id: 'list-1' })).before(
+      createEntityRef(Item, { id: 'item-2' }),
+      createEntityRef(Item, { id: 'item-1' }),
+    );
+    const result = {
+      status: 'applied' as const,
+      delta: { added: [], removed: [], moved: [] },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ kind: 'graph-command-result', value: result }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const executor = createFetchGraphReadExecutor({ commandEndpoint: '/graph/commands' });
+
+    await expect(executor.runOrderedRelationshipCommand!(command)).resolves.toEqual(result);
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({
+      version: 2,
+      kind: 'graph-command',
+      command: { kind: 'ordered-relationship-command', action: 'move' },
     });
   });
 

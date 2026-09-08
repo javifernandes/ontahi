@@ -7,8 +7,11 @@ import { isEntityRef } from './ref/index.js';
 import type { RelationshipCommandResult } from './relationship-command-result.js';
 import type {
   CanonicalManyToManyRelationIdentity,
+  CanonicalOrderedRelationIdentity,
   CanonicalRelationIdentity,
   ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
+  OrderedRelationshipDelta,
   RelationshipCommand,
   RelationshipDelta,
 } from './relationship-command.js';
@@ -23,8 +26,8 @@ export type MutationCausality = {
 export type AppliedRelationshipMutationOutcome = {
   kind: 'applied-mutation-outcome';
   mutationKind: 'relationship-command';
-  command: RelationshipCommand | ManyToManyRelationshipCommand;
-  delta: RelationshipDelta;
+  command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand;
+  delta: RelationshipDelta | OrderedRelationshipDelta;
   causality: MutationCausality;
 };
 
@@ -50,6 +53,11 @@ export type ExecuteManyToManyRelationshipCommandIntent = {
   command: ManyToManyRelationshipCommand;
 };
 
+export type ExecuteOrderedRelationshipCommandIntent = {
+  kind: 'execute-ordered-relationship-command';
+  command: OrderedRelationshipCommand;
+};
+
 export type ExecuteEntityMutationCommandIntent = {
   kind: 'execute-entity-mutation-command';
   command: EntityMutationCommand;
@@ -72,6 +80,7 @@ export type EmitEventReactionIntent = {
 export type MutationReactionIntent =
   | ExecuteRelationshipCommandIntent
   | ExecuteManyToManyRelationshipCommandIntent
+  | ExecuteOrderedRelationshipCommandIntent
   | ExecuteEntityMutationCommandIntent
   | InvokeOperationReactionIntent
   | EmitEventReactionIntent;
@@ -79,8 +88,14 @@ export type MutationReactionIntent =
 export type MutationReactionMatch =
   | {
       mutationKind: 'relationship-command';
-      action?: RelationshipCommand['action'] | ManyToManyRelationshipCommand['action'];
-      relation?: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity;
+      action?:
+        | RelationshipCommand['action']
+        | ManyToManyRelationshipCommand['action']
+        | OrderedRelationshipCommand['action'];
+      relation?:
+        | CanonicalRelationIdentity
+        | CanonicalManyToManyRelationIdentity
+        | CanonicalOrderedRelationIdentity;
     }
   | {
       mutationKind: 'entity-mutation-command';
@@ -163,6 +178,9 @@ export type CreateMutationReactionRunnerOptions = {
   executeManyToManyRelationshipCommand?: (
     command: ManyToManyRelationshipCommand,
   ) => Promise<RelationshipCommandResult>;
+  executeOrderedRelationshipCommand?: (
+    command: OrderedRelationshipCommand,
+  ) => Promise<RelationshipCommandResult>;
   executeEntityMutationCommand?: (command: EntityMutationCommand) => Promise<EntityMutationDelta>;
   invokeOperation?: (request: InvokeOperationReactionIntent['request']) => Promise<unknown>;
   emitEvent?: (event: unknown) => Promise<void>;
@@ -193,8 +211,8 @@ export type MutationReactionRunner = {
     command: RelationshipCommand,
   ): Promise<MutationReactionResult | NotAppliedRelationshipMutationResult>;
   createAppliedOutcome: (
-    command: RelationshipCommand | ManyToManyRelationshipCommand,
-    delta: RelationshipDelta,
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
   ) => AppliedRelationshipMutationOutcome;
   react: (outcome: AppliedMutationOutcome) => Promise<MutationReactionResult>;
   applied: (
@@ -205,11 +223,18 @@ export type MutationReactionRunner = {
 
 const isRelationshipCommandIntent = (
   command: unknown,
-  kind: RelationshipCommand['kind'] | ManyToManyRelationshipCommand['kind'],
+  kind:
+    | RelationshipCommand['kind']
+    | ManyToManyRelationshipCommand['kind']
+    | OrderedRelationshipCommand['kind'],
 ) =>
   isRecord(command) &&
   command.kind === kind &&
-  parseGraphCommandRequest({ version: 1, kind: 'graph-command', command }).success;
+  parseGraphCommandRequest({
+    version: kind === 'ordered-relationship-command' ? 2 : 1,
+    kind: 'graph-command',
+    command,
+  }).success;
 
 const isEntityMutationCommand = (command: unknown): command is EntityMutationCommand => {
   if (
@@ -234,6 +259,9 @@ const isMutationReactionIntent = (intent: unknown): intent is MutationReactionIn
   if (intent.kind === 'execute-many-to-many-relationship-command') {
     return isRelationshipCommandIntent(intent.command, 'many-to-many-relationship-command');
   }
+  if (intent.kind === 'execute-ordered-relationship-command') {
+    return isRelationshipCommandIntent(intent.command, 'ordered-relationship-command');
+  }
   if (intent.kind === 'execute-entity-mutation-command') {
     return isEntityMutationCommand(intent.command);
   }
@@ -248,14 +276,22 @@ const isMutationReactionIntent = (intent: unknown): intent is MutationReactionIn
 };
 
 const sameRelation = (
-  left: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity,
-  right: CanonicalRelationIdentity | CanonicalManyToManyRelationIdentity,
+  left:
+    | CanonicalRelationIdentity
+    | CanonicalManyToManyRelationIdentity
+    | CanonicalOrderedRelationIdentity,
+  right:
+    | CanonicalRelationIdentity
+    | CanonicalManyToManyRelationIdentity
+    | CanonicalOrderedRelationIdentity,
 ) =>
   left.sourceEntityName === right.sourceEntityName &&
   left.targetEntityName === right.targetEntityName &&
   ('fieldName' in left
     ? 'fieldName' in right && left.fieldName === right.fieldName
-    : 'relationName' in right && left.relationName === right.relationName);
+    : 'relationName' in right &&
+      left.relationName === right.relationName &&
+      left.cardinality === right.cardinality);
 
 const reactToOutcome = (
   reaction: MutationReaction,
@@ -285,6 +321,7 @@ export const createMutationReactionRunner = ({
   reactions,
   executeRelationshipCommand,
   executeManyToManyRelationshipCommand,
+  executeOrderedRelationshipCommand,
   executeEntityMutationCommand,
   invokeOperation,
   emitEvent,
@@ -348,6 +385,25 @@ export const createMutationReactionRunner = ({
       outcome,
       reactions: [],
     };
+  };
+
+  const applyOrderedRelationship = async (
+    command: OrderedRelationshipCommand,
+    parent: AppliedMutationOutcome,
+  ): Promise<AppliedRelationshipMutationResult | NotAppliedRelationshipMutationResult> => {
+    if (!executeOrderedRelationshipCommand) {
+      throw new Error('Ordered Relationship execution for Mutation Reactions is unavailable.');
+    }
+    const result = await executeOrderedRelationshipCommand(command);
+    if (result.status === 'not-applied') return result;
+    const outcome: AppliedRelationshipMutationOutcome = {
+      kind: 'applied-mutation-outcome',
+      mutationKind: 'relationship-command',
+      command,
+      delta: result.delta,
+      causality: causalityFor(parent),
+    };
+    return { status: 'applied', outcome, reactions: [] };
   };
 
   const applyEntityMutation = async (
@@ -443,6 +499,12 @@ export const createMutationReactionRunner = ({
       }
       if (intent.kind === 'execute-many-to-many-relationship-command') {
         const result = await applyManyToManyRelationship(intent.command, source);
+        return result.status === 'applied'
+          ? { ...execution, status: 'applied', outcome: result.outcome }
+          : { ...execution, status: 'not-applied', diagnostic: result.diagnostic };
+      }
+      if (intent.kind === 'execute-ordered-relationship-command') {
+        const result = await applyOrderedRelationship(intent.command, source);
         return result.status === 'applied'
           ? { ...execution, status: 'applied', outcome: result.outcome }
           : { ...execution, status: 'not-applied', diagnostic: result.diagnostic };
@@ -575,8 +637,8 @@ export const createMutationReactionRunner = ({
   }) as MutationReactionRunner;
 
   run.createAppliedOutcome = (
-    command: RelationshipCommand | ManyToManyRelationshipCommand,
-    delta: RelationshipDelta,
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
   ) => ({
     kind: 'applied-mutation-outcome',
     mutationKind: 'relationship-command',
@@ -586,8 +648,8 @@ export const createMutationReactionRunner = ({
   });
   run.react = processAppliedOutcome;
   run.applied = (
-    command: RelationshipCommand | ManyToManyRelationshipCommand,
-    delta: RelationshipDelta,
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
   ) => processAppliedOutcome(run.createAppliedOutcome(command, delta));
 
   return run;

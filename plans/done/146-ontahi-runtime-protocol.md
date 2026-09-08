@@ -25,7 +25,7 @@ Related plans:
 1. [128. Ontahi Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
 2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [138b. Conditional Exact Entity Mutations](../done/138b-conditional-exact-entity-mutations.md)
-4. [145. Ordered Relations And Sequence Commands](../next/145-ordered-relations-and-sequence-commands.md)
+4. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
 
 ## Summary
 
@@ -330,7 +330,7 @@ historical activity timeline that Atlas did not observe.
    first-class semantic values.
 4. Pull [Plan 132](../next/132-durable-invocation-identity-and-idempotency.md) when durable retry
    identity becomes the next runtime pressure, or
-   [Plan 145](../next/145-ordered-relations-and-sequence-commands.md) when ordered membership becomes
+   [Plan 145](../done/145-ordered-relations-and-sequence-commands.md) when ordered membership becomes
    the next Relation pressure.
 5. [Plan 123](../next/123-ontahi-declarative-entity-invariants.md) owns permanent persisted-state
    invariants; [Plan 76a](../next/76a-operation-input-constraints-and-client-validation.md) owns

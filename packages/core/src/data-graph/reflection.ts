@@ -27,9 +27,10 @@ export type ReflectedSchemaRelation = {
   provenance: 'declared' | 'derived-inverse';
   direction: 'forward' | 'inverse';
   cardinality: 'one' | 'many';
+  ordered?: true;
   nullable?: boolean;
   required?: boolean;
-  structuralVerbs: Array<'assign' | 'clear' | 'add' | 'remove'>;
+  structuralVerbs: Array<'assign' | 'clear' | 'add' | 'remove' | 'move'>;
   sourceField?: string;
   targetField?: string;
   constraints?: readonly RelationConstraint[];
@@ -71,13 +72,16 @@ const reflectedDeclaredRelation = (
     provenance: 'declared',
     direction: relation.relationKind === 'hasMany' ? 'inverse' : 'forward',
     cardinality: relation.relationKind === 'belongsTo' ? 'one' : 'many',
+    ...(relation.ordered ? { ordered: true as const } : {}),
     ...(relation.relationKind === 'belongsTo' ? { nullable, required: !nullable } : {}),
     structuralVerbs:
       relation.relationKind === 'belongsTo'
         ? nullable
           ? ['assign', 'clear']
           : ['assign']
-        : ['add', 'remove'],
+        : relation.ordered
+          ? ['move']
+          : ['add', 'remove'],
     ...(relation.sourceField ? { sourceField: relation.sourceField } : {}),
     ...(relation.targetField ? { targetField: relation.targetField } : {}),
     ...(relation.constraints ? { constraints: relation.constraints } : {}),

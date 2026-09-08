@@ -11,6 +11,7 @@ relatedPlans:
   - ontahi://plans/100h-ontahi-portability-example-and-developer-guide
   - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
+  - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
@@ -39,6 +40,10 @@ The experience should support at least:
 6. moving from a concise semantic explanation to the exact portable envelopes and
    transport-specific evidence when deeper diagnosis is needed;
 7. keeping authority, credentials, and sensitive payloads protected while diagnostics are active.
+
+That semantic explanation includes structural ordered movement: a developer sees which Relation,
+source, member, and relative destination the application sent, independently of whether Fetch or
+WebSocket carried it and without mistaking browser-local drag state for domain activity.
 
 Configuration is part of the experience when it helps a developer understand or test a runtime,
 but application deployment policy remains host-owned. Diagnostic surfaces should always show the

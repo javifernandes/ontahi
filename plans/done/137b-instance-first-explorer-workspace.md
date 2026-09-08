@@ -389,6 +389,6 @@ work should begin as a new intervention rather than reopening this workspace pla
 3. direct Relation mutation and composition lifecycle need reflected runtime affordances rather
    than structural-verb inference;
 4. ordered membership, reordering, and transfer belong to
-   [Plan 145](../next/145-ordered-relations-and-sequence-commands.md);
+   [Plan 145](../done/145-ordered-relations-and-sequence-commands.md);
 5. persistent boards, ownership, tenancy, access-scope diagnostics, and replicated view state
    remain separate model and runtime work.

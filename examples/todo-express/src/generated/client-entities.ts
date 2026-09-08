@@ -11,7 +11,7 @@ import {
   value,
 } from '@ontahi/core/data-graph';
 
-export const TodoListSchema = defineEntitySchema('TodoList', {
+const TodoListSchemaBase = defineEntitySchema('TodoList', {
   id: field.id(),
   name: field.nonEmptyString({
     trim: true,
@@ -28,16 +28,20 @@ export const TodoListSchema = defineEntitySchema('TodoList', {
 export const TagSchema = defineEntitySchema('Tag', {
   id: field.id(),
   name: field.nonEmptyString({ trim: true }),
-  color: TodoListSchema.fields.color,
+  color: TodoListSchemaBase.fields.color,
 }).display({ primary: 'name', search: ['name'] });
 export const TodoItemSchema = defineEntitySchema('TodoItem', {
   id: field.id(),
-  list: field.ref(TodoListSchema),
+  list: field.ref(TodoListSchemaBase),
   title: field.nonEmptyString({ trim: true }),
   completed: field.boolean(),
 })
   .display({ primary: 'title', search: ['title'] })
   .manyToMany('tags', TagSchema);
+export const TodoListSchema = TodoListSchemaBase.hasMany('items', TodoItemSchema, {
+  via: 'list',
+  ordered: true,
+});
 
 const CompleteAllOutputValue = value('CompleteAllOutput', {
   completed: field.nonNegativeInteger(),
@@ -58,7 +62,7 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['TodoItem']],
+        invalidate: [['TodoList'], ['TodoItem']],
       },
       input: graphSchema.object({
         list: graphSchema.ref(TodoListSchema),
@@ -81,7 +85,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['TodoItem']],
+        invalidate: [['TodoList'], ['TodoItem']],
       },
       input: graphSchema.pick(TodoItemSchema, ['id', 'list', 'title']).named('CreateTodoItemInput'),
       output: TodoItemSchema,
@@ -90,7 +94,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['TodoItem']],
+        invalidate: [['TodoList'], ['TodoItem']],
       },
       input: graphSchema.object({
         todos: TodoItemSchema.many(),
@@ -101,7 +105,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['TodoItem']],
+        invalidate: [['TodoList'], ['TodoItem']],
       },
       input: graphSchema.object({
         todo: graphSchema.existingRef(TodoItemSchema),
@@ -122,7 +126,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['Tag'], ['TodoItem']],
+        invalidate: [['TodoList'], ['Tag'], ['TodoItem']],
       },
       input: graphSchema.object({
         tag: graphSchema.existingRef(TagSchema),
@@ -132,7 +136,7 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       authority: 'server',
       exposure: 'bridge',
       bridge: {
-        invalidate: [['TodoItem']],
+        invalidate: [['TodoList'], ['TodoItem']],
       },
       input: graphSchema.void(),
     }),

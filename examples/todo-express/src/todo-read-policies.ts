@@ -10,19 +10,6 @@ export type TodoGraphReadAuthority = {
 // Reads are deliberately public in this portability example. Each policy still opts into that
 // scope explicitly; an omitted Entity or surface remains denied by the dispatcher.
 
-const TodoListReadPolicy = {
-  entity: TodoList,
-  modes: ['get', 'run', 'count'],
-  cardinalities: ['one', 'many'],
-  maxLimit: 200,
-  fields: {
-    id: { select: true, filter: ['eq', 'in'] },
-    name: { select: true, filter: ['eq', 'in'], order: true },
-    color: { select: true, filter: ['eq', 'in'] },
-  },
-  scope: 'all',
-} satisfies GraphReadPolicy<typeof TodoList, TodoGraphReadAuthority>;
-
 const TagReadPolicy = {
   entity: Tag,
   modes: ['get', 'run', 'count'],
@@ -52,6 +39,22 @@ const TodoItemReadPolicy = {
   },
   scope: 'all',
 } satisfies GraphReadPolicy<typeof TodoItem, TodoGraphReadAuthority>;
+
+const TodoListReadPolicy = {
+  entity: TodoList,
+  modes: ['get', 'run', 'count'],
+  cardinalities: ['one', 'many'],
+  maxLimit: 200,
+  fields: {
+    id: { select: true, filter: ['eq', 'in'] },
+    name: { select: true, filter: ['eq', 'in'], order: true },
+    color: { select: true, filter: ['eq', 'in'] },
+  },
+  relations: {
+    items: TodoItemReadPolicy,
+  },
+  scope: 'all',
+} satisfies GraphReadPolicy<typeof TodoList, TodoGraphReadAuthority>;
 
 export const todoGraphReadPolicies = [
   TodoListReadPolicy,

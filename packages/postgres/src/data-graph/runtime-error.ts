@@ -6,6 +6,7 @@ export type PostgresDataGraphErrorReason =
   | 'cardinality_mismatch'
   | 'entity_mutation_condition_not_met'
   | 'relation_constraint_rejected'
+  | 'ordered_relationship_rejected'
   | 'relationship_precondition_failed';
 
 export class PostgresDataGraphError extends Error {

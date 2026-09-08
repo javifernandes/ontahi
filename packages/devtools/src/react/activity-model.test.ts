@@ -8,6 +8,7 @@ import {
   activityEntryTitle,
   buildActivityEntries,
   formatSelectionExpression,
+  graphCommandSummary,
   graphReadSummary,
   isRecord,
   matchesFilter,
@@ -139,6 +140,36 @@ describe('Devtools activity model', () => {
       ),
     ).toBe('TodoItem.tags.change');
     expect(
+      semanticSummary(
+        exchangeActivity({
+          kind: 'graph-command',
+          command: {
+            kind: 'ordered-relationship-command',
+            action: 'move',
+            relation: {
+              sourceEntityName: 'TodoList',
+              relationName: 'items',
+              targetEntityName: 'TodoItem',
+              cardinality: 'ordered-many',
+            },
+            source: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-inbox' } },
+            member: {
+              kind: 'entity-ref',
+              entityName: 'TodoItem',
+              locator: { id: 'todo-explorer' },
+            },
+            position: {
+              before: {
+                kind: 'entity-ref',
+                entityName: 'TodoItem',
+                locator: { id: 'todo-inline-editing' },
+              },
+            },
+          },
+        }),
+      ),
+    ).toBe('TodoList.items.move(todo-explorer, before: todo-inline-editing)');
+    expect(
       semanticSummary(exchangeActivity({ kind: 'check-permission', operationId: 'Todo.remove' })),
     ).toBe('can Todo.remove()');
     expect(semanticSummary(exchangeActivity({ kind: 'invoke', operationId: 'Todo.add' }))).toBe(
@@ -156,6 +187,56 @@ describe('Devtools activity model', () => {
       'custom.family',
     );
     expect(semanticSummary({ id: 'empty', at: 0 })).toBe('Runtime exchange');
+  });
+
+  it('summarizes every ordered destination and composite identities', () => {
+    const command = {
+      kind: 'ordered-relationship-command',
+      action: 'move',
+      relation: { sourceEntityName: 'List', relationName: 'items' },
+      member: { kind: 'entity-ref', locator: { tenant: 'acme', slug: 'draft' } },
+    };
+
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: {
+          ...command,
+          position: { after: { kind: 'entity-ref', locator: { id: 'published' } } },
+        },
+      }),
+    ).toBe('List.items.move(tenant: acme, slug: draft, after: published)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: {
+          ...command,
+          member: {
+            kind: 'entity-ref',
+            locator: { scope: { tenant: 'acme' }, segments: ['draft', 2] },
+          },
+          position: { at: 'end' },
+        },
+      }),
+    ).toBe('List.items.move(scope: {"tenant":"acme"}, segments: ["draft",2], at: end)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: { ...command, position: { at: 'start' } },
+      }),
+    ).toBe('List.items.move(tenant: acme, slug: draft, at: start)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: { ...command, position: { at: 'middle' } },
+      }),
+    ).toBe('List.items.move(tenant: acme, slug: draft, destination: unknown)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: { kind: 'ordered-relationship-command', relation: {}, position: null },
+      }),
+    ).toBe('Entity.relation.move(unknown, destination: unknown)');
   });
 
   it('correlates large progress streams without losing snapshots', () => {

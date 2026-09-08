@@ -155,6 +155,17 @@ export const createContextualRelationshipCommandExecutor = <
       }
       return runtime.runManyToManyRelationshipCommand(command, options);
     }),
+  runOrderedRelationshipCommand: (command, options) =>
+    Effect.suspend(() => {
+      const runtime =
+        getRequiredDataGraphRuntime<Partial<RelationshipCommandExecutor<TError, TOptions>>>();
+      if (typeof runtime.runOrderedRelationshipCommand !== 'function') {
+        throw new Error(
+          'The current Data Graph runtime does not support ordered Relationship Command execution.',
+        );
+      }
+      return runtime.runOrderedRelationshipCommand(command, options);
+    }),
 });
 
 export const withDataGraph = <TInput = unknown, TRuntime = unknown>({

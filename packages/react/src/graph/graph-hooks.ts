@@ -8,6 +8,7 @@ import {
   type GraphCommandSpec,
   type GraphReadIntent,
   type ManyToManyRelationshipCommand,
+  type OrderedRelationshipCommand,
   type RelationshipCommandResult,
   type QueryOrView,
   type ViewDefinition,
@@ -196,6 +197,44 @@ export function useManyToManyRelationshipCommand<
         throw new Error('Graph executor does not support many-to-many Relationship Commands.');
       }
       return graphExecutor.runManyToManyRelationshipCommand(
+        buildCommand(variables),
+        options?.runtimeOptions,
+      );
+    },
+    onSuccess: async (data, variables, onMutateResult, context) => {
+      for (const queryKey of options?.invalidateQueryKeys ?? []) {
+        await queryClient.invalidateQueries({ queryKey });
+      }
+      await options?.onSuccess?.(data, variables, onMutateResult, context);
+    },
+  });
+}
+
+export function useOrderedRelationshipCommand<
+  TVariables,
+  TContext = unknown,
+  TReadOptions = unknown,
+  TCommandOptions = TReadOptions,
+>(
+  buildCommand: (variables: TVariables) => OrderedRelationshipCommand,
+  options?: GraphCommandHookOptions<
+    RelationshipCommandResult,
+    TVariables,
+    TContext,
+    TCommandOptions
+  >,
+): UseMutationResult<RelationshipCommandResult, Error, TVariables, TContext> {
+  const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    ...options,
+    mutationKey: options?.mutationKey,
+    mutationFn: variables => {
+      if (!graphExecutor.runOrderedRelationshipCommand) {
+        throw new Error('Graph executor does not support ordered Relationship Commands.');
+      }
+      return graphExecutor.runOrderedRelationshipCommand(
         buildCommand(variables),
         options?.runtimeOptions,
       );

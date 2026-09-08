@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/146e-runtime-transport-durable-observation
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
+  - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
 ---
 
@@ -61,6 +62,11 @@ keeps application context visible above while its master-detail layout keeps tra
 and compares Request with Response at the right. Each side uses progressive disclosure from a
 semantic projection to body JSON and finally the complete envelope; the raw transport package is
 never the default explanation of application behavior.
+
+Ordered Relationship Commands keep that same progression. Activity summarizes a move as
+`Source.relation.move(member, before|after|at: anchor)`, while the Visual detail separates the
+source/list, moving member, and destination. Body and Envelope remain the exact portable evidence;
+Devtools does not synthesize UI drag events or observe presentation storage.
 
 Transport routing is likewise a reusable Core runtime component rather than state owned by the
 Devtools panel or application. Devtools discovers and operates the `routing` capability of an

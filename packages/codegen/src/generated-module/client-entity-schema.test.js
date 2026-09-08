@@ -319,6 +319,7 @@ describe('semantic client Entity schema emitter', () => {
         deferredRelations: [
           {
             sourceLocalName: 'BookSchema',
+            sourceDeclarationLocalName: 'BookSchemaBase',
             kind: 'belongsTo',
             name: 'publisher',
             targetLocalName: 'PublisherSchema',
@@ -327,6 +328,35 @@ describe('semantic client Entity schema emitter', () => {
         ],
       },
     });
+  });
+
+  it('allocates a collision-free local name for deferred schema initialization', () => {
+    const schemaEntities = [
+      ...relatedSchemaEntities,
+      {
+        entityName: 'BookBase',
+        entityDefinitionName: 'BookBaseEntity',
+        entityDefinitionLocalName: 'BookSchemaBase',
+        entitySchemaProjection: { name: 'BookBase', fieldsText: '{ id: field.id() }' },
+      },
+    ];
+
+    const result = createClientEntitySchemaModuleModel({ schemaEntities });
+    const bookSchema = result.model.entitySchemas.find(schema => schema.localName === 'BookSchema');
+    const publisherRelation = result.model.deferredRelations.find(
+      relation => relation.sourceLocalName === 'BookSchema',
+    );
+
+    expect(bookSchema).toMatchObject({
+      declarationLocalName: 'BookSchemaBase2',
+      deferred: true,
+    });
+    expect(publisherRelation).toMatchObject({
+      sourceDeclarationLocalName: 'BookSchemaBase2',
+    });
+    expect(renderSemanticClientEntitySchemaModule({ schemaEntities: schemaEntities })).toContain(
+      'const BookSchemaBase2 = defineEntitySchema',
+    );
   });
 
   it('prints dependency order and relations with semantic parity to the legacy projection', () => {
@@ -448,6 +478,7 @@ describe('semantic client Entity schema emitter', () => {
         deferredRelations: [
           {
             sourceLocalName: 'NoteSchema',
+            sourceDeclarationLocalName: 'NoteSchemaBase',
             kind: 'hasMany',
             name: 'tags',
             targetLocalName: 'TagEntity',

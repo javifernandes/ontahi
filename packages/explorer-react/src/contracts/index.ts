@@ -79,10 +79,11 @@ export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
     targetDisplay?: ExplorerEntityDisplayDescriptor;
     direction?: 'forward' | 'inverse';
     cardinality?: 'one' | 'many';
+    ordered?: true;
     nullable?: boolean;
     required?: boolean;
-    structuralVerbs?: Array<'assign' | 'clear' | 'add' | 'remove'>;
-    mutations?: { add?: true; remove?: true };
+    structuralVerbs?: Array<'assign' | 'clear' | 'add' | 'remove' | 'move'>;
+    mutations?: { add?: true; remove?: true; move?: true };
     canonicalIdentity?:
       | { sourceEntityName: string; fieldName: string; targetEntityName: string }
       | {
@@ -90,6 +91,12 @@ export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
           relationName: string;
           targetEntityName: string;
           cardinality: 'many-to-many';
+        }
+      | {
+          sourceEntityName: string;
+          relationName: string;
+          targetEntityName: string;
+          cardinality: 'ordered-many';
         };
   }>;
 };

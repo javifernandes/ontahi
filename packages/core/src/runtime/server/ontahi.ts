@@ -5,6 +5,7 @@ import {
   createGraphReadObserver as createDataGraphReadObserver,
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   assertMutationReactionConfiguration,
+  isReferenceFieldDefinition,
   materializeDerivedFieldDefinitions,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
@@ -21,6 +22,8 @@ import {
   type RelationshipCommandPolicy,
   type ManyToManyRelationshipCommandPolicy,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type OrderedRelationshipCommandPolicy,
+  type OrderedRelationshipCommandExecutionRuntime,
   type MutationReaction,
   type PortableDerivedFieldRegistry,
   type PortableOperationConditionRegistry,
@@ -62,6 +65,29 @@ type RuntimeCommandOptions<TRuntime> =
 type StorageRuntime<TStorage> =
   TStorage extends DataGraphDefaultStorage<infer TRuntime> ? TRuntime : never;
 
+const assertResolvedOrderedRelations = (entities: readonly AnyEntityDefinition[]) => {
+  entities.forEach(source => {
+    Object.entries(source.relations).forEach(([name, relation]) => {
+      if (!relation.ordered) return;
+      const targetField = relation.targetField
+        ? relation.target.fields[relation.targetField]
+        : undefined;
+      if (
+        relation.relationKind !== 'hasMany' ||
+        !targetField ||
+        !isReferenceFieldDefinition(targetField) ||
+        targetField.target !== source ||
+        targetField.nullable ||
+        targetField.optional
+      ) {
+        throw new Error(
+          `Ordered Relation ${source.name}.${name} requires a direct hasMany via a required Reference Field back to ${source.name}.`,
+        );
+      }
+    });
+  });
+};
+
 export type ApplicationGraphReadDispatcherFactory = <TAuthority>(
   policies: readonly GraphReadPolicy<any, TAuthority>[],
 ) => GraphReadDispatcher<TAuthority>;
@@ -74,6 +100,7 @@ export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
   policies: readonly (
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
+    | OrderedRelationshipCommandPolicy
     | EntityMutationCommandPolicy<any>
   )[],
 ) => GraphCommandDispatcher<TAuthority>;
@@ -285,6 +312,7 @@ export const ontahi = <
     declaredEntities.forEach(declaration =>
       resolveOntahiEntityReferences(declaration, semanticEntitiesByName),
     );
+    assertResolvedOrderedRelations(semanticDeclarations);
     materializeDerivedFieldDefinitions(semanticDeclarations, options.derivedFields);
     options.storage.bindEntities?.(semanticDeclarations);
   }
@@ -478,6 +506,17 @@ export const ontahi = <
           (
             runtime as unknown as ManyToManyRelationshipCommandExecutionRuntime<unknown>
           ).runManyToManyRelationshipCommand(command),
+        );
+      },
+      executeOrdered: command => {
+        const runtime = options.storage.createRuntime();
+        if (!('runOrderedRelationshipCommand' in runtime)) {
+          throw new Error('Storage runtime does not support ordered Relationship Commands.');
+        }
+        return Effect.runPromise(
+          (
+            runtime as unknown as OrderedRelationshipCommandExecutionRuntime<unknown>
+          ).runOrderedRelationshipCommand(command),
         );
       },
       executeEntityMutation: command => {

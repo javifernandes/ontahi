@@ -79,6 +79,11 @@ export const applyConventionalDataGraphMappings = ({
           type: 'one-to-many',
           from: `${sourceMapping.tableName}.${sourceMapping.columns[sourceIdentityField]}`,
           to: `${targetMapping.tableName}.${targetMapping.columns[targetField]}`,
+          ...(relation.ordered
+            ? {
+                orderBy: `${targetMapping.tableName}.${naming.column(`${targetField}Position`)}`,
+              }
+            : {}),
         });
         return;
       }

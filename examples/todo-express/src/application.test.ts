@@ -5,6 +5,7 @@ import {
   createEntityRef,
   mutateEntity,
   query,
+  relationship,
   relationshipSet,
   Selection,
   toGraphCommandRequest,
@@ -789,6 +790,55 @@ describe('Ontahi todo portability example', () => {
       },
     });
     expect(getTodoRelationships()).toHaveLength(2);
+  });
+
+  it('persists TodoList.items order through the Fetch graph Command transport', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
+      { id: 'todo-3', list: 'list-1', title: 'Third', completed: false },
+    ];
+    const command = relationship(
+      ClientTodoListSchema,
+      'items',
+      createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
+    ).before(
+      createEntityRef(ClientTodoItemSchema, { id: 'todo-3' }),
+      createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+    );
+    const client = createFetchGraphReadExecutor({
+      endpoint: `${origin}/graph/reads`,
+      commandEndpoint: `${origin}/graph/commands`,
+    });
+
+    await expect(client.runOrderedRelationshipCommand!(command)).resolves.toMatchObject({
+      status: 'applied',
+      delta: { moved: [{ member: { locator: { id: 'todo-3' } } }] },
+    });
+    expect(getTodoDataset().TodoItem?.map(todo => todo.id)).toEqual(['todo-3', 'todo-1', 'todo-2']);
+  });
+
+  it('persists TodoList.items order through the WebSocket Runtime Protocol', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
+    ];
+    const runtimeTransport = createWebSocketRuntimeTransport({
+      url: `${origin.replace(/^http/, 'ws')}/runtime`,
+      createWebSocket: url => new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
+    });
+    const client = createRuntimeGraphClient({ runtimeTransport });
+    const command = relationship(
+      ClientTodoListSchema,
+      'items',
+      createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
+    ).prepend(createEntityRef(ClientTodoItemSchema, { id: 'todo-2' }));
+
+    await expect(
+      client.graphExecutor.runOrderedRelationshipCommand!(command),
+    ).resolves.toMatchObject({ status: 'applied', delta: { moved: [expect.any(Object)] } });
+    expect(getTodoDataset().TodoItem?.map(todo => todo.id)).toEqual(['todo-2', 'todo-1']);
+    runtimeTransport.close();
   });
 
   it('creates a Tag through the generic remote Entity mutation capability', async () => {

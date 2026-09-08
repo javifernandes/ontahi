@@ -228,7 +228,11 @@ export const compilePostgresQuery = <TParams, TResult>(
   queryOrView: QueryOrView<TParams, TResult>,
   params: TParams,
   mapping: PostgresEntityMapping,
-  options: { count?: boolean; projectedFields?: readonly string[] } = {},
+  options: {
+    count?: boolean;
+    projectedFields?: readonly string[];
+    physicalOrderBy?: readonly string[];
+  } = {},
 ): ParameterizedSql => {
   const spec = resolveQuerySpec(queryOrView, params) as QuerySpec;
   if (spec.root !== mapping.entity) {
@@ -239,18 +243,22 @@ export const compilePostgresQuery = <TParams, TResult>(
   const selection = compilePostgresSelection(spec.selection, mapping, values);
   const order = options.count
     ? ''
-    : spec.orderBy
-        .map(orderSpec => {
-          const fieldSql = resolvePostgresFieldSql(mapping, orderSpec.fieldName);
-          if (!fieldSql) {
-            throw new Error(`Field ${mapping.entity.name}.${orderSpec.fieldName} is not mapped.`);
-          }
-          return (
-            `${fieldSql} ${orderSpec.direction.toUpperCase()}` +
-            (orderSpec.direction === 'asc' ? ' NULLS FIRST' : ' NULLS LAST')
-          );
-        })
-        .join(', ');
+    : spec.orderBy.length > 0
+      ? spec.orderBy
+          .map(orderSpec => {
+            const fieldSql = resolvePostgresFieldSql(mapping, orderSpec.fieldName);
+            if (!fieldSql) {
+              throw new Error(`Field ${mapping.entity.name}.${orderSpec.fieldName} is not mapped.`);
+            }
+            return (
+              `${fieldSql} ${orderSpec.direction.toUpperCase()}` +
+              (orderSpec.direction === 'asc' ? ' NULLS FIRST' : ' NULLS LAST')
+            );
+          })
+          .join(', ')
+      : (options.physicalOrderBy ?? [])
+          .map(column => `${quoteIdentifier(column)} ASC NULLS LAST`)
+          .join(', ');
   const limit = !options.count && spec.limit != null ? ` LIMIT ${spec.limit}` : '';
 
   return {

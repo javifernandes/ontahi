@@ -13,6 +13,7 @@ import {
   type RemoteGraphObservationTransport,
   type RemoteGraphReadTransport,
   type ManyToManyRelationshipCommandExecutionRuntime,
+  type OrderedRelationshipCommandExecutionRuntime,
   type RelationshipCommandExecutionRuntime,
 } from '@ontahi/core/data-graph';
 import { runBrowserEffect } from '@ontahi/core/runtime/browser';
@@ -47,7 +48,8 @@ export type FetchRelationshipRuntime<TOptions = undefined> = RelationshipCommand
   RemoteDataGraphError,
   TOptions
 > &
-  ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions>;
+  ManyToManyRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
+  OrderedRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions>;
 export type FetchEntityMutationRuntime<TOptions = undefined> =
   EntityMutationCommandExecutionRuntime<RemoteDataGraphError, TOptions>;
 
@@ -155,6 +157,8 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
         runBrowserEffect(runtime.runRelationshipCommand(command, options)),
       runManyToManyRelationshipCommand: (command, options) =>
         runBrowserEffect(runtime.runManyToManyRelationshipCommand(command, options)),
+      runOrderedRelationshipCommand: (command, options) =>
+        runBrowserEffect(runtime.runOrderedRelationshipCommand(command, options)),
       runEntityMutationCommand: (command, options) =>
         runBrowserEffect(runtime.runEntityMutationCommand(command, options)),
     },

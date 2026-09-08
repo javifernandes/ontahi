@@ -1,5 +1,6 @@
 import {
   formatSelectionExpression,
+  graphCommandSummary,
   graphReadSummary,
   isRecord,
   viewFields,
@@ -200,9 +201,52 @@ const GraphReadVisual = ({ body }: { readonly body: RecordValue }) => {
   );
 };
 
+const GraphCommandVisual = ({ body }: { readonly body: RecordValue }) => {
+  const command = isRecord(body.command) ? body.command : undefined;
+  const relation = command && isRecord(command.relation) ? command.relation : undefined;
+  if (!command || command.kind !== 'ordered-relationship-command' || !relation) {
+    return <DomainValue value={body} />;
+  }
+  const position = isRecord(command.position) ? command.position : undefined;
+  const destination = position?.before
+    ? `Before ${formatLeaf(position.before)}`
+    : position?.after
+      ? `After ${formatLeaf(position.after)}`
+      : position?.at === 'start'
+        ? 'Start of list'
+        : position?.at === 'end'
+          ? 'End of list'
+          : 'Unknown destination';
+  return (
+    <>
+      <p style={styles.semanticHeadline}>{graphCommandSummary(body)}</p>
+      <div style={styles.semanticGrid}>
+        <div style={styles.semanticCard}>
+          <span style={styles.semanticLabel}>Source / List</span>
+          <span style={styles.semanticValue}>
+            {String(relation.sourceEntityName ?? 'Entity')}.
+            {String(relation.relationName ?? 'relation')}
+            {' · '}
+            {formatLeaf(command.source)}
+          </span>
+        </div>
+        <div style={styles.semanticCard}>
+          <span style={styles.semanticLabel}>Moving item</span>
+          <span style={styles.semanticValue}>{formatLeaf(command.member)}</span>
+        </div>
+        <div style={styles.semanticCard}>
+          <span style={styles.semanticLabel}>Destination</span>
+          <span style={styles.semanticValue}>{destination}</span>
+        </div>
+      </div>
+    </>
+  );
+};
+
 export const SemanticPayload = ({ value }: { readonly value: unknown }) => {
   if (!isRecord(value)) return <DomainValue value={value} />;
   if (value.kind === 'graph-read') return <GraphReadVisual body={value} />;
+  if (value.kind === 'graph-command') return <GraphCommandVisual body={value} />;
   if (
     value.kind === 'invoke' ||
     value.kind === 'check-permission' ||

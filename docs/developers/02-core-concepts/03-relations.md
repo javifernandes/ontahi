@@ -147,6 +147,23 @@ relations: () => ({
 `Enrollment.fields.student` already supplies the related Entity, the reference value, and the join
 evidence. The inverse declaration adds only the domain name and `hasMany` cardinality.
 
+When sequence is part of that domain relation, declare it on the inverse collection rather than as
+a public position Field:
+
+```ts
+relations: () => ({
+  items: relation.hasMany(entity.ref('TodoItem'), {
+    via: 'list',
+    ordered: true,
+  }),
+}),
+```
+
+An ordered `hasMany` must point through one required Reference Field on the target. Ordinary nested
+reads preserve its stored sequence when the caller supplies no `orderBy`; an explicit `orderBy`
+still wins for that read without changing the relation. Root Entity queries remain unordered unless
+the caller orders them. Reflection exposes `ordered: true` and the structural `move` affordance.
+
 Reflection can still show the other endpoint when only one side was declared. It derives a
 read-only inverse descriptor from the schema's Reference Field evidence, preserving the canonical
 declaring Entity and Relation identity. That descriptor makes topology visible in Explorer, but it
@@ -183,6 +200,19 @@ of its serialized identity; crossing a process boundary still carries only the E
 locator. The lower-level `relationship(Entity, relationName, subject)` factory remains available to
 framework integrations, but ordinary application code starts from the bound Ref.
 
+An ordered to-many endpoint offers `move`, `prepend`, `append`, `before`, and `after` instead of
+membership-changing `add` and `remove`:
+
+```ts
+const command = relationship(TodoList, 'items', list).before(item, anchor, {
+  ifPosition: { before: previousNext, after: previousPrevious },
+});
+```
+
+The optional exact-neighborhood precondition is checked atomically. A stale precondition fails with
+`relationship_precondition_failed`, or returns `not-applied` when `onMismatch: 'skip'` is explicit.
+Missing participants and participants from another collection produce stable typed rejections.
+
 Constructing the command is pure. A runtime-bound command gains an explicit, non-enumerable
 `.run()` method, so execution can discover the current runtime without changing the portable
 command envelope:
@@ -196,8 +226,9 @@ one link. Ontahí normalizes both directions to the identity of the Reference Fi
 connection. Clearing a required relation is rejected before mutation.
 
 Provider and remote runtimes return an explicit \concept{Relationship Command Result}. An applied
-command carries a \concept{Relationship Delta}: only the links actually added or removed. An
-idempotent assignment is still applied and carries empty arrays instead of claiming that a fact
+command carries a \concept{Relationship Delta}: only the links actually added or removed, plus the
+exact previous and next neighborhood for each moved member of an ordered Relation. An idempotent
+assignment or move is still applied and carries empty arrays instead of claiming that a fact
 changed. A deliberately skipped conditional command is different: it is `not-applied` and has no
 delta.
 
@@ -205,7 +236,11 @@ delta.
 type RelationshipCommandResult =
   | {
       status: 'applied';
-      delta: { added: RelationshipFact[]; removed: RelationshipFact[] };
+      delta: {
+        added: RelationshipFact[];
+        removed: RelationshipFact[];
+        moved?: OrderedRelationshipMove[];
+      };
     }
   | {
       status: 'not-applied';

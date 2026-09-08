@@ -8,6 +8,7 @@ import type {
   QueryOrView,
   QuerySpec,
   ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
   RelationshipCommand,
   RelationshipCommandResult,
   EntityMutationCommand,
@@ -41,6 +42,10 @@ export interface ReactGraphExecutor<TReadOptions = unknown, TCommandOptions = TR
   ): Promise<RelationshipCommandResult>;
   runManyToManyRelationshipCommand?(
     command: ManyToManyRelationshipCommand,
+    options?: TCommandOptions,
+  ): Promise<RelationshipCommandResult>;
+  runOrderedRelationshipCommand?(
+    command: OrderedRelationshipCommand,
     options?: TCommandOptions,
   ): Promise<RelationshipCommandResult>;
   runEntityMutationCommand?(

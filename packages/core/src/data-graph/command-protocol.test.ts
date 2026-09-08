@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   createEntityRef,
@@ -9,6 +9,8 @@ import {
   relationship,
   resolveGraphCommandRequest,
   toGraphCommandRequest,
+  type GraphCommandRequestV1,
+  type OrderedRelationshipCommand,
 } from './index.js';
 
 const defineSchoolGraph = () => {
@@ -193,6 +195,119 @@ describe('data graph Relationship Command protocol', () => {
     expect(
       resolveGraphCommandRequest(toGraphCommandRequest(command), { entities: [Student, Course] }),
     ).toMatchObject({ success: false, error: { error: { code: 'invalid_relation' } } });
+  });
+});
+
+describe('data graph ordered Relationship Command protocol', () => {
+  const defineOrderedGraph = () => {
+    const List = entity('ProtocolList', { id: field.id() });
+    const Item = entity('ProtocolItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list', ordered: true });
+    return { List, Item };
+  };
+
+  it('round-trips only through protocol v2 and resolves the declared ordered endpoint', () => {
+    const graph = defineOrderedGraph();
+    const list = createEntityRef(graph.List, { id: 'list-1' });
+    const member = createEntityRef(graph.Item, { id: 'item-2' });
+    const anchor = createEntityRef(graph.Item, { id: 'item-1' });
+    const command = relationship(graph.List, 'items', list).after(member, anchor, {
+      ifPosition: { before: null, after: anchor },
+      onMismatch: 'skip',
+    });
+    expectTypeOf<OrderedRelationshipCommand>().not.toMatchTypeOf<
+      GraphCommandRequestV1['command']
+    >();
+    const request = JSON.parse(JSON.stringify(toGraphCommandRequest(command)));
+
+    expect(request).toEqual({ version: 2, kind: 'graph-command', command });
+    const parsed = parseGraphCommandRequest(request);
+    expect(parsed).toEqual({ success: true, request });
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+    expect(
+      resolveGraphCommandRequest(parsed.request, { entities: [graph.List, graph.Item] }),
+    ).toEqual({ success: true, request: parsed.request, command });
+  });
+
+  it('rejects v1, ambiguous placement, and a non-ordered server Relation', () => {
+    const graph = defineOrderedGraph();
+    const command = relationship(
+      graph.List,
+      'items',
+      createEntityRef(graph.List, { id: 'list-1' }),
+    ).prepend(createEntityRef(graph.Item, { id: 'item-1' }));
+
+    expect(
+      parseGraphCommandRequest({ ...toGraphCommandRequest(command), version: 1 }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+    expect(
+      parseGraphCommandRequest({
+        ...toGraphCommandRequest(command),
+        command: { ...command, position: { at: 'start', before: command.member } },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+
+    const List = entity('ProtocolList', { id: field.id() });
+    const Item = entity('ProtocolItem', { id: field.id(), list: field.ref(List) });
+    List.hasMany('items', Item, { via: 'list' });
+    expect(
+      resolveGraphCommandRequest(toGraphCommandRequest(command), { entities: [List, Item] }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_relation' } } });
+  });
+
+  it('rejects malformed ordered placements and neighborhood preconditions', () => {
+    const graph = defineOrderedGraph();
+    const command = relationship(
+      graph.List,
+      'items',
+      createEntityRef(graph.List, { id: 'list-1' }),
+    ).prepend(createEntityRef(graph.Item, { id: 'item-1' }));
+    const request = toGraphCommandRequest(command);
+
+    for (const position of [
+      null,
+      { before: command.member, extra: true },
+      { after: command.member, extra: true },
+      { destination: 'unknown' },
+    ]) {
+      expect(
+        parseGraphCommandRequest({
+          ...request,
+          command: { ...command, position },
+        }),
+      ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+    }
+    expect(
+      parseGraphCommandRequest({
+        ...request,
+        command: {
+          ...command,
+          precondition: { position: { before: null }, onMismatch: 'skip' },
+        },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+  });
+
+  it('validates a before anchor during server resolution', () => {
+    const graph = defineOrderedGraph();
+    const command = relationship(
+      graph.List,
+      'items',
+      createEntityRef(graph.List, { id: 'list-1' }),
+    ).before(
+      createEntityRef(graph.Item, { id: 'item-2' }),
+      createEntityRef(graph.Item, { id: 'item-1' }),
+    );
+    const invalid = {
+      ...command,
+      position: { before: createEntityRef(graph.List, { id: 'list-1' }) },
+    } as unknown as typeof command;
+    const parsed = parseGraphCommandRequest(toGraphCommandRequest(invalid));
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(
+      resolveGraphCommandRequest(parsed.request, { entities: [graph.List, graph.Item] }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_reference' } } });
   });
 });
 

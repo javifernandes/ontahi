@@ -1,15 +1,3 @@
-type Identified = { id: unknown };
-
-export const groupTodoLists = <List extends Identified, Todo>(
-  lists: readonly List[],
-  todos: readonly Todo[],
-  listIdForTodo: (todo: Todo) => unknown,
-) =>
-  lists.map(list => ({
-    ...list,
-    items: todos.filter(todo => listIdForTodo(todo) === list.id),
-  }));
-
 export const reconcileTodoListOrder = (
   currentIds: readonly string[],
   availableIds: readonly string[],
@@ -34,11 +22,6 @@ export const moveTodoList = (
   nextIds.splice(targetIndex < 0 ? nextIds.length : targetIndex, 0, movingId);
   return nextIds;
 };
-
-export const reconcileTodoItemOrder = (
-  currentIds: readonly string[],
-  availableIds: readonly string[],
-) => reconcileTodoListOrder(currentIds, availableIds);
 
 export const moveTodoItem = (currentIds: readonly string[], movingId: string, beforeId?: string) =>
   moveTodoList(currentIds, movingId, beforeId);

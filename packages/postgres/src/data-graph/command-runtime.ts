@@ -9,6 +9,7 @@ import {
   type EntityMutationDelta,
   type GraphCommandSpec,
   type ManyToManyRelationshipCommand,
+  type OrderedRelationshipCommand,
   type RelationConstraintRejection,
   type RelationshipCommand,
 } from '@ontahi/core/data-graph';
@@ -20,6 +21,7 @@ import {
   materializePostgresManyToManyDelta,
 } from './many-to-many.js';
 import type { PostgresEntityMapping } from './mapping.js';
+import { executePostgresOrderedRelationshipCommand } from './ordered-relationship-command.js';
 import {
   compilePostgresRelationshipCommand,
   materializePostgresRelationshipDelta,
@@ -170,6 +172,24 @@ export const executePostgresManyToManyCommand = (input: {
           : 'execution_failed';
       return new PostgresDataGraphError('PostgreSQL many-to-many Command failed.', reason, cause);
     },
+  });
+
+export const executePostgresOrderedRelationshipCommandEffect = (input: {
+  command: OrderedRelationshipCommand;
+  executeQuery: ExecuteQuery;
+  mappings: readonly PostgresEntityMapping[];
+  authoritySerialized?: boolean;
+}) =>
+  Effect.tryPromise({
+    try: () => executePostgresOrderedRelationshipCommand(input),
+    catch: cause =>
+      cause instanceof PostgresDataGraphError
+        ? cause
+        : new PostgresDataGraphError(
+            'PostgreSQL ordered Relationship Command failed.',
+            'execution_failed',
+            cause,
+          ),
   });
 
 export const executePostgresRelationshipCommand = (input: {

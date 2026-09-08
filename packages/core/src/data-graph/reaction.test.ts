@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   createEntityRef,
@@ -9,6 +9,7 @@ import {
   relationship,
   relationshipSet,
   type AppliedRelationshipMutationOutcome,
+  type OrderedRelationshipDelta,
   type RelationshipDelta,
 } from './index.js';
 
@@ -38,6 +39,39 @@ const outcomeFor = (
 });
 
 describe('Reaction authoring', () => {
+  it('exposes moved only for ordered Relations with an ordered delta', () => {
+    const { Course } = defineClassroomGraph();
+    const ListBase = entity('ReactionOrderedList', { id: field.id() });
+    const Item = entity('ReactionOrderedItem', {
+      id: field.id(),
+      list: field.ref(ListBase),
+    });
+    const List = ListBase.hasMany('items', Item, { via: 'list', ordered: true });
+    const unordered = reaction.relationship(Course, 'students');
+    const ordered = reaction.relationship(List, 'items');
+
+    expect(unordered).not.toHaveProperty('moved');
+    expectTypeOf(unordered).not.toHaveProperty('moved');
+    expect(ordered).toHaveProperty('moved');
+    expectTypeOf(ordered).toHaveProperty('moved');
+
+    const declaration = ordered.moved({ id: 'item-moved', delivery: 'inline' }).react(outcome => {
+      expectTypeOf(outcome.delta).toEqualTypeOf<OrderedRelationshipDelta>();
+      return [reaction.intent.emit({ moves: outcome.delta.moved.length })];
+    });
+
+    expect(declaration.when).toEqual({
+      mutationKind: 'relationship-command',
+      action: 'move',
+      relation: {
+        sourceEntityName: 'ReactionOrderedList',
+        relationName: 'items',
+        targetEntityName: 'ReactionOrderedItem',
+        cardinality: 'ordered-many',
+      },
+    });
+  });
+
   it('does not make an incomplete Reaction builder Promise-like', () => {
     const { Course } = defineClassroomGraph();
 

@@ -35,6 +35,7 @@ const createProps = (overrides: Partial<TodoBoardProps> = {}): TodoBoardProps =>
   deletingTodoId: undefined,
   taggingTodoId: undefined,
   deletingTagId: undefined,
+  reorderingTodoId: undefined,
   clearActionError: vi.fn(),
   createList: vi.fn().mockResolvedValue('list-new') as unknown as TodoBoardProps['createList'],
   renameList: vi.fn().mockResolvedValue(true),
@@ -56,19 +57,22 @@ const createProps = (overrides: Partial<TodoBoardProps> = {}): TodoBoardProps =>
   toggleTodoTag: vi.fn().mockResolvedValue(true),
   createTagForTodo: vi.fn().mockResolvedValue(true),
   deleteTag: vi.fn().mockResolvedValue(true),
+  moveTodo: vi.fn().mockResolvedValue(true),
   ...overrides,
 });
 
 describe('TodoBoard list creation', () => {
   let container: HTMLDivElement;
   let root: Root;
+  let setStoredValue: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     const storedValues = new Map<string, string>();
+    setStoredValue = vi.fn((key: string, value: string) => storedValues.set(key, value));
     vi.stubGlobal('localStorage', {
       clear: () => storedValues.clear(),
       getItem: (key: string) => storedValues.get(key) ?? null,
-      setItem: (key: string, value: string) => storedValues.set(key, value),
+      setItem: setStoredValue,
     });
     vi.stubGlobal(
       'ResizeObserver',
@@ -142,5 +146,44 @@ describe('TodoBoard list creation', () => {
       'input[aria-label="Add a todo to Focused list"]',
     )!;
     expect(document.activeElement).toBe(quickAdd);
+  });
+
+  it('delegates keyboard reorder to the runtime and never persists item order locally', () => {
+    const moveTodo = vi.fn().mockResolvedValue(true) as TodoBoardProps['moveTodo'];
+    const listRef = {
+      kind: 'entity-ref' as const,
+      entityName: 'TodoList' as const,
+      locator: { id: 'list-1' },
+    };
+    const props = createProps({
+      moveTodo,
+      lists: [
+        {
+          id: 'list-1',
+          name: 'Inbox',
+          color: '#f5ddd5',
+          items: [
+            { id: 'todo-1', list: listRef, title: 'First', completed: false, tags: [] },
+            { id: 'todo-2', list: listRef, title: 'Second', completed: false, tags: [] },
+          ],
+        },
+      ],
+    });
+
+    act(() => root.render(<TodoBoard {...props} />));
+    act(() => {
+      container
+        .querySelector<HTMLElement>('[data-todo-id="todo-1"]')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    expect(moveTodo).toHaveBeenCalledWith('list-1', 'todo-1', undefined);
+    expect(setStoredValue.mock.calls.map(([key]) => key)).not.toContain('ontahi.todo.item-order');
+
+    act(() => root.render(<TodoBoard {...props} reorderingTodoId='todo-1' />));
+    expect(container.querySelector('[data-todo-id="todo-1"]')?.getAttribute('aria-busy')).toBe(
+      'true',
+    );
+    expect(container.textContent).toContain('Saving order…');
   });
 });

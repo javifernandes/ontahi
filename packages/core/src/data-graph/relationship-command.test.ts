@@ -145,7 +145,7 @@ describe('relationship commands', () => {
     expect(() => relationship(Student, 'course', course)).toThrow(
       'Expected relationship subject Ref for Student, got Course.',
     );
-    expect(() => relationship(Student, 'course', student).assign(student)).toThrow(
+    expect(() => relationship(Student, 'course', student).assign(student as never)).toThrow(
       'Expected target Ref for Course, got Student.',
     );
   });

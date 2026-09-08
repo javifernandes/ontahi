@@ -53,6 +53,86 @@ const assertApplied: (
 };
 
 describe('Ontahi Reaction registration', () => {
+  it('runs an ordered move Reaction and an ordered follow-up through the contextual runtime', async () => {
+    const ListFields = { id: field.id() };
+    const Item = entity({
+      name: 'ReactionOrderedItem',
+      fields: {
+        id: field.id(),
+        list: field.ref(entity.ref('ReactionOrderedList', { fields: ListFields })),
+      },
+    });
+    const List = entity({
+      name: 'ReactionOrderedList',
+      fields: ListFields,
+      relations: () => ({
+        items: relation.hasMany(Item, { via: 'list', ordered: true }),
+      }),
+    });
+    const dataset: InMemoryDataset = {
+      ReactionOrderedList: [{ id: 'list-1' }],
+      ReactionOrderedItem: [
+        { id: 'a', list: 'list-1' },
+        { id: 'b', list: 'list-1' },
+        { id: 'c', list: 'list-1' },
+      ],
+    };
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset }),
+      entities: [List, Item],
+      reactions: () => [
+        reaction
+          .relationship(List, 'items')
+          .moved({ id: 'keep-a-last', delivery: 'inline' })
+          .react(outcome =>
+            outcome.command.member.locator.id === 'c'
+              ? [
+                  reaction.intent.execute({
+                    ...outcome.command,
+                    member: {
+                      kind: 'entity-ref',
+                      entityName: 'ReactionOrderedItem',
+                      locator: { id: 'a' },
+                    },
+                    position: { at: 'end' },
+                  }),
+                ]
+              : [],
+          ),
+      ],
+    });
+    const move = layer('tests.ordered-reaction', {
+      concerns: [application.app.graph.withRuntime()],
+    }).effect('move', () =>
+      application.graph.entities.ReactionOrderedList.refById('list-1')
+        .items.prepend(application.graph.entities.ReactionOrderedItem.refById('c'))
+        .run(),
+    );
+
+    const result = await move();
+
+    assertApplied(result);
+    expect(result).toMatchObject({
+      outcome: {
+        command: { kind: 'ordered-relationship-command', action: 'move' },
+        delta: { moved: [{ member: { locator: { id: 'c' } } }] },
+      },
+      reactions: [
+        {
+          reactionId: 'keep-a-last',
+          status: 'applied',
+          outcome: {
+            command: {
+              kind: 'ordered-relationship-command',
+              member: { locator: { id: 'a' } },
+            },
+          },
+        },
+      ],
+    });
+    expect(dataset.ReactionOrderedItem?.map(row => row.id)).toEqual(['c', 'b', 'a']);
+  });
+
   it('runs a registered Classroom unlink Reaction after one applied Relationship Command', async () => {
     const { Course, Student } = defineClassroom();
     const dataset: InMemoryDataset = {

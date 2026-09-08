@@ -171,3 +171,9 @@ other trusted request state remain in Fetch initialization and are never embedde
 Command. The executor supports policy-bounded Relationship Commands and identity-scoped Entity
 Mutation Commands; `useGraphExecutorCapability()` lets optional reflective UI discover whether the
 host installed that execution surface without making it mandatory for read-only hosts.
+
+`useOrderedRelationshipCommand` executes `move`/`before`/`after`/`prepend`/`append` commands through
+the same Fetch or WebSocket Runtime Transport. Its result includes an exact `moved` delta, while a
+stale exact-neighborhood precondition follows the command's fail-or-skip policy. Optimistic UI may
+project the requested order temporarily, but the authoritative sequence should be refetched from
+the ordered Relation after completion.

@@ -4,6 +4,7 @@ import type {
   GraphReadPolicy,
   EntityMutationCommandPolicy,
   ManyToManyRelationshipCommandPolicy,
+  OrderedRelationshipCommandPolicy,
   RelationshipCommandPolicy,
 } from '@ontahi/core/data-graph';
 import {
@@ -89,6 +90,7 @@ export type OntahiExpressGraphCommandOptions<TAuthority = InvocationContext> = {
   policies: readonly (
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
+    | OrderedRelationshipCommandPolicy
     | EntityMutationCommandPolicy<any>
   )[];
   dispatcher?: GraphCommandDispatcher<TAuthority>;

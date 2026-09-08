@@ -8,6 +8,7 @@ import {
   entity,
   field,
   isDataGraphTransactionCapability,
+  mapEntity,
   mapRelation,
   mutateEntity,
   relationConstraint,
@@ -154,6 +155,31 @@ const RelationshipTagMapping = postgresMapping({
   table: 'relationship_tags',
   columns: { id: 'id', label: 'label', assignable: 'is_assignable' },
 });
+const OrderedListBase = entity('OrderedList', { id: field.id() });
+const OrderedItem = entity('OrderedItem', {
+  id: field.id(),
+  list: field.ref(OrderedListBase),
+  title: field.string(),
+});
+const OrderedList = OrderedListBase.hasMany('items', OrderedItem, { via: 'list', ordered: true });
+mapEntity(OrderedList).toTable('ordered_lists');
+mapEntity(OrderedItem).toTable('ordered_items', { list: 'list_id' });
+mapRelation(OrderedList, 'items', {
+  type: 'one-to-many',
+  from: 'ordered_lists.id',
+  to: 'ordered_items.list_id',
+  orderBy: 'ordered_items.list_position',
+});
+const OrderedListMapping = postgresMapping({
+  entity: OrderedList,
+  table: 'ordered_lists',
+  columns: { id: 'id' },
+});
+const OrderedItemMapping = postgresMapping({
+  entity: OrderedItem,
+  table: 'ordered_items',
+  columns: { id: 'id', list: 'list_id', title: 'title' },
+});
 
 describe('PostgreSQL data graph runtime', () => {
   let container: StartedPostgreSqlContainer | undefined;
@@ -232,6 +258,15 @@ describe('PostgreSQL data graph runtime', () => {
       CREATE TABLE derived_students (
         id text PRIMARY KEY,
         course_id text NOT NULL REFERENCES derived_courses(id)
+      );
+      CREATE TABLE ordered_lists (
+        id text PRIMARY KEY
+      );
+      CREATE TABLE ordered_items (
+        id text PRIMARY KEY,
+        list_id text NOT NULL REFERENCES ordered_lists(id),
+        title text NOT NULL,
+        list_position bigint NOT NULL
       )
     `);
   }, 180_000);
@@ -976,6 +1011,179 @@ describe('PostgreSQL data graph runtime', () => {
     await expect(
       pool.query(`SELECT id FROM capacity_students WHERE course_id = 'course-1'`),
     ).resolves.toMatchObject({ rowCount: 1 });
+  });
+
+  it('persists ordered moves, applies natural traversal order, and rejects a concurrent stale move', async () => {
+    await pool.query('TRUNCATE TABLE ordered_items, ordered_lists CASCADE');
+    await pool.query(`
+      INSERT INTO ordered_lists (id) VALUES ('list-1'), ('list-2');
+      INSERT INTO ordered_items (id, list_id, title, list_position) VALUES
+        ('a', 'list-1', 'Zulu', 1),
+        ('b', 'list-1', 'Alpha', 2),
+        ('c', 'list-1', 'Mike', 3),
+        ('x', 'list-2', 'Other', 1)
+    `);
+    const runtime = createPostgresDataGraphRuntime({
+      pool,
+      mappings: [OrderedListMapping, OrderedItemMapping],
+    });
+    const list = createEntityRef(OrderedList, { id: 'list-1' });
+    const item = (id: string) => createEntityRef(OrderedItem, { id });
+    const ids = async (explicit = false) => {
+      const read = query(OrderedList)
+        .where(candidate => candidate.id.eq('list-1'))
+        .include(candidate => ({
+          items: explicit ? candidate.items.orderBy(member => member.title) : candidate.items,
+        }));
+      const rows = await Effect.runPromise(runtime.run(read, undefined));
+      return (rows[0]?.items ?? []).map(member => member.id);
+    };
+
+    await expect(
+      Effect.runPromise(
+        runtime.runOrderedRelationshipCommand(
+          relationship(OrderedList, 'items', list).before(item('b'), item('c')),
+        ),
+      ),
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [], moved: [] } });
+
+    const placements = [
+      [relationship(OrderedList, 'items', list).append(item('a')), ['b', 'c', 'a']],
+      [relationship(OrderedList, 'items', list).before(item('c'), item('b')), ['a', 'c', 'b']],
+      [relationship(OrderedList, 'items', list).after(item('a'), item('b')), ['b', 'a', 'c']],
+      [
+        relationship(OrderedList, 'items', list).move(item('a'), { after: item('b') }),
+        ['b', 'a', 'c'],
+      ],
+      [
+        relationship(OrderedList, 'items', list).prepend(item('c'), {
+          ifPosition: { before: null, after: item('b') },
+        }),
+        ['c', 'a', 'b'],
+      ],
+    ] as const;
+    for (const [command, expected] of placements) {
+      await pool.query(
+        `UPDATE ordered_items SET list_position = CASE id WHEN 'a' THEN 1 WHEN 'b' THEN 2 ELSE 3 END
+         WHERE list_id = 'list-1'`,
+      );
+      await expect(
+        Effect.runPromise(runtime.runOrderedRelationshipCommand(command)),
+      ).resolves.toMatchObject({
+        status: 'applied',
+        delta: { moved: [{ member: { locator: { id: command.member.locator.id } } }] },
+      });
+      await expect(ids()).resolves.toEqual(expected);
+    }
+    await expect(ids()).resolves.toEqual(['c', 'a', 'b']);
+    await expect(ids(true)).resolves.toEqual(['b', 'c', 'a']);
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runOrderedRelationshipCommand(
+            relationship(
+              OrderedList,
+              'items',
+              createEntityRef(OrderedList, { id: 'missing-list' }),
+            ).prepend(item('a')),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'ordered_relationship_rejected',
+        rejection: { code: 'ordered_relationship_source_not_found' },
+      },
+    });
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runOrderedRelationshipCommand(
+            relationship(OrderedList, 'items', list).prepend(item('missing-member')),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'ordered_relationship_rejected',
+        rejection: { code: 'ordered_relationship_member_not_found' },
+      },
+    });
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runOrderedRelationshipCommand(
+            relationship(OrderedList, 'items', list).prepend(item('x')),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'ordered_relationship_rejected',
+        rejection: { code: 'ordered_relationship_member_not_in_relation' },
+      },
+    });
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runOrderedRelationshipCommand(
+            relationship(OrderedList, 'items', list).before(item('a'), item('missing-anchor')),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'ordered_relationship_rejected',
+        rejection: { code: 'ordered_relationship_anchor_not_found' },
+      },
+    });
+    await expect(
+      Effect.runPromise(
+        runtime
+          .runOrderedRelationshipCommand(
+            relationship(OrderedList, 'items', list).prepend(item('a'), {
+              ifPosition: { before: null, after: item('x') },
+            }),
+          )
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({
+      _tag: 'Left',
+      left: {
+        reason: 'ordered_relationship_rejected',
+        rejection: { code: 'ordered_relationship_neighbor_not_in_relation' },
+      },
+    });
+    await expect(ids()).resolves.toEqual(['c', 'a', 'b']);
+
+    await pool.query(
+      `UPDATE ordered_items SET list_position = CASE id WHEN 'a' THEN 1 WHEN 'b' THEN 2 ELSE 3 END
+       WHERE list_id = 'list-1'`,
+    );
+    const commands = [
+      relationship(OrderedList, 'items', list).prepend(item('c'), {
+        ifPosition: { before: null, after: item('b') },
+      }),
+      relationship(OrderedList, 'items', list).prepend(item('b'), {
+        ifPosition: { before: item('c'), after: item('a') },
+      }),
+    ].map(command =>
+      Effect.runPromise(runtime.runOrderedRelationshipCommand(command).pipe(Effect.either)),
+    );
+    const results = await Promise.all(commands);
+    expect(results.filter(Either.isRight)).toHaveLength(1);
+    expect(results.filter(Either.isLeft)).toHaveLength(1);
+    expect(results.find(Either.isLeft)).toMatchObject({
+      _tag: 'Left',
+      left: { reason: 'relationship_precondition_failed' },
+    });
+    await expect(
+      pool.query(`SELECT list_position FROM ordered_items WHERE id = 'x'`),
+    ).resolves.toMatchObject({ rows: [{ list_position: '1' }] });
   });
 
   it('runs one fluent client Entity read directly and through Express over PostgreSQL', async () => {

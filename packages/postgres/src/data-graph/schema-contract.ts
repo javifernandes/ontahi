@@ -66,20 +66,32 @@ export const inspectPostgresDataGraphSchema = async ({
       ];
     }
 
-    return Object.entries(mapping.columns).flatMap<PostgresDataGraphSchemaIssue>(
-      ([field, column]) =>
-        columns.has(column)
-          ? []
-          : [
-              {
-                kind: 'column-not-found',
-                column,
-                entity: entity.name,
-                field,
-                schema,
-                table: mapping.tableName,
-              },
-            ],
+    const requiredColumns = [
+      ...Object.entries(mapping.columns),
+      ...entities.flatMap(source =>
+        Object.entries(source.relations).flatMap(([relationName, relation]) =>
+          relation.target === entity &&
+          relation.ordered &&
+          relation.mapping?.type === 'one-to-many' &&
+          relation.mapping.orderColumn
+            ? [[`${source.name}.${relationName}.__order`, relation.mapping.orderColumn] as const]
+            : [],
+        ),
+      ),
+    ];
+    return requiredColumns.flatMap<PostgresDataGraphSchemaIssue>(([field, column]) =>
+      columns.has(column)
+        ? []
+        : [
+            {
+              kind: 'column-not-found',
+              column,
+              entity: entity.name,
+              field,
+              schema,
+              table: mapping.tableName,
+            },
+          ],
     );
   });
 

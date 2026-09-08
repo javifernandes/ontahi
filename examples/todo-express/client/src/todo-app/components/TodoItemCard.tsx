@@ -19,6 +19,7 @@ type TodoItemCardProps = {
   isDeleting: boolean;
   isDragging: boolean;
   isTagging: boolean;
+  isReordering: boolean;
   deletingTagId?: string;
   isTagPickerOpen: boolean;
   closeTagPicker: () => void;
@@ -47,6 +48,7 @@ export const TodoItemCard = ({
   isDeleting,
   isDragging,
   isTagging,
+  isReordering,
   deletingTagId,
   isTagPickerOpen,
   closeTagPicker,
@@ -133,21 +135,24 @@ export const TodoItemCard = ({
       beginTitleEdit();
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      moveBy(-1);
+      if (!isReordering) moveBy(-1);
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
-      moveBy(1);
+      if (!isReordering) moveBy(1);
     }
   };
 
   return (
     <div
-      className={`todo-item-card${todo.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}`}
+      className={`todo-item-card${todo.completed ? ' completed' : ''}${isDragging ? ' dragging' : ''}${isReordering ? ' reordering' : ''}`}
       data-todo-id={todo.id}
       tabIndex={0}
       role='listitem'
       aria-label={`${todo.title}. Drag to reorder; arrow keys also work. Press Enter to rename.`}
-      onPointerDown={startPointerDragging}
+      aria-busy={isReordering}
+      onPointerDown={event => {
+        if (!isReordering) startPointerDragging(event);
+      }}
       onPointerMove={movePointerDragging}
       onPointerUp={dropPointer}
       onPointerCancel={cancelPointerDragging}
@@ -229,6 +234,11 @@ export const TodoItemCard = ({
             {todo.title}
           </span>
         )}
+        {isReordering ? (
+          <small className='todo-order-pending' aria-live='polite'>
+            <LoaderCircle className='spin' aria-hidden='true' /> Saving order…
+          </small>
+        ) : null}
         {todo.tags.length > 0 ? (
           <div className='assigned-tags' aria-label={`Tags for ${todo.title}`}>
             {todo.tags.map(tag => (

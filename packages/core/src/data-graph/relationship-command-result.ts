@@ -6,18 +6,24 @@ import type {
   CanonicalManyToManyRelationIdentity,
   CanonicalRelationIdentity,
   ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
+  OrderedRelationshipDelta,
+  OrderedRelationshipMove,
   RelationshipCommand,
   RelationshipDelta,
   RelationshipFact,
 } from './relationship-command.js';
 
 export type RelationshipCommandDiagnostic = {
-  reason: 'relationship_precondition_failed' | 'relation_constraint_rejected';
+  reason:
+    | 'relationship_precondition_failed'
+    | 'relation_constraint_rejected'
+    | 'ordered_relationship_rejected';
   rejection: RelationConstraintRejection;
 };
 
 export type RelationshipCommandResult =
-  | { status: 'applied'; delta: RelationshipDelta }
+  | { status: 'applied'; delta: RelationshipDelta | OrderedRelationshipDelta }
   | { status: 'not-applied'; diagnostic: RelationshipCommandDiagnostic };
 
 const hasValidDiagnosticParameters = (value: unknown) =>
@@ -45,7 +51,8 @@ export const isRelationshipCommandDiagnostic = (
 ): value is RelationshipCommandDiagnostic =>
   isRecord(value) &&
   (value.reason === 'relationship_precondition_failed' ||
-    value.reason === 'relation_constraint_rejected') &&
+    value.reason === 'relation_constraint_rejected' ||
+    value.reason === 'ordered_relationship_rejected') &&
   isRelationConstraintRejection(value.rejection);
 
 const isCanonicalRelationIdentity = (
@@ -65,6 +72,27 @@ const isRelationshipFact = (value: unknown): value is RelationshipFact =>
   isEntityRef(value.target) &&
   value.target.entityName === value.relation.targetEntityName;
 
+const isOrderedPosition = (value: unknown, targetEntityName: string) =>
+  isRecord(value) &&
+  (value.before === null ||
+    (isEntityRef(value.before) && value.before.entityName === targetEntityName)) &&
+  (value.after === null ||
+    (isEntityRef(value.after) && value.after.entityName === targetEntityName));
+
+const isOrderedMove = (value: unknown): value is OrderedRelationshipMove =>
+  isRecord(value) &&
+  isRecord(value.relation) &&
+  value.relation.cardinality === 'ordered-many' &&
+  typeof value.relation.sourceEntityName === 'string' &&
+  typeof value.relation.relationName === 'string' &&
+  typeof value.relation.targetEntityName === 'string' &&
+  isEntityRef(value.source) &&
+  value.source.entityName === value.relation.sourceEntityName &&
+  isEntityRef(value.member) &&
+  value.member.entityName === value.relation.targetEntityName &&
+  isOrderedPosition(value.from, value.relation.targetEntityName) &&
+  isOrderedPosition(value.to, value.relation.targetEntityName);
+
 export const isRelationshipCommandResult = (value: unknown): value is RelationshipCommandResult =>
   isRecord(value) &&
   ((value.status === 'applied' &&
@@ -72,22 +100,31 @@ export const isRelationshipCommandResult = (value: unknown): value is Relationsh
     Array.isArray(value.delta.added) &&
     value.delta.added.every(isRelationshipFact) &&
     Array.isArray(value.delta.removed) &&
-    value.delta.removed.every(isRelationshipFact)) ||
+    value.delta.removed.every(isRelationshipFact) &&
+    (value.delta.moved === undefined ||
+      (Array.isArray(value.delta.moved) && value.delta.moved.every(isOrderedMove)))) ||
     (value.status === 'not-applied' && isRelationshipCommandDiagnostic(value.diagnostic)));
 
 export const relationshipPreconditionDiagnostic = (
-  command: RelationshipCommand,
+  command: RelationshipCommand | OrderedRelationshipCommand,
 ): RelationshipCommandDiagnostic => ({
   reason: 'relationship_precondition_failed',
   rejection: {
     version: 1,
     code: 'relationship_precondition_failed',
     message: 'Current Relation target did not match the command precondition.',
-    parameters: {
-      sourceEntityName: command.relation.sourceEntityName,
-      fieldName: command.relation.fieldName,
-      targetEntityName: command.relation.targetEntityName,
-    },
+    parameters:
+      command.kind === 'relationship-command'
+        ? {
+            sourceEntityName: command.relation.sourceEntityName,
+            fieldName: command.relation.fieldName,
+            targetEntityName: command.relation.targetEntityName,
+          }
+        : {
+            sourceEntityName: command.relation.sourceEntityName,
+            relationName: command.relation.relationName,
+            targetEntityName: command.relation.targetEntityName,
+          },
   },
 });
 
@@ -96,19 +133,33 @@ export const relationshipConstraintDiagnostic = (
 ): RelationshipCommandDiagnostic => ({ reason: 'relation_constraint_rejected', rejection });
 
 export const appliedRelationshipCommand = (
-  delta: RelationshipDelta,
+  delta: RelationshipDelta | OrderedRelationshipDelta,
 ): RelationshipCommandResult => ({ status: 'applied', delta });
 
 export const notAppliedRelationshipCommand = (
-  command: RelationshipCommand,
+  command: RelationshipCommand | OrderedRelationshipCommand,
 ): RelationshipCommandResult => ({
   status: 'not-applied',
   diagnostic: relationshipPreconditionDiagnostic(command),
 });
 
+export const orderedRelationshipDiagnostic = (
+  code: string,
+  message: string,
+  parameters?: RelationConstraintRejection['parameters'],
+): RelationshipCommandDiagnostic => ({
+  reason: 'ordered_relationship_rejected',
+  rejection: {
+    version: 1,
+    code,
+    message,
+    ...(parameters ? { parameters } : {}),
+  },
+});
+
 const diagnosticFromRecord = (
   value: Record<string, unknown>,
-  command: RelationshipCommand | ManyToManyRelationshipCommand,
+  command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
 ): RelationshipCommandDiagnostic | undefined => {
   if (isRelationshipCommandDiagnostic(value.diagnostic)) return value.diagnostic;
   if (
@@ -117,15 +168,21 @@ const diagnosticFromRecord = (
   ) {
     return relationshipConstraintDiagnostic(value.rejection);
   }
+  if (
+    value.reason === 'ordered_relationship_rejected' &&
+    isRelationConstraintRejection(value.rejection)
+  ) {
+    return { reason: 'ordered_relationship_rejected', rejection: value.rejection };
+  }
   return value.reason === 'relationship_precondition_failed' &&
-    command.kind === 'relationship-command'
+    (command.kind === 'relationship-command' || command.kind === 'ordered-relationship-command')
     ? relationshipPreconditionDiagnostic(command)
     : undefined;
 };
 
 export const relationshipCommandDiagnosticFromError = (
   error: unknown,
-  command: RelationshipCommand | ManyToManyRelationshipCommand,
+  command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
 ): RelationshipCommandDiagnostic | undefined => {
   const seen = new Set<unknown>();
   const pending: unknown[] = [error];

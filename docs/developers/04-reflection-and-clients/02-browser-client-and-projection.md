@@ -242,6 +242,18 @@ const linkTags = useManyToManyRelationshipCommand(
 await linkTags.mutateAsync({ todoIds: selectedTodoIds, tagId: selectedTagId });
 ```
 
+Ordered collections use the same path with a dedicated hook:
+
+```tsx
+const reorder = useOrderedRelationshipCommand(({ list, item, before }) =>
+  relationship(TodoListSchema, 'items', list).before(item, before),
+);
+```
+
+The browser may render an optimistic projection while the command is pending, then refetches the
+nested ordered Relation as the source of truth. The portable command never contains a database
+position or client-owned rank.
+
 The remote path is default-deny and requires an explicit server graph-command policy for that
 Relation and action. The result is `applied` with an exact delta or `not-applied` with a structured
 diagnostic. Exact Entity create and Ref-targeted update/delete use another variant of the same

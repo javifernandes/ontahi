@@ -1,6 +1,7 @@
 import type {
   EntityMutationCommandPolicy,
   ManyToManyRelationshipCommandPolicy,
+  OrderedRelationshipCommandPolicy,
 } from '@ontahi/core/data-graph';
 import type {
   ExplorerEntityDetail,
@@ -23,7 +24,7 @@ const isEntityMutationPolicy = (policy: unknown): policy is EntityMutationComman
 
 const isManyToManyRelationshipPolicy = (
   policy: unknown,
-): policy is ManyToManyRelationshipCommandPolicy<any> =>
+): policy is ManyToManyRelationshipCommandPolicy<any> | OrderedRelationshipCommandPolicy<any> =>
   typeof policy === 'object' &&
   policy !== null &&
   'relationName' in policy &&
@@ -70,12 +71,14 @@ const withRelationMutations = (
         candidate.relationName === identity.relationName,
     );
     if (!policy || !isManyToManyRelationshipPolicy(policy)) return relation;
+    const actions = policy.actions as readonly string[];
 
     return {
       ...relation,
       mutations: {
-        ...(policy.actions.includes('link') ? { add: true as const } : {}),
-        ...(policy.actions.includes('unlink') ? { remove: true as const } : {}),
+        ...(actions.includes('link') ? { add: true as const } : {}),
+        ...(actions.includes('unlink') ? { remove: true as const } : {}),
+        ...(actions.includes('move') ? { move: true as const } : {}),
       },
     };
   }),

@@ -10,6 +10,8 @@ import {
 import type { RelationshipCommandResult } from '../../data-graph/relationship-command-result.js';
 import type {
   ManyToManyRelationshipCommand,
+  OrderedRelationshipCommand,
+  OrderedRelationshipDelta,
   RelationshipCommand,
   RelationshipCommandExecutor,
   RelationshipDelta,
@@ -41,8 +43,8 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
   RelationshipMutationResult
 > => {
   const applyReactions = (
-    command: RelationshipCommand | ManyToManyRelationshipCommand,
-    delta: RelationshipDelta,
+    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+    delta: RelationshipDelta | OrderedRelationshipDelta,
     options?: TOptions,
   ) => {
     const runner = createMutationReactionRunner({
@@ -70,6 +72,18 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           );
         }
         return Effect.runPromise(runtime.runManyToManyRelationshipCommand(followUp, options));
+      },
+      executeOrderedRelationshipCommand: followUp => {
+        const runtime =
+          getRequiredDataGraphRuntime<
+            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
+          >();
+        if (typeof runtime.runOrderedRelationshipCommand !== 'function') {
+          throw new TypeError(
+            'The current Data Graph runtime does not support ordered Relationship Command execution.',
+          );
+        }
+        return Effect.runPromise(runtime.runOrderedRelationshipCommand(followUp, options));
       },
       invokeOperation,
       emitEvent,
@@ -130,6 +144,29 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
         }
         return runtime
           .runManyToManyRelationshipCommand(command, options)
+          .pipe(
+            Effect.flatMap(result =>
+              result.status === 'not-applied'
+                ? Effect.succeed<RelationshipMutationResult>(result)
+                : applyReactions(command, result.delta, options).pipe(
+                    Effect.map(applied => applied as RelationshipMutationResult),
+                  ),
+            ),
+          );
+      }),
+    runOrderedRelationshipCommand: (command, options) =>
+      Effect.suspend(() => {
+        const runtime =
+          getRequiredDataGraphRuntime<
+            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
+          >();
+        if (typeof runtime.runOrderedRelationshipCommand !== 'function') {
+          throw new TypeError(
+            'The current Data Graph runtime does not support ordered Relationship Command execution.',
+          );
+        }
+        return runtime
+          .runOrderedRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
               result.status === 'not-applied'

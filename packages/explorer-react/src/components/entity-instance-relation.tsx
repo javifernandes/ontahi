@@ -59,7 +59,7 @@ export const createExplorerManyToManyRelationshipCommand = (
   participant: AnyEntityRef,
 ): ManyToManyRelationshipCommand => {
   const identity = relation.canonicalIdentity;
-  if (!identity || !('relationName' in identity)) {
+  if (!identity || !('relationName' in identity) || identity.cardinality !== 'many-to-many') {
     throw new Error(
       `Relation ${subject.entityName}.${relation.name} is not canonical many-to-many.`,
     );

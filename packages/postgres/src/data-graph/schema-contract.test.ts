@@ -1,4 +1,4 @@
-import { field, mapEntity, modelExpression } from '@ontahi/core/data-graph';
+import { field, mapEntity, mapRelation, modelExpression } from '@ontahi/core/data-graph';
 import { entity } from '@ontahi/core/entity';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
@@ -85,6 +85,50 @@ describe('PostgreSQL data graph schema contract', () => {
           field: 'capacity',
           schema: 'public',
           table: 'courses',
+        },
+      ],
+    });
+  });
+
+  it('requires the private order column on the ordered Relation target table', async () => {
+    const ListBase = entity({ name: 'List', fields: { id: field.id() } });
+    const Item = entity({
+      name: 'Item',
+      fields: { id: field.id(), list: field.ref(ListBase) },
+    });
+    const List = ListBase.hasMany('items', Item, { via: 'list', ordered: true });
+    mapEntity(List).toTable('lists', { id: 'id' });
+    mapEntity(Item).toTable('items', { id: 'id', list: 'list_id' });
+    mapRelation(List, 'items', {
+      type: 'one-to-many',
+      from: 'lists.id',
+      to: 'items.list_id',
+      orderBy: 'items.list_position',
+    });
+
+    await expect(
+      inspectPostgresDataGraphSchema({
+        entities: [List, Item],
+        pool: {
+          query: async () => ({
+            rows: [
+              { table_name: 'lists', column_name: 'id' },
+              { table_name: 'items', column_name: 'id' },
+              { table_name: 'items', column_name: 'list_id' },
+            ],
+          }),
+        } as unknown as Pick<Pool, 'query'>,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: 'column-not-found',
+          column: 'list_position',
+          entity: 'Item',
+          field: 'List.items.__order',
+          schema: 'public',
+          table: 'items',
         },
       ],
     });
