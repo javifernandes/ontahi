@@ -80,6 +80,13 @@ is preserved and submitted with the new sort. Schema reflection suggests sortabl
 policy remains authoritative and rejections are shown without replacing the successful snapshot.
 Result-table limit controls and multi-Field ordering remain follow-ups.
 
+When ordering is the rejected capability, the receiver reports the requested Entity and Field,
+for example `Ordering by TodoItem.completed is not allowed by the Graph Read policy.` The Console
+displays that server message; the protocol body retains `access_denied` and optional
+`details: { reason: 'ordering_not_allowed', entityName, fieldName }`. Other authorization failures
+remain generic. Header availability still reflects intrinsic scalar types, not effective read
+permissions; authority-aware affordances remain a separate follow-up.
+
 `createRuntimeTransportRouter(...)` owns effective routing, capability validation, inspection, and
 subscription. Devtools recognizes that configurable Runtime Transport and owns its generic Settings
 projection; applications do not provide settings UI, React state, or presets. Profiles are derived

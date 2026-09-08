@@ -27,3 +27,11 @@ Remote Entity writes are default-deny independently from Entity registration. Th
 policy opts into exact create/update/delete per Entity, allowlists both mutation and result Fields,
 and requires the deliberately visible `scope: 'all'`. Authority-derived row scope is not a
 read-then-write check: it must later become one atomic intersection with the exact mutation target.
+
+Graph Read policy distinguishes selecting, filtering, and ordering a Field. A readable scalar is
+not necessarily authorized for ordering. When an otherwise authorized Query is rejected for its
+ordering, the receiver preserves `access_denied` but identifies the requested Entity and Field in
+a safe message and structured `ordering_not_allowed` detail. This applies to reads and observation;
+it never reveals row-scope predicates, private dependency names, or executor failures. Missing
+policies and other authorization failures retain a generic rejection. Static authoring reflection
+is assistance, not evidence of effective authority.

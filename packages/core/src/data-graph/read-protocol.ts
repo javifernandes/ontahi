@@ -41,6 +41,11 @@ export type GraphReadProtocolError = {
   readonly error: {
     readonly code: GraphReadProtocolErrorCode;
     readonly message: string;
+    readonly details?: {
+      readonly reason: 'ordering_not_allowed';
+      readonly entityName: string;
+      readonly fieldName: string;
+    };
   };
 };
 
@@ -61,7 +66,13 @@ export const isGraphReadProtocolError = (value: unknown): value is GraphReadProt
   isRecord(value.error) &&
   typeof value.error.code === 'string' &&
   graphReadProtocolErrorCodes.has(value.error.code as GraphReadProtocolErrorCode) &&
-  typeof value.error.message === 'string';
+  typeof value.error.message === 'string' &&
+  (value.error.details === undefined ||
+    (value.error.code === 'access_denied' &&
+      isRecord(value.error.details) &&
+      value.error.details.reason === 'ordering_not_allowed' &&
+      typeof value.error.details.entityName === 'string' &&
+      typeof value.error.details.fieldName === 'string'));
 
 export type GraphReadRequestParseResult =
   | { readonly success: true; readonly request: GraphReadRequestV1 }
@@ -78,9 +89,10 @@ export type GraphReadRequestResolveResult =
 export const graphReadProtocolError = (
   code: GraphReadProtocolErrorCode,
   message: string,
+  details?: GraphReadProtocolError['error']['details'],
 ): GraphReadProtocolError => ({
   kind: 'protocol-error',
-  error: { code, message },
+  error: { code, message, ...(details ? { details } : {}) },
 });
 
 const assertJsonSafeSelection = (expression: SelectionExpression): void => {

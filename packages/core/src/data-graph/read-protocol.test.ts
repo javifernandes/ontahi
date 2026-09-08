@@ -44,6 +44,35 @@ const validReadRequest = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('data graph read protocol', () => {
+  it('recognizes optional ordering denial details without accepting malformed diagnostics', () => {
+    const error = {
+      kind: 'protocol-error',
+      error: {
+        code: 'access_denied',
+        message: 'Ordering by Trip.status is not allowed by the Graph Read policy.',
+        details: { reason: 'ordering_not_allowed', entityName: 'Trip', fieldName: 'status' },
+      },
+    };
+    expect(isGraphReadProtocolError(JSON.parse(JSON.stringify(error)))).toBe(true);
+    expect(
+      isGraphReadProtocolError({ ...error, error: { code: 'access_denied', message: 'Denied.' } }),
+    ).toBe(true);
+    for (const details of [
+      null,
+      {},
+      { ...error.error.details, fieldName: 1 },
+      { ...error.error.details, entityName: null },
+      { ...error.error.details, reason: 'unknown' },
+    ]) {
+      expect(isGraphReadProtocolError({ ...error, error: { ...error.error, details } })).toBe(
+        false,
+      );
+    }
+    expect(
+      isGraphReadProtocolError({ ...error, error: { ...error.error, code: 'invalid_request' } }),
+    ).toBe(false);
+  });
+
   it('recognizes only declared structured protocol errors', () => {
     expect(
       isGraphReadProtocolError({

@@ -399,7 +399,11 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 11. The read-ordering slice is covered by headless lowering/source-edit tests, CodeMirror finite
     projection/deletion tests, and Devtools integration against the real in-memory read dispatcher
     (ordering before limit, policy rejection, Undo, pending edits, transport failure, empty rows).
-12. Table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
+12. Ordering-only policy rejections now preserve `access_denied` and report the requested Entity
+    and Field with optional structured `ordering_not_allowed` details. Console displays the
+    receiver's precise message while retaining the successful result snapshot. Unknown policies
+    and other denials remain generic; no permissions are broadened.
+13. Authority-aware header capabilities, table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
     source history, Commands, Operations, reflection
     delivery, and the terminal CLI remain later slices of this plan.
 

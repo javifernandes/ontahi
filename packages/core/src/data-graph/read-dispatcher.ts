@@ -304,22 +304,37 @@ const allowsProjection = (
   );
 };
 
-const allowsQuery = (
+const queryAccessError = (
   query: QuerySpec,
   mode: GraphReadMode,
   policy: GraphReadPolicy<any, any>,
-): boolean =>
-  policy.modes.includes(mode) &&
-  (mode === 'count' ||
-    policy.cardinalities.includes(query.cardinality ?? (mode === 'get' ? 'one' : 'many'))) &&
-  (query.limit === undefined || query.limit <= policy.maxLimit) &&
-  allowsSelection(query.selection, policy, query.root) &&
-  query.orderBy.every(
+): GraphReadProtocolError | undefined => {
+  if (
+    !policy.modes.includes(mode) ||
+    (mode !== 'count' &&
+      !policy.cardinalities.includes(query.cardinality ?? (mode === 'get' ? 'one' : 'many'))) ||
+    (query.limit !== undefined && query.limit > policy.maxLimit) ||
+    !allowsSelection(query.selection, policy, query.root) ||
+    !allowsProjection(query, policy, mode)
+  )
+    return graphReadAccessDenied();
+
+  const deniedOrder = query.orderBy.find(
     order =>
-      readFieldPolicy(policy, order.fieldName)?.order === true &&
-      allowsDerivedFieldDependencies(query.root, order.fieldName, policy),
-  ) &&
-  allowsProjection(query, policy, mode);
+      readFieldPolicy(policy, order.fieldName)?.order !== true ||
+      !allowsDerivedFieldDependencies(query.root, order.fieldName, policy),
+  );
+  if (!deniedOrder) return undefined;
+  return graphReadProtocolError(
+    'access_denied',
+    `Ordering by ${query.root.name}.${deniedOrder.fieldName} is not allowed by the Graph Read policy.`,
+    {
+      reason: 'ordering_not_allowed',
+      entityName: query.root.name,
+      fieldName: deniedOrder.fieldName,
+    },
+  );
+};
 
 const resolveScope = <TAuthority>(
   policy: GraphReadPolicy<any, TAuthority>,
@@ -370,9 +385,8 @@ const authorizeGraphRead = <TAuthority>(
 
   const resolved = resolveGraphReadRequest(parsed.request, { entities: [policy.entity] });
   if (!resolved.success) return resolved;
-  if (!allowsQuery(resolved.query, parsed.request.mode, policy)) {
-    return { success: false, error: graphReadAccessDenied() };
-  }
+  const accessError = queryAccessError(resolved.query, parsed.request.mode, policy);
+  if (accessError) return { success: false, error: accessError };
 
   let query = resolved.query;
   try {

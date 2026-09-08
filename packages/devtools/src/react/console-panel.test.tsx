@@ -217,7 +217,7 @@ describe('Console bidirectional Query ordering', () => {
     fireEvent.click(result.getByRole('button', { name: 'Sort by id' }));
     expect(await result.findByRole('alert')).toHaveProperty(
       'textContent',
-      'Data graph read access denied.',
+      'Ordering by Tag.id is not allowed by the Graph Read policy.',
     );
     expect(view.state.doc.toString()).toBe('Tag.orderBy(id).limit(2).many()');
     expect(visibleNames()).toEqual(['A hidden', 'Alpha']);

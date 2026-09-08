@@ -59,6 +59,100 @@ const createTripPolicy = (
 });
 
 describe('graph read dispatcher', () => {
+  it('keeps other authorization failures generic and rejects ordering before observation starts', async () => {
+    const graph = defineTripGraph();
+    const execute = vi.fn();
+    const policies = [createTripPolicy(graph)];
+    const dispatch = createGraphReadDispatcher({ policies, execute });
+    const context = { authority: { ownerId: 'owner-1' }, signal: new AbortController().signal };
+    const request = toGraphReadRequest(
+      query(graph.Trip)
+        .as(graph.Trip.view('TripList', { id: true }))
+        .build(),
+      'run',
+    );
+    const ordered = { ...request, orderBy: [{ fieldName: 'status', direction: 'asc' }] };
+    const generic = {
+      kind: 'protocol-error',
+      error: { code: 'access_denied', message: 'Data graph read access denied.' },
+    };
+    expect(await dispatch({ ...ordered, limit: 51 }, context)).toEqual(generic);
+    expect(await dispatch({ ...ordered, mode: 'get' }, context)).toEqual(generic);
+    expect(
+      await dispatch(
+        { ...ordered, selection: { ...ordered.selection, entityName: 'Unexposed' } },
+        context,
+      ),
+    ).toEqual(generic);
+    const observe = vi.fn();
+    const observer = createGraphReadObserver({ policies, observe });
+    const results = [];
+    for await (const result of observer(ordered, context)) results.push(result);
+    expect(results).toEqual([
+      {
+        kind: 'protocol-error',
+        error: {
+          code: 'access_denied',
+          message: 'Ordering by Trip.status is not allowed by the Graph Read policy.',
+          details: { reason: 'ordering_not_allowed', entityName: 'Trip', fieldName: 'status' },
+        },
+      },
+    ]);
+    expect(execute).not.toHaveBeenCalled();
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it.each(['id', 'completed'] as const)(
+    'explains the rejected ordering Field TodoItem.%s',
+    async fieldName => {
+      const TodoItem = entity('TodoItem', {
+        id: field.id(),
+        title: field.string(),
+        completed: field.boolean(),
+      });
+      const execute = vi.fn().mockResolvedValue([]);
+      const dispatch = createGraphReadDispatcher({
+        policies: [
+          {
+            entity: TodoItem,
+            scope: 'all',
+            modes: ['run'],
+            cardinalities: ['many'],
+            maxLimit: 25,
+            fields: {
+              id: { select: true },
+              title: { select: true, order: true },
+              completed: { select: true },
+            },
+          },
+        ],
+        execute,
+      });
+      const request = toGraphReadRequest(query(TodoItem).build(), 'run');
+      expect(
+        await dispatch(
+          { ...request, orderBy: [{ fieldName, direction: 'asc' }] },
+          { authority: undefined },
+        ),
+      ).toEqual({
+        kind: 'protocol-error',
+        error: {
+          code: 'access_denied',
+          message: `Ordering by TodoItem.${fieldName} is not allowed by the Graph Read policy.`,
+          details: { reason: 'ordering_not_allowed', entityName: 'TodoItem', fieldName },
+        },
+      });
+      expect(execute).not.toHaveBeenCalled();
+      expect(
+        await dispatch(
+          { ...request, orderBy: [{ fieldName: 'title', direction: 'asc' }] },
+          { authority: undefined },
+        ),
+      ).toEqual({ kind: 'graph-read-result', value: [] });
+      expect(execute).toHaveBeenCalledOnce();
+    },
+  );
+
   it.each([
     {
       name: 'non-positive maxLimit',
