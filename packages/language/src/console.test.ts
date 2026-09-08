@@ -255,7 +255,7 @@ describe('Console Graph Read language', () => {
           channel: 'syntax',
           code: 'console.syntax.invalid',
           message:
-            'Expected .limit(...), .first(), .one(), .many(), or .count() after the Selection expression.',
+            'Expected .orderBy(...), .limit(...), .first(), .one(), .many(), or .count() after the Selection expression.',
         },
       ],
     });

@@ -244,7 +244,7 @@ describe('OntahiDevtools', () => {
       );
 
       const panel = within(
-        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).slice(-1)[0]!,
       );
       fireEvent.click(panel.getByRole('button', { name: 'Console' }));
       expect(panel.getByRole('textbox', { name: 'Ontahí Console expression' })).toBeTruthy();
@@ -324,7 +324,7 @@ describe('OntahiDevtools', () => {
       );
 
       const panel = within(
-        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).slice(-1)[0]!,
       );
       fireEvent.click(panel.getByRole('button', { name: 'Console' }));
       expect(panel.getByText('Tag · graph.read · count')).toBeTruthy();
@@ -402,7 +402,7 @@ describe('OntahiDevtools', () => {
       );
 
       const panel = within(
-        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).at(-1)!,
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).slice(-1)[0]!,
       );
       fireEvent.click(panel.getByRole('button', { name: 'Console' }));
       fireEvent.click(panel.getByRole('button', { name: 'Run' }));

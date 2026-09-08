@@ -1,3 +1,5 @@
+import type { GraphReadOrder } from '@ontahi/core/data-graph';
+
 import {
   formatSelectionExpression,
   graphCommandSummary,
@@ -39,9 +41,22 @@ const formatLeaf = (value: unknown): string => {
   return String(value ?? '—');
 };
 
-const ResultTable = ({ value }: { readonly value: readonly unknown[] }) => {
+type ResultTableOrdering = {
+  readonly fields: readonly string[];
+  readonly order?: GraphReadOrder;
+  readonly disabled: boolean;
+  readonly onSort: (fieldName: string) => void;
+};
+
+export const ResultTable = ({
+  value,
+  ordering,
+}: {
+  readonly value: readonly unknown[];
+  readonly ordering?: ResultTableOrdering;
+}) => {
   const records = value.filter(isRecord);
-  if (records.length !== value.length || records.length === 0) {
+  if (records.length !== value.length || (records.length === 0 && !ordering?.fields.length)) {
     return (
       <div style={styles.semanticCard}>
         <span style={styles.semanticLabel}>Result</span>
@@ -49,15 +64,58 @@ const ResultTable = ({ value }: { readonly value: readonly unknown[] }) => {
       </div>
     );
   }
-  const columns = [...new Set(records.flatMap(record => Object.keys(record)))].slice(0, 8);
+  const availableColumns = records.length
+    ? [...new Set(records.flatMap(record => Object.keys(record)))]
+    : (ordering?.fields ?? []);
+  const columns = ordering ? availableColumns : availableColumns.slice(0, 8);
   return (
     <div style={styles.tableWrap}>
       <table style={styles.table}>
+        {ordering && (records.length === 0 || records.length > 50) ? (
+          <caption style={styles.consoleHint}>
+            {records.length === 0
+              ? 'Empty list'
+              : `Showing the first 50 of ${records.length} returned rows.`}
+          </caption>
+        ) : null}
         <thead>
           <tr>
             {columns.map(column => (
-              <th key={column} style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}>
-                {column}
+              <th
+                key={column}
+                style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}
+                aria-sort={
+                  ordering?.order?.fieldName === column
+                    ? ordering.order.direction === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : undefined
+                }
+              >
+                {ordering?.fields.includes(column) ? (
+                  <button
+                    type='button'
+                    disabled={ordering.disabled}
+                    aria-label={`Sort by ${column}`}
+                    title='Change Query ordering and run (ascending → descending → none)'
+                    style={{
+                      ...styles.tableSortButton,
+                      ...(ordering.disabled ? styles.disabledButton : {}),
+                    }}
+                    onClick={() => ordering.onSort(column)}
+                  >
+                    {column}{' '}
+                    <span aria-hidden='true'>
+                      {ordering.order?.fieldName === column
+                        ? ordering.order.direction === 'asc'
+                          ? '↑'
+                          : '↓'
+                        : '↕'}
+                    </span>
+                  </button>
+                ) : (
+                  column
+                )}
               </th>
             ))}
           </tr>

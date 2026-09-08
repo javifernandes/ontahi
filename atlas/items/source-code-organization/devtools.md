@@ -78,6 +78,14 @@ Ordered Relationship Commands keep that same progression. Activity summarizes a 
 source/list, moving member, and destination. Body and Envelope remain the exact portable evidence;
 Devtools does not synthesize UI drag events or observe presentation storage.
 
+The Console's Visual many-result table is also a source-backed Query editing projection. A scalar
+Field header edits `.orderBy(...)` through the headless language's source ranges and submits the
+ordinary Graph Read; the runtime applies ordering before its limit. Text changes remain drafts
+until explicitly executed. The table retains the last successful request/source/result snapshot,
+so its sort indicator does not claim that an unfinished, pending, or rejected draft produced those
+rows. Invalid or other-Entity drafts disable table actions. This first projection supports one
+ordering Field; table limit controls and multi-Field ordering remain later work.
+
 Transport routing is likewise a reusable Core runtime component rather than state owned by the
 Devtools panel or application. Devtools discovers and operates the `routing` capability of an
 explicitly provided configurable Runtime Transport, subscribes to its snapshot, and derives both

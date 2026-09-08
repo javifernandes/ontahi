@@ -1060,36 +1060,42 @@ describe('Selection CodeMirror adapter', () => {
     parent.remove();
   });
 
-  it('projects and edits finite values inside a Console Query expression', () => {
+  it.each(['', '.orderBy(title, desc).limit(2)'])(
+    'projects and edits finite values inside a Console Query with modifiers %s',
+    modifiers => {
+      const parent = document.createElement('div');
+      document.body.append(parent);
+      const source = `TodoItem.where(completed = false)${modifiers}.many()`;
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: source,
+          extensions: consoleExpressionExtensions(
+            { entities: [TodoItem] },
+            { finiteValueProjections: true },
+          ),
+        }),
+      });
+
+      const select = parent.querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!;
+      expect(select.getAttribute('aria-label')).toBe('Value for TodoItem.completed');
+      expect(select.value).toBe('false');
+      select.value = 'true';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(view.state.doc.toString()).toBe(`TodoItem.where(completed = true)${modifiers}.many()`);
+
+      view.destroy();
+      parent.remove();
+    },
+  );
+
+  it.each([
+    'TodoItem.where(completed = false).one',
+    'TodoItem.where(completed = false).orderBy(title, desc',
+    'TodoItem.orderBy',
+  ])('keeps Backspace editing through incomplete Console syntax %s', source => {
     const parent = document.createElement('div');
     document.body.append(parent);
-    const source = 'TodoItem.where(completed = false).many()';
-    const view = new EditorView({
-      parent,
-      state: EditorState.create({
-        doc: source,
-        extensions: consoleExpressionExtensions(
-          { entities: [TodoItem] },
-          { finiteValueProjections: true },
-        ),
-      }),
-    });
-
-    const select = parent.querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!;
-    expect(select.getAttribute('aria-label')).toBe('Value for TodoItem.completed');
-    expect(select.value).toBe('false');
-    select.value = 'true';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(view.state.doc.toString()).toBe('TodoItem.where(completed = true).many()');
-
-    view.destroy();
-    parent.remove();
-  });
-
-  it('keeps Backspace editing through an incomplete Console terminal', () => {
-    const parent = document.createElement('div');
-    document.body.append(parent);
-    const source = 'TodoItem.where(completed = false).one';
     const view = new EditorView({
       parent,
       state: EditorState.create({

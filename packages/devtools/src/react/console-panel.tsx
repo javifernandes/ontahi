@@ -1,24 +1,26 @@
 'use client';
 
-import { history, historyKeymap } from '@codemirror/commands';
+import { history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
-import type { AnyEntityDefinition } from '@ontahi/core/data-graph';
+import type { AnyEntityDefinition, GraphReadRequestV1 } from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolExchange,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
 import {
   analyzeConsoleDocument,
+  editConsoleOrderBy,
+  isConsoleOrderableField,
   reflectSelectionLanguageEntity,
   type ConsoleLanguageApplicationReflection,
 } from '@ontahi/language';
 import { consoleExpressionExtensions } from '@ontahi/language-codemirror';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
-import { SemanticPayload } from './semantic-payload.js';
+import { ResultTable, SemanticPayload } from './semantic-payload.js';
 
 export type OntahiDevtoolsConsoleOptions = {
   readonly entities: readonly AnyEntityDefinition[];
@@ -31,12 +33,26 @@ export type ConsolePanelProps = {
   readonly runtimeTransport?: RuntimeTransport<any>;
 };
 
-type ConsoleResult =
+type ConsoleResultSnapshot = {
+  readonly document: string;
+  readonly request: GraphReadRequestV1;
+  readonly value: unknown;
+};
+
+type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
   | { readonly status: 'idle' | 'executing' }
-  | { readonly status: 'success'; readonly value: unknown }
-  | { readonly status: 'error'; readonly message: string };
+  | { readonly status: 'success' }
+  | { readonly status: 'error'; readonly message: string }
+);
 
 type ConsoleResultMode = 'visual' | 'json';
+
+const resultNotice = (result: ConsoleResult, document: string): string => {
+  if (result.status === 'executing') return 'Running · showing previous result.';
+  if (result.status === 'error') return 'Run failed · showing previous result.';
+  if (result.snapshot?.document !== document) return 'Changes not run · showing previous result.';
+  return 'Result matches the executed query.';
+};
 
 type ConsoleEditorProps = {
   readonly application: ConsoleLanguageApplicationReflection;
@@ -45,6 +61,7 @@ type ConsoleEditorProps = {
   readonly onChange: (document: string) => void;
   readonly run: () => void;
   readonly value: string;
+  readonly viewRef: MutableRefObject<EditorView | undefined>;
 };
 
 const externalDocumentChange = Annotation.define<boolean>();
@@ -80,9 +97,16 @@ const consoleEditorTheme = EditorView.theme({
   '.cm-tooltip-lint': { fontFamily: 'inherit' },
 });
 
-const ConsoleEditor = ({ application, label, limit, onChange, run, value }: ConsoleEditorProps) => {
+const ConsoleEditor = ({
+  application,
+  label,
+  limit,
+  onChange,
+  run,
+  value,
+  viewRef,
+}: ConsoleEditorProps) => {
   const hostRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView>();
   const languageCompartmentRef = useRef(new Compartment());
   const labelCompartmentRef = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
@@ -193,6 +217,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   const [document, setDocument] = useState(initialDocument);
   const [result, setResult] = useState<ConsoleResult>({ status: 'idle' });
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
+  const viewRef = useRef<EditorView>();
+  const executingRef = useRef(false);
   const exchange = useMemo(
     () =>
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
@@ -204,30 +230,82 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   );
   const documentDiagnostics = [...analysis.syntaxDiagnostics, ...analysis.semanticDiagnostics];
 
-  const run = () => {
-    if (result.status === 'executing') return;
-    if (!analysis.request) {
-      setResult({ status: 'error', message: 'Fix the Console expression before running it.' });
+  const runDocument = (source: string) => {
+    if (executingRef.current) return;
+    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    if (!request) {
+      setResult(previous => ({
+        snapshot: previous.snapshot,
+        status: 'error',
+        message: 'Fix the Console expression before running it.',
+      }));
       return;
     }
     if (!exchange) {
-      setResult({
+      setResult(previous => ({
+        snapshot: previous.snapshot,
         status: 'error',
         message: 'Console execution requires a configured Runtime Transport.',
-      });
+      }));
       return;
     }
 
-    setResult({ status: 'executing' });
-    void exchange({ family: 'graph.read', body: analysis.request })
+    executingRef.current = true;
+    setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
+    void exchange({ family: 'graph.read', body: request })
       .then(graphReadValue)
-      .then(value => setResult({ status: 'success', value }))
+      .then(value =>
+        setResult({ status: 'success', snapshot: { document: source, request, value } }),
+      )
       .catch((error: unknown) =>
-        setResult({
+        setResult(previous => ({
+          snapshot: previous.snapshot,
           status: 'error',
           message: error instanceof Error ? error.message : 'Graph Read failed.',
-        }),
-      );
+        })),
+      )
+      .finally(() => {
+        executingRef.current = false;
+      });
+  };
+
+  const run = () => runDocument(viewRef.current?.state.doc.toString() ?? document);
+  const snapshot = result.snapshot;
+  const resultEntity = application.entities.find(
+    entity => entity.name === snapshot?.request.selection.entityName,
+  );
+  const canSort = Boolean(
+    exchange &&
+    snapshot?.request.mode === 'run' &&
+    analysis.request?.mode === 'run' &&
+    analysis.request.selection.entityName === snapshot.request.selection.entityName &&
+    result.status !== 'executing',
+  );
+  const sortBy = (fieldName: string) => {
+    const view = viewRef.current;
+    if (!canSort || !view || executingRef.current) return;
+    const source = view.state.doc.toString();
+    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    if (
+      request?.mode !== 'run' ||
+      request.selection.entityName !== snapshot?.request.selection.entityName
+    )
+      return;
+    const currentOrder = request.orderBy[0];
+    const nextOrder =
+      currentOrder?.fieldName !== fieldName
+        ? { fieldName, direction: 'asc' as const }
+        : currentOrder.direction === 'asc'
+          ? { fieldName, direction: 'desc' as const }
+          : undefined;
+    const changes = editConsoleOrderBy(source, application, nextOrder);
+    if (!changes) return;
+    view.dispatch({
+      changes,
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.console-sort',
+    });
+    runDocument(view.state.doc.toString());
   };
 
   return (
@@ -257,6 +335,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           onChange={setDocument}
           run={run}
           value={document}
+          viewRef={viewRef}
         />
         <div style={styles.consoleStatus} aria-live='polite'>
           {documentDiagnostics.length > 0
@@ -284,7 +363,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         <div style={styles.consoleResultHeader}>
           <strong>Result</strong>
           <span style={styles.consoleResultControls}>
-            {result.status === 'success' ? (
+            {snapshot ? (
               <span style={styles.modes} aria-label='Console result view mode'>
                 {(
                   [
@@ -308,23 +387,48 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           </span>
         </div>
         <div style={styles.consoleResultBody} aria-live='polite'>
-          {result.status === 'success' ? (
-            resultMode === 'visual' ? (
-              <SemanticPayload value={result.value} />
-            ) : (
-              <JsonView value={result.value} label='Console result JSON' />
-            )
-          ) : result.status === 'error' ? (
+          {snapshot ? (
+            <div style={styles.consoleSnapshotStatus}>
+              <span>{resultNotice(result, document)}</span>
+              <details>
+                <summary>Executed query</summary>
+                <pre style={{ whiteSpace: 'pre-wrap' }}>{snapshot.document}</pre>
+              </details>
+            </div>
+          ) : null}
+          {result.status === 'error' ? (
             <span role='alert' style={styles.consoleError}>
               {result.message}
             </span>
-          ) : (
+          ) : null}
+          {snapshot ? (
+            resultMode === 'visual' ? (
+              snapshot.request.mode === 'run' && Array.isArray(snapshot.value) ? (
+                <ResultTable
+                  value={snapshot.value}
+                  ordering={{
+                    fields:
+                      resultEntity?.fields
+                        .filter(isConsoleOrderableField)
+                        .map(field => field.name) ?? [],
+                    order: snapshot.request.orderBy[0],
+                    disabled: !canSort,
+                    onSort: sortBy,
+                  }}
+                />
+              ) : (
+                <SemanticPayload value={snapshot.value} />
+              )
+            ) : (
+              <JsonView value={snapshot.value} label='Console result JSON' />
+            )
+          ) : result.status !== 'error' ? (
             <span style={styles.consoleEmpty}>
               {result.status === 'executing'
                 ? 'Executing through the configured Runtime Transport…'
                 : 'Run the expression to inspect its semantic result.'}
             </span>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

@@ -59,6 +59,27 @@ mode; count requests do not inherit the Console row limit or a row cardinality.
 Many reads may override the default row limit in source, for example `Tag.limit(10).many()` or
 `TodoItem.where(completed = false).limit(5).many()`.
 
+Query ordering is shared by the source editor and the Visual result table:
+
+```text
+Tag.orderBy(name).limit(10).many()
+Tag.orderBy(name, desc).many()
+```
+
+Run reflects source ordering in the table header. Clicking a scalar Field header cycles through
+ascending, descending, and no explicit order: it edits only the ordering source ranges as one
+undoable transaction and submits a new Graph Read. Sorting happens in the runtime before the
+limit, never just over visible rows. The first slice supports one ordering Field; `first()` and
+`one()` also accept textual ordering, while `count()` does not.
+
+Typing or undoing does not execute. The table and arrow describe the last successful execution,
+whose source is available under **Executed query**. Draft changes, pending reads, and failures
+leave that snapshot visible with a status notice. Controls are disabled while running or when the
+draft is invalid, targets another Entity, or is no longer a many read. A valid same-Entity draft
+is preserved and submitted with the new sort. Schema reflection suggests sortable Fields; receiver
+policy remains authoritative and rejections are shown without replacing the successful snapshot.
+Result-table limit controls and multi-Field ordering remain follow-ups.
+
 `createRuntimeTransportRouter(...)` owns effective routing, capability validation, inspection, and
 subscription. Devtools recognizes that configurable Runtime Transport and owns its generic Settings
 projection; applications do not provide settings UI, React state, or presets. Profiles are derived

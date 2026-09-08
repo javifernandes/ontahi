@@ -86,3 +86,24 @@ Selection syntax, diagnostics, completion, reflection, and lowering. This walkin
 `.where(...).many()`, nullable `.where(...).first()`, and exact-cardinality `.where(...).one()` Graph
 Reads; additional Query members, Commands, and Operations extend the same expression language rather
 than adding leading family keywords.
+
+Omitting `.where(...)` selects `all`. `.count()` returns the canonical count without a row limit;
+`.limit(nonNegativeInteger)` is supported only with `.many()`.
+
+Ordering is a Query modifier, not part of Selection membership:
+
+```text
+Tag.orderBy(name).limit(10).many()
+TodoItem.where(completed = false).orderBy(title, desc).first()
+```
+
+The chain is `Entity` → optional `where` → optional `orderBy` → optional `limit` → terminal.
+This slice supports one reflected scalar Field (`id`, string, number, Boolean, enum), with `asc`
+as the default or explicit `asc`/`desc`. References and structured values are not sortable, and
+ordering with `count()` is rejected. Runtime read policies may reject otherwise valid ordering.
+
+`editConsoleOrderBy(document, application, order | undefined)` returns source-range changes to
+insert, update, or remove ordering. It preserves unrelated source, including Selection spelling,
+whitespace, and limits; invalid documents or unsupported orders return `undefined`. Apply the
+changes together as one editor transaction. `isConsoleOrderableField` supplies the same intrinsic
+Field capability used by diagnostics and completion; it does not grant execution authority.

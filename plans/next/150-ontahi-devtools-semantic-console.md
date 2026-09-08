@@ -385,8 +385,23 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    preserves structured exact-one cardinality feedback, and produces ordinary Activity evidence.
 7. Todo supplies its generated Entity schemas and starts with
    `TodoItem.where(completed = false).many()` as the browser proof.
-8. Named Views, other Query terminals/members, source history, Commands, Operations, reflection
-   delivery, and the terminal CLI remain later slices of this plan.
+8. `.orderBy(field[, asc|desc])` reuses canonical Graph Read ordering, with one reflected scalar
+   Field and ascending as the default. The grammar orders `where`, `orderBy`, `limit`, then the
+   terminal. Ordering is supported for `many`, `first`, and `one`, not `count`.
+9. Visual many-result headers and source are projections of that same Query. Header actions cycle
+   ascending/descending/none, apply source-range edits in one undoable CodeMirror transaction, and
+   explicitly execute through Runtime Transport. No client-side row sorting or hidden sort state
+   is introduced. Text editing and Undo do not run automatically.
+10. Results retain the successful execution's source and canonical request. Arrows describe that
+    snapshot; draft changes, pending reads, and failures do not rewrite the old result. Invalid,
+    other-Entity, non-many, and in-flight drafts disable table actions. Valid same-Entity drafts
+    retain their filters and limits when a header action submits them.
+11. The read-ordering slice is covered by headless lowering/source-edit tests, CodeMirror finite
+    projection/deletion tests, and Devtools integration against the real in-memory read dispatcher
+    (ordering before limit, policy rejection, Undo, pending edits, transport failure, empty rows).
+12. Table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
+    source history, Commands, Operations, reflection
+    delivery, and the terminal CLI remain later slices of this plan.
 
 ## Acceptance Checklist
 

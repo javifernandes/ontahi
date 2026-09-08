@@ -1,6 +1,22 @@
 import type { CSSProperties } from 'react';
 
 export const styles: Record<string, CSSProperties> = {
+  tableSortButton: {
+    border: 0,
+    padding: '0.25rem 0',
+    color: 'inherit',
+    background: 'transparent',
+    font: 'inherit',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  consoleSnapshotStatus: {
+    display: 'grid',
+    gap: 6,
+    marginBottom: 12,
+    color: '#7fa28f',
+    fontSize: '0.6875rem',
+  },
   launcher: {
     position: 'fixed',
     zIndex: 2147483646,

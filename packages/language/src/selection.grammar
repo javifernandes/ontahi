@@ -4,10 +4,15 @@
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
   EntityName
-  (Dot Where OpenParen OrExpression CloseParen)?
-  (Dot Limit OpenParen NumberLiteral CloseParen)?
+  WhereClause?
+  OrderByClause?
+  LimitClause?
   Dot ReadTerminal OpenParen CloseParen
 }
+WhereClause { Dot Where OpenParen OrExpression CloseParen }
+OrderByClause { Dot OrderBy OpenParen FieldName (Comma OrderDirection)? CloseParen }
+OrderDirection { Identifier }
+LimitClause { Dot Limit OpenParen NumberLiteral CloseParen }
 EntityName { Identifier }
 ReadTerminal { First | One | Many | Count }
 
@@ -44,6 +49,7 @@ One { @specialize<Identifier, "one"> }
 Many { @specialize<Identifier, "many"> }
 Count { @specialize<Identifier, "count"> }
 Limit { @specialize<Identifier, "limit"> }
+OrderBy { @specialize<Identifier, "orderBy"> }
 
 Equals { "=" }
 ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }
