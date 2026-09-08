@@ -38,6 +38,7 @@ export type CreateNextGraphReadRouteHandlerOptions<TAuthority = InvocationContex
 const responseStatus = (response: GraphReadDispatchResponse) => {
   if (response.kind === 'graph-read-result') return 200;
   if (response.error.code === 'access_denied') return 403;
+  if (response.error.code === 'cardinality_mismatch') return 409;
   if (response.error.code === 'execution_unavailable') return 503;
   return 400;
 };

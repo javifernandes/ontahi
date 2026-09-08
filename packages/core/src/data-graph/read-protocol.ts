@@ -32,6 +32,7 @@ export type GraphReadProtocolErrorCode =
   | 'unknown_entity'
   | 'invalid_selection'
   | 'invalid_projection'
+  | 'cardinality_mismatch'
   | 'access_denied'
   | 'execution_unavailable';
 
@@ -49,6 +50,7 @@ const graphReadProtocolErrorCodes = new Set<GraphReadProtocolErrorCode>([
   'unknown_entity',
   'invalid_selection',
   'invalid_projection',
+  'cardinality_mismatch',
   'access_denied',
   'execution_unavailable',
 ]);

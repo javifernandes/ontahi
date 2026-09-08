@@ -1,5 +1,5 @@
 import { isJsonValue, type JsonValue } from '../value/json.js';
-import { hasOwn } from '../value/object.js';
+import { hasOwn, isRecord } from '../value/object.js';
 
 import {
   isDerivedFieldDefinition,
@@ -117,6 +117,28 @@ const graphReadExecutionUnavailable = () =>
   graphReadProtocolError(
     'execution_unavailable',
     'Data graph read execution is temporarily unavailable.',
+  );
+
+const cardinalityMismatchMarkers = new Set([
+  'cardinality_mismatch',
+  'selection_cardinality_mismatch',
+]);
+
+const isCardinalityMismatchMarker = (value: unknown) =>
+  typeof value === 'string' && cardinalityMismatchMarkers.has(value);
+
+const isGraphReadCardinalityMismatch = (error: unknown) =>
+  isRecord(error) &&
+  (isCardinalityMismatchMarker(error.reason) ||
+    isCardinalityMismatchMarker(error.cause) ||
+    (isRecord(error.cause) &&
+      (isCardinalityMismatchMarker(error.cause.reason) ||
+        isCardinalityMismatchMarker(error.cause.cause))));
+
+const graphReadCardinalityMismatch = (entityName: string) =>
+  graphReadProtocolError(
+    'cardinality_mismatch',
+    `Expected exactly one ${entityName}, but the Selection resolved to zero or multiple results.`,
   );
 
 const validOperators = new Set<GraphReadOperator>(['eq', 'in', 'isNull', 'lte', 'lt', 'gte', 'gt']);
@@ -388,6 +410,9 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
         value: await execute(authorized.query, authorized.mode),
       };
     } catch (error) {
+      if (authorized.query.cardinality === 'one' && isGraphReadCardinalityMismatch(error)) {
+        return graphReadCardinalityMismatch(authorized.query.root.name);
+      }
       reportError?.(error);
       return graphReadExecutionUnavailable();
     }

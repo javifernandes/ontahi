@@ -375,7 +375,7 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    `Mod-Enter` execution extensions without copying Selection semantics.
 5. `@ontahi/devtools/react` exposes an opt-in Console panel that submits the lowered Read through
    the configured Runtime Transport, renders the result through shared Visual or JSON projections,
-   and produces ordinary Activity evidence.
+   preserves structured exact-one cardinality feedback, and produces ordinary Activity evidence.
 6. Todo supplies its generated Entity schemas and starts with
    `TodoItem.where(completed = false).many()` as the browser proof.
 7. Named Views, other Query terminals/members, source history, Commands, Operations, reflection

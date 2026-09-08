@@ -183,6 +183,23 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
+  it('preserves an exact-one read cardinality mismatch across Express HTTP', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
+      { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
+    ];
+    const exactTodo = query(ClientTodoItemSchema)
+      .where(todo => todo.completed.eq(false))
+      .one().read;
+    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+
+    await expect(remoteExecutor.get(exactTodo, undefined)).rejects.toMatchObject({
+      code: 'cardinality_mismatch',
+      message:
+        'Expected exactly one TodoItem, but the Selection resolved to zero or multiple results.',
+    });
+  });
+
   it('reads direct tags without exposing the physical join row', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Read relation', completed: false },

@@ -300,12 +300,24 @@ describe('OntahiDevtools', () => {
         id: field.id(),
         title: field.string(),
       });
-      const request = vi.fn().mockImplementation(async (envelope: RuntimeProtocolRequestEnvelope) =>
-        createRuntimeProtocolResponse(envelope, {
-          kind: 'graph-read-result',
-          value: { id: 'todo-1', title: 'One semantic result' },
-        }),
-      );
+      const request = vi
+        .fn()
+        .mockImplementationOnce(async (envelope: RuntimeProtocolRequestEnvelope) =>
+          createRuntimeProtocolResponse(envelope, {
+            kind: 'graph-read-result',
+            value: { id: 'todo-1', title: 'One semantic result' },
+          }),
+        )
+        .mockImplementationOnce(async (envelope: RuntimeProtocolRequestEnvelope) =>
+          createRuntimeProtocolResponse(envelope, {
+            kind: 'protocol-error',
+            error: {
+              code: 'cardinality_mismatch',
+              message:
+                'Expected exactly one TodoItem, but the Selection resolved to zero or multiple results.',
+            },
+          }),
+        );
       const runtimeTransport = instrumentRuntimeTransport({
         diagnostics,
         id: 'http',
@@ -350,6 +362,10 @@ describe('OntahiDevtools', () => {
       });
       fireEvent.click(panel.getByRole('button', { name: 'JSON' }));
       expect(await panel.findByText('"One semantic result"')).toBeTruthy();
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+      expect((await panel.findByRole('alert')).textContent).toBe(
+        'Expected exactly one TodoItem, but the Selection resolved to zero or multiple results.',
+      );
       fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
     },
     uiTestTimeoutMs,

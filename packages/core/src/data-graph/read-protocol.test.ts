@@ -48,7 +48,10 @@ describe('data graph read protocol', () => {
     expect(
       isGraphReadProtocolError({
         kind: 'protocol-error',
-        error: { code: 'access_denied', message: 'Data graph read access denied.' },
+        error: {
+          code: 'cardinality_mismatch',
+          message: 'Expected exactly one Trip.',
+        },
       }),
     ).toBe(true);
     expect(
