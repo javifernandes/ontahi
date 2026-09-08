@@ -189,7 +189,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   );
   const initialDocument =
     options.initialDocument ??
-    (application.entities[0] ? application.entities[0].name + '.where(all).many()' : '');
+    (application.entities[0] ? application.entities[0].name + '.many()' : '');
   const [document, setDocument] = useState(initialDocument);
   const [result, setResult] = useState<ConsoleResult>({ status: 'idle' });
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');

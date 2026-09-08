@@ -368,7 +368,9 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    top rules while sharing the exact `OrExpression` Selection productions.
 2. `@ontahi/language` parses and resolves the first self-contained keyword-free expressions,
    `Entity.where(Selection).many()`, nullable `Entity.where(Selection).first()`, and exact-cardinality
-   `Entity.where(Selection).one()`, and lowers them to canonical `GraphReadRequestV1` bodies.
+   `Entity.where(Selection).one()`, plus their unfiltered `Entity.many()`, `Entity.first()`, and
+   `Entity.one()` forms, and lowers them to canonical `GraphReadRequestV1` bodies. An omitted
+   `.where(...)` resolves to the canonical `all` Selection.
 3. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
 4. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and

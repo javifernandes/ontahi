@@ -3,7 +3,7 @@
 
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
-  EntityName Dot Where OpenParen OrExpression CloseParen Dot ReadTerminal OpenParen CloseParen
+  EntityName (Dot Where OpenParen OrExpression CloseParen)? Dot ReadTerminal OpenParen CloseParen
 }
 EntityName { Identifier }
 ReadTerminal { First | One | Many }

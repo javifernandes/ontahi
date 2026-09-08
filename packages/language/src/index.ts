@@ -965,6 +965,8 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
   const firstTerminal = readTerminal?.getChild('First');
   const oneTerminal = readTerminal?.getChild('One');
   const manyTerminal = readTerminal?.getChild('Many');
+  const where = graphRead.getChild('Where');
+  const terminalParenthesisIndex = where ? 1 : 0;
   return {
     kind: 'console-document',
     from: 0,
@@ -973,17 +975,21 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
       kind: 'graph-read',
       ...rangeOf(graphRead),
       entity: tokenOf('entity-name', graphRead.getChild('EntityName'), document),
-      where: tokenOf('where-member', graphRead.getChild('Where'), document),
-      whereOpen: tokenOf('open-parenthesis', opens[0] ?? null, document),
+      where: tokenOf('where-member', where, document),
+      whereOpen: tokenOf('open-parenthesis', where ? (opens[0] ?? null) : null, document),
       selection: expressionSyntax(graphRead.getChild('OrExpression'), document),
-      whereClose: tokenOf('close-parenthesis', closes[0] ?? null, document),
+      whereClose: tokenOf('close-parenthesis', where ? (closes[0] ?? null) : null, document),
       terminal: firstTerminal
         ? tokenOf('first-member', firstTerminal, document)
         : oneTerminal
           ? tokenOf('one-member', oneTerminal, document)
           : tokenOf('many-member', manyTerminal ?? null, document),
-      terminalOpen: tokenOf('open-parenthesis', opens[1] ?? null, document),
-      terminalClose: tokenOf('close-parenthesis', closes[1] ?? null, document),
+      terminalOpen: tokenOf('open-parenthesis', opens[terminalParenthesisIndex] ?? null, document),
+      terminalClose: tokenOf(
+        'close-parenthesis',
+        closes[terminalParenthesisIndex] ?? null,
+        document,
+      ),
     },
   };
 };
@@ -991,11 +997,14 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
 const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   const expression = syntax.expression;
   if (!expression?.entity) return 'Expected an Entity name to begin the Console expression.';
-  if (!expression.where) return `Expected .where(...) after ${expression.entity.text}.`;
-  if (!expression.whereOpen) return 'Expected "(" after .where.';
-  if (!expression.whereClose) return 'Expected ")" to close the Selection expression.';
+  if (expression.where && !expression.whereOpen) return 'Expected "(" after .where.';
+  if (expression.where && !expression.whereClose) {
+    return 'Expected ")" to close the Selection expression.';
+  }
   if (!expression.terminal) {
-    return 'Expected .first(), .one(), or .many() after the Selection expression.';
+    return expression.whereClose
+      ? 'Expected .first(), .one(), or .many() after the Selection expression.'
+      : `Expected .where(...), .first(), .one(), or .many() after ${expression.entity.text}.`;
   }
   if (!expression.terminalOpen || !expression.terminalClose) {
     return `Expected an empty argument list after .${expression.terminal.text}.`;
@@ -1007,9 +1016,7 @@ const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
   const expression = syntax.expression;
   return Boolean(
     expression?.entity &&
-    expression.where &&
-    expression.whereOpen &&
-    expression.whereClose &&
+    (!expression.where || (expression.whereOpen && expression.whereClose)) &&
     expression.terminal &&
     expression.terminalOpen &&
     expression.terminalClose,
@@ -1074,12 +1081,7 @@ export const analyzeConsoleDocument = (
 ): ConsoleDocumentAnalysis => {
   const parsed = parseConsoleDocument(document);
   const expression = parsed.syntax.expression;
-  if (
-    parsed.syntaxDiagnostics.length > 0 ||
-    !expression?.entity ||
-    !expression.selection ||
-    !expression.terminal
-  ) {
+  if (parsed.syntaxDiagnostics.length > 0 || !expression?.entity || !expression.terminal) {
     return { ...parsed, semanticDiagnostics: [] };
   }
 
@@ -1099,7 +1101,9 @@ export const analyzeConsoleDocument = (
     };
   }
 
-  const resolved = resolveExpression(expression.selection, entity);
+  const resolved: SemanticResolution = expression.selection
+    ? resolveExpression(expression.selection, entity)
+    : { diagnostics: [], expression: selectionAll() };
   return {
     ...parsed,
     semanticDiagnostics: resolved.diagnostics,
@@ -1134,6 +1138,27 @@ const completionWordRange = (document: string, position: number): SelectionLangu
   while (to < document.length && /[A-Za-z0-9_]/.test(document[to]!)) to += 1;
   return { from, to };
 };
+
+const consoleReadTerminalCompletionItems: readonly ConsoleLanguageCompletionItem[] = [
+  {
+    label: 'first',
+    apply: 'first()',
+    kind: 'member',
+    detail: 'Nullable first Graph Read terminal',
+  },
+  {
+    label: 'one',
+    apply: 'one()',
+    kind: 'member',
+    detail: 'Exact-one Graph Read terminal',
+  },
+  {
+    label: 'many',
+    apply: 'many()',
+    kind: 'member',
+    detail: 'Many Graph Read terminal',
+  },
+];
 
 export const completeConsoleDocument = (
   document: string,
@@ -1183,6 +1208,7 @@ export const completeConsoleDocument = (
   if (
     syntax?.entity &&
     !syntax.where &&
+    !syntax.terminal &&
     document.slice(syntax.entity.to, range.from).includes('.')
   ) {
     return {
@@ -1195,6 +1221,7 @@ export const completeConsoleDocument = (
             kind: 'member',
             detail: 'Selection',
           },
+          ...consoleReadTerminalCompletionItems,
         ] satisfies ConsoleLanguageCompletionItem[]
       ).filter(item => item.label.startsWith(memberPrefix)),
     };
@@ -1206,28 +1233,7 @@ export const completeConsoleDocument = (
   ) {
     return {
       ...range,
-      items: (
-        [
-          {
-            label: 'first',
-            apply: 'first()',
-            kind: 'member',
-            detail: 'Nullable first Graph Read terminal',
-          },
-          {
-            label: 'one',
-            apply: 'one()',
-            kind: 'member',
-            detail: 'Exact-one Graph Read terminal',
-          },
-          {
-            label: 'many',
-            apply: 'many()',
-            kind: 'member',
-            detail: 'Many Graph Read terminal',
-          },
-        ] satisfies ConsoleLanguageCompletionItem[]
-      ).filter(item => item.label.startsWith(memberPrefix)),
+      items: consoleReadTerminalCompletionItems.filter(item => item.label.startsWith(memberPrefix)),
     };
   }
 

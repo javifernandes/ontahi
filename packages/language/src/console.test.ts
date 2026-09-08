@@ -63,6 +63,40 @@ describe('Console Graph Read language', () => {
     });
   });
 
+  it.each([
+    ['many', 'many-member', 'run', 'many'],
+    ['first', 'first-member', 'get', undefined],
+    ['one', 'one-member', 'get', 'one'],
+  ] as const)(
+    'defaults %s() to the canonical all Selection',
+    (terminal, terminalKind, mode, cardinality) => {
+      const analysis = analyzeConsoleDocument(`TodoItem.${terminal}()`, application);
+
+      expect(analysis.syntaxDiagnostics).toEqual([]);
+      expect(analysis.semanticDiagnostics).toEqual([]);
+      expect(analysis.syntax.expression).toMatchObject({
+        kind: 'graph-read',
+        entity: { text: 'TodoItem' },
+        terminal: { kind: terminalKind, text: terminal },
+      });
+      expect(analysis.syntax.expression?.where).toBeUndefined();
+      expect(analysis.syntax.expression?.selection).toBeUndefined();
+      expect(analysis.request).toEqual({
+        version: 1,
+        kind: 'graph-read',
+        mode,
+        selection: {
+          kind: 'selection',
+          entityName: 'TodoItem',
+          expression: { kind: 'all' },
+        },
+        orderBy: [],
+        limit: 25,
+        ...(cardinality ? { cardinality } : {}),
+      });
+    },
+  );
+
   it('keeps unknown Entities separate from nested Selection diagnostics', () => {
     expect(analyzeConsoleDocument('Missing.where(all).many()', application)).toMatchObject({
       syntaxDiagnostics: [],
@@ -155,6 +189,12 @@ describe('Console Graph Read language', () => {
     expect(completion.items).toContainEqual(
       expect.objectContaining({ label: 'completed', apply: 'completed', kind: 'field' }),
     );
+
+    const directTerminalDocument = 'TodoItem.m';
+    expect(
+      completeConsoleDocument(directTerminalDocument, directTerminalDocument.length, application)
+        .items,
+    ).toEqual([expect.objectContaining({ label: 'many', apply: 'many()', kind: 'member' })]);
 
     const terminalDocument = 'TodoItem.where(all).o';
     expect(

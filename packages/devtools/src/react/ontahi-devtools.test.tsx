@@ -332,7 +332,7 @@ describe('OntahiDevtools', () => {
         <OntahiDevtools
           console={{
             entities: [TodoItem],
-            initialDocument: 'TodoItem.where(id = "todo-1").one()',
+            initialDocument: 'TodoItem.one()',
           }}
           diagnostics={diagnostics}
           initiallyOpen
@@ -355,10 +355,7 @@ describe('OntahiDevtools', () => {
           selection: {
             entityName: 'TodoItem',
             expression: {
-              kind: 'predicate',
-              fieldName: 'id',
-              operator: 'eq',
-              value: 'todo-1',
+              kind: 'all',
             },
           },
         },

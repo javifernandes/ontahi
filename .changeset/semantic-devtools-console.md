@@ -14,4 +14,6 @@ Graph Read requests, and executes them through the configured Runtime Transport.
 can be inspected through the same visual projection used by Activity or as JSON. Exact-one
 cardinality mismatches cross the Graph Read protocol as an authority-safe structured rejection
 rather than an opaque availability failure. Boolean and enum literals use the same schema-aware,
-source-backed value controls as the Explorer Selection editor.
+source-backed value controls as the Explorer Selection editor. Omitting `.where(...)` defaults to
+the canonical `all` Selection, so unfiltered reads can use `Entity.many()`, `Entity.first()`, or
+`Entity.one()` directly.
