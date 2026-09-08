@@ -124,7 +124,7 @@ describe('SemanticPayload', () => {
   });
 
   it('renders ordered movement as source, member, and destination cards', () => {
-    render(
+    const ui = render(
       <SemanticPayload
         value={{
           kind: 'graph-command',
@@ -163,5 +163,44 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('todo-explorer')).toBeTruthy();
     expect(screen.getByText('Destination')).toBeTruthy();
     expect(screen.getByText('Before todo-inline-editing')).toBeTruthy();
+
+    for (const [position, label] of [
+      [
+        {
+          after: {
+            kind: 'entity-ref',
+            entityName: 'TodoItem',
+            locator: { id: 'todo-review' },
+          },
+        },
+        'After todo-review',
+      ],
+      [{ at: 'start' }, 'Start of list'],
+      [{ at: 'end' }, 'End of list'],
+      [{ at: 'middle' }, 'Unknown destination'],
+    ] as const) {
+      ui.rerender(
+        <SemanticPayload
+          value={{
+            kind: 'graph-command',
+            command: {
+              kind: 'ordered-relationship-command',
+              relation: { sourceEntityName: 'TodoList', relationName: 'items' },
+              source: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-inbox' } },
+              member: { kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } },
+              position,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+
+    ui.rerender(
+      <SemanticPayload
+        value={{ kind: 'graph-command', command: { kind: 'custom-command', value: 1 } }}
+      />,
+    );
+    expect(screen.getByText('custom-command')).toBeTruthy();
   });
 });

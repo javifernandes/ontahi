@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
+  bindEntityRefRelationshipCommands,
   createEntityRef,
   createGraphCommandDispatcher,
   createInMemoryDataGraphRuntime,
@@ -11,6 +12,7 @@ import {
   toGraphCommandRequest,
   type InMemoryDataset,
   type OrderedRelationshipCommand,
+  type RelationshipCommandExecutor,
 } from './index.js';
 
 const defineGraph = () => {
@@ -76,6 +78,54 @@ describe('ordered Relationship Commands', () => {
     });
   });
 
+  it('binds every ordered movement helper and reports an unsupported executor', async () => {
+    const f = fixture();
+    const bound = bindEntityRefRelationshipCommands(f.list, f.List, f.runtime);
+    const commands = [
+      bound.items.move(f.items[0]!, { after: f.items[1]! }),
+      bound.items.append(f.items[0]!),
+      bound.items.prepend(f.items[2]!),
+      bound.items.before(f.items[2]!, f.items[1]!),
+      bound.items.after(f.items[0]!, f.items[1]!),
+    ];
+
+    await expect(Effect.runPromise(commands[0]!.run())).resolves.toMatchObject({
+      status: 'applied',
+    });
+
+    const unsupportedExecutor = {
+      runRelationshipCommand: f.runtime.runRelationshipCommand.bind(f.runtime),
+      runManyToManyRelationshipCommand: f.runtime.runManyToManyRelationshipCommand.bind(f.runtime),
+    } as RelationshipCommandExecutor;
+    const unsupported = bindEntityRefRelationshipCommands(f.list, f.List, unsupportedExecutor);
+    expect(() => unsupported.items.append(f.items[0]!).run()).toThrow(
+      'does not support ordered Relationship Commands',
+    );
+  });
+
+  it('rejects invalid ordered authoring inputs before creating a command', () => {
+    const f = fixture();
+    const operations = relationship(f.List, 'items', f.list);
+
+    expect(() => operations.append(f.items[0]!, { onMismatch: 'skip' } as never)).toThrow(
+      'onMismatch requires ifPosition',
+    );
+    expect(() => relationship(f.List, 'items', f.items[0] as never).append(f.items[1]!)).toThrow(
+      'Expected relationship subject Ref for OrderedList',
+    );
+    expect(() => operations.append(f.list as never)).toThrow(
+      'Expected ordered member Ref for OrderedItem',
+    );
+    expect(() => operations.before(f.items[0]!, f.list as never)).toThrow(
+      'Expected ordered anchor Ref for OrderedItem',
+    );
+    expect(() =>
+      operations.append(f.items[0]!, {
+        ifPosition: { before: f.list as never, after: null },
+      }),
+    ).toThrow('Expected ordered precondition neighbor Ref for OrderedItem');
+  });
+
   it.each([
     [
       'move',
@@ -126,6 +176,84 @@ describe('ordered Relationship Commands', () => {
       f.run(relationship(f.List, 'items', f.list).before(f.items[1]!, f.items[2]!)),
     ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [], moved: [] } });
     expect(f.ids()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('treats positioning a member relative to itself as an idempotent move', async () => {
+    const f = fixture();
+    await expect(
+      f.run(relationship(f.List, 'items', f.list).before(f.items[0]!, f.items[0]!)),
+    ).resolves.toEqual({ status: 'applied', delta: { added: [], removed: [], moved: [] } });
+    expect(f.ids()).toEqual(['a', 'b', 'c']);
+  });
+
+  it.each([
+    [
+      'unknown target Entity',
+      (f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => ({
+        ...command,
+        relation: { ...command.relation, targetEntityName: 'MissingItem' },
+      }),
+      'invalid_command',
+    ],
+    [
+      'invalid ordered Relation',
+      (_f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => ({
+        ...command,
+        relation: { ...command.relation, relationName: 'missing' },
+      }),
+      'invalid_command',
+    ],
+    [
+      'wrong source Ref Entity',
+      (f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => ({
+        ...command,
+        source: f.items[0],
+      }),
+      'invalid_command',
+    ],
+    [
+      'wrong member Ref Entity',
+      (f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => ({
+        ...command,
+        member: f.list,
+      }),
+      'invalid_command',
+    ],
+    [
+      'wrong anchor Ref Entity',
+      (f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => ({
+        ...command,
+        position: { before: f.list },
+      }),
+      'invalid_command',
+    ],
+    [
+      'ambiguous source Ref',
+      (f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => {
+        (f.dataset.OrderedList as Record<string, unknown>[]).push({ id: 'list-1' });
+        return command;
+      },
+      'cardinality_mismatch',
+    ],
+    [
+      'ambiguous member Ref',
+      (f: ReturnType<typeof fixture>, command: OrderedRelationshipCommand) => {
+        (f.dataset.OrderedItem as Record<string, unknown>[]).push({ id: 'a', list: 'list-1' });
+        return command;
+      },
+      'cardinality_mismatch',
+    ],
+  ] as const)('rejects a structurally %s command', async (_name, alter, reason) => {
+    const f = fixture();
+    const command = relationship(f.List, 'items', f.list).prepend(f.items[0]!);
+
+    await expect(
+      Effect.runPromise(
+        f.runtime
+          .runOrderedRelationshipCommand(alter(f, command) as OrderedRelationshipCommand)
+          .pipe(Effect.either),
+      ),
+    ).resolves.toMatchObject({ _tag: 'Left', left: { reason } });
   });
 
   it.each([
@@ -237,10 +365,26 @@ describe('ordered Relationship Commands', () => {
       policies: [{ entity: f.List, relationName: 'items', actions: ['move'] }],
       executeOrdered,
     });
+    const unavailable = createGraphCommandDispatcher({
+      policies: [{ entity: f.List, relationName: 'items', actions: ['move'] }],
+    });
+
+    expect(() =>
+      createGraphCommandDispatcher({
+        policies: [
+          { entity: f.List, relationName: 'items', actions: ['move'] },
+          { entity: f.List, relationName: 'items', actions: ['move'] },
+        ],
+        executeOrdered,
+      }),
+    ).toThrow('Duplicate Graph Command policy for Relation OrderedList.items');
 
     await expect(
       denied(toGraphCommandRequest(command), { authority: undefined }),
     ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    await expect(
+      unavailable(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'execution_unavailable' } });
     await expect(
       allowed(toGraphCommandRequest(command), { authority: undefined }),
     ).resolves.toMatchObject({ kind: 'graph-command-result', value: { status: 'applied' } });

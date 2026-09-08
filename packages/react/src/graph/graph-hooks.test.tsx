@@ -364,17 +364,33 @@ describe('graph query and command hooks', () => {
       createEntityRef(Item, { id: 'item-2' }),
     );
     const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
     graphExecutor.runOrderedRelationshipCommand = vi
       .fn()
       .mockResolvedValue({ status: 'applied', delta: { added: [], removed: [], moved: [] } });
 
-    const { result } = renderHook(() => useOrderedRelationshipCommand(() => command), {
-      wrapper: createWrapper(graphExecutor),
-    });
+    const { result } = renderHook(
+      () =>
+        useOrderedRelationshipCommand(() => command, {
+          invalidateQueryKeys: [['graph', 'lists']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
     await act(async () => {
       await result.current.mutateAsync(undefined);
     });
 
     expect(graphExecutor.runOrderedRelationshipCommand).toHaveBeenCalledWith(command, undefined);
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['graph', 'lists'] });
+
+    const unsupportedExecutor = createExecutorMock();
+    unsupportedExecutor.runOrderedRelationshipCommand = undefined;
+    const unsupported = renderHook(() => useOrderedRelationshipCommand(() => command), {
+      wrapper: createWrapper(unsupportedExecutor),
+    });
+    await expect(unsupported.result.current.mutateAsync(undefined)).rejects.toThrow(
+      'does not support ordered Relationship Commands',
+    );
   });
 });

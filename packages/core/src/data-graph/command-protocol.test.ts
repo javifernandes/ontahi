@@ -249,6 +249,61 @@ describe('data graph ordered Relationship Command protocol', () => {
       resolveGraphCommandRequest(toGraphCommandRequest(command), { entities: [List, Item] }),
     ).toMatchObject({ success: false, error: { error: { code: 'invalid_relation' } } });
   });
+
+  it('rejects malformed ordered placements and neighborhood preconditions', () => {
+    const graph = defineOrderedGraph();
+    const command = relationship(
+      graph.List,
+      'items',
+      createEntityRef(graph.List, { id: 'list-1' }),
+    ).prepend(createEntityRef(graph.Item, { id: 'item-1' }));
+    const request = toGraphCommandRequest(command);
+
+    for (const position of [
+      null,
+      { before: command.member, extra: true },
+      { after: command.member, extra: true },
+      { destination: 'unknown' },
+    ]) {
+      expect(
+        parseGraphCommandRequest({
+          ...request,
+          command: { ...command, position },
+        }),
+      ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+    }
+    expect(
+      parseGraphCommandRequest({
+        ...request,
+        command: {
+          ...command,
+          precondition: { position: { before: null }, onMismatch: 'skip' },
+        },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+  });
+
+  it('validates a before anchor during server resolution', () => {
+    const graph = defineOrderedGraph();
+    const command = relationship(
+      graph.List,
+      'items',
+      createEntityRef(graph.List, { id: 'list-1' }),
+    ).before(
+      createEntityRef(graph.Item, { id: 'item-2' }),
+      createEntityRef(graph.Item, { id: 'item-1' }),
+    );
+    const invalid = {
+      ...command,
+      position: { before: createEntityRef(graph.List, { id: 'list-1' }) },
+    } as unknown as typeof command;
+    const parsed = parseGraphCommandRequest(toGraphCommandRequest(invalid));
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+
+    expect(
+      resolveGraphCommandRequest(parsed.request, { entities: [graph.List, graph.Item] }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_reference' } } });
+  });
 });
 
 describe('data graph Entity Mutation Command protocol', () => {

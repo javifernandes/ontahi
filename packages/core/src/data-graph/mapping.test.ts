@@ -116,6 +116,46 @@ describe('data-graph mapping', () => {
     });
   });
 
+  it('requires ordered mapping evidence only on the relation target table', () => {
+    const List = entity('ExplicitOrderedList', { id: field.id() });
+    const Item = entity('ExplicitOrderedItem', { id: field.id(), list: field.ref(List) });
+    const OrderedList = List.hasMany('items', Item, { via: 'list', ordered: true });
+    const PlainListBase = entity('ExplicitPlainList', { id: field.id() });
+    const PlainItem = entity('ExplicitPlainItem', {
+      id: field.id(),
+      list: field.ref(PlainListBase),
+    });
+    const PlainList = PlainListBase.hasMany('items', PlainItem, { via: 'list' });
+    mapEntity(OrderedList).toTable('lists');
+    mapEntity(PlainList).toTable('plain_lists');
+    mapEntity(PlainItem).toTable('plain_items');
+    mapEntity(Item).toTable('items');
+
+    expect(() =>
+      mapRelation(OrderedList, 'items', {
+        type: 'one-to-many',
+        from: 'lists.id',
+        to: 'items.list_id',
+      }),
+    ).toThrow('requires an orderBy mapping');
+    expect(() =>
+      mapRelation(PlainList, 'items', {
+        type: 'one-to-many',
+        from: 'plain_lists.id',
+        to: 'items.list_id',
+        orderBy: 'items.position',
+      }),
+    ).toThrow('cannot declare an orderBy mapping');
+    expect(() =>
+      mapRelation(OrderedList, 'items', {
+        type: 'one-to-many',
+        from: 'lists.id',
+        to: 'items.list_id',
+        orderBy: 'lists.position',
+      }),
+    ).toThrow('position must be stored on items');
+  });
+
   it('resolves effective has-many target fields from unique belongs-to and reverse mapping', () => {
     const Course = entity('MappedCourse', { id: field.id() });
     const Advisor = entity('Advisor', { id: field.id() });

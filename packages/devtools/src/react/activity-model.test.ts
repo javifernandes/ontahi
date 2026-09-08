@@ -8,6 +8,7 @@ import {
   activityEntryTitle,
   buildActivityEntries,
   formatSelectionExpression,
+  graphCommandSummary,
   graphReadSummary,
   isRecord,
   matchesFilter,
@@ -186,6 +187,43 @@ describe('Devtools activity model', () => {
       'custom.family',
     );
     expect(semanticSummary({ id: 'empty', at: 0 })).toBe('Runtime exchange');
+  });
+
+  it('summarizes every ordered destination and composite identities', () => {
+    const command = {
+      kind: 'ordered-relationship-command',
+      action: 'move',
+      relation: { sourceEntityName: 'List', relationName: 'items' },
+      member: { kind: 'entity-ref', locator: { tenant: 'acme', slug: 'draft' } },
+    };
+
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: {
+          ...command,
+          position: { after: { kind: 'entity-ref', locator: { id: 'published' } } },
+        },
+      }),
+    ).toBe('List.items.move(tenant: acme, slug: draft, after: published)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: { ...command, position: { at: 'start' } },
+      }),
+    ).toBe('List.items.move(tenant: acme, slug: draft, at: start)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: { ...command, position: { at: 'middle' } },
+      }),
+    ).toBe('List.items.move(tenant: acme, slug: draft, destination: unknown)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
+        command: { kind: 'ordered-relationship-command', relation: {}, position: null },
+      }),
+    ).toBe('Entity.relation.move(unknown, destination: unknown)');
   });
 
   it('correlates large progress streams without losing snapshots', () => {
