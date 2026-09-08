@@ -84,7 +84,12 @@ ordinary Graph Read; the runtime applies ordering before its limit. Text changes
 until explicitly executed. The table retains the last successful request/source/result snapshot,
 so its sort indicator does not claim that an unfinished, pending, or rejected draft produced those
 rows. Invalid or other-Entity drafts disable table actions. This first projection supports one
-ordering Field; table limit controls and multi-Field ordering remain later work.
+ordering Field; table limit controls and multi-Field ordering remain later work. Header availability
+intersects reflected scalar types with optional ordering capabilities delivered by the successful
+Graph Read. Core owns those policy-derived capabilities; Devtools projects them as enabled controls
+or explanatory inactive headers, never as frontend policy. Missing metadata, replaced transport,
+or a policy denial requires fresh successful execution before sorting. These are advisory snapshots,
+not durable grants: authorization still runs on every submitted query.
 
 Transport routing is likewise a reusable Core runtime component rather than state owned by the
 Devtools panel or application. Devtools discovers and operates the `routing` capability of an

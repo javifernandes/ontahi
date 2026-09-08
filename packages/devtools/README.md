@@ -76,16 +76,22 @@ Typing or undoing does not execute. The table and arrow describe the last succes
 whose source is available under **Executed query**. Draft changes, pending reads, and failures
 leave that snapshot visible with a status notice. Controls are disabled while running or when the
 draft is invalid, targets another Entity, or is no longer a many read. A valid same-Entity draft
-is preserved and submitted with the new sort. Schema reflection suggests sortable Fields; receiver
-policy remains authoritative and rejections are shown without replacing the successful snapshot.
+is preserved and submitted with the new sort. Headers intersect intrinsically sortable Fields with
+the receiver's effective ordering capabilities, requested alongside each successful read. Denied
+headers remain focusable but inactive, with a tooltip explaining the policy restriction. Missing
+or malformed capabilities preserve readable results but disable ordering with a refresh explanation.
+Replacing Runtime Transport requires a successful Run to refresh permissions; an `access_denied`
+response also invalidates the previous capabilities. Capabilities describe the successful read,
+not a permanent grant: policy/authentication or routing changes inside the same transport may make
+them stale. Receiver policy remains authoritative on every request, and rejections are shown
+without replacing the successful result data.
 Result-table limit controls and multi-Field ordering remain follow-ups.
 
 When ordering is the rejected capability, the receiver reports the requested Entity and Field,
 for example `Ordering by TodoItem.completed is not allowed by the Graph Read policy.` The Console
 displays that server message; the protocol body retains `access_denied` and optional
 `details: { reason: 'ordering_not_allowed', entityName, fieldName }`. Other authorization failures
-remain generic. Header availability still reflects intrinsic scalar types, not effective read
-permissions; authority-aware affordances remain a separate follow-up.
+remain generic. Textual ordering can still be authored independently of header availability.
 
 `createRuntimeTransportRouter(...)` owns effective routing, capability validation, inspection, and
 subscription. Devtools recognizes that configurable Runtime Transport and owns its generic Settings

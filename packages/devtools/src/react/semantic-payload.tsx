@@ -44,7 +44,7 @@ const formatLeaf = (value: unknown): string => {
 type ResultTableOrdering = {
   readonly fields: readonly string[];
   readonly order?: GraphReadOrder;
-  readonly disabled: boolean;
+  readonly disabledReason: (fieldName: string) => string | undefined;
   readonly onSort: (fieldName: string) => void;
 };
 
@@ -80,44 +80,54 @@ export const ResultTable = ({
         ) : null}
         <thead>
           <tr>
-            {columns.map(column => (
-              <th
-                key={column}
-                style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}
-                aria-sort={
-                  ordering?.order?.fieldName === column
-                    ? ordering.order.direction === 'asc'
-                      ? 'ascending'
-                      : 'descending'
-                    : undefined
-                }
-              >
-                {ordering?.fields.includes(column) ? (
-                  <button
-                    type='button'
-                    disabled={ordering.disabled}
-                    aria-label={`Sort by ${column}`}
-                    title='Change Query ordering and run (ascending → descending → none)'
-                    style={{
-                      ...styles.tableSortButton,
-                      ...(ordering.disabled ? styles.disabledButton : {}),
-                    }}
-                    onClick={() => ordering.onSort(column)}
-                  >
-                    {column}{' '}
-                    <span aria-hidden='true'>
-                      {ordering.order?.fieldName === column
-                        ? ordering.order.direction === 'asc'
-                          ? '↑'
-                          : '↓'
-                        : '↕'}
-                    </span>
-                  </button>
-                ) : (
-                  column
-                )}
-              </th>
-            ))}
+            {columns.map(column => {
+              const disabledReason = ordering?.disabledReason(column);
+              return (
+                <th
+                  key={column}
+                  style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}
+                  aria-sort={
+                    ordering?.order?.fieldName === column
+                      ? ordering.order.direction === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : undefined
+                  }
+                >
+                  {ordering?.fields.includes(column) ? (
+                    <button
+                      type='button'
+                      aria-disabled={Boolean(disabledReason)}
+                      aria-label={`Sort by ${column}`}
+                      title={
+                        disabledReason ??
+                        'Change Query ordering and run (ascending → descending → none)'
+                      }
+                      style={{
+                        ...styles.tableSortButton,
+                        ...(disabledReason ? styles.disabledButton : {}),
+                      }}
+                      onClick={() => {
+                        if (!disabledReason) ordering.onSort(column);
+                      }}
+                    >
+                      {column}{' '}
+                      <span aria-hidden='true'>
+                        {ordering.order?.fieldName === column
+                          ? ordering.order.direction === 'asc'
+                            ? '↑'
+                            : '↓'
+                          : disabledReason
+                            ? '—'
+                            : '↕'}
+                      </span>
+                    </button>
+                  ) : (
+                    column
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

@@ -10,6 +10,7 @@ import {
 import {
   createRuntimeProtocolResponse,
   type RuntimeProtocolRequestEnvelope,
+  type RuntimeProtocolResponseEnvelope,
 } from '@ontahi/core/runtime/protocol';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Effect } from 'effect';
@@ -66,13 +67,15 @@ const mountConsole = (source = 'Tag.where(active = true).limit(2).many()') => {
             : runtime.count(query, undefined),
       ),
   });
-  const respond = async (envelope: RuntimeProtocolRequestEnvelope) => {
+  const respond = async (
+    envelope: RuntimeProtocolRequestEnvelope,
+  ): Promise<RuntimeProtocolResponseEnvelope> => {
     const body = await dispatch(envelope.body, { authority: undefined });
     if (!isJsonValue(body)) throw new Error('Expected a portable Graph Read response.');
     return createRuntimeProtocolResponse(envelope, body);
   };
   const request = vi.fn(respond);
-  render(
+  const rendered = render(
     <ConsolePanel
       options={{ entities: [Tag, Other], initialDocument: source }}
       runtimeTransport={{ request }}
@@ -90,10 +93,45 @@ const mountConsole = (source = 'Tag.where(active = true).limit(2).many()') => {
       .getAllByRole('row')
       .slice(1)
       .map(row => within(row).getAllByRole('cell')[1]!.textContent);
-  return { request, respond, view, replaceSource, result, visibleNames };
+  const switchTransport = () => {
+    const nextRequest = vi.fn(respond);
+    rendered.rerender(
+      <ConsolePanel
+        options={{ entities: [Tag, Other], initialDocument: source }}
+        runtimeTransport={{ request: nextRequest }}
+      />,
+    );
+    return nextRequest;
+  };
+  return { request, respond, view, replaceSource, result, visibleNames, switchTransport };
 };
 
 describe('Console bidirectional Query ordering', () => {
+  it('enables only ordering Fields advertised by the receiver', async () => {
+    const { request, view, result } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    const id = result.getByRole('button', { name: 'Sort by id' });
+    expect(id.getAttribute('aria-disabled')).toBe('true');
+    expect(id.getAttribute('title')).toBe(
+      'Ordering by Tag.id is not allowed by the Graph Read policy.',
+    );
+    expect(
+      result.getByRole('button', { name: 'Sort by active' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+    expect(result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled')).toBe(
+      'false',
+    );
+    const source = view.state.doc.toString();
+    fireEvent.click(id);
+    fireEvent.keyDown(id, { key: 'Enter' });
+    id.focus();
+    expect(document.activeElement).toBe(id);
+    expect(view.state.doc.toString()).toBe(source);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]![0].body).toHaveProperty('includeCapabilities', true);
+  });
+
   it('edits the source and executes server ordering before the limit, with an undoable sort cycle', async () => {
     const source = '  Tag.where(active = true)\n .limit(2).many()';
     const { request, view, result, visibleNames } = mountConsole(source);
@@ -162,7 +200,7 @@ describe('Console bidirectional Query ordering', () => {
     for (const draft of ['Tag.orderBy(', 'Other.many()', 'Tag.first()', 'Tag.count()']) {
       replaceSource(draft);
       const sort = result.getByRole('button', { name: 'Sort by name' }) as HTMLButtonElement;
-      expect(sort.disabled).toBe(true);
+      expect(sort.getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(sort);
       expect(view.state.doc.toString()).toBe(draft);
       expect(request).toHaveBeenCalledOnce();
@@ -189,9 +227,9 @@ describe('Console bidirectional Query ordering', () => {
     });
     fireEvent.click(result.getByRole('button', { name: 'Sort by name' }));
     expect(visibleNames()).toEqual(['Zulu', 'Middle']);
-    expect(
-      (result.getByRole('button', { name: 'Sort by name' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect(result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
     fireEvent.click(result.getByRole('button', { name: 'Sort by name' }));
     replaceSource('Tag.where(active = false).many()');
     expect(request).toHaveBeenCalledTimes(2);
@@ -209,12 +247,13 @@ describe('Console bidirectional Query ordering', () => {
   });
 
   it('preserves results and executed ordering when policy or transport rejects a new sort', async () => {
-    const { request, view, result, visibleNames } = mountConsole(
+    const { request, view, replaceSource, result, visibleNames } = mountConsole(
       'Tag.orderBy(name).limit(2).many()',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByRole('table');
-    fireEvent.click(result.getByRole('button', { name: 'Sort by id' }));
+    replaceSource('Tag.orderBy(id).limit(2).many()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(await result.findByRole('alert')).toHaveProperty(
       'textContent',
       'Ordering by Tag.id is not allowed by the Graph Read policy.',
@@ -225,12 +264,67 @@ describe('Console bidirectional Query ordering', () => {
       'ascending',
     );
     request.mockRejectedValueOnce(new Error('Connection lost'));
-    fireEvent.click(result.getByRole('button', { name: 'Sort by name' }));
+    expect(result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
+    replaceSource('Tag.orderBy(name).limit(2).many()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(result.getByRole('alert').textContent).toBe('Connection lost'));
     expect(visibleNames()).toEqual(['A hidden', 'Alpha']);
     expect(request).toHaveBeenCalledTimes(3);
     fireEvent.click(result.getByRole('button', { name: 'JSON' }));
     expect(result.getByText('"A hidden"')).toBeTruthy();
+  });
+
+  it.each([undefined, null, {}, { orderBy: [1] }])(
+    'keeps results but disables sorting when capability metadata is unavailable: %j',
+    async capabilities => {
+      const { request, view, result } = mountConsole();
+      request.mockImplementationOnce(async envelope => {
+        const body = {
+          kind: 'graph-read-result',
+          value: rows,
+          ...(capabilities === undefined ? {} : { capabilities }),
+        };
+        if (!isJsonValue(body)) throw new Error('Expected portable test metadata.');
+        return createRuntimeProtocolResponse(envelope, body);
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await result.findByRole('table');
+      const name = result.getByRole('button', { name: 'Sort by name' });
+      expect(name.getAttribute('aria-disabled')).toBe('true');
+      expect(name.getAttribute('title')).toContain('Ordering permissions unavailable');
+      const source = view.state.doc.toString();
+      fireEvent.click(name);
+      expect(view.state.doc.toString()).toBe(source);
+      expect(request).toHaveBeenCalledOnce();
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await waitFor(() =>
+        expect(
+          result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled'),
+        ).toBe('false'),
+      );
+    },
+  );
+
+  it('does not reuse capability metadata after replacing the transport', async () => {
+    const { request, result, switchTransport } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    const nextRequest = switchTransport();
+    const name = result.getByRole('button', { name: 'Sort by name' });
+    expect(name.getAttribute('aria-disabled')).toBe('true');
+    expect(name.getAttribute('title')).toContain('for this transport');
+    fireEvent.click(name);
+    expect(request).toHaveBeenCalledOnce();
+    expect(nextRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() =>
+      expect(
+        result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled'),
+      ).toBe('false'),
+    );
+    expect(nextRequest).toHaveBeenCalledOnce();
   });
 
   it('keeps sortable reflected headers when a valid query returns no rows', async () => {

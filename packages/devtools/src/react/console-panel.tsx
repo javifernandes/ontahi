@@ -3,7 +3,12 @@
 import { history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
-import type { AnyEntityDefinition, GraphReadRequestV1 } from '@ontahi/core/data-graph';
+import {
+  isGraphReadCapabilities,
+  type AnyEntityDefinition,
+  type GraphReadCapabilities,
+  type GraphReadRequestV1,
+} from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolExchange,
   type RuntimeTransport,
@@ -37,6 +42,8 @@ type ConsoleResultSnapshot = {
   readonly document: string;
   readonly request: GraphReadRequestV1;
   readonly value: unknown;
+  readonly capabilities?: GraphReadCapabilities;
+  readonly transport?: RuntimeTransport<any>;
 };
 
 type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
@@ -189,20 +196,37 @@ const ConsoleEditor = ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const graphReadValue = (response: unknown): unknown => {
+class ConsoleGraphReadError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
+const graphReadResult = (
+  response: unknown,
+): Pick<ConsoleResultSnapshot, 'value' | 'capabilities'> => {
   if (!isRecord(response)) throw new Error('Graph Read returned an invalid response.');
   if (response.kind === 'protocol-error') {
     const error = response.error;
-    throw new Error(
+    throw new ConsoleGraphReadError(
       isRecord(error) && typeof error.message === 'string'
         ? error.message
         : 'Graph Read was rejected.',
+      isRecord(error) && typeof error.code === 'string' ? error.code : undefined,
     );
   }
   if (response.kind !== 'graph-read-result' || !('value' in response)) {
     throw new Error('Graph Read returned an invalid result.');
   }
-  return response.value;
+  return {
+    value: response.value,
+    capabilities: isGraphReadCapabilities(response.capabilities)
+      ? response.capabilities
+      : undefined,
+  };
 };
 
 export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) => {
@@ -252,14 +276,22 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
 
     executingRef.current = true;
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
-    void exchange({ family: 'graph.read', body: request })
-      .then(graphReadValue)
-      .then(value =>
-        setResult({ status: 'success', snapshot: { document: source, request, value } }),
+    void exchange({ family: 'graph.read', body: { ...request, includeCapabilities: true } })
+      .then(graphReadResult)
+      .then(result =>
+        setResult({
+          status: 'success',
+          snapshot: { document: source, request, ...result, transport: runtimeTransport },
+        }),
       )
       .catch((error: unknown) =>
         setResult(previous => ({
-          snapshot: previous.snapshot,
+          snapshot:
+            previous.snapshot &&
+            error instanceof ConsoleGraphReadError &&
+            error.code === 'access_denied'
+              ? { ...previous.snapshot, capabilities: undefined }
+              : previous.snapshot,
           status: 'error',
           message: error instanceof Error ? error.message : 'Graph Read failed.',
         })),
@@ -274,16 +306,27 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   const resultEntity = application.entities.find(
     entity => entity.name === snapshot?.request.selection.entityName,
   );
-  const canSort = Boolean(
-    exchange &&
-    snapshot?.request.mode === 'run' &&
-    analysis.request?.mode === 'run' &&
-    analysis.request.selection.entityName === snapshot.request.selection.entityName &&
-    result.status !== 'executing',
-  );
+  const sortDisabledReason = (fieldName: string): string | undefined => {
+    if (result.status === 'executing') return 'Wait for the current query to finish.';
+    if (!exchange) return 'Ordering requires a configured Runtime Transport.';
+    if (snapshot?.transport !== runtimeTransport)
+      return 'Run the query to refresh ordering permissions for this transport.';
+    if (!snapshot?.capabilities)
+      return 'Ordering permissions unavailable. Run a successful query against a server that reports Graph Read capabilities.';
+    if (!snapshot.capabilities.orderBy.includes(fieldName))
+      return `Ordering by ${snapshot.request.selection.entityName}.${fieldName} is not allowed by the Graph Read policy.`;
+    if (!analysis.request) return 'Fix the Console expression before changing ordering.';
+    if (
+      snapshot.request.mode !== 'run' ||
+      analysis.request.mode !== 'run' ||
+      analysis.request.selection.entityName !== snapshot.request.selection.entityName
+    )
+      return 'Run a many query for the current Entity before changing ordering.';
+    return undefined;
+  };
   const sortBy = (fieldName: string) => {
     const view = viewRef.current;
-    if (!canSort || !view || executingRef.current) return;
+    if (sortDisabledReason(fieldName) || !view || executingRef.current) return;
     const source = view.state.doc.toString();
     const request = analyzeConsoleDocument(source, application, { limit }).request;
     if (
@@ -412,7 +455,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
                         .filter(isConsoleOrderableField)
                         .map(field => field.name) ?? [],
                     order: snapshot.request.orderBy[0],
-                    disabled: !canSort,
+                    disabledReason: sortDisabledReason,
                     onSort: sortBy,
                   }}
                 />

@@ -14,6 +14,7 @@ import {
   resolveGraphReadRequest,
   validateGraphReadSelection,
   type GraphReadMode,
+  type GraphReadCapabilities,
   type GraphReadProtocolError,
 } from './read-protocol.js';
 import {
@@ -74,11 +75,19 @@ export type GraphReadDispatchContext<TAuthority> = {
 };
 
 export type GraphReadDispatchResponse =
-  | { readonly kind: 'graph-read-result'; readonly value: unknown }
+  | {
+      readonly kind: 'graph-read-result';
+      readonly value: unknown;
+      readonly capabilities?: GraphReadCapabilities;
+    }
   | GraphReadProtocolError;
 
 export type GraphReadObservationResponse =
-  | { readonly kind: 'graph-read-result'; readonly value: JsonValue[] }
+  | {
+      readonly kind: 'graph-read-result';
+      readonly value: JsonValue[];
+      readonly capabilities?: GraphReadCapabilities;
+    }
   | GraphReadProtocolError;
 
 export type GraphReadDispatchExecutor = (query: QuerySpec, mode: GraphReadMode) => Promise<unknown>;
@@ -304,6 +313,14 @@ const allowsProjection = (
   );
 };
 
+const allowsOrdering = (
+  entity: AnyEntityDefinition,
+  fieldName: string,
+  policy: GraphReadPolicyNode,
+): boolean =>
+  readFieldPolicy(policy, fieldName)?.order === true &&
+  allowsDerivedFieldDependencies(entity, fieldName, policy);
+
 const queryAccessError = (
   query: QuerySpec,
   mode: GraphReadMode,
@@ -320,9 +337,7 @@ const queryAccessError = (
     return graphReadAccessDenied();
 
   const deniedOrder = query.orderBy.find(
-    order =>
-      readFieldPolicy(policy, order.fieldName)?.order !== true ||
-      !allowsDerivedFieldDependencies(query.root, order.fieldName, policy),
+    order => !allowsOrdering(query.root, order.fieldName, policy),
   );
   if (!deniedOrder) return undefined;
   return graphReadProtocolError(
@@ -368,7 +383,12 @@ const createGraphReadPolicyRegistry = <TAuthority>(
 };
 
 type AuthorizedGraphRead =
-  | { readonly success: true; readonly query: QuerySpec; readonly mode: GraphReadMode }
+  | {
+      readonly success: true;
+      readonly query: QuerySpec;
+      readonly mode: GraphReadMode;
+      readonly capabilities?: GraphReadCapabilities;
+    }
   | { readonly success: false; readonly error: GraphReadProtocolError };
 
 const authorizeGraphRead = <TAuthority>(
@@ -404,7 +424,23 @@ const authorizeGraphRead = <TAuthority>(
     return { success: false, error: graphReadExecutionUnavailable() };
   }
 
-  return { success: true, query, mode: parsed.request.mode };
+  return {
+    success: true,
+    query,
+    mode: parsed.request.mode,
+    ...(parsed.request.includeCapabilities
+      ? {
+          capabilities: {
+            orderBy:
+              parsed.request.mode === 'count'
+                ? []
+                : Object.keys(query.root.fields).filter(fieldName =>
+                    allowsOrdering(query.root, fieldName, policy),
+                  ),
+          },
+        }
+      : {}),
+  };
 };
 
 export const createGraphReadDispatcher = <TAuthority = unknown>({
@@ -422,6 +458,7 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
       return {
         kind: 'graph-read-result',
         value: await execute(authorized.query, authorized.mode),
+        ...(authorized.capabilities ? { capabilities: authorized.capabilities } : {}),
       };
     } catch (error) {
       if (authorized.query.cardinality === 'one' && isGraphReadCardinalityMismatch(error)) {
@@ -462,7 +499,11 @@ export const createGraphReadObserver = <TAuthority = unknown>({
           if (!Array.isArray(value) || !isJsonValue(value)) {
             throw new Error('Data graph observer produced a non-JSON result array.');
           }
-          yield { kind: 'graph-read-result', value };
+          yield {
+            kind: 'graph-read-result',
+            value,
+            ...(authorized.capabilities ? { capabilities: authorized.capabilities } : {}),
+          };
         }
       } catch (error) {
         if (context.signal.aborted) return;

@@ -24,7 +24,19 @@ export type GraphReadRequestV1 = {
   readonly orderBy: readonly GraphReadOrder[];
   readonly limit?: number;
   readonly cardinality?: 'one' | 'many';
+  /** Request advisory capabilities alongside an authorized result, without changing Query meaning. */
+  readonly includeCapabilities?: boolean;
 };
+
+/** Receiver policy at the time of the read; subsequent reads must still be authorized. */
+export type GraphReadCapabilities = {
+  readonly orderBy: readonly string[];
+};
+
+export const isGraphReadCapabilities = (value: unknown): value is GraphReadCapabilities =>
+  isRecord(value) &&
+  Array.isArray(value.orderBy) &&
+  value.orderBy.every(field => typeof field === 'string');
 
 export type GraphReadProtocolErrorCode =
   | 'invalid_request'
@@ -236,6 +248,15 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       error: graphReadProtocolError('invalid_request', 'Data graph read View must be an object.'),
     };
   }
+  if (value.includeCapabilities !== undefined && typeof value.includeCapabilities !== 'boolean') {
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'invalid_request',
+        'Data graph read includeCapabilities must be a boolean.',
+      ),
+    };
+  }
   if (!isJsonValue(value)) {
     return {
       success: false,
@@ -257,6 +278,9 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       orderBy: value.orderBy,
       ...(value.limit === undefined ? {} : { limit: value.limit }),
       ...(value.cardinality === undefined ? {} : { cardinality: value.cardinality }),
+      ...(value.includeCapabilities === undefined
+        ? {}
+        : { includeCapabilities: value.includeCapabilities }),
     }) as unknown as GraphReadRequestV1,
   };
 };

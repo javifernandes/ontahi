@@ -6,6 +6,7 @@ import {
   field,
   getSelectColumnsForQuery,
   isGraphReadProtocolError,
+  isGraphReadCapabilities,
   mapEntity,
   parseGraphReadRequest,
   query,
@@ -44,6 +45,26 @@ const validReadRequest = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('data graph read protocol', () => {
+  it('round-trips an optional capability request and validates reflected ordering fields', () => {
+    for (const includeCapabilities of [true, false]) {
+      expect(parseGraphReadRequest(validReadRequest({ includeCapabilities }))).toMatchObject({
+        success: true,
+        request: { includeCapabilities },
+      });
+    }
+    for (const includeCapabilities of [null, 'true', 1, {}]) {
+      expect(parseGraphReadRequest(validReadRequest({ includeCapabilities }))).toMatchObject({
+        success: false,
+        error: { error: { code: 'invalid_request' } },
+      });
+    }
+    expect(isGraphReadCapabilities({ orderBy: ['id', 'name'] })).toBe(true);
+    expect(isGraphReadCapabilities({ orderBy: [] })).toBe(true);
+    for (const value of [undefined, null, {}, { orderBy: 'id' }, { orderBy: [1] }]) {
+      expect(isGraphReadCapabilities(value)).toBe(false);
+    }
+  });
+
   it('recognizes optional ordering denial details without accepting malformed diagnostics', () => {
     const error = {
       kind: 'protocol-error',

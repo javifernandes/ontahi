@@ -51,6 +51,20 @@ a process. Plain Queries and Views return arrays; `first`, `one`, `count`, and `
 select their corresponding result. Runtime-bound Effects remain the composition API inside
 Operations.
 
+## Graph Read ordering capabilities
+
+Portable Graph Read requests may opt into `includeCapabilities: true`. After authorization and a
+successful execution, the dispatcher adds `capabilities: { orderBy: string[] }` alongside `value`.
+The names are root Fields allowed by the same ordering policy checks used to authorize queries,
+including derived-Field dependency access. An empty array means no ordering is available (also
+the case for count reads); absent metadata means capabilities were not supplied. Observations
+support the same opt-in. Requests without it retain their existing response shape, and errors
+never carry capabilities.
+
+This is advisory metadata from the authorized read, not client-authored authority or a grant for
+future requests. Every subsequent read must still pass ordinary authorization. Consumers can use
+`isGraphReadCapabilities` from `@ontahi/core/data-graph` to validate optional response metadata.
+
 ## Caller-owned Views
 
 An Operation may define a semantic population by returning a declarative Selection while each

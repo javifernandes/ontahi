@@ -403,8 +403,14 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
     and Field with optional structured `ordering_not_allowed` details. Console displays the
     receiver's precise message while retaining the successful result snapshot. Unknown policies
     and other denials remain generic; no permissions are broadened.
-13. Authority-aware header capabilities, table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
-    source history, Commands, Operations, reflection
+13. Console requests opt-in ordering capabilities with each Graph Read. The receiver derives root
+    Field names from its ordinary policy checks, including derived dependencies, and emits them
+    only with successful results. Headers intersect these names with intrinsic scalar types;
+    denied headers explain the policy restriction without editing or sending requests. Missing
+    or malformed metadata, a replaced transport, or a policy denial require a fresh successful
+    Run before sorting. Capabilities are advisory snapshots; every read remains authorized anew.
+14. Table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
+    source history, Commands, Operations, full reflection
     delivery, and the terminal CLI remain later slices of this plan.
 
 ## Acceptance Checklist
