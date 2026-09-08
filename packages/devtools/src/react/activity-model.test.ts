@@ -209,6 +209,19 @@ describe('Devtools activity model', () => {
     expect(
       graphCommandSummary({
         kind: 'graph-command',
+        command: {
+          ...command,
+          member: {
+            kind: 'entity-ref',
+            locator: { scope: { tenant: 'acme' }, segments: ['draft', 2] },
+          },
+          position: { at: 'end' },
+        },
+      }),
+    ).toBe('List.items.move(scope: {"tenant":"acme"}, segments: ["draft",2], at: end)');
+    expect(
+      graphCommandSummary({
+        kind: 'graph-command',
         command: { ...command, position: { at: 'start' } },
       }),
     ).toBe('List.items.move(tenant: acme, slug: draft, at: start)');

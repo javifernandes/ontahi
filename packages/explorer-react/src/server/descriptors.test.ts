@@ -507,6 +507,31 @@ describe('explorer descriptor builder', () => {
     ]);
   });
 
+  it('describes the canonical identity of an ordered has-many Relation', () => {
+    const ListBase = entity('OrderedDescriptorList', { id: field.id() });
+    const Item = entity('OrderedDescriptorItem', {
+      id: field.id(),
+      list: field.ref(ListBase),
+    });
+    const List = ListBase.hasMany('items', Item, { via: 'list', ordered: true });
+
+    expect(
+      getExplorerEntityDetail({ entities: [List, Item] }, List.name)?.relations,
+    ).toContainEqual(
+      expect.objectContaining({
+        name: 'items',
+        ordered: true,
+        structuralVerbs: ['move'],
+        canonicalIdentity: {
+          sourceEntityName: 'OrderedDescriptorList',
+          relationName: 'items',
+          targetEntityName: 'OrderedDescriptorItem',
+          cardinality: 'ordered-many',
+        },
+      }),
+    );
+  });
+
   it('presents inverse endpoints derived by schema reflection', () => {
     const TodoList = entity('TodoList', { id: field.id(), name: field.string() });
     const Tag = entity('Tag', { id: field.id(), name: field.string() });

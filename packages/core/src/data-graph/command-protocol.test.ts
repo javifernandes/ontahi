@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   createEntityRef,
@@ -9,6 +9,8 @@ import {
   relationship,
   resolveGraphCommandRequest,
   toGraphCommandRequest,
+  type GraphCommandRequestV1,
+  type OrderedRelationshipCommand,
 } from './index.js';
 
 const defineSchoolGraph = () => {
@@ -213,6 +215,9 @@ describe('data graph ordered Relationship Command protocol', () => {
       ifPosition: { before: null, after: anchor },
       onMismatch: 'skip',
     });
+    expectTypeOf<OrderedRelationshipCommand>().not.toMatchTypeOf<
+      GraphCommandRequestV1['command']
+    >();
     const request = JSON.parse(JSON.stringify(toGraphCommandRequest(command)));
 
     expect(request).toEqual({ version: 2, kind: 'graph-command', command });

@@ -127,13 +127,21 @@ export const graphReadSummary = (body: RecordValue): string | undefined => {
   return clauses.join(' · ');
 };
 
+const formatLocatorValue = (value: unknown) => {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value === null) return 'null';
+  return JSON.stringify(value) ?? String(value);
+};
+
 const refIdentity = (value: unknown) => {
   if (!isRecord(value) || !isRecord(value.locator)) return 'unknown';
   if (Object.keys(value.locator).length === 1 && 'id' in value.locator) {
-    return String(value.locator.id);
+    return formatLocatorValue(value.locator.id);
   }
   return Object.entries(value.locator)
-    .map(([key, item]) => `${key}: ${String(item)}`)
+    .map(([key, item]) => `${key}: ${formatLocatorValue(item)}`)
     .join(', ');
 };
 

@@ -12,6 +12,7 @@ import {
   resolveCanonicalRelationshipIdentity,
   type ManyToManyRelationshipCommand,
   type OrderedRelationshipCommand,
+  type OrderedRelationshipDelta,
   type RelationshipCommand,
 } from './relationship-command.js';
 
@@ -26,8 +27,11 @@ type AppliedManyToManyRelationshipMutationOutcome = Omit<
 > & { command: ManyToManyRelationshipCommand };
 type AppliedOrderedRelationshipMutationOutcome = Omit<
   AppliedRelationshipMutationOutcome,
-  'command'
-> & { command: OrderedRelationshipCommand };
+  'command' | 'delta'
+> & {
+  command: OrderedRelationshipCommand;
+  delta: OrderedRelationshipDelta;
+};
 type RelationshipOutcomeFor<
   TEntity extends AnyEntityDefinition,
   TRelationName extends keyof TEntity['relations'] & string,
@@ -41,6 +45,29 @@ type RelationshipEventAuthoring<TOutcome> = {
   (project: RelationshipOutcomeProjector<TOutcome, unknown>): MutationReaction;
   (event: unknown): MutationReaction;
 };
+type RelationshipReactionBuilder<TOutcome> = {
+  react: (
+    project: RelationshipOutcomeProjector<TOutcome, readonly MutationReactionIntent[]>,
+  ) => MutationReaction;
+  emit: RelationshipEventAuthoring<TOutcome>;
+};
+type RelationshipReactionAuthoring<
+  TEntity extends AnyEntityDefinition,
+  TRelationName extends keyof TEntity['relations'] & string,
+> = {
+  added: (
+    config: ReactionConfig,
+  ) => RelationshipReactionBuilder<RelationshipOutcomeFor<TEntity, TRelationName>>;
+  removed: (
+    config: ReactionConfig,
+  ) => RelationshipReactionBuilder<RelationshipOutcomeFor<TEntity, TRelationName>>;
+} & (TEntity['relations'][TRelationName] extends { ordered: true }
+  ? {
+      moved: (
+        config: ReactionConfig,
+      ) => RelationshipReactionBuilder<RelationshipOutcomeFor<TEntity, TRelationName>>;
+    }
+  : {});
 
 const emit = (event: unknown): EmitEventReactionIntent => ({ kind: 'emit-event', event });
 
@@ -119,14 +146,19 @@ const relationship = <
 >(
   entity: TEntity,
   relationName: TRelationName,
-) => ({
-  added: (config: ReactionConfig) =>
-    defineRelationshipReaction(entity, relationName, 'link', config),
-  removed: (config: ReactionConfig) =>
-    defineRelationshipReaction(entity, relationName, 'unlink', config),
-  moved: (config: ReactionConfig) =>
-    defineRelationshipReaction(entity, relationName, 'move', config),
-});
+): RelationshipReactionAuthoring<TEntity, TRelationName> =>
+  ({
+    added: (config: ReactionConfig) =>
+      defineRelationshipReaction(entity, relationName, 'link', config),
+    removed: (config: ReactionConfig) =>
+      defineRelationshipReaction(entity, relationName, 'unlink', config),
+    ...(entity.relations[relationName]?.ordered
+      ? {
+          moved: (config: ReactionConfig) =>
+            defineRelationshipReaction(entity, relationName, 'move', config),
+        }
+      : {}),
+  }) as RelationshipReactionAuthoring<TEntity, TRelationName>;
 
 export const reaction = {
   relationship,

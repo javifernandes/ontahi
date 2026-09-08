@@ -28,11 +28,12 @@ type AnyGraphCommand =
   | RelationshipCommand
   | ManyToManyRelationshipCommand
   | OrderedRelationshipCommand;
+type GraphCommandV1 = Exclude<AnyGraphCommand, OrderedRelationshipCommand>;
 
 export type GraphCommandRequestV1 = {
   readonly version: 1;
   readonly kind: 'graph-command';
-  readonly command: AnyGraphCommand;
+  readonly command: GraphCommandV1;
 };
 
 export type GraphCommandRequestV2 = {
@@ -102,15 +103,11 @@ export const graphCommandProtocolError = (
 ): GraphCommandProtocolError => ({ kind: 'protocol-error', error: { code, message } });
 
 export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandRequest => {
-  const request = {
-    version:
-      command.kind === 'ordered-relationship-command' ||
-      (command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command))
-        ? 2
-        : 1,
-    kind: 'graph-command',
-    command,
-  } satisfies GraphCommandRequest;
+  const request: GraphCommandRequest =
+    command.kind === 'ordered-relationship-command' ||
+    (command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command))
+      ? { version: 2, kind: 'graph-command', command }
+      : { version: 1, kind: 'graph-command', command };
   if (!isJsonValue(request)) throw new Error('Data graph Command request must be JSON-safe.');
   return cloneJson(request);
 };

@@ -57,6 +57,7 @@ export type ExplorerEntityLike = {
       sourceField?: string;
       targetField?: string;
       nullable?: boolean;
+      ordered?: true;
       target?: {
         name?: string;
         refLocators?: Record<string, { fields?: readonly string[] }>;
@@ -247,20 +248,27 @@ const describeRelation = (
           fieldName: relation.sourceField,
           targetEntityName: relation.target?.name ?? 'Unknown',
         }
-      : kind === 'hasMany' && relation.targetField
+      : kind === 'hasMany' && relation.ordered
         ? {
-            sourceEntityName: relation.target?.name ?? 'Unknown',
-            fieldName: relation.targetField,
-            targetEntityName: source.name ?? 'Unknown',
+            sourceEntityName: source.name ?? 'Unknown',
+            relationName: name,
+            targetEntityName: relation.target?.name ?? 'Unknown',
+            cardinality: 'ordered-many' as const,
           }
-        : kind === 'manyToMany'
+        : kind === 'hasMany' && relation.targetField
           ? {
-              sourceEntityName: source.name ?? 'Unknown',
-              relationName: name,
-              targetEntityName: relation.target?.name ?? 'Unknown',
-              cardinality: 'many-to-many' as const,
+              sourceEntityName: relation.target?.name ?? 'Unknown',
+              fieldName: relation.targetField,
+              targetEntityName: source.name ?? 'Unknown',
             }
-          : undefined;
+          : kind === 'manyToMany'
+            ? {
+                sourceEntityName: source.name ?? 'Unknown',
+                relationName: name,
+                targetEntityName: relation.target?.name ?? 'Unknown',
+                cardinality: 'many-to-many' as const,
+              }
+            : undefined;
 
   return {
     name,

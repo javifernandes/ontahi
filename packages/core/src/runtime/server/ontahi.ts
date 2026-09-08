@@ -5,6 +5,7 @@ import {
   createGraphReadObserver as createDataGraphReadObserver,
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   assertMutationReactionConfiguration,
+  isReferenceFieldDefinition,
   materializeDerivedFieldDefinitions,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
@@ -63,6 +64,29 @@ type RuntimeCommandOptions<TRuntime> =
     : never;
 type StorageRuntime<TStorage> =
   TStorage extends DataGraphDefaultStorage<infer TRuntime> ? TRuntime : never;
+
+const assertResolvedOrderedRelations = (entities: readonly AnyEntityDefinition[]) => {
+  entities.forEach(source => {
+    Object.entries(source.relations).forEach(([name, relation]) => {
+      if (!relation.ordered) return;
+      const targetField = relation.targetField
+        ? relation.target.fields[relation.targetField]
+        : undefined;
+      if (
+        relation.relationKind !== 'hasMany' ||
+        !targetField ||
+        !isReferenceFieldDefinition(targetField) ||
+        targetField.target !== source ||
+        targetField.nullable ||
+        targetField.optional
+      ) {
+        throw new Error(
+          `Ordered Relation ${source.name}.${name} requires a direct hasMany via a required Reference Field back to ${source.name}.`,
+        );
+      }
+    });
+  });
+};
 
 export type ApplicationGraphReadDispatcherFactory = <TAuthority>(
   policies: readonly GraphReadPolicy<any, TAuthority>[],
@@ -288,6 +312,7 @@ export const ontahi = <
     declaredEntities.forEach(declaration =>
       resolveOntahiEntityReferences(declaration, semanticEntitiesByName),
     );
+    assertResolvedOrderedRelations(semanticDeclarations);
     materializeDerivedFieldDefinitions(semanticDeclarations, options.derivedFields);
     options.storage.bindEntities?.(semanticDeclarations);
   }

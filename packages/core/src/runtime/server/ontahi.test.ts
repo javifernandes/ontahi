@@ -965,6 +965,32 @@ describe('ontahi application composition root', () => {
     ).toThrow(
       'Ordered Relation InvalidSemanticOrderedList.items requires a direct hasMany via a required Reference Field',
     );
+
+    const LookalikeList = defineEntitySchema('IdentitySemanticOrderedList', { id: field.id() });
+    const IdentityList = entity({
+      name: 'IdentitySemanticOrderedList',
+      fields: { id: field.id() },
+      relations: () => ({
+        items: relation.hasMany(entity.ref('IdentitySemanticOrderedItem'), {
+          via: 'list',
+          ordered: true,
+        }),
+      }),
+    });
+    const IdentityItem = entity({
+      name: 'IdentitySemanticOrderedItem',
+      fields: { id: field.id(), list: field.ref(LookalikeList) },
+    });
+    expect(() =>
+      ontahi({
+        storage: createInMemoryDataGraphStorage({
+          dataset: { IdentitySemanticOrderedList: [], IdentitySemanticOrderedItem: [] },
+        }),
+        entities: [IdentityList, IdentityItem],
+      }),
+    ).toThrow(
+      'Ordered Relation IdentitySemanticOrderedList.items requires a direct hasMany via a required Reference Field',
+    );
   });
 
   it('scopes reusable semantic refs to each application entity registry', () => {
