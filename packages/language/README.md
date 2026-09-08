@@ -83,6 +83,6 @@ analysis.request;
 The shared Lezer grammar exposes independent `SelectionDocument` and `ConsoleDocument` top rules.
 The Console layer resolves the Entity and terminal, while the nested expression keeps the existing
 Selection syntax, diagnostics, completion, reflection, and lowering. This walking skeleton supports
-`.where(...).many()` and exact-cardinality `.where(...).one()` Graph Reads; additional Query members,
-Commands, and Operations extend the same expression language rather than adding leading family
-keywords.
+`.where(...).many()`, nullable `.where(...).first()`, and exact-cardinality `.where(...).one()` Graph
+Reads; additional Query members, Commands, and Operations extend the same expression language rather
+than adding leading family keywords.

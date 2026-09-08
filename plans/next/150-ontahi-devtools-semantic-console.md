@@ -367,8 +367,8 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 1. The existing Lezer grammar now exposes independent `SelectionDocument` and `ConsoleDocument`
    top rules while sharing the exact `OrExpression` Selection productions.
 2. `@ontahi/language` parses and resolves the first self-contained keyword-free expressions,
-   `Entity.where(Selection).many()` and exact-cardinality `Entity.where(Selection).one()`, and lowers
-   them to canonical `GraphReadRequestV1` bodies.
+   `Entity.where(Selection).many()`, nullable `Entity.where(Selection).first()`, and exact-cardinality
+   `Entity.where(Selection).one()`, and lowers them to canonical `GraphReadRequestV1` bodies.
 3. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
 4. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and

@@ -6,7 +6,7 @@ GraphReadExpression {
   EntityName Dot Where OpenParen OrExpression CloseParen Dot ReadTerminal OpenParen CloseParen
 }
 EntityName { Identifier }
-ReadTerminal { One | Many }
+ReadTerminal { First | One | Many }
 
 OrExpression { AndExpression (Or AndExpression)* }
 AndExpression { NotExpression (And NotExpression)* }
@@ -36,6 +36,7 @@ Null { @specialize<Identifier, "null"> }
 True { @specialize<Identifier, "true"> }
 False { @specialize<Identifier, "false"> }
 Where { @specialize<Identifier, "where"> }
+First { @specialize<Identifier, "first"> }
 One { @specialize<Identifier, "one"> }
 Many { @specialize<Identifier, "many"> }
 

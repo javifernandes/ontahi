@@ -1030,4 +1030,28 @@ describe('Selection CodeMirror adapter', () => {
     view.destroy();
     parent.remove();
   });
+
+  it('keeps Backspace editing through an incomplete Console terminal', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const source = 'TodoItem.where(completed = false).one';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: consoleExpressionExtensions({ entities: [TodoItem] }),
+      }),
+    });
+
+    for (const expected of [source.slice(0, -1), source.slice(0, -2), source.slice(0, -3)]) {
+      view.contentDOM.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+      );
+      expect(view.state.doc.toString()).toBe(expected);
+    }
+
+    view.destroy();
+    parent.remove();
+  });
 });

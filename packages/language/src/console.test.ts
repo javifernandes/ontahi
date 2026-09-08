@@ -102,9 +102,28 @@ describe('Console Graph Read language', () => {
     });
     expect(analysis.request).toMatchObject({
       kind: 'graph-read',
-      mode: 'run',
+      mode: 'get',
       cardinality: 'one',
     });
+  });
+
+  it('lowers first() to the existing nullable get intent without strict cardinality', () => {
+    const analysis = analyzeConsoleDocument(
+      'TodoItem.where(completed = false).first()',
+      application,
+    );
+
+    expect(analysis.syntaxDiagnostics).toEqual([]);
+    expect(analysis.semanticDiagnostics).toEqual([]);
+    expect(analysis.syntax.expression?.terminal).toMatchObject({
+      kind: 'first-member',
+      text: 'first',
+    });
+    expect(analysis.request).toMatchObject({
+      kind: 'graph-read',
+      mode: 'get',
+    });
+    expect(analysis.request).not.toHaveProperty('cardinality');
   });
 
   it('reports an incomplete terminal as Console syntax rather than Selection semantics', () => {
@@ -113,7 +132,7 @@ describe('Console Graph Read language', () => {
         {
           channel: 'syntax',
           code: 'console.syntax.invalid',
-          message: 'Expected .one() or .many() after the Selection expression.',
+          message: 'Expected .first(), .one(), or .many() after the Selection expression.',
         },
       ],
     });
@@ -141,6 +160,10 @@ describe('Console Graph Read language', () => {
     expect(
       completeConsoleDocument(terminalDocument, terminalDocument.length, application).items,
     ).toContainEqual(expect.objectContaining({ label: 'one', apply: 'one()', kind: 'member' }));
+    const firstDocument = 'TodoItem.where(all).f';
+    expect(
+      completeConsoleDocument(firstDocument, firstDocument.length, application).items,
+    ).toContainEqual(expect.objectContaining({ label: 'first', apply: 'first()', kind: 'member' }));
   });
 
   it('projects Core Entity definitions into the existing Selection reflection input', () => {

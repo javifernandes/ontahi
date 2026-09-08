@@ -335,7 +335,7 @@ describe('OntahiDevtools', () => {
       expect(request.mock.calls[0]?.[0]).toMatchObject({
         family: 'graph.read',
         body: {
-          mode: 'run',
+          mode: 'get',
           cardinality: 'one',
           selection: {
             entityName: 'TodoItem',

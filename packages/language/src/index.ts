@@ -218,7 +218,7 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly selection?: SelectionExpressionSyntax;
   readonly whereClose?: SelectionLanguageToken<'close-parenthesis'>;
-  readonly terminal?: SelectionLanguageToken<'one-member' | 'many-member'>;
+  readonly terminal?: SelectionLanguageToken<'first-member' | 'one-member' | 'many-member'>;
   readonly terminalOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly terminalClose?: SelectionLanguageToken<'close-parenthesis'>;
 };
@@ -962,6 +962,7 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
   const opens = graphRead.getChildren('OpenParen');
   const closes = graphRead.getChildren('CloseParen');
   const readTerminal = graphRead.getChild('ReadTerminal');
+  const firstTerminal = readTerminal?.getChild('First');
   const oneTerminal = readTerminal?.getChild('One');
   const manyTerminal = readTerminal?.getChild('Many');
   return {
@@ -976,9 +977,11 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
       whereOpen: tokenOf('open-parenthesis', opens[0] ?? null, document),
       selection: expressionSyntax(graphRead.getChild('OrExpression'), document),
       whereClose: tokenOf('close-parenthesis', closes[0] ?? null, document),
-      terminal: oneTerminal
-        ? tokenOf('one-member', oneTerminal, document)
-        : tokenOf('many-member', manyTerminal ?? null, document),
+      terminal: firstTerminal
+        ? tokenOf('first-member', firstTerminal, document)
+        : oneTerminal
+          ? tokenOf('one-member', oneTerminal, document)
+          : tokenOf('many-member', manyTerminal ?? null, document),
       terminalOpen: tokenOf('open-parenthesis', opens[1] ?? null, document),
       terminalClose: tokenOf('close-parenthesis', closes[1] ?? null, document),
     },
@@ -991,9 +994,11 @@ const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   if (!expression.where) return `Expected .where(...) after ${expression.entity.text}.`;
   if (!expression.whereOpen) return 'Expected "(" after .where.';
   if (!expression.whereClose) return 'Expected ")" to close the Selection expression.';
-  if (!expression.terminal) return 'Expected .one() or .many() after the Selection expression.';
+  if (!expression.terminal) {
+    return 'Expected .first(), .one(), or .many() after the Selection expression.';
+  }
   if (!expression.terminalOpen || !expression.terminalClose) {
-    return 'Expected an empty argument list after .many.';
+    return `Expected an empty argument list after .${expression.terminal.text}.`;
   }
   return 'The Console expression is invalid.';
 };
@@ -1069,7 +1074,12 @@ export const analyzeConsoleDocument = (
 ): ConsoleDocumentAnalysis => {
   const parsed = parseConsoleDocument(document);
   const expression = parsed.syntax.expression;
-  if (parsed.syntaxDiagnostics.length > 0 || !expression?.entity || !expression.selection) {
+  if (
+    parsed.syntaxDiagnostics.length > 0 ||
+    !expression?.entity ||
+    !expression.selection ||
+    !expression.terminal
+  ) {
     return { ...parsed, semanticDiagnostics: [] };
   }
 
@@ -1098,7 +1108,7 @@ export const analyzeConsoleDocument = (
           request: {
             version: 1,
             kind: 'graph-read',
-            mode: 'run',
+            mode: expression.terminal.kind === 'many-member' ? 'run' : 'get',
             selection: {
               kind: 'selection',
               entityName: entity.name,
@@ -1106,7 +1116,11 @@ export const analyzeConsoleDocument = (
             },
             orderBy: [],
             limit: options.limit ?? 25,
-            cardinality: expression.terminal?.kind === 'one-member' ? 'one' : 'many',
+            ...(expression.terminal.kind === 'first-member'
+              ? {}
+              : {
+                  cardinality: expression.terminal.kind === 'one-member' ? 'one' : 'many',
+                }),
           } satisfies GraphReadRequestV1,
         }
       : {}),
@@ -1194,6 +1208,12 @@ export const completeConsoleDocument = (
       ...range,
       items: (
         [
+          {
+            label: 'first',
+            apply: 'first()',
+            kind: 'member',
+            detail: 'Nullable first Graph Read terminal',
+          },
           {
             label: 'one',
             apply: 'one()',

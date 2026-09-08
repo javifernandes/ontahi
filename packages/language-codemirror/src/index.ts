@@ -91,7 +91,7 @@ const consoleParser = consoleDocumentParser.configure({
   props: [
     styleTags({
       EntityName: tags.typeName,
-      'Where One Many': tags.function(tags.propertyName),
+      'Where First One Many': tags.function(tags.propertyName),
       FieldName: tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
@@ -410,6 +410,14 @@ export const consoleExpressionExtensions = (
 ): readonly Extension[] => [
   consoleExpressionLanguageSupport(),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  keymap.of([
+    {
+      key: 'Backspace',
+      run: deleteCharBackward,
+      shift: deleteCharBackward,
+      preventDefault: true,
+    },
+  ]),
   ...(options.run
     ? [
         keymap.of([
