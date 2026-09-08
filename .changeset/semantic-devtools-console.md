@@ -18,3 +18,6 @@ source-backed value controls as the Explorer Selection editor. Omitting `.where(
 the canonical `all` Selection, so unfiltered reads can use `Entity.many()`, `Entity.first()`, or
 `Entity.one()` directly. `Entity.count()` and `Entity.where(Selection).count()` use the existing
 Graph Read count mode and render its scalar result without applying a row limit or cardinality.
+Many reads accept a source-backed `.limit(nonNegativeInteger)` modifier before their terminal;
+invalid limits and meaningless combinations with `first()`, `one()`, or `count()` are rejected
+before execution.

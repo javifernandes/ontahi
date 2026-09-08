@@ -3,7 +3,10 @@
 
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
-  EntityName (Dot Where OpenParen OrExpression CloseParen)? Dot ReadTerminal OpenParen CloseParen
+  EntityName
+  (Dot Where OpenParen OrExpression CloseParen)?
+  (Dot Limit OpenParen NumberLiteral CloseParen)?
+  Dot ReadTerminal OpenParen CloseParen
 }
 EntityName { Identifier }
 ReadTerminal { First | One | Many | Count }
@@ -40,6 +43,7 @@ First { @specialize<Identifier, "first"> }
 One { @specialize<Identifier, "one"> }
 Many { @specialize<Identifier, "many"> }
 Count { @specialize<Identifier, "count"> }
+Limit { @specialize<Identifier, "limit"> }
 
 Equals { "=" }
 ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }

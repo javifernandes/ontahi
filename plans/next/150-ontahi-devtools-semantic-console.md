@@ -372,17 +372,20 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    `Entity.one()` forms, and lowers them to canonical `GraphReadRequestV1` bodies. An omitted
    `.where(...)` resolves to the canonical `all` Selection. Filtered and unfiltered `.count()`
    terminals use the canonical count mode without row cardinality or limit.
-3. Core Entity definitions can be projected into the existing narrow Selection reflection input;
+3. Many reads accept `.limit(nonNegativeInteger)` before their terminal and lower that source value
+   to the canonical request limit; combinations with `first()`, `one()`, or `count()` are rejected
+   as meaningless.
+4. Core Entity definitions can be projected into the existing narrow Selection reflection input;
    Entity and nested Field completions remain headless.
-4. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and
+5. `@ontahi/language-codemirror` exposes the Console parser, completion, lint, highlighting, and
    `Mod-Enter` execution extensions without copying Selection semantics. Its nested Selection also
    reuses the source-backed finite-value projections for Boolean and enum literals.
-5. `@ontahi/devtools/react` exposes an opt-in Console panel that submits the lowered Read through
+6. `@ontahi/devtools/react` exposes an opt-in Console panel that submits the lowered Read through
    the configured Runtime Transport, renders the result through shared Visual or JSON projections,
    preserves structured exact-one cardinality feedback, and produces ordinary Activity evidence.
-6. Todo supplies its generated Entity schemas and starts with
+7. Todo supplies its generated Entity schemas and starts with
    `TodoItem.where(completed = false).many()` as the browser proof.
-7. Named Views, other Query terminals/members, source history, Commands, Operations, reflection
+8. Named Views, other Query terminals/members, source history, Commands, Operations, reflection
    delivery, and the terminal CLI remain later slices of this plan.
 
 ## Acceptance Checklist

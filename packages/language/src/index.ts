@@ -207,7 +207,11 @@ export type ConsoleLanguageDiagnostic =
   | SelectionLanguageDiagnostic
   | (SelectionLanguageRange & {
       readonly channel: 'syntax' | 'semantic';
-      readonly code: 'console.syntax.invalid' | 'console.semantic.unknown-entity';
+      readonly code:
+        | 'console.syntax.invalid'
+        | 'console.semantic.unknown-entity'
+        | 'console.semantic.invalid-limit'
+        | 'console.semantic.unsupported-limit';
       readonly message: string;
     });
 
@@ -218,6 +222,10 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly selection?: SelectionExpressionSyntax;
   readonly whereClose?: SelectionLanguageToken<'close-parenthesis'>;
+  readonly limit?: SelectionLanguageToken<'limit-member'>;
+  readonly limitOpen?: SelectionLanguageToken<'open-parenthesis'>;
+  readonly limitValue?: SelectionNumberLiteralSyntax;
+  readonly limitClose?: SelectionLanguageToken<'close-parenthesis'>;
   readonly terminal?: SelectionLanguageToken<
     'first-member' | 'one-member' | 'many-member' | 'count-member'
   >;
@@ -969,7 +977,10 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
   const manyTerminal = readTerminal?.getChild('Many');
   const countTerminal = readTerminal?.getChild('Count');
   const where = graphRead.getChild('Where');
-  const terminalParenthesisIndex = where ? 1 : 0;
+  const limit = graphRead.getChild('Limit');
+  const limitParenthesisIndex = where ? 1 : 0;
+  const terminalParenthesisIndex = Number(Boolean(where)) + Number(Boolean(limit));
+  const limitValueToken = tokenOf('number-literal', graphRead.getChild('NumberLiteral'), document);
   return {
     kind: 'console-document',
     from: 0,
@@ -982,6 +993,20 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
       whereOpen: tokenOf('open-parenthesis', where ? (opens[0] ?? null) : null, document),
       selection: expressionSyntax(graphRead.getChild('OrExpression'), document),
       whereClose: tokenOf('close-parenthesis', where ? (closes[0] ?? null) : null, document),
+      limit: tokenOf('limit-member', limit, document),
+      limitOpen: tokenOf(
+        'open-parenthesis',
+        limit ? (opens[limitParenthesisIndex] ?? null) : null,
+        document,
+      ),
+      limitValue: limitValueToken
+        ? { ...limitValueToken, value: Number(limitValueToken.text) }
+        : undefined,
+      limitClose: tokenOf(
+        'close-parenthesis',
+        limit ? (closes[limitParenthesisIndex] ?? null) : null,
+        document,
+      ),
       terminal: firstTerminal
         ? tokenOf('first-member', firstTerminal, document)
         : oneTerminal
@@ -1006,10 +1031,18 @@ const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   if (expression.where && !expression.whereClose) {
     return 'Expected ")" to close the Selection expression.';
   }
+  if (expression.limit && !expression.limitOpen) return 'Expected "(" after .limit.';
+  if (expression.limit && !expression.limitValue) {
+    return 'Expected a numeric row limit inside .limit(...).';
+  }
+  if (expression.limit && !expression.limitClose) return 'Expected ")" to close .limit(...).';
   if (!expression.terminal) {
+    if (expression.limitClose) {
+      return 'Expected .many() after .limit(...).';
+    }
     return expression.whereClose
-      ? 'Expected .first(), .one(), .many(), or .count() after the Selection expression.'
-      : `Expected .where(...), .first(), .one(), .many(), or .count() after ${expression.entity.text}.`;
+      ? 'Expected .limit(...), .first(), .one(), .many(), or .count() after the Selection expression.'
+      : `Expected .where(...), .limit(...), .first(), .one(), .many(), or .count() after ${expression.entity.text}.`;
   }
   if (!expression.terminalOpen || !expression.terminalClose) {
     return `Expected an empty argument list after .${expression.terminal.text}.`;
@@ -1022,6 +1055,8 @@ const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
   return Boolean(
     expression?.entity &&
     (!expression.where || (expression.whereOpen && expression.whereClose)) &&
+    (!expression.limit ||
+      (expression.limitOpen && expression.limitValue && expression.limitClose)) &&
     expression.terminal &&
     expression.terminalOpen &&
     expression.terminalClose,
@@ -1109,10 +1144,33 @@ export const analyzeConsoleDocument = (
   const resolved: SemanticResolution = expression.selection
     ? resolveExpression(expression.selection, entity)
     : { diagnostics: [], expression: selectionAll() };
+  const modifierDiagnostics: ConsoleLanguageDiagnostic[] = [];
+  if (
+    expression.limitValue &&
+    (!Number.isInteger(expression.limitValue.value) || expression.limitValue.value < 0)
+  ) {
+    modifierDiagnostics.push({
+      channel: 'semantic',
+      code: 'console.semantic.invalid-limit',
+      message: 'Console Graph Read limit must be a non-negative integer.',
+      from: expression.limitValue.from,
+      to: expression.limitValue.to,
+    });
+  }
+  if (expression.limit && expression.terminal.kind !== 'many-member') {
+    modifierDiagnostics.push({
+      channel: 'semantic',
+      code: 'console.semantic.unsupported-limit',
+      message: '.limit(...) can only be combined with .many().',
+      from: expression.limit.from,
+      to: expression.limitClose?.to ?? expression.limit.to,
+    });
+  }
+  const semanticDiagnostics = [...resolved.diagnostics, ...modifierDiagnostics];
   return {
     ...parsed,
-    semanticDiagnostics: resolved.diagnostics,
-    ...(resolved.expression && resolved.diagnostics.length === 0
+    semanticDiagnostics,
+    ...(resolved.expression && semanticDiagnostics.length === 0
       ? {
           request: {
             version: 1,
@@ -1129,7 +1187,9 @@ export const analyzeConsoleDocument = (
               expression: resolved.expression,
             },
             orderBy: [],
-            ...(expression.terminal.kind === 'count-member' ? {} : { limit: options.limit ?? 25 }),
+            ...(expression.terminal.kind === 'count-member'
+              ? {}
+              : { limit: expression.limitValue?.value ?? options.limit ?? 25 }),
             ...(expression.terminal.kind === 'one-member'
               ? { cardinality: 'one' as const }
               : expression.terminal.kind === 'many-member'
@@ -1175,6 +1235,17 @@ const consoleReadTerminalCompletionItems: readonly ConsoleLanguageCompletionItem
     detail: 'Graph Read count terminal',
   },
 ];
+
+const consoleLimitedReadTerminalCompletionItems = consoleReadTerminalCompletionItems.filter(
+  item => item.label === 'many',
+);
+
+const consoleLimitCompletionItem: ConsoleLanguageCompletionItem = {
+  label: 'limit',
+  apply: 'limit(',
+  kind: 'member',
+  detail: 'Graph Read row limit',
+};
 
 export const completeConsoleDocument = (
   document: string,
@@ -1224,6 +1295,7 @@ export const completeConsoleDocument = (
   if (
     syntax?.entity &&
     !syntax.where &&
+    !syntax.limit &&
     !syntax.terminal &&
     document.slice(syntax.entity.to, range.from).includes('.')
   ) {
@@ -1237,6 +1309,7 @@ export const completeConsoleDocument = (
             kind: 'member',
             detail: 'Selection',
           },
+          consoleLimitCompletionItem,
           ...consoleReadTerminalCompletionItems,
         ] satisfies ConsoleLanguageCompletionItem[]
       ).filter(item => item.label.startsWith(memberPrefix)),
@@ -1244,12 +1317,27 @@ export const completeConsoleDocument = (
   }
   if (
     syntax?.whereClose &&
+    !syntax.limit &&
     !syntax.terminal &&
     document.slice(syntax.whereClose.to, range.from).includes('.')
   ) {
     return {
       ...range,
-      items: consoleReadTerminalCompletionItems.filter(item => item.label.startsWith(memberPrefix)),
+      items: [consoleLimitCompletionItem, ...consoleReadTerminalCompletionItems].filter(item =>
+        item.label.startsWith(memberPrefix),
+      ),
+    };
+  }
+  if (
+    syntax?.limitClose &&
+    !syntax.terminal &&
+    document.slice(syntax.limitClose.to, range.from).includes('.')
+  ) {
+    return {
+      ...range,
+      items: consoleLimitedReadTerminalCompletionItems.filter(item =>
+        item.label.startsWith(memberPrefix),
+      ),
     };
   }
 

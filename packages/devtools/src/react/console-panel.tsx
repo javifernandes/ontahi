@@ -274,7 +274,9 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
             : [
                 analysis.request?.selection.entityName ?? 'No Entity',
                 'graph.read',
-                analysis.request?.mode === 'count' ? 'count' : 'limit ' + limit,
+                analysis.request?.mode === 'count'
+                  ? 'count'
+                  : 'limit ' + (analysis.request?.limit ?? limit),
               ].join(' · ')}
         </div>
       </div>

@@ -56,6 +56,8 @@ const runtimeTransport = createRuntimeTransportRouter({
 The Console supports filtered and unfiltered read terminals. `Tag.count()` and
 `TodoItem.where(completed = false).count()` lower directly to the canonical Graph Read `count`
 mode; count requests do not inherit the Console row limit or a row cardinality.
+Many reads may override the default row limit in source, for example `Tag.limit(10).many()` or
+`TodoItem.where(completed = false).limit(5).many()`.
 
 `createRuntimeTransportRouter(...)` owns effective routing, capability validation, inspection, and
 subscription. Devtools recognizes that configurable Runtime Transport and owns its generic Settings

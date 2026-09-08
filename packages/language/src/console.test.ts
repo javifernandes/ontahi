@@ -124,6 +124,67 @@ describe('Console Graph Read language', () => {
     });
   });
 
+  it('uses an explicit row limit with filtered and unfiltered reads', () => {
+    const unfiltered = analyzeConsoleDocument('TodoItem.limit(2).many()', application);
+    expect(unfiltered.syntaxDiagnostics).toEqual([]);
+    expect(unfiltered.semanticDiagnostics).toEqual([]);
+    expect(unfiltered.syntax.expression).toMatchObject({
+      limit: { kind: 'limit-member', text: 'limit' },
+      limitValue: { kind: 'number-literal', value: 2 },
+      terminal: { kind: 'many-member' },
+    });
+    expect(unfiltered.request).toMatchObject({
+      mode: 'run',
+      limit: 2,
+      selection: { expression: { kind: 'all' } },
+    });
+
+    const filtered = analyzeConsoleDocument(
+      'TodoItem.where(completed = false).limit(5).many()',
+      application,
+    );
+    expect(filtered.syntaxDiagnostics).toEqual([]);
+    expect(filtered.semanticDiagnostics).toEqual([]);
+    expect(filtered.request).toMatchObject({
+      mode: 'run',
+      limit: 5,
+      selection: {
+        expression: {
+          kind: 'predicate',
+          fieldName: 'completed',
+          operator: 'eq',
+          value: false,
+        },
+      },
+    });
+  });
+
+  it('rejects invalid limits and count combinations before execution', () => {
+    for (const source of ['TodoItem.limit(-1).many()', 'TodoItem.limit(1.5).many()']) {
+      const analysis = analyzeConsoleDocument(source, application);
+      expect(analysis.semanticDiagnostics).toEqual([
+        expect.objectContaining({
+          channel: 'semantic',
+          code: 'console.semantic.invalid-limit',
+          message: 'Console Graph Read limit must be a non-negative integer.',
+        }),
+      ]);
+      expect(analysis.request).toBeUndefined();
+    }
+
+    for (const terminal of ['first', 'one', 'count']) {
+      const analysis = analyzeConsoleDocument(`TodoItem.limit(2).${terminal}()`, application);
+      expect(analysis.semanticDiagnostics).toEqual([
+        expect.objectContaining({
+          channel: 'semantic',
+          code: 'console.semantic.unsupported-limit',
+          message: '.limit(...) can only be combined with .many().',
+        }),
+      ]);
+      expect(analysis.request).toBeUndefined();
+    }
+  });
+
   it('keeps unknown Entities separate from nested Selection diagnostics', () => {
     expect(analyzeConsoleDocument('Missing.where(all).many()', application)).toMatchObject({
       syntaxDiagnostics: [],
@@ -194,7 +255,25 @@ describe('Console Graph Read language', () => {
           channel: 'syntax',
           code: 'console.syntax.invalid',
           message:
-            'Expected .first(), .one(), .many(), or .count() after the Selection expression.',
+            'Expected .limit(...), .first(), .one(), .many(), or .count() after the Selection expression.',
+        },
+      ],
+    });
+    expect(parseConsoleDocument('TodoItem.limit().many()')).toMatchObject({
+      syntaxDiagnostics: [
+        {
+          channel: 'syntax',
+          code: 'console.syntax.invalid',
+          message: 'Expected a numeric row limit inside .limit(...).',
+        },
+      ],
+    });
+    expect(parseConsoleDocument('TodoItem.limit(2)')).toMatchObject({
+      syntaxDiagnostics: [
+        {
+          channel: 'syntax',
+          code: 'console.syntax.invalid',
+          message: 'Expected .many() after .limit(...).',
         },
       ],
     });
@@ -228,6 +307,20 @@ describe('Console Graph Read language', () => {
     expect(completeConsoleDocument(countDocument, countDocument.length, application).items).toEqual(
       [expect.objectContaining({ label: 'count', apply: 'count()', kind: 'member' })],
     );
+
+    const limitDocument = 'TodoItem.where(all).l';
+    expect(completeConsoleDocument(limitDocument, limitDocument.length, application).items).toEqual(
+      [expect.objectContaining({ label: 'limit', apply: 'limit(', kind: 'member' })],
+    );
+
+    const limitedTerminalDocument = 'TodoItem.limit(2).';
+    expect(
+      completeConsoleDocument(
+        limitedTerminalDocument,
+        limitedTerminalDocument.length,
+        application,
+      ).items.map(item => item.label),
+    ).toEqual(['many']);
 
     const terminalDocument = 'TodoItem.where(all).o';
     expect(

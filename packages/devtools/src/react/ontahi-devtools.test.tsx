@@ -235,7 +235,7 @@ describe('OntahiDevtools', () => {
         <OntahiDevtools
           console={{
             entities: [TodoItem],
-            initialDocument: 'TodoItem.where(completed = false).many()',
+            initialDocument: 'TodoItem.where(completed = false).limit(2).many()',
           }}
           diagnostics={diagnostics}
           initiallyOpen
@@ -252,6 +252,7 @@ describe('OntahiDevtools', () => {
         name: 'Value for TodoItem.completed',
       }) as HTMLSelectElement;
       expect(completedValue.value).toBe('false');
+      expect(panel.getByText('TodoItem · graph.read · limit 2')).toBeTruthy();
       fireEvent.change(completedValue, { target: { value: 'true' } });
       fireEvent.click(panel.getByRole('button', { name: 'Run' }));
 
@@ -280,7 +281,7 @@ describe('OntahiDevtools', () => {
             },
           },
           orderBy: [],
-          limit: 25,
+          limit: 2,
           cardinality: 'many',
         },
       });
