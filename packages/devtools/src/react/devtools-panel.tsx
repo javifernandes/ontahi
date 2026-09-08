@@ -14,6 +14,7 @@ import {
   buildActivityEntries,
   matchesFilter,
 } from './activity-model.js';
+import { ConsolePanel, type OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { styles } from './devtools-styles.js';
 import { ExchangeDetail } from './exchange-detail.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
@@ -21,6 +22,7 @@ import { PanelResizer } from './panel-resizer.js';
 import { RuntimeTransportSettings } from './runtime-transport-settings.js';
 
 export type DevtoolsPanelProps = {
+  readonly consoleOptions?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly runtimeTransport?: RuntimeTransport<any>;
   readonly height: number;
@@ -29,6 +31,7 @@ export type DevtoolsPanelProps = {
 };
 
 export const DevtoolsPanel = ({
+  consoleOptions,
   diagnostics,
   runtimeTransport,
   height,
@@ -40,7 +43,7 @@ export const DevtoolsPanel = ({
     diagnostics.inspect,
     diagnostics.inspect,
   );
-  const [view, setView] = useState<'activity' | 'settings'>('activity');
+  const [view, setView] = useState<'activity' | 'console' | 'settings'>('activity');
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
   const configurableRuntimeTransport =
@@ -78,6 +81,48 @@ export const DevtoolsPanel = ({
     setSelected(undefined);
   };
 
+  const renderContent = () => {
+    if (view === 'console' && consoleOptions)
+      return <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />;
+    if (view === 'settings' && configurableRuntimeTransport)
+      return (
+        <section style={styles.settingsPage} aria-label='Devtools settings'>
+          <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
+        </section>
+      );
+    return (
+      <div style={styles.workspace}>
+        <section style={styles.sidebar} aria-label='Runtime traffic'>
+          <div style={styles.filterBar}>
+            <input
+              type='search'
+              style={styles.filter}
+              value={filter}
+              onChange={event => setFilter(event.currentTarget.value)}
+              aria-label='Filter diagnostics'
+              placeholder='Filter intent, family, transport, outcome…'
+            />
+          </div>
+          <ActivityList
+            activities={filteredActivities}
+            selectedId={activeActivity?.id}
+            select={setSelected}
+          />
+        </section>
+        {activeActivity?.observation ? (
+          <OperationProgressDetail
+            activity={activeActivity.observation}
+            exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
+          />
+        ) : activeActivity?.kind === 'exchange' ? (
+          <ExchangeDetail activity={activeActivity.exchange} />
+        ) : (
+          <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <aside style={{ ...styles.panel, height }} aria-label='Ontahí Devtools'>
       <PanelResizer height={height} resize={resize} />
@@ -95,6 +140,16 @@ export const DevtoolsPanel = ({
           >
             Activity <span style={styles.count}>{filteredActivities.length}</span>
           </button>
+          {consoleOptions ? (
+            <button
+              type='button'
+              style={{ ...styles.view, ...(view === 'console' ? styles.activeView : {}) }}
+              onClick={() => setView('console')}
+              aria-pressed={view === 'console'}
+            >
+              Console
+            </button>
+          ) : null}
           {configurableRuntimeTransport ? (
             <button
               type='button'
@@ -107,9 +162,11 @@ export const DevtoolsPanel = ({
           ) : null}
         </nav>
         <span style={styles.headerActions}>
-          <button type='button' style={styles.subtleButton} onClick={clear}>
-            Clear
-          </button>
+          {view === 'activity' ? (
+            <button type='button' style={styles.subtleButton} onClick={clear}>
+              Clear
+            </button>
+          ) : null}
           <button
             type='button'
             style={styles.subtleButton}
@@ -120,41 +177,7 @@ export const DevtoolsPanel = ({
           </button>
         </span>
       </header>
-      {view === 'settings' && configurableRuntimeTransport ? (
-        <section style={styles.settingsPage} aria-label='Devtools settings'>
-          <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
-        </section>
-      ) : (
-        <div style={styles.workspace}>
-          <section style={styles.sidebar} aria-label='Runtime traffic'>
-            <div style={styles.filterBar}>
-              <input
-                type='search'
-                style={styles.filter}
-                value={filter}
-                onChange={event => setFilter(event.currentTarget.value)}
-                aria-label='Filter diagnostics'
-                placeholder='Filter intent, family, transport, outcome…'
-              />
-            </div>
-            <ActivityList
-              activities={filteredActivities}
-              selectedId={activeActivity?.id}
-              select={setSelected}
-            />
-          </section>
-          {activeActivity?.observation ? (
-            <OperationProgressDetail
-              activity={activeActivity.observation}
-              exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
-            />
-          ) : activeActivity?.kind === 'exchange' ? (
-            <ExchangeDetail activity={activeActivity.exchange} />
-          ) : (
-            <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
-          )}
-        </div>
-      )}
+      {renderContent()}
     </aside>
   );
 };

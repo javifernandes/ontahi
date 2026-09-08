@@ -25,6 +25,7 @@ relatedPlans:
   - ontahi://plans/146f-nextjs-runtime-protocol-adapter
   - ontahi://plans/146g-unified-fetch-runtime-protocol-clients
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
+  - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -43,6 +44,12 @@ HTTP, WebSocket, gRPC, queues, process-local calls, and CLI streams are projecti
 contract. Express should expose one mounted path by default while allowing hosts to route selected
 message kinds through different paths for security, limits, operations, or observability. Those
 paths are deployment choices rather than distinct framework protocols.
+
+Authoring tools such as the Devtools Console and a future terminal CLI project human-facing
+documents onto existing `graph.read`, `graph.command`, and `operation` bodies. They do not define a
+Console protocol family or place authority in a portable request. The configured transport and
+receiver dispatcher continue to own routing, compatibility, context derivation, policy, and
+execution exactly as they do for application-authored traffic.
 
 Core exposes the first envelope, typed family registry, and transport-neutral dispatcher.
 `operation` body version 1 preserves the existing `invoke` and `check-permission` semantics;

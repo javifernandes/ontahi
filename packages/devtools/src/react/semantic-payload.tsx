@@ -1,3 +1,5 @@
+import type { GraphReadOrder } from '@ontahi/core/data-graph';
+
 import {
   formatSelectionExpression,
   graphCommandSummary,
@@ -39,9 +41,32 @@ const formatLeaf = (value: unknown): string => {
   return String(value ?? '—');
 };
 
-const ResultTable = ({ value }: { readonly value: readonly unknown[] }) => {
+export type ResultTableOrdering = {
+  readonly fields: readonly string[];
+  readonly order?: GraphReadOrder;
+  readonly disabledReason: (fieldName: string) => string | undefined;
+  readonly onSort: (fieldName: string) => void;
+};
+
+const columnSort = (order: GraphReadOrder | undefined, column: string) => {
+  if (order?.fieldName !== column) return undefined;
+  return order.direction === 'asc' ? 'ascending' : 'descending';
+};
+
+const columnSortIcon = (order: GraphReadOrder | undefined, column: string, disabled: boolean) => {
+  if (order?.fieldName === column) return order.direction === 'asc' ? '↑' : '↓';
+  return disabled ? '—' : '↕';
+};
+
+export const ResultTable = ({
+  value,
+  ordering,
+}: {
+  readonly value: readonly unknown[];
+  readonly ordering?: ResultTableOrdering;
+}) => {
   const records = value.filter(isRecord);
-  if (records.length !== value.length || records.length === 0) {
+  if (records.length !== value.length || (records.length === 0 && !ordering?.fields.length)) {
     return (
       <div style={styles.semanticCard}>
         <span style={styles.semanticLabel}>Result</span>
@@ -49,17 +74,58 @@ const ResultTable = ({ value }: { readonly value: readonly unknown[] }) => {
       </div>
     );
   }
-  const columns = [...new Set(records.flatMap(record => Object.keys(record)))].slice(0, 8);
+  const availableColumns = records.length
+    ? [...new Set(records.flatMap(record => Object.keys(record)))]
+    : (ordering?.fields ?? []);
+  const columns = ordering ? availableColumns : availableColumns.slice(0, 8);
   return (
     <div style={styles.tableWrap}>
       <table style={styles.table}>
+        {ordering && (records.length === 0 || records.length > 50) ? (
+          <caption style={styles.consoleHint}>
+            {records.length === 0
+              ? 'Empty list'
+              : `Showing the first 50 of ${records.length} returned rows.`}
+          </caption>
+        ) : null}
         <thead>
           <tr>
-            {columns.map(column => (
-              <th key={column} style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}>
-                {column}
-              </th>
-            ))}
+            {columns.map(column => {
+              const disabledReason = ordering?.disabledReason(column);
+              return (
+                <th
+                  key={column}
+                  style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}
+                  aria-sort={columnSort(ordering?.order, column)}
+                >
+                  {ordering?.fields.includes(column) ? (
+                    <button
+                      type='button'
+                      aria-disabled={Boolean(disabledReason)}
+                      aria-label={`Sort by ${column}`}
+                      title={
+                        disabledReason ??
+                        'Change Query ordering and run (ascending → descending → none)'
+                      }
+                      style={{
+                        ...styles.tableSortButton,
+                        ...(disabledReason ? styles.disabledButton : {}),
+                      }}
+                      onClick={() => {
+                        if (!disabledReason) ordering.onSort(column);
+                      }}
+                    >
+                      {column}{' '}
+                      <span aria-hidden='true'>
+                        {columnSortIcon(ordering.order, column, Boolean(disabledReason))}
+                      </span>
+                    </button>
+                  ) : (
+                    column
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>

@@ -1,11 +1,13 @@
+import { entity, field } from '@ontahi/core/data-graph';
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeTransportRouter,
   createRuntimeProtocolRequest,
   createRuntimeProtocolResponse,
+  type RuntimeProtocolRequestEnvelope,
 } from '@ontahi/core/runtime/protocol';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createOntahiDiagnostics } from '../diagnostics.js';
 import { instrumentRuntimeTransport } from '../instrument-runtime-transport.js';
@@ -13,6 +15,25 @@ import { instrumentRuntimeTransport } from '../instrument-runtime-transport.js';
 import { OntahiDevtools } from './ontahi-devtools.js';
 
 const uiTestTimeoutMs = 15_000;
+const originalRangeGetClientRects = Range.prototype.getClientRects;
+
+beforeAll(() => {
+  Object.defineProperty(Range.prototype, 'getClientRects', {
+    configurable: true,
+    value: () => [] as unknown as DOMRectList,
+  });
+});
+
+afterAll(() => {
+  if (originalRangeGetClientRects) {
+    Object.defineProperty(Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: originalRangeGetClientRects,
+    });
+  } else {
+    Reflect.deleteProperty(Range.prototype, 'getClientRects');
+  }
+});
 
 describe('OntahiDevtools', () => {
   it(
@@ -181,6 +202,232 @@ describe('OntahiDevtools', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Activity/ }));
       expect(screen.getByRole('region', { name: 'Runtime traffic' })).toBeTruthy();
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'executes a keyword-free Selection expression from the Console through Runtime Transport',
+    async () => {
+      const diagnostics = createOntahiDiagnostics({
+        capturePayloads: true,
+        redact: value => value,
+      });
+      const TodoItem = entity('TodoItem', {
+        id: field.id(),
+        title: field.string(),
+        completed: field.boolean(),
+      });
+      const request = vi.fn().mockImplementation(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-read-result',
+          value: [{ id: 'todo-1', title: 'Try semantic Console', completed: false }],
+        }),
+      );
+      const runtimeTransport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: { request },
+      });
+
+      render(
+        <OntahiDevtools
+          console={{
+            entities: [TodoItem],
+            initialDocument: 'TodoItem.where(completed = false).limit(2).many()',
+          }}
+          diagnostics={diagnostics}
+          initiallyOpen
+          runtimeTransport={runtimeTransport}
+        />,
+      );
+
+      const panel = within(
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).slice(-1)[0]!,
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Console' }));
+      expect(panel.getByRole('textbox', { name: 'Ontahí Console expression' })).toBeTruthy();
+      const completedValue = panel.getByRole('combobox', {
+        name: 'Value for TodoItem.completed',
+      }) as HTMLSelectElement;
+      expect(completedValue.value).toBe('false');
+      expect(panel.getByText('TodoItem · graph.read · limit 2')).toBeTruthy();
+      fireEvent.change(completedValue, { target: { value: 'true' } });
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+
+      expect(await panel.findByRole('table')).toBeTruthy();
+      expect(panel.getByText('Try semantic Console')).toBeTruthy();
+      expect(panel.getByRole('button', { name: 'Visual' }).getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'JSON' }));
+      expect(await panel.findByText('\"Try semantic Console\"')).toBeTruthy();
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        family: 'graph.read',
+        body: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'TodoItem',
+            expression: {
+              kind: 'predicate',
+              fieldName: 'completed',
+              operator: 'eq',
+              value: true,
+            },
+          },
+          orderBy: [],
+          limit: 2,
+          cardinality: 'many',
+        },
+      });
+
+      fireEvent.click(panel.getByRole('button', { name: /Activity/ }));
+      expect(await panel.findAllByText('graph.read')).not.toHaveLength(0);
+      fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'executes a Console count and renders its scalar result',
+    async () => {
+      const diagnostics = createOntahiDiagnostics();
+      const Tag = entity('Tag', {
+        id: field.id(),
+        name: field.string(),
+      });
+      const request = vi.fn().mockImplementation(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-read-result',
+          value: 3,
+        }),
+      );
+      const runtimeTransport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: { request },
+      });
+
+      render(
+        <OntahiDevtools
+          console={{ entities: [Tag], initialDocument: 'Tag.count()' }}
+          diagnostics={diagnostics}
+          initiallyOpen
+          runtimeTransport={runtimeTransport}
+        />,
+      );
+
+      const panel = within(
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).slice(-1)[0]!,
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Console' }));
+      expect(panel.getByText('Tag · graph.read · count')).toBeTruthy();
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+
+      expect(await within(panel.getByLabelText('Console result')).findByText('3')).toBeTruthy();
+      expect(request).toHaveBeenCalledOnce();
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        family: 'graph.read',
+        body: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'count',
+          selection: {
+            kind: 'selection',
+            entityName: 'Tag',
+            expression: { kind: 'all' },
+          },
+          orderBy: [],
+        },
+      });
+      expect(request.mock.calls[0]?.[0].body).not.toHaveProperty('limit');
+      expect(request.mock.calls[0]?.[0].body).not.toHaveProperty('cardinality');
+      fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'executes an exact-one Console read and renders its single result',
+    async () => {
+      const diagnostics = createOntahiDiagnostics({
+        capturePayloads: true,
+        redact: value => value,
+      });
+      const TodoItem = entity('TodoItem', {
+        id: field.id(),
+        title: field.string(),
+      });
+      const request = vi
+        .fn()
+        .mockImplementationOnce(async (envelope: RuntimeProtocolRequestEnvelope) =>
+          createRuntimeProtocolResponse(envelope, {
+            kind: 'graph-read-result',
+            value: { id: 'todo-1', title: 'One semantic result' },
+          }),
+        )
+        .mockImplementationOnce(async (envelope: RuntimeProtocolRequestEnvelope) =>
+          createRuntimeProtocolResponse(envelope, {
+            kind: 'protocol-error',
+            error: {
+              code: 'cardinality_mismatch',
+              message:
+                'Expected exactly one TodoItem, but the Selection resolved to zero or multiple results.',
+            },
+          }),
+        );
+      const runtimeTransport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'http',
+        kind: 'fetch',
+        transport: { request },
+      });
+
+      render(
+        <OntahiDevtools
+          console={{
+            entities: [TodoItem],
+            initialDocument: 'TodoItem.one()',
+          }}
+          diagnostics={diagnostics}
+          initiallyOpen
+          runtimeTransport={runtimeTransport}
+        />,
+      );
+
+      const panel = within(
+        screen.getAllByRole('complementary', { name: 'Ontahí Devtools' }).slice(-1)[0]!,
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Console' }));
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+
+      expect(await panel.findByText('One semantic result')).toBeTruthy();
+      expect(request.mock.calls[0]?.[0]).toMatchObject({
+        family: 'graph.read',
+        body: {
+          mode: 'get',
+          cardinality: 'one',
+          selection: {
+            entityName: 'TodoItem',
+            expression: {
+              kind: 'all',
+            },
+          },
+        },
+      });
+      fireEvent.click(panel.getByRole('button', { name: 'JSON' }));
+      expect(await panel.findByText('"One semantic result"')).toBeTruthy();
+      fireEvent.click(panel.getByRole('button', { name: 'Run' }));
+      expect((await panel.findByRole('alert')).textContent).toBe(
+        'Expected exactly one TodoItem, but the Selection resolved to zero or multiple results.',
+      );
+      fireEvent.click(panel.getByRole('button', { name: 'Close Devtools' }));
     },
     uiTestTimeoutMs,
   );

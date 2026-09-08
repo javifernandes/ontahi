@@ -59,6 +59,188 @@ const createTripPolicy = (
 });
 
 describe('graph read dispatcher', () => {
+  it('returns policy-owned ordering capabilities only when requested and authorized', async () => {
+    const graph = defineTripGraph();
+    const execute = vi.fn().mockResolvedValue([]);
+    const dispatch = createGraphReadDispatcher({ policies: [createTripPolicy(graph)], execute });
+    const request = toGraphReadRequest(
+      query(graph.Trip)
+        .as(graph.Trip.view('TripList', { id: true, status: true }))
+        .build(),
+      'run',
+    );
+    const context = { authority: { ownerId: 'owner-1' } };
+    expect(await dispatch(request, context)).toEqual({ kind: 'graph-read-result', value: [] });
+    expect(await dispatch({ ...request, includeCapabilities: true }, context)).toEqual({
+      kind: 'graph-read-result',
+      value: [],
+      capabilities: { orderBy: ['id'] },
+    });
+    const denied = await dispatch({ ...request, includeCapabilities: true, limit: 51 }, context);
+    expect(denied.kind).toBe('protocol-error');
+    expect(denied).not.toHaveProperty('capabilities');
+    expect(execute).toHaveBeenCalledTimes(2);
+    execute.mockResolvedValueOnce(0);
+    expect(
+      await dispatch({ ...request, mode: 'count', includeCapabilities: true }, context),
+    ).toEqual({ kind: 'graph-read-result', value: 0, capabilities: { orderBy: [] } });
+    execute.mockRejectedValueOnce(new Error('Private executor failure'));
+    expect(await dispatch({ ...request, includeCapabilities: true }, context)).toEqual({
+      kind: 'protocol-error',
+      error: {
+        code: 'execution_unavailable',
+        message: 'Data graph read execution is temporarily unavailable.',
+      },
+    });
+    const observe = vi.fn(async function* () {
+      yield [];
+    });
+    const observer = createGraphReadObserver({ policies: [createTripPolicy(graph)], observe });
+    const observed = [];
+    for await (const result of observer(
+      { ...request, includeCapabilities: true },
+      { ...context, signal: new AbortController().signal },
+    ))
+      observed.push(result);
+    expect(observed).toEqual([
+      { kind: 'graph-read-result', value: [], capabilities: { orderBy: ['id'] } },
+    ]);
+  });
+
+  it('excludes derived ordering without authorized dependencies and returns an explicit empty set', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      secret: field.number(),
+      score: field.derived(field.number(), modelExpression.define(modelExpression.field('secret'))),
+    });
+    const execute = vi.fn().mockResolvedValue([{ id: 'book' }]);
+    const request = {
+      ...toGraphReadRequest(
+        query(Book)
+          .as(Book.view('Public', { id: true }))
+          .build(),
+        'run',
+      ),
+      includeCapabilities: true,
+    };
+    const fields = { id: { select: true as const }, score: { order: true as const } };
+    const policy = {
+      entity: Book,
+      modes: ['run' as const],
+      cardinalities: ['many' as const],
+      maxLimit: 25,
+      scope: 'all' as const,
+      fields,
+    };
+    const deniedDependency = createGraphReadDispatcher({ policies: [policy], execute });
+    expect(await deniedDependency(request, { authority: undefined })).toEqual({
+      kind: 'graph-read-result',
+      value: [{ id: 'book' }],
+      capabilities: { orderBy: [] },
+    });
+    const allowedDependency = createGraphReadDispatcher({
+      policies: [{ ...policy, fields: { ...fields, secret: { select: true } } }],
+      execute,
+    });
+    expect(await allowedDependency(request, { authority: undefined })).toMatchObject({
+      capabilities: { orderBy: ['score'] },
+    });
+  });
+
+  it('keeps other authorization failures generic and rejects ordering before observation starts', async () => {
+    const graph = defineTripGraph();
+    const execute = vi.fn();
+    const policies = [createTripPolicy(graph)];
+    const dispatch = createGraphReadDispatcher({ policies, execute });
+    const context = { authority: { ownerId: 'owner-1' }, signal: new AbortController().signal };
+    const request = toGraphReadRequest(
+      query(graph.Trip)
+        .as(graph.Trip.view('TripList', { id: true }))
+        .build(),
+      'run',
+    );
+    const ordered = { ...request, orderBy: [{ fieldName: 'status', direction: 'asc' }] };
+    const generic = {
+      kind: 'protocol-error',
+      error: { code: 'access_denied', message: 'Data graph read access denied.' },
+    };
+    expect(await dispatch({ ...ordered, limit: 51 }, context)).toEqual(generic);
+    expect(await dispatch({ ...ordered, mode: 'get' }, context)).toEqual(generic);
+    expect(
+      await dispatch(
+        { ...ordered, selection: { ...ordered.selection, entityName: 'Unexposed' } },
+        context,
+      ),
+    ).toEqual(generic);
+    const observe = vi.fn();
+    const observer = createGraphReadObserver({ policies, observe });
+    const results = [];
+    for await (const result of observer(ordered, context)) results.push(result);
+    expect(results).toEqual([
+      {
+        kind: 'protocol-error',
+        error: {
+          code: 'access_denied',
+          message: 'Ordering by Trip.status is not allowed by the Graph Read policy.',
+          details: { reason: 'ordering_not_allowed', entityName: 'Trip', fieldName: 'status' },
+        },
+      },
+    ]);
+    expect(execute).not.toHaveBeenCalled();
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it.each(['id', 'completed'] as const)(
+    'explains the rejected ordering Field TodoItem.%s',
+    async fieldName => {
+      const TodoItem = entity('TodoItem', {
+        id: field.id(),
+        title: field.string(),
+        completed: field.boolean(),
+      });
+      const execute = vi.fn().mockResolvedValue([]);
+      const dispatch = createGraphReadDispatcher({
+        policies: [
+          {
+            entity: TodoItem,
+            scope: 'all',
+            modes: ['run'],
+            cardinalities: ['many'],
+            maxLimit: 25,
+            fields: {
+              id: { select: true },
+              title: { select: true, order: true },
+              completed: { select: true },
+            },
+          },
+        ],
+        execute,
+      });
+      const request = toGraphReadRequest(query(TodoItem).build(), 'run');
+      expect(
+        await dispatch(
+          { ...request, orderBy: [{ fieldName, direction: 'asc' }] },
+          { authority: undefined },
+        ),
+      ).toEqual({
+        kind: 'protocol-error',
+        error: {
+          code: 'access_denied',
+          message: `Ordering by TodoItem.${fieldName} is not allowed by the Graph Read policy.`,
+          details: { reason: 'ordering_not_allowed', entityName: 'TodoItem', fieldName },
+        },
+      });
+      expect(execute).not.toHaveBeenCalled();
+      expect(
+        await dispatch(
+          { ...request, orderBy: [{ fieldName: 'title', direction: 'asc' }] },
+          { authority: undefined },
+        ),
+      ).toEqual({ kind: 'graph-read-result', value: [] });
+      expect(execute).toHaveBeenCalledOnce();
+    },
+  );
+
   it.each([
     {
       name: 'non-positive maxLimit',
@@ -634,6 +816,50 @@ describe('graph read dispatcher', () => {
     });
     expect(reportError).toHaveBeenCalledWith(failure);
   });
+
+  it.each(['one', undefined] as const)(
+    'returns a safe cardinality mismatch with cardinality %s',
+    async cardinality => {
+      const client = defineTripGraph();
+      const server = defineTripGraph();
+      const TripList = client.Trip.view('TripList', { id: true });
+      const reportError = vi.fn();
+      const failure = Object.assign(new Error('provider details must remain private'), {
+        reason: 'cardinality_mismatch',
+      });
+      const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+        ...createTripPolicy(server),
+        modes: ['get'],
+        cardinalities: ['one'],
+        scope: 'all',
+      };
+      const dispatch = createGraphReadDispatcher({
+        policies: [policy],
+        execute: vi.fn(async () => {
+          throw failure;
+        }),
+        reportError,
+      });
+
+      await expect(
+        dispatch(
+          {
+            ...toGraphReadRequest(query(client.Trip).as(TripList), 'get'),
+            ...(cardinality ? { cardinality } : {}),
+          },
+          { authority: { ownerId: 'owner-1' } },
+        ),
+      ).resolves.toEqual({
+        kind: 'protocol-error',
+        error: {
+          code: 'cardinality_mismatch',
+          message:
+            'Expected exactly one Trip, but the Selection resolved to zero or multiple results.',
+        },
+      });
+      expect(reportError).not.toHaveBeenCalled();
+    },
+  );
 
   it('accepts a raw server-owned scope expression', async () => {
     const client = defineTripGraph();

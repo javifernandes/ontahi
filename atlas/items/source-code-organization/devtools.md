@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
+  - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
 Ontahí Devtools is the browser-resident implementation component for inspecting an Ontahí web
@@ -39,6 +40,9 @@ meaning even when they share a connection or visual timeline.
    endpoint projection, protocol/session diagnostics, and HTTP or WebSocket evidence.
 4. **Settings:** effective configuration and development overrides derived generically from an
    explicitly provided configurable Runtime Transport.
+5. **Console:** reflection-assisted authoring and explicit execution of Graph Reads, Graph Commands,
+   and Operation invocations through the application's ordinary runtime capabilities, with results
+   correlated back to Activity.
 
 ## Component Boundary
 
@@ -47,6 +51,12 @@ transport-neutral decorator can record `RuntimeTransport.request(...)` and Durab
 lifecycle, while individual transports contribute optional HTTP, WebSocket, handshake, and
 connection evidence. The existing Graph Client Cache inspection and subscription boundary supplies
 cache state and events.
+
+The Console extends that headless boundary with source/history and execution coordination while
+leaving parsing and lowering in the semantic language capability. The host supplies a narrow
+application model and ordinary Read, Command, and Operation execution ports. The Devtools package
+does not import Explorer UI contracts, a storage provider, or a server runtime; its React export
+only projects the headless Console session.
 
 The headless diagnostic store and transport decorator live in `@ontahi/devtools`. The bottom-docked
 React surface is exported separately from `@ontahi/devtools/react`; it is one projection of that
@@ -68,6 +78,36 @@ Ordered Relationship Commands keep that same progression. Activity summarizes a 
 source/list, moving member, and destination. Body and Envelope remain the exact portable evidence;
 Devtools does not synthesize UI drag events or observe presentation storage.
 
+The Console's `exists()` terminal uses the application Graph Read's presence semantics: the
+language lowers to a bounded nullable `get`, and the Console projects a successful record/null to
+a Boolean. The submitted source determines that projection even if the draft changes in flight.
+Read policies and failures are preserved; Activity retains the real exchange rather than a
+synthetic Boolean protocol response. Ordering and display-limit modifiers do not apply to exists.
+
+The Console's Visual many-result table is also a source-backed Query editing projection. A scalar
+Field header edits `.orderBy(...)` through the headless language's source ranges and submits the
+ordinary Graph Read; the runtime applies ordering before its limit. Text changes remain drafts
+until explicitly executed. The table retains the last successful request/source/result snapshot,
+so its sort indicator does not claim that an unfinished, pending, or rejected draft produced those
+rows. Invalid or other-Entity drafts disable table actions. This first projection supports one
+ordering Field; multi-Field ordering remains later work. Header availability
+intersects reflected scalar types with optional ordering capabilities delivered by the successful
+Graph Read. Core owns those policy-derived capabilities; Devtools projects them as enabled controls
+or explanatory inactive headers, never as frontend policy. Missing metadata, replaced transport,
+or a policy denial requires fresh successful execution before sorting. These are advisory snapshots,
+not durable grants: authorization still runs on every submitted query.
+Console ordering autocomplete consumes the same snapshot through a headless completion resolver.
+It suggests only permitted reflected Fields for the matching Entity and transport, while manual
+authoring and other completion contexts remain independent of that advisory capability.
+
+The many-result limit control is another source-backed projection. Apply/Enter edits only the limit
+through headless source ranges, then submits the current same-Entity draft. A compact result toolbar
+shows last successful round-trip duration, editable limit and Visual/JSON without duplicating the
+query or success/row summaries. Draft, pending and previous-result notices appear only when needed;
+actionable errors remain visible. The retained result, duration and limit do not imply a total count
+or pagination. UI draft numbers and source Undo never execute
+implicitly, and the receiver still enforces maximum-limit policy.
+
 Transport routing is likewise a reusable Core runtime component rather than state owned by the
 Devtools panel or application. Devtools discovers and operates the `routing` capability of an
 explicitly provided configurable Runtime Transport, subscribes to its snapshot, and derives both
@@ -80,8 +120,10 @@ automatically through another transport.
 
 Diagnostics use bounded in-memory retention, avoid payload persistence by default, and provide
 redaction before values enter the diagnostic store. Production inclusion and mutable controls are
-explicit host choices. Replaying Commands or Operations is outside the first component because it
-could duplicate effects before Ontahí has a truthful invocation identity and idempotency contract.
+explicit host choices. Console history restores source but never executes it automatically. A
+Command or Operation submitted again is a new explicit effect, not a replay guarantee; automatic
+retry, one-click mutation replay, and ambiguous-failure recovery remain outside the component until
+Ontahí has truthful invocation identity and idempotency contracts.
 
 Ontahí Devtools does not create a second protocol, change application hooks, own deployment
 policy, or replace the browser's complete Network tooling. It realizes the runtime-inspection part

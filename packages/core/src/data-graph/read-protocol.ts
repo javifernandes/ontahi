@@ -24,7 +24,19 @@ export type GraphReadRequestV1 = {
   readonly orderBy: readonly GraphReadOrder[];
   readonly limit?: number;
   readonly cardinality?: 'one' | 'many';
+  /** Request advisory capabilities alongside an authorized result, without changing Query meaning. */
+  readonly includeCapabilities?: boolean;
 };
+
+/** Receiver policy at the time of the read; subsequent reads must still be authorized. */
+export type GraphReadCapabilities = {
+  readonly orderBy: readonly string[];
+};
+
+export const isGraphReadCapabilities = (value: unknown): value is GraphReadCapabilities =>
+  isRecord(value) &&
+  Array.isArray(value.orderBy) &&
+  value.orderBy.every(field => typeof field === 'string');
 
 export type GraphReadProtocolErrorCode =
   | 'invalid_request'
@@ -32,6 +44,7 @@ export type GraphReadProtocolErrorCode =
   | 'unknown_entity'
   | 'invalid_selection'
   | 'invalid_projection'
+  | 'cardinality_mismatch'
   | 'access_denied'
   | 'execution_unavailable';
 
@@ -40,6 +53,11 @@ export type GraphReadProtocolError = {
   readonly error: {
     readonly code: GraphReadProtocolErrorCode;
     readonly message: string;
+    readonly details?: {
+      readonly reason: 'ordering_not_allowed';
+      readonly entityName: string;
+      readonly fieldName: string;
+    };
   };
 };
 
@@ -49,6 +67,7 @@ const graphReadProtocolErrorCodes = new Set<GraphReadProtocolErrorCode>([
   'unknown_entity',
   'invalid_selection',
   'invalid_projection',
+  'cardinality_mismatch',
   'access_denied',
   'execution_unavailable',
 ]);
@@ -59,7 +78,13 @@ export const isGraphReadProtocolError = (value: unknown): value is GraphReadProt
   isRecord(value.error) &&
   typeof value.error.code === 'string' &&
   graphReadProtocolErrorCodes.has(value.error.code as GraphReadProtocolErrorCode) &&
-  typeof value.error.message === 'string';
+  typeof value.error.message === 'string' &&
+  (value.error.details === undefined ||
+    (value.error.code === 'access_denied' &&
+      isRecord(value.error.details) &&
+      value.error.details.reason === 'ordering_not_allowed' &&
+      typeof value.error.details.entityName === 'string' &&
+      typeof value.error.details.fieldName === 'string'));
 
 export type GraphReadRequestParseResult =
   | { readonly success: true; readonly request: GraphReadRequestV1 }
@@ -76,9 +101,10 @@ export type GraphReadRequestResolveResult =
 export const graphReadProtocolError = (
   code: GraphReadProtocolErrorCode,
   message: string,
+  details?: GraphReadProtocolError['error']['details'],
 ): GraphReadProtocolError => ({
   kind: 'protocol-error',
-  error: { code, message },
+  error: { code, message, ...(details ? { details } : {}) },
 });
 
 const assertJsonSafeSelection = (expression: SelectionExpression): void => {
@@ -222,6 +248,15 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       error: graphReadProtocolError('invalid_request', 'Data graph read View must be an object.'),
     };
   }
+  if (value.includeCapabilities !== undefined && typeof value.includeCapabilities !== 'boolean') {
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'invalid_request',
+        'Data graph read includeCapabilities must be a boolean.',
+      ),
+    };
+  }
   if (!isJsonValue(value)) {
     return {
       success: false,
@@ -243,6 +278,9 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       orderBy: value.orderBy,
       ...(value.limit === undefined ? {} : { limit: value.limit }),
       ...(value.cardinality === undefined ? {} : { cardinality: value.cardinality }),
+      ...(value.includeCapabilities === undefined
+        ? {}
+        : { includeCapabilities: value.includeCapabilities }),
     }) as unknown as GraphReadRequestV1,
   };
 };

@@ -13,6 +13,9 @@ import { analyzeSelectionDocument } from '@ontahi/language';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  consoleExpressionExtensions,
+  consoleExpressionLinter,
+  deriveConsoleFiniteValueProjections,
   deriveSelectionFiniteValueProjections,
   deriveSelectionReferenceValueProjections,
   selectionExpressionCompletionSource,
@@ -182,6 +185,34 @@ describe('Selection CodeMirror adapter', () => {
       deriveSelectionFiniteValueProjections('status is null', {
         ...WorkItem,
         fields: [{ ...WorkItem.fields[0], nullable: true }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('derives finite projections from the nested Selection in a Console expression', () => {
+    const booleanSource = 'TodoItem.where(completed = false).many()';
+    expect(deriveConsoleFiniteValueProjections(booleanSource, { entities: [TodoItem] })).toEqual([
+      {
+        from: booleanSource.indexOf('false'),
+        to: booleanSource.indexOf('false') + 'false'.length,
+        fieldName: 'completed',
+        value: false,
+        choices: [
+          { label: 'true', text: 'true', value: true },
+          { label: 'false', text: 'false', value: false },
+        ],
+      },
+    ]);
+
+    const enumSource = 'WorkItem.where(status = "open").one';
+    expect(
+      deriveConsoleFiniteValueProjections(enumSource, { entities: [WorkItem] }).map(
+        projection => projection.value,
+      ),
+    ).toEqual(['open']);
+    expect(
+      deriveConsoleFiniteValueProjections('TodoItem.where(missing = false).many()', {
+        entities: [TodoItem],
       }),
     ).toEqual([]);
   });
@@ -991,5 +1022,174 @@ describe('Selection CodeMirror adapter', () => {
 
     expect(await selectionExpressionHoverSource(view, 2, 1)).toBeNull();
     view.destroy();
+  });
+
+  it('refreshes Console ordering completions when capabilities change without editing source or history', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const compartment = new Compartment();
+    const application = { entities: [TodoItem] };
+    const source = 'TodoItem.orderBy().many()';
+    const extensions = (fields: readonly string[]) =>
+      consoleExpressionExtensions(application, {
+        orderableFields: entityName => (entityName === 'TodoItem' ? fields : []),
+      });
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('(') + 1 },
+        extensions: [history(), compartment.of(extensions(['title']))],
+      }),
+    });
+    try {
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['title']),
+      );
+      view.dispatch({ effects: compartment.reconfigure(extensions([])) });
+      await vi.waitFor(() => expect(currentCompletions(view.state)).toEqual([]));
+      view.dispatch({ effects: compartment.reconfigure(extensions(['completed'])) });
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['completed']),
+      );
+      expect(view.state.doc.toString()).toBe(source);
+      expect(undo(view)).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it('reuses Selection parsing and completion inside a Console Query expression', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const source = 'TodoItem.where(comp).many()';
+    const position = source.indexOf('comp') + 'comp'.length;
+    const application = { entities: [TodoItem] };
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: position },
+        extensions: consoleExpressionExtensions(application),
+      }),
+    });
+
+    expect(syntaxTree(view.state).topNode.type.name).toBe('ConsoleDocument');
+    expect(consoleExpressionLinter(application)(view)).toEqual([
+      {
+        from: position,
+        to: position,
+        severity: 'error',
+        source: 'Ontahí syntax',
+        message: 'Expected a Selection operator after the Field name.',
+      },
+    ]);
+    expect(startCompletion(view)).toBe(true);
+    await vi.waitFor(() =>
+      expect(currentCompletions(view.state).map(completion => completion.label)).toEqual([
+        'completed',
+      ]),
+    );
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it.each(['.many()', '.orderBy(title, desc).limit(2).many()', '.exists()'])(
+    'projects and edits finite values inside a Console Query ending in %s',
+    suffix => {
+      const parent = document.createElement('div');
+      document.body.append(parent);
+      const source = `TodoItem.where(completed = false)${suffix}`;
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: source,
+          extensions: consoleExpressionExtensions(
+            { entities: [TodoItem] },
+            { finiteValueProjections: true },
+          ),
+        }),
+      });
+
+      const select = parent.querySelector<HTMLSelectElement>('.cm-ontahi-finite-value-select')!;
+      expect(select.getAttribute('aria-label')).toBe('Value for TodoItem.completed');
+      expect(select.value).toBe('false');
+      select.value = 'true';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(view.state.doc.toString()).toBe(`TodoItem.where(completed = true)${suffix}`);
+
+      view.destroy();
+      parent.remove();
+    },
+  );
+
+  it('runs the current Console document through Mod-Enter without changing source', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const run = vi.fn();
+    const source = 'TodoItem.exists()';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: consoleExpressionExtensions({ entities: [TodoItem] }, { run }),
+      }),
+    });
+    try {
+      view.contentDOM.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(run).toHaveBeenCalledOnce();
+      expect(view.state.doc.toString()).toBe(source);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it.each([
+    '',
+    'TodoItem.many()',
+    'Missing.where(completed = false).many()',
+    'TodoItem.where(completed = ).many()',
+  ])('leaves unresolved or absent Console finite values as source: %s', source => {
+    expect(deriveConsoleFiniteValueProjections(source, { entities: [TodoItem] })).toEqual([]);
+  });
+
+  it.each([
+    'TodoItem.where(completed = false).one',
+    'TodoItem.where(completed = false).exists',
+    'TodoItem.where(completed = false).orderBy(title, desc',
+    'TodoItem.orderBy',
+  ])('keeps Backspace editing through incomplete Console syntax %s', source => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: consoleExpressionExtensions({ entities: [TodoItem] }),
+      }),
+    });
+
+    for (const expected of [source.slice(0, -1), source.slice(0, -2), source.slice(0, -3)]) {
+      view.contentDOM.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+      );
+      expect(view.state.doc.toString()).toBe(expected);
+    }
+
+    view.destroy();
+    parent.remove();
   });
 });

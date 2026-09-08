@@ -1,5 +1,5 @@
 import { isJsonValue, type JsonValue } from '../value/json.js';
-import { hasOwn } from '../value/object.js';
+import { hasOwn, isRecord } from '../value/object.js';
 
 import {
   isDerivedFieldDefinition,
@@ -14,6 +14,7 @@ import {
   resolveGraphReadRequest,
   validateGraphReadSelection,
   type GraphReadMode,
+  type GraphReadCapabilities,
   type GraphReadProtocolError,
 } from './read-protocol.js';
 import {
@@ -74,11 +75,19 @@ export type GraphReadDispatchContext<TAuthority> = {
 };
 
 export type GraphReadDispatchResponse =
-  | { readonly kind: 'graph-read-result'; readonly value: unknown }
+  | {
+      readonly kind: 'graph-read-result';
+      readonly value: unknown;
+      readonly capabilities?: GraphReadCapabilities;
+    }
   | GraphReadProtocolError;
 
 export type GraphReadObservationResponse =
-  | { readonly kind: 'graph-read-result'; readonly value: JsonValue[] }
+  | {
+      readonly kind: 'graph-read-result';
+      readonly value: JsonValue[];
+      readonly capabilities?: GraphReadCapabilities;
+    }
   | GraphReadProtocolError;
 
 export type GraphReadDispatchExecutor = (query: QuerySpec, mode: GraphReadMode) => Promise<unknown>;
@@ -117,6 +126,28 @@ const graphReadExecutionUnavailable = () =>
   graphReadProtocolError(
     'execution_unavailable',
     'Data graph read execution is temporarily unavailable.',
+  );
+
+const cardinalityMismatchMarkers = new Set([
+  'cardinality_mismatch',
+  'selection_cardinality_mismatch',
+]);
+
+const isCardinalityMismatchMarker = (value: unknown) =>
+  typeof value === 'string' && cardinalityMismatchMarkers.has(value);
+
+const isGraphReadCardinalityMismatch = (error: unknown) =>
+  isRecord(error) &&
+  (isCardinalityMismatchMarker(error.reason) ||
+    isCardinalityMismatchMarker(error.cause) ||
+    (isRecord(error.cause) &&
+      (isCardinalityMismatchMarker(error.cause.reason) ||
+        isCardinalityMismatchMarker(error.cause.cause))));
+
+const graphReadCardinalityMismatch = (entityName: string) =>
+  graphReadProtocolError(
+    'cardinality_mismatch',
+    `Expected exactly one ${entityName}, but the Selection resolved to zero or multiple results.`,
   );
 
 const validOperators = new Set<GraphReadOperator>(['eq', 'in', 'isNull', 'lte', 'lt', 'gte', 'gt']);
@@ -282,22 +313,43 @@ const allowsProjection = (
   );
 };
 
-const allowsQuery = (
+const allowsOrdering = (
+  entity: AnyEntityDefinition,
+  fieldName: string,
+  policy: GraphReadPolicyNode,
+): boolean =>
+  readFieldPolicy(policy, fieldName)?.order === true &&
+  allowsDerivedFieldDependencies(entity, fieldName, policy);
+
+const queryAccessError = (
   query: QuerySpec,
   mode: GraphReadMode,
   policy: GraphReadPolicy<any, any>,
-): boolean =>
-  policy.modes.includes(mode) &&
-  (mode === 'count' ||
-    policy.cardinalities.includes(query.cardinality ?? (mode === 'get' ? 'one' : 'many'))) &&
-  (query.limit === undefined || query.limit <= policy.maxLimit) &&
-  allowsSelection(query.selection, policy, query.root) &&
-  query.orderBy.every(
-    order =>
-      readFieldPolicy(policy, order.fieldName)?.order === true &&
-      allowsDerivedFieldDependencies(query.root, order.fieldName, policy),
-  ) &&
-  allowsProjection(query, policy, mode);
+): GraphReadProtocolError | undefined => {
+  if (
+    !policy.modes.includes(mode) ||
+    (mode !== 'count' &&
+      !policy.cardinalities.includes(query.cardinality ?? (mode === 'get' ? 'one' : 'many'))) ||
+    (query.limit !== undefined && query.limit > policy.maxLimit) ||
+    !allowsSelection(query.selection, policy, query.root) ||
+    !allowsProjection(query, policy, mode)
+  )
+    return graphReadAccessDenied();
+
+  const deniedOrder = query.orderBy.find(
+    order => !allowsOrdering(query.root, order.fieldName, policy),
+  );
+  if (!deniedOrder) return undefined;
+  return graphReadProtocolError(
+    'access_denied',
+    `Ordering by ${query.root.name}.${deniedOrder.fieldName} is not allowed by the Graph Read policy.`,
+    {
+      reason: 'ordering_not_allowed',
+      entityName: query.root.name,
+      fieldName: deniedOrder.fieldName,
+    },
+  );
+};
 
 const resolveScope = <TAuthority>(
   policy: GraphReadPolicy<any, TAuthority>,
@@ -331,7 +383,12 @@ const createGraphReadPolicyRegistry = <TAuthority>(
 };
 
 type AuthorizedGraphRead =
-  | { readonly success: true; readonly query: QuerySpec; readonly mode: GraphReadMode }
+  | {
+      readonly success: true;
+      readonly query: QuerySpec;
+      readonly mode: GraphReadMode;
+      readonly capabilities?: GraphReadCapabilities;
+    }
   | { readonly success: false; readonly error: GraphReadProtocolError };
 
 const authorizeGraphRead = <TAuthority>(
@@ -348,9 +405,8 @@ const authorizeGraphRead = <TAuthority>(
 
   const resolved = resolveGraphReadRequest(parsed.request, { entities: [policy.entity] });
   if (!resolved.success) return resolved;
-  if (!allowsQuery(resolved.query, parsed.request.mode, policy)) {
-    return { success: false, error: graphReadAccessDenied() };
-  }
+  const accessError = queryAccessError(resolved.query, parsed.request.mode, policy);
+  if (accessError) return { success: false, error: accessError };
 
   let query = resolved.query;
   try {
@@ -368,7 +424,23 @@ const authorizeGraphRead = <TAuthority>(
     return { success: false, error: graphReadExecutionUnavailable() };
   }
 
-  return { success: true, query, mode: parsed.request.mode };
+  return {
+    success: true,
+    query,
+    mode: parsed.request.mode,
+    ...(parsed.request.includeCapabilities
+      ? {
+          capabilities: {
+            orderBy:
+              parsed.request.mode === 'count'
+                ? []
+                : Object.keys(query.root.fields).filter(fieldName =>
+                    allowsOrdering(query.root, fieldName, policy),
+                  ),
+          },
+        }
+      : {}),
+  };
 };
 
 export const createGraphReadDispatcher = <TAuthority = unknown>({
@@ -386,8 +458,14 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
       return {
         kind: 'graph-read-result',
         value: await execute(authorized.query, authorized.mode),
+        ...(authorized.capabilities ? { capabilities: authorized.capabilities } : {}),
       };
     } catch (error) {
+      const cardinality =
+        authorized.query.cardinality ?? (authorized.mode === 'get' ? 'one' : 'many');
+      if (cardinality === 'one' && isGraphReadCardinalityMismatch(error)) {
+        return graphReadCardinalityMismatch(authorized.query.root.name);
+      }
       reportError?.(error);
       return graphReadExecutionUnavailable();
     }
@@ -423,7 +501,11 @@ export const createGraphReadObserver = <TAuthority = unknown>({
           if (!Array.isArray(value) || !isJsonValue(value)) {
             throw new Error('Data graph observer produced a non-JSON result array.');
           }
-          yield { kind: 'graph-read-result', value };
+          yield {
+            kind: 'graph-read-result',
+            value,
+            ...(authorized.capabilities ? { capabilities: authorized.capabilities } : {}),
+          };
         }
       } catch (error) {
         if (context.signal.aborted) return;

@@ -123,7 +123,7 @@ The reflected schema exposes this requirement so Explorer can choose a single-se
 1. schema parsing rejects a statically knowable mismatch, such as `none` or a `references` expression containing zero or multiple refs for a `one` input;
 2. the runtime consumer validates predicates, `all`, and composed expressions against the materialized result.
 
-The rehydrated Selection carries the requirement into queries and commands. Composition preserves `one`; an API may strengthen a requirement to `one`, but a bulk helper cannot weaken an existing `one` to `many`. Reads and counts fail unless exactly one member resolves. Updates and deletes do the same, with the execution provider responsible for ensuring failed cardinality checks do not expose partial effects and for documenting its concurrency guarantees.
+The rehydrated Selection carries the requirement into queries and commands. Composition preserves `one`; an API may strengthen a requirement to `one`, but a bulk helper cannot weaken an existing `one` to `many`. Reads and counts fail unless exactly one member resolves. Remote Graph Reads preserve that expected semantic failure as an authority-safe `cardinality_mismatch` protocol error while unrelated provider failures remain opaque. Updates and deletes do the same, with the execution provider responsible for ensuring failed cardinality checks do not expose partial effects and for documenting its concurrency guarantees.
 
 Operation implementations therefore use the semantic input directly in the common case:
 
@@ -195,6 +195,9 @@ widget, dashboard, or editor consumes or produces that meaning rather than defin
 Selection algebra. While a person is editing text, the document and its recoverable syntax tree
 remain the source of authorial details such as whitespace, parentheses, incomplete nodes, and
 cursor positions; only a valid semantic resolution lowers to the canonical AST.
+Explorer's contextual editor and the Devtools Console reuse the same CodeMirror finite-value
+projection: reflected Boolean and enum literals render as source-backed controls whose changes edit
+the document before it is resolved again.
 
 The future [[ontahi.semantic-interaction-language|Selection language editor]] is a distinct
 artifact rather than a React component owned by Explorer. It may use textual, structural, or

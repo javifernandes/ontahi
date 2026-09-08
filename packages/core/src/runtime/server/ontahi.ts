@@ -65,6 +65,12 @@ type RuntimeCommandOptions<TRuntime> =
 type StorageRuntime<TStorage> =
   TStorage extends DataGraphDefaultStorage<infer TRuntime> ? TRuntime : never;
 
+const runDataGraphEffect = async <TValue, TError>(effect: Effect.Effect<TValue, TError>) => {
+  const result = await Effect.runPromise(Effect.either(effect));
+  if (result._tag === 'Left') throw result.left;
+  return result.right;
+};
+
 const assertResolvedOrderedRelations = (entities: readonly AnyEntityDefinition[]) => {
   entities.forEach(source => {
     Object.entries(source.relations).forEach(([name, relation]) => {
@@ -452,9 +458,9 @@ export const ontahi = <
       policies,
       execute: (read, mode) => {
         const runtime = options.storage.createRuntime();
-        if (mode === 'get') return Effect.runPromise(runtime.get(read, undefined));
-        if (mode === 'count') return Effect.runPromise(runtime.count(read, undefined));
-        return Effect.runPromise(runtime.run(read, undefined));
+        if (mode === 'get') return runDataGraphEffect(runtime.get(read, undefined));
+        if (mode === 'count') return runDataGraphEffect(runtime.count(read, undefined));
+        return runDataGraphEffect(runtime.run(read, undefined));
       },
     });
   };

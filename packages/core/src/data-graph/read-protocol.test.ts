@@ -6,6 +6,7 @@ import {
   field,
   getSelectColumnsForQuery,
   isGraphReadProtocolError,
+  isGraphReadCapabilities,
   mapEntity,
   parseGraphReadRequest,
   query,
@@ -44,11 +45,63 @@ const validReadRequest = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('data graph read protocol', () => {
+  it('round-trips an optional capability request and validates reflected ordering fields', () => {
+    for (const includeCapabilities of [true, false]) {
+      expect(parseGraphReadRequest(validReadRequest({ includeCapabilities }))).toMatchObject({
+        success: true,
+        request: { includeCapabilities },
+      });
+    }
+    for (const includeCapabilities of [null, 'true', 1, {}]) {
+      expect(parseGraphReadRequest(validReadRequest({ includeCapabilities }))).toMatchObject({
+        success: false,
+        error: { error: { code: 'invalid_request' } },
+      });
+    }
+    expect(isGraphReadCapabilities({ orderBy: ['id', 'name'] })).toBe(true);
+    expect(isGraphReadCapabilities({ orderBy: [] })).toBe(true);
+    for (const value of [undefined, null, {}, { orderBy: 'id' }, { orderBy: [1] }]) {
+      expect(isGraphReadCapabilities(value)).toBe(false);
+    }
+  });
+
+  it('recognizes optional ordering denial details without accepting malformed diagnostics', () => {
+    const error = {
+      kind: 'protocol-error',
+      error: {
+        code: 'access_denied',
+        message: 'Ordering by Trip.status is not allowed by the Graph Read policy.',
+        details: { reason: 'ordering_not_allowed', entityName: 'Trip', fieldName: 'status' },
+      },
+    };
+    expect(isGraphReadProtocolError(JSON.parse(JSON.stringify(error)))).toBe(true);
+    expect(
+      isGraphReadProtocolError({ ...error, error: { code: 'access_denied', message: 'Denied.' } }),
+    ).toBe(true);
+    for (const details of [
+      null,
+      {},
+      { ...error.error.details, fieldName: 1 },
+      { ...error.error.details, entityName: null },
+      { ...error.error.details, reason: 'unknown' },
+    ]) {
+      expect(isGraphReadProtocolError({ ...error, error: { ...error.error, details } })).toBe(
+        false,
+      );
+    }
+    expect(
+      isGraphReadProtocolError({ ...error, error: { ...error.error, code: 'invalid_request' } }),
+    ).toBe(false);
+  });
+
   it('recognizes only declared structured protocol errors', () => {
     expect(
       isGraphReadProtocolError({
         kind: 'protocol-error',
-        error: { code: 'access_denied', message: 'Data graph read access denied.' },
+        error: {
+          code: 'cardinality_mismatch',
+          message: 'Expected exactly one Trip.',
+        },
       }),
     ).toBe(true);
     expect(

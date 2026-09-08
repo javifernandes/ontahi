@@ -1,4 +1,20 @@
 @top SelectionDocument { OrExpression? }
+@top ConsoleDocument { ConsoleExpression? }
+
+ConsoleExpression { GraphReadExpression }
+GraphReadExpression {
+  EntityName
+  WhereClause?
+  OrderByClause?
+  LimitClause?
+  Dot ReadTerminal OpenParen CloseParen
+}
+WhereClause { Dot Where OpenParen OrExpression CloseParen }
+OrderByClause { Dot OrderBy OpenParen FieldName (Comma OrderDirection)? CloseParen }
+OrderDirection { Identifier }
+LimitClause { Dot Limit OpenParen NumberLiteral CloseParen }
+EntityName { Identifier }
+ReadTerminal { First | One | Many | Count | Exists }
 
 OrExpression { AndExpression (Or AndExpression)* }
 AndExpression { NotExpression (And NotExpression)* }
@@ -27,6 +43,14 @@ Is { @specialize<Identifier, "is"> }
 Null { @specialize<Identifier, "null"> }
 True { @specialize<Identifier, "true"> }
 False { @specialize<Identifier, "false"> }
+Where { @extend<Identifier, "where"> }
+First { @extend<Identifier, "first"> }
+One { @extend<Identifier, "one"> }
+Many { @extend<Identifier, "many"> }
+Count { @extend<Identifier, "count"> }
+Exists { @extend<Identifier, "exists"> }
+Limit { @extend<Identifier, "limit"> }
+OrderBy { @extend<Identifier, "orderBy"> }
 
 Equals { "=" }
 ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }
@@ -39,6 +63,7 @@ CloseParen { ")" }
 OpenBracket { "[" }
 CloseBracket { "]" }
 Comma { "," }
+Dot { "." }
 
 @tokens {
   Identifier { $[A-Za-z_] $[A-Za-z0-9_]* }

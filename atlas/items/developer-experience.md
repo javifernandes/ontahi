@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
   - ontahi://plans/118-ontahi-selection-language-editor
+  - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
 Ontahí Developer Experience is the experience of building, understanding, inspecting, and
@@ -40,6 +41,8 @@ The experience should support at least:
 6. moving from a concise semantic explanation to the exact portable envelopes and
    transport-specific evidence when deeper diagnosis is needed;
 7. keeping authority, credentials, and sensitive payloads protected while diagnostics are active.
+8. authoring and explicitly executing a semantic Read, Command, or Operation against the current
+   application without writing temporary host code or assembling transport envelopes.
 
 That semantic explanation includes structural ordered movement: a developer sees which Relation,
 source, member, and relative destination the application sent, independently of whether Fetch or
@@ -60,4 +63,6 @@ on runtime inspection and transport tuning; Explorer, documentation, examples, d
 the [[ontahi.semantic-interaction-language|Ontahí Semantic Interaction Language]] support adjacent
 parts without being collapsed into Devtools. Devtools may project the same canonical Selection or
 Graph Read that a language surface produces, while document parsing and semantic resolution remain
-owned by the language capability.
+owned by the language capability. Its Console is an intentional interaction surface over ordinary
+runtime capabilities: it lowers to existing family bodies, uses receiver-side policy, and correlates
+the outcome back to Activity rather than creating a privileged execution path.

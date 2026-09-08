@@ -1,6 +1,6 @@
 import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
 import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
-import { OntahiDevtools } from '@ontahi/devtools/react';
+import { OntahiDevtools, type OntahiDevtoolsConsoleOptions } from '@ontahi/devtools/react';
 import {
   createFetchRuntimeTransport,
   createRuntimeGraphClient,
@@ -10,6 +10,8 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+
+import { TagSchema, TodoItemSchema, TodoListSchema } from '../../src/generated/client-entities.js';
 
 import { App } from './App.js';
 import { Explorer } from './Explorer.js';
@@ -71,6 +73,10 @@ const runtimeTransport = createRuntimeTransportRouter({
 });
 const graphClient = createRuntimeGraphClient({ runtimeTransport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
+const devtoolsConsole = {
+  entities: [TodoListSchema, TodoItemSchema, TagSchema],
+  initialDocument: 'TodoItem.where(completed = false).many()',
+} satisfies OntahiDevtoolsConsoleOptions;
 
 const TodoClient = () => {
   const [authentication, setAuthentication] = useState<BootstrapState<AuthenticationSession>>({
@@ -102,7 +108,11 @@ const TodoClient = () => {
         <App authentication={authentication} setAuthentication={setAuthentication} />
       )}
       {diagnostics ? (
-        <OntahiDevtools diagnostics={diagnostics} runtimeTransport={runtimeTransport} />
+        <OntahiDevtools
+          console={devtoolsConsole}
+          diagnostics={diagnostics}
+          runtimeTransport={runtimeTransport}
+        />
       ) : null}
     </OntahiGraphProvider>
   );

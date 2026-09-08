@@ -128,6 +128,7 @@ describe('Next.js graph read route adapter', () => {
     ['unknown_entity', 400],
     ['invalid_selection', 400],
     ['invalid_projection', 400],
+    ['cardinality_mismatch', 409],
     ['access_denied', 403],
     ['execution_unavailable', 503],
   ] as const)('maps %s protocol errors to HTTP %s', async (code, status) => {
