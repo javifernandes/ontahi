@@ -90,6 +90,9 @@ Graph Read. Core owns those policy-derived capabilities; Devtools projects them 
 or explanatory inactive headers, never as frontend policy. Missing metadata, replaced transport,
 or a policy denial requires fresh successful execution before sorting. These are advisory snapshots,
 not durable grants: authorization still runs on every submitted query.
+Console ordering autocomplete consumes the same snapshot through a headless completion resolver.
+It suggests only permitted reflected Fields for the matching Entity and transport, while manual
+authoring and other completion contexts remain independent of that advisory capability.
 
 Transport routing is likewise a reusable Core runtime component rather than state owned by the
 Devtools panel or application. Devtools discovers and operates the `routing` capability of an

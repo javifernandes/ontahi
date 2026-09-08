@@ -107,3 +107,10 @@ insert, update, or remove ordering. It preserves unrelated source, including Sel
 whitespace, and limits; invalid documents or unsupported orders return `undefined`. Apply the
 changes together as one editor transaction. `isConsoleOrderableField` supplies the same intrinsic
 Field capability used by diagnostics and completion; it does not grant execution authority.
+
+`completeConsoleDocument(document, position, application, { orderableFields })` optionally narrows
+ordering suggestions with a synchronous `(entityName) => readonly string[]` resolver supplied by
+the host. Return `[]` when unavailable or denied. Omitting the resolver retains schema-only
+completion. Advertised names are intersected with reflected sortable Fields; filtering, direction,
+and member suggestions are unchanged. The resolver affects assistance only, never parsing,
+diagnostics, lowering, or receiver authorization.

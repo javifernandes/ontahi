@@ -66,6 +66,7 @@ type ConsoleEditorProps = {
   readonly label: string;
   readonly limit: number;
   readonly onChange: (document: string) => void;
+  readonly orderableFields: (entityName: string) => readonly string[];
   readonly run: () => void;
   readonly value: string;
   readonly viewRef: MutableRefObject<EditorView | undefined>;
@@ -109,6 +110,7 @@ const ConsoleEditor = ({
   label,
   limit,
   onChange,
+  orderableFields,
   run,
   value,
   viewRef,
@@ -134,6 +136,7 @@ const ConsoleEditor = ({
           languageCompartmentRef.current.of(
             consoleExpressionExtensions(application, {
               finiteValueProjections: true,
+              orderableFields,
               limit,
               run: () => runRef.current(),
             }),
@@ -166,12 +169,13 @@ const ConsoleEditor = ({
       effects: languageCompartmentRef.current.reconfigure(
         consoleExpressionExtensions(application, {
           finiteValueProjections: true,
+          orderableFields,
           limit,
           run: () => runRef.current(),
         }),
       ),
     });
-  }, [application, limit]);
+  }, [application, limit, orderableFields]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
@@ -303,6 +307,15 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
 
   const run = () => runDocument(viewRef.current?.state.doc.toString() ?? document);
   const snapshot = result.snapshot;
+  const orderingCapabilities =
+    snapshot?.transport === runtimeTransport ? snapshot?.capabilities : undefined;
+  const orderableFields = useMemo(
+    () => (entityName: string) =>
+      entityName === snapshot?.request.selection.entityName
+        ? (orderingCapabilities?.orderBy ?? [])
+        : [],
+    [snapshot?.request.selection.entityName, orderingCapabilities],
+  );
   const resultEntity = application.entities.find(
     entity => entity.name === snapshot?.request.selection.entityName,
   );
@@ -311,9 +324,9 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     if (!exchange) return 'Ordering requires a configured Runtime Transport.';
     if (snapshot?.transport !== runtimeTransport)
       return 'Run the query to refresh ordering permissions for this transport.';
-    if (!snapshot?.capabilities)
+    if (!snapshot || !orderingCapabilities)
       return 'Ordering permissions unavailable. Run a successful query against a server that reports Graph Read capabilities.';
-    if (!snapshot.capabilities.orderBy.includes(fieldName))
+    if (!orderingCapabilities.orderBy.includes(fieldName))
       return `Ordering by ${snapshot.request.selection.entityName}.${fieldName} is not allowed by the Graph Read policy.`;
     if (!analysis.request) return 'Fix the Console expression before changing ordering.';
     if (
@@ -376,6 +389,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           label='Ontahí Console expression'
           limit={limit}
           onChange={setDocument}
+          orderableFields={orderableFields}
           run={run}
           value={document}
           viewRef={viewRef}

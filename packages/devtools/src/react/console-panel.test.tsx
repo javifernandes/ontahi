@@ -107,6 +107,30 @@ const mountConsole = (source = 'Tag.where(active = true).limit(2).many()') => {
 };
 
 describe('Console bidirectional Query ordering', () => {
+  it('uses receiver ordering permissions in autocomplete, without restricting manual source', async () => {
+    const { view, replaceSource, result } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    const source = 'Tag.where(active = true).orderBy().many()';
+    replaceSource(source);
+    act(() => {
+      view.dispatch({ selection: { anchor: source.indexOf('orderBy(') + 'orderBy('.length } });
+      view.focus();
+    });
+    fireEvent.keyDown(view.contentDOM, { key: ' ', code: 'Space', ctrlKey: true });
+    const completions = within(await screen.findByRole('listbox'));
+    expect(completions.getAllByRole('option').map(option => option.textContent)).toEqual([
+      'namestring',
+    ]);
+    replaceSource('Tag.orderBy(id).many()');
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await result.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Ordering by Tag.id is not allowed by the Graph Read policy.',
+    );
+  });
+
   it('enables only ordering Fields advertised by the receiver', async () => {
     const { request, view, result } = mountConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -131,6 +155,32 @@ describe('Console bidirectional Query ordering', () => {
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]![0].body).toHaveProperty('includeCapabilities', true);
   });
+
+  it.each(['transport', 'entity'] as const)(
+    'drops open ordering suggestions when the %s changes',
+    async change => {
+      const { view, replaceSource, result, switchTransport } = mountConsole();
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await result.findByRole('table');
+      const source = 'Tag.orderBy().many()';
+      replaceSource(source);
+      act(() => {
+        view.dispatch({ selection: { anchor: source.indexOf('(') + 1 } });
+        view.focus();
+      });
+      fireEvent.keyDown(view.contentDOM, { key: ' ', code: 'Space', ctrlKey: true });
+      const completions = within(await screen.findByRole('listbox'));
+      expect(completions.getAllByRole('option').map(option => option.textContent)).toEqual([
+        'namestring',
+      ]);
+      if (change === 'transport') switchTransport();
+      else act(() => view.dispatch({ changes: { from: 0, to: 3, insert: 'Other' } }));
+      await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+      expect(view.state.doc.toString()).toBe(
+        change === 'transport' ? source : 'Other.orderBy().many()',
+      );
+    },
+  );
 
   it('edits the source and executes server ordering before the limit, with an undoable sort cycle', async () => {
     const source = '  Tag.where(active = true)\n .limit(2).many()';

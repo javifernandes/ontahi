@@ -409,6 +409,10 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
     denied headers explain the policy restriction without editing or sending requests. Missing
     or malformed metadata, a replaced transport, or a policy denial require a fresh successful
     Run before sorting. Capabilities are advisory snapshots; every read remains authorized anew.
+    `orderBy(...)` autocomplete consumes the same Entity/transport-bound snapshot, excluding denied
+    Fields and offering none when capabilities are unavailable. An optional headless completion
+    resolver narrows assistance without restricting manual authoring or changing query semantics;
+    CodeMirror reconfiguration drops stale suggestions without changing source or history.
 14. Table limit controls, multiple ordering Fields, named Views, other Query terminals/members,
     source history, Commands, Operations, full reflection
     delivery, and the terminal CLI remain later slices of this plan.

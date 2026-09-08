@@ -33,6 +33,7 @@ import {
   type ConsoleDocumentAnalysis,
   type ConsoleLanguageApplicationReflection,
   type ConsoleLanguageCompletionItem,
+  type ConsoleLanguageCompletionOptions,
   type SelectionDocumentAnalysis,
   type SelectionLanguageCompletionItem,
   type SelectionLanguageEntityReflection,
@@ -160,12 +161,16 @@ export const selectionExpressionCompletionSource: CompletionSource = context => 
 };
 
 const consoleCompletionSource =
-  (application: ConsoleLanguageApplicationReflection): CompletionSource =>
+  (
+    application: ConsoleLanguageApplicationReflection,
+    options: ConsoleLanguageCompletionOptions,
+  ): CompletionSource =>
   context => {
     const completion = completeConsoleDocument(
       context.state.doc.toString(),
       context.pos,
       application,
+      options,
     );
     if (completion.items.length === 0) return null;
     return {
@@ -178,6 +183,8 @@ const consoleCompletionSource =
         detail: item.detail,
         ...(item.kind === 'entity' || item.kind === 'field' ? { boost: 10 } : {}),
       })),
+      // Entity and clause context can change outside the completion's replacement range.
+      map: () => null,
     };
   };
 
@@ -394,7 +401,7 @@ export const selectionExpressionExtensions = (
   linter(selectionExpressionLinter(entity), { delay: 0 }),
 ];
 
-export type ConsoleExpressionExtensionOptions = {
+export type ConsoleExpressionExtensionOptions = ConsoleLanguageCompletionOptions & {
   readonly finiteValueProjections?: boolean;
   readonly limit?: number;
   readonly run?: () => void;
@@ -438,7 +445,7 @@ export const consoleExpressionExtensions = (
       ]
     : []),
   autocompletion({
-    override: [consoleCompletionSource(application)],
+    override: [consoleCompletionSource(application, options)],
     icons: false,
   }),
   ...(options.finiteValueProjections ? consoleFiniteValueProjectionExtensions(application) : []),

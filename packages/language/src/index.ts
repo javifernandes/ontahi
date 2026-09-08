@@ -276,6 +276,11 @@ export type ConsoleLanguageCompletionResult = SelectionLanguageRange & {
   readonly items: readonly ConsoleLanguageCompletionItem[];
 };
 
+export type ConsoleLanguageCompletionOptions = {
+  /** Narrow ordering suggestions only. Omit for schema-only completion; return [] when unavailable. */
+  readonly orderableFields?: (entityName: string) => readonly string[];
+};
+
 const selectionDocumentParser = parser.configure({ top: 'SelectionDocument' });
 const consoleDocumentParser = parser.configure({ top: 'ConsoleDocument' });
 
@@ -1395,6 +1400,7 @@ export const completeConsoleDocument = (
   document: string,
   position: number,
   application: ConsoleLanguageApplicationReflection,
+  options: ConsoleLanguageCompletionOptions = {},
 ): ConsoleLanguageCompletionResult => {
   const safePosition = Math.max(0, Math.min(position, document.length));
   const syntax = parseConsoleDocument(document).syntax.expression;
@@ -1442,6 +1448,7 @@ export const completeConsoleDocument = (
     safePosition >= order.open.to &&
     (order.close === undefined || safePosition <= order.close.from)
   ) {
+    const orderableFields = options.orderableFields?.(entity.name);
     return {
       ...range,
       items:
@@ -1452,12 +1459,18 @@ export const completeConsoleDocument = (
               kind: 'value' as const,
               detail: 'Order direction',
             }))
-          : entity.fields.filter(isConsoleOrderableField).map(field => ({
-              label: field.name,
-              apply: field.name,
-              kind: 'field' as const,
-              detail: field.type,
-            })),
+          : entity.fields
+              .filter(
+                field =>
+                  isConsoleOrderableField(field) &&
+                  (orderableFields === undefined || orderableFields.includes(field.name)),
+              )
+              .map(field => ({
+                label: field.name,
+                apply: field.name,
+                kind: 'field' as const,
+                detail: field.type,
+              })),
     };
   }
   const memberPrefix = document.slice(range.from, safePosition);

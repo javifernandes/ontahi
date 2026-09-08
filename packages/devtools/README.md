@@ -87,6 +87,13 @@ them stale. Receiver policy remains authoritative on every request, and rejectio
 without replacing the successful result data.
 Result-table limit controls and multi-Field ordering remain follow-ups.
 
+`orderBy(...)` autocomplete uses that same capability snapshot for the matching Entity and
+transport, even in incomplete drafts. It suggests only permitted scalar Fields. Before a successful
+read, or when permissions are unavailable or invalidated, it offers no ordering Fields; run a valid
+read for the Entity to refresh them. Changing Entity or replacing the transport discards stale
+suggestions. Other completions and manual source authoring remain schema-based; this assistance
+does not grant authority or prevent the server from rejecting a manually authored order.
+
 When ordering is the rejected capability, the receiver reports the requested Entity and Field,
 for example `Ordering by TodoItem.completed is not allowed by the Graph Read policy.` The Console
 displays that server message; the protocol body retains `access_denied` and optional

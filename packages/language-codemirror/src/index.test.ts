@@ -1024,6 +1024,44 @@ describe('Selection CodeMirror adapter', () => {
     view.destroy();
   });
 
+  it('refreshes Console ordering completions when capabilities change without editing source or history', async () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const compartment = new Compartment();
+    const application = { entities: [TodoItem] };
+    const source = 'TodoItem.orderBy().many()';
+    const extensions = (fields: readonly string[]) =>
+      consoleExpressionExtensions(application, {
+        orderableFields: entityName => (entityName === 'TodoItem' ? fields : []),
+      });
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('(') + 1 },
+        extensions: [history(), compartment.of(extensions(['title']))],
+      }),
+    });
+    try {
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['title']),
+      );
+      view.dispatch({ effects: compartment.reconfigure(extensions([])) });
+      await vi.waitFor(() => expect(currentCompletions(view.state)).toEqual([]));
+      view.dispatch({ effects: compartment.reconfigure(extensions(['completed'])) });
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['completed']),
+      );
+      expect(view.state.doc.toString()).toBe(source);
+      expect(undo(view)).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it('reuses Selection parsing and completion inside a Console Query expression', async () => {
     const parent = document.createElement('div');
     document.body.append(parent);

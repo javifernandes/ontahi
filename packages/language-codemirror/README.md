@@ -53,3 +53,8 @@ variables with neutral fallbacks, so Explorer can integrate it without adapter-s
 
 Backspace is bound to CodeMirror's document command so deletion remains an ordinary transaction
 even while a completion popup and semantic marks are active.
+
+`consoleExpressionExtensions(application, { orderableFields })` forwards the host's optional
+Entity-to-Field-name resolver to headless Console completion. Reconfigure the extension when the
+capability snapshot changes to discard stale suggestions without editing source or history. The
+adapter does not fetch permissions or change the Console linter's schema-based validation.

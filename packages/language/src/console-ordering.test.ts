@@ -25,6 +25,33 @@ const application = {
 } as const;
 
 describe('Console ordering', () => {
+  it('narrows only ordering suggestions using Entity-specific capabilities', () => {
+    const options = {
+      orderableFields: (entityName: string) =>
+        entityName === 'Tag' ? ['name', 'owner', 'unknown'] : [],
+    };
+    for (const source of ['Tag.orderBy(', 'Tag.where(active = true).orderBy(na).many()']) {
+      const position = source.indexOf('orderBy(') + 'orderBy('.length;
+      expect(
+        completeConsoleDocument(source, position, application, options).items.map(
+          item => item.label,
+        ),
+      ).toEqual(['name']);
+      expect(
+        completeConsoleDocument(source, position, application, { orderableFields: () => [] }).items,
+      ).toEqual([]);
+    }
+    const other = { entities: [{ ...application.entities[0], name: 'Other' }] };
+    const source = 'Other.orderBy(';
+    expect(completeConsoleDocument(source, source.length, other, options).items).toEqual([]);
+    for (const source of ['Tag.where(', 'Tag.orderBy(name, ', 'Tag.']) {
+      expect(completeConsoleDocument(source, source.length, application, options)).toEqual(
+        completeConsoleDocument(source, source.length, application),
+      );
+    }
+    expect(analyzeConsoleDocument('Tag.orderBy(id).many()', application).request).toBeDefined();
+  });
+
   it.each([
     ['Tag.orderBy(name).many()', 'run', 'asc', 25],
     ['Tag.orderBy(name, asc).many()', 'run', 'asc', 25],
