@@ -817,46 +817,49 @@ describe('graph read dispatcher', () => {
     expect(reportError).toHaveBeenCalledWith(failure);
   });
 
-  it('returns a safe, explicit protocol error for exact-one cardinality mismatches', async () => {
-    const client = defineTripGraph();
-    const server = defineTripGraph();
-    const TripList = client.Trip.view('TripList', { id: true });
-    const reportError = vi.fn();
-    const failure = Object.assign(new Error('provider details must remain private'), {
-      reason: 'cardinality_mismatch',
-    });
-    const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
-      ...createTripPolicy(server),
-      modes: ['get'],
-      cardinalities: ['one'],
-      scope: 'all',
-    };
-    const dispatch = createGraphReadDispatcher({
-      policies: [policy],
-      execute: vi.fn(async () => {
-        throw failure;
-      }),
-      reportError,
-    });
+  it.each(['one', undefined] as const)(
+    'returns a safe cardinality mismatch with cardinality %s',
+    async cardinality => {
+      const client = defineTripGraph();
+      const server = defineTripGraph();
+      const TripList = client.Trip.view('TripList', { id: true });
+      const reportError = vi.fn();
+      const failure = Object.assign(new Error('provider details must remain private'), {
+        reason: 'cardinality_mismatch',
+      });
+      const policy: GraphReadPolicy<typeof server.Trip, Authority> = {
+        ...createTripPolicy(server),
+        modes: ['get'],
+        cardinalities: ['one'],
+        scope: 'all',
+      };
+      const dispatch = createGraphReadDispatcher({
+        policies: [policy],
+        execute: vi.fn(async () => {
+          throw failure;
+        }),
+        reportError,
+      });
 
-    await expect(
-      dispatch(
-        {
-          ...toGraphReadRequest(query(client.Trip).as(TripList), 'get'),
-          cardinality: 'one',
+      await expect(
+        dispatch(
+          {
+            ...toGraphReadRequest(query(client.Trip).as(TripList), 'get'),
+            ...(cardinality ? { cardinality } : {}),
+          },
+          { authority: { ownerId: 'owner-1' } },
+        ),
+      ).resolves.toEqual({
+        kind: 'protocol-error',
+        error: {
+          code: 'cardinality_mismatch',
+          message:
+            'Expected exactly one Trip, but the Selection resolved to zero or multiple results.',
         },
-        { authority: { ownerId: 'owner-1' } },
-      ),
-    ).resolves.toEqual({
-      kind: 'protocol-error',
-      error: {
-        code: 'cardinality_mismatch',
-        message:
-          'Expected exactly one Trip, but the Selection resolved to zero or multiple results.',
-      },
-    });
-    expect(reportError).not.toHaveBeenCalled();
-  });
+      });
+      expect(reportError).not.toHaveBeenCalled();
+    },
+  );
 
   it('accepts a raw server-owned scope expression', async () => {
     const client = defineTripGraph();

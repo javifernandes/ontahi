@@ -461,7 +461,9 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
         ...(authorized.capabilities ? { capabilities: authorized.capabilities } : {}),
       };
     } catch (error) {
-      if (authorized.query.cardinality === 'one' && isGraphReadCardinalityMismatch(error)) {
+      const cardinality =
+        authorized.query.cardinality ?? (authorized.mode === 'get' ? 'one' : 'many');
+      if (cardinality === 'one' && isGraphReadCardinalityMismatch(error)) {
         return graphReadCardinalityMismatch(authorized.query.root.name);
       }
       reportError?.(error);

@@ -1,4 +1,4 @@
 import { parser } from './generated/selection-parser.js';
 
-export const selectionDocumentParser = parser;
+export { parser as selectionDocumentParser } from './generated/selection-parser.js';
 export const consoleDocumentParser = parser.configure({ top: 'ConsoleDocument' });

@@ -43,14 +43,14 @@ Is { @specialize<Identifier, "is"> }
 Null { @specialize<Identifier, "null"> }
 True { @specialize<Identifier, "true"> }
 False { @specialize<Identifier, "false"> }
-Where { @specialize<Identifier, "where"> }
-First { @specialize<Identifier, "first"> }
-One { @specialize<Identifier, "one"> }
-Many { @specialize<Identifier, "many"> }
-Count { @specialize<Identifier, "count"> }
-Exists { @specialize<Identifier, "exists"> }
-Limit { @specialize<Identifier, "limit"> }
-OrderBy { @specialize<Identifier, "orderBy"> }
+Where { @extend<Identifier, "where"> }
+First { @extend<Identifier, "first"> }
+One { @extend<Identifier, "one"> }
+Many { @extend<Identifier, "many"> }
+Count { @extend<Identifier, "count"> }
+Exists { @extend<Identifier, "exists"> }
+Limit { @extend<Identifier, "limit"> }
+OrderBy { @extend<Identifier, "orderBy"> }
 
 Equals { "=" }
 ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }

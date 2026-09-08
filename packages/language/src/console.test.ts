@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   analyzeConsoleDocument,
+  analyzeSelectionDocument,
   completeConsoleDocument,
   parseConsoleDocument,
   reflectSelectionLanguageEntity,
@@ -22,6 +23,33 @@ const application = {
 } as const;
 
 describe('Console Graph Read language', () => {
+  it.each(['where', 'first', 'one', 'many', 'count', 'exists', 'limit', 'orderBy'])(
+    'keeps %s available as a Field and Entity identifier',
+    name => {
+      const reflected = { name, fields: [{ name, type: 'number', nullable: false }] };
+      const selection = analyzeSelectionDocument(`${name} = 2`, reflected);
+      expect(selection.syntaxDiagnostics).toEqual([]);
+      expect(selection.semanticDiagnostics).toEqual([]);
+      expect(selection.selection?.expression).toEqual({
+        kind: 'predicate',
+        fieldName: name,
+        operator: 'eq',
+        value: 2,
+      });
+      const console = analyzeConsoleDocument(
+        `${name}.where(${name} = 2).orderBy(${name}).limit(3).many()`,
+        { entities: [reflected] },
+      );
+      expect(console.syntaxDiagnostics).toEqual([]);
+      expect(console.semanticDiagnostics).toEqual([]);
+      expect(console.request).toMatchObject({
+        mode: 'run',
+        limit: 3,
+        selection: { entityName: name, expression: selection.selection?.expression },
+        orderBy: [{ fieldName: name, direction: 'asc' }],
+      });
+    },
+  );
   it('reuses the Selection grammar inside a keyword-free Query expression', () => {
     const analysis = analyzeConsoleDocument(
       'TodoItem.where(completed = false and title = "Draft").many()',

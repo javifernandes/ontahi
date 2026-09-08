@@ -81,6 +81,48 @@ export const DevtoolsPanel = ({
     setSelected(undefined);
   };
 
+  const renderContent = () => {
+    if (view === 'console' && consoleOptions)
+      return <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />;
+    if (view === 'settings' && configurableRuntimeTransport)
+      return (
+        <section style={styles.settingsPage} aria-label='Devtools settings'>
+          <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
+        </section>
+      );
+    return (
+      <div style={styles.workspace}>
+        <section style={styles.sidebar} aria-label='Runtime traffic'>
+          <div style={styles.filterBar}>
+            <input
+              type='search'
+              style={styles.filter}
+              value={filter}
+              onChange={event => setFilter(event.currentTarget.value)}
+              aria-label='Filter diagnostics'
+              placeholder='Filter intent, family, transport, outcome…'
+            />
+          </div>
+          <ActivityList
+            activities={filteredActivities}
+            selectedId={activeActivity?.id}
+            select={setSelected}
+          />
+        </section>
+        {activeActivity?.observation ? (
+          <OperationProgressDetail
+            activity={activeActivity.observation}
+            exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
+          />
+        ) : activeActivity?.kind === 'exchange' ? (
+          <ExchangeDetail activity={activeActivity.exchange} />
+        ) : (
+          <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <aside style={{ ...styles.panel, height }} aria-label='Ontahí Devtools'>
       <PanelResizer height={height} resize={resize} />
@@ -135,43 +177,7 @@ export const DevtoolsPanel = ({
           </button>
         </span>
       </header>
-      {view === 'console' && consoleOptions ? (
-        <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />
-      ) : view === 'settings' && configurableRuntimeTransport ? (
-        <section style={styles.settingsPage} aria-label='Devtools settings'>
-          <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
-        </section>
-      ) : (
-        <div style={styles.workspace}>
-          <section style={styles.sidebar} aria-label='Runtime traffic'>
-            <div style={styles.filterBar}>
-              <input
-                type='search'
-                style={styles.filter}
-                value={filter}
-                onChange={event => setFilter(event.currentTarget.value)}
-                aria-label='Filter diagnostics'
-                placeholder='Filter intent, family, transport, outcome…'
-              />
-            </div>
-            <ActivityList
-              activities={filteredActivities}
-              selectedId={activeActivity?.id}
-              select={setSelected}
-            />
-          </section>
-          {activeActivity?.observation ? (
-            <OperationProgressDetail
-              activity={activeActivity.observation}
-              exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
-            />
-          ) : activeActivity?.kind === 'exchange' ? (
-            <ExchangeDetail activity={activeActivity.exchange} />
-          ) : (
-            <div style={styles.empty}>Select runtime traffic to inspect its semantic detail.</div>
-          )}
-        </div>
-      )}
+      {renderContent()}
     </aside>
   );
 };

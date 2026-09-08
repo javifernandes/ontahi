@@ -175,22 +175,25 @@ describe('Console exists reads', () => {
     expect(result.getByText('true')).toBeTruthy();
   });
 
-  it.each([[], false, 0, 'invalid'])('rejects a malformed nullable get result %j', async value => {
-    const { request, result } = mountConsole('Tag.exists()');
-    request.mockImplementationOnce(async envelope =>
-      createRuntimeProtocolResponse(envelope, {
-        version: 1,
-        kind: 'graph-read-result',
-        value,
-      }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
-    expect((await result.findByRole('alert')).textContent).toBe(
-      'Graph Read exists expected an Entity record or null.',
-    );
-    expect(result.queryByText('true')).toBeNull();
-    expect(result.queryByText('false')).toBeNull();
-  });
+  it.each([[[]], [false], [0], ['invalid']])(
+    'rejects a malformed nullable get result %j',
+    async value => {
+      const { request, result } = mountConsole('Tag.exists()');
+      request.mockImplementationOnce(async envelope =>
+        createRuntimeProtocolResponse(envelope, {
+          version: 1,
+          kind: 'graph-read-result',
+          value,
+        }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      expect((await result.findByRole('alert')).textContent).toBe(
+        'Graph Read exists expected an Entity record or null.',
+      );
+      expect(result.queryByText('true')).toBeNull();
+      expect(result.queryByText('false')).toBeNull();
+    },
+  );
 });
 
 describe('Console bidirectional Query limit', () => {

@@ -432,6 +432,11 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 17. Multiple ordering Fields, named Views, other Query terminals/members,
     source history, Commands, Operations, full reflection
     delivery, and the terminal CLI remain later slices of this plan.
+18. PR review hardening preserves the eight Console member words as contextual identifiers in
+    Selection Fields and Entity names, covers implicit get-cardinality error mapping, and adds
+    execution-shortcut/unresolved-projection coverage without lowering coverage thresholds.
+    Analysis diagnostics and result rendering are split by responsibility; result controls and
+    status use native accessible elements without adding UI chrome.
 
 ## Acceptance Checklist
 

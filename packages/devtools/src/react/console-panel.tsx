@@ -8,6 +8,7 @@ import {
   type AnyEntityDefinition,
   type GraphReadCapabilities,
   type GraphReadRequestV1,
+  type GraphReadOrder,
 } from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolExchange,
@@ -20,6 +21,7 @@ import {
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
   type ConsoleLanguageApplicationReflection,
+  type ConsoleDocumentAnalysis,
 } from '@ontahi/language';
 import { consoleExpressionExtensions } from '@ontahi/language-codemirror';
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
@@ -27,7 +29,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
-import { ResultTable, SemanticPayload } from './semantic-payload.js';
+import { ResultTable, SemanticPayload, type ResultTableOrdering } from './semantic-payload.js';
 
 export type OntahiDevtoolsConsoleOptions = {
   readonly entities: readonly AnyEntityDefinition[];
@@ -56,6 +58,72 @@ type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
 );
 
 type ConsoleResultMode = 'visual' | 'json';
+
+const nextConsoleOrder = (
+  current: GraphReadOrder | undefined,
+  fieldName: string,
+): GraphReadOrder | undefined => {
+  if (current?.fieldName !== fieldName) return { fieldName, direction: 'asc' };
+  if (current.direction === 'asc') return { fieldName, direction: 'desc' };
+  return undefined;
+};
+
+const consoleReadSummary = (analysis: ConsoleDocumentAnalysis, limit: number) => {
+  if (analysis.syntax.expression?.terminal?.kind === 'exists-member') return 'exists';
+  if (analysis.request?.mode === 'count') return 'count';
+  return 'limit ' + (analysis.request?.limit ?? limit);
+};
+
+const ConsoleAnalysisStatus = ({
+  analysis,
+  limit,
+}: {
+  readonly analysis: ConsoleDocumentAnalysis;
+  readonly limit: number;
+}) => {
+  const diagnostics = [...analysis.syntaxDiagnostics, ...analysis.semanticDiagnostics];
+  if (diagnostics.length === 0)
+    return [
+      analysis.request?.selection.entityName ?? 'No Entity',
+      'graph.read',
+      consoleReadSummary(analysis, limit),
+    ].join(' · ');
+  return diagnostics.map(diagnostic => (
+    <span
+      key={[diagnostic.channel, diagnostic.code, diagnostic.from, diagnostic.to].join('-')}
+      style={styles.consoleDiagnostic}
+      data-diagnostic-channel={diagnostic.channel}
+    >
+      {diagnostic.message}
+    </span>
+  ));
+};
+
+const ConsoleResultContent = ({
+  result,
+  mode,
+  ordering,
+}: {
+  readonly result: ConsoleResult;
+  readonly mode: ConsoleResultMode;
+  readonly ordering: ResultTableOrdering;
+}) => {
+  const snapshot = result.snapshot;
+  if (!snapshot) {
+    if (result.status === 'error') return null;
+    return (
+      <span style={styles.consoleEmpty}>
+        {result.status === 'executing'
+          ? 'Executing through the configured Runtime Transport…'
+          : 'Run the expression to inspect its semantic result.'}
+      </span>
+    );
+  }
+  if (mode === 'json') return <JsonView value={snapshot.value} label='Console result JSON' />;
+  if (snapshot.request.mode === 'run' && Array.isArray(snapshot.value))
+    return <ResultTable value={snapshot.value} ordering={ordering} />;
+  return <SemanticPayload value={snapshot.value} />;
+};
 
 const resultNotice = (result: ConsoleResult, document: string): string => {
   if (result.status === 'executing') return 'Running…';
@@ -236,10 +304,96 @@ const graphReadResult = (
   };
 };
 
+const ConsoleResultPanel = ({
+  result,
+  document,
+  limit,
+  resultMode,
+  setResultMode,
+  limitDisabledReason,
+  changeLimit,
+  ordering,
+}: {
+  readonly result: ConsoleResult;
+  readonly document: string;
+  readonly limit: number;
+  readonly resultMode: ConsoleResultMode;
+  readonly setResultMode: (mode: ConsoleResultMode) => void;
+  readonly limitDisabledReason?: string;
+  readonly changeLimit: (limit: number) => void;
+  readonly ordering: ResultTableOrdering;
+}) => {
+  const snapshot = result.snapshot;
+  return (
+    <div style={styles.consoleResult} aria-label='Console result'>
+      <fieldset
+        style={{ border: 0, margin: 0, minWidth: 0, ...styles.consoleResultHeader }}
+        aria-label='Console result toolbar'
+      >
+        <div style={styles.consoleResultControls}>
+          {snapshot ? (
+            <span
+              style={styles.consoleResultStatus}
+              aria-label='Last query duration'
+              title='Last successful round-trip time (including transport)'
+            >
+              {Math.round(snapshot.durationMs)} ms
+            </span>
+          ) : null}
+          {snapshot?.request.mode === 'run' && Array.isArray(snapshot.value) ? (
+            <ConsoleResultLimit
+              request={snapshot.request}
+              defaultLimit={limit}
+              disabledReason={limitDisabledReason}
+              onApply={changeLimit}
+            />
+          ) : null}
+          <output
+            style={styles.consoleResultStatus}
+            title={snapshot ? 'Showing the last successful result.' : undefined}
+          >
+            {resultNotice(result, document)}
+          </output>
+        </div>
+        <span style={styles.consoleResultControls}>
+          {snapshot ? (
+            <span style={styles.modes} aria-label='Console result view mode'>
+              {(
+                [
+                  ['visual', 'Visual'],
+                  ['json', 'JSON'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type='button'
+                  style={{ ...styles.mode, ...(resultMode === value ? styles.activeMode : {}) }}
+                  onClick={() => setResultMode(value)}
+                  aria-pressed={resultMode === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
+          ) : null}
+        </span>
+      </fieldset>
+      <div style={styles.consoleResultBody} aria-live='polite'>
+        {result.status === 'error' ? (
+          <span role='alert' style={styles.consoleError}>
+            {result.message}
+          </span>
+        ) : null}
+        <ConsoleResultContent result={result} mode={resultMode} ordering={ordering} />
+      </div>
+    </div>
+  );
+};
+
 export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) => {
   const limit = options.limit ?? 25;
   const application = useMemo<ConsoleLanguageApplicationReflection>(
-    () => ({ entities: options.entities.map(reflectSelectionLanguageEntity) }),
+    () => ({ entities: options.entities.map(entity => reflectSelectionLanguageEntity(entity)) }),
     [options.entities],
   );
   const initialDocument =
@@ -259,7 +413,6 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     () => analyzeConsoleDocument(document, application, { limit }),
     [application, document, limit],
   );
-  const documentDiagnostics = [...analysis.syntaxDiagnostics, ...analysis.semanticDiagnostics];
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
@@ -364,13 +517,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       request.selection.entityName !== snapshot?.request.selection.entityName
     )
       return;
-    const currentOrder = request.orderBy[0];
-    const nextOrder =
-      currentOrder?.fieldName !== fieldName
-        ? { fieldName, direction: 'asc' as const }
-        : currentOrder.direction === 'asc'
-          ? { fieldName, direction: 'desc' as const }
-          : undefined;
+    const nextOrder = nextConsoleOrder(request.orderBy[0], fieldName);
     const changes = editConsoleOrderBy(source, application, nextOrder);
     if (!changes) return;
     view.dispatch({
@@ -381,20 +528,21 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     runDocument(view.state.doc.toString());
   };
 
-  const limitDisabledReason =
-    result.status === 'executing'
-      ? 'Wait for the current query to finish.'
-      : !exchange || snapshot?.transport !== runtimeTransport
-        ? 'Run the query with the current Runtime Transport before changing its limit.'
-        : !analysis.request
-          ? 'Fix the Console expression before changing its limit.'
-          : analysis.request.mode !== 'run' ||
-              analysis.request.selection.entityName !== snapshot?.request.selection.entityName
-            ? 'Run a many query for the current Entity before changing its limit.'
-            : undefined;
+  const limitDisabledReason = () => {
+    if (result.status === 'executing') return 'Wait for the current query to finish.';
+    if (!exchange || snapshot?.transport !== runtimeTransport)
+      return 'Run the query with the current Runtime Transport before changing its limit.';
+    if (!analysis.request) return 'Fix the Console expression before changing its limit.';
+    if (
+      analysis.request.mode !== 'run' ||
+      analysis.request.selection.entityName !== snapshot?.request.selection.entityName
+    )
+      return 'Run a many query for the current Entity before changing its limit.';
+    return undefined;
+  };
   const changeLimit = (nextLimit: number) => {
     const view = viewRef.current;
-    if (limitDisabledReason || !view || executingRef.current) return;
+    if (limitDisabledReason() || !view || executingRef.current) return;
     const source = view.state.doc.toString();
     const request = analyzeConsoleDocument(source, application, { limit }).request;
     if (
@@ -443,116 +591,25 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           viewRef={viewRef}
         />
         <div style={styles.consoleStatus} aria-live='polite'>
-          {documentDiagnostics.length > 0
-            ? documentDiagnostics.map(diagnostic => (
-                <span
-                  key={[diagnostic.channel, diagnostic.code, diagnostic.from, diagnostic.to].join(
-                    '-',
-                  )}
-                  style={styles.consoleDiagnostic}
-                  data-diagnostic-channel={diagnostic.channel}
-                >
-                  {diagnostic.message}
-                </span>
-              ))
-            : [
-                analysis.request?.selection.entityName ?? 'No Entity',
-                'graph.read',
-                analysis.syntax.expression?.terminal?.kind === 'exists-member'
-                  ? 'exists'
-                  : analysis.request?.mode === 'count'
-                    ? 'count'
-                    : 'limit ' + (analysis.request?.limit ?? limit),
-              ].join(' · ')}
+          <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
         </div>
       </div>
-      <div style={styles.consoleResult} aria-label='Console result'>
-        <div style={styles.consoleResultHeader} role='group' aria-label='Console result toolbar'>
-          <div style={styles.consoleResultControls}>
-            {snapshot ? (
-              <span
-                style={styles.consoleResultStatus}
-                aria-label='Last query duration'
-                title='Last successful round-trip time (including transport)'
-              >
-                {Math.round(snapshot.durationMs)} ms
-              </span>
-            ) : null}
-            {snapshot?.request.mode === 'run' && Array.isArray(snapshot.value) ? (
-              <ConsoleResultLimit
-                request={snapshot.request}
-                defaultLimit={limit}
-                disabledReason={limitDisabledReason}
-                onApply={changeLimit}
-              />
-            ) : null}
-            <span
-              role='status'
-              style={styles.consoleResultStatus}
-              title={snapshot ? 'Showing the last successful result.' : undefined}
-            >
-              {resultNotice(result, document)}
-            </span>
-          </div>
-          <span style={styles.consoleResultControls}>
-            {snapshot ? (
-              <span style={styles.modes} aria-label='Console result view mode'>
-                {(
-                  [
-                    ['visual', 'Visual'],
-                    ['json', 'JSON'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type='button'
-                    style={{ ...styles.mode, ...(resultMode === value ? styles.activeMode : {}) }}
-                    onClick={() => setResultMode(value)}
-                    aria-pressed={resultMode === value}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </span>
-            ) : null}
-          </span>
-        </div>
-        <div style={styles.consoleResultBody} aria-live='polite'>
-          {result.status === 'error' ? (
-            <span role='alert' style={styles.consoleError}>
-              {result.message}
-            </span>
-          ) : null}
-          {snapshot ? (
-            resultMode === 'visual' ? (
-              snapshot.request.mode === 'run' && Array.isArray(snapshot.value) ? (
-                <ResultTable
-                  value={snapshot.value}
-                  ordering={{
-                    fields:
-                      resultEntity?.fields
-                        .filter(isConsoleOrderableField)
-                        .map(field => field.name) ?? [],
-                    order: snapshot.request.orderBy[0],
-                    disabledReason: sortDisabledReason,
-                    onSort: sortBy,
-                  }}
-                />
-              ) : (
-                <SemanticPayload value={snapshot.value} />
-              )
-            ) : (
-              <JsonView value={snapshot.value} label='Console result JSON' />
-            )
-          ) : result.status !== 'error' ? (
-            <span style={styles.consoleEmpty}>
-              {result.status === 'executing'
-                ? 'Executing through the configured Runtime Transport…'
-                : 'Run the expression to inspect its semantic result.'}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <ConsoleResultPanel
+        result={result}
+        document={document}
+        limit={limit}
+        resultMode={resultMode}
+        setResultMode={setResultMode}
+        limitDisabledReason={limitDisabledReason()}
+        changeLimit={changeLimit}
+        ordering={{
+          fields:
+            resultEntity?.fields.filter(isConsoleOrderableField).map(field => field.name) ?? [],
+          order: snapshot?.request.orderBy[0],
+          disabledReason: sortDisabledReason,
+          onSort: sortBy,
+        }}
+      />
     </section>
   );
 };

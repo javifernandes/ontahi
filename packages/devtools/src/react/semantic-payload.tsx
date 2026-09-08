@@ -41,11 +41,21 @@ const formatLeaf = (value: unknown): string => {
   return String(value ?? '—');
 };
 
-type ResultTableOrdering = {
+export type ResultTableOrdering = {
   readonly fields: readonly string[];
   readonly order?: GraphReadOrder;
   readonly disabledReason: (fieldName: string) => string | undefined;
   readonly onSort: (fieldName: string) => void;
+};
+
+const columnSort = (order: GraphReadOrder | undefined, column: string) => {
+  if (order?.fieldName !== column) return undefined;
+  return order.direction === 'asc' ? 'ascending' : 'descending';
+};
+
+const columnSortIcon = (order: GraphReadOrder | undefined, column: string, disabled: boolean) => {
+  if (order?.fieldName === column) return order.direction === 'asc' ? '↑' : '↓';
+  return disabled ? '—' : '↕';
 };
 
 export const ResultTable = ({
@@ -86,13 +96,7 @@ export const ResultTable = ({
                 <th
                   key={column}
                   style={{ ...styles.tableCell, color: '#7fa28f', textAlign: 'left' }}
-                  aria-sort={
-                    ordering?.order?.fieldName === column
-                      ? ordering.order.direction === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : undefined
-                  }
+                  aria-sort={columnSort(ordering?.order, column)}
                 >
                   {ordering?.fields.includes(column) ? (
                     <button
@@ -113,13 +117,7 @@ export const ResultTable = ({
                     >
                       {column}{' '}
                       <span aria-hidden='true'>
-                        {ordering.order?.fieldName === column
-                          ? ordering.order.direction === 'asc'
-                            ? '↑'
-                            : '↓'
-                          : disabledReason
-                            ? '—'
-                            : '↕'}
+                        {columnSortIcon(ordering.order, column, Boolean(disabledReason))}
                       </span>
                     </button>
                   ) : (

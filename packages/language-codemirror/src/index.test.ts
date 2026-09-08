@@ -1127,6 +1127,44 @@ describe('Selection CodeMirror adapter', () => {
     },
   );
 
+  it('runs the current Console document through Mod-Enter without changing source', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const run = vi.fn();
+    const source = 'TodoItem.exists()';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: consoleExpressionExtensions({ entities: [TodoItem] }, { run }),
+      }),
+    });
+    try {
+      view.contentDOM.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(run).toHaveBeenCalledOnce();
+      expect(view.state.doc.toString()).toBe(source);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it.each([
+    '',
+    'TodoItem.many()',
+    'Missing.where(completed = false).many()',
+    'TodoItem.where(completed = ).many()',
+  ])('leaves unresolved or absent Console finite values as source: %s', source => {
+    expect(deriveConsoleFiniteValueProjections(source, { entities: [TodoItem] })).toEqual([]);
+  });
+
   it.each([
     'TodoItem.where(completed = false).one',
     'TodoItem.where(completed = false).exists',

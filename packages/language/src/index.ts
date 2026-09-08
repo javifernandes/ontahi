@@ -980,6 +980,20 @@ export const reflectSelectionLanguageEntity = <TEntity extends AnyEntityDefiniti
   relations: Object.keys(entity.relations).map(name => ({ name })),
 });
 
+const consoleTerminalToken = (terminal: SyntaxNode | null | undefined, document: string) => {
+  for (const [nodeName, kind] of [
+    ['First', 'first-member'],
+    ['One', 'one-member'],
+    ['Many', 'many-member'],
+    ['Count', 'count-member'],
+    ['Exists', 'exists-member'],
+  ] as const) {
+    const node = terminal?.getChild(nodeName);
+    if (node) return tokenOf(kind, node, document);
+  }
+  return undefined;
+};
+
 const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyntax => {
   const consoleExpression = tree.topNode.getChild('ConsoleExpression');
   const graphRead = consoleExpression?.getChild('GraphReadExpression');
@@ -991,11 +1005,6 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
   const orderClause = graphRead.getChild('OrderByClause');
   const limitClause = graphRead.getChild('LimitClause');
   const readTerminal = graphRead.getChild('ReadTerminal');
-  const firstTerminal = readTerminal?.getChild('First');
-  const oneTerminal = readTerminal?.getChild('One');
-  const manyTerminal = readTerminal?.getChild('Many');
-  const countTerminal = readTerminal?.getChild('Count');
-  const existsTerminal = readTerminal?.getChild('Exists');
   const limitValueToken = tokenOf(
     'number-literal',
     limitClause?.getChild('NumberLiteral') ?? null,
@@ -1037,52 +1046,59 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
         limitClause?.getChild('CloseParen') ?? null,
         document,
       ),
-      terminal: firstTerminal
-        ? tokenOf('first-member', firstTerminal, document)
-        : oneTerminal
-          ? tokenOf('one-member', oneTerminal, document)
-          : manyTerminal
-            ? tokenOf('many-member', manyTerminal, document)
-            : countTerminal
-              ? tokenOf('count-member', countTerminal, document)
-              : tokenOf('exists-member', existsTerminal ?? null, document),
+      terminal: consoleTerminalToken(readTerminal, document),
       terminalOpen: tokenOf('open-parenthesis', graphRead.getChild('OpenParen'), document),
       terminalClose: tokenOf('close-parenthesis', graphRead.getChild('CloseParen'), document),
     },
   };
 };
 
-const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
-  const expression = syntax.expression;
-  if (!expression?.entity) return 'Expected an Entity name to begin the Console expression.';
-  if (expression.where && !expression.whereOpen) return 'Expected "(" after .where.';
-  if (expression.where && !expression.whereClose) {
-    return 'Expected ")" to close the Selection expression.';
-  }
-  const order = expression.orderBy;
-  if (order && !order.open) return 'Expected "(" after .orderBy.';
-  if (order && !order.field) return 'Expected a Field name inside .orderBy(...).';
-  if (order?.comma && !order.direction) return 'Expected asc or desc after the ordering Field.';
-  if (order && !order.close) return 'Expected ")" to close .orderBy(...).';
+const consoleOrderStructureDiagnostic = (order: ConsoleOrderBySyntax | undefined) => {
+  if (!order) return undefined;
+  if (!order.open) return 'Expected "(" after .orderBy.';
+  if (!order.field) return 'Expected a Field name inside .orderBy(...).';
+  if (order.comma && !order.direction) return 'Expected asc or desc after the ordering Field.';
+  if (!order.close) return 'Expected ")" to close .orderBy(...).';
+  return undefined;
+};
+
+const consoleLimitStructureDiagnostic = (expression: ConsoleGraphReadSyntax) => {
   if (expression.limit && !expression.limitOpen) return 'Expected "(" after .limit.';
   if (expression.limit && !expression.limitValue) {
     return 'Expected a numeric row limit inside .limit(...).';
   }
   if (expression.limit && !expression.limitClose) return 'Expected ")" to close .limit(...).';
+  return undefined;
+};
+
+const consoleTerminalStructureDiagnostic = (expression: ConsoleGraphReadSyntax) => {
   if (!expression.terminal) {
     if (expression.limitClose) {
       return 'Expected .many() after .limit(...).';
     }
-    if (order?.close)
+    if (expression.orderBy?.close)
       return 'Expected .limit(...), .first(), .one(), or .many() after .orderBy(...).';
     return expression.whereClose
       ? 'Expected .orderBy(...), .limit(...), .first(), .one(), .many(), .count(), or .exists() after the Selection expression.'
-      : `Expected .where(...), .orderBy(...), .limit(...), .first(), .one(), .many(), .count(), or .exists() after ${expression.entity.text}.`;
+      : `Expected .where(...), .orderBy(...), .limit(...), .first(), .one(), .many(), .count(), or .exists() after ${expression.entity?.text}.`;
   }
   if (!expression.terminalOpen || !expression.terminalClose) {
     return `Expected an empty argument list after .${expression.terminal.text}.`;
   }
   return 'The Console expression is invalid.';
+};
+
+const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
+  const expression = syntax.expression;
+  if (!expression?.entity) return 'Expected an Entity name to begin the Console expression.';
+  if (expression.where && !expression.whereOpen) return 'Expected "(" after .where.';
+  if (expression.where && !expression.whereClose)
+    return 'Expected ")" to close the Selection expression.';
+  return (
+    consoleOrderStructureDiagnostic(expression.orderBy) ??
+    consoleLimitStructureDiagnostic(expression) ??
+    consoleTerminalStructureDiagnostic(expression)
+  );
 };
 
 const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
@@ -1189,13 +1205,48 @@ export const analyzeConsoleDocument = (
   const resolved: SemanticResolution = expression.selection
     ? resolveExpression(expression.selection, entity)
     : { diagnostics: [], expression: selectionAll() };
-  const modifierDiagnostics: ConsoleLanguageDiagnostic[] = [];
+  const semanticDiagnostics = [
+    ...resolved.diagnostics,
+    ...consoleOrderDiagnostics(expression, entity),
+    ...consoleLimitDiagnostics(expression),
+  ];
+  if (!resolved.expression || semanticDiagnostics.length > 0)
+    return { ...parsed, semanticDiagnostics };
+  const order = expression.orderBy;
+  return {
+    ...parsed,
+    semanticDiagnostics,
+    request: {
+      version: 1,
+      kind: 'graph-read',
+      ...consoleTerminalRequest(
+        expression.terminal.kind,
+        expression.limitValue?.value ?? options.limit ?? 25,
+      ),
+      selection: { kind: 'selection', entityName: entity.name, expression: resolved.expression },
+      orderBy: order?.field
+        ? [
+            {
+              fieldName: order.field.text,
+              direction: order.direction?.text === 'desc' ? 'desc' : 'asc',
+            },
+          ]
+        : [],
+    },
+  };
+};
+
+const consoleOrderDiagnostics = (
+  expression: ConsoleGraphReadSyntax,
+  entity: SelectionLanguageEntityReflection,
+): ConsoleLanguageDiagnostic[] => {
+  const diagnostics: ConsoleLanguageDiagnostic[] = [];
   const order = expression.orderBy;
   if (
     order?.field &&
     !entity.fields.some(field => field.name === order.field?.text && isConsoleOrderableField(field))
   ) {
-    modifierDiagnostics.push({
+    diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.invalid-order-field',
       message: `Order by a scalar Field of ${entity.name}; ${order.field.text} is not supported.`,
@@ -1204,7 +1255,7 @@ export const analyzeConsoleDocument = (
     });
   }
   if (order?.direction && !['asc', 'desc'].includes(order.direction.text)) {
-    modifierDiagnostics.push({
+    diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.invalid-order-direction',
       message: 'Order direction must be asc or desc.',
@@ -1212,8 +1263,12 @@ export const analyzeConsoleDocument = (
       to: order.direction.to,
     });
   }
-  if (order && ['count-member', 'exists-member'].includes(expression.terminal.kind)) {
-    modifierDiagnostics.push({
+  if (
+    order &&
+    expression.terminal &&
+    ['count-member', 'exists-member'].includes(expression.terminal.kind)
+  ) {
+    diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.unsupported-order',
       message: `.orderBy(...) cannot be combined with .${expression.terminal.text}().`,
@@ -1221,11 +1276,18 @@ export const analyzeConsoleDocument = (
       to: order.to,
     });
   }
+  return diagnostics;
+};
+
+const consoleLimitDiagnostics = (
+  expression: ConsoleGraphReadSyntax,
+): ConsoleLanguageDiagnostic[] => {
+  const diagnostics: ConsoleLanguageDiagnostic[] = [];
   if (
     expression.limitValue &&
     (!Number.isInteger(expression.limitValue.value) || expression.limitValue.value < 0)
   ) {
-    modifierDiagnostics.push({
+    diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.invalid-limit',
       message: 'Console Graph Read limit must be a non-negative integer.',
@@ -1233,8 +1295,8 @@ export const analyzeConsoleDocument = (
       to: expression.limitValue.to,
     });
   }
-  if (expression.limit && expression.terminal.kind !== 'many-member') {
-    modifierDiagnostics.push({
+  if (expression.limit && expression.terminal?.kind !== 'many-member') {
+    diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.unsupported-limit',
       message: '.limit(...) can only be combined with .many().',
@@ -1242,51 +1304,25 @@ export const analyzeConsoleDocument = (
       to: expression.limitClose?.to ?? expression.limit.to,
     });
   }
-  const semanticDiagnostics = [...resolved.diagnostics, ...modifierDiagnostics];
-  return {
-    ...parsed,
-    semanticDiagnostics,
-    ...(resolved.expression && semanticDiagnostics.length === 0
-      ? {
-          request: {
-            version: 1,
-            kind: 'graph-read',
-            mode:
-              expression.terminal.kind === 'many-member'
-                ? 'run'
-                : expression.terminal.kind === 'count-member'
-                  ? 'count'
-                  : 'get',
-            selection: {
-              kind: 'selection',
-              entityName: entity.name,
-              expression: resolved.expression,
-            },
-            orderBy: order?.field
-              ? [
-                  {
-                    fieldName: order.field.text,
-                    direction: order.direction?.text === 'desc' ? 'desc' : 'asc',
-                  },
-                ]
-              : [],
-            ...(expression.terminal.kind === 'count-member'
-              ? {}
-              : {
-                  limit:
-                    expression.terminal.kind === 'exists-member'
-                      ? 1
-                      : (expression.limitValue?.value ?? options.limit ?? 25),
-                }),
-            ...(expression.terminal.kind === 'one-member'
-              ? { cardinality: 'one' as const }
-              : expression.terminal.kind === 'many-member'
-                ? { cardinality: 'many' as const }
-                : {}),
-          } satisfies GraphReadRequestV1,
-        }
-      : {}),
-  };
+  return diagnostics;
+};
+
+const consoleTerminalRequest = (
+  terminal: NonNullable<ConsoleGraphReadSyntax['terminal']>['kind'],
+  limit: number,
+): Pick<GraphReadRequestV1, 'mode' | 'limit' | 'cardinality'> => {
+  switch (terminal) {
+    case 'many-member':
+      return { mode: 'run', limit, cardinality: 'many' };
+    case 'count-member':
+      return { mode: 'count' };
+    case 'exists-member':
+      return { mode: 'get', limit: 1 };
+    case 'one-member':
+      return { mode: 'get', limit, cardinality: 'one' };
+    case 'first-member':
+      return { mode: 'get', limit };
+  }
 };
 
 /** Fields with scalar ordering semantics. Runtime read policies remain authoritative. */
@@ -1355,10 +1391,11 @@ export const editConsoleOrderBy = (
     }
   } else {
     const position = syntax.whereClose?.to ?? syntax.entity.to;
+    const direction = order.direction === 'asc' ? '' : ', ' + order.direction;
     changes.push({
       from: position,
       to: position,
-      insert: `.orderBy(${order.fieldName}${order.direction === 'asc' ? '' : `, ${order.direction}`})`,
+      insert: `.orderBy(${order.fieldName}${direction})`,
     });
   }
   const nextDocument = changes.reduceRight(
@@ -1367,21 +1404,18 @@ export const editConsoleOrderBy = (
   );
   const nextRequest = analyzeConsoleDocument(nextDocument, application).request;
   const nextOrder = nextRequest?.orderBy[0];
-  if (
-    !nextRequest ||
-    (order
-      ? nextOrder?.fieldName !== order.fieldName || nextOrder?.direction !== order.direction
-      : nextRequest.orderBy.length !== 0)
-  )
-    return undefined;
+  if (!nextRequest || !consoleOrderMatches(nextOrder, order)) return undefined;
   return changes;
 };
 
+const consoleOrderMatches = (left: GraphReadOrder | undefined, right: GraphReadOrder | undefined) =>
+  left?.fieldName === right?.fieldName && left?.direction === right?.direction;
+
 const completionWordRange = (document: string, position: number): SelectionLanguageRange => {
   let from = position;
-  while (from > 0 && /[A-Za-z0-9_]/.test(document[from - 1]!)) from -= 1;
+  while (from > 0 && /\w/.test(document[from - 1]!)) from -= 1;
   let to = position;
-  while (to < document.length && /[A-Za-z0-9_]/.test(document[to]!)) to += 1;
+  while (to < document.length && /\w/.test(document[to]!)) to += 1;
   return { from, to };
 };
 
@@ -1436,6 +1470,29 @@ const consoleOrderCompletionItem: ConsoleLanguageCompletionItem = {
   detail: 'Graph Read ordering',
 };
 
+const consoleOrderCompletions = (
+  entity: SelectionLanguageEntityReflection,
+  order: ConsoleOrderBySyntax,
+  position: number,
+  options: ConsoleLanguageCompletionOptions,
+): readonly ConsoleLanguageCompletionItem[] => {
+  if (order.comma && position >= order.comma.to) {
+    return ['asc', 'desc'].map(direction => ({
+      label: direction,
+      apply: direction,
+      kind: 'value',
+      detail: 'Order direction',
+    }));
+  }
+  const fields = options.orderableFields?.(entity.name);
+  return entity.fields
+    .filter(
+      field =>
+        isConsoleOrderableField(field) && (fields === undefined || fields.includes(field.name)),
+    )
+    .map(field => ({ label: field.name, apply: field.name, kind: 'field', detail: field.type }));
+};
+
 export const completeConsoleDocument = (
   document: string,
   position: number,
@@ -1445,7 +1502,7 @@ export const completeConsoleDocument = (
   const safePosition = Math.max(0, Math.min(position, document.length));
   const syntax = parseConsoleDocument(document).syntax.expression;
   const rootPrefix = document.slice(0, safePosition);
-  if (!rootPrefix.includes('.') && /^\s*[A-Za-z0-9_]*$/.test(rootPrefix)) {
+  if (!rootPrefix.includes('.') && /^\s*\w*$/.test(rootPrefix)) {
     const range = completionWordRange(document, safePosition);
     return {
       ...range,
@@ -1488,29 +1545,9 @@ export const completeConsoleDocument = (
     safePosition >= order.open.to &&
     (order.close === undefined || safePosition <= order.close.from)
   ) {
-    const orderableFields = options.orderableFields?.(entity.name);
     return {
       ...range,
-      items:
-        order.comma && safePosition >= order.comma.to
-          ? ['asc', 'desc'].map(direction => ({
-              label: direction,
-              apply: direction,
-              kind: 'value' as const,
-              detail: 'Order direction',
-            }))
-          : entity.fields
-              .filter(
-                field =>
-                  isConsoleOrderableField(field) &&
-                  (orderableFields === undefined || orderableFields.includes(field.name)),
-              )
-              .map(field => ({
-                label: field.name,
-                apply: field.name,
-                kind: 'field' as const,
-                detail: field.type,
-              })),
+      items: consoleOrderCompletions(entity, order, safePosition, options),
     };
   }
   const memberPrefix = document.slice(range.from, safePosition);
