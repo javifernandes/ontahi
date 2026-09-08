@@ -126,6 +126,7 @@ export const createClientEntitySchemaModuleModel = ({
       }),
   );
   const orderedSchemaEntities = orderSchemaProjections(schemaEntities);
+  const schemaImports = createSchemaImports({ schemaEntities, projectedNames, schemaImportPath });
   const deferredSchemaLocalNames = new Set(
     orderedSchemaEntities
       .filter(entity =>
@@ -133,11 +134,33 @@ export const createClientEntitySchemaModuleModel = ({
       )
       .map(entity => entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`),
   );
+  const reservedLocalNames = new Set([
+    'defineEntitySchema',
+    'field',
+    ...orderedSchemaEntities
+      .filter(entity => entity.entitySchemaProjection)
+      .map(entity => entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`),
+    ...schemaImports.flatMap(schemaImport =>
+      schemaImport.bindings.map(binding => binding.localName),
+    ),
+  ]);
+  const deferredDeclarationLocalNames = new Map();
+  for (const localName of deferredSchemaLocalNames) {
+    const stem = `${localName}Base`;
+    let declarationLocalName = stem;
+    let suffix = 2;
+    while (reservedLocalNames.has(declarationLocalName)) {
+      declarationLocalName = `${stem}${suffix}`;
+      suffix += 1;
+    }
+    reservedLocalNames.add(declarationLocalName);
+    deferredDeclarationLocalNames.set(localName, declarationLocalName);
+  }
   const initializationNames = new Map(projectedNames);
   for (const entity of orderedSchemaEntities) {
     const localName = entity.entityDefinitionLocalName ?? `${entity.entityName}Schema`;
     if (!deferredSchemaLocalNames.has(localName)) continue;
-    const baseLocalName = `${localName}Base`;
+    const baseLocalName = deferredDeclarationLocalNames.get(localName);
     if (entity.entityDefinitionName)
       initializationNames.set(entity.entityDefinitionName, baseLocalName);
     if (entity.entityName) initializationNames.set(entity.entityName, baseLocalName);
@@ -151,7 +174,9 @@ export const createClientEntitySchemaModuleModel = ({
 
       return {
         localName,
-        ...(deferred ? { declarationLocalName: `${localName}Base`, deferred: true } : {}),
+        ...(deferred
+          ? { declarationLocalName: deferredDeclarationLocalNames.get(localName), deferred: true }
+          : {}),
         entityName: projection.name,
         fields: sourceExpression(
           replaceProjectedEntityNames(projection.fieldsText, initializationNames),
@@ -188,7 +213,7 @@ export const createClientEntitySchemaModuleModel = ({
       .filter(relation => relation.deferred)
       .map(relation => ({
         sourceLocalName,
-        sourceDeclarationLocalName: `${sourceLocalName}Base`,
+        sourceDeclarationLocalName: deferredDeclarationLocalNames.get(sourceLocalName),
         ...createRelationModel(relation, initializationNames),
       }));
   });
@@ -203,7 +228,7 @@ export const createClientEntitySchemaModuleModel = ({
           : []),
         ...(usesField ? [{ importedName: 'field', localName: 'field' }] : []),
       ],
-      schemaImports: createSchemaImports({ schemaEntities, projectedNames, schemaImportPath }),
+      schemaImports,
       entitySchemas,
       deferredRelations,
     },
