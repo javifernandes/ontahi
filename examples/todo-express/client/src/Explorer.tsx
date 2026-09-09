@@ -76,7 +76,7 @@ export const Explorer = () => {
 
   return (
     <div className='explorer-host' data-explorer-theme-host>
-      <ExplorerProvider basePath='/explorer' loadTaskRunSource={loadTaskRunSource}>
+      <ExplorerProvider basePath='/explorer' loadTaskRunSource={loadTaskRunSource} theme='light'>
         <a className='explorer-exit' href='/'>
           ← Todo
         </a>

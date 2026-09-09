@@ -16,15 +16,29 @@ import {
 } from '@ontahi/core/runtime/protocol';
 import {
   analyzeConsoleDocument,
+  convertConsoleDocument,
   editConsoleOrderBy,
   editConsoleLimit,
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
   type ConsoleLanguageApplicationReflection,
   type ConsoleDocumentAnalysis,
+  type ConsoleDialect,
 } from '@ontahi/language';
-import { consoleExpressionExtensions } from '@ontahi/language-codemirror';
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import {
+  authoringDialectPreference,
+  consoleExpressionExtensions,
+  consoleExpressionDialect,
+  setConsoleExpressionDialect,
+} from '@ontahi/language-codemirror';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MutableRefObject,
+} from 'react';
 
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
@@ -34,6 +48,7 @@ import { ResultTable, SemanticPayload, type ResultTableOrdering } from './semant
 export type OntahiDevtoolsConsoleOptions = {
   readonly entities: readonly AnyEntityDefinition[];
   readonly initialDocument?: string;
+  readonly initialDialect?: ConsoleDialect;
   readonly limit?: number;
 };
 
@@ -44,6 +59,7 @@ export type ConsolePanelProps = {
 
 type ConsoleResultSnapshot = {
   readonly document: string;
+  readonly exists: boolean;
   readonly request: GraphReadRequestV1;
   readonly value: unknown;
   readonly durationMs: number;
@@ -125,10 +141,10 @@ const ConsoleResultContent = ({
   return <SemanticPayload value={snapshot.value} />;
 };
 
-const resultNotice = (result: ConsoleResult, document: string): string => {
+const resultNotice = (result: ConsoleResult, matchesDraft: boolean): string => {
   if (result.status === 'executing') return 'Running…';
   if (result.status === 'error' && result.snapshot) return 'Previous result';
-  if (result.snapshot && result.snapshot.document !== document) return 'Changes not run';
+  if (result.snapshot && !matchesDraft) return 'Changes not run';
   return '';
 };
 
@@ -136,7 +152,8 @@ type ConsoleEditorProps = {
   readonly application: ConsoleLanguageApplicationReflection;
   readonly label: string;
   readonly limit: number;
-  readonly onChange: (document: string) => void;
+  readonly dialect: ConsoleDialect;
+  readonly onChange: (document: string, dialect: ConsoleDialect) => void;
   readonly orderableFields: (entityName: string) => readonly string[];
   readonly run: () => void;
   readonly value: string;
@@ -178,6 +195,7 @@ const consoleEditorTheme = EditorView.theme({
 
 const ConsoleEditor = ({
   application,
+  dialect,
   label,
   limit,
   onChange,
@@ -206,6 +224,8 @@ const ConsoleEditor = ({
           keymap.of(historyKeymap),
           languageCompartmentRef.current.of(
             consoleExpressionExtensions(application, {
+              colorScheme: 'dark',
+              dialect,
               finiteValueProjections: true,
               orderableFields,
               limit,
@@ -217,12 +237,17 @@ const ConsoleEditor = ({
           consoleEditorTheme,
           EditorView.updateListener.of(update => {
             if (
-              update.docChanged &&
+              (update.docChanged ||
+                update.state.field(consoleExpressionDialect) !==
+                  update.startState.field(consoleExpressionDialect)) &&
               !update.transactions.some(transaction =>
                 transaction.annotation(externalDocumentChange),
               )
             ) {
-              onChangeRef.current(update.state.doc.toString());
+              onChangeRef.current(
+                update.state.doc.toString(),
+                update.state.field(consoleExpressionDialect),
+              );
             }
           }),
         ],
@@ -239,6 +264,8 @@ const ConsoleEditor = ({
     viewRef.current?.dispatch({
       effects: languageCompartmentRef.current.reconfigure(
         consoleExpressionExtensions(application, {
+          colorScheme: 'dark',
+          dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
           finiteValueProjections: true,
           orderableFields,
           limit,
@@ -306,7 +333,7 @@ const graphReadResult = (
 
 const ConsoleResultPanel = ({
   result,
-  document,
+  matchesDraft,
   limit,
   resultMode,
   setResultMode,
@@ -315,7 +342,7 @@ const ConsoleResultPanel = ({
   ordering,
 }: {
   readonly result: ConsoleResult;
-  readonly document: string;
+  readonly matchesDraft: boolean;
   readonly limit: number;
   readonly resultMode: ConsoleResultMode;
   readonly setResultMode: (mode: ConsoleResultMode) => void;
@@ -352,7 +379,7 @@ const ConsoleResultPanel = ({
             style={styles.consoleResultStatus}
             title={snapshot ? 'Showing the last successful result.' : undefined}
           >
-            {resultNotice(result, document)}
+            {resultNotice(result, matchesDraft)}
           </output>
         </div>
         <span style={styles.consoleResultControls}>
@@ -391,6 +418,12 @@ const ConsoleResultPanel = ({
 };
 
 export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) => {
+  const preferredDialect = useSyncExternalStore(
+    authoringDialectPreference.subscribe,
+    authoringDialectPreference.getSnapshot,
+    authoringDialectPreference.getServerSnapshot,
+  );
+  const [preferenceNotice, setPreferenceNotice] = useState('');
   const limit = options.limit ?? 25;
   const application = useMemo<ConsoleLanguageApplicationReflection>(
     () => ({ entities: options.entities.map(entity => reflectSelectionLanguageEntity(entity)) }),
@@ -398,8 +431,13 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   );
   const initialDocument =
     options.initialDocument ??
-    (application.entities[0] ? application.entities[0].name + '.many()' : '');
-  const [document, setDocument] = useState(initialDocument);
+    (application.entities[0]
+      ? application.entities[0].name + (options.initialDialect === 'declarative' ? '' : '.many()')
+      : '');
+  const [{ document, dialect }, setDraft] = useState({
+    document: initialDocument,
+    dialect: options.initialDialect ?? 'ts',
+  });
   const [result, setResult] = useState<ConsoleResult>({ status: 'idle' });
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
   const viewRef = useRef<EditorView>();
@@ -410,13 +448,16 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     [runtimeTransport],
   );
   const analysis = useMemo(
-    () => analyzeConsoleDocument(document, application, { limit }),
-    [application, document, limit],
+    () => analyzeConsoleDocument(document, application, { limit, dialect }),
+    [application, document, limit, dialect],
   );
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
-    const executedAnalysis = analyzeConsoleDocument(source, application, { limit });
+    const executedAnalysis = analyzeConsoleDocument(source, application, {
+      limit,
+      dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
+    });
     const request = executedAnalysis.request;
     if (!request) {
       setResult(previous => ({
@@ -449,6 +490,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           status: 'success',
           snapshot: {
             document: source,
+            exists,
             request,
             ...result,
             // Match the application Graph Read exists intent over nullable get.
@@ -476,6 +518,38 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   };
 
   const run = () => runDocument(viewRef.current?.state.doc.toString() ?? document);
+  const changeDialect = (nextDialect: ConsoleDialect, focus = true): boolean => {
+    const view = viewRef.current;
+    if (!view) return false;
+    const currentDialect = view.state.field(consoleExpressionDialect);
+    if (nextDialect === currentDialect) return true;
+    const source = view.state.doc.toString();
+    const converted =
+      source.trim() === ''
+        ? source
+        : convertConsoleDocument(source, application, nextDialect, {
+            limit,
+            dialect: currentDialect,
+          });
+    if (converted === undefined) return false;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: converted },
+      effects: setConsoleExpressionDialect.of(nextDialect),
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.console-dialect',
+    });
+    if (focus) view.focus();
+    setPreferenceNotice('');
+    return true;
+  };
+  useEffect(() => {
+    if (options.initialDialect) return;
+    if (!changeDialect(preferredDialect ?? 'ts', false)) {
+      setPreferenceNotice(
+        'Preferred dialect changed; this incomplete draft keeps its current dialect. Fix it and use the Console switch to convert.',
+      );
+    }
+  }, [preferredDialect, options.initialDialect]);
   const snapshot = result.snapshot;
   const orderingCapabilities =
     snapshot?.transport === runtimeTransport ? snapshot?.capabilities : undefined;
@@ -511,14 +585,14 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     const view = viewRef.current;
     if (sortDisabledReason(fieldName) || !view || executingRef.current) return;
     const source = view.state.doc.toString();
-    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    const request = analyzeConsoleDocument(source, application, { limit, dialect }).request;
     if (
       request?.mode !== 'run' ||
       request.selection.entityName !== snapshot?.request.selection.entityName
     )
       return;
     const nextOrder = nextConsoleOrder(request.orderBy[0], fieldName);
-    const changes = editConsoleOrderBy(source, application, nextOrder);
+    const changes = editConsoleOrderBy(source, application, nextOrder, { dialect });
     if (!changes) return;
     view.dispatch({
       changes,
@@ -544,13 +618,13 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     const view = viewRef.current;
     if (limitDisabledReason() || !view || executingRef.current) return;
     const source = view.state.doc.toString();
-    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    const request = analyzeConsoleDocument(source, application, { limit, dialect }).request;
     if (
       request?.mode !== 'run' ||
       request.selection.entityName !== snapshot?.request.selection.entityName
     )
       return;
-    const changes = editConsoleLimit(source, application, nextLimit);
+    const changes = editConsoleLimit(source, application, nextLimit, { dialect });
     if (!changes) return;
     view.dispatch({
       changes,
@@ -566,25 +640,49 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         <div style={styles.consoleHeading}>
           <span>
             <strong style={styles.consoleTitle}>Semantic Console</strong>
-            <span style={styles.consoleHint}>Graph Read walking skeleton · Mod-Enter to run</span>
+            <span style={styles.consoleHint}>Graph Read · Mod-Enter to run</span>
           </span>
-          <button
-            type='button'
-            style={{
-              ...styles.primaryButton,
-              ...(!analysis.request || result.status === 'executing' ? styles.disabledButton : {}),
-            }}
-            disabled={!analysis.request || result.status === 'executing'}
-            onClick={run}
-          >
-            {result.status === 'executing' ? 'Running…' : 'Run'}
-          </button>
+          <span style={styles.consoleResultControls}>
+            <fieldset style={{ ...styles.modes, margin: 0 }} aria-label='Console dialect'>
+              {(['ts', 'declarative'] as const).map(value => (
+                <button
+                  key={value}
+                  type='button'
+                  style={{ ...styles.mode, ...(dialect === value ? styles.activeMode : {}) }}
+                  aria-pressed={dialect === value}
+                  disabled={value !== dialect && document.trim() !== '' && !analysis.request}
+                  title={
+                    !analysis.request && document.trim() !== ''
+                      ? 'Fix the expression before switching dialect. Your draft will be kept.'
+                      : 'Convert syntax without running the query. Undo restores the original text and dialect.'
+                  }
+                  onClick={() => changeDialect(value)}
+                >
+                  {value === 'ts' ? 'TS' : 'Declarative'}
+                </button>
+              ))}
+            </fieldset>
+            <button
+              type='button'
+              style={{
+                ...styles.primaryButton,
+                ...(!analysis.request || result.status === 'executing'
+                  ? styles.disabledButton
+                  : {}),
+              }}
+              disabled={!analysis.request || result.status === 'executing'}
+              onClick={run}
+            >
+              {result.status === 'executing' ? 'Running…' : 'Run'}
+            </button>
+          </span>
         </div>
         <ConsoleEditor
           application={application}
+          dialect={dialect}
           label='Ontahí Console expression'
           limit={limit}
-          onChange={setDocument}
+          onChange={(document, dialect) => setDraft({ document, dialect })}
           orderableFields={orderableFields}
           run={run}
           value={document}
@@ -592,11 +690,16 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         />
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
+          {preferenceNotice ? <span>{preferenceNotice}</span> : null}
         </div>
       </div>
       <ConsoleResultPanel
         result={result}
-        document={document}
+        matchesDraft={
+          JSON.stringify(result.snapshot?.request) === JSON.stringify(analysis.request) &&
+          result.snapshot?.exists ===
+            (analysis.syntax.expression?.terminal?.kind === 'exists-member')
+        }
         limit={limit}
         resultMode={resultMode}
         setResultMode={setResultMode}

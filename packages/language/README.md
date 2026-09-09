@@ -157,6 +157,8 @@ and prints an explicit terminal. Same-dialect conversion preserves the entire va
 Comments are unsupported and block conversion rather than being silently removed. Terminal intent
 is preserved even when `first` and `exists` produce identical wire requests.
 
-This is a headless slice: Console completion, source-range sort/limit edits, the CodeMirror adapter,
-and the Devtools UI still support the existing TS-like syntax only. A UI must not use conversion
-alone as a dialect switch without supporting editor behavior and undo of source plus dialect.
+`completeConsoleDocument` accepts `{ dialect: 'declarative', orderableFields }`; suggestions reuse
+Selection completion and the same receiver capability hints as TS. `editConsoleOrderBy` and
+`editConsoleLimit` accept a fourth options argument with `dialect` and preserve unrelated source in
+either form. The CodeMirror adapter and Devtools Console support switching with source and dialect
+restored together on undo; conversion alone does not own that editor history or execute reads.

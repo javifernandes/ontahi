@@ -27,6 +27,15 @@ import { buildExplorerSnapshot } from '@ontahi/explorer-react/server';
 React, ReactDOM, TanStack Query, and Lucide remain host peers. Monaco is owned by this package
 because the JSON operation editor is part of the provided Explorer UI.
 
+Selection editors follow the resolved Explorer theme with dedicated light/dark syntax colors.
+Hosts with a fixed light or dark CSS palette must pass the matching `theme` to `ExplorerProvider`
+or `ExplorerShell`; the default `system` follows OS preference, not the host's CSS background.
+They observe the browser-origin authoring dialect preference shared with Devtools Settings through
+`@ontahi/language-codemirror`. Their help identifies the preference; contextual predicates such as
+`completed = false` have the same syntax in TS-like and Declarative, so switching does not rewrite
+them or trigger reads. Entity pickers, Reference lookup searches, and other plain-text searches
+keep their existing text-search semantics.
+
 `ExplorerEntityBrowser` is instance-first when the host registers a reflected Entity data reader:
 the selected Entity opens as one compact collection-view node containing its rows and query
 controls. Its header owns the searchable Entity switcher, and the complete node can move, minimize,

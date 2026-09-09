@@ -41,6 +41,80 @@ const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity
 });
 
 describe('Devtools activity model', () => {
+  it('projects declarative predicates from the captured tree, preserving nested grouping', () => {
+    expect(
+      formatSelectionExpression(
+        {
+          kind: 'and',
+          operands: [
+            {
+              kind: 'or',
+              operands: [
+                {
+                  kind: 'predicate',
+                  fieldName: 'status',
+                  operator: 'in',
+                  values: ['open', 'done'],
+                },
+                { kind: 'predicate', fieldName: 'due', operator: 'isNull' },
+              ],
+            },
+            {
+              kind: 'not',
+              operand: { kind: 'predicate', fieldName: 'priority', operator: 'gte', value: 2 },
+            },
+          ],
+        },
+        'declarative',
+      ),
+    ).toBe('where (status in ["open","done"] or due is null) and not (priority >= 2)');
+    expect(formatSelectionExpression(undefined, 'declarative')).toBe('selection');
+    expect(formatSelectionExpression({ kind: 'references', refs: [{}, {}] }, 'declarative')).toBe(
+      'references (2)',
+    );
+    expect(formatSelectionExpression({ kind: 'redacted' }, 'declarative')).toBe('redacted (…)');
+  });
+
+  it.each([
+    [{ mode: 'run' }, 'many'],
+    [{ mode: 'count' }, 'count'],
+    [{ mode: 'get', cardinality: 'one' }, 'one'],
+    [{ mode: 'get', limit: 1 }, 'limit 1 · first'],
+  ])('projects the captured read mode without inventing exists: %j', (mode, terminal) => {
+    expect(
+      graphReadSummary(
+        {
+          kind: 'graph-read',
+          selection: { entityName: 'Tag', expression: { kind: 'all' } },
+          ...mode,
+        },
+        'declarative',
+      ),
+    ).toBe(`Tag · ${terminal}`);
+  });
+
+  it('keeps view metadata, multiple ordering fields, and incomplete captures visible', () => {
+    expect(
+      graphReadSummary(
+        {
+          kind: 'graph-read',
+          selection: { entityName: 'Tag', expression: { kind: 'none' } },
+          orderBy: [
+            { fieldName: 'name', direction: 'asc' },
+            { fieldName: 'id', direction: 'desc' },
+            {},
+          ],
+          view: { name: 'TagCard' },
+        },
+        'declarative',
+      ),
+    ).toBe('Tag where none · order by name ascending, id descending · as TagCard');
+    expect(graphReadSummary({ kind: 'graph-read' }, 'declarative')).toBeUndefined();
+    expect(
+      semanticSummary(exchangeActivity({ kind: 'graph-read' }, 'graph.read'), 'declarative'),
+    ).toBe('graph.read');
+  });
+
   it('formats selection and view semantics across supported shapes', () => {
     expect(isRecord({ value: 1 })).toBe(true);
     expect(isRecord(null)).toBe(false);

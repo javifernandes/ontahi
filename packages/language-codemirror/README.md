@@ -58,3 +58,33 @@ even while a completion popup and semantic marks are active.
 Entity-to-Field-name resolver to headless Console completion. Reconfigure the extension when the
 capability snapshot changes to discard stale suggestions without editing source or history. The
 adapter does not fetch permissions or change the Console linter's schema-based validation.
+
+## Console Dialects
+
+`consoleExpressionExtensions(application, { dialect: 'declarative' })` selects declarative parsing,
+highlighting, completion, lint, and optional Boolean/enum controls. The default remains `ts`.
+`consoleExpressionLanguageSupport(dialect)` and `deriveConsoleFiniteValueProjections(document,
+application, dialect)` also accept the dialect explicitly.
+
+The adapter stores the current dialect in `consoleExpressionDialect`. After validating/converting
+the current document with the headless language service, dispatch its text changes and
+`setConsoleExpressionDialect.of(targetDialect)` together as one isolated history transaction.
+With CodeMirror history installed, undo/redo restores both the source and parser; the original
+whitespace is restored, not regenerated from a canonical request. Switching performs no execution.
+When reconfiguring application/capability options, pass the current dialect from the state field.
+The state effect configures the editor; validation/conversion and any Run action remain host-owned.
+
+## Browser Authoring Preference And Colors
+
+`authoringDialectPreference` exposes `getSnapshot()`, `getServerSnapshot()`, `subscribe(listener)`,
+and `set('ts' | 'declarative' | undefined)` for browser hosts. It persists under
+`ontahi.authoring.dialect`, notifies same-origin tabs and editors, and falls back to page-local state
+if storage is restricted. `undefined` clears the preference. Server calls are inert and return
+`undefined`; this is not runtime authority or server-owned user data. React hosts can consume it
+with `useSyncExternalStore`. The extension itself does not silently rewrite documents: hosts own
+safe conversion, explicit overrides, and incomplete-draft handling.
+
+Both Selection and Console extensions accept `colorScheme: 'light' | 'dark'` (default `light`).
+Reconfigure it when the host theme changes. Dedicated token palettes replace generic highlighting;
+keyword/function, Entity, Field, operator, string, and literal colors are contrast-tested against
+the default light/dark editor surfaces. Finite-value projections and source text remain unchanged.

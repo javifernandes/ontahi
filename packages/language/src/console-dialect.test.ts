@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { analyzeConsoleDocument, convertConsoleDocument, parseConsoleDocument } from './index.js';
+import {
+  analyzeConsoleDocument,
+  convertConsoleDocument,
+  parseConsoleDocument,
+  completeConsoleDocument,
+  editConsoleLimit,
+  editConsoleOrderBy,
+} from './index.js';
 
 const application = {
   entities: [
@@ -17,6 +24,80 @@ const application = {
 } as const;
 
 describe('Console read dialects', () => {
+  it.each([
+    ['To', ['TodoItem']],
+    ['TodoItem ', ['where', 'order by', 'limit', 'many', 'first', 'one', 'count', 'exists']],
+    ['TodoItem wh', ['where']],
+    ['TodoItem where comp', ['completed']],
+    ['TodoItem where completed = ', ['true', 'false']],
+    ['TodoItem where completed = false ', ['and', 'or', 'order by', 'limit', 'many', 'exists']],
+    ['TodoItem where completed = false ord', ['order by']],
+    ['TodoItem order ', ['by']],
+    ['TodoItem order by ', ['title']],
+    ['TodoItem order by ti', ['title']],
+    ['TodoItem order by title ', ['ascending', 'descending', 'limit', 'first', 'many']],
+    ['TodoItem order by title desc', ['descending']],
+    ['TodoItem limit 3 ', ['many']],
+  ] as const)('completes declarative draft %s', (source, expected) => {
+    const items = completeConsoleDocument(source, source.length, application, {
+      dialect: 'declarative',
+      orderableFields: () => ['title'],
+    }).items;
+    expect(items.map(item => item.label)).toEqual(expect.arrayContaining([...expected]));
+    if (source.includes('order by ') && !source.includes('title'))
+      expect(items.some(item => item.label === 'completed')).toBe(false);
+    expect(
+      items.filter(item => item.kind === 'member').every(item => !item.apply.includes('(')),
+    ).toBe(true);
+  });
+
+  it('applies capability hints without affecting predicate completion or semantic validity', () => {
+    const source = 'TodoItem order by ';
+    const options = { dialect: 'declarative', orderableFields: () => [] } as const;
+    expect(completeConsoleDocument(source, source.length, application, options).items).toEqual([]);
+    const predicate = 'TodoItem where comp';
+    expect(
+      completeConsoleDocument(predicate, predicate.length, application, options).items.map(
+        item => item.label,
+      ),
+    ).toContain('completed');
+    expect(
+      analyzeConsoleDocument(source + 'completed', application, options).request,
+    ).toBeDefined();
+  });
+
+  it('edits declarative ordering and limit without rewriting unrelated source', () => {
+    const options = { dialect: 'declarative' } as const;
+    let source = '  TodoItem where ( completed = false )  many  ';
+    const apply = (changes: ReturnType<typeof editConsoleOrderBy>) => {
+      expect(changes).toBeDefined();
+      for (const change of [...changes!].reverse())
+        source = source.slice(0, change.from) + change.insert + source.slice(change.to);
+      expect(analyzeConsoleDocument(source, application, options).request).toBeDefined();
+    };
+    apply(
+      editConsoleOrderBy(source, application, { fieldName: 'title', direction: 'asc' }, options),
+    );
+    expect(source).toBe('  TodoItem where ( completed = false ) order by title  many  ');
+    apply(
+      editConsoleOrderBy(source, application, { fieldName: 'title', direction: 'desc' }, options),
+    );
+    expect(source).toContain('order by title descending');
+    apply(editConsoleLimit(source, application, 0, options));
+    expect(source).toContain('descending limit 0  many');
+    apply(editConsoleLimit(source, application, 4, options));
+    apply(
+      editConsoleOrderBy(source, application, { fieldName: 'priority', direction: 'asc' }, options),
+    );
+    expect(source).toContain('order by priority ascending limit 4');
+    apply(editConsoleOrderBy(source, application, undefined, options));
+    expect(source).toBe('  TodoItem where ( completed = false )  limit 4  many  ');
+    expect(editConsoleLimit('TodoItem', application, 2, options)).toEqual([
+      { from: 8, to: 8, insert: ' limit 2' },
+    ]);
+    expect(editConsoleLimit('TodoItem one', application, 2, options)).toBeUndefined();
+    expect(editConsoleOrderBy('TodoItem where', application, undefined, options)).toBeUndefined();
+  });
   it.each([
     ['TodoItem', 'TodoItem.many()'],
     ['TodoItem where completed = false', 'TodoItem.where(completed = false).many()'],

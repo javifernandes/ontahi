@@ -114,11 +114,29 @@ Following the Read Console proof, the next language experiment compares the exis
 fluent syntax with a declarative, SQL-familiar surface over the same canonical Read/Selection
 values. These are Ontahí dialects, not execution of TypeScript or SQL; equality, nullability,
 cardinality, defaults, and policy retain Ontahí semantics. The headless proof now parses and converts
-both dialects using the same Selection productions and resolver; editor/UI support remains pending.
+both dialects using the same Selection productions and resolver. The Devtools Console now exposes
+TS/Declarative switching with dialect-aware CodeMirror assistance and source-backed table edits.
 Declarative reads default to `many`; explicit `first`, `one`, `count`, and `exists` retain their
 existing meanings. Valid-draft conversion retains terminal intent from authoring syntax, because
 `first` and `exists` can share a wire request without sharing result presentation. Invalid drafts
-and unsupported comments cannot be converted; conversion performs no execution.
+and unsupported comments cannot be converted; conversion performs no execution. The editor records
+source replacement and dialect configuration as one invertible history event, preserving original
+trivia on undo. Semantically equivalent conversion does not make an executed result stale; changing
+the query or the `exists` presentation intent does. Receiver capabilities still constrain both
+ordering suggestions and table headers, without changing intrinsic schema validity.
+
+Authoring dialect preference is browser-origin UI state, separate from canonical requests and
+runtime authority. Devtools Settings and Explorer Selection editors share it through the CodeMirror
+adapter; an explicit host dialect or a local Console switch can override it. Preference changes
+convert only valid drafts without execution, preserving incomplete drafts and editor history.
+Contextual Explorer predicates share syntax in both dialects, while plain-text searches remain
+plain text. Both editor families share theme-aware syntax palettes.
+
+Activity is another projection of the captured canonical model, not an editor. Its Graph Read
+list titles, detail, Visual request, and text filtering follow the same saved dialect through a
+presentation context and pure diagnostic formatters. Reprojection never changes captured JSON or
+produces runtime traffic. Diagnostic summaries may describe captures outside the Console grammar;
+they do not reconstruct lost editor intent such as `exists` from a nullable `get` request.
 
 Before adding Command syntax, Plan 150a established the direction of named Selection factories
 without losing canonical identity/reference guarantees. Public factory declaration details and Ref

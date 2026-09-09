@@ -76,16 +76,16 @@ Read delivery evidence: [merged PR #148](https://github.com/javifernandes/ontahi
 included in `main` at `cfca984`. This plan remains `current`; delivering Reads did not complete
 its Command, Operation, session, or CLI scope.
 
-| Area                            | Status                                  | Delivered or remaining                                                                                                                                                 |
-| ------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A. Language contract            | Partial                                 | Read syntax, diagnostics, lowering, and reflection exist; three-family resolution and a headless session contract remain.                                              |
-| B. Read walking skeleton        | Done for the agreed small Read surface  | Filtered/unfiltered terminals, one-field ordering, limits, rich values, Visual/JSON, and source-backed table controls. Views and pagination were not delivered.        |
-| 150a. Locator/Ref investigation | Done; bounded deferrals accepted        | 21 research cases; canonical identity preserved. Factory declaration details, external resolution, and Ref migration deferred.                                         |
-| C. Two Read dialects            | In progress; headless proof implemented | Shared analysis and valid-draft conversion. UI switching, assistance, rich controls, and table editing remain next.                                                    |
-| D. Graph Commands               | Not started                             | Targeting, authoring, confirmation, execution, and results in the Console.                                                                                             |
-| E. Operation invocation         | Not started; after Commands             | Input assistance, invocation outcomes, confirmation, and durable progress links.                                                                                       |
-| F. Console experience           | Partial                                 | Compact results, read assistance, undo, and pending/stale/error states exist; execution history, richer disclosures, and complete session/accessibility proofs remain. |
-| G. CLI projection               | Deferred                                | Headless execution proof, package decision, and separate CLI implementation plan.                                                                                      |
+| Area                            | Status                                 | Delivered or remaining                                                                                                                                                 |
+| ------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Language contract            | Partial                                | Read syntax, diagnostics, lowering, and reflection exist; three-family resolution and a headless session contract remain.                                              |
+| B. Read walking skeleton        | Done for the agreed small Read surface | Filtered/unfiltered terminals, one-field ordering, limits, rich values, Visual/JSON, and source-backed table controls. Views and pagination were not delivered.        |
+| 150a. Locator/Ref investigation | Done; bounded deferrals accepted       | 21 research cases; canonical identity preserved. Factory declaration details, external resolution, and Ref migration deferred.                                         |
+| C. Two Read dialects            | Implemented; validation complete       | TS/Declarative selector, shared analysis, assistance, rich values, table edits, and reversible non-executing conversion.                                               |
+| D. Graph Commands               | Not started                            | Targeting, authoring, confirmation, execution, and results in the Console.                                                                                             |
+| E. Operation invocation         | Not started; after Commands            | Input assistance, invocation outcomes, confirmation, and durable progress links.                                                                                       |
+| F. Console experience           | Partial                                | Compact results, read assistance, undo, and pending/stale/error states exist; execution history, richer disclosures, and complete session/accessibility proofs remain. |
+| G. CLI projection               | Deferred                               | Headless execution proof, package decision, and separate CLI implementation plan.                                                                                      |
 
 Deferred read extensions: named Views/parameters, nested projections, multi-field ordering, and
 pagination. They are not prerequisites for research or the two-dialect proof. The original View
@@ -397,7 +397,7 @@ scope is separately pending rather than included in the completion claim.
 
 ### C. Read-Only Dialect Experiment
 
-Status: in progress; headless parsing/analysis/conversion implemented after the accepted 150a gate.
+Status: implemented; headless and editor/Console proofs complete after the accepted 150a gate.
 
 Representative equivalence in the headless slice:
 
@@ -414,9 +414,9 @@ TodoItem where completed = false order by title ascending limit 25
       including defaults and cardinality. A dialect must not inherit JavaScript or SQL coercions.
 - [x] Prove parse/render/parse semantic round-trips, including reserved-word Entity/Field names,
       quoted values, Boolean precedence, and diagnostics for unsupported constructs.
-- [ ] Switching dialect must not execute. Define handling for invalid/incomplete drafts, comments,
+- [x] Switching dialect must not execute. Define handling for invalid/incomplete drafts, comments,
       undo, and source trivia; never silently replace a draft with an older valid model.
-- [ ] Reuse finite-value controls and the source-backed table sort/limit interaction in each dialect.
+- [x] Reuse finite-value controls and the source-backed table sort/limit interaction in each dialect.
       Request lowering, receiver capability hints, and authorization must remain shared.
 - [x] Use headless adapters first; no new universal AST, language-runtime eval, CLI binary, or generic
       dialect plugin framework. Additional Java/Python/.NET-like surfaces remain future possibilities.
@@ -436,13 +436,92 @@ rejects empty/invalid drafts instead of using stale valid state. Conversion pres
 spelling/grouping; outer whitespace is formatted. Comments are not supported and therefore block
 conversion rather than being dropped. Same-dialect conversion preserves the full source.
 
-#### C2. Next Vertical Slice — Editor And Console
+#### C2. Editor And Console
 
-Add the UI selector only with dialect-aware CodeMirror parsing, completion, lint, rich values, and
-source-backed sort/limit edits. Switching must be non-executing and reversible with source and
-dialect restored together; retain the original draft/trivia in that transaction. Invalid drafts
-must remain untouched with actionable feedback. No selector is exposed by C1, and the existing
-Console/Explorer continue using TS/Selection syntax. Do not claim C is complete before this proof.
+The Console exposes TS/Declarative controls beside Run, with dialect-aware CodeMirror parsing,
+completion, lint, rich Boolean/enum values, and source-backed sort/limit edits. Switching does not
+execute; CodeMirror stores source and dialect together in history and restores original trivia on
+undo. Invalid drafts block conversion with a tooltip and existing diagnostics; empty drafts switch
+unchanged. Comments remain unsupported rather than silently discarded. `initialDialect` optionally
+selects the initial Console form; TS and the contextual Explorer Selection remain unchanged defaults.
+
+Results retain executed meaning during switching and pending reads. Canonical request equality plus
+the `exists` presentation intent determines whether the current draft matches the successful
+snapshot; equivalent conversion does not claim a new execution or falsely show a stale result.
+Table controls and completion share existing receiver capability hints in both dialects.
+
+#### C2 Verification — 2026-09-09
+
+- Language: 204 tests; CodeMirror: 45 tests; Devtools: 75 tests, all with coverage thresholds passing.
+- Added proofs for clause/Selection completion, ordering capability hints, minimal source edits,
+  parser and history restoration, rich values, invalid/empty drafts, initial dialect, pending
+  `exists` results, and real receiver-backed sorting/limits in declarative mode.
+- All three packages pass build, typecheck, and lint. The Todo browser bundle builds.
+- `pnpm verify:artifacts -- --skip-build` passes clean-room install, type, and runtime checks with
+  the rebuilt Language, CodeMirror, and Devtools artifacts.
+- Browser smoke in the local in-memory Todo: converted to Declarative without a new Activity entry,
+  ran the filtered read, sorted via the title header, then changed limit to two. Source, Activity,
+  and two visible result rows agreed; the Boolean control remained rich. Inspected actual rendering.
+
+#### C3. Shared Authoring Preference And Syntax Contrast
+
+- [x] Add a browser-origin preference in Devtools Settings, observable by mounted editors and
+      other same-origin tabs. Keep it separate from runtime authority and use page-local fallback
+      when storage is unavailable. Server calls are inert.
+- [x] Preserve the Console editor, draft, result, and undo history while visiting Settings or
+      Activity. Convert valid drafts without execution on preference changes; retain incomplete
+      drafts with a notice. The local Console switch does not overwrite the saved preference;
+      an explicit host `initialDialect` overrides it.
+- [x] Share the preference with Explorer Selection editors without inventing new predicate or
+      plain-text search semantics: contextual predicates already have identical syntax in both
+      dialects. Their help identifies the preferred dialect.
+- [x] Replace generic syntax colors with dedicated light/dark palettes for both dialects and
+      contextual Selection editors. Follow the resolved Explorer theme and the dark Console.
+
+Verification on 2026-09-09: Language 204, CodeMirror 55, Devtools 79, and Explorer 189 tests pass
+with coverage thresholds. New tests cover preference persistence/notifications/restricted storage/SSR,
+Settings navigation and undo, invalid draft preservation, saved defaults and host overrides,
+Explorer theme reconfiguration, and keyword tokens in both dialects. Every token color exceeds
+4.5:1 contrast against the tested light/dark editor surfaces. All three touched UI packages pass
+build, typecheck, and lint; the Todo client builds (existing chunk-size warning). The user reports
+having tested manually; no additional assistant browser smoke is claimed for C3.
+
+`pnpm verify:artifacts -- --skip-build` also passes clean-room installation, type, and runtime
+checks with rebuilt artifacts. The network-restricted attempt was stopped after npm resolution
+failed; the successful run used authorized network access.
+
+#### C3 Follow-up: Fixed-Light Todo Host
+
+The Todo host uses a fixed light CSS palette but omitted `ExplorerProvider.theme`, so the editor
+followed a dark OS preference and displayed light tokens on a light background. A consumer test
+mounting the real provider/editor with a dark system preference reproduced the exact pale Field
+color from the reported screenshot. The host now explicitly supplies `theme='light'`; computed
+Field/operator colors and the rich Boolean value pass without changing Console's dark palette.
+Focused Todo Explorer tests (4), codegen check, server/client typechecks, lint, and client build pass.
+The full Todo suite also passes (67 tests) with authorized local-server access; the sandboxed run
+could not complete its OAuth/application server tests.
+
+#### C4. Activity Read Projection
+
+- [x] Apply the saved dialect to existing Graph Read Activity list titles, detail headings,
+      Selection/ordering cards, and filtering—not only CodeMirror editors.
+- [x] Derive labels directly from captured canonical data with pure formatters and a React
+      presentation context. Keep payloads, Body JSON/Envelope copying, results, and traffic intact.
+- [x] Preserve nested declarative predicate grouping and captured cardinality. Do not infer
+      `exists` from nullable `get`; retain View/multi-order/redacted diagnostic information even
+      when outside the executable Console grammar.
+- [x] Keep Command and Operation labels unchanged until their dialects are defined.
+
+The regression first failed because Activity retained fixed TS summaries after changing Settings.
+The passing focused proof covers all three summary locations, Selection, filtering, live preference
+changes, unchanged captured payloads/JSON/envelopes, and no extra request or CodeMirror instance.
+Pure tests also cover nested predicates, null/membership, incomplete captures, Views, ordering, and
+read modes.
+
+C4 verification on 2026-09-09: all 86 Devtools tests pass with coverage thresholds. The 12 focused
+Activity tests also pass after the final formatter adjustment. Devtools build, typecheck, lint,
+changed-file formatting, and Todo client build pass (existing chunk-size warning). No new browser
+smoke or package export was added in this slice.
 
 #### C1 Verification — 2026-09-09
 
@@ -609,7 +688,7 @@ delivery evidence.
       URLs, edit credentials, or submit raw authority/context.
 - [x] The Locator/Ref research records an explicit decision or bounded deferral before mutable
       syntax is implemented.
-- [ ] TS-like and declarative Read documents preserve equivalent canonical requests, semantic
+- [x] TS-like and declarative Read documents preserve equivalent canonical requests, semantic
       round-trips, rich controls, and non-executing, non-destructive dialect switching.
 - [ ] A developer can author and execute a Graph Command, including an ordered Relationship move
       in Todo, from the Console.
@@ -647,9 +726,9 @@ final branch head `0b64b25`: Node 20 tests, Node 24 tests with coverage, example
 lint, builds, typecheck, and clean-room package artifact checks. Sonar and CodeQL passed as well.
 The detailed Read implementation and browser smoke observations are retained in the checkpoint.
 
-This is evidence for the shipped Read slice, not for the unimplemented dialect, mutation, history,
-or headless session paths. The 2026-09-09 update only reconciles plan status and scope; it does not
-claim a new full CI or browser run.
+This merged-CI evidence covers the original Read slice. The later local dialect implementation,
+automated checks, and browser smoke are recorded separately in C1/C2 above, not claimed as a new
+full CI run. Mutation, execution history, and headless session paths remain unimplemented.
 
 ### Remaining Verification Contract
 

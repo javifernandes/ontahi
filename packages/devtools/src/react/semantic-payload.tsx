@@ -1,13 +1,16 @@
 import type { GraphReadOrder } from '@ontahi/core/data-graph';
+import { useContext } from 'react';
 
 import {
   formatSelectionExpression,
+  formatReadOrder,
   graphCommandSummary,
   graphReadSummary,
   isRecord,
   viewFields,
   type RecordValue,
 } from './activity-model.js';
+import { AuthoringDialectContext } from './authoring-dialect.js';
 import { styles } from './devtools-styles.js';
 
 const isEntityRefValue = (
@@ -220,19 +223,20 @@ const OperationPayloadVisual = ({ body }: { readonly body: RecordValue }) => {
 };
 
 const GraphReadVisual = ({ body }: { readonly body: RecordValue }) => {
+  const dialect = useContext(AuthoringDialectContext);
   const selection = isRecord(body.selection) ? body.selection : undefined;
   const view = isRecord(body.view) ? body.view : undefined;
   const fields = viewFields(view);
   return (
     <>
-      <p style={styles.semanticHeadline}>{graphReadSummary(body)}</p>
+      <p style={styles.semanticHeadline}>{graphReadSummary(body, dialect)}</p>
       <div style={styles.semanticGrid}>
         <div style={styles.semanticCard}>
           <span style={styles.semanticLabel}>Selection</span>
           <span style={styles.semanticValue}>
             {String(selection?.entityName ?? 'Unknown')}
             {' · '}
-            {formatSelectionExpression(selection?.expression)}
+            {formatSelectionExpression(selection?.expression, dialect)}
           </span>
         </div>
         {Array.isArray(body.orderBy) ? (
@@ -240,9 +244,7 @@ const GraphReadVisual = ({ body }: { readonly body: RecordValue }) => {
             <span style={styles.semanticLabel}>Order</span>
             <span style={styles.semanticValue}>
               {body.orderBy
-                .map(order =>
-                  isRecord(order) ? `${String(order.fieldName)} ${String(order.direction)}` : '',
-                )
+                .map(order => formatReadOrder(order, dialect))
                 .filter(Boolean)
                 .join(', ')}
             </span>

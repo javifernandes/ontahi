@@ -10,6 +10,7 @@ import {
 import {
   analyzeSelectionDocument,
   parseConsoleDocument,
+  type ConsoleDialect,
   type ConsoleLanguageApplicationReflection,
   type SelectionExpressionSyntax,
   type SelectionLanguageEntityReflection,
@@ -119,8 +120,9 @@ type FiniteValueProjectionContext = {
 const consoleFiniteValueProjectionContext = (
   document: string,
   application: ConsoleLanguageApplicationReflection,
+  dialect: ConsoleDialect = 'ts',
 ): FiniteValueProjectionContext | undefined => {
-  const expression = parseConsoleDocument(document).syntax.expression;
+  const expression = parseConsoleDocument(document, dialect).syntax.expression;
   if (!expression?.entity || !expression.selection) return undefined;
   const selection = expression.selection;
   const entity = application.entities.find(candidate => candidate.name === expression.entity?.text);
@@ -142,8 +144,9 @@ const consoleFiniteValueProjectionContext = (
 export const deriveConsoleFiniteValueProjections = (
   document: string,
   application: ConsoleLanguageApplicationReflection,
+  dialect: ConsoleDialect = 'ts',
 ): readonly SelectionFiniteValueProjection[] =>
-  consoleFiniteValueProjectionContext(document, application)?.projections ?? [];
+  consoleFiniteValueProjectionContext(document, application, dialect)?.projections ?? [];
 
 const revealFiniteValueProjection = StateEffect.define<SelectionLanguageRange>();
 
@@ -354,7 +357,8 @@ export const selectionFiniteValueProjectionExtensions = (
 
 export const consoleFiniteValueProjectionExtensions = (
   application: ConsoleLanguageApplicationReflection,
+  dialect: ConsoleDialect = 'ts',
 ): readonly Extension[] =>
   finiteValueProjectionExtensions(document =>
-    consoleFiniteValueProjectionContext(document, application),
+    consoleFiniteValueProjectionContext(document, application, dialect),
   );

@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   consoleExpressionExtensions,
+  consoleExpressionDialect,
+  setConsoleExpressionDialect,
   consoleExpressionLinter,
   deriveConsoleFiniteValueProjections,
   deriveSelectionFiniteValueProjections,
@@ -55,6 +57,92 @@ const TodoItem = {
     { name: 'title', type: 'string', nullable: false },
   ],
 } as const;
+
+describe('Console dialect editor state', () => {
+  it('changes parser and lint with source and restores both through history', () => {
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: 'TodoItem.many()',
+        extensions: [history(), consoleExpressionExtensions({ entities: [TodoItem] })],
+      }),
+    });
+    try {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: 'TodoItem where completed = false' },
+        effects: setConsoleExpressionDialect.of('declarative'),
+      });
+      expect(syntaxTree(view.state).topNode.name).toBe('DeclarativeConsoleDocument');
+      expect(
+        consoleExpressionLinter({ entities: [TodoItem] }, { dialect: 'declarative' })(view),
+      ).toEqual([]);
+      expect(undo(view)).toBe(true);
+      expect(view.state.doc.toString()).toBe('TodoItem.many()');
+      expect(view.state.field(consoleExpressionDialect)).toBe('ts');
+      expect(syntaxTree(view.state).topNode.name).toBe('ConsoleDocument');
+      expect(redo(view)).toBe(true);
+      expect(syntaxTree(view.state).topNode.name).toBe('DeclarativeConsoleDocument');
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it('reconfigures capabilities in a declarative editor without losing dialect or undo', async () => {
+    const application = { entities: [TodoItem] };
+    const language = new Compartment();
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: 'TodoItem order by ',
+        extensions: [
+          history(),
+          language.of(
+            consoleExpressionExtensions(application, {
+              dialect: 'declarative',
+              orderableFields: () => ['title'],
+            }),
+          ),
+        ],
+      }),
+    });
+    try {
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['title']),
+      );
+      view.dispatch({
+        effects: language.reconfigure(
+          consoleExpressionExtensions(application, {
+            dialect: 'declarative',
+            orderableFields: () => [],
+          }),
+        ),
+      });
+      await vi.waitFor(() => expect(currentCompletions(view.state)).toEqual([]));
+      expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+      expect(syntaxTree(view.state).topNode.name).toBe('DeclarativeConsoleDocument');
+      expect(undo(view)).toBe(false);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it('derives Boolean and enum controls at declarative source ranges', () => {
+    const source = 'WorkItem where completed = false and status = "open" many';
+    const projections = deriveConsoleFiniteValueProjections(
+      source,
+      {
+        entities: [{ ...WorkItem, fields: [...TodoItem.fields, ...WorkItem.fields] }],
+      },
+      'declarative',
+    );
+    expect(projections.map(projection => source.slice(projection.from, projection.to))).toEqual([
+      'false',
+      '"open"',
+    ]);
+  });
+});
 
 const WorkItem = {
   name: 'WorkItem',

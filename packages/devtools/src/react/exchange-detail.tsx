@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 
 import type { DiagnosticProtocolEnvelope } from '../diagnostics.js';
 
@@ -8,6 +8,7 @@ import {
   type ExchangeActivity,
   type RecordValue,
 } from './activity-model.js';
+import { AuthoringDialectContext } from './authoring-dialect.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
 import { SemanticPayload } from './semantic-payload.js';
@@ -63,6 +64,7 @@ const PayloadPanel = ({
 };
 
 export const ExchangeDetail = ({ activity }: { readonly activity: ExchangeActivity }) => {
+  const dialect = useContext(AuthoringDialectContext);
   const event = activity.settled ?? activity.started;
   if (!event) return null;
   const outcome = activity.settled?.outcome ?? 'pending';
@@ -74,7 +76,7 @@ export const ExchangeDetail = ({ activity }: { readonly activity: ExchangeActivi
       <header style={styles.detailHeader}>
         <span style={{ ...styles.dot, background: outcomeColor(outcome) }} />
         <span style={styles.detailHeadingGroup}>
-          <h3 style={styles.detailTitle}>{semanticSummary(activity)}</h3>
+          <h3 style={styles.detailTitle}>{semanticSummary(activity, dialect)}</h3>
           <span style={styles.detailMeta}>
             <span style={styles.family}>{event.family}</span>
             <span>{event.transportId}</span>

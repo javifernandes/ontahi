@@ -12,6 +12,7 @@ import {
   type RuntimeProtocolRequestEnvelope,
   type RuntimeProtocolResponseEnvelope,
 } from '@ontahi/core/runtime/protocol';
+import { consoleExpressionDialect } from '@ontahi/language-codemirror';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Effect } from 'effect';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -31,6 +32,111 @@ afterAll(() => {
   else Reflect.deleteProperty(Range.prototype, 'getClientRects');
 });
 afterEach(cleanup);
+
+describe('Console dialect switching', () => {
+  it('converts without executing and restores exact source plus parser on undo/redo', async () => {
+    const source = '  Tag.where( active = true ).limit(2).many()  ';
+    const { view, request, result } = mountConsole(source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: 'Declarative' }));
+    expect(view.state.doc.toString()).toBe('Tag where active = true limit 2 many');
+    expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+    expect(screen.getByRole('button', { name: 'Declarative' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(request).toHaveBeenCalledOnce();
+    expect(result.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('combobox', { name: 'Value for Tag.active' })).toBeDefined();
+    act(() => {
+      undo(view);
+    });
+    expect(view.state.doc.toString()).toBe(source);
+    expect(view.state.field(consoleExpressionDialect)).toBe('ts');
+    expect(screen.getByRole('button', { name: 'TS' }).getAttribute('aria-pressed')).toBe('true');
+    act(() => {
+      redo(view);
+    });
+    expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it('runs declarative source with rich values and receiver-backed sort/limit edits', async () => {
+    const { view, request, result, visibleNames, applyLimit } = mountConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Declarative' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    fireEvent.click(result.getByRole('button', { name: /Sort by name/ }));
+    await waitFor(() => expect(visibleNames()).toEqual(['Alpha', 'Middle']));
+    expect(view.state.doc.toString()).toBe('Tag where active = true order by name limit 2 many');
+    applyLimit(1);
+    await waitFor(() => expect(visibleNames()).toEqual(['Alpha']));
+    expect(view.state.doc.toString()).toBe('Tag where active = true order by name limit 1 many');
+    expect(request).toHaveBeenCalledTimes(3);
+    act(() => {
+      undo(view);
+    });
+    expect(view.state.doc.toString()).toBe('Tag where active = true order by name limit 2 many');
+    expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+    expect(result.getByRole('status').textContent).toBe('Changes not run');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Value for Tag.active' }), {
+      target: { value: 'false' },
+    });
+    expect(view.state.doc.toString()).toContain('active = false');
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps invalid drafts untouched and allows switching an empty editor', () => {
+    const { view, replaceSource, request } = mountConsole('Tag.where(active =');
+    const button = screen.getByRole('button', { name: 'Declarative' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.title).toContain('Fix the expression');
+    fireEvent.click(button);
+    expect(view.state.doc.toString()).toBe('Tag.where(active =');
+    replaceSource('   ');
+    fireEvent.click(button);
+    expect(view.state.doc.toString()).toBe('   ');
+    expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+    act(() => {
+      undo(view);
+    });
+    expect(view.state.field(consoleExpressionDialect)).toBe('ts');
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('preserves pending exists intent when switching dialect and editing the new draft', async () => {
+    const { request, respond, replaceSource, result, view } = mountConsole('Tag.exists()');
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    request.mockImplementationOnce(async envelope => {
+      await pending;
+      return respond(envelope);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Declarative' }));
+    replaceSource('Tag first');
+    await act(async () => {
+      release();
+      await pending;
+    });
+    await result.findByText('true');
+    expect(view.state.doc.toString()).toBe('Tag first');
+    expect(result.getByRole('status').textContent).toBe('Changes not run');
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it('supports an initial declarative dialect without requiring an initial document', () => {
+    render(<ConsolePanel options={{ entities: [Tag], initialDialect: 'declarative' }} />);
+    const view = EditorView.findFromDOM(
+      screen.getByRole('textbox', { name: 'Ontahí Console expression' }),
+    )!;
+    expect(view.state.doc.toString()).toBe('Tag');
+    expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
 
 const Tag = entity('Tag', { id: field.id(), name: field.string(), active: field.boolean() });
 const Other = entity('Other', { id: field.id(), name: field.string() });

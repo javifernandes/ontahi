@@ -8,6 +8,16 @@ keeps transport families as supporting metadata, and lets each request and respo
 semantic projection, body JSON, and its complete Runtime Protocol envelope. It does not patch
 `fetch`, `WebSocket`, or browser globals, and it does not persist or upload diagnostic data.
 
+Activity Graph Read summaries follow Settings → Authoring language in the list, detail heading,
+and Visual request (Selection and ordering included). Filtering matches the displayed dialect.
+This is a pure projection of captured canonical data, not a CodeMirror editor or a conversion of
+previously rendered text. Changing the preference reprojects existing entries without traffic or
+payload mutation; Body JSON, Envelope, and copied JSON remain the captured protocol data.
+Summaries are compact diagnostic labels, not guaranteed executable Console documents: they may
+include Views, multiple ordering keys, redacted values, or Reference selections outside today's
+Console grammar. Nullable `get` is shown as `first`, not guessed to be `exists`. Command and
+Operation labels remain unchanged until those authoring dialects are defined.
+
 ```tsx
 import { entity, field } from '@ontahi/core/data-graph';
 import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
@@ -62,6 +72,27 @@ the successful result to presence/absence. Errors remain errors, never `false`. 
 neither `limit` nor `orderBy`, and has no table controls. Activity retains the actual `get` exchange.
 Many reads may override the default row limit in source, for example `Tag.limit(10).many()` or
 `TodoItem.where(completed = false).limit(5).many()`.
+
+The composer includes **TS / Declarative** controls. For example, `TodoItem where completed = false`
+selects many by default; append `order by title descending limit 10`, or an explicit terminal such
+as `first`, `one`, `count`, or `exists` with the existing modifier restrictions. Both dialects keep
+the same runtime and policy boundary, Boolean/enum controls, and permission-aware completion.
+Header sorting and limit changes edit the active dialect and submit through Runtime Transport.
+
+Switching dialect does not run a query. Undo/redo restores the original source and dialect together;
+equivalent converted queries keep the current result without a false stale notice. Invalid drafts
+(including unsupported comments) block switching with an explanation and are never discarded.
+Empty drafts may switch unchanged. Settings → Authoring language saves the preferred dialect for
+Ontahí authoring editors on this browser origin, including other tabs. With no saved preference,
+TS is the default. The Console switch is a local override; it does not change Settings. Visiting
+Settings or Activity preserves the mounted Console draft, result, and undo history. A preference
+change converts valid drafts without running; incomplete drafts retain their dialect with a notice.
+
+An explicit `console.initialDialect` is a host override of the saved preference. If supplied,
+`initialDocument` must use that initial dialect (TS when omitted); a saved preference then converts
+it safely. Explorer Selection predicates already share their syntax across both dialects, and
+plain-text searches remain plain text. Syntax highlighting uses a dedicated dark palette for the
+Console, including `where`, `many`, other clauses, Fields, and literals.
 
 Query ordering is shared by the source editor and the Visual result table:
 
