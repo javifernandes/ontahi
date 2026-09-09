@@ -22,6 +22,7 @@ relatedPlans:
   - ontahi://plans/126-ontahi-runtime-data-reflection
   - ontahi://plans/147-application-bound-headless-graph-reads
   - ontahi://plans/150-ontahi-devtools-semantic-console
+  - ontahi://plans/150a-selection-factories-locators-and-refs
 ---
 
 The [[ontahi.semantic-interaction-language|Ontahí Semantic Interaction Language]] is a family of
@@ -106,6 +107,25 @@ to lower to the existing family-owned Query/Selection, Command, and Operation re
 representations. The document must not become a universal Console AST, hide family selection in UI
 state, or define a new Runtime Protocol family. Its headless services remain reusable by a terminal
 CLI even though the first host is React Devtools.
+
+## Read Dialect Design Gate
+
+Following the Read Console proof, the next language experiment compares the existing TS-like
+fluent syntax with a declarative, SQL-familiar surface over the same canonical Read/Selection
+values. These are Ontahí dialects, not execution of TypeScript or SQL; equality, nullability,
+cardinality, defaults, and policy retain Ontahí semantics. The headless proof now parses and converts
+both dialects using the same Selection productions and resolver; editor/UI support remains pending.
+Declarative reads default to `many`; explicit `first`, `one`, `count`, and `exists` retain their
+existing meanings. Valid-draft conversion retains terminal intent from authoring syntax, because
+`first` and `exists` can share a wire request without sharing result presentation. Invalid drafts
+and unsupported comments cannot be converted; conversion performs no execution.
+
+Before adding Command syntax, Plan 150a established the direction of named Selection factories
+without losing canonical identity/reference guarantees. Public factory declaration details and Ref
+migration are deferred; no new portable factory node is introduced. The read-only dialect proof tests semantic
+round-trips and source-backed rich controls. Dialect switching must not execute or silently discard
+an incomplete draft. Implementation language (including a future Go/Rust CLI) is independent from
+the selected authoring dialect. Commands follow that proof; Operation invocation follows Commands.
 
 ## Reflection And Assistance
 

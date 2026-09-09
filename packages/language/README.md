@@ -126,3 +126,37 @@ the host. Return `[]` when unavailable or denied. Omitting the resolver retains 
 completion. Advertised names are intersected with reflected sortable Fields; filtering, direction,
 and member suggestions are unchanged. The resolver affects assistance only, never parsing,
 diagnostics, lowering, or receiver authorization.
+
+## Headless Read Dialects
+
+Parsing and analysis accept an opt-in `declarative` dialect; the default remains `ts`:
+
+```ts
+const source = 'TodoItem where completed = false order by title descending limit 10';
+const analysis = analyzeConsoleDocument(source, applicationReflection, { dialect: 'declarative' });
+```
+
+The declarative order is `Entity [where predicate] [order by Field [ascending|descending]]
+[limit number] [terminal]`. Omitted terminal means `many`; explicit terminals are `many`, `first`,
+`one`, `count`, and `exists`. Ordering defaults to ascending. All type, precedence, cardinality,
+default-limit, and modifier restrictions remain the same as TS-like Console reads. This is Ontahí
+syntax, not SQL execution or SQL coercion. New clause words are contextual, so `order` and `many`
+can still name Entities and Fields. Existing reserved Selection words remain reserved.
+
+```ts
+import { convertConsoleDocument, parseConsoleDocument } from '@ontahi/language';
+
+parseConsoleDocument(source, 'declarative');
+convertConsoleDocument(source, applicationReflection, 'ts', { dialect: 'declarative' });
+// TodoItem.where(completed = false).orderBy(title, desc).limit(10).many()
+```
+
+Conversion returns `undefined` for empty or invalid drafts. It never executes or uses an older
+valid document. It preserves predicate spelling and grouping, formats outer syntax/whitespace,
+and prints an explicit terminal. Same-dialect conversion preserves the entire valid source.
+Comments are unsupported and block conversion rather than being silently removed. Terminal intent
+is preserved even when `first` and `exists` produce identical wire requests.
+
+This is a headless slice: Console completion, source-range sort/limit edits, the CodeMirror adapter,
+and the Devtools UI still support the existing TS-like syntax only. A UI must not use conversion
+alone as a dialect switch without supporting editor behavior and undo of source plus dialect.

@@ -1,6 +1,6 @@
 # 150. Ontahí Devtools Semantic Console
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/150-ontahi-devtools-semantic-console`
 
@@ -9,11 +9,12 @@ Related plans:
 1. [100f. Operation Invocation Capability](../done/100f-operation-invocation-capability.md)
 2. [118. Ontahí Selection Language Editor](../done/118-ontahi-selection-language-editor.md)
 3. [128. Ontahí Data Graph Execution Bridge](../current/128-ontahi-data-graph-execution-bridge.md)
-4. [132. Durable Invocation Identity And Idempotency](./132-durable-invocation-identity-and-idempotency.md)
+4. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 5. [145. Ordered Relations And Sequence Commands](../done/145-ordered-relations-and-sequence-commands.md)
 6. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 7. [147. Application-Bound Headless Graph Reads](../done/147-application-bound-headless-graph-reads.md)
 8. [148. Ontahí Devtools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
+9. [150a. Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
 
 Related Atlas shapes:
 
@@ -24,9 +25,20 @@ Related Atlas shapes:
 
 ## Summary
 
-Add a **Console** panel to Ontahí Devtools where a developer can author and execute semantic Graph
-Reads, Graph Commands, and Operation invocations against the application currently connected to the
-browser:
+Deliver a **Console** panel to Ontahí Devtools for semantic Graph Reads, Graph Commands, and
+Operation invocations against the connected application. The Read slice is shipped; Commands and
+Operation invocation are not yet implemented in the Console.
+
+Supported today:
+
+```text
+TodoItem.where(completed = false).orderBy(title).limit(20).many()
+Tag.many()
+TodoItem.where(id = "todo-explorer").one()
+TodoItem.where(completed = false).exists()
+```
+
+Original future-facing examples, retained as design context rather than executable syntax:
 
 ```text
 TodoItem
@@ -53,9 +65,33 @@ shape is a semantic, reflection-assisted console that lowers valid documents to 
 request bodies and executes them through the application's configured runtime. It is not JavaScript
 `eval`, an arbitrary HTTP client, a server shell, or a privileged policy bypass.
 
-The first visual host is a new Devtools panel. Its parser, resolver, lowering, and execution
-coordination remain headless so a future terminal CLI can use the same documents and outcomes
-without importing React or reconstructing Ontahí semantics.
+The first visual host is the Devtools panel. Parser, resolver, and lowering are already headless.
+Extracting a reusable headless Console execution/session model remains pending: current execution
+coordination lives in the React panel. A future terminal CLI should reuse the same documents and
+outcomes without importing React or reconstructing Ontahí semantics.
+
+## Delivery Status — 2026-09-09
+
+Read delivery evidence: [merged PR #148](https://github.com/javifernandes/ontahi/pull/148),
+included in `main` at `cfca984`. This plan remains `current`; delivering Reads did not complete
+its Command, Operation, session, or CLI scope.
+
+| Area                            | Status                                  | Delivered or remaining                                                                                                                                                 |
+| ------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Language contract            | Partial                                 | Read syntax, diagnostics, lowering, and reflection exist; three-family resolution and a headless session contract remain.                                              |
+| B. Read walking skeleton        | Done for the agreed small Read surface  | Filtered/unfiltered terminals, one-field ordering, limits, rich values, Visual/JSON, and source-backed table controls. Views and pagination were not delivered.        |
+| 150a. Locator/Ref investigation | Done; bounded deferrals accepted        | 21 research cases; canonical identity preserved. Factory declaration details, external resolution, and Ref migration deferred.                                         |
+| C. Two Read dialects            | In progress; headless proof implemented | Shared analysis and valid-draft conversion. UI switching, assistance, rich controls, and table editing remain next.                                                    |
+| D. Graph Commands               | Not started                             | Targeting, authoring, confirmation, execution, and results in the Console.                                                                                             |
+| E. Operation invocation         | Not started; after Commands             | Input assistance, invocation outcomes, confirmation, and durable progress links.                                                                                       |
+| F. Console experience           | Partial                                 | Compact results, read assistance, undo, and pending/stale/error states exist; execution history, richer disclosures, and complete session/accessibility proofs remain. |
+| G. CLI projection               | Deferred                                | Headless execution proof, package decision, and separate CLI implementation plan.                                                                                      |
+
+Deferred read extensions: named Views/parameters, nested projections, multi-field ordering, and
+pagination. They are not prerequisites for research or the two-dialect proof. The original View
+acceptance remains recorded below; these items must be explicitly delivered or extracted into
+linked follow-ups before closing the parent plan. Additional language dialects and a standalone
+CLI are likewise outside the immediate next slice.
 
 ## Context
 
@@ -65,11 +101,11 @@ a generated form. The Selection language can author a contextual predicate and l
 canonical Selection AST. The Runtime Protocol can already carry Operation, Graph Read, and Graph
 Command bodies over HTTP, WebSocket, or process-local transports.
 
-The missing loop is intentional interaction. A developer who wants to answer “does this View return
+The original missing loop was intentional interaction. A developer who wanted to answer “does this View return
 the expected TodoItems?”, “what does this ordered move do?”, or “how does this Operation reject this
-input?” must currently write temporary application code, find an Explorer-specific form, or assemble
+input?” had to write temporary application code, find an Explorer-specific form, or assemble
 a protocol request by hand. None is equivalent to a small Ontahí-native CLI embedded beside the
-runtime evidence.
+runtime evidence. PR #148 closes that loop for the supported Reads; the other families remain.
 
 Historical BookOps GraphOps work is useful evidence: reflected operation forms and entity data
 browsing make domain capabilities discoverable, but they are task-specific panels. A Console should
@@ -178,7 +214,8 @@ actually support:
 4. ordered Relationship placement and move using `before`, `after`, or `at`;
 5. optimistic preconditions when the underlying Command declares them.
 
-Command assistance should use canonical Entity Refs and reflected Relationship facts. The receiver
+The original Command proposal uses canonical Entity Refs and reflected Relationship facts. Plan
+150a now gates the authoring model; it does not yet change the existing portable Command contract. The receiver
 must still parse the portable Command body and enforce policy. A missing editor affordance is not a
 denial, and a visible completion is not authorization.
 
@@ -194,6 +231,10 @@ Durable Operations should return and link to their existing Task/run identity an
 The Console does not create a parallel durable lifecycle or wait language in the first slice.
 
 ### Results And History
+
+The following remains the full experience target, not a list of shipped UI. Today the Console has
+Visual/JSON result values and compact duration/limit controls, but not a request/envelope inspector,
+an Activity deep-link, or execution history. Source undo/redo is not execution history.
 
 The visual panel should contain:
 
@@ -307,58 +348,161 @@ the model is stale, broader than current authority, or unavailable.
 
 ## Execution Slices
 
+### Revised Sequence — 2026-09-09
+
+The Read Console shipped in PR #148. Before adding mutable syntax, the agreed next order is:
+
+1. [150a. Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md):
+   investigate whether Selection subsumes the original locator responsibility, and what identity
+   or reference guarantees still require a distinct representation. Do not freeze `refByX` in the
+   language or assume Ref removal before testing the alternatives.
+2. Prove two read-only dialects while the language is small: the existing TS-like fluent surface
+   and a declarative surface. Both target the same canonical Read/Selection values.
+3. Add Graph Commands.
+4. Add Operation invocation.
+
+The following A/B sections retain the original walking-skeleton scope and history. The research
+gate is closed: start read-only dialects without factory implementation or Ref migration. Named
+Views remain deferred, not a prerequisite for the two-dialect proof; the original View acceptance
+item below remains future scope. Console experience and CLI follow-ups are retained.
+
 ### A. Contract And Syntax Gate
 
-1. Inventory the canonical Read, Command, and Operation bodies plus current reflected metadata.
-2. Write representative keyword-free Console documents for Todo and one second test application.
-3. Define the smallest self-contained expression grammar and prove that reflection can resolve its
-   root/member chain to one semantic family without a leading discriminator.
-4. Define diagnostics, lowering outcomes, execution outcomes, and source-history contracts without
-   depending on React or CodeMirror.
-5. Record unsupported syntax and runtime capabilities explicitly rather than silently accepting
-   future-looking forms.
+Status: partial; the Read boundary is established, not the complete three-family contract.
+
+- [x] Define self-contained keyword-free Read grammar, reflection-based resolution, and headless
+      diagnostics/lowering over the existing Selection algebra.
+- [x] Cover Todo and independent Entity fixtures; reject unsupported/incomplete Read syntax.
+- [ ] Complete the cross-family contract and representative Command/Operation documents after 150a.
+- [ ] Define headless execution outcomes and source-history/session contracts independent of React.
 
 ### B. Read Walking Skeleton
 
-1. Parse and resolve one Query expression against the supplied application model.
-2. Reuse the existing Selection language for `where`.
-3. Lower Entity, cardinality, View/params, Selection, ordering, pagination, and limit only where
-   supported by the canonical Graph Read body.
-4. Execute through the host's ordinary Graph Read client and configured Runtime Transport.
-5. Render semantic results and correlated Activity evidence in a minimal Console panel.
+Status: shipped for the agreed small surface in PR #148. The original expanded View/pagination
+scope is separately pending rather than included in the completion claim.
 
-### C. Operation Invocation
+- [x] Parse/resolve Entity and optional `where`, reusing the exact Selection grammar.
+- [x] Support filtered/unfiltered `many`, `first`, `one`, `count`, and `exists`.
+- [x] Lower one-field ordering and explicit non-negative limits where the terminal supports them.
+- [x] Execute canonical Graph Reads through configured Runtime Transport and receiver policies.
+- [x] Render tables, individual/scalar results, and JSON with compact timing and limit controls.
+- [x] Reuse Boolean/enum rich values, completion, highlighting, lint, and `Mod-Enter`.
+- [x] Reflect table sort/limit changes into undoable source edits and execute through the receiver.
+- [x] Use receiver ordering capabilities in both headers and autocomplete.
+- [x] Preserve successful snapshots during edits, pending requests, and failures; show precise
+      cardinality/ordering errors and ordinary transport errors.
+- [x] Produce ordinary Activity evidence through the host's instrumented transport.
+- [ ] Add named Views/parameters and nested projection, if retained after the design gate (deferred).
+- [ ] Add pagination and multi-field ordering (deferred).
 
-1. Add Operation discovery, contract-driven input assistance, and validation diagnostics.
-2. Lower to the canonical versioned Operation request.
-3. Preserve permission preflight and invocation-time authorization as distinct outcomes.
-4. Render every canonical invocation result and link Durable acceptance to Activity/run progress.
-5. Require explicit confirmation according to the configured effect/destructive policy.
+### C. Read-Only Dialect Experiment
+
+Status: in progress; headless parsing/analysis/conversion implemented after the accepted 150a gate.
+
+Representative equivalence in the headless slice:
+
+```text
+TodoItem.where(completed = false).orderBy(title).limit(25).many()
+
+TodoItem where completed = false order by title ascending limit 25
+```
+
+- [x] Cover only the currently supported reads: predicates, ordering, limit, and `many`, `first`,
+      `one`, `count`, `exists`. Define terminal spelling and any default explicitly before coding;
+      omitted terminals must not introduce hidden execution meaning. Do not add SQL semantics.
+- [x] Require both dialects to lower equivalent valid documents to the same canonical request,
+      including defaults and cardinality. A dialect must not inherit JavaScript or SQL coercions.
+- [x] Prove parse/render/parse semantic round-trips, including reserved-word Entity/Field names,
+      quoted values, Boolean precedence, and diagnostics for unsupported constructs.
+- [ ] Switching dialect must not execute. Define handling for invalid/incomplete drafts, comments,
+      undo, and source trivia; never silently replace a draft with an older valid model.
+- [ ] Reuse finite-value controls and the source-backed table sort/limit interaction in each dialect.
+      Request lowering, receiver capability hints, and authorization must remain shared.
+- [x] Use headless adapters first; no new universal AST, language-runtime eval, CLI binary, or generic
+      dialect plugin framework. Additional Java/Python/.NET-like surfaces remain future possibilities.
+
+#### C1. Headless Dialect Contract
+
+`Entity [where predicate] [order by Field [ascending|descending]] [limit number] [terminal]`.
+Terminal is `many` by default, or explicit `many`, `first`, `one`, `count`, `exists`. Ordering defaults
+to ascending; display limit remains the supplied host default (25 otherwise). Omission never runs
+anything: analysis only constructs the existing request. Current terminal/modifier restrictions,
+Selection precedence, types, nullability, and receiver authority remain unchanged.
+
+The shared Lezer grammar has a third top rule, not a regex-to-TS preprocessor. Both recovered forms
+use the same reflection resolver and request lowering. `convertConsoleDocument` prints validated
+authoring structure, retaining `exists` versus `first` even when their wire bodies coincide. It
+rejects empty/invalid drafts instead of using stale valid state. Conversion preserves predicate
+spelling/grouping; outer whitespace is formatted. Comments are not supported and therefore block
+conversion rather than being dropped. Same-dialect conversion preserves the full source.
+
+#### C2. Next Vertical Slice — Editor And Console
+
+Add the UI selector only with dialect-aware CodeMirror parsing, completion, lint, rich values, and
+source-backed sort/limit edits. Switching must be non-executing and reversible with source and
+dialect restored together; retain the original draft/trivia in that transaction. Invalid drafts
+must remain untouched with actionable feedback. No selector is exposed by C1, and the existing
+Console/Explorer continue using TS/Selection syntax. Do not claim C is complete before this proof.
+
+#### C1 Verification — 2026-09-09
+
+- Language: 51 new dialect cases; full suite 189 tests passes, including coverage thresholds.
+- Existing consumers: CodeMirror 42 tests and Devtools 70 tests pass with the rebuilt language.
+- Language typecheck, lint, and build pass; changed-file formatting and plan links checked.
+- `pnpm verify:artifacts -- --skip-build` passes clean-room installation, type, and runtime checks
+  after rebuilding Language. The first sandboxed attempt could not reach npm; the successful retry
+  used authorized network access. No new UI, live dialect switching, or cross-provider runtime
+  behavior is claimed by these checks.
 
 ### D. Graph Commands
 
-1. Add exact Entity mutation and Relationship Command discovery from the application model.
-2. Lower direct, many-to-many, and ordered forms to the existing versioned Command body.
-3. Preserve typed preconditions and Command results.
-4. Prove attach/detach plus ordered `move before|after|at` in Todo.
-5. Treat every submission as a new effect and never retry through transport ambiguity.
+Status: not started; after the read-only dialect proof.
 
-### E. Console Experience
+- [ ] Add exact Entity mutation and Relationship Command discovery from the application model.
+- [ ] Lower direct, many-to-many, and ordered forms to the existing versioned Command body.
+- [ ] Preserve typed preconditions and Command results.
+- [ ] Prove attach/detach plus ordered `move before|after|at` in Todo.
+- [ ] Require explicit submission/confirmation; never retry through transport ambiguity.
+- [ ] Choose targeting syntax from the completed model gate, not by copying generated TS methods.
 
-1. Complete grammar-aware completion, hover/help, formatting, and error positioning.
-2. Add semantic/body/envelope result disclosure and request metadata.
-3. Add bounded, redacted source history with restore-only selection.
-4. Add keyboard, screen-reader, focus, resizing, and narrow-layout behavior.
-5. Make unavailable application model, handler, family, transport, and diagnostics capabilities
-   explicit in empty/error states.
+### E. Operation Invocation
 
-### F. CLI Projection Follow-Up
+Status: not started; after Commands. Existing invocation elsewhere in Ontahí does not complete
+Console invocation.
 
-1. Prove the headless language and Console session APIs in a small non-React harness.
-2. Decide whether a standalone CLI belongs in `@ontahi/devtools`, a new package, or a host tool
-   after real authentication and configuration requirements are known.
-3. Specify terminal input/output, config discovery, transport selection, credential handling, and
-   non-interactive exit codes in a separate implementation plan.
+- [ ] Add Operation discovery, contract-driven input assistance, and validation diagnostics.
+- [ ] Lower to the canonical versioned Operation request.
+- [ ] Preserve permission preflight and invocation-time authorization as distinct outcomes.
+- [ ] Render every canonical invocation result and link Durable acceptance to Activity/run progress.
+- [ ] Require explicit confirmation according to the configured effect/destructive policy.
+
+### F. Console Experience
+
+Status: partial; read usability shipped, broader session experience remains.
+
+- [x] Deliver Read completion, positioned syntax/semantic diagnostics, rich finite values,
+      `Mod-Enter`, source undo/redo, and a resizable Devtools host.
+- [x] Deliver Visual/JSON result values, compact elapsed time/limit controls, and pending/stale/error
+      presentation without redundant query or success panels.
+- [ ] Complete hover/help and deliberate formatting for the supported dialects/families.
+- [ ] Add optional request/body/envelope disclosure and a direct Activity correlation link without
+      reclaiming the table's space for redundant metadata.
+- [ ] Add bounded, redacted execution history with restore-only selection.
+- [ ] Extract the headless execution/session lifecycle, including abort and retention policy.
+- [ ] Complete keyboard, screen-reader, focus, and narrow-layout verification across families.
+- [ ] Extend and verify capability-unavailable states for Commands, Operations, and diagnostics;
+      the Read slice already reports missing transport, invalid source, and execution failures.
+
+### G. CLI Projection Follow-Up
+
+Status: deferred; the language boundary exists, but there is no complete headless Console session
+or standalone CLI proof.
+
+- [ ] Prove the headless language and Console session APIs in a small non-React harness.
+- [ ] Decide whether a standalone CLI belongs in `@ontahi/devtools`, a new package, or a host tool
+      after real authentication and configuration requirements are known.
+- [ ] Specify terminal input/output, config discovery, transport selection, credential handling, and
+      non-interactive exit codes in a separate implementation plan.
 
 ## Implementation Checkpoint
 
@@ -440,37 +584,74 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
 
 ## Acceptance Checklist
 
-- [ ] A developer can author and execute at least one Graph Read, Graph Command, and Operation
-      invocation from the Devtools Console.
-- [ ] The Todo proof includes a filtered View-backed Read and an ordered Relationship move.
-- [ ] Every valid expression lowers to an existing canonical family body; the Console introduces no
-      protocol family or authority field.
-- [ ] Read, Command, and Operation expressions resolve unambiguously without leading `read`,
-      `command`, or `invoke` keywords or a hidden UI family selector.
-- [ ] Syntax/semantic diagnostics are distinguishable from policy, application, protocol, and
-      transport outcomes.
-- [ ] Reflection drives assistance but does not determine authorization.
-- [ ] The receiver applies the same parsing, validation, policy, limits, and authority as ordinary
-      application traffic.
-- [ ] Console work uses the application's effective configurable Runtime Transport and appears as
-      ordinary correlated Activity evidence.
-- [ ] Switching transport routing affects newly submitted Console work without migrating or
-      replaying active work.
-- [ ] Unknown or unsupported families and unavailable handlers fail visibly.
+Checked items describe the shipped Read surface only. Cross-family and session guarantees remain
+unchecked until exercised in those paths; existing runtime capabilities elsewhere are not Console
+delivery evidence.
+
+- [x] A developer can author and execute supported filtered/unfiltered Graph Reads from the Console.
+- [x] Read documents resolve without leading family keywords or a hidden family selector and lower
+      to canonical `GraphReadRequestV1`, with no new protocol family or authority field.
+- [x] Read syntax/semantic diagnostics are distinct from receiver and transport failures; structured
+      cardinality and ordering rejection messages survive to the result panel.
+- [x] Reflection drives Read assistance; receiver policies authorize every execution. Headers and
+      autocomplete share receiver-provided ordering capability hints.
+- [x] Reads use the configured Runtime Transport and appear in ordinary Activity when the host
+      instruments that transport; the Console does not create another diagnostic stream.
+- [x] Read controls preserve successful snapshots, prevent pending duplicate submissions, and
+      require fresh capabilities after the transport changes.
+- [x] Visual/JSON results, finite-value widgets, and bidirectional sort/limit source editing work
+      with ordinary undo and explicit execution.
+- [x] Parser, resolver, lowering, and source-edit helpers have headless tests.
+- [x] CodeMirror/React tests cover Read execution, result kinds, rich editing, pending/stale/error
+      states, shortcuts, and ordering/limit capability guards.
+- [x] Todo has the opt-in Read Console integration and a browser smoke proof.
+- [x] The shipped Read grammar cannot evaluate arbitrary JavaScript, run shell/SQL, fetch arbitrary
+      URLs, edit credentials, or submit raw authority/context.
+- [x] The Locator/Ref research records an explicit decision or bounded deferral before mutable
+      syntax is implemented.
+- [ ] TS-like and declarative Read documents preserve equivalent canonical requests, semantic
+      round-trips, rich controls, and non-executing, non-destructive dialect switching.
+- [ ] A developer can author and execute a Graph Command, including an ordered Relationship move
+      in Todo, from the Console.
+- [ ] A developer can invoke an Operation from the Console and inspect its canonical outcomes.
+- [ ] Command/Operation resolution remains keyword-free, lowers only to canonical family bodies,
+      and preserves the same authority, policy, validation, and transport boundaries as ordinary
+      application calls. Extend the no-eval/no-raw-authority guarantee to these new forms.
+- [ ] Command/Operation diagnostics distinguish editor errors, policy rejection, application
+      outcomes, protocol failures, and transport failures without silent fallback.
+- [ ] All three families preserve ordinary Activity correlation and transport switching without
+      migrating or replaying active work; unknown families and unavailable handlers fail visibly.
+- [ ] A filtered View-backed Read is proved or explicitly moved to a linked follow-up before
+      parent closure (deferred; not a prerequisite for dialects or Commands).
 - [ ] A previous Command or Operation never executes merely because history is opened, selected, or
       restored.
 - [ ] Commands and Operations require explicit submission and follow the configured confirmation
       policy; ambiguous failures are never retried automatically.
 - [ ] History and diagnostics are bounded, session-local by default, and redact before retention.
-- [ ] The Console cannot evaluate arbitrary JavaScript, run shell/SQL, fetch arbitrary URLs, edit
-      credentials, or submit raw authority/context.
-- [ ] Parser, resolver, lowering, and Console session tests run without DOM or React.
-- [ ] React tests cover execution states, result kinds, history safety, keyboard behavior, and
-      capability-unavailable states.
-- [ ] Browser integration tests prove the Read, Invoke, and ordered Command flows against Todo.
-- [ ] The Devtools production and opt-in mounting rules remain explicit and documented.
+- [ ] A headless Console session and its tests cover abort, concurrency, retention, and restore
+      without DOM or React; parser-only headless tests do not satisfy this item.
+- [ ] React tests extend to confirmation, history safety, mutable result kinds, and all
+      capability-unavailable states, with complete keyboard/accessibility/narrow-layout coverage.
+- [ ] Browser integration tests prove Read, Invoke, and ordered Command flows against Todo over the
+      planned HTTP/WebSocket matrix; the Read smoke proof is not that complete matrix.
+- [ ] Mutable production inclusion and opt-in execution rules are explicit and documented, beyond
+      the shipped Read Console's explicit host configuration.
 
 ## Verification
+
+### Delivered Read Evidence
+
+[PR #148](https://github.com/javifernandes/ontahi/pull/148) merged after
+[CI run 34291790051](https://github.com/javifernandes/ontahi/actions/runs/34291790051) passed on its
+final branch head `0b64b25`: Node 20 tests, Node 24 tests with coverage, example tests, formatting,
+lint, builds, typecheck, and clean-room package artifact checks. Sonar and CodeQL passed as well.
+The detailed Read implementation and browser smoke observations are retained in the checkpoint.
+
+This is evidence for the shipped Read slice, not for the unimplemented dialect, mutation, history,
+or headless session paths. The 2026-09-09 update only reconciles plan status and scope; it does not
+claim a new full CI or browser run.
+
+### Remaining Verification Contract
 
 1. Golden syntax/diagnostic cases for complete, incomplete, invalid, and unsupported documents.
 2. Lowering conformance fixtures comparing Console output with canonical family parsers.
@@ -500,11 +681,14 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
    create a second diagnostic channel.
 9. History restores source and never implies replay. A repeated effect is a new explicit invocation.
 10. Multi-expression scripts, transactions, and persistent macros wait for their own semantic model.
+11. After the Read walking skeleton, investigate Locator/Ref simplification, then prove TS-like and
+    declarative Read dialects, then add Commands, and finally Operation invocation. A dialect is a
+    projection of Ontahí semantics, not the language used to implement its host or CLI.
 
 ## Open Questions
 
-1. Which Query member chain best matches Ontahí's existing typed API while remaining readable and
-   recoverable as an incomplete Console expression?
+1. Given the shipped TS-like Read chain, what declarative terminal spelling/defaults preserve its
+   meaning, and how can switching dialect preserve incomplete authoring without executing?
 2. Which framework-owned reflection projection supplies the first complete Console application
    model: generated client metadata, static application reflection, Runtime Data Reflection, or a
    deliberate composition?

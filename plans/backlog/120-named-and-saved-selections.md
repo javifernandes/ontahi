@@ -12,6 +12,8 @@ Related plans:
 
 1. [116 Ontahí Selection Model](../done/116-ontahi-selection-model.md)
 2. [118 Ontahí Selection Language Editor Research](../done/118-ontahi-selection-language-editor.md)
+3. [150a Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
+4. [120a Pure Named Selection Factory Contract](./120a-pure-named-selection-factory-contract.md)
 
 ## Proposal
 
@@ -27,3 +29,14 @@ Define reusable domain-named selections and persisted user-owned saved selection
 ## Non-Goal
 
 Persistence and product UX are useful follow-ups, not prerequisites for evaluating or transporting selections.
+
+## Current Research Link
+
+Plan 150a investigates the code-owned, parameterized factory portion as a possible simplification
+of locators before Console Commands. It does not pull saved-selection persistence, lifecycle, or
+product UX out of this backlog. Existing `Selection.named()` is a local label, not implementation
+of the named factory registry described here.
+
+The completed experiments in 150a recommend pure expansion and preserving canonical identity,
+without changing current Ref wire values. Plan 120a isolates the resulting optional implementation
+proposal; it remains backlog pending review and is not a prerequisite for the two-dialect Read proof.
