@@ -24,6 +24,18 @@ const application = {
 } as const;
 
 describe('Console read dialects', () => {
+  it.each(['Tag by named', 'Tag by named "Important" and by'])(
+    'includes factory intersections in the grammar guidance for %s',
+    source => {
+      const parsed = parseConsoleDocument(source, 'declarative');
+      expect(parsed.syntaxDiagnostics[0]).toMatchObject({
+        code: 'console.syntax.invalid',
+        message:
+          'Expected Entity, optional by factory argument (and by factory argument)*, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).',
+      });
+    },
+  );
+
   it.each([
     ['To', ['TodoItem']],
     ['TodoItem ', ['where', 'order by', 'limit', 'many', 'first', 'one', 'count', 'exists']],

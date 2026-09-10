@@ -1215,7 +1215,7 @@ export const parseConsoleDocument = (
       message: isSelectionError
         ? syntaxDiagnosticMessage(document, selectionSyntax)
         : dialect === 'declarative'
-          ? 'Expected Entity, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).'
+          ? 'Expected Entity, optional by factory argument (and by factory argument)*, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).'
           : consoleStructureDiagnosticMessage(syntax),
       ...error,
     });
