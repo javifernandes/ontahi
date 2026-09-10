@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^11.7.2",
-    "@types/node": "^20.0.0",
+    "@types/node": "^26.4.1",
     "@types/pg": "^8.15.5",
     "@vitest/coverage-v8": "^4.0.18",
     "pg": "^8.16.3",

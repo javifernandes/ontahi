@@ -71,7 +71,7 @@
   },
   "devDependencies": {
     "@ontahi/explorer-react": "workspace:*",
-    "@types/node": "^20.0.0",
+    "@types/node": "^26.4.1",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.18",
     "effect": "3.21.0",
