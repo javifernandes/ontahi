@@ -29,6 +29,14 @@ component_management:
       name: '@ontahi/opentelemetry'
       paths:
         - packages/opentelemetry/**
+    - component_id: package_mysql
+      name: '@ontahi/mysql'
+      paths:
+        - packages/mysql/**
+    - component_id: package_sql
+      name: '@ontahi/sql'
+      paths:
+        - packages/sql/**
     - component_id: package_postgres
       name: '@ontahi/postgres'
       paths:

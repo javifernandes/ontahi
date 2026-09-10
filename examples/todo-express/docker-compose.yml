@@ -16,5 +16,27 @@ services:
       timeout: 3s
       retries: 30
 
+  mysql:
+    profiles: [mysql]
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ontahi_todos
+      MYSQL_ROOT_PASSWORD: ${TODO_MYSQL_PASSWORD:-}
+    ports:
+      - '33069:3306'
+    volumes:
+      - todo-mysql-data:/var/lib/mysql
+      - ./migrations-mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h 127.0.0.1 -uroot --silent',
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
 volumes:
   todo-postgres-data:
+  todo-mysql-data:

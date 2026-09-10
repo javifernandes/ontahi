@@ -4,7 +4,9 @@ import {
   type DataGraphExecutionRuntime,
   type RelationshipFact,
 } from '@ontahi/core/data-graph';
+import { createMysqlDataGraphStorage } from '@ontahi/mysql';
 import { createPostgresDataGraphStorage } from '@ontahi/postgres/data-graph';
+import { createPool } from 'mysql2/promise';
 import { Pool } from 'pg';
 
 const todoRef = (id: string): AnyEntityRef => ({
@@ -76,16 +78,33 @@ export const createTodoInMemoryStorage = () =>
     ],
   });
 
-export const defaultStorage =
-  process.env.TODO_STORAGE === 'postgres'
-    ? createPostgresDataGraphStorage({
-        pool: new Pool({
-          connectionString:
-            process.env.DATABASE_URL ??
-            'postgresql://postgres:postgres@127.0.0.1:54329/ontahi_todos',
-        }),
-      })
-    : createTodoInMemoryStorage();
+const createDefaultStorage = () => {
+  if (process.env.TODO_STORAGE === 'postgres') {
+    return createPostgresDataGraphStorage({
+      pool: new Pool({
+        connectionString:
+          process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54329/ontahi_todos',
+      }),
+    });
+  }
+  if (process.env.TODO_STORAGE === 'mysql') {
+    const uri = process.env.DATABASE_URL;
+    const password = process.env.TODO_MYSQL_PASSWORD;
+    if (!uri && !password) throw new Error('MySQL requires DATABASE_URL or TODO_MYSQL_PASSWORD.');
+    const pool = uri
+      ? createPool(uri)
+      : createPool({
+          host: '127.0.0.1',
+          port: 33069,
+          user: 'root',
+          database: 'ontahi_todos',
+          password,
+        });
+    return createMysqlDataGraphStorage({ pool });
+  }
+  return createTodoInMemoryStorage();
+};
+export const defaultStorage = createDefaultStorage();
 
 export const createTodoDataGraphRuntime = (): DataGraphExecutionRuntime<unknown> =>
   defaultStorage.createRuntime();

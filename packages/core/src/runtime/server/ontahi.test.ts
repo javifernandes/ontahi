@@ -1221,7 +1221,7 @@ describe('ontahi application composition root', () => {
     expect(typeof Todo.relations.tags?.constraints).not.toBe('function');
   });
 
-  it('prepares immediate relations for existing physical mapping declarations', () => {
+  it('preserves explicit relation mappings when composing the application', () => {
     const Book = entity({
       name: 'Book',
       fields: {
@@ -1254,6 +1254,12 @@ describe('ontahi application composition root', () => {
         toColumn: 'id',
       },
     });
+    const mapping = BookLabel.relations.book?.mapping;
+    ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      entities: [Book, BookLabel],
+    });
+    expect(BookLabel.relations.book?.mapping).toBe(mapping);
   });
 
   it('composes unified declarations with deferred migration modules', () => {

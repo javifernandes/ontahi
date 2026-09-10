@@ -1,0 +1,62 @@
+{
+  "name": "@ontahi/mysql",
+  "version": "1.0.0-alpha.11",
+  "description": "MySQL data graph storage for Ontahi",
+  "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/mysql",
+  "license": "Apache-2.0",
+  "author": "Javier Fernandes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/javifernandes/ontahi.git",
+    "directory": "packages/mysql"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./data-graph": {
+      "types": "./dist/data-graph/index.d.ts",
+      "import": "./dist/data-graph/index.js",
+      "require": "./dist/data-graph/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build:watch": "pnpm exec tsc -p tsconfig.build.json --watch",
+    "test": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "lint": "pnpm exec eslint \"src/**/*.ts\" --max-warnings 0",
+    "lint:fix": "pnpm exec eslint \"src/**/*.ts\" --fix --max-warnings 0"
+  },
+  "dependencies": {
+    "@ontahi/core": "workspace:*",
+    "@ontahi/sql": "workspace:*",
+    "effect": "^3.21.0",
+    "mysql2": "^3.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "testcontainers": "^11.7.2",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

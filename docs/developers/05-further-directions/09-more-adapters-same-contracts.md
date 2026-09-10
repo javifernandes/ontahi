@@ -2,7 +2,7 @@
 
 New adapters are valuable when they prove that the contracts are real:
 
-- MySQL or MariaDB graph storage;
+- SQLite graph storage or separately verified MariaDB compatibility;
 - document-oriented storage where its supported graph semantics are stated honestly;
 - RabbitMQ, DBOS, Restate, or other durable task runtimes with real worker execution;
 - gRPC, streaming, queue, or message-bus transports;

@@ -10,12 +10,14 @@
       "@ontahi/explorer-react",
       "@ontahi/language",
       "@ontahi/language-codemirror",
+      "@ontahi/mysql",
       "@ontahi/opentelemetry",
       "@ontahi/postgres",
       "@ontahi/react",
       "@ontahi/runtime-express",
       "@ontahi/runtime-nextjs",
       "@ontahi/runtime-vercel-workflows",
+      "@ontahi/sql",
       "@ontahi/supabase"
     ]
   ],

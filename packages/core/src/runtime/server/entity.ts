@@ -1030,6 +1030,7 @@ const defineOntahiEntity = <
         declaration.constraints,
         skipSemanticRefs,
       );
+      const mapping = relations[name]?.mapping;
       relations[name] = {
         kind: 'relation',
         relationKind: declaration.relationKind,
@@ -1038,6 +1039,7 @@ const defineOntahiEntity = <
         ...(declaration.targetField ? { targetField: declaration.targetField } : {}),
         ...(declaration.ordered ? { ordered: true } : {}),
         ...(constraints ? { constraints } : {}),
+        ...(mapping ? { mapping } : {}),
       };
 
       if (declaration.ordered) {
