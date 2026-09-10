@@ -103,7 +103,7 @@ Tag.orderBy(name).limit(10).many()
 TodoItem.where(completed = false).orderBy(title, desc).first()
 ```
 
-The chain is `Entity` → optional `by` → optional `where` → optional `orderBy` → optional `limit` → terminal.
+The chain is `Entity` → zero or more `by` → optional `where` → optional `orderBy` → optional `limit` → terminal.
 This slice supports one reflected scalar Field (`id`, string, number, Boolean, enum), with `asc`
 as the default or explicit `asc`/`desc`. References and structured values are not sortable, and
 ordering with `count()` or `exists()` is rejected. Runtime read policies may reject otherwise valid ordering.
@@ -136,7 +136,7 @@ const source = 'TodoItem where completed = false order by title descending limit
 const analysis = analyzeConsoleDocument(source, applicationReflection, { dialect: 'declarative' });
 ```
 
-The declarative order is `Entity [by factory argument] [where predicate] [order by Field [ascending|descending]]
+The declarative order is `Entity [by factory argument (and by factory argument)*] [where predicate] [order by Field [ascending|descending]]
 [limit number] [terminal]`. Omitted terminal means `many`; explicit terminals are `many`, `first`,
 `one`, `count`, and `exists`. Ordering defaults to ascending. All type, precedence, cardinality,
 default-limit, and modifier restrictions remain the same as TS-like Console reads. This is Ontahí
@@ -166,8 +166,8 @@ restored together on undo; conversion alone does not own that editor history or 
 ## Named Selection factories in Console reads
 
 `reflectSelectionLanguageEntity` includes portable factory contracts declared with Core's
-`withSelectionFactories`. Both Console dialects can invoke one reflected factory, optionally
-intersect its membership with `where`, and use the existing read modifiers and terminals:
+`withSelectionFactories`. Both Console dialects can invoke reflected factories, intersect their
+membership with each other and optionally with `where`, and use the existing read modifiers and terminals:
 
 ```text
 Tag.by({ named: "Work" }).where(name = "Work").many()
@@ -175,7 +175,16 @@ Tag by named "Work" where name = "Work" many
 
 Tag.by({ identity: { id: "tag-work" } }).one()
 Tag by identity { id: "tag-work" } one
+
+Tag.by({ named: "Work" }).by({ identity: "tag-work" }).many()
+Tag by named "Work" and by identity "tag-work" many
 ```
+
+Each additional factory intersects membership (AND); it never replaces the previous factory or
+unions results. Repeating a factory name with different inputs is permitted and may select nothing.
+All factory clauses precede `where` and read modifiers. A `where` predicate retains its ordinary
+Boolean grouping and is intersected as a whole with the factories. Repeated `.by(...)` is Console
+syntax, not a new Core Selection method: SDK callers compose `Tag.by(...).and(Tag.by(...))`.
 
 Factory names select declared meanings, not Entity Fields. Scalar shorthand is accepted only when
 the declaration opts in; structured arguments use the exact required input names and scalar types.
@@ -188,5 +197,5 @@ analysis intersects the result with an authored `where` predicate and lowers to 
 `graph.read` request. There is no factory wire node or new authorization grant: receiver policy and
 consumer cardinality still apply. The original factory name and argument remain in the source model,
 so dialect conversion and table-driven order/limit edits preserve them instead of displaying the
-expanded predicate. Multiple `by` clauses, `and by`/`or by`, nested inputs, and external resolvers
-are not supported in this bounded slice.
+expanded predicate. Any invalid invocation blocks the entire read, not just its suffix.
+`or by`, factory-expression grouping, nested inputs, and external resolvers remain outside this slice.

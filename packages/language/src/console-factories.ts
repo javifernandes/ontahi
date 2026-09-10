@@ -13,6 +13,8 @@ import type {
 } from './index.js';
 
 export type ConsoleFactorySyntax = SelectionLanguageRange & {
+  readonly conjunction?: SelectionLanguageRange;
+  readonly by?: SelectionLanguageRange;
   readonly name?: SelectionLanguageRange & { readonly text: string; readonly value: string };
   readonly argument?: SelectionLanguageRange & { readonly text: string };
   readonly properties?: readonly (SelectionLanguageRange & {
@@ -42,9 +44,13 @@ export const parseConsoleFactory = (
   const name = node.getChild('FactoryName');
   const argument = node.getChild('FactoryArgument');
   const object = argument?.getChild('FactoryObject');
+  const conjunction = node.getChild('And');
+  const by = node.getChild('By');
   const syntax = {
     from: node.from,
     to: node.to,
+    ...(conjunction ? { conjunction: { from: conjunction.from, to: conjunction.to } } : {}),
+    ...(by ? { by: { from: by.from, to: by.to } } : {}),
     ...(object
       ? {
           properties: object.getChildren('FactoryProperty').map(property => {
@@ -157,6 +163,21 @@ export const completeConsoleFactory = (
   dialect: 'ts' | 'declarative' = 'ts',
 ): ConsoleLanguageCompletionResult | undefined => {
   if (!factory || pos < factory.from || pos > factory.to) return undefined;
+  if (factory.conjunction && (!factory.by || pos <= factory.by.to)) {
+    const prefix = document.slice(factory.conjunction.to, pos).match(/\w*$/)![0];
+    return {
+      from: factory.by?.from ?? pos - prefix.length,
+      to: factory.by?.to ?? pos + document.slice(pos, factory.to).match(/^\w*/)![0].length,
+      items: [
+        {
+          label: 'by',
+          apply: pos === factory.conjunction.to && !factory.by ? ' by ' : 'by ',
+          kind: 'keyword',
+          detail: 'Named Selection factory',
+        },
+      ],
+    };
+  }
   const name = factory.name;
   if (!name || pos <= name.to) {
     const from = name?.from ?? pos;

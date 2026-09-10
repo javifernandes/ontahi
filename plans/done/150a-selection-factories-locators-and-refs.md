@@ -362,7 +362,7 @@ identity and authoring guarantees. Narrow the distinction and migrate deliberate
 1. [116a. Selection Cardinality Before Read Shaping](../next/116a-selection-cardinality-before-read-shaping.md)
    records the concrete in-memory limit finding. Confirm the expected boundary and prove adapters
    independently; do not silently change it in this test-only research.
-2. [120a. Pure Named Selection Factory Contract](../current/120a-pure-named-selection-factory-contract.md)
+2. [120a. Pure Named Selection Factory Contract](120a-pure-named-selection-factory-contract.md)
    scopes an optional later implementation. It is not required to begin the two-dialect Read proof,
    and does not include wholesale Ref removal or external resolution.
 3. Accepted decision for Plan 150: proceed next with TS-like/declarative projections over **existing

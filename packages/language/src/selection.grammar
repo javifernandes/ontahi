@@ -4,7 +4,7 @@
 
 DeclarativeGraphReadExpression {
   EntityName
-  DeclarativeFactoryClause?
+  (DeclarativeFactoryClause DeclarativeFactoryIntersection*)?
   DeclarativeWhereClause?
   DeclarativeOrderByClause?
   DeclarativeLimitClause?
@@ -18,7 +18,7 @@ DeclarativeLimitClause { Limit NumberLiteral }
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
   EntityName
-  FactoryClause?
+  FactoryClause*
   WhereClause?
   OrderByClause?
   LimitClause?
@@ -26,6 +26,7 @@ GraphReadExpression {
 }
 FactoryClause { Dot By OpenParen OpenBrace FactoryName Colon FactoryArgument CloseBrace CloseParen }
 DeclarativeFactoryClause { By FactoryName FactoryArgument }
+DeclarativeFactoryIntersection { And By FactoryName FactoryArgument }
 FactoryName { Identifier | StringLiteral }
 FactoryArgument { ScalarLiteral | Null | FactoryObject }
 FactoryObject { OpenBrace (FactoryProperty (Comma FactoryProperty)*)? CloseBrace }

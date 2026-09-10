@@ -241,7 +241,7 @@ export type ConsoleOrderBySyntax = SelectionLanguageRange & {
 
 export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly kind: 'graph-read';
-  readonly factory?: ConsoleFactorySyntax;
+  readonly factories: readonly ConsoleFactorySyntax[];
   readonly entity?: SelectionLanguageToken<'entity-name'>;
   readonly where?: SelectionLanguageToken<'where-member'>;
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
@@ -1040,10 +1040,11 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
     expression: {
       kind: 'graph-read',
       ...rangeOf(graphRead),
-      factory: parseConsoleFactory(
-        firstChildNamed(graphRead, ['FactoryClause', 'DeclarativeFactoryClause']),
-        document,
-      ),
+      factories: [
+        ...graphRead.getChildren('FactoryClause'),
+        ...graphRead.getChildren('DeclarativeFactoryClause'),
+        ...graphRead.getChildren('DeclarativeFactoryIntersection'),
+      ].map(node => parseConsoleFactory(node, document)!),
       entity: tokenOf('entity-name', graphRead.getChild('EntityName'), document),
       where: tokenOf('where-member', whereClause?.getChild('Where') ?? null, document),
       whereOpen: tokenOf('open-parenthesis', whereClause?.getChild('OpenParen') ?? null, document),
@@ -1184,13 +1185,15 @@ export const parseConsoleDocument = (
     message: 'String literals must use valid JSON escaping.',
     ...range,
   }));
-  if (syntax.expression?.factory?.error)
-    syntaxDiagnostics.push({
-      ...syntax.expression.factory,
-      channel: 'syntax',
-      code: 'console.syntax.invalid',
-      message: syntax.expression.factory.error,
-    });
+  for (const factory of syntax.expression?.factories ?? [])
+    if (factory.error)
+      syntaxDiagnostics.push({
+        from: factory.from,
+        to: factory.to,
+        channel: 'syntax',
+        code: 'console.syntax.invalid',
+        message: factory.error,
+      });
 
   if (error) {
     const expression = syntax.expression;
@@ -1255,26 +1258,18 @@ export const analyzeConsoleDocument = (
   let resolved: SemanticResolution = expression.selection
     ? resolveExpression(expression.selection, entity)
     : { diagnostics: [], expression: selectionAll() };
-  if (expression.factory) {
+  const selections: SelectionExpression[] = [];
+  for (const factory of expression.factories) {
     try {
-      const selected = resolveConsoleFactory(
-        expression.factory,
-        entity.name,
-        entity.selectionFactories,
-      );
-      resolved = {
-        ...resolved,
-        expression:
-          expression.selection && resolved.expression
-            ? selectionAnd(selected, resolved.expression)
-            : selected,
-      };
+      const selected = resolveConsoleFactory(factory, entity.name, entity.selectionFactories);
+      selections.push(selected);
     } catch (cause) {
       return {
         ...parsed,
         semanticDiagnostics: [
           {
-            ...expression.factory,
+            from: factory.from,
+            to: factory.to,
             channel: 'semantic',
             code: 'console.semantic.invalid-factory',
             message: cause instanceof Error ? cause.message : 'Invalid Selection factory input.',
@@ -1283,6 +1278,14 @@ export const analyzeConsoleDocument = (
       };
     }
   }
+  if (selections.length > 0)
+    resolved = {
+      ...resolved,
+      expression: selectionAnd(
+        ...selections,
+        ...(expression.selection && resolved.expression ? [resolved.expression] : []),
+      ),
+    };
   const semanticDiagnostics = [
     ...resolved.diagnostics,
     ...consoleOrderDiagnostics(expression, entity, options.dialect),
@@ -1454,7 +1457,7 @@ export const editConsoleLimit = (
     syntax.orderBy?.to ??
     syntax.whereClose?.to ??
     syntax.selection?.to ??
-    syntax.factory?.to ??
+    syntax.factories.at(-1)?.to ??
     syntax.entity.to;
   return [
     {
@@ -1521,7 +1524,10 @@ export const editConsoleOrderBy = (
     );
   } else {
     const position =
-      syntax.whereClose?.to ?? syntax.selection?.to ?? syntax.factory?.to ?? syntax.entity.to;
+      syntax.whereClose?.to ??
+      syntax.selection?.to ??
+      syntax.factories.at(-1)?.to ??
+      syntax.entity.to;
     const direction = order.direction === 'asc' ? '' : ', ' + order.direction;
     changes.push({
       from: position,
@@ -1655,7 +1661,7 @@ export const completeConsoleDocument = (
   const factoryCompletion = completeConsoleFactory(
     document,
     safePosition,
-    syntax?.factory,
+    syntax?.factories.find(factory => safePosition >= factory.from && safePosition <= factory.to),
     entity?.selectionFactories,
     'ts',
   );
@@ -1707,7 +1713,7 @@ export const completeConsoleDocument = (
       ...range,
       items: (
         [
-          ...(entity?.selectionFactories && !syntax.factory
+          ...(entity?.selectionFactories
             ? [
                 {
                   label: 'by',
@@ -1784,12 +1790,15 @@ const declarativeContinuationItems = (
 ): readonly ConsoleLanguageCompletionItem[] => {
   if (syntax.terminal) return [];
   return [
-    ...(!syntax.factory &&
-    !syntax.where &&
-    !syntax.orderBy &&
-    !syntax.limit &&
-    entity.selectionFactories
-      ? [{ label: 'by', apply: 'by ', kind: 'keyword' as const, detail: 'Named Selection factory' }]
+    ...(!syntax.where && !syntax.orderBy && !syntax.limit && entity.selectionFactories
+      ? [
+          {
+            label: syntax.factories.length ? 'and by' : 'by',
+            apply: syntax.factories.length ? 'and by ' : 'by ',
+            kind: 'keyword' as const,
+            detail: 'Named Selection factory',
+          },
+        ]
       : []),
     ...(!syntax.where && !syntax.orderBy && !syntax.limit
       ? [{ label: 'where', apply: 'where ', kind: 'keyword' as const, detail: 'Selection' }]
@@ -1839,7 +1848,7 @@ const completeDeclarativeConsoleDocument = (
   const factoryCompletion = completeConsoleFactory(
     document,
     pos,
-    syntax.factory,
+    syntax.factories.find(factory => pos >= factory.from && pos <= factory.to),
     entity.selectionFactories,
     'declarative',
   );

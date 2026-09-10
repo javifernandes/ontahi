@@ -1,6 +1,6 @@
 # 120a. Pure Named Selection Factory Contract
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/120a-pure-named-selection-factory-contract`
 
@@ -138,9 +138,35 @@ and root lint, and clean-room installed-package checks passed. A browser smoke t
 from the result table while preserving the invocation. Screenshot review confirmed highlighting and
 rich ordering controls in the dark Console. No live database-provider verification is claimed.
 
+## Intersection and closure checkpoint — 2026-09-10
+
+The user exercised the Console proof and accepted the pure, portable expansion model as reusable
+Selection authoring rather than remote Operation execution. The final bounded language slice adds
+repeated TS-like `.by(...)` and declarative `and by`, always interpreted as intersection. Repeated
+factory names retain independent inputs; an invalid later invocation blocks the entire read.
+
+The source model retains every invocation in order, including through dialect conversion,
+ordering/limit edits, incomplete drafts, and completion in earlier or later arguments. The Core SDK
+still composes factory-produced Selections with `.and(...)`; no new Selection method or wire node
+is needed. Activity continues to show the expanded request that actually crossed the transport.
+
+This closes the bounded contract and Console proof, not the larger named/saved-selection project.
+Deferred factory union/grouping, composed templates, richer inputs, Explorer invocation forms, and
+representative locator migrations are tracked in [120](../backlog/120-named-and-saved-selections.md).
+No locator is deprecated. Consumer cardinality before read shaping remains
+[116a](../next/116a-selection-cardinality-before-read-shaping.md), ahead of Console Commands.
+
+Closure validation: Language 262, CodeMirror 66 and Devtools 99 tests passed with coverage;
+affected typechecks/builds/lint, repository formatting/root lint, and clean-room installed-package
+verification passed on Node 24. Todo codegen/typechecks and production build passed. Browser smoke
+executed two factories plus `where`, converted dialect, sorted from the table, and confirmed that
+disjoint factories return count zero. Screenshot review confirmed the composed source and rich
+ordering controls. No live database-provider verification is claimed.
+
 ## Acceptance
 
-- [ ] Public API and reflection are accepted after a small executable proof.
+- [x] Public API and reflection are accepted after a small executable proof, with the bounded
+      pure-template contract retained as experimental and broader extensions explicitly deferred.
 - [x] Equivalent inputs and explicit shorthand lower identically; same-shaped named alternatives
       remain distinguishable and invalid inputs fail before execution.
 - [x] Canonical identity, explicit-member intent, consumer cardinality, and receiver policies remain

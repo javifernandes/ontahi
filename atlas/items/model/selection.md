@@ -80,10 +80,11 @@ top-level `selection(entity, ...)` factory remains the lower-level schema-orient
 Factory discovery exposes a strict input schema and an output Selection entity (without a
 cardinality promise), together with version, template and optional shorthand. Graph discovery,
 generated browser definitions and Explorer contract inspection share this data. Factories confer
-no execution authority. Console reads accept one reflected factory plus an optional `where`
-intersection in both dialects, with schema-driven completion. Authored invocation data survives
+no execution authority. Console reads accept reflected factory intersections plus an optional `where`
+in both dialects, with schema-driven completion. Repeated TS-like `.by(...)` and declarative `and by`
+lower to the same existing Selection AND; they do not introduce a new Core SDK method. Each authored invocation survives
 dialect conversion and table modifier edits; execution still receives the expanded ordinary AST.
-Multiple-factory language composition and Explorer invocation forms remain separate work.
+Factory union/grouping and Explorer invocation forms remain separate work.
 
 Pure named factories construct deferred Selection data from reflected explicit inputs. The first
 Core proof adds `withSelectionFactories`/`by` in parallel with locators: scalar predicate templates

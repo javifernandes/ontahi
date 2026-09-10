@@ -77,9 +77,12 @@ boundary or be consumed by an explicit runtime.
 Graph discovery exposes each factory's strict input schema and Selection output entity, without a
 cardinality promise. Codegen preserves portable declarations in typed browser facades. Explorer's
 Entity Structure panel shows their schemas and templates; dynamic invocation forms remain separate.
-The Console accepts one factory plus optional `where` in either dialect, for example
+The Console accepts factories plus optional `where` in either dialect, for example
 `Tag.by({ named: "Work" }).many()` or `Tag by named "Work" many`. Factory and input completion
 use the reflected schema; dialect switching and table modifiers preserve the authored invocation.
+Additional Console factories intersect membership: `Tag by named "Work" and by identity "tag-work" many`,
+or `Tag.by({ named: "Work" }).by({ identity: "tag-work" }).many()` in the TS-like dialect. In the Core
+SDK, compose the resulting Selections with `.and(...)`; chained `.by(...)` belongs to Console syntax.
 
 Factories do not assert uniqueness. The receiving input's `one`/`many` contract controls cardinality;
 identity references, existence, and uniqueness of current authorized membership remain distinct.

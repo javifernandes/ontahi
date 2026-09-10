@@ -82,10 +82,12 @@ a local Entity variable and a named object-literal factory map. The generated br
 client facade retain typed `by` and the same descriptors. Factory data must contain literals and
 Core `field`/`graphSchema.object` constructors; opaque expressions produce diagnostics, not server
 imports. Explorer's Entity Structure panel displays these contracts using its existing schema UI.
-Console supports one `by` invocation plus an optional `where` predicate in both dialects, with
+Console supports intersected `by` invocations plus an optional `where` predicate in both dialects, with
 schema-driven completion. For example, `Tag.by({ named: "Work" }).many()` and
 `Tag by named "Work" many` preserve their authored invocation when converting dialect or editing
-table ordering/limits. Dynamic Explorer invocation forms remain a follow-up.
+table ordering/limits. Additional Console factories use `.by(...).by(...)` in TS-like syntax or
+`by ... and by ...` in declarative; the Core SDK continues to compose Selection results with
+`.and(...)`. Dynamic Explorer invocation forms remain a follow-up.
 
 `expandSelectionFactory(descriptor, argument)` is the shared pure expansion boundary for tools
 holding only reflected JSON. It returns validated, normalized `input` and a Selection `expression`;
