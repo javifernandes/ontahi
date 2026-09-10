@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
+import { authoringDialectPreference } from '@ontahi/language-codemirror';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createExplorerSelectionReferenceValueProvider,
   ExplorerSelectionLanguageEditor,
 } from './selection-language-editor.js';
+import { ExplorerThemeProvider } from './theme.js';
 
 const TodoItem = {
   name: 'TodoItem',
@@ -26,9 +29,35 @@ const ReferencedTodoItem = {
   ],
 } as const;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  authoringDialectPreference.set(undefined);
+});
 
 describe('ExplorerSelectionLanguageEditor', () => {
+  it('shares the dialect preference and follows the Explorer theme without rewriting predicates', () => {
+    const onChange = vi.fn();
+    const editor = (
+      <ExplorerSelectionLanguageEditor
+        entity={TodoItem}
+        label='Filter'
+        value='completed = false'
+        onChange={onChange}
+      />
+    );
+    const { container, rerender } = render(
+      <ExplorerThemeProvider theme='dark'>{editor}</ExplorerThemeProvider>,
+    );
+    const view = EditorView.findFromDOM(screen.getByRole('textbox', { name: 'Filter' }))!;
+    expect(view.state.facet(EditorView.darkTheme)).toBe(true);
+    act(() => authoringDialectPreference.set('declarative'));
+    expect(container.querySelector('[data-ontahi-authoring-dialect="declarative"]')).toBeTruthy();
+    expect(screen.getByText(/Preferred dialect: Declarative/)).toBeTruthy();
+    expect(view.state.doc.toString()).toBe('completed = false');
+    expect(onChange).not.toHaveBeenCalled();
+    rerender(<ExplorerThemeProvider theme='light'>{editor}</ExplorerThemeProvider>);
+    expect(view.state.facet(EditorView.darkTheme)).toBe(false);
+  });
   it('adapts the reflected Entity reader into Reference search and identity resolution', async () => {
     const readEntityData = vi.fn().mockImplementation(async request => ({
       entityName: 'TodoList',
@@ -122,7 +151,7 @@ describe('ExplorerSelectionLanguageEditor', () => {
     const control = screen.getByRole('combobox', { name: 'Value for TodoItem.completed' });
     const help = screen.getByRole('button', { name: 'Selection editor help' });
     expect(help.getAttribute('aria-describedby')).toBeTruthy();
-    expect(screen.getByRole('tooltip').textContent).toBe(
+    expect(screen.getByRole('tooltip').textContent).toContain(
       'Ctrl-Space for suggestions. Hover a Field or operator for details. Press Escape on a value control to edit its source text.',
     );
     fireEvent.focus(help);

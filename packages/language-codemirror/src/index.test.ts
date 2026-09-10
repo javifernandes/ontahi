@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   consoleExpressionExtensions,
+  consoleExpressionDialect,
+  setConsoleExpressionDialect,
   consoleExpressionLinter,
   deriveConsoleFiniteValueProjections,
   deriveSelectionFiniteValueProjections,
@@ -55,6 +57,337 @@ const TodoItem = {
     { name: 'title', type: 'string', nullable: false },
   ],
 } as const;
+
+describe('Console dialect editor state', () => {
+  it('repairs a missing TS direction after an explicit comma with either choice', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const source = 'TodoItem.orderBy(title,).many()';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        extensions: [
+          history(),
+          ...consoleExpressionExtensions(
+            { entities: [TodoItem] },
+            {
+              finiteValueProjections: true,
+              orderableFields: () => ['title'],
+            },
+          ),
+        ],
+      }),
+    });
+    try {
+      const direction = parent.querySelector<HTMLSelectElement>(
+        '[aria-label="Order direction for TodoItem"]',
+      )!;
+      expect(direction.selectedOptions[0]!.textContent).toBe('Choose direction');
+      direction.value = ' asc';
+      direction.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(view.state.doc.toString()).toBe('TodoItem.orderBy(title, asc).many()');
+      undo(view);
+      expect(view.state.doc.toString()).toBe(source);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it.each([
+    [
+      'declarative',
+      'TodoItem order by ',
+      'TodoItem order by title',
+      'TodoItem order by title descending',
+      ' descending',
+    ],
+    [
+      'ts',
+      'TodoItem.orderBy().many()',
+      'TodoItem.orderBy(title).many()',
+      'TodoItem.orderBy(title, desc).many()',
+      ', desc',
+    ],
+  ] as const)(
+    'projects incomplete %s ordering and implicit direction without changing text',
+    (dialect, source, ordered, descending, directionValue) => {
+      const parent = document.createElement('div');
+      document.body.append(parent);
+      const compartment = new Compartment();
+      const extensions = (fields: string[]) =>
+        consoleExpressionExtensions(
+          { entities: [TodoItem] },
+          {
+            dialect,
+            finiteValueProjections: true,
+            orderableFields: () => fields,
+          },
+        );
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: source,
+          extensions: [history(), compartment.of(extensions(['title']))],
+        }),
+      });
+      try {
+        expect(view.state.doc.toString()).toBe(source);
+        const chooser = parent.querySelector<HTMLSelectElement>(
+          '[aria-label="Order field for TodoItem"]',
+        )!;
+        chooser.value = 'title';
+        chooser.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(view.state.doc.toString()).toBe(ordered);
+        const direction = parent.querySelector<HTMLSelectElement>(
+          '[aria-label="Order direction for TodoItem"]',
+        )!;
+        expect(direction.selectedOptions[0]!.textContent).toBe(
+          dialect === 'ts' ? 'asc' : 'ascending',
+        );
+        direction.value = directionValue;
+        direction.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(view.state.doc.toString()).toBe(descending);
+        undo(view);
+        expect(view.state.doc.toString()).toBe(ordered);
+        view.dispatch({ effects: compartment.reconfigure(extensions([])) });
+        expect(parent.querySelector('select')).toBeNull();
+        expect(view.state.doc.toString()).toBe(ordered);
+        undo(view);
+        expect(view.state.doc.toString()).toBe(source);
+      } finally {
+        view.destroy();
+        parent.remove();
+      }
+    },
+  );
+
+  it.each([
+    ['declarative', 'TodoItem order by title descending'],
+    ['ts', 'TodoItem.orderBy(title).many()'],
+  ] as const)('can delete the whole %s draft through rich ordering controls', (dialect, source) => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.length },
+        extensions: consoleExpressionExtensions(
+          { entities: [TodoItem] },
+          {
+            dialect,
+            finiteValueProjections: true,
+            orderableFields: () => ['title'],
+          },
+        ),
+      }),
+    });
+    try {
+      for (let remaining = source.length; remaining > 0 && view.state.doc.length > 0; remaining--) {
+        const before = view.state.doc.length;
+        view.contentDOM.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+        );
+        expect(view.state.doc.length).toBeLessThan(before);
+      }
+      expect(view.state.doc.toString()).toBe('');
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it.each([
+    [
+      'declarative',
+      'TodoItem order by title descending',
+      'TodoItem order by completed descending',
+      'ascending',
+    ],
+    [
+      'ts',
+      'TodoItem.orderBy(title, desc).many()',
+      'TodoItem.orderBy(completed, desc).many()',
+      'asc',
+    ],
+  ] as const)(
+    'edits %s ordering through source-backed dropdowns with undo and Escape',
+    (dialect, source, changed, ascending) => {
+      const parent = document.createElement('div');
+      document.body.append(parent);
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: source,
+          extensions: [
+            history(),
+            ...consoleExpressionExtensions(
+              { entities: [TodoItem] },
+              {
+                dialect,
+                finiteValueProjections: true,
+                orderableFields: () => ['title', 'completed'],
+              },
+            ),
+          ],
+        }),
+      });
+      try {
+        const field = parent.querySelector<HTMLSelectElement>(
+          '[aria-label="Order field for TodoItem"]',
+        )!;
+        expect(field).not.toBeNull();
+        expect(Array.from(field.options, option => option.value)).toEqual(['completed', 'title']);
+        field.value = 'completed';
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(view.state.doc.toString()).toBe(changed);
+        const direction = parent.querySelector<HTMLSelectElement>(
+          '[aria-label="Order direction for TodoItem"]',
+        )!;
+        direction.value = ascending;
+        direction.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(view.state.doc.toString()).toContain(ascending);
+        undo(view);
+        expect(view.state.doc.toString()).toBe(changed);
+        undo(view);
+        expect(view.state.doc.toString()).toBe(source);
+        parent
+          .querySelector<HTMLSelectElement>('[aria-label="Order field for TodoItem"]')!
+          .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(parent.querySelector('[aria-label="Order field for TodoItem"]')).toBeNull();
+        expect(
+          view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to),
+        ).toBe('title');
+      } finally {
+        view.destroy();
+        parent.remove();
+      }
+    },
+  );
+
+  it.each([
+    ['declarative', 'TodoItem ord', 'order by', 'TodoItem order by '],
+    ['ts', 'TodoItem.ord', 'orderBy', 'TodoItem.orderBy('],
+  ] as const)(
+    'offers permitted Fields immediately after accepting %s ordering',
+    async (dialect, source, label, completed) => {
+      const view = new EditorView({
+        parent: document.body,
+        state: EditorState.create({
+          doc: source,
+          selection: { anchor: source.length },
+          extensions: consoleExpressionExtensions(
+            { entities: [TodoItem] },
+            {
+              dialect,
+              orderableFields: () => ['title'],
+            },
+          ),
+        }),
+      });
+      try {
+        view.focus();
+        startCompletion(view);
+        await vi.waitFor(() =>
+          expect(currentCompletions(view.state).map(item => item.label)).toEqual([label]),
+        );
+        await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+        expect(view.state.doc.toString()).toBe(completed);
+        await vi.waitFor(() =>
+          expect(currentCompletions(view.state).map(item => item.label)).toEqual(['title']),
+        );
+      } finally {
+        view.destroy();
+      }
+    },
+  );
+
+  it('changes parser and lint with source and restores both through history', () => {
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: 'TodoItem.many()',
+        extensions: [history(), consoleExpressionExtensions({ entities: [TodoItem] })],
+      }),
+    });
+    try {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: 'TodoItem where completed = false' },
+        effects: setConsoleExpressionDialect.of('declarative'),
+      });
+      expect(syntaxTree(view.state).topNode.name).toBe('DeclarativeConsoleDocument');
+      expect(
+        consoleExpressionLinter({ entities: [TodoItem] }, { dialect: 'declarative' })(view),
+      ).toEqual([]);
+      expect(undo(view)).toBe(true);
+      expect(view.state.doc.toString()).toBe('TodoItem.many()');
+      expect(view.state.field(consoleExpressionDialect)).toBe('ts');
+      expect(syntaxTree(view.state).topNode.name).toBe('ConsoleDocument');
+      expect(redo(view)).toBe(true);
+      expect(syntaxTree(view.state).topNode.name).toBe('DeclarativeConsoleDocument');
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it('reconfigures capabilities in a declarative editor without losing dialect or undo', async () => {
+    const application = { entities: [TodoItem] };
+    const language = new Compartment();
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: 'TodoItem order by ',
+        extensions: [
+          history(),
+          language.of(
+            consoleExpressionExtensions(application, {
+              dialect: 'declarative',
+              orderableFields: () => ['title'],
+            }),
+          ),
+        ],
+      }),
+    });
+    try {
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['title']),
+      );
+      view.dispatch({
+        effects: language.reconfigure(
+          consoleExpressionExtensions(application, {
+            dialect: 'declarative',
+            orderableFields: () => [],
+          }),
+        ),
+      });
+      await vi.waitFor(() => expect(currentCompletions(view.state)).toEqual([]));
+      expect(view.state.field(consoleExpressionDialect)).toBe('declarative');
+      expect(syntaxTree(view.state).topNode.name).toBe('DeclarativeConsoleDocument');
+      expect(undo(view)).toBe(false);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it('derives Boolean and enum controls at declarative source ranges', () => {
+    const source = 'WorkItem where completed = false and status = "open" many';
+    const projections = deriveConsoleFiniteValueProjections(
+      source,
+      {
+        entities: [{ ...WorkItem, fields: [...TodoItem.fields, ...WorkItem.fields] }],
+      },
+      'declarative',
+    );
+    expect(projections.map(projection => source.slice(projection.from, projection.to))).toEqual([
+      'false',
+      '"open"',
+    ]);
+  });
+});
 
 const WorkItem = {
   name: 'WorkItem',

@@ -59,6 +59,51 @@ const createTripPolicy = (
 });
 
 describe('graph read dispatcher', () => {
+  it('discovers ordering policy without executing data or requiring a select-all projection', async () => {
+    const graph = defineTripGraph();
+    const execute = vi.fn();
+    const dispatch = createGraphReadDispatcher({ policies: [createTripPolicy(graph)], execute });
+    const request = { version: 1, kind: 'graph-read-capabilities', entityName: 'Trip' };
+    expect(await dispatch(request, { authority: { ownerId: 'owner-1' } })).toEqual({
+      kind: 'graph-read-capabilities-result',
+      entityName: 'Trip',
+      capabilities: { orderBy: ['id'] },
+    });
+    expect(
+      await dispatch({ ...request, entityName: 'Unknown' }, { authority: { ownerId: 'x' } }),
+    ).toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not disclose capabilities when authority scope fails', async () => {
+    const graph = defineTripGraph();
+    const execute = vi.fn();
+    const reportError = vi.fn();
+    const dispatch = createGraphReadDispatcher({
+      policies: [
+        {
+          ...createTripPolicy(graph),
+          scope: () => {
+            throw new Error('Private failure');
+          },
+        },
+      ],
+      execute,
+      reportError,
+    });
+    expect(
+      await dispatch(
+        { version: 1, kind: 'graph-read-capabilities', entityName: 'Trip' },
+        { authority: { ownerId: 'x' } },
+      ),
+    ).toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'execution_unavailable' },
+    });
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('returns policy-owned ordering capabilities only when requested and authorized', async () => {
     const graph = defineTripGraph();
     const execute = vi.fn().mockResolvedValue([]);
@@ -133,6 +178,12 @@ describe('graph read dispatcher', () => {
       fields,
     };
     const deniedDependency = createGraphReadDispatcher({ policies: [policy], execute });
+    const metadata = { version: 1, kind: 'graph-read-capabilities', entityName: 'Book' };
+    expect(await deniedDependency(metadata, { authority: undefined })).toEqual({
+      kind: 'graph-read-capabilities-result',
+      entityName: 'Book',
+      capabilities: { orderBy: [] },
+    });
     expect(await deniedDependency(request, { authority: undefined })).toEqual({
       kind: 'graph-read-result',
       value: [{ id: 'book' }],
@@ -145,6 +196,17 @@ describe('graph read dispatcher', () => {
     expect(await allowedDependency(request, { authority: undefined })).toMatchObject({
       capabilities: { orderBy: ['score'] },
     });
+    expect(await allowedDependency(metadata, { authority: undefined })).toMatchObject({
+      capabilities: { orderBy: ['score'] },
+    });
+    const countOnly = createGraphReadDispatcher({
+      policies: [{ ...policy, modes: ['count'] }],
+      execute,
+    });
+    expect(await countOnly(metadata, { authority: undefined })).toMatchObject({
+      capabilities: { orderBy: [] },
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('keeps other authorization failures generic and rejects ordering before observation starts', async () => {

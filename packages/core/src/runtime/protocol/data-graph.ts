@@ -4,20 +4,20 @@ import {
   type GraphCommandProtocolError,
 } from '../../data-graph/command-protocol.js';
 import {
-  parseGraphReadRequest,
+  parseGraphReadFamilyRequest,
   type GraphReadProtocolError,
-  type GraphReadRequestV1,
+  type GraphReadFamilyRequest,
 } from '../../data-graph/read-protocol.js';
 
 import { defineRuntimeProtocolFamily } from './registry.js';
 
 export const graphReadRuntimeProtocolFamily = defineRuntimeProtocolFamily<
   'graph.read',
-  GraphReadRequestV1,
+  GraphReadFamilyRequest,
   GraphReadProtocolError
 >({
   name: 'graph.read',
-  parseRequest: parseGraphReadRequest,
+  parseRequest: parseGraphReadFamilyRequest,
 });
 
 export const graphCommandRuntimeProtocolFamily = defineRuntimeProtocolFamily<

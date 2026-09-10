@@ -11,21 +11,42 @@ import {
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
 import {
+  anonymousExecutionIdentity,
+  executionIdentityCacheKey,
+  type ExecutionIdentity,
+} from '@ontahi/core/runtime/identity';
+import {
   createRuntimeProtocolExchange,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
 import {
   analyzeConsoleDocument,
+  convertConsoleDocument,
   editConsoleOrderBy,
   editConsoleLimit,
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
   type ConsoleLanguageApplicationReflection,
   type ConsoleDocumentAnalysis,
+  type ConsoleDialect,
 } from '@ontahi/language';
-import { consoleExpressionExtensions } from '@ontahi/language-codemirror';
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import {
+  authoringDialectPreference,
+  consoleExpressionExtensions,
+  consoleExpressionDialect,
+  setConsoleExpressionDialect,
+} from '@ontahi/language-codemirror';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MutableRefObject,
+  type SetStateAction,
+} from 'react';
 
+import { useConsoleReadCapabilities } from './console-read-capabilities.js';
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
@@ -34,7 +55,10 @@ import { ResultTable, SemanticPayload, type ResultTableOrdering } from './semant
 export type OntahiDevtoolsConsoleOptions = {
   readonly entities: readonly AnyEntityDefinition[];
   readonly initialDocument?: string;
+  readonly initialDialect?: ConsoleDialect;
   readonly limit?: number;
+  /** Host cache identity, not credentials. Update principal/cacheScope on authority changes. */
+  readonly identity?: ExecutionIdentity;
 };
 
 export type ConsolePanelProps = {
@@ -44,11 +68,13 @@ export type ConsolePanelProps = {
 
 type ConsoleResultSnapshot = {
   readonly document: string;
+  readonly exists: boolean;
   readonly request: GraphReadRequestV1;
   readonly value: unknown;
   readonly durationMs: number;
   readonly capabilities?: GraphReadCapabilities;
   readonly transport?: RuntimeTransport<any>;
+  readonly route?: string;
 };
 
 type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
@@ -125,10 +151,10 @@ const ConsoleResultContent = ({
   return <SemanticPayload value={snapshot.value} />;
 };
 
-const resultNotice = (result: ConsoleResult, document: string): string => {
+const resultNotice = (result: ConsoleResult, matchesDraft: boolean): string => {
   if (result.status === 'executing') return 'Running…';
   if (result.status === 'error' && result.snapshot) return 'Previous result';
-  if (result.snapshot && result.snapshot.document !== document) return 'Changes not run';
+  if (result.snapshot && !matchesDraft) return 'Changes not run';
   return '';
 };
 
@@ -136,7 +162,8 @@ type ConsoleEditorProps = {
   readonly application: ConsoleLanguageApplicationReflection;
   readonly label: string;
   readonly limit: number;
-  readonly onChange: (document: string) => void;
+  readonly dialect: ConsoleDialect;
+  readonly onChange: (document: string, dialect: ConsoleDialect) => void;
   readonly orderableFields: (entityName: string) => readonly string[];
   readonly run: () => void;
   readonly value: string;
@@ -178,6 +205,7 @@ const consoleEditorTheme = EditorView.theme({
 
 const ConsoleEditor = ({
   application,
+  dialect,
   label,
   limit,
   onChange,
@@ -206,6 +234,8 @@ const ConsoleEditor = ({
           keymap.of(historyKeymap),
           languageCompartmentRef.current.of(
             consoleExpressionExtensions(application, {
+              colorScheme: 'dark',
+              dialect,
               finiteValueProjections: true,
               orderableFields,
               limit,
@@ -217,12 +247,17 @@ const ConsoleEditor = ({
           consoleEditorTheme,
           EditorView.updateListener.of(update => {
             if (
-              update.docChanged &&
+              (update.docChanged ||
+                update.state.field(consoleExpressionDialect) !==
+                  update.startState.field(consoleExpressionDialect)) &&
               !update.transactions.some(transaction =>
                 transaction.annotation(externalDocumentChange),
               )
             ) {
-              onChangeRef.current(update.state.doc.toString());
+              onChangeRef.current(
+                update.state.doc.toString(),
+                update.state.field(consoleExpressionDialect),
+              );
             }
           }),
         ],
@@ -239,6 +274,8 @@ const ConsoleEditor = ({
     viewRef.current?.dispatch({
       effects: languageCompartmentRef.current.reconfigure(
         consoleExpressionExtensions(application, {
+          colorScheme: 'dark',
+          dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
           finiteValueProjections: true,
           orderableFields,
           limit,
@@ -306,7 +343,7 @@ const graphReadResult = (
 
 const ConsoleResultPanel = ({
   result,
-  document,
+  matchesDraft,
   limit,
   resultMode,
   setResultMode,
@@ -315,7 +352,7 @@ const ConsoleResultPanel = ({
   ordering,
 }: {
   readonly result: ConsoleResult;
-  readonly document: string;
+  readonly matchesDraft: boolean;
   readonly limit: number;
   readonly resultMode: ConsoleResultMode;
   readonly setResultMode: (mode: ConsoleResultMode) => void;
@@ -352,7 +389,7 @@ const ConsoleResultPanel = ({
             style={styles.consoleResultStatus}
             title={snapshot ? 'Showing the last successful result.' : undefined}
           >
-            {resultNotice(result, document)}
+            {resultNotice(result, matchesDraft)}
           </output>
         </div>
         <span style={styles.consoleResultControls}>
@@ -391,6 +428,12 @@ const ConsoleResultPanel = ({
 };
 
 export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) => {
+  const preferredDialect = useSyncExternalStore(
+    authoringDialectPreference.subscribe,
+    authoringDialectPreference.getSnapshot,
+    authoringDialectPreference.getServerSnapshot,
+  );
+  const [preferenceNotice, setPreferenceNotice] = useState('');
   const limit = options.limit ?? 25;
   const application = useMemo<ConsoleLanguageApplicationReflection>(
     () => ({ entities: options.entities.map(entity => reflectSelectionLanguageEntity(entity)) }),
@@ -398,25 +441,60 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   );
   const initialDocument =
     options.initialDocument ??
-    (application.entities[0] ? application.entities[0].name + '.many()' : '');
-  const [document, setDocument] = useState(initialDocument);
-  const [result, setResult] = useState<ConsoleResult>({ status: 'idle' });
+    (application.entities[0]
+      ? application.entities[0].name + (options.initialDialect === 'declarative' ? '' : '.many()')
+      : '');
+  const [{ document, dialect }, setDraft] = useState({
+    document: initialDocument,
+    dialect: options.initialDialect ?? 'ts',
+  });
+  const identityKey = JSON.stringify(
+    executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
+  );
+  const [storedResult, setStoredResult] = useState<{
+    readonly identityKey: string;
+    readonly result: ConsoleResult;
+  }>();
+  const result: ConsoleResult =
+    storedResult?.identityKey === identityKey ? storedResult.result : { status: 'idle' };
+  const setResult = (update: SetStateAction<ConsoleResult>) =>
+    setStoredResult(previous => ({
+      identityKey,
+      result:
+        typeof update === 'function'
+          ? update(previous?.identityKey === identityKey ? previous.result : { status: 'idle' })
+          : update,
+    }));
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
   const viewRef = useRef<EditorView>();
-  const executingRef = useRef(false);
+  const executingRef = useRef<AbortController>();
+  useEffect(() => {
+    setStoredResult(undefined);
+    return () => {
+      executingRef.current?.abort();
+      executingRef.current = undefined;
+    };
+  }, [identityKey]);
   const exchange = useMemo(
     () =>
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
     [runtimeTransport],
   );
   const analysis = useMemo(
-    () => analyzeConsoleDocument(document, application, { limit }),
-    [application, document, limit],
+    () => analyzeConsoleDocument(document, application, { limit, dialect }),
+    [application, document, limit, dialect],
   );
+  const entityName = application.entities.find(
+    entity => entity.name === analysis.syntax.expression?.entity?.text,
+  )?.name;
+  const discovery = useConsoleReadCapabilities(runtimeTransport, entityName, identityKey);
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
-    const executedAnalysis = analyzeConsoleDocument(source, application, { limit });
+    const executedAnalysis = analyzeConsoleDocument(source, application, {
+      limit,
+      dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
+    });
     const request = executedAnalysis.request;
     if (!request) {
       setResult(previous => ({
@@ -435,12 +513,17 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       return;
     }
 
-    executingRef.current = true;
+    const controller = new AbortController();
+    executingRef.current = controller;
     const startedAt = performance.now();
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
-    void exchange({ family: 'graph.read', body: { ...request, includeCapabilities: true } })
+    void exchange(
+      { family: 'graph.read', body: { ...request, includeCapabilities: true } },
+      { signal: controller.signal },
+    )
       .then(graphReadResult)
       .then(result => {
+        if (controller.signal.aborted) return;
         const exists = executedAnalysis.syntax.expression?.terminal?.kind === 'exists-member';
         if (exists && result.value !== null && !isRecord(result.value)) {
           throw new Error('Graph Read exists expected an Entity record or null.');
@@ -449,16 +532,21 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
           status: 'success',
           snapshot: {
             document: source,
+            exists,
             request,
             ...result,
             // Match the application Graph Read exists intent over nullable get.
             value: exists ? result.value !== null : result.value,
             transport: runtimeTransport,
+            route: discovery.route,
             durationMs: Math.max(0, performance.now() - startedAt),
           },
         });
       })
-      .catch((error: unknown) =>
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        if (error instanceof ConsoleGraphReadError && error.code === 'access_denied')
+          discovery.refresh();
         setResult(previous => ({
           snapshot:
             previous.snapshot &&
@@ -468,34 +556,71 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
               : previous.snapshot,
           status: 'error',
           message: error instanceof Error ? error.message : 'Graph Read failed.',
-        })),
-      )
+        }));
+      })
       .finally(() => {
-        executingRef.current = false;
+        if (executingRef.current === controller) executingRef.current = undefined;
       });
   };
 
   const run = () => runDocument(viewRef.current?.state.doc.toString() ?? document);
+  const changeDialect = (nextDialect: ConsoleDialect, focus = true): boolean => {
+    const view = viewRef.current;
+    if (!view) return false;
+    const currentDialect = view.state.field(consoleExpressionDialect);
+    if (nextDialect === currentDialect) return true;
+    const source = view.state.doc.toString();
+    const converted =
+      source.trim() === ''
+        ? source
+        : convertConsoleDocument(source, application, nextDialect, {
+            limit,
+            dialect: currentDialect,
+          });
+    if (converted === undefined) return false;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: converted },
+      effects: setConsoleExpressionDialect.of(nextDialect),
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.console-dialect',
+    });
+    if (focus) view.focus();
+    setPreferenceNotice('');
+    return true;
+  };
+  useEffect(() => {
+    if (options.initialDialect) return;
+    if (!changeDialect(preferredDialect ?? 'ts', false)) {
+      setPreferenceNotice(
+        'Preferred dialect changed; this incomplete draft keeps its current dialect. Fix it and use the Console switch to convert.',
+      );
+    }
+  }, [preferredDialect, options.initialDialect]);
   const snapshot = result.snapshot;
-  const orderingCapabilities =
-    snapshot?.transport === runtimeTransport ? snapshot?.capabilities : undefined;
-  const orderableFields = useMemo(
-    () => (entityName: string) =>
-      entityName === snapshot?.request.selection.entityName
-        ? (orderingCapabilities?.orderBy ?? [])
-        : [],
-    [snapshot?.request.selection.entityName, orderingCapabilities],
-  );
+  const orderingCapabilities = discovery.capabilities;
+  const orderableFields = discovery.orderableFields;
+  const orderingCompletionNotice = () => {
+    const syntax = analysis.syntax.expression;
+    const entityName = syntax?.entity?.text;
+    if (!syntax?.orderBy || !application.entities.some(entity => entity.name === entityName))
+      return null;
+    if (!runtimeTransport) return 'Ordering suggestions require a configured Runtime Transport.';
+    if (discovery.loading) return 'Loading ordering permissions…';
+    if (discovery.error) return `Ordering permissions unavailable: ${discovery.error}`;
+    return orderingCapabilities?.orderBy.length === 0
+      ? 'The current Graph Read policy allows no ordering Fields for this Entity.'
+      : null;
+  };
   const resultEntity = application.entities.find(
     entity => entity.name === snapshot?.request.selection.entityName,
   );
   const sortDisabledReason = (fieldName: string): string | undefined => {
     if (result.status === 'executing') return 'Wait for the current query to finish.';
     if (!exchange) return 'Ordering requires a configured Runtime Transport.';
-    if (snapshot?.transport !== runtimeTransport)
+    if (snapshot?.transport !== runtimeTransport || snapshot?.route !== discovery.route)
       return 'Run the query to refresh ordering permissions for this transport.';
-    if (!snapshot || !orderingCapabilities)
-      return 'Ordering permissions unavailable. Run a successful query against a server that reports Graph Read capabilities.';
+    if (!snapshot || !orderingCapabilities || entityName !== snapshot.request.selection.entityName)
+      return 'Ordering permissions unavailable for the current Entity.';
     if (!orderingCapabilities.orderBy.includes(fieldName))
       return `Ordering by ${snapshot.request.selection.entityName}.${fieldName} is not allowed by the Graph Read policy.`;
     if (!analysis.request) return 'Fix the Console expression before changing ordering.';
@@ -511,14 +636,14 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     const view = viewRef.current;
     if (sortDisabledReason(fieldName) || !view || executingRef.current) return;
     const source = view.state.doc.toString();
-    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    const request = analyzeConsoleDocument(source, application, { limit, dialect }).request;
     if (
       request?.mode !== 'run' ||
       request.selection.entityName !== snapshot?.request.selection.entityName
     )
       return;
     const nextOrder = nextConsoleOrder(request.orderBy[0], fieldName);
-    const changes = editConsoleOrderBy(source, application, nextOrder);
+    const changes = editConsoleOrderBy(source, application, nextOrder, { dialect });
     if (!changes) return;
     view.dispatch({
       changes,
@@ -530,7 +655,11 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
 
   const limitDisabledReason = () => {
     if (result.status === 'executing') return 'Wait for the current query to finish.';
-    if (!exchange || snapshot?.transport !== runtimeTransport)
+    if (
+      !exchange ||
+      snapshot?.transport !== runtimeTransport ||
+      snapshot?.route !== discovery.route
+    )
       return 'Run the query with the current Runtime Transport before changing its limit.';
     if (!analysis.request) return 'Fix the Console expression before changing its limit.';
     if (
@@ -544,13 +673,13 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     const view = viewRef.current;
     if (limitDisabledReason() || !view || executingRef.current) return;
     const source = view.state.doc.toString();
-    const request = analyzeConsoleDocument(source, application, { limit }).request;
+    const request = analyzeConsoleDocument(source, application, { limit, dialect }).request;
     if (
       request?.mode !== 'run' ||
       request.selection.entityName !== snapshot?.request.selection.entityName
     )
       return;
-    const changes = editConsoleLimit(source, application, nextLimit);
+    const changes = editConsoleLimit(source, application, nextLimit, { dialect });
     if (!changes) return;
     view.dispatch({
       changes,
@@ -566,25 +695,49 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         <div style={styles.consoleHeading}>
           <span>
             <strong style={styles.consoleTitle}>Semantic Console</strong>
-            <span style={styles.consoleHint}>Graph Read walking skeleton · Mod-Enter to run</span>
+            <span style={styles.consoleHint}>Graph Read · Mod-Enter to run</span>
           </span>
-          <button
-            type='button'
-            style={{
-              ...styles.primaryButton,
-              ...(!analysis.request || result.status === 'executing' ? styles.disabledButton : {}),
-            }}
-            disabled={!analysis.request || result.status === 'executing'}
-            onClick={run}
-          >
-            {result.status === 'executing' ? 'Running…' : 'Run'}
-          </button>
+          <span style={styles.consoleResultControls}>
+            <fieldset style={{ ...styles.modes, margin: 0 }} aria-label='Console dialect'>
+              {(['ts', 'declarative'] as const).map(value => (
+                <button
+                  key={value}
+                  type='button'
+                  style={{ ...styles.mode, ...(dialect === value ? styles.activeMode : {}) }}
+                  aria-pressed={dialect === value}
+                  disabled={value !== dialect && document.trim() !== '' && !analysis.request}
+                  title={
+                    !analysis.request && document.trim() !== ''
+                      ? 'Fix the expression before switching dialect. Your draft will be kept.'
+                      : 'Convert syntax without running the query. Undo restores the original text and dialect.'
+                  }
+                  onClick={() => changeDialect(value)}
+                >
+                  {value === 'ts' ? 'TS' : 'Declarative'}
+                </button>
+              ))}
+            </fieldset>
+            <button
+              type='button'
+              style={{
+                ...styles.primaryButton,
+                ...(!analysis.request || result.status === 'executing'
+                  ? styles.disabledButton
+                  : {}),
+              }}
+              disabled={!analysis.request || result.status === 'executing'}
+              onClick={run}
+            >
+              {result.status === 'executing' ? 'Running…' : 'Run'}
+            </button>
+          </span>
         </div>
         <ConsoleEditor
           application={application}
+          dialect={dialect}
           label='Ontahí Console expression'
           limit={limit}
-          onChange={setDocument}
+          onChange={(document, dialect) => setDraft({ document, dialect })}
           orderableFields={orderableFields}
           run={run}
           value={document}
@@ -592,11 +745,22 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         />
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
+          <span>{orderingCompletionNotice()}</span>
+          {analysis.syntax.expression?.orderBy && discovery.error ? (
+            <button type='button' style={styles.mode} onClick={discovery.refresh}>
+              Retry ordering permissions
+            </button>
+          ) : null}
+          {preferenceNotice ? <span>{preferenceNotice}</span> : null}
         </div>
       </div>
       <ConsoleResultPanel
         result={result}
-        document={document}
+        matchesDraft={
+          JSON.stringify(result.snapshot?.request) === JSON.stringify(analysis.request) &&
+          result.snapshot?.exists ===
+            (analysis.syntax.expression?.terminal?.kind === 'exists-member')
+        }
         limit={limit}
         resultMode={resultMode}
         setResultMode={setResultMode}

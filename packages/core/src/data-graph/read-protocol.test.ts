@@ -9,6 +9,7 @@ import {
   isGraphReadCapabilities,
   mapEntity,
   parseGraphReadRequest,
+  parseGraphReadFamilyRequest,
   query,
   resolveGraphReadRequest,
   toGraphReadRequest,
@@ -45,6 +46,27 @@ const validReadRequest = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('data graph read protocol', () => {
+  it.each([
+    [{ version: 2, kind: 'graph-read-capabilities', entityName: 'Trip' }, 'unsupported_version'],
+    [{ version: 1, kind: 'graph-read-capabilities' }, 'invalid_request'],
+    [{ version: 1, kind: 'graph-read-capabilities', entityName: 42 }, 'invalid_request'],
+    [{ version: 1, kind: 'graph-read-capabilities', entityName: '  ' }, 'invalid_request'],
+  ])('rejects invalid metadata request %j', (request, code) => {
+    expect(parseGraphReadFamilyRequest(request)).toMatchObject({
+      success: false,
+      error: { error: { code } },
+    });
+  });
+
+  it('keeps metadata distinct from data reads and strips client-supplied authority', () => {
+    const request = { version: 1, kind: 'graph-read-capabilities', entityName: 'Trip' };
+    expect(parseGraphReadFamilyRequest({ ...request, authority: 'untrusted' })).toEqual({
+      success: true,
+      request,
+    });
+    expect(parseGraphReadRequest(request)).toMatchObject({ success: false });
+  });
+
   it('round-trips an optional capability request and validates reflected ordering fields', () => {
     for (const includeCapabilities of [true, false]) {
       expect(parseGraphReadRequest(validReadRequest({ includeCapabilities }))).toMatchObject({

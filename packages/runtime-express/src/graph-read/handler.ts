@@ -1,6 +1,6 @@
 import {
   graphReadProtocolError,
-  parseGraphReadRequest,
+  parseGraphReadFamilyRequest,
   type GraphReadDispatchContext,
   type GraphReadDispatcher,
   type GraphReadDispatchResponse,
@@ -32,7 +32,7 @@ export type CreateExpressGraphReadHandlerOptions<TAuthority> = {
 };
 
 const responseStatus = (response: GraphReadDispatchResponse) => {
-  if (response.kind === 'graph-read-result') return 200;
+  if (response.kind !== 'protocol-error') return 200;
   if (response.error.code === 'access_denied') return 403;
   if (response.error.code === 'cardinality_mismatch') return 409;
   if (response.error.code === 'execution_unavailable') return 503;
@@ -48,7 +48,7 @@ export const createExpressGraphReadHandler =
     reportError,
   }: CreateExpressGraphReadHandlerOptions<TAuthority>): RequestHandler =>
   async (request, response) => {
-    const parsed = parseGraphReadRequest(request.body);
+    const parsed = parseGraphReadFamilyRequest(request.body);
     if (!parsed.success) {
       response.status(400).json(parsed.error);
       return;

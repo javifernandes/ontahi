@@ -6,12 +6,13 @@ import { EditorView, keymap } from '@codemirror/view';
 import type { ReflectedEntityDataReader } from '@ontahi/core/data-graph';
 import type { SelectionLanguageEntityReflection } from '@ontahi/language';
 import {
+  authoringDialectPreference,
   selectionExpressionExtensions,
   type SelectionReferenceValueOption,
   type SelectionReferenceValueProvider,
 } from '@ontahi/language-codemirror';
 import { CircleHelp } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 
 import { cx } from '../internal/cx.js';
 
@@ -20,6 +21,7 @@ import {
   getExplorerReferenceRowSecondaryLabel,
   toExplorerReferenceDisplayString,
 } from './entity-reference-presentation.js';
+import { useExplorerTheme } from './theme.js';
 
 export type ExplorerSelectionLanguageEditorProps = {
   readonly label: string;
@@ -106,6 +108,13 @@ export function ExplorerSelectionLanguageEditor({
   referenceValues,
   value,
 }: ExplorerSelectionLanguageEditorProps) {
+  const { resolvedTheme } = useExplorerTheme();
+  const preferredDialect =
+    useSyncExternalStore(
+      authoringDialectPreference.subscribe,
+      authoringDialectPreference.getSnapshot,
+      authoringDialectPreference.getServerSnapshot,
+    ) ?? 'ts';
   const helpId = useId();
   const [helpDismissed, setHelpDismissed] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -128,6 +137,7 @@ export function ExplorerSelectionLanguageEditor({
           keymap.of(historyKeymap),
           languageCompartmentRef.current.of(
             selectionExpressionExtensions(entity, {
+              colorScheme: resolvedTheme,
               finiteValueProjections: true,
               ...(referenceValues ? { referenceValues } : {}),
             }),
@@ -160,12 +170,13 @@ export function ExplorerSelectionLanguageEditor({
     viewRef.current?.dispatch({
       effects: languageCompartmentRef.current.reconfigure(
         selectionExpressionExtensions(entity, {
+          colorScheme: resolvedTheme,
           finiteValueProjections: true,
           ...(referenceValues ? { referenceValues } : {}),
         }),
       ),
     });
-  }, [entity, referenceValues]);
+  }, [entity, referenceValues, resolvedTheme]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
@@ -186,6 +197,7 @@ export function ExplorerSelectionLanguageEditor({
 
   return (
     <div
+      data-ontahi-authoring-dialect={preferredDialect}
       className={cx(
         'relative rounded-md border bg-background text-foreground focus-within:border-primary',
         className,
@@ -223,7 +235,9 @@ export function ExplorerSelectionLanguageEditor({
           )}
         >
           Ctrl-Space for suggestions. Hover a Field or operator for details. Press Escape on a value
-          control to edit its source text.
+          control to edit its source text. Preferred dialect:{' '}
+          {preferredDialect === 'ts' ? 'TS-like' : 'Declarative'}. Selection predicates share the
+          same syntax in both dialects.
         </div>
       </div>
     </div>

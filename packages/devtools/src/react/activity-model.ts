@@ -1,3 +1,5 @@
+import type { ConsoleDialect } from '@ontahi/language';
+
 import type {
   ExchangeDiagnosticEvent,
   ObservationDiagnosticEvent,
@@ -81,7 +83,52 @@ const formatInlineValue = (value: unknown) => {
   return formatted.length > 42 ? `${formatted.slice(0, 39)}…` : formatted;
 };
 
-export const formatSelectionExpression = (value: unknown): string => {
+const declarativeOperators = new Map([
+  ['eq', '='],
+  ['gt', '>'],
+  ['gte', '>='],
+  ['lt', '<'],
+  ['lte', '<='],
+]);
+
+const declarativePredicate = (value: unknown): string => {
+  if (!isRecord(value) || typeof value.kind !== 'string') return 'selection';
+  if (value.kind === 'all' || value.kind === 'none') return value.kind;
+  if (value.kind === 'references' && Array.isArray(value.refs))
+    return `references (${value.refs.length})`;
+  if (value.kind === 'predicate' && typeof value.fieldName === 'string') {
+    if (value.operator === 'in' && Array.isArray(value.values))
+      return `${value.fieldName} in ${formatInlineValue(value.values)}`;
+    if (value.operator === 'isNull') return `${value.fieldName} is null`;
+    const operator = String(value.operator);
+    return `${value.fieldName} ${declarativeOperators.get(operator) ?? operator} ${formatInlineValue(value.value)}`;
+  }
+  if ((value.kind === 'and' || value.kind === 'or') && Array.isArray(value.operands)) {
+    return value.operands
+      .map(operand => {
+        const rendered = declarativePredicate(operand);
+        return isRecord(operand) && (operand.kind === 'and' || operand.kind === 'or')
+          ? `(${rendered})`
+          : rendered;
+      })
+      .join(` ${value.kind} `);
+  }
+  if (value.kind === 'not') return `not (${declarativePredicate(value.operand)})`;
+  return `${value.kind} (…)`;
+};
+
+export const formatSelectionExpression = (
+  value: unknown,
+  dialect: ConsoleDialect = 'ts',
+): string => {
+  if (dialect === 'declarative') {
+    const predicate = declarativePredicate(value);
+    return isRecord(value) &&
+      typeof value.kind === 'string' &&
+      ['predicate', 'and', 'or', 'not'].includes(value.kind)
+      ? `where ${predicate}`
+      : predicate;
+  }
   if (!isRecord(value) || typeof value.kind !== 'string') return 'selection';
   if (value.kind === 'all' || value.kind === 'none') return value.kind;
   if (value.kind === 'references' && Array.isArray(value.refs)) {
@@ -97,7 +144,7 @@ export const formatSelectionExpression = (value: unknown): string => {
   if ((value.kind === 'and' || value.kind === 'or') && Array.isArray(value.operands)) {
     const operator = value.kind === 'and' ? ' && ' : ' || ';
     const operands = value.operands
-      .map(formatSelectionExpression)
+      .map(operand => formatSelectionExpression(operand))
       .map(part => (part.startsWith('where(') && part.endsWith(')') ? part.slice(6, -1) : part));
     return `where(${operands.join(operator)})`;
   }
@@ -105,22 +152,44 @@ export const formatSelectionExpression = (value: unknown): string => {
   return `${value.kind}(…)`;
 };
 
-export const graphReadSummary = (body: RecordValue): string | undefined => {
+export const formatReadOrder = (order: unknown, dialect: ConsoleDialect = 'ts'): string => {
+  if (!isRecord(order) || typeof order.fieldName !== 'string') return '';
+  if (typeof order.direction !== 'string') return order.fieldName;
+  const direction =
+    dialect === 'declarative' && order.direction === 'asc'
+      ? 'ascending'
+      : dialect === 'declarative' && order.direction === 'desc'
+        ? 'descending'
+        : order.direction;
+  return `${order.fieldName} ${direction}`;
+};
+
+export const graphReadSummary = (
+  body: RecordValue,
+  dialect: ConsoleDialect = 'ts',
+): string | undefined => {
   if (body.kind !== 'graph-read' || !isRecord(body.selection)) return undefined;
   const entity =
     typeof body.selection.entityName === 'string' ? body.selection.entityName : 'UnknownEntity';
-  const clauses = [`${entity}.${formatSelectionExpression(body.selection.expression)}`];
+  const expression = body.selection.expression;
+  const clauses = [
+    dialect === 'ts'
+      ? `${entity}.${formatSelectionExpression(expression)}`
+      : isRecord(expression) && expression.kind === 'all'
+        ? entity
+        : `${entity} ${isRecord(expression) && expression.kind === 'none' ? 'where none' : formatSelectionExpression(expression, dialect)}`,
+  ];
   if (Array.isArray(body.orderBy) && body.orderBy.length > 0) {
-    const ordering = body.orderBy
-      .map(order =>
-        isRecord(order) && typeof order.fieldName === 'string'
-          ? `${order.fieldName}${typeof order.direction === 'string' ? ` ${order.direction}` : ''}`
-          : undefined,
-      )
-      .filter((value): value is string => Boolean(value));
-    if (ordering.length > 0) clauses.push(`orderBy ${ordering.join(', ')}`);
+    const ordering = body.orderBy.map(order => formatReadOrder(order, dialect)).filter(Boolean);
+    if (ordering.length > 0)
+      clauses.push(`${dialect === 'ts' ? 'orderBy' : 'order by'} ${ordering.join(', ')}`);
   }
   if (typeof body.limit === 'number') clauses.push(`limit ${body.limit}`);
+  if (dialect === 'declarative') {
+    if (body.mode === 'run') clauses.push('many');
+    else if (body.mode === 'count') clauses.push('count');
+    else if (body.mode === 'get') clauses.push(body.cardinality === 'one' ? 'one' : 'first');
+  }
   if (isRecord(body.view) && typeof body.view.name === 'string') {
     clauses.push(`as ${body.view.name}`);
   }
@@ -184,11 +253,16 @@ export const graphCommandSummary = (body: RecordValue): string | undefined => {
   return typeof command.kind === 'string' ? command.kind : 'Graph command';
 };
 
-export const semanticSummary = (activity: ExchangeActivity): string => {
+export const semanticSummary = (
+  activity: ExchangeActivity,
+  dialect: ConsoleDialect = 'ts',
+): string => {
   const event = activity.started ?? activity.settled;
   const body = activity.started?.request?.body;
   if (isRecord(body)) {
-    const graphRead = graphReadSummary(body);
+    if (body.kind === 'graph-read-capabilities' && typeof body.entityName === 'string')
+      return `${body.entityName} read capabilities`;
+    const graphRead = graphReadSummary(body, dialect);
     if (graphRead) return graphRead;
     const graphCommand = graphCommandSummary(body);
     if (graphCommand) return graphCommand;
@@ -332,8 +406,8 @@ export const activityEntryOutcome = (entry: ActivityEntry): RuntimeDiagnosticOut
   (entry.kind === 'exchange' ? entry.exchange.settled?.outcome : undefined) ??
   'pending';
 
-export const activityEntryTitle = (entry: ActivityEntry) => {
-  if (entry.kind === 'exchange') return semanticSummary(entry.exchange);
+export const activityEntryTitle = (entry: ActivityEntry, dialect: ConsoleDialect = 'ts') => {
+  if (entry.kind === 'exchange') return semanticSummary(entry.exchange, dialect);
   const event =
     entry.observation.settled ??
     entry.observation.snapshots[entry.observation.snapshots.length - 1] ??

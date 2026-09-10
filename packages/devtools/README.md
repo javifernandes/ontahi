@@ -8,6 +8,16 @@ keeps transport families as supporting metadata, and lets each request and respo
 semantic projection, body JSON, and its complete Runtime Protocol envelope. It does not patch
 `fetch`, `WebSocket`, or browser globals, and it does not persist or upload diagnostic data.
 
+Activity Graph Read summaries follow Settings → Authoring language in the list, detail heading,
+and Visual request (Selection and ordering included). Filtering matches the displayed dialect.
+This is a pure projection of captured canonical data, not a CodeMirror editor or a conversion of
+previously rendered text. Changing the preference reprojects existing entries without traffic or
+payload mutation; Body JSON, Envelope, and copied JSON remain the captured protocol data.
+Summaries are compact diagnostic labels, not guaranteed executable Console documents: they may
+include Views, multiple ordering keys, redacted values, or Reference selections outside today's
+Console grammar. Nullable `get` is shown as `first`, not guessed to be `exists`. Command and
+Operation labels remain unchanged until those authoring dialects are defined.
+
 ```tsx
 import { entity, field } from '@ontahi/core/data-graph';
 import { createRuntimeTransportRouter } from '@ontahi/core/runtime/protocol';
@@ -63,6 +73,33 @@ neither `limit` nor `orderBy`, and has no table controls. Activity retains the a
 Many reads may override the default row limit in source, for example `Tag.limit(10).many()` or
 `TodoItem.where(completed = false).limit(5).many()`.
 
+The composer includes **TS / Declarative** controls. For example, `TodoItem where completed = false`
+selects many by default; append `order by title descending limit 10`, or an explicit terminal such
+as `first`, `one`, `count`, or `exists` with the existing modifier restrictions. Both dialects keep
+the same runtime and policy boundary, Boolean/enum controls, and permission-aware completion.
+Header sorting and limit changes edit the active dialect and submit through Runtime Transport.
+Accepting `order by`/`orderBy` reopens completion for its permitted Fields. Ordering suggestions
+load through a metadata-only `graph.read` request as soon as the draft names a reflected Entity,
+including incomplete queries. No initial Run is required. Field and direction dropdowns edit the
+source in both dialects without executing; undo/redo and Escape work like Boolean/enum controls.
+Loading, denied/unavailable metadata (with retry), and a known empty policy are distinguished.
+Typing and accepting suggestions never execute data queries.
+
+Switching dialect does not run a query. Undo/redo restores the original source and dialect together;
+equivalent converted queries keep the current result without a false stale notice. Invalid drafts
+(including unsupported comments) block switching with an explanation and are never discarded.
+Empty drafts may switch unchanged. Settings → Authoring language saves the preferred dialect for
+Ontahí authoring editors on this browser origin, including other tabs. With no saved preference,
+TS is the default. The Console switch is a local override; it does not change Settings. Visiting
+Settings or Activity preserves the mounted Console draft, result, and undo history. A preference
+change converts valid drafts without running; incomplete drafts retain their dialect with a notice.
+
+An explicit `console.initialDialect` is a host override of the saved preference. If supplied,
+`initialDocument` must use that initial dialect (TS when omitted); a saved preference then converts
+it safely. Explorer Selection predicates already share their syntax across both dialects, and
+plain-text searches remain plain text. Syntax highlighting uses a dedicated dark palette for the
+Console, including `where`, `many`, other clauses, Fields, and literals.
+
 Query ordering is shared by the source editor and the Visual result table:
 
 ```text
@@ -84,14 +121,22 @@ snapshot visible with a short toolbar notice; actionable errors remain visible i
 Controls are disabled while running or when the
 draft is invalid, targets another Entity, or is no longer a many read. A valid same-Entity draft
 is preserved and submitted with the new sort. Headers intersect intrinsically sortable Fields with
-the receiver's effective ordering capabilities, requested alongside each successful read. Denied
+the receiver's ordering capabilities, discovered independently of data execution. Denied
 headers remain focusable but inactive, with a tooltip explaining the policy restriction. Missing
 or malformed capabilities preserve readable results but disable ordering with a refresh explanation.
-Replacing Runtime Transport requires a successful Run to refresh permissions; an `access_denied`
-response also invalidates the previous capabilities. Capabilities describe the successful read,
-not a permanent grant: policy/authentication or routing changes inside the same transport may make
-them stale. Receiver policy remains authoritative on every request, and rejections are shown
-without replacing the successful result data.
+Replacing Runtime Transport or changing its graph.read route automatically refreshes metadata;
+old results still require a Run on that transport before table edits. An `access_denied` response
+also refreshes capabilities. Pass `console.identity` the same `ExecutionIdentity` used by the
+application's Graph provider. Changing its principal or `cacheScope` immediately hides prior
+results, cancels pending reads, and refreshes ordering metadata, without losing the draft or undo
+history. Use `cacheScope` for tenant/role/policy revisions that do not change the principal.
+Equivalent identity values do not trigger discovery. This is local cache invalidation, not a
+credential or a client-supplied permission grant; it is never added to protocol requests.
+When omitted, identity defaults to anonymous. Hosts must propagate authority changes, including
+login/logout; unreported cookie or server policy changes cannot be detected automatically.
+Receiver policy remains authoritative on every request. Within an unchanged identity, rejections
+are shown without replacing the successful result data. Activity remains an explicit diagnostic
+history; this invalidation does not erase its captured exchanges.
 The many-result toolbar's numeric
 Limit control accepts non-negative safe integers, including zero. Apply or Enter edits only the
 existing limit literal (or inserts `.limit(...)`) and runs the current same-Entity draft, preserving
@@ -105,9 +150,9 @@ follow-ups. The existing 50-row visual preview cap is
 reported separately when reached.
 
 `orderBy(...)` autocomplete uses that same capability snapshot for the matching Entity and
-transport, even in incomplete drafts. It suggests only permitted scalar Fields. Before a successful
-read, or when permissions are unavailable or invalidated, it offers no ordering Fields; run a valid
-read for the Entity to refresh them. Changing Entity or replacing the transport discards stale
+transport, even in incomplete drafts. It suggests only permitted scalar Fields. While discovery is
+pending or unavailable, it offers no ordering Fields; retry loads metadata, not rows.
+Changing Entity or replacing the transport discards stale
 suggestions. Other completions and manual source authoring remain schema-based; this assistance
 does not grant authority or prevent the server from rejecting a manually authored order.
 

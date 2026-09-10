@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createOntahiDiagnostics } from '../diagnostics.js';
 import { instrumentRuntimeTransport } from '../instrument-runtime-transport.js';
 
+import { withConsoleMetadata } from './console-transport.test-support.js';
 import { OntahiDevtools } from './ontahi-devtools.js';
 
 const uiTestTimeoutMs = 15_000;
@@ -228,7 +229,7 @@ describe('OntahiDevtools', () => {
         diagnostics,
         id: 'http',
         kind: 'fetch',
-        transport: { request },
+        transport: withConsoleMetadata(request),
       });
 
       render(
@@ -311,7 +312,7 @@ describe('OntahiDevtools', () => {
         diagnostics,
         id: 'http',
         kind: 'fetch',
-        transport: { request },
+        transport: withConsoleMetadata(request),
       });
 
       render(
@@ -386,7 +387,7 @@ describe('OntahiDevtools', () => {
         diagnostics,
         id: 'http',
         kind: 'fetch',
-        transport: { request },
+        transport: withConsoleMetadata(request),
       });
 
       render(

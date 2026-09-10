@@ -11,9 +11,11 @@ import {
   toGraphCommandRequest,
 } from '@ontahi/core/data-graph';
 import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
+import { createRuntimeProtocolExchange } from '@ontahi/core/runtime/protocol';
 import {
   createFetchGraphClient,
   createFetchGraphReadExecutor,
+  createFetchRuntimeTransport,
   createRuntimeGraphClient,
   createWebSocketRuntimeTransport,
   type RuntimeWebSocket,
@@ -91,6 +93,35 @@ describe('Ontahi todo portability example', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await closeServer?.();
+  });
+
+  it('discovers TodoItem ordering over HTTP and WebSocket before any data query', async () => {
+    const http = createFetchRuntimeTransport({ endpoint: `${origin}/runtime` });
+    const websocket = createWebSocketRuntimeTransport({
+      url: `${origin.replace(/^http/, 'ws')}/runtime`,
+      createWebSocket: url => new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
+    });
+    try {
+      for (const transport of [http, websocket]) {
+        const exchange = createRuntimeProtocolExchange({ transport });
+        expect(
+          await exchange({
+            family: 'graph.read',
+            body: {
+              version: 1,
+              kind: 'graph-read-capabilities',
+              entityName: 'TodoItem',
+            },
+          }),
+        ).toEqual({
+          kind: 'graph-read-capabilities-result',
+          entityName: 'TodoItem',
+          capabilities: { orderBy: ['title'] },
+        });
+      }
+    } finally {
+      websocket.close();
+    }
   });
 
   const invoke = (operationId: string, input: unknown, authenticated = false) =>

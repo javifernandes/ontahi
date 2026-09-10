@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useContext, type CSSProperties } from 'react';
 
 import {
   activityEntryEvent,
@@ -8,6 +8,7 @@ import {
   outcomeColor,
   type ActivityEntry,
 } from './activity-model.js';
+import { AuthoringDialectContext } from './authoring-dialect.js';
 import { styles } from './devtools-styles.js';
 
 const activityButtonStyle = (selected: boolean): CSSProperties => ({
@@ -23,8 +24,9 @@ export const ActivityList = ({
   readonly activities: readonly ActivityEntry[];
   readonly selectedId?: string;
   readonly select: (id: string) => void;
-}) =>
-  activities.length === 0 ? (
+}) => {
+  const dialect = useContext(AuthoringDialectContext);
+  return activities.length === 0 ? (
     <div style={styles.empty}>
       Run an Ontahí query or mutation to see its semantic runtime activity.
     </div>
@@ -42,7 +44,7 @@ export const ActivityList = ({
               type='button'
               style={activityButtonStyle(selectedId === activity.id)}
               onClick={() => select(activity.id)}
-              aria-label={`${activityEntryTitle(activity)} ${event.transportId} ${outcome}`}
+              aria-label={`${activityEntryTitle(activity, dialect)} ${event.transportId} ${outcome}`}
             >
               <span
                 style={{ ...styles.dot, background: outcomeColor(outcome) }}
@@ -50,7 +52,7 @@ export const ActivityList = ({
                 aria-hidden='true'
               />
               <span style={styles.rowMain}>
-                <span style={styles.rowTitle}>{activityEntryTitle(activity)}</span>
+                <span style={styles.rowTitle}>{activityEntryTitle(activity, dialect)}</span>
                 <span style={styles.rowMeta}>
                   <span style={styles.family}>
                     {exchange ? event.family : 'operation progress'}
@@ -71,3 +73,4 @@ export const ActivityList = ({
       })}
     </ol>
   );
+};

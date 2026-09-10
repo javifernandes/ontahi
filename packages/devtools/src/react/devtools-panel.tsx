@@ -2,6 +2,7 @@ import {
   isConfigurableRuntimeTransport,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
+import { authoringDialectPreference } from '@ontahi/language-codemirror';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
@@ -14,6 +15,8 @@ import {
   buildActivityEntries,
   matchesFilter,
 } from './activity-model.js';
+import { AuthoringDialectContext } from './authoring-dialect.js';
+import { AuthoringSettings } from './authoring-settings.js';
 import { ConsolePanel, type OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { styles } from './devtools-styles.js';
 import { ExchangeDetail } from './exchange-detail.js';
@@ -38,12 +41,19 @@ export const DevtoolsPanel = ({
   resize,
   close,
 }: DevtoolsPanelProps) => {
+  const dialect =
+    useSyncExternalStore(
+      authoringDialectPreference.subscribe,
+      authoringDialectPreference.getSnapshot,
+      authoringDialectPreference.getServerSnapshot,
+    ) ?? 'ts';
   const snapshot = useSyncExternalStore(
     diagnostics.subscribe,
     diagnostics.inspect,
     diagnostics.inspect,
   );
   const [view, setView] = useState<'activity' | 'console' | 'settings'>('activity');
+  const [consoleOpened, setConsoleOpened] = useState(false);
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
   const configurableRuntimeTransport =
@@ -60,7 +70,7 @@ export const DevtoolsPanel = ({
           event &&
           matchesFilter(
             [
-              activityEntryTitle(activity),
+              activityEntryTitle(activity, dialect),
               event.family,
               event.transportId,
               activityEntryOutcome(activity),
@@ -82,12 +92,14 @@ export const DevtoolsPanel = ({
   };
 
   const renderContent = () => {
-    if (view === 'console' && consoleOptions)
-      return <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />;
-    if (view === 'settings' && configurableRuntimeTransport)
+    if (view === 'console' && consoleOptions) return null;
+    if (view === 'settings')
       return (
         <section style={styles.settingsPage} aria-label='Devtools settings'>
-          <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
+          <AuthoringSettings />
+          {configurableRuntimeTransport ? (
+            <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
+          ) : null}
         </section>
       );
     return (
@@ -124,33 +136,36 @@ export const DevtoolsPanel = ({
   };
 
   return (
-    <aside style={{ ...styles.panel, height }} aria-label='Ontahí Devtools'>
-      <PanelResizer height={height} resize={resize} />
-      <header style={styles.header}>
-        <span style={styles.brand}>
-          <span style={styles.eyebrow}>Runtime inspector</span>
-          <h2 style={styles.title}>Ontahí Devtools</h2>
-        </span>
-        <nav style={styles.views} aria-label='Devtools views'>
-          <button
-            type='button'
-            style={{ ...styles.view, ...(view === 'activity' ? styles.activeView : {}) }}
-            onClick={() => setView('activity')}
-            aria-pressed={view === 'activity'}
-          >
-            Activity <span style={styles.count}>{filteredActivities.length}</span>
-          </button>
-          {consoleOptions ? (
+    <AuthoringDialectContext.Provider value={dialect}>
+      <aside style={{ ...styles.panel, height }} aria-label='Ontahí Devtools'>
+        <PanelResizer height={height} resize={resize} />
+        <header style={styles.header}>
+          <span style={styles.brand}>
+            <span style={styles.eyebrow}>Runtime inspector</span>
+            <h2 style={styles.title}>Ontahí Devtools</h2>
+          </span>
+          <nav style={styles.views} aria-label='Devtools views'>
             <button
               type='button'
-              style={{ ...styles.view, ...(view === 'console' ? styles.activeView : {}) }}
-              onClick={() => setView('console')}
-              aria-pressed={view === 'console'}
+              style={{ ...styles.view, ...(view === 'activity' ? styles.activeView : {}) }}
+              onClick={() => setView('activity')}
+              aria-pressed={view === 'activity'}
             >
-              Console
+              Activity <span style={styles.count}>{filteredActivities.length}</span>
             </button>
-          ) : null}
-          {configurableRuntimeTransport ? (
+            {consoleOptions ? (
+              <button
+                type='button'
+                style={{ ...styles.view, ...(view === 'console' ? styles.activeView : {}) }}
+                onClick={() => {
+                  setConsoleOpened(true);
+                  setView('console');
+                }}
+                aria-pressed={view === 'console'}
+              >
+                Console
+              </button>
+            ) : null}
             <button
               type='button'
               style={{ ...styles.view, ...(view === 'settings' ? styles.activeView : {}) }}
@@ -159,25 +174,33 @@ export const DevtoolsPanel = ({
             >
               Settings
             </button>
-          ) : null}
-        </nav>
-        <span style={styles.headerActions}>
-          {view === 'activity' ? (
-            <button type='button' style={styles.subtleButton} onClick={clear}>
-              Clear
+          </nav>
+          <span style={styles.headerActions}>
+            {view === 'activity' ? (
+              <button type='button' style={styles.subtleButton} onClick={clear}>
+                Clear
+              </button>
+            ) : null}
+            <button
+              type='button'
+              style={styles.subtleButton}
+              onClick={close}
+              aria-label='Close Devtools'
+            >
+              ×
             </button>
-          ) : null}
-          <button
-            type='button'
-            style={styles.subtleButton}
-            onClick={close}
-            aria-label='Close Devtools'
+          </span>
+        </header>
+        {consoleOptions && consoleOpened ? (
+          <div
+            hidden={view !== 'console'}
+            style={view === 'console' ? { display: 'contents' } : undefined}
           >
-            ×
-          </button>
-        </span>
-      </header>
-      {renderContent()}
-    </aside>
+            <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />
+          </div>
+        ) : null}
+        {renderContent()}
+      </aside>
+    </AuthoringDialectContext.Provider>
   );
 };

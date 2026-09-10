@@ -4,15 +4,16 @@ import {
   type CompletionResult,
   type CompletionSource,
 } from '@codemirror/autocomplete';
-import { deleteCharBackward } from '@codemirror/commands';
-import {
-  defaultHighlightStyle,
-  LRLanguage,
-  LanguageSupport,
-  syntaxHighlighting,
-} from '@codemirror/language';
+import { deleteCharBackward, invertedEffects } from '@codemirror/commands';
+import { LRLanguage, LanguageSupport } from '@codemirror/language';
 import { linter, type Diagnostic, type LintSource } from '@codemirror/lint';
-import type { Extension } from '@codemirror/state';
+import {
+  Compartment,
+  EditorState,
+  StateEffect,
+  StateField,
+  type Extension,
+} from '@codemirror/state';
 import {
   Decoration,
   EditorView,
@@ -30,6 +31,7 @@ import {
   completeConsoleDocument,
   completeSelectionDocument,
   hoverSelectionDocument,
+  type ConsoleDialect,
   type ConsoleDocumentAnalysis,
   type ConsoleLanguageApplicationReflection,
   type ConsoleLanguageCompletionItem,
@@ -53,6 +55,9 @@ import {
   type SelectionReferenceValueProvider,
 } from './reference-value-projection.js';
 import { selectionExpressionEntity } from './selection-state.js';
+import { ontahiSyntaxHighlighting } from './syntax-highlighting.js';
+
+export { authoringDialectPreference } from './authoring-preference.js';
 
 export {
   deriveConsoleFiniteValueProjections,
@@ -97,7 +102,7 @@ const consoleParser = consoleDocumentParser.configure({
     styleTags({
       EntityName: tags.typeName,
       'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
-      OrderDirection: tags.keyword,
+      'Order By Ascending Descending OrderDirection': tags.keyword,
       FieldName: tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
@@ -112,9 +117,26 @@ const consoleParser = consoleDocumentParser.configure({
 });
 
 export const consoleExpressionLanguage = LRLanguage.define({ parser: consoleParser });
+const declarativeConsoleExpressionLanguage = LRLanguage.define({
+  parser: consoleParser.configure({ top: 'DeclarativeConsoleDocument' }),
+});
 
-export const consoleExpressionLanguageSupport = () =>
-  new LanguageSupport(consoleExpressionLanguage);
+export const consoleExpressionLanguageSupport = (dialect: ConsoleDialect = 'ts') =>
+  new LanguageSupport(
+    dialect === 'declarative' ? declarativeConsoleExpressionLanguage : consoleExpressionLanguage,
+  );
+
+/** Dispatch with source changes as a single history event to preserve both sides of conversion. */
+export const setConsoleExpressionDialect = StateEffect.define<ConsoleDialect>();
+export const consoleExpressionDialect = StateField.define<ConsoleDialect>({
+  create: () => 'ts',
+  update: (dialect, transaction) => {
+    for (const effect of transaction.effects) {
+      if (effect.is(setConsoleExpressionDialect)) dialect = effect.value;
+    }
+    return dialect;
+  },
+});
 
 const completionType = (
   kind: SelectionLanguageCompletionItem['kind'] | ConsoleLanguageCompletionItem['kind'],
@@ -325,13 +347,6 @@ const selectionExpressionAssistanceTheme = EditorView.theme({
     fontWeight: '700',
     textDecoration: 'none',
   },
-  '.cm-ontahi-semantic-field': {
-    color: 'hsl(var(--primary))',
-    fontWeight: '600',
-  },
-  '.cm-ontahi-semantic-operator, .cm-ontahi-semantic-keyword': {
-    color: 'hsl(var(--chart-3, var(--primary)))',
-  },
   '.cm-ontahi-semantic-invalid, .cm-ontahi-semantic-unsupported': {
     textDecoration: 'underline wavy hsl(var(--destructive))',
     textUnderlineOffset: '0.2em',
@@ -368,6 +383,7 @@ export const selectionExpressionLinter =
     toCodeMirrorDiagnostics(analyzeSelectionDocument(view.state.doc.toString(), entity));
 
 export type SelectionExpressionExtensionOptions = {
+  readonly colorScheme?: 'light' | 'dark';
   readonly finiteValueProjections?: boolean;
   readonly referenceValues?: SelectionReferenceValueProvider;
 };
@@ -379,7 +395,7 @@ export const selectionExpressionExtensions = (
   selectionExpressionEntity.of(entity),
   ...(options.referenceValues ? [selectionReferenceValueProvider.of(options.referenceValues)] : []),
   selectionExpressionLanguageSupport(),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  ontahiSyntaxHighlighting(options.colorScheme),
   keymap.of([
     {
       key: 'Backspace',
@@ -402,6 +418,7 @@ export const selectionExpressionExtensions = (
 ];
 
 export type ConsoleExpressionExtensionOptions = ConsoleLanguageCompletionOptions & {
+  readonly colorScheme?: 'light' | 'dark';
   readonly finiteValueProjections?: boolean;
   readonly limit?: number;
   readonly run?: () => void;
@@ -414,15 +431,15 @@ export const consoleExpressionLinter =
   ): LintSource =>
   view =>
     toCodeMirrorDiagnostics(
-      analyzeConsoleDocument(view.state.doc.toString(), application, { limit: options.limit }),
+      analyzeConsoleDocument(view.state.doc.toString(), application, options),
     );
 
-export const consoleExpressionExtensions = (
+const consoleDialectExtensions = (
   application: ConsoleLanguageApplicationReflection,
   options: ConsoleExpressionExtensionOptions = {},
 ): readonly Extension[] => [
-  consoleExpressionLanguageSupport(),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  consoleExpressionLanguageSupport(options.dialect),
+  ontahiSyntaxHighlighting(options.colorScheme),
   keymap.of([
     {
       key: 'Backspace',
@@ -446,9 +463,39 @@ export const consoleExpressionExtensions = (
     : []),
   autocompletion({
     override: [consoleCompletionSource(application, options)],
+    activateOnCompletion: completion =>
+      ['where', 'order by', 'by', 'orderBy'].includes(completion.label),
     icons: false,
   }),
-  ...(options.finiteValueProjections ? consoleFiniteValueProjectionExtensions(application) : []),
+  ...(options.finiteValueProjections
+    ? consoleFiniteValueProjectionExtensions(application, options.dialect, options.orderableFields)
+    : []),
   selectionExpressionAssistanceTheme,
   linter(consoleExpressionLinter(application, options), { delay: 0 }),
 ];
+
+export const consoleExpressionExtensions = (
+  application: ConsoleLanguageApplicationReflection,
+  options: ConsoleExpressionExtensionOptions = {},
+): readonly Extension[] => {
+  const language = new Compartment();
+  return [
+    consoleExpressionDialect.init(() => options.dialect ?? 'ts'),
+    invertedEffects.of(transaction =>
+      transaction.effects.some(effect => effect.is(setConsoleExpressionDialect))
+        ? [setConsoleExpressionDialect.of(transaction.startState.field(consoleExpressionDialect))]
+        : [],
+    ),
+    language.of(consoleDialectExtensions(application, options)),
+    EditorState.transactionExtender.of(transaction => {
+      const dialect = transaction.state.field(consoleExpressionDialect);
+      return dialect !== transaction.startState.field(consoleExpressionDialect)
+        ? {
+            effects: language.reconfigure(
+              consoleDialectExtensions(application, { ...options, dialect }),
+            ),
+          }
+        : null;
+    }),
+  ];
+};

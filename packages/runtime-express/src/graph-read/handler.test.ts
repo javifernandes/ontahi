@@ -41,6 +41,23 @@ const invokeHandler = async (
 };
 
 describe('Express graph read adapter', () => {
+  it('dispatches metadata with trusted authority and returns a successful HTTP response', async () => {
+    const payload = {
+      kind: 'graph-read-capabilities-result' as const,
+      entityName: 'Todo',
+      capabilities: { orderBy: ['title'] },
+    };
+    const dispatcher = vi.fn(async () => payload);
+    const request = { version: 1, kind: 'graph-read-capabilities', entityName: 'Todo' };
+    const result = await invokeHandler(
+      createExpressGraphReadHandler({ dispatcher, context: () => ({ authority: 'trusted' }) }),
+      { ...request, authority: 'untrusted' },
+    );
+    expect(result.status).toBe(200);
+    expect(result.payload).toEqual(payload);
+    expect(dispatcher).toHaveBeenCalledWith(request, { authority: 'trusted' });
+  });
+
   it('rejects malformed requests before deriving context or dispatching', async () => {
     const dispatcher = vi.fn() as GraphReadDispatcher<unknown>;
     const context = vi.fn(() => ({ authority: undefined }));

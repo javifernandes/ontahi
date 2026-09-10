@@ -14,6 +14,7 @@ import {
   type SelectionPredicate,
 } from '@ontahi/core/data-graph';
 
+import { renderConsoleDialect } from './console-dialect.js';
 import { parser } from './generated/selection-parser.js';
 
 export type SelectionLanguageRange = {
@@ -220,6 +221,7 @@ export type ConsoleLanguageDiagnostic =
     });
 
 export type ConsoleOrderBySyntax = SelectionLanguageRange & {
+  readonly by?: SelectionLanguageToken<'by-keyword'>;
   readonly open?: SelectionLanguageToken<'open-parenthesis'>;
   readonly field?: SelectionLanguageToken<'field-name'>;
   readonly comma?: SelectionLanguageToken<'comma'>;
@@ -261,8 +263,11 @@ export type ConsoleDocumentAnalysis = ConsoleDocumentParseResult & {
   readonly request?: GraphReadRequestV1;
 };
 
+export type ConsoleDialect = 'ts' | 'declarative';
+
 export type ConsoleDocumentAnalysisOptions = {
   readonly limit?: number;
+  readonly dialect?: ConsoleDialect;
 };
 
 export type ConsoleLanguageCompletionItem = {
@@ -277,12 +282,14 @@ export type ConsoleLanguageCompletionResult = SelectionLanguageRange & {
 };
 
 export type ConsoleLanguageCompletionOptions = {
+  readonly dialect?: ConsoleDialect;
   /** Narrow ordering suggestions only. Omit for schema-only completion; return [] when unavailable. */
   readonly orderableFields?: (entityName: string) => readonly string[];
 };
 
 const selectionDocumentParser = parser.configure({ top: 'SelectionDocument' });
 const consoleDocumentParser = parser.configure({ top: 'ConsoleDocument' });
+const declarativeConsoleDocumentParser = parser.configure({ top: 'DeclarativeConsoleDocument' });
 
 const rangeOf = (node: SyntaxNode | SyntaxNodeRef): SelectionLanguageRange => ({
   from: node.from,
@@ -996,14 +1003,16 @@ const consoleTerminalToken = (terminal: SyntaxNode | null | undefined, document:
 
 const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyntax => {
   const consoleExpression = tree.topNode.getChild('ConsoleExpression');
-  const graphRead = consoleExpression?.getChild('GraphReadExpression');
+  const graphRead =
+    consoleExpression?.getChild('GraphReadExpression') ??
+    tree.topNode.getChild('DeclarativeGraphReadExpression');
   if (!graphRead) {
     return { kind: 'console-document', from: 0, to: document.length };
   }
 
-  const whereClause = graphRead.getChild('WhereClause');
-  const orderClause = graphRead.getChild('OrderByClause');
-  const limitClause = graphRead.getChild('LimitClause');
+  const whereClause = firstChildNamed(graphRead, ['WhereClause', 'DeclarativeWhereClause']);
+  const orderClause = firstChildNamed(graphRead, ['OrderByClause', 'DeclarativeOrderByClause']);
+  const limitClause = firstChildNamed(graphRead, ['LimitClause', 'DeclarativeLimitClause']);
   const readTerminal = graphRead.getChild('ReadTerminal');
   const limitValueToken = tokenOf(
     'number-literal',
@@ -1029,10 +1038,15 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
       orderBy: orderClause
         ? {
             ...rangeOf(orderClause),
+            by: tokenOf('by-keyword', orderClause.getChild('By'), document),
             open: tokenOf('open-parenthesis', orderClause.getChild('OpenParen'), document),
             field: tokenOf('field-name', orderClause.getChild('FieldName'), document),
             comma: tokenOf('comma', orderClause.getChild('Comma'), document),
-            direction: tokenOf('order-direction', orderClause.getChild('OrderDirection'), document),
+            direction: tokenOf(
+              'order-direction',
+              firstChildNamed(orderClause, ['OrderDirection', 'DeclarativeOrderDirection']),
+              document,
+            ),
             close: tokenOf('close-parenthesis', orderClause.getChild('CloseParen'), document),
           }
         : undefined,
@@ -1129,8 +1143,13 @@ const firstErrorRange = (tree: Tree): SelectionLanguageRange | undefined => {
   return error;
 };
 
-export const parseConsoleDocument = (document: string): ConsoleDocumentParseResult => {
-  const tree = consoleDocumentParser.parse(document);
+export const parseConsoleDocument = (
+  document: string,
+  dialect: ConsoleDialect = 'ts',
+): ConsoleDocumentParseResult => {
+  const tree = (
+    dialect === 'declarative' ? declarativeConsoleDocumentParser : consoleDocumentParser
+  ).parse(document);
   const syntax = consoleSyntaxFromTree(document, tree);
   if (document.trim().length === 0) return { syntax, syntaxDiagnostics: [] };
 
@@ -1167,7 +1186,9 @@ export const parseConsoleDocument = (document: string): ConsoleDocumentParseResu
       code: isSelectionError ? 'selection.syntax.invalid' : 'console.syntax.invalid',
       message: isSelectionError
         ? syntaxDiagnosticMessage(document, selectionSyntax)
-        : consoleStructureDiagnosticMessage(syntax),
+        : dialect === 'declarative'
+          ? 'Expected Entity, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).'
+          : consoleStructureDiagnosticMessage(syntax),
       ...error,
     });
   }
@@ -1180,9 +1201,13 @@ export const analyzeConsoleDocument = (
   application: ConsoleLanguageApplicationReflection,
   options: ConsoleDocumentAnalysisOptions = {},
 ): ConsoleDocumentAnalysis => {
-  const parsed = parseConsoleDocument(document);
+  const parsed = parseConsoleDocument(document, options.dialect);
   const expression = parsed.syntax.expression;
-  if (parsed.syntaxDiagnostics.length > 0 || !expression?.entity || !expression.terminal) {
+  if (
+    parsed.syntaxDiagnostics.length > 0 ||
+    !expression?.entity ||
+    (!expression.terminal && options.dialect !== 'declarative')
+  ) {
     return { ...parsed, semanticDiagnostics: [] };
   }
 
@@ -1207,8 +1232,8 @@ export const analyzeConsoleDocument = (
     : { diagnostics: [], expression: selectionAll() };
   const semanticDiagnostics = [
     ...resolved.diagnostics,
-    ...consoleOrderDiagnostics(expression, entity),
-    ...consoleLimitDiagnostics(expression),
+    ...consoleOrderDiagnostics(expression, entity, options.dialect),
+    ...consoleLimitDiagnostics(expression, options.dialect),
   ];
   if (!resolved.expression || semanticDiagnostics.length > 0)
     return { ...parsed, semanticDiagnostics };
@@ -1220,7 +1245,7 @@ export const analyzeConsoleDocument = (
       version: 1,
       kind: 'graph-read',
       ...consoleTerminalRequest(
-        expression.terminal.kind,
+        expression.terminal?.kind ?? 'many-member',
         expression.limitValue?.value ?? options.limit ?? 25,
       ),
       selection: { kind: 'selection', entityName: entity.name, expression: resolved.expression },
@@ -1228,7 +1253,9 @@ export const analyzeConsoleDocument = (
         ? [
             {
               fieldName: order.field.text,
-              direction: order.direction?.text === 'desc' ? 'desc' : 'asc',
+              direction: ['desc', 'descending'].includes(order.direction?.text ?? '')
+                ? 'desc'
+                : 'asc',
             },
           ]
         : [],
@@ -1236,9 +1263,24 @@ export const analyzeConsoleDocument = (
   };
 };
 
+/** Convert only the current valid draft. Never executes or falls back to an earlier document. */
+export const convertConsoleDocument = (
+  document: string,
+  application: ConsoleLanguageApplicationReflection,
+  targetDialect: ConsoleDialect,
+  options: ConsoleDocumentAnalysisOptions = {},
+): string | undefined => {
+  const analysis = analyzeConsoleDocument(document, application, options);
+  if (!analysis.request || !analysis.syntax.expression) return undefined;
+  return targetDialect === (options.dialect ?? 'ts')
+    ? document
+    : renderConsoleDialect(document, analysis.syntax.expression, targetDialect);
+};
+
 const consoleOrderDiagnostics = (
   expression: ConsoleGraphReadSyntax,
   entity: SelectionLanguageEntityReflection,
+  dialect: ConsoleDialect = 'ts',
 ): ConsoleLanguageDiagnostic[] => {
   const diagnostics: ConsoleLanguageDiagnostic[] = [];
   const order = expression.orderBy;
@@ -1254,11 +1296,12 @@ const consoleOrderDiagnostics = (
       to: order.field.to,
     });
   }
-  if (order?.direction && !['asc', 'desc'].includes(order.direction.text)) {
+  const directions = dialect === 'declarative' ? ['ascending', 'descending'] : ['asc', 'desc'];
+  if (order?.direction && !directions.includes(order.direction.text)) {
     diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.invalid-order-direction',
-      message: 'Order direction must be asc or desc.',
+      message: `Order direction must be ${directions.join(' or ')}.`,
       from: order.direction.from,
       to: order.direction.to,
     });
@@ -1271,7 +1314,10 @@ const consoleOrderDiagnostics = (
     diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.unsupported-order',
-      message: `.orderBy(...) cannot be combined with .${expression.terminal.text}().`,
+      message:
+        dialect === 'declarative'
+          ? `order by cannot be combined with ${expression.terminal.text}.`
+          : `.orderBy(...) cannot be combined with .${expression.terminal.text}().`,
       from: order.from,
       to: order.to,
     });
@@ -1281,6 +1327,7 @@ const consoleOrderDiagnostics = (
 
 const consoleLimitDiagnostics = (
   expression: ConsoleGraphReadSyntax,
+  dialect: ConsoleDialect = 'ts',
 ): ConsoleLanguageDiagnostic[] => {
   const diagnostics: ConsoleLanguageDiagnostic[] = [];
   if (
@@ -1295,11 +1342,14 @@ const consoleLimitDiagnostics = (
       to: expression.limitValue.to,
     });
   }
-  if (expression.limit && expression.terminal?.kind !== 'many-member') {
+  if (expression.limit && (expression.terminal?.kind ?? 'many-member') !== 'many-member') {
     diagnostics.push({
       channel: 'semantic',
       code: 'console.semantic.unsupported-limit',
-      message: '.limit(...) can only be combined with .many().',
+      message:
+        dialect === 'declarative'
+          ? 'limit can only be combined with many (the default terminal).'
+          : '.limit(...) can only be combined with .many().',
       from: expression.limit.from,
       to: expression.limitClose?.to ?? expression.limit.to,
     });
@@ -1336,36 +1386,54 @@ export const editConsoleLimit = (
   document: string,
   application: ConsoleLanguageApplicationReflection,
   limit: number,
+  options: ConsoleDocumentAnalysisOptions = {},
 ): readonly ConsoleDocumentChange[] | undefined => {
   if (!Number.isSafeInteger(limit) || limit < 0) return undefined;
-  const analysis = analyzeConsoleDocument(document, application);
+  const analysis = analyzeConsoleDocument(document, application, options);
   const syntax = analysis.syntax.expression;
-  if (!analysis.request || syntax?.terminal?.kind !== 'many-member' || !syntax.entity)
-    return undefined;
+  if (!analysis.request || analysis.request.mode !== 'run' || !syntax?.entity) return undefined;
   if (syntax.limitValue) {
     return syntax.limitValue.value === limit
       ? []
       : [{ from: syntax.limitValue.from, to: syntax.limitValue.to, insert: String(limit) }];
   }
-  const position = syntax.orderBy?.to ?? syntax.whereClose?.to ?? syntax.entity.to;
-  return [{ from: position, to: position, insert: `.limit(${limit})` }];
+  const position =
+    syntax.orderBy?.to ?? syntax.whereClose?.to ?? syntax.selection?.to ?? syntax.entity.to;
+  return [
+    {
+      from: position,
+      to: position,
+      insert: options.dialect === 'declarative' ? ` limit ${limit}` : `.limit(${limit})`,
+    },
+  ];
 };
 
 const consoleOrderReplacementChanges = (
   field: SelectionLanguageToken<'field-name'>,
   direction: SelectionLanguageToken<'order-direction'> | undefined,
   order: GraphReadOrder,
+  dialect: ConsoleDialect = 'ts',
 ): ConsoleDocumentChange[] => {
   const changes: ConsoleDocumentChange[] = [];
+  const spelling =
+    dialect === 'declarative'
+      ? order.direction === 'asc'
+        ? 'ascending'
+        : 'descending'
+      : order.direction;
   if (field.text !== order.fieldName) {
     changes.push({ from: field.from, to: field.to, insert: order.fieldName });
   }
   if (direction) {
-    if (direction.text !== order.direction) {
-      changes.push({ from: direction.from, to: direction.to, insert: order.direction });
+    if (direction.text !== spelling) {
+      changes.push({ from: direction.from, to: direction.to, insert: spelling });
     }
   } else if (order.direction !== 'asc') {
-    changes.push({ from: field.to, to: field.to, insert: `, ${order.direction}` });
+    changes.push({
+      from: field.to,
+      to: field.to,
+      insert: dialect === 'declarative' ? ` ${spelling}` : `, ${spelling}`,
+    });
   }
   return changes;
 };
@@ -1375,8 +1443,9 @@ export const editConsoleOrderBy = (
   document: string,
   application: ConsoleLanguageApplicationReflection,
   order: GraphReadOrder | undefined,
+  options: ConsoleDocumentAnalysisOptions = {},
 ): readonly ConsoleDocumentChange[] | undefined => {
-  const analysis = analyzeConsoleDocument(document, application);
+  const analysis = analyzeConsoleDocument(document, application, options);
   const syntax = analysis.syntax.expression;
   if (
     !analysis.request ||
@@ -1390,21 +1459,26 @@ export const editConsoleOrderBy = (
   if (!order) {
     if (existing) changes.push({ from: existing.from, to: existing.to, insert: '' });
   } else if (existing?.field) {
-    changes.push(...consoleOrderReplacementChanges(existing.field, existing.direction, order));
+    changes.push(
+      ...consoleOrderReplacementChanges(existing.field, existing.direction, order, options.dialect),
+    );
   } else {
-    const position = syntax.whereClose?.to ?? syntax.entity.to;
+    const position = syntax.whereClose?.to ?? syntax.selection?.to ?? syntax.entity.to;
     const direction = order.direction === 'asc' ? '' : ', ' + order.direction;
     changes.push({
       from: position,
       to: position,
-      insert: `.orderBy(${order.fieldName}${direction})`,
+      insert:
+        options.dialect === 'declarative'
+          ? ` order by ${order.fieldName}${order.direction === 'asc' ? '' : ' descending'}`
+          : `.orderBy(${order.fieldName}${direction})`,
     });
   }
   const nextDocument = changes.reduceRight(
     (source, change) => source.slice(0, change.from) + change.insert + source.slice(change.to),
     document,
   );
-  const nextRequest = analyzeConsoleDocument(nextDocument, application).request;
+  const nextRequest = analyzeConsoleDocument(nextDocument, application, options).request;
   const nextOrder = nextRequest?.orderBy[0];
   if (!nextRequest || !consoleOrderMatches(nextOrder, order)) return undefined;
   return changes;
@@ -1501,6 +1575,8 @@ export const completeConsoleDocument = (
   application: ConsoleLanguageApplicationReflection,
   options: ConsoleLanguageCompletionOptions = {},
 ): ConsoleLanguageCompletionResult => {
+  if (options.dialect === 'declarative')
+    return completeDeclarativeConsoleDocument(document, position, application, options);
   const safePosition = Math.max(0, Math.min(position, document.length));
   const syntax = parseConsoleDocument(document).syntax.expression;
   const rootPrefix = document.slice(0, safePosition);
@@ -1624,6 +1700,108 @@ export const completeConsoleDocument = (
   }
 
   return { ...range, items: [] };
+};
+
+const declarativeContinuationItems = (
+  syntax: ConsoleGraphReadSyntax,
+): readonly ConsoleLanguageCompletionItem[] => {
+  if (syntax.terminal) return [];
+  return [
+    ...(!syntax.where && !syntax.orderBy && !syntax.limit
+      ? [{ label: 'where', apply: 'where ', kind: 'keyword' as const, detail: 'Selection' }]
+      : []),
+    ...(!syntax.orderBy && !syntax.limit
+      ? [{ ...consoleOrderCompletionItem, label: 'order by', apply: 'order by ' }]
+      : []),
+    ...(!syntax.limit ? [{ ...consoleLimitCompletionItem, apply: 'limit ' }] : []),
+    ...consoleReadTerminalCompletionItems
+      .filter(item =>
+        syntax.limit
+          ? item.label === 'many'
+          : !syntax.orderBy || !['count', 'exists'].includes(item.label),
+      )
+      .map(item => ({ ...item, apply: item.label })),
+  ];
+};
+
+const completeDeclarativeConsoleDocument = (
+  document: string,
+  position: number,
+  application: ConsoleLanguageApplicationReflection,
+  options: ConsoleLanguageCompletionOptions,
+): ConsoleLanguageCompletionResult => {
+  const pos = clampDocumentPosition(document, position);
+  const range = completionWordRange(document, pos);
+  const prefix = document.slice(range.from, pos);
+  const result = (
+    items: readonly ConsoleLanguageCompletionItem[],
+  ): ConsoleLanguageCompletionResult => ({
+    ...range,
+    items: items.filter(item => item.label.startsWith(prefix)),
+  });
+  if (/^\s*\w*$/.test(document.slice(0, pos))) {
+    return result(
+      application.entities.map(entity => ({
+        label: entity.name,
+        apply: entity.name,
+        kind: 'entity',
+        detail: 'Entity',
+      })),
+    );
+  }
+  const syntax = parseConsoleDocument(document, 'declarative').syntax.expression;
+  const entity = application.entities.find(candidate => candidate.name === syntax?.entity?.text);
+  if (!syntax || !entity) return result([]);
+
+  // A complete prefix permits the next clause, even when the current word is still incomplete.
+  const beforeWord = analyzeConsoleDocument(document.slice(0, range.from), application, {
+    dialect: 'declarative',
+  });
+  const continuation =
+    beforeWord.request && beforeWord.syntax.expression
+      ? declarativeContinuationItems(beforeWord.syntax.expression)
+      : [];
+  const orderItems = declarativeOrderCompletionItems(syntax, entity, pos, options);
+  if (orderItems) return result([...orderItems, ...continuation]);
+  const from = syntax.where?.to;
+  const to = syntax.orderBy?.from ?? syntax.limit?.from ?? syntax.terminal?.from ?? document.length;
+  if (from !== undefined && pos >= from && pos <= to) {
+    const end = beforeWord.request ? range.from : to;
+    const completion = completeSelectionDocument(
+      document.slice(from, end),
+      Math.min(pos, end) - from,
+      entity,
+    );
+    if (beforeWord.request) return result([...completion.items, ...continuation]);
+    return { from: from + completion.from, to: from + completion.to, items: completion.items };
+  }
+  return result(continuation);
+};
+
+const declarativeOrderCompletionItems = (
+  syntax: ConsoleGraphReadSyntax,
+  entity: SelectionLanguageEntityReflection,
+  position: number,
+  options: ConsoleLanguageCompletionOptions,
+): readonly ConsoleLanguageCompletionItem[] | undefined => {
+  const order = syntax.orderBy;
+  if (
+    !order ||
+    position < order.from ||
+    position > (syntax.limit?.from ?? syntax.terminal?.from ?? Number.POSITIVE_INFINITY)
+  )
+    return undefined;
+  if (!order.by) return [{ label: 'by', apply: 'by ', kind: 'keyword', detail: 'Ordering Field' }];
+  if (position < order.by.to) return undefined;
+  if (!order.field || position <= order.field.to)
+    return consoleOrderCompletions(entity, order, position, options);
+  if (order.direction && position > order.direction.to) return [];
+  return ['ascending', 'descending'].map(label => ({
+    label,
+    apply: label,
+    kind: 'keyword',
+    detail: 'Order direction',
+  }));
 };
 
 const operatorDocumentation: Record<

@@ -30,6 +30,18 @@ const registry = createRuntimeProtocolRegistry([
 ] as const);
 
 describe('Runtime Protocol Data Graph families', () => {
+  it('carries metadata discovery through the graph.read family without Query syntax', () => {
+    const request = createRuntimeProtocolRequest({
+      id: 'metadata',
+      family: 'graph.read',
+      body: { version: 1, kind: 'graph-read-capabilities', entityName: 'Book' },
+    });
+    expect(registry.parseRequest(JSON.parse(JSON.stringify(request)))).toEqual({
+      success: true,
+      request,
+    });
+  });
+
   it('wraps and canonically parses the existing Graph Read request', () => {
     const body = toGraphReadRequest(
       query(Book).where(book => book.published.eq(true)),

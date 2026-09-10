@@ -1,5 +1,18 @@
 @top SelectionDocument { OrExpression? }
 @top ConsoleDocument { ConsoleExpression? }
+@top DeclarativeConsoleDocument { DeclarativeGraphReadExpression? }
+
+DeclarativeGraphReadExpression {
+  EntityName
+  DeclarativeWhereClause?
+  DeclarativeOrderByClause?
+  DeclarativeLimitClause?
+  ReadTerminal?
+}
+DeclarativeWhereClause { Where OrExpression }
+DeclarativeOrderByClause { Order By FieldName DeclarativeOrderDirection? }
+DeclarativeOrderDirection { Ascending | Descending }
+DeclarativeLimitClause { Limit NumberLiteral }
 
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
@@ -51,6 +64,10 @@ Count { @extend<Identifier, "count"> }
 Exists { @extend<Identifier, "exists"> }
 Limit { @extend<Identifier, "limit"> }
 OrderBy { @extend<Identifier, "orderBy"> }
+Order { @extend<Identifier, "order"> }
+By { @extend<Identifier, "by"> }
+Ascending { @extend<Identifier, "ascending"> }
+Descending { @extend<Identifier, "descending"> }
 
 Equals { "=" }
 ComparisonOperator { LessThanOrEqual | GreaterThanOrEqual | LessThan | GreaterThan }
