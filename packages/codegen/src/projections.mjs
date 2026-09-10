@@ -399,7 +399,7 @@ export const renderGeneratedClientEntityModule = ({
     ...schemaCoreImports,
     ...(usesField && !schemaImportsField ? ['field'] : []),
     ...(usesGraphOutput ? ['graphOutput'] : []),
-    ...(usesGraphSchema ? ['graphSchema'] : []),
+    ...(usesGraphSchema && !schemaCoreImports.includes('graphSchema') ? ['graphSchema'] : []),
     ...(usesGraphSelection ? ['graphSelection'] : []),
     ...(usesQueryRef ? ['queryRef'] : []),
     ...(usesValue ? ['value'] : []),

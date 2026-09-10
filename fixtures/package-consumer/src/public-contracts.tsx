@@ -6,6 +6,13 @@ import {
   type OntahiApplicationAnalysis,
 } from '@ontahi/codegen';
 import { createRuntimeProtocolExchange } from '@ontahi/core/runtime/protocol';
+import {
+  entity,
+  field,
+  graphSchema,
+  withSelectionFactories,
+  defineClientEntity,
+} from '@ontahi/core/data-graph';
 import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import { createExpressRuntimeProtocolHandler } from '@ontahi/runtime-express/runtime-protocol';
@@ -57,6 +64,18 @@ type PublicModules = [
 ];
 
 export type PublicModuleCount = PublicModules['length'];
+
+const FactoryEntity = withSelectionFactories(entity('FactoryEntity', { id: field.id() }), {
+  identity: {
+    version: 1,
+    input: graphSchema.object({ id: field.id() }),
+    scalarInput: 'id',
+    template: { kind: 'identity', bindings: { id: 'id' } },
+  },
+});
+const factoryClient = defineClientEntity(FactoryEntity);
+export const factorySelection = factoryClient.by({ identity: 'example' });
+export const legacyFactoryRef = factoryClient.refById('example');
 
 export type UnifiedRuntimeProtocolPublicContracts = [
   typeof createRuntimeProtocolExchange,

@@ -5,6 +5,21 @@ const sourceExpression = sourceText => ({
   sourceText,
 });
 
+const synthesizeExpression = expression => {
+  const result = ts.transform(ts.getSynthesizedDeepClone(expression), [
+    context => {
+      const visit = node =>
+        ts.isNumericLiteral(node)
+          ? ts.factory.createNumericLiteral(node.text)
+          : ts.visitEachChild(node, visit, context);
+      return node => ts.visitNode(node, visit);
+    },
+  ]);
+  const synthesized = result.transformed[0];
+  result.dispose();
+  return synthesized;
+};
+
 const parseSourceExpression = sourceText => {
   const sourceFile = ts.createSourceFile(
     'generated-expression.ts',
@@ -19,7 +34,7 @@ const parseSourceExpression = sourceText => {
   return {
     diagnostics: sourceFile.parseDiagnostics,
     expression: initializer
-      ? ts.getSynthesizedDeepClone(
+      ? synthesizeExpression(
           ts.isParenthesizedExpression(initializer) ? initializer.expression : initializer,
         )
       : undefined,
@@ -32,6 +47,7 @@ const schemaExpressionEntries = schema => [
   ['freshness', schema.freshness],
   ['locators', schema.locators],
   ['identity', schema.identity],
+  ['selectionFactories', schema.selectionFactories],
 ];
 
 const replaceProjectedEntityNames = (sourceText, projectedNames) =>
@@ -187,6 +203,9 @@ export const createClientEntitySchemaModuleModel = ({
           : undefined,
         locators: projection.locatorsText ? sourceExpression(projection.locatorsText) : undefined,
         identity: projection.identityText ? sourceExpression(projection.identityText) : undefined,
+        selectionFactories: projection.selectionFactoriesText
+          ? sourceExpression(projection.selectionFactoriesText)
+          : undefined,
         relations: (projection.relations ?? [])
           .filter(relation => !relation.deferred)
           .map(relation => createRelationModel(relation, initializationNames)),
@@ -203,7 +222,12 @@ export const createClientEntitySchemaModuleModel = ({
         : [],
     ),
   );
-  const usesField = entitySchemas.some(schema => /\bfield\./.test(schema.fields.sourceText));
+  const usesField = entitySchemas.some(schema =>
+    schemaExpressionEntries(schema).some(
+      ([, expression]) => expression && /\bfield\./.test(expression.sourceText),
+    ),
+  );
+  const usesFactories = entitySchemas.some(schema => schema.selectionFactories);
   const deferredRelations = orderedSchemaEntities.flatMap(entity => {
     const projection = entity.entitySchemaProjection;
     if (!projection) return [];
@@ -227,6 +251,12 @@ export const createClientEntitySchemaModuleModel = ({
           ? [{ importedName: 'entity', localName: 'defineEntitySchema' }]
           : []),
         ...(usesField ? [{ importedName: 'field', localName: 'field' }] : []),
+        ...(usesFactories
+          ? [
+              { importedName: 'withSelectionFactories', localName: 'withSelectionFactories' },
+              { importedName: 'graphSchema', localName: 'graphSchema' },
+            ]
+          : []),
       ],
       schemaImports,
       entitySchemas,
@@ -310,7 +340,7 @@ const createEntitySchemaDeclaration = schema => {
   );
 
   for (const [method, expression] of schemaExpressionEntries(schema).slice(1)) {
-    if (!expression) continue;
+    if (!expression || method === 'selectionFactories') continue;
 
     initializer = ts.factory.createCallExpression(
       ts.factory.createPropertyAccessExpression(initializer, ts.factory.createIdentifier(method)),
@@ -320,6 +350,13 @@ const createEntitySchemaDeclaration = schema => {
   }
   for (const relation of schema.relations) {
     initializer = createRelationCall(initializer, relation);
+  }
+  if (schema.selectionFactories) {
+    initializer = ts.factory.createCallExpression(
+      ts.factory.createIdentifier('withSelectionFactories'),
+      undefined,
+      [initializer, readExpression(schema.selectionFactories)],
+    );
   }
 
   return ts.factory.createVariableStatement(

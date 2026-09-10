@@ -1,6 +1,8 @@
 import type { SyntaxNode, SyntaxNodeRef, Tree } from '@lezer/common';
 import {
   isReferenceFieldDefinition,
+  reflectSelectionFactories,
+  type SelectionFactoryDescriptor,
   selectionAll,
   selectionAnd,
   selectionNone,
@@ -15,6 +17,12 @@ import {
 } from '@ontahi/core/data-graph';
 
 import { renderConsoleDialect } from './console-dialect.js';
+import {
+  parseConsoleFactory,
+  resolveConsoleFactory,
+  completeConsoleFactory,
+  type ConsoleFactorySyntax,
+} from './console-factories.js';
 import { parser } from './generated/selection-parser.js';
 
 export type SelectionLanguageRange = {
@@ -53,6 +61,7 @@ export type SelectionLanguageFieldReflection = {
 
 export type SelectionLanguageEntityReflection<TEntityName extends string = string> = {
   readonly name: TEntityName;
+  readonly selectionFactories?: Readonly<Record<string, SelectionFactoryDescriptor>>;
   readonly fields: readonly SelectionLanguageFieldReflection[];
   readonly relations?: readonly { readonly name: string }[];
 };
@@ -212,6 +221,7 @@ export type ConsoleLanguageDiagnostic =
       readonly code:
         | 'console.syntax.invalid'
         | 'console.semantic.unknown-entity'
+        | 'console.semantic.invalid-factory'
         | 'console.semantic.invalid-limit'
         | 'console.semantic.unsupported-limit'
         | 'console.semantic.invalid-order-field'
@@ -231,6 +241,7 @@ export type ConsoleOrderBySyntax = SelectionLanguageRange & {
 
 export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly kind: 'graph-read';
+  readonly factory?: ConsoleFactorySyntax;
   readonly entity?: SelectionLanguageToken<'entity-name'>;
   readonly where?: SelectionLanguageToken<'where-member'>;
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
@@ -959,6 +970,9 @@ export const reflectSelectionLanguageEntity = <TEntity extends AnyEntityDefiniti
   entity: TEntity,
 ): SelectionLanguageEntityReflection<TEntity['name']> => ({
   name: entity.name,
+  ...(reflectSelectionFactories(entity)
+    ? { selectionFactories: reflectSelectionFactories(entity) }
+    : {}),
   fields: Object.entries(entity.fields).map(([name, definition]) => {
     const reference = isReferenceFieldDefinition(definition)
       ? (() => {
@@ -1026,6 +1040,10 @@ const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyn
     expression: {
       kind: 'graph-read',
       ...rangeOf(graphRead),
+      factory: parseConsoleFactory(
+        firstChildNamed(graphRead, ['FactoryClause', 'DeclarativeFactoryClause']),
+        document,
+      ),
       entity: tokenOf('entity-name', graphRead.getChild('EntityName'), document),
       where: tokenOf('where-member', whereClause?.getChild('Where') ?? null, document),
       whereOpen: tokenOf('open-parenthesis', whereClause?.getChild('OpenParen') ?? null, document),
@@ -1166,6 +1184,13 @@ export const parseConsoleDocument = (
     message: 'String literals must use valid JSON escaping.',
     ...range,
   }));
+  if (syntax.expression?.factory?.error)
+    syntaxDiagnostics.push({
+      ...syntax.expression.factory,
+      channel: 'syntax',
+      code: 'console.syntax.invalid',
+      message: syntax.expression.factory.error,
+    });
 
   if (error) {
     const expression = syntax.expression;
@@ -1227,9 +1252,37 @@ export const analyzeConsoleDocument = (
     };
   }
 
-  const resolved: SemanticResolution = expression.selection
+  let resolved: SemanticResolution = expression.selection
     ? resolveExpression(expression.selection, entity)
     : { diagnostics: [], expression: selectionAll() };
+  if (expression.factory) {
+    try {
+      const selected = resolveConsoleFactory(
+        expression.factory,
+        entity.name,
+        entity.selectionFactories,
+      );
+      resolved = {
+        ...resolved,
+        expression:
+          expression.selection && resolved.expression
+            ? selectionAnd(selected, resolved.expression)
+            : selected,
+      };
+    } catch (cause) {
+      return {
+        ...parsed,
+        semanticDiagnostics: [
+          {
+            ...expression.factory,
+            channel: 'semantic',
+            code: 'console.semantic.invalid-factory',
+            message: cause instanceof Error ? cause.message : 'Invalid Selection factory input.',
+          },
+        ],
+      };
+    }
+  }
   const semanticDiagnostics = [
     ...resolved.diagnostics,
     ...consoleOrderDiagnostics(expression, entity, options.dialect),
@@ -1398,7 +1451,11 @@ export const editConsoleLimit = (
       : [{ from: syntax.limitValue.from, to: syntax.limitValue.to, insert: String(limit) }];
   }
   const position =
-    syntax.orderBy?.to ?? syntax.whereClose?.to ?? syntax.selection?.to ?? syntax.entity.to;
+    syntax.orderBy?.to ??
+    syntax.whereClose?.to ??
+    syntax.selection?.to ??
+    syntax.factory?.to ??
+    syntax.entity.to;
   return [
     {
       from: position,
@@ -1463,7 +1520,8 @@ export const editConsoleOrderBy = (
       ...consoleOrderReplacementChanges(existing.field, existing.direction, order, options.dialect),
     );
   } else {
-    const position = syntax.whereClose?.to ?? syntax.selection?.to ?? syntax.entity.to;
+    const position =
+      syntax.whereClose?.to ?? syntax.selection?.to ?? syntax.factory?.to ?? syntax.entity.to;
     const direction = order.direction === 'asc' ? '' : ', ' + order.direction;
     changes.push({
       from: position,
@@ -1594,6 +1652,14 @@ export const completeConsoleDocument = (
   }
 
   const entity = application.entities.find(candidate => candidate.name === syntax?.entity?.text);
+  const factoryCompletion = completeConsoleFactory(
+    document,
+    safePosition,
+    syntax?.factory,
+    entity?.selectionFactories,
+    'ts',
+  );
+  if (factoryCompletion) return factoryCompletion;
   const selectionFrom = syntax?.whereOpen?.to;
   const selectionTo = syntax?.whereClose?.from;
   if (
@@ -1641,6 +1707,16 @@ export const completeConsoleDocument = (
       ...range,
       items: (
         [
+          ...(entity?.selectionFactories && !syntax.factory
+            ? [
+                {
+                  label: 'by',
+                  apply: 'by({',
+                  kind: 'member' as const,
+                  detail: 'Named Selection factory',
+                },
+              ]
+            : []),
           {
             label: 'where',
             apply: 'where(',
@@ -1704,9 +1780,17 @@ export const completeConsoleDocument = (
 
 const declarativeContinuationItems = (
   syntax: ConsoleGraphReadSyntax,
+  entity: SelectionLanguageEntityReflection,
 ): readonly ConsoleLanguageCompletionItem[] => {
   if (syntax.terminal) return [];
   return [
+    ...(!syntax.factory &&
+    !syntax.where &&
+    !syntax.orderBy &&
+    !syntax.limit &&
+    entity.selectionFactories
+      ? [{ label: 'by', apply: 'by ', kind: 'keyword' as const, detail: 'Named Selection factory' }]
+      : []),
     ...(!syntax.where && !syntax.orderBy && !syntax.limit
       ? [{ label: 'where', apply: 'where ', kind: 'keyword' as const, detail: 'Selection' }]
       : []),
@@ -1752,6 +1836,14 @@ const completeDeclarativeConsoleDocument = (
   const syntax = parseConsoleDocument(document, 'declarative').syntax.expression;
   const entity = application.entities.find(candidate => candidate.name === syntax?.entity?.text);
   if (!syntax || !entity) return result([]);
+  const factoryCompletion = completeConsoleFactory(
+    document,
+    pos,
+    syntax.factory,
+    entity.selectionFactories,
+    'declarative',
+  );
+  if (factoryCompletion) return factoryCompletion;
 
   // A complete prefix permits the next clause, even when the current word is still incomplete.
   const beforeWord = analyzeConsoleDocument(document.slice(0, range.from), application, {
@@ -1759,7 +1851,7 @@ const completeDeclarativeConsoleDocument = (
   });
   const continuation =
     beforeWord.request && beforeWord.syntax.expression
-      ? declarativeContinuationItems(beforeWord.syntax.expression)
+      ? declarativeContinuationItems(beforeWord.syntax.expression, entity)
       : [];
   const orderItems = declarativeOrderCompletionItems(syntax, entity, pos, options);
   if (orderItems) return result([...orderItems, ...continuation]);

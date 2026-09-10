@@ -2,6 +2,7 @@ import {
   field,
   graphSchema,
   mapRelation,
+  withSelectionFactories,
   type InferGraphSchemaValue,
   type RelationConstraint,
 } from '@ontahi/core/data-graph';
@@ -124,15 +125,31 @@ export const TodoList = entity({
   },
 });
 
-export const Tag = entity({
-  name: 'Tag',
-  fields: {
-    id: field.id(),
-    name: field.nonEmptyString({ trim: true }),
-    color: TodoList.fields.color,
+export const Tag = withSelectionFactories(
+  entity({
+    name: 'Tag',
+    fields: {
+      id: field.id(),
+      name: field.nonEmptyString({ trim: true }),
+      color: TodoList.fields.color,
+    },
+    display: { primary: 'name', search: ['name'] },
+  }),
+  {
+    identity: {
+      version: 1,
+      input: graphSchema.object({ id: field.id() }),
+      scalarInput: 'id',
+      template: { kind: 'identity', bindings: { id: 'id' } },
+    },
+    named: {
+      version: 1,
+      input: graphSchema.object({ text: field.nonEmptyString({ trim: true }) }),
+      scalarInput: 'text',
+      template: { kind: 'predicate', fieldName: 'name', operator: 'eq', input: 'text' },
+    },
   },
-  display: { primary: 'name', search: ['name'] },
-});
+);
 
 const todoItemFields = {
   id: field.id(),

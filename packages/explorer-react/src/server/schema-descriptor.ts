@@ -1,6 +1,8 @@
 import {
   isGraphSchemaDefinition,
   toGraphJsonSchema,
+  graphSchemaDescriptorToJsonSchema,
+  type GraphSchemaDescriptor,
   type GraphSchemaDefinition,
 } from '@ontahi/core/data-graph';
 
@@ -634,4 +636,17 @@ export const describeGraphSchema = (
       error: error instanceof Error ? error.message : String(error),
     };
   }
+};
+
+export const describeReflectedSchema = (
+  descriptor: GraphSchemaDescriptor,
+): ExplorerSchemaDescriptor => {
+  const jsonSchema = graphSchemaDescriptorToJsonSchema(descriptor) as JsonSchemaObject;
+  const context = { definitions: jsonSchema.$defs ?? {} };
+  return {
+    source: 'ontahi',
+    summary: summarizeJsonSchema(jsonSchema, context, { io: 'input' }),
+    fields: flattenSchemaFields(jsonSchema, '', true, context),
+    jsonSchema,
+  };
 };

@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/118-ontahi-selection-language-editor
   - ontahi://plans/119-selection-relation-predicates
   - ontahi://plans/120-named-and-saved-selections
+  - ontahi://plans/120a-pure-named-selection-factory-contract
   - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
 migratedFrom: bookops://atlas/model/selection
@@ -73,6 +74,25 @@ const abandonedDrafts = Book.selection(book => book.status.eq('draft'))
 `Entity.selection(...)` is the ordinary authoring form on a bound server entity and on its
 generated browser projection. Both produce the same transport-safe `Selection<TEntity>`; the
 top-level `selection(entity, ...)` factory remains the lower-level schema-oriented form.
+
+## Pure factories
+
+Factory discovery exposes a strict input schema and an output Selection entity (without a
+cardinality promise), together with version, template and optional shorthand. Graph discovery,
+generated browser definitions and Explorer contract inspection share this data. Factories confer
+no execution authority. Console reads accept one reflected factory plus an optional `where`
+intersection in both dialects, with schema-driven completion. Authored invocation data survives
+dialect conversion and table modifier edits; execution still receives the expanded ordinary AST.
+Multiple-factory language composition and Explorer invocation forms remain separate work.
+
+Pure named factories construct deferred Selection data from reflected explicit inputs. The first
+Core proof adds `withSelectionFactories`/`by` in parallel with locators: scalar predicate templates
+expand to predicates, while canonical identity templates retain explicit `references` intent.
+Neither starts a fetch nor assigns consumer cardinality. The factory declaration and original
+invocation are authoring metadata, not new execution AST nodes or authorization grants. Composition
+derives another Selection; it does not mutate the caller's membership or preserve misleading
+whole-expression factory provenance. Versions identify application-owned declarations, not frozen
+membership. Locator migration and remote mutation widening remain separate.
 
 ## Operation Contracts
 

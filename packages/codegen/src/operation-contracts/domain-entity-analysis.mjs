@@ -3,6 +3,7 @@ import ts from 'typescript';
 import { describeEntityDeclaration, resolveEntityDeclaration } from './entity-discovery.mjs';
 import {
   projectEntitySchemaConfig,
+  projectSelectionFactories,
   resolveEntitySchemaProjection,
 } from './entity-schema-projection.mjs';
 import { parseDomainOperationDefaults, parseOperationDefinition } from './operation-analysis.mjs';
@@ -74,6 +75,17 @@ export const findDomainEntityDefinition = (sourceFile, expectedExportName, optio
       const entitySchemaProjection = unifiedDeclaration
         ? projectEntitySchemaConfig(configArg, schemaContext)
         : resolveEntitySchemaProjection(entityDefinitionName, schemaContext);
+      if (entitySchemaProjection && resolvedDeclaration.selectionFactories) {
+        const factoryProjection = projectSelectionFactories(
+          resolvedDeclaration.selectionFactories,
+          schemaContext,
+        );
+        entitySchemaProjection.selectionFactoriesText = factoryProjection.selectionFactoriesText;
+        entitySchemaProjection.diagnostics = [
+          ...(entitySchemaProjection.diagnostics ?? []),
+          ...(factoryProjection.diagnostics ?? []),
+        ];
+      }
 
       const parsedTasks = parseTaskDefinitions(configArg, importMap);
       const projectionDiagnostics = entitySchemaProjection?.diagnostics ?? [];

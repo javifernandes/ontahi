@@ -8,6 +8,7 @@ import type {
   ReflectedEntityDataSort,
   ReflectedEntityDisplayDescriptor,
   PortableOperationConditions,
+  SelectionFactoryDescriptor,
 } from '@ontahi/core/data-graph';
 import type { TaskRunListItem, TaskRunSource } from '@ontahi/core/runtime/contracts';
 
@@ -43,6 +44,10 @@ export type ExplorerEntityMutationDescriptor = {
 };
 
 export type ExplorerEntityDetail = ExplorerEntityDescriptor & {
+  selectionFactories?: Record<
+    string,
+    SelectionFactoryDescriptor & { inputSchema: ExplorerSchemaDescriptor }
+  >;
   diagram: string;
   identity?: {
     name: string;

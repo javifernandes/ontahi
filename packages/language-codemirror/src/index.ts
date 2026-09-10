@@ -103,7 +103,7 @@ const consoleParser = consoleDocumentParser.configure({
       EntityName: tags.typeName,
       'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
       'Order By Ascending Descending OrderDirection': tags.keyword,
-      FieldName: tags.variableName,
+      'FieldName FactoryName InputName': tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
       'All None': tags.atom,
@@ -111,7 +111,8 @@ const consoleParser = consoleDocumentParser.configure({
       Null: tags.null,
       NumberLiteral: tags.number,
       StringLiteral: tags.string,
-      'Dot OpenParen CloseParen OpenBracket CloseBracket Comma': tags.punctuation,
+      'Dot OpenParen CloseParen OpenBracket CloseBracket OpenBrace CloseBrace Colon Comma':
+        tags.punctuation,
     }),
   ],
 });
@@ -464,7 +465,9 @@ const consoleDialectExtensions = (
   autocompletion({
     override: [consoleCompletionSource(application, options)],
     activateOnCompletion: completion =>
-      ['where', 'order by', 'by', 'orderBy'].includes(completion.label),
+      ['where', 'order by', 'by', 'orderBy'].includes(completion.label) ||
+      completion.detail?.startsWith('Selection factory') === true ||
+      (typeof completion.apply === 'string' && completion.apply.endsWith(': ')),
     icons: false,
   }),
   ...(options.finiteValueProjections

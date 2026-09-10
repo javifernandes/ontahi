@@ -7,12 +7,35 @@ import {
   graphSchema,
   modelExpression,
   value,
+  withSelectionFactories,
 } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import { buildExplorerSnapshot, getExplorerEntityDetail } from './index.js';
 
 describe('explorer descriptor builder', () => {
+  it('discovers factory input and output contracts without confusing inputs with Entity Fields', () => {
+    const Customer = withSelectionFactories(
+      entity('Customer', { id: field.id(), archivedAt: field.datetime() }),
+      {
+        archivedSince: {
+          version: 1,
+          input: graphSchema.object({ date: field.datetime() }),
+          template: { kind: 'predicate', fieldName: 'archivedAt', operator: 'gte', input: 'date' },
+        },
+      },
+    );
+    const detail = getExplorerEntityDetail({ entities: [Customer] }, 'Customer');
+    const reflected = JSON.parse(JSON.stringify(detail));
+    expect(reflected.selectionFactories.archivedSince).toMatchObject({
+      output: { kind: 'selection', entityName: 'Customer' },
+      inputSchema: { source: 'ontahi', fields: [{ path: 'date', required: true }] },
+    });
+    expect(detail?.fields.map(field => field.name)).not.toContain('date');
+    expect(
+      reflected.selectionFactories.archivedSince.inputSchema.jsonSchema.additionalProperties,
+    ).toBe(false);
+  });
   it('builds reflected entity, operation, task, ingress, and event descriptors', () => {
     const OperationBook = entity('Book', {
       id: field.id(),

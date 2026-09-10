@@ -13,7 +13,7 @@ Related plans:
 1. [116 Ontahí Selection Model](../done/116-ontahi-selection-model.md)
 2. [118 Ontahí Selection Language Editor Research](../done/118-ontahi-selection-language-editor.md)
 3. [150a Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
-4. [120a Pure Named Selection Factory Contract](./120a-pure-named-selection-factory-contract.md)
+4. [120a Pure Named Selection Factory Contract](../current/120a-pure-named-selection-factory-contract.md)
 
 ## Proposal
 
