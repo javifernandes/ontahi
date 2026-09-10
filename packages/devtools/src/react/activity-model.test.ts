@@ -111,6 +111,12 @@ describe('Devtools activity model', () => {
     ).toBe('Tag where none · order by name ascending, id descending · as TagCard');
     expect(graphReadSummary({ kind: 'graph-read' }, 'declarative')).toBeUndefined();
     expect(
+      semanticSummary(
+        exchangeActivity({ kind: 'graph-read-capabilities', entityName: 'Tag' }, 'graph.read'),
+        'declarative',
+      ),
+    ).toBe('Tag read capabilities');
+    expect(
       semanticSummary(exchangeActivity({ kind: 'graph-read' }, 'graph.read'), 'declarative'),
     ).toBe('graph.read');
   });

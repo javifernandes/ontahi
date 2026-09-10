@@ -24,6 +24,21 @@ const graphReadRequest = (body: unknown, headers?: Record<string, string>) =>
   });
 
 describe('Next.js graph read route adapter', () => {
+  it('dispatches metadata with trusted authority and returns a successful HTTP response', async () => {
+    const payload = {
+      kind: 'graph-read-capabilities-result' as const,
+      entityName: 'Todo',
+      capabilities: { orderBy: ['title'] },
+    };
+    const dispatcher = vi.fn(async () => payload);
+    const body = { version: 1, kind: 'graph-read-capabilities', entityName: 'Todo' };
+    const handler = createNextGraphReadRouteHandler({ dispatcher, authority: () => 'trusted' });
+    const response = await handler(graphReadRequest({ ...body, authority: 'untrusted' }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(payload);
+    expect(dispatcher).toHaveBeenCalledWith(body, { authority: 'trusted' });
+  });
+
   it('requires an authority factory for a specialized dispatcher', () => {
     const dispatcher = vi.fn() as GraphReadDispatcher<{ ownerId: string }>;
 

@@ -260,6 +260,8 @@ export const semanticSummary = (
   const event = activity.started ?? activity.settled;
   const body = activity.started?.request?.body;
   if (isRecord(body)) {
+    if (body.kind === 'graph-read-capabilities' && typeof body.entityName === 'string')
+      return `${body.entityName} read capabilities`;
     const graphRead = graphReadSummary(body, dialect);
     if (graphRead) return graphRead;
     const graphCommand = graphCommandSummary(body);

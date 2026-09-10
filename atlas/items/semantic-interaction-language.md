@@ -123,7 +123,14 @@ and unsupported comments cannot be converted; conversion performs no execution. 
 source replacement and dialect configuration as one invertible history event, preserving original
 trivia on undo. Semantically equivalent conversion does not make an executed result stale; changing
 the query or the `exists` presentation intent does. Receiver capabilities still constrain both
-ordering suggestions and table headers, without changing intrinsic schema validity.
+ordering suggestions and table headers, without changing intrinsic schema validity. Console now
+discovers ordering metadata through a dedicated `graph-read-capabilities` request in the graph.read
+family, independently of executing a Query. The receiver validates trusted authority scope and
+derives allowed Fields from the ordinary policy; it does not materialize or count rows. This same
+Entity/transport/routing-bound snapshot feeds source-backed ordering Field and direction dropdowns
+in both dialects. Loading or unavailable metadata never implies a permission grant, and late
+responses cannot populate another Entity's editor. Controls reuse finite-value projection behavior,
+preserving source, undo, Escape, and manual authoring. Every execution still reauthorizes.
 
 Authoring dialect preference is browser-origin UI state, separate from canonical requests and
 runtime authority. Devtools Settings and Explorer Selection editors share it through the CodeMirror

@@ -53,6 +53,21 @@ Operations.
 
 ## Graph Read ordering capabilities
 
+The `graph.read` Runtime Protocol family also accepts metadata-only discovery:
+
+```json
+{ "version": 1, "kind": "graph-read-capabilities", "entityName": "TodoItem" }
+```
+
+The dispatcher returns `{ kind: 'graph-read-capabilities-result', entityName: 'TodoItem',
+capabilities: { orderBy: ['title'] } }` without invoking a data executor. It uses the same policy,
+trusted authority scope validation, and derived-Field dependency checks. Unknown/unexposed Entities
+and failed scope resolution return errors without capabilities. Count-only policies report an empty
+ordering set. This describes available ordering Fields, not authorization of a particular Query.
+`parseGraphReadFamilyRequest` accepts discovery or ordinary reads; `parseGraphReadRequest` and
+Graph observation continue to accept data reads only. Standalone Express/Next.js Graph Read
+handlers accept discovery as well.
+
 Portable Graph Read requests may opt into `includeCapabilities: true`. After authorization and a
 successful execution, the dispatcher adds `capabilities: { orderBy: string[] }` alongside `value`.
 The names are root Fields allowed by the same ordering policy checks used to authorize queries,
@@ -61,7 +76,7 @@ the case for count reads); absent metadata means capabilities were not supplied.
 support the same opt-in. Requests without it retain their existing response shape, and errors
 never carry capabilities.
 
-This is advisory metadata from the authorized read, not client-authored authority or a grant for
+Both forms are advisory receiver metadata, not client-authored authority or a grant for
 future requests. Every subsequent read must still pass ordinary authorization. Consumers can use
 `isGraphReadCapabilities` from `@ontahi/core/data-graph` to validate optional response metadata.
 

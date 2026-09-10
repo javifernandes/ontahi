@@ -1,6 +1,6 @@
 import {
   graphReadProtocolError,
-  parseGraphReadRequest,
+  parseGraphReadFamilyRequest,
   type GraphReadDispatcher,
   type GraphReadDispatchResponse,
 } from '@ontahi/core/data-graph';
@@ -36,7 +36,7 @@ export type CreateNextGraphReadRouteHandlerOptions<TAuthority = InvocationContex
     );
 
 const responseStatus = (response: GraphReadDispatchResponse) => {
-  if (response.kind === 'graph-read-result') return 200;
+  if (response.kind !== 'protocol-error') return 200;
   if (response.error.code === 'access_denied') return 403;
   if (response.error.code === 'cardinality_mismatch') return 409;
   if (response.error.code === 'execution_unavailable') return 503;
@@ -46,7 +46,7 @@ const responseStatus = (response: GraphReadDispatchResponse) => {
 export const createNextGraphReadRouteHandler =
   <TAuthority>(options: CreateNextGraphReadRouteHandlerOptions<TAuthority>) =>
   async (request: Request): Promise<Response> => {
-    const parsed = parseGraphReadRequest(await request.json().catch(() => null));
+    const parsed = parseGraphReadFamilyRequest(await request.json().catch(() => null));
     if (!parsed.success) {
       return Response.json(parsed.error, { status: 400 });
     }

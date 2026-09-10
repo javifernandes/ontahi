@@ -58,6 +58,11 @@ even while a completion popup and semantic marks are active.
 Entity-to-Field-name resolver to headless Console completion. Reconfigure the extension when the
 capability snapshot changes to discard stale suggestions without editing source or history. The
 adapter does not fetch permissions or change the Console linter's schema-based validation.
+With `finiteValueProjections: true`, that same resolver supplies ordering Field dropdowns and
+direction controls in TS and Declarative. Incomplete order clauses show a Field chooser; omitted
+directions display the implicit ascending order without adding source text until changed. Choosing
+an option edits only its source range, never executes, and supports undo/redo, Escape to reveal
+source, and deletion. Without permitted Fields, ordering stays ordinary editable text.
 
 ## Console Dialects
 

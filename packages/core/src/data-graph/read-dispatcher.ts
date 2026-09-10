@@ -11,6 +11,8 @@ import type { QuerySpec } from './query.js';
 import {
   graphReadProtocolError,
   parseGraphReadRequest,
+  parseGraphReadFamilyRequest,
+  type GraphReadCapabilitiesResult,
   resolveGraphReadRequest,
   validateGraphReadSelection,
   type GraphReadMode,
@@ -75,6 +77,7 @@ export type GraphReadDispatchContext<TAuthority> = {
 };
 
 export type GraphReadDispatchResponse =
+  | GraphReadCapabilitiesResult
   | {
       readonly kind: 'graph-read-result';
       readonly value: unknown;
@@ -451,6 +454,31 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
   const policyByEntityName = createGraphReadPolicyRegistry(policies);
 
   return async (input, context) => {
+    const parsed = parseGraphReadFamilyRequest(input);
+    if (!parsed.success) return parsed.error;
+    if (parsed.request.kind === 'graph-read-capabilities') {
+      const policy = policyByEntityName.get(parsed.request.entityName);
+      if (!policy) return graphReadAccessDenied();
+      try {
+        const scope = resolveScope(policy, context);
+        const invalidScope = scope && validateGraphReadSelection(scope, policy.entity);
+        if (invalidScope) throw new Error(invalidScope.error.message);
+        return {
+          kind: 'graph-read-capabilities-result',
+          entityName: policy.entity.name,
+          capabilities: {
+            orderBy: policy.modes.some(mode => mode !== 'count')
+              ? Object.keys(policy.entity.fields).filter(field =>
+                  allowsOrdering(policy.entity, field, policy),
+                )
+              : [],
+          },
+        };
+      } catch (error) {
+        reportError?.(error);
+        return graphReadExecutionUnavailable();
+      }
+    }
     const authorized = authorizeGraphRead(input, context, policyByEntityName, reportError);
     if (!authorized.success) return authorized.error;
 

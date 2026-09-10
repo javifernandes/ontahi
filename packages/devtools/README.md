@@ -78,6 +78,12 @@ selects many by default; append `order by title descending limit 10`, or an expl
 as `first`, `one`, `count`, or `exists` with the existing modifier restrictions. Both dialects keep
 the same runtime and policy boundary, Boolean/enum controls, and permission-aware completion.
 Header sorting and limit changes edit the active dialect and submit through Runtime Transport.
+Accepting `order by`/`orderBy` reopens completion for its permitted Fields. Ordering suggestions
+load through a metadata-only `graph.read` request as soon as the draft names a reflected Entity,
+including incomplete queries. No initial Run is required. Field and direction dropdowns edit the
+source in both dialects without executing; undo/redo and Escape work like Boolean/enum controls.
+Loading, denied/unavailable metadata (with retry), and a known empty policy are distinguished.
+Typing and accepting suggestions never execute data queries.
 
 Switching dialect does not run a query. Undo/redo restores the original source and dialect together;
 equivalent converted queries keep the current result without a false stale notice. Invalid drafts
@@ -115,13 +121,13 @@ snapshot visible with a short toolbar notice; actionable errors remain visible i
 Controls are disabled while running or when the
 draft is invalid, targets another Entity, or is no longer a many read. A valid same-Entity draft
 is preserved and submitted with the new sort. Headers intersect intrinsically sortable Fields with
-the receiver's effective ordering capabilities, requested alongside each successful read. Denied
+the receiver's ordering capabilities, discovered independently of data execution. Denied
 headers remain focusable but inactive, with a tooltip explaining the policy restriction. Missing
 or malformed capabilities preserve readable results but disable ordering with a refresh explanation.
-Replacing Runtime Transport requires a successful Run to refresh permissions; an `access_denied`
-response also invalidates the previous capabilities. Capabilities describe the successful read,
-not a permanent grant: policy/authentication or routing changes inside the same transport may make
-them stale. Receiver policy remains authoritative on every request, and rejections are shown
+Replacing Runtime Transport or changing its graph.read route automatically refreshes metadata;
+old results still require a Run on that transport before table edits. An `access_denied` response
+also refreshes capabilities. Capabilities are not a permanent grant: authentication/policy changes
+without a transport notification may make them stale. Receiver policy remains authoritative on every request, and rejections are shown
 without replacing the successful result data.
 The many-result toolbar's numeric
 Limit control accepts non-negative safe integers, including zero. Apply or Enter edits only the
@@ -136,9 +142,9 @@ follow-ups. The existing 50-row visual preview cap is
 reported separately when reached.
 
 `orderBy(...)` autocomplete uses that same capability snapshot for the matching Entity and
-transport, even in incomplete drafts. It suggests only permitted scalar Fields. Before a successful
-read, or when permissions are unavailable or invalidated, it offers no ordering Fields; run a valid
-read for the Entity to refresh them. Changing Entity or replacing the transport discards stale
+transport, even in incomplete drafts. It suggests only permitted scalar Fields. While discovery is
+pending or unavailable, it offers no ordering Fields; retry loads metadata, not rows.
+Changing Entity or replacing the transport discards stale
 suggestions. Other completions and manual source authoring remain schema-based; this assistance
 does not grant authority or prevent the server from rejecting a manually authored order.
 

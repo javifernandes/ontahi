@@ -501,6 +501,43 @@ Focused Todo Explorer tests (4), codegen check, server/client typechecks, lint, 
 The full Todo suite also passes (67 tests) with authorized local-server access; the sandboxed run
 could not complete its OAuth/application server tests.
 
+#### C3 Follow-up: Chained Ordering Completion
+
+Accepting `order by` closed CodeMirror completion without offering the next Field, even with known
+ordering capabilities. A regression reproduces that exact accepted-completion transaction; the
+adapter now reactivates completion for ordering/predicate clauses in both dialects. Receiver-owned
+Field filtering remains intact. The initial follow-up explained missing permissions by asking for
+a first successful read; user feedback rejected that dependency. The metadata-only discovery slice
+below replaces that temporary UX.
+Verification: CodeMirror 57 and Devtools 88 tests pass with coverage thresholds, including both
+accepted-ordering dialects and receiver-backed declarative completion before/after the first read.
+Both packages pass typecheck, lint, and build; the Todo client rebuild passes with the existing
+chunk-size warning. Formatting and whitespace checks pass.
+
+#### C3 Follow-up: Independent Ordering Discovery And Rich Controls
+
+- [x] Add `graph-read-capabilities` to the existing graph.read family: Entity policy metadata,
+      trusted scope validation, no Query execution or select-all prerequisite.
+- [x] Support Runtime Protocol HTTP/WebSocket and standalone Express/Next.js read adapters.
+- [x] Discover on reflected Entity selection, even with an incomplete draft; share the result
+      between autocomplete, Field/direction dropdowns, and headers.
+- [x] Distinguish loading, empty policy, and error/retry without running data queries.
+- [x] Invalidate on Entity, transport, and graph.read routing changes; ignore late replies.
+- [x] Reuse finite-value widgets for both dialects, with ordinary source edits, undo/redo, Escape,
+      deletion, and an implicit ascending direction that does not mutate source just by rendering.
+
+Metadata is advisory, never authorization of a particular Query. Authentication changes without
+transport notifications can still stale a snapshot; execution remains authoritative and a denial
+refreshes metadata. Data results keep their existing snapshot and Run semantics.
+
+Verification: Core 916, Devtools 91, Express 44, Next.js 51, and Todo 68 tests pass. CodeMirror's
+expanded coverage suite exercises incomplete clauses, implicit direction, source reveal, undo,
+permission reconfiguration, and deletion through rich controls. Devtools, CodeMirror, and Next.js
+coverage gates pass. A real-browser smoke verifies pre-Run discovery, permitted Field/direction
+choices, unchanged results until Run, descending execution, and TS/Declarative conversion.
+Affected packages and Todo pass build/typecheck/lint; packed artifacts pass clean-room install,
+types, and runtime checks. The Todo client retains its existing large-chunk build warning.
+
 #### C4. Activity Read Projection
 
 - [x] Apply the saved dialect to existing Graph Read Activity list titles, detail headings,
@@ -626,12 +663,13 @@ Checkpoint 2026-09-08, Graph Read walking skeleton:
     and Field with optional structured `ordering_not_allowed` details. Console displays the
     receiver's precise message while retaining the successful result snapshot. Unknown policies
     and other denials remain generic; no permissions are broadened.
-13. Console requests opt-in ordering capabilities with each Graph Read. The receiver derives root
-    Field names from its ordinary policy checks, including derived dependencies, and emits them
-    only with successful results. Headers intersect these names with intrinsic scalar types;
+13. Console discovers ordering metadata independently via `graph-read-capabilities`, without data
+    execution; ordinary Graph Reads retain their optional inline capabilities. The receiver derives
+    Field names from policy, including derived dependencies. Headers intersect these names with intrinsic scalar types;
     denied headers explain the policy restriction without editing or sending requests. Missing
-    or malformed metadata, a replaced transport, or a policy denial require a fresh successful
-    Run before sorting. Capabilities are advisory snapshots; every read remains authorized anew.
+    or malformed metadata disables ordering, with metadata retry available. Transport/routing changes
+    and policy denials refresh discovery. Old table results require a Run on the current transport.
+    Capabilities are advisory snapshots; every read remains authorized anew.
     `orderBy(...)` autocomplete consumes the same Entity/transport-bound snapshot, excluding denied
     Fields and offering none when capabilities are unavailable. An optional headless completion
     resolver narrows assistance without restricting manual authoring or changing query semantics;

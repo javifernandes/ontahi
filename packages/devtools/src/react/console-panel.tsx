@@ -40,6 +40,7 @@ import {
   type MutableRefObject,
 } from 'react';
 
+import { useConsoleReadCapabilities } from './console-read-capabilities.js';
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
@@ -65,6 +66,7 @@ type ConsoleResultSnapshot = {
   readonly durationMs: number;
   readonly capabilities?: GraphReadCapabilities;
   readonly transport?: RuntimeTransport<any>;
+  readonly route?: string;
 };
 
 type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
@@ -451,6 +453,10 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
+  const entityName = application.entities.find(
+    entity => entity.name === analysis.syntax.expression?.entity?.text,
+  )?.name;
+  const discovery = useConsoleReadCapabilities(runtimeTransport, entityName);
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
@@ -496,11 +502,14 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
             // Match the application Graph Read exists intent over nullable get.
             value: exists ? result.value !== null : result.value,
             transport: runtimeTransport,
+            route: discovery.route,
             durationMs: Math.max(0, performance.now() - startedAt),
           },
         });
       })
-      .catch((error: unknown) =>
+      .catch((error: unknown) => {
+        if (error instanceof ConsoleGraphReadError && error.code === 'access_denied')
+          discovery.refresh();
         setResult(previous => ({
           snapshot:
             previous.snapshot &&
@@ -510,8 +519,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
               : previous.snapshot,
           status: 'error',
           message: error instanceof Error ? error.message : 'Graph Read failed.',
-        })),
-      )
+        }));
+      })
       .finally(() => {
         executingRef.current = false;
       });
@@ -551,25 +560,30 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     }
   }, [preferredDialect, options.initialDialect]);
   const snapshot = result.snapshot;
-  const orderingCapabilities =
-    snapshot?.transport === runtimeTransport ? snapshot?.capabilities : undefined;
-  const orderableFields = useMemo(
-    () => (entityName: string) =>
-      entityName === snapshot?.request.selection.entityName
-        ? (orderingCapabilities?.orderBy ?? [])
-        : [],
-    [snapshot?.request.selection.entityName, orderingCapabilities],
-  );
+  const orderingCapabilities = discovery.capabilities;
+  const orderableFields = discovery.orderableFields;
+  const orderingCompletionNotice = () => {
+    const syntax = analysis.syntax.expression;
+    const entityName = syntax?.entity?.text;
+    if (!syntax?.orderBy || !application.entities.some(entity => entity.name === entityName))
+      return null;
+    if (!runtimeTransport) return 'Ordering suggestions require a configured Runtime Transport.';
+    if (discovery.loading) return 'Loading ordering permissions…';
+    if (discovery.error) return `Ordering permissions unavailable: ${discovery.error}`;
+    return orderingCapabilities?.orderBy.length === 0
+      ? 'The current Graph Read policy allows no ordering Fields for this Entity.'
+      : null;
+  };
   const resultEntity = application.entities.find(
     entity => entity.name === snapshot?.request.selection.entityName,
   );
   const sortDisabledReason = (fieldName: string): string | undefined => {
     if (result.status === 'executing') return 'Wait for the current query to finish.';
     if (!exchange) return 'Ordering requires a configured Runtime Transport.';
-    if (snapshot?.transport !== runtimeTransport)
+    if (snapshot?.transport !== runtimeTransport || snapshot?.route !== discovery.route)
       return 'Run the query to refresh ordering permissions for this transport.';
-    if (!snapshot || !orderingCapabilities)
-      return 'Ordering permissions unavailable. Run a successful query against a server that reports Graph Read capabilities.';
+    if (!snapshot || !orderingCapabilities || entityName !== snapshot.request.selection.entityName)
+      return 'Ordering permissions unavailable for the current Entity.';
     if (!orderingCapabilities.orderBy.includes(fieldName))
       return `Ordering by ${snapshot.request.selection.entityName}.${fieldName} is not allowed by the Graph Read policy.`;
     if (!analysis.request) return 'Fix the Console expression before changing ordering.';
@@ -604,7 +618,11 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
 
   const limitDisabledReason = () => {
     if (result.status === 'executing') return 'Wait for the current query to finish.';
-    if (!exchange || snapshot?.transport !== runtimeTransport)
+    if (
+      !exchange ||
+      snapshot?.transport !== runtimeTransport ||
+      snapshot?.route !== discovery.route
+    )
       return 'Run the query with the current Runtime Transport before changing its limit.';
     if (!analysis.request) return 'Fix the Console expression before changing its limit.';
     if (
@@ -690,6 +708,12 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         />
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
+          <span>{orderingCompletionNotice()}</span>
+          {analysis.syntax.expression?.orderBy && discovery.error ? (
+            <button type='button' style={styles.mode} onClick={discovery.refresh}>
+              Retry ordering permissions
+            </button>
+          ) : null}
           {preferenceNotice ? <span>{preferenceNotice}</span> : null}
         </div>
       </div>

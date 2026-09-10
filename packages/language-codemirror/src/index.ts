@@ -463,10 +463,12 @@ const consoleDialectExtensions = (
     : []),
   autocompletion({
     override: [consoleCompletionSource(application, options)],
+    activateOnCompletion: completion =>
+      ['where', 'order by', 'by', 'orderBy'].includes(completion.label),
     icons: false,
   }),
   ...(options.finiteValueProjections
-    ? consoleFiniteValueProjectionExtensions(application, options.dialect)
+    ? consoleFiniteValueProjectionExtensions(application, options.dialect, options.orderableFields)
     : []),
   selectionExpressionAssistanceTheme,
   linter(consoleExpressionLinter(application, options), { delay: 0 }),

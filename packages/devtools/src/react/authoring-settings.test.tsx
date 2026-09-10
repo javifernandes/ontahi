@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createOntahiDiagnostics } from '../diagnostics.js';
 
+import { withConsoleMetadata } from './console-transport.test-support.js';
 import { OntahiDevtools } from './ontahi-devtools.js';
 
 const Tag = entity('Tag', { id: field.id(), name: field.string() });
@@ -22,7 +23,7 @@ const openConsole = (initialDocument = 'Tag.many()', initialDialect?: 'ts' | 'de
     <OntahiDevtools
       initiallyOpen
       diagnostics={createOntahiDiagnostics()}
-      runtimeTransport={{ request }}
+      runtimeTransport={withConsoleMetadata(request)}
       console={{ entities: [Tag], initialDocument, initialDialect }}
     />,
   );

@@ -33,6 +33,50 @@ export type GraphReadCapabilities = {
   readonly orderBy: readonly string[];
 };
 
+/** Advisory Entity policy discovery. Does not select, count, or materialize data. */
+export type GraphReadCapabilitiesRequestV1 = {
+  readonly version: 1;
+  readonly kind: 'graph-read-capabilities';
+  readonly entityName: string;
+};
+
+export type GraphReadCapabilitiesResult = {
+  readonly kind: 'graph-read-capabilities-result';
+  readonly entityName: string;
+  readonly capabilities: GraphReadCapabilities;
+};
+
+export type GraphReadFamilyRequest = GraphReadRequestV1 | GraphReadCapabilitiesRequestV1;
+
+export const parseGraphReadFamilyRequest = (
+  value: unknown,
+):
+  | { readonly success: true; readonly request: GraphReadFamilyRequest }
+  | { readonly success: false; readonly error: GraphReadProtocolError } => {
+  if (!isRecord(value) || value.kind !== 'graph-read-capabilities')
+    return parseGraphReadRequest(value);
+  if (value.version !== 1)
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'unsupported_version',
+        `Unsupported data graph read protocol version: ${String(value.version)}.`,
+      ),
+    };
+  if (typeof value.entityName !== 'string' || value.entityName.trim() === '')
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'invalid_request',
+        'Graph Read capabilities require an Entity name.',
+      ),
+    };
+  return {
+    success: true,
+    request: { version: 1, kind: 'graph-read-capabilities', entityName: value.entityName },
+  };
+};
+
 export const isGraphReadCapabilities = (value: unknown): value is GraphReadCapabilities =>
   isRecord(value) &&
   Array.isArray(value.orderBy) &&

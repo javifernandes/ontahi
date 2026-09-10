@@ -1,3 +1,4 @@
+import { isolateHistory } from '@codemirror/commands';
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import {
   Decoration,
@@ -19,6 +20,11 @@ import {
   type SelectionPredicateSyntax,
   type SelectionScalarLiteralSyntax,
 } from '@ontahi/language';
+
+import {
+  consoleOrderProjections,
+  type EditorFiniteValueProjection,
+} from './console-order-projection.js';
 
 export type SelectionFiniteValueProjectionChoice = {
   readonly label: string;
@@ -114,7 +120,7 @@ export const deriveSelectionFiniteValueProjections = (
 
 type FiniteValueProjectionContext = {
   readonly entityName: string;
-  readonly projections: readonly SelectionFiniteValueProjection[];
+  readonly projections: readonly EditorFiniteValueProjection[];
 };
 
 const consoleFiniteValueProjectionContext = (
@@ -167,7 +173,7 @@ const sameRange = (left: SelectionLanguageRange | undefined, right: SelectionLan
 class FiniteValueWidget extends WidgetType {
   constructor(
     readonly entityName: string,
-    readonly projection: SelectionFiniteValueProjection,
+    readonly projection: EditorFiniteValueProjection,
   ) {
     super();
   }
@@ -192,7 +198,10 @@ class FiniteValueWidget extends WidgetType {
 
     const select = document.createElement('select');
     select.className = 'cm-ontahi-finite-value-select';
-    select.setAttribute('aria-label', `Value for ${this.entityName}.${this.projection.fieldName}`);
+    select.setAttribute(
+      'aria-label',
+      this.projection.label ?? `Value for ${this.entityName}.${this.projection.fieldName}`,
+    );
     select.setAttribute('aria-keyshortcuts', 'Escape, Backspace, Delete');
     select.title = 'Choose a value. Press Escape to edit the source text.';
     for (const choice of this.projection.choices) {
@@ -201,9 +210,15 @@ class FiniteValueWidget extends WidgetType {
       option.textContent = choice.label;
       select.append(option);
     }
-    select.value = this.projection.choices.find(
-      choice => choice.value === this.projection.value,
-    )!.text;
+    const selected = this.projection.choices.find(choice => choice.value === this.projection.value);
+    if (!selected) {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = this.projection.placeholder ?? 'Choose value';
+      placeholder.disabled = true;
+      select.prepend(placeholder);
+    }
+    select.value = selected?.text ?? '';
 
     const chevron = document.createElement('span');
     chevron.className = 'cm-ontahi-finite-value-chevron';
@@ -221,6 +236,7 @@ class FiniteValueWidget extends WidgetType {
         },
         selection: { anchor: this.projection.from + choice.text.length },
         userEvent: 'input.ontahi-projection',
+        annotations: isolateHistory.of('full'),
       });
       view.focus();
     });
@@ -296,9 +312,15 @@ const finiteValueDecorations = (
       sameRange(revealed, projection)
         ? []
         : [
-            Decoration.replace({
-              widget: new FiniteValueWidget(context.entityName, projection),
-            }).range(projection.from, projection.to),
+            (projection.from === projection.to
+              ? Decoration.widget({
+                  widget: new FiniteValueWidget(context.entityName, projection),
+                  side: 1,
+                })
+              : Decoration.replace({
+                  widget: new FiniteValueWidget(context.entityName, projection),
+                })
+            ).range(projection.from, projection.to),
           ],
     ),
     true,
@@ -358,7 +380,13 @@ export const selectionFiniteValueProjectionExtensions = (
 export const consoleFiniteValueProjectionExtensions = (
   application: ConsoleLanguageApplicationReflection,
   dialect: ConsoleDialect = 'ts',
+  orderableFields?: (entityName: string) => readonly string[],
 ): readonly Extension[] =>
-  finiteValueProjectionExtensions(document =>
-    consoleFiniteValueProjectionContext(document, application, dialect),
-  );
+  finiteValueProjectionExtensions(document => {
+    const values = consoleFiniteValueProjectionContext(document, application, dialect);
+    const ordering = consoleOrderProjections(document, application, dialect, orderableFields);
+    const entityName = parseConsoleDocument(document, dialect).syntax.expression?.entity?.text;
+    return entityName
+      ? { entityName, projections: [...(values?.projections ?? []), ...ordering] }
+      : undefined;
+  });
