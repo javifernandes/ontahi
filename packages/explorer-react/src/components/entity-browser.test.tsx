@@ -799,135 +799,123 @@ describe('ExplorerEntityBrowser', () => {
     expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { count: 12 } }));
   });
 
-  it('uses reflected editors for booleans, enums, numbers, dates, JSON, references, and null', async () => {
-    const user = userEvent.setup();
-    const runMutation = vi.fn().mockResolvedValue({ created: [], updated: [], deleted: [] });
-    const onApplied = vi.fn().mockResolvedValue(undefined);
-    const target = {
-      kind: 'entity-ref',
-      entityName: 'Record',
-      locator: { id: 'record-1' },
-    } as const;
-    const cells = [
-      { field: { name: 'completed', type: 'boolean', nullable: false }, value: false },
-      {
-        field: {
-          name: 'status',
-          type: 'enum',
-          nullable: false,
-          enumValues: ['draft', 'ready'],
-        },
-        value: 'draft',
+  // Keep each rich editor interaction independently bounded under parallel CI coverage.
+  it.each([
+    {
+      field: { name: 'completed', type: 'boolean', nullable: false },
+      value: false,
+      expected: true,
+      edit: async user => {
+        await user.click(screen.getByRole('switch', { name: 'Edit completed' }));
       },
-      { field: { name: 'score', type: 'number', nullable: false }, value: 1 },
-      {
-        field: { name: 'scheduledAt', type: 'date', nullable: false },
-        value: '2026-08-30T10:00:00.000Z',
+    },
+    {
+      field: { name: 'status', type: 'enum', nullable: false, enumValues: ['draft', 'ready'] },
+      value: 'draft',
+      expected: 'ready',
+      edit: async user => {
+        await user.selectOptions(screen.getByRole('combobox', { name: 'Edit status' }), 'ready');
       },
-      { field: { name: 'metadata', type: 'json', nullable: false }, value: { rank: 1 } },
-      {
-        field: {
-          name: 'owner',
-          type: 'reference',
-          nullable: false,
-          reference: {
-            entityName: 'Profile',
-            identity: { name: 'refById', fields: ['id'] },
-          },
-        },
-        value: { kind: 'entity-ref', entityName: 'Profile', locator: { id: 'profile-1' } },
+    },
+    {
+      field: { name: 'score', type: 'number', nullable: false },
+      value: 1,
+      expected: 42.5,
+      edit: async user => {
+        await user.clear(screen.getByRole('spinbutton', { name: 'Edit score' }));
+        await user.type(screen.getByRole('spinbutton', { name: 'Edit score' }), '42.5');
       },
-      { field: { name: 'note', type: 'string', nullable: true }, value: 'Keep me' },
-    ] satisfies Array<{
-      field: ExplorerEntityDetail['fields'][number];
-      value: unknown;
-    }>;
-
-    render(
-      <div>
-        {cells.map(({ field, value }) => (
-          <ExplorerEditableEntityCell
-            key={field.name}
-            entityName='Record'
-            field={field}
-            href={field.name === 'owner' ? '/profiles/profile-1' : undefined}
-            onApplied={onApplied}
-            runMutation={runMutation}
-            target={target}
-            value={value}
-          >
-            {field.name === 'owner' ? 'Profile · profile-1' : String(value)}
-          </ExplorerEditableEntityCell>
-        ))}
-      </div>,
-    );
-
-    expect(screen.getByRole('link', { name: 'Profile · profile-1' }).getAttribute('href')).toBe(
-      '/profiles/profile-1',
-    );
-
-    await user.click(screen.getByRole('switch', { name: 'Edit completed' }));
-    await waitFor(() =>
-      expect(runMutation).toHaveBeenCalledWith(
-        expect.objectContaining({ values: { completed: true } }),
-      ),
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Edit status' }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Edit status' }), 'ready');
-    await user.click(screen.getByRole('button', { name: 'Save status' }));
-
-    await user.click(screen.getByRole('button', { name: 'Edit score' }));
-    await user.clear(screen.getByRole('spinbutton', { name: 'Edit score' }));
-    await user.type(screen.getByRole('spinbutton', { name: 'Edit score' }), '42.5');
-    await user.click(screen.getByRole('button', { name: 'Save score' }));
-
-    await user.click(screen.getByRole('button', { name: 'Edit scheduledAt' }));
-    fireEvent.change(screen.getByLabelText('Edit scheduledAt'), {
-      target: { value: '2026-08-30T12:45' },
-    });
-    await user.click(screen.getByRole('button', { name: 'Save scheduledAt' }));
-
-    await user.click(screen.getByRole('button', { name: 'Edit metadata' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Edit metadata' }), {
-      target: { value: '{"rank":2}' },
-    });
-    await user.click(screen.getByRole('button', { name: 'Save metadata' }));
-
-    await user.click(screen.getByRole('button', { name: 'Edit owner' }));
-    await user.clear(screen.getByRole('textbox', { name: 'Edit owner' }));
-    await user.type(screen.getByRole('textbox', { name: 'Edit owner' }), 'profile-2');
-    await user.click(screen.getByRole('button', { name: 'Save owner' }));
-
-    await user.click(screen.getByRole('button', { name: 'Edit note' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Edit note is null' }));
-    await user.click(screen.getByRole('button', { name: 'Save note' }));
-
-    expect(runMutation).toHaveBeenCalledWith(
-      expect.objectContaining({ values: { status: 'ready' } }),
-    );
-    expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { score: 42.5 } }));
-    expect(runMutation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        values: { scheduledAt: new Date('2026-08-30T12:45').toISOString() },
-      }),
-    );
-    expect(runMutation).toHaveBeenCalledWith(
-      expect.objectContaining({ values: { metadata: { rank: 2 } } }),
-    );
-    expect(runMutation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        values: {
-          owner: {
-            kind: 'entity-ref',
-            entityName: 'Profile',
-            locator: { id: 'profile-2' },
-          },
-        },
-      }),
-    );
-    expect(runMutation).toHaveBeenCalledWith(expect.objectContaining({ values: { note: null } }));
-  });
+    },
+    {
+      field: { name: 'scheduledAt', type: 'date', nullable: false },
+      value: '2026-08-30T10:00:00.000Z',
+      expected: new Date('2026-08-30T12:45').toISOString(),
+      edit: async () => {
+        fireEvent.change(screen.getByLabelText('Edit scheduledAt'), {
+          target: { value: '2026-08-30T12:45' },
+        });
+      },
+    },
+    {
+      field: { name: 'metadata', type: 'json', nullable: false },
+      value: { rank: 1 },
+      expected: { rank: 2 },
+      edit: async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Edit metadata' }), {
+          target: { value: '{"rank":2}' },
+        });
+      },
+    },
+    {
+      field: {
+        name: 'owner',
+        type: 'reference',
+        nullable: false,
+        reference: { entityName: 'Profile', identity: { name: 'refById', fields: ['id'] } },
+      },
+      value: { kind: 'entity-ref', entityName: 'Profile', locator: { id: 'profile-1' } },
+      expected: { kind: 'entity-ref', entityName: 'Profile', locator: { id: 'profile-2' } },
+      edit: async user => {
+        await user.clear(screen.getByRole('textbox', { name: 'Edit owner' }));
+        await user.type(screen.getByRole('textbox', { name: 'Edit owner' }), 'profile-2');
+      },
+    },
+    {
+      field: { name: 'note', type: 'string', nullable: true },
+      value: 'Keep me',
+      expected: null,
+      edit: async user => {
+        await user.click(screen.getByRole('checkbox', { name: 'Edit note is null' }));
+      },
+    },
+  ] satisfies Array<{
+    field: ExplorerEntityDetail['fields'][number];
+    value: unknown;
+    expected: unknown;
+    edit: (user: ReturnType<typeof userEvent.setup>) => Promise<void>;
+  }>)(
+    'uses the reflected editor for $field.name ($field.type)',
+    async ({ field, value, expected, edit }) => {
+      const user = userEvent.setup();
+      const runMutation = vi.fn().mockResolvedValue({ created: [], updated: [], deleted: [] });
+      const onApplied = vi.fn().mockResolvedValue(undefined);
+      const target = {
+        kind: 'entity-ref',
+        entityName: 'Record',
+        locator: { id: 'record-1' },
+      } as const;
+      render(
+        <ExplorerEditableEntityCell
+          entityName='Record'
+          field={field}
+          href={field.name === 'owner' ? '/profiles/profile-1' : undefined}
+          onApplied={onApplied}
+          runMutation={runMutation}
+          target={target}
+          value={value}
+        >
+          {field.name === 'owner' ? 'Profile · profile-1' : String(value)}
+        </ExplorerEditableEntityCell>,
+      );
+      if (field.name === 'owner') {
+        expect(screen.getByRole('link', { name: 'Profile · profile-1' }).getAttribute('href')).toBe(
+          '/profiles/profile-1',
+        );
+      }
+      if (field.type !== 'boolean')
+        await user.click(screen.getByRole('button', { name: 'Edit ' + field.name }));
+      await edit(user);
+      if (field.type !== 'boolean')
+        await user.click(screen.getByRole('button', { name: 'Save ' + field.name }));
+      await waitFor(() =>
+        expect(runMutation).toHaveBeenCalledWith(
+          expect.objectContaining({ values: { [field.name]: expected } }),
+        ),
+      );
+      expect(runMutation).toHaveBeenCalledOnce();
+      await waitFor(() => expect(onApplied).toHaveBeenCalledOnce());
+    },
+  );
 
   it('validates rich create inputs, closes its popover, and reports mutation failures', async () => {
     const user = userEvent.setup();
