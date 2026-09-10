@@ -11,6 +11,11 @@ import {
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
 import {
+  anonymousExecutionIdentity,
+  executionIdentityCacheKey,
+  type ExecutionIdentity,
+} from '@ontahi/core/runtime/identity';
+import {
   createRuntimeProtocolExchange,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
@@ -38,6 +43,7 @@ import {
   useState,
   useSyncExternalStore,
   type MutableRefObject,
+  type SetStateAction,
 } from 'react';
 
 import { useConsoleReadCapabilities } from './console-read-capabilities.js';
@@ -51,6 +57,8 @@ export type OntahiDevtoolsConsoleOptions = {
   readonly initialDocument?: string;
   readonly initialDialect?: ConsoleDialect;
   readonly limit?: number;
+  /** Host cache identity, not credentials. Update principal/cacheScope on authority changes. */
+  readonly identity?: ExecutionIdentity;
 };
 
 export type ConsolePanelProps = {
@@ -440,10 +448,33 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     document: initialDocument,
     dialect: options.initialDialect ?? 'ts',
   });
-  const [result, setResult] = useState<ConsoleResult>({ status: 'idle' });
+  const identityKey = JSON.stringify(
+    executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
+  );
+  const [storedResult, setStoredResult] = useState<{
+    readonly identityKey: string;
+    readonly result: ConsoleResult;
+  }>();
+  const result: ConsoleResult =
+    storedResult?.identityKey === identityKey ? storedResult.result : { status: 'idle' };
+  const setResult = (update: SetStateAction<ConsoleResult>) =>
+    setStoredResult(previous => ({
+      identityKey,
+      result:
+        typeof update === 'function'
+          ? update(previous?.identityKey === identityKey ? previous.result : { status: 'idle' })
+          : update,
+    }));
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
   const viewRef = useRef<EditorView>();
-  const executingRef = useRef(false);
+  const executingRef = useRef<AbortController>();
+  useEffect(() => {
+    setStoredResult(undefined);
+    return () => {
+      executingRef.current?.abort();
+      executingRef.current = undefined;
+    };
+  }, [identityKey]);
   const exchange = useMemo(
     () =>
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
@@ -456,7 +487,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   const entityName = application.entities.find(
     entity => entity.name === analysis.syntax.expression?.entity?.text,
   )?.name;
-  const discovery = useConsoleReadCapabilities(runtimeTransport, entityName);
+  const discovery = useConsoleReadCapabilities(runtimeTransport, entityName, identityKey);
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
@@ -482,12 +513,17 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       return;
     }
 
-    executingRef.current = true;
+    const controller = new AbortController();
+    executingRef.current = controller;
     const startedAt = performance.now();
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
-    void exchange({ family: 'graph.read', body: { ...request, includeCapabilities: true } })
+    void exchange(
+      { family: 'graph.read', body: { ...request, includeCapabilities: true } },
+      { signal: controller.signal },
+    )
       .then(graphReadResult)
       .then(result => {
+        if (controller.signal.aborted) return;
         const exists = executedAnalysis.syntax.expression?.terminal?.kind === 'exists-member';
         if (exists && result.value !== null && !isRecord(result.value)) {
           throw new Error('Graph Read exists expected an Entity record or null.');
@@ -508,6 +544,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         });
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
         if (error instanceof ConsoleGraphReadError && error.code === 'access_denied')
           discovery.refresh();
         setResult(previous => ({
@@ -522,7 +559,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         }));
       })
       .finally(() => {
-        executingRef.current = false;
+        if (executingRef.current === controller) executingRef.current = undefined;
       });
   };
 

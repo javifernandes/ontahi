@@ -41,7 +41,8 @@ const setPreference = (dialect: 'ts' | 'declarative') => {
   fireEvent.click(screen.getByRole('button', { name: 'Console' }));
 };
 
-describe('shared authoring settings', () => {
+// Match the mounted Devtools integration budget under parallel CI coverage.
+describe('shared authoring settings', { timeout: 15_000 }, () => {
   it('retains the same editor and undo history across Settings and converts without executing', () => {
     const { view, request } = openConsole();
     act(() =>

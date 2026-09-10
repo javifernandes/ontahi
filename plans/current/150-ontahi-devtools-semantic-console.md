@@ -522,13 +522,24 @@ chunk-size warning. Formatting and whitespace checks pass.
 - [x] Discover on reflected Entity selection, even with an incomplete draft; share the result
       between autocomplete, Field/direction dropdowns, and headers.
 - [x] Distinguish loading, empty policy, and error/retry without running data queries.
-- [x] Invalidate on Entity, transport, and graph.read routing changes; ignore late replies.
+- [x] Invalidate on Entity, transport, graph.read routing, and host identity changes; ignore late replies.
 - [x] Reuse finite-value widgets for both dialects, with ordinary source edits, undo/redo, Escape,
       deletion, and an implicit ascending direction that does not mutate source just by rendering.
 
-Metadata is advisory, never authorization of a particular Query. Authentication changes without
-transport notifications can still stale a snapshot; execution remains authoritative and a denial
-refreshes metadata. Data results keep their existing snapshot and Run semantics.
+Metadata is advisory, never authorization of a particular Query. The host now supplies
+`console.identity` using the existing ExecutionIdentity principal/cacheScope contract (wired in
+Todo). Authority changes invalidate metadata, clear previous Console results, and cancel pending
+reads while preserving the editor and undo history. Late metadata/results/errors cannot restore
+the previous authority's state. Hosts must signal tenant/role/policy changes through cacheScope;
+unreported cookie or server policy changes cannot be inferred. Execution remains authoritative
+and a denial refreshes metadata. Within one identity, results retain their snapshot/Run semantics.
+
+PR review follow-up: mounted Console regressions cover principal/cacheScope changes, open
+autocomplete invalidation, updated headers, preserved editor, equivalent-identity rerenders, and
+late data successes/errors (including switching back). All 97 Devtools tests pass with coverage.
+CI's Node 20/24 failures were 5-second UI timeouts; the new Console/Settings/Activity suites now use
+the same 15-second integration budget as the existing mounted Devtools tests, without retries,
+skipped assertions, or a global unit-test timeout increase.
 
 Verification: Core 916, Devtools 91, Express 44, Next.js 51, and Todo 68 tests pass. CodeMirror's
 expanded coverage suite exercises incomplete clauses, implicit direction, source reveal, undo,

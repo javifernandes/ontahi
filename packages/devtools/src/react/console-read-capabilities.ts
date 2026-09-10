@@ -11,16 +11,18 @@ type Discovery = {
   readonly transport: RuntimeTransport<any>;
   readonly entityName: string;
   readonly route?: string;
+  readonly identityKey: string;
   readonly capabilities?: GraphReadCapabilities;
   readonly error?: string;
 };
 
 const subscribeUnconfigured = () => () => undefined;
 
-/** Bound to the current transport and Entity; late replies cannot grant another draft permissions. */
+/** Bound to transport, Entity and identity; late replies cannot restore another authority's metadata. */
 export const useConsoleReadCapabilities = (
   transport: RuntimeTransport<any> | undefined,
   entityName: string | undefined,
+  identityKey = '',
 ) => {
   const routing =
     transport && isConfigurableRuntimeTransport(transport) ? transport.routing : undefined;
@@ -59,7 +61,13 @@ export const useConsoleReadCapabilities = (
         )
           throw new Error('This server did not return Graph Read capabilities.');
         if (active)
-          setDiscovery({ transport, entityName, route, capabilities: response.capabilities });
+          setDiscovery({
+            transport,
+            entityName,
+            route,
+            identityKey,
+            capabilities: response.capabilities,
+          });
       })
       .catch((error: unknown) => {
         if (active)
@@ -67,6 +75,7 @@ export const useConsoleReadCapabilities = (
             transport,
             entityName,
             route,
+            identityKey,
             error: error instanceof Error ? error.message : 'Could not load ordering permissions.',
           });
       });
@@ -74,13 +83,14 @@ export const useConsoleReadCapabilities = (
       active = false;
       controller.abort();
     };
-  }, [transport, entityName, route, revision]);
+  }, [transport, entityName, route, identityKey, revision]);
 
   const current =
     discovery &&
     discovery.transport === transport &&
     discovery.entityName === entityName &&
-    discovery.route === route
+    discovery.route === route &&
+    discovery.identityKey === identityKey
       ? discovery
       : undefined;
   const capabilities = current?.capabilities;

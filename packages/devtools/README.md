@@ -126,9 +126,17 @@ headers remain focusable but inactive, with a tooltip explaining the policy rest
 or malformed capabilities preserve readable results but disable ordering with a refresh explanation.
 Replacing Runtime Transport or changing its graph.read route automatically refreshes metadata;
 old results still require a Run on that transport before table edits. An `access_denied` response
-also refreshes capabilities. Capabilities are not a permanent grant: authentication/policy changes
-without a transport notification may make them stale. Receiver policy remains authoritative on every request, and rejections are shown
-without replacing the successful result data.
+also refreshes capabilities. Pass `console.identity` the same `ExecutionIdentity` used by the
+application's Graph provider. Changing its principal or `cacheScope` immediately hides prior
+results, cancels pending reads, and refreshes ordering metadata, without losing the draft or undo
+history. Use `cacheScope` for tenant/role/policy revisions that do not change the principal.
+Equivalent identity values do not trigger discovery. This is local cache invalidation, not a
+credential or a client-supplied permission grant; it is never added to protocol requests.
+When omitted, identity defaults to anonymous. Hosts must propagate authority changes, including
+login/logout; unreported cookie or server policy changes cannot be detected automatically.
+Receiver policy remains authoritative on every request. Within an unchanged identity, rejections
+are shown without replacing the successful result data. Activity remains an explicit diagnostic
+history; this invalidation does not erase its captured exchanges.
 The many-result toolbar's numeric
 Limit control accepts non-negative safe integers, including zero. Apply or Enter edits only the
 existing limit literal (or inserts `.limit(...)`) and runs the current same-Entity draft, preserving

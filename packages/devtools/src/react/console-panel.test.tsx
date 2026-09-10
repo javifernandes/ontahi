@@ -7,6 +7,7 @@ import {
   entity,
   field,
 } from '@ontahi/core/data-graph';
+import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
   createRuntimeProtocolResponse,
   type RuntimeProtocolRequestEnvelope,
@@ -33,7 +34,10 @@ afterAll(() => {
 });
 afterEach(cleanup);
 
-describe('Console dialect switching', () => {
+// Match the mounted Devtools integration budget under parallel CI coverage.
+const uiTestOptions = { timeout: 15_000 };
+
+describe('Console dialect switching', uiTestOptions, () => {
   it('converts without executing and restores exact source plus parser on undo/redo', async () => {
     const source = '  Tag.where( active = true ).limit(2).many()  ';
     const { view, request, result } = mountConsole(source);
@@ -193,10 +197,11 @@ const mountConsole = (
     (envelope.body as { kind?: string }).kind === 'graph-read-capabilities'
       ? metadata(envelope)
       : dataRequest(envelope);
+  const transport = { request: route(request) };
   const rendered = render(
     <ConsolePanel
       options={{ entities: [Tag, Other], initialDocument: source }}
-      runtimeTransport={{ request: route(request) }}
+      runtimeTransport={transport}
     />,
   );
   const editor = screen.getByRole('textbox', { name: 'Ontahí Console expression' });
@@ -236,11 +241,18 @@ const mountConsole = (
     result,
     visibleNames,
     switchTransport,
+    setIdentity: (identity: ExecutionIdentity) =>
+      rendered.rerender(
+        <ConsolePanel
+          options={{ entities: [Tag, Other], initialDocument: source, identity }}
+          runtimeTransport={transport}
+        />,
+      ),
     applyLimit,
   };
 };
 
-describe('Console exists reads', () => {
+describe('Console exists reads', uiTestOptions, () => {
   it.each([
     ['Tag.exists()', true],
     ['Tag.where(active = true).exists()', true],
@@ -315,7 +327,7 @@ describe('Console exists reads', () => {
   );
 });
 
-describe('Console bidirectional Query limit', () => {
+describe('Console bidirectional Query limit', uiTestOptions, () => {
   it('keeps result chrome in one toolbar without repeating the query or success status', async () => {
     const { result } = mountConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -491,7 +503,84 @@ describe('Console bidirectional Query limit', () => {
   });
 });
 
-describe('Console bidirectional Query ordering', () => {
+describe('Console bidirectional Query ordering', uiTestOptions, () => {
+  it.each([
+    { principal: { kind: 'user' as const, subject: 'alice' } },
+    { principal: null, cacheScope: { tenant: 'other', policyRevision: 2 } },
+  ])(
+    'drops previous authority results and ordering choices without discarding the draft: %j',
+    async identity => {
+      const { view, request, metadata, result, setIdentity } = mountConsole(
+        'Tag.orderBy(name).many()',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await result.findByRole('table');
+      expect(
+        result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled'),
+      ).toBe('false');
+      let reply!: () => void;
+      metadata.mockImplementationOnce(
+        envelope =>
+          new Promise(resolve => {
+            reply = () =>
+              resolve(
+                createRuntimeProtocolResponse(envelope, {
+                  kind: 'graph-read-capabilities-result',
+                  entityName: 'Tag',
+                  capabilities: { orderBy: ['id'] },
+                }),
+              );
+          }),
+      );
+      setIdentity(identity);
+      expect(result.queryByRole('table')).toBeNull();
+      expect(screen.queryByRole('combobox', { name: 'Order field for Tag' })).toBeNull();
+      expect(screen.getByText('Loading ordering permissions…')).toBeTruthy();
+      expect(EditorView.findFromDOM(screen.getByRole('textbox'))).toBe(view);
+      expect(view.state.doc.toString()).toBe('Tag.orderBy(name).many()');
+      await act(async () => reply());
+      expect(request).toHaveBeenCalledOnce();
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await result.findByRole('table');
+      expect(
+        result.getByRole('button', { name: 'Sort by name' }).getAttribute('aria-disabled'),
+      ).toBe('true');
+      expect(result.getByRole('button', { name: 'Sort by id' }).getAttribute('aria-disabled')).toBe(
+        'false',
+      );
+      const calls = metadata.mock.calls.length;
+      setIdentity({ ...identity });
+      expect(metadata).toHaveBeenCalledTimes(calls);
+      expect(result.getByRole('table')).toBeTruthy();
+    },
+  );
+
+  it.each(['success', 'error'])(
+    'ignores a late data %s after switching authority, including switching back',
+    async outcome => {
+      const { request, respond, result, setIdentity } = mountConsole();
+      let reply!: () => void;
+      request.mockImplementationOnce(
+        envelope =>
+          new Promise((resolve, reject) => {
+            reply = () =>
+              outcome === 'success'
+                ? resolve(respond(envelope))
+                : reject(new Error('Old session error'));
+          }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      setIdentity({ principal: { kind: 'user', subject: 'alice' } });
+      setIdentity({ principal: null });
+      await act(async () => reply());
+      expect(result.queryByRole('table')).toBeNull();
+      expect(result.queryByRole('alert')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      await result.findByRole('table');
+      expect(request).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('loads ordering permissions before the first query', async () => {
     const { request } = mountConsole('Tag.orderBy(');
     expect(screen.getByText('Loading ordering permissions…')).toBeTruthy();
@@ -580,10 +669,11 @@ describe('Console bidirectional Query ordering', () => {
     expect(request.mock.calls[0]![0].body).toHaveProperty('includeCapabilities', true);
   });
 
-  it.each(['transport', 'entity'] as const)(
+  it.each(['transport', 'entity', 'authority'] as const)(
     'drops open ordering suggestions when the %s changes',
     async change => {
-      const { view, replaceSource, result, switchTransport, metadata } = mountConsole();
+      const { view, replaceSource, result, switchTransport, setIdentity, metadata } =
+        mountConsole();
       fireEvent.click(screen.getByRole('button', { name: 'Run' }));
       await result.findByRole('table');
       const source = 'Tag.orderBy().many()';
@@ -597,7 +687,7 @@ describe('Console bidirectional Query ordering', () => {
       expect(completions.getAllByRole('option').map(option => option.textContent)).toEqual([
         'namestring',
       ]);
-      if (change === 'transport') {
+      if (change !== 'entity') {
         metadata.mockImplementationOnce(async envelope =>
           createRuntimeProtocolResponse(envelope, {
             kind: 'graph-read-capabilities-result',
@@ -605,11 +695,12 @@ describe('Console bidirectional Query ordering', () => {
             capabilities: { orderBy: [] },
           }),
         );
-        switchTransport();
+        if (change === 'transport') switchTransport();
+        else setIdentity({ principal: null, cacheScope: 'restricted' });
       } else act(() => view.dispatch({ changes: { from: 0, to: 3, insert: 'Other' } }));
       await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
       expect(view.state.doc.toString()).toBe(
-        change === 'transport' ? source : 'Other.orderBy().many()',
+        change === 'entity' ? 'Other.orderBy().many()' : source,
       );
     },
   );

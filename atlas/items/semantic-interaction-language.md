@@ -127,9 +127,11 @@ ordering suggestions and table headers, without changing intrinsic schema validi
 discovers ordering metadata through a dedicated `graph-read-capabilities` request in the graph.read
 family, independently of executing a Query. The receiver validates trusted authority scope and
 derives allowed Fields from the ordinary policy; it does not materialize or count rows. This same
-Entity/transport/routing-bound snapshot feeds source-backed ordering Field and direction dropdowns
+Entity/transport/routing/ExecutionIdentity-bound snapshot feeds source-backed ordering Field and direction dropdowns
 in both dialects. Loading or unavailable metadata never implies a permission grant, and late
-responses cannot populate another Entity's editor. Controls reuse finite-value projection behavior,
+responses cannot populate another Entity or authority's editor. Hosts signal principal or
+cacheScope changes; Console clears previous results and cancels reads without discarding the draft.
+This local identity is not sent as a permission grant. Controls reuse finite-value projection behavior,
 preserving source, undo, Escape, and manual authoring. Every execution still reauthorizes.
 
 Authoring dialect preference is browser-origin UI state, separate from canonical requests and

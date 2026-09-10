@@ -36,6 +36,24 @@ const pendingTransport = () => {
 };
 
 describe('Console capabilities discovery', () => {
+  it('invalidates authority metadata and ignores replies from a previous authority on the same transport', async () => {
+    const { transport, reply } = pendingTransport();
+    const { result, rerender } = renderHook(
+      ({ identityKey }) => useConsoleReadCapabilities(transport, 'Tag', identityKey),
+      { initialProps: { identityKey: 'alice' } },
+    );
+    await act(async () => reply(0, 'Tag', ['name']));
+    expect(result.current.orderableFields('Tag')).toEqual(['name']);
+    act(() => result.current.refresh());
+    rerender({ identityKey: 'bob' });
+    expect(result.current.orderableFields('Tag')).toEqual([]);
+    expect(result.current.loading).toBe(true);
+    expect(transport.request).toHaveBeenCalledTimes(3);
+    await act(async () => reply(2, 'Tag', ['id']));
+    await act(async () => reply(1, 'Tag', ['name']));
+    expect(result.current.orderableFields('Tag')).toEqual(['id']);
+  });
+
   it('refreshes metadata when graph.read routing changes inside the same transport', async () => {
     const first = pendingTransport();
     const second = pendingTransport();

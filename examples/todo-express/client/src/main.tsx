@@ -109,7 +109,7 @@ const TodoClient = () => {
       )}
       {diagnostics ? (
         <OntahiDevtools
-          console={devtoolsConsole}
+          console={{ ...devtoolsConsole, identity }}
           diagnostics={diagnostics}
           runtimeTransport={runtimeTransport}
         />

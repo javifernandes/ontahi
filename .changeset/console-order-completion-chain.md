@@ -11,5 +11,6 @@ without another keystroke. Discover receiver-owned ordering permissions through 
 graph.read request before executing data, with loading/error feedback and retry. Share that policy
 snapshot between completion, source-backed field/direction dropdowns in both dialects, and result
 headers. Preserve keyboard editing and undo, and invalidate stale metadata when Entity, transport,
-or graph.read routing changes. Support discovery through Runtime Protocol and standalone Express
+graph.read routing, or host-provided ExecutionIdentity changes. Identity changes clear prior Console
+results and cancel pending reads without discarding the draft or undo history. Support discovery through Runtime Protocol and standalone Express
 and Next.js Graph Read handlers; ordinary reads and observations retain their existing contracts.
