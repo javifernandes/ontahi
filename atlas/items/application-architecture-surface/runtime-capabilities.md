@@ -25,6 +25,7 @@ relatedPlans:
   - ontahi://plans/138a-client-entity-mutation-authoring
   - ontahi://plans/138b-conditional-exact-entity-mutations
   - ontahi://plans/146-ontahi-runtime-protocol
+  - ontahi://plans/151-mysql-data-graph-storage
 migratedFrom: bookops://atlas/application-architecture-surface/runtime-capabilities
 sourceCommit: 67713696
 ---
@@ -61,6 +62,16 @@ the complete execution port. It owns live seeded state, plain and relation-root 
 commands, and reflected Explorer data. Supabase provides external durability, while
 `@ontahi/postgres` now provides provider-executed SQL, host-owned physical mappings, graph runtime
 conformance, and reflected Entity data over direct PostgreSQL connections.
+
+`@ontahi/sql` now shares conventional mappings, parameterized read compilation, derived-field
+compilation, and read materialization between PostgreSQL and the `@ontahi/mysql` adapter.
+It owns no connections or mutation transaction strategy. MySQL provides CRUD, exact Entity
+Mutation results, transaction-scoped reads and writes, command savepoints, and reflection against
+MySQL 8.4/InnoDB. It also implements explicit-target upsert, primary-key changes, and direct,
+many-to-many, and ordered Relationship Commands. Competing-connection tests prove count limits,
+conditional replacement, duplicate-edge handling, and ordered moves. Todo's two-process integration
+proves persistence through a host restart. Shared reads do not imply interchangeable physical
+schemas or driver type representations.
 
 Entity Mutation Command execution is a focused capability beside generic provider Commands and
 Relationship Commands. In-memory, PostgreSQL, and Supabase runtimes implement exact

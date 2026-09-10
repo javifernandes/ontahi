@@ -1,6 +1,6 @@
 # Ontahi Todo Express Example
 
-This is a small Ontahi application with interchangeable in-memory and direct PostgreSQL graph
+This is a small Ontahi application with interchangeable in-memory, direct PostgreSQL, and MySQL graph
 storage. It declares lists, todos, tags, and a direct many-to-many Relation between todos and tags; executes
 caller-authored browser Queries through the default-deny Express graph-read bridge; transports
 Selections into write Operations; includes an in-process durable Operation and a host-supplied
@@ -113,7 +113,7 @@ adapter with the host-owned migration:
 
 Each in-memory process start creates the same small Inbox/Later workspace with todos and tags, so
 the Todo UI and Explorer are immediately testable after a restart. Mutations remain process-local
-and the deterministic seed is recreated on the next start. PostgreSQL storage is not seeded by
+and the deterministic seed is recreated on the next start. PostgreSQL and MySQL storage are not seeded by
 this path.
 
 ```sh
@@ -125,6 +125,32 @@ The Compose service persists data in a named volume. Use `db:stop` to stop it or
 recreate the database and reapply every file in `migrations/`. PostgreSQL only runs these init
 scripts when creating the volume, so reset an existing example database after pulling a new
 migration.
+
+To use MySQL 8.4/InnoDB instead, build the packages and browser client once, then start the host:
+
+```sh
+pnpm build:packages
+pnpm --filter @ontahi/example-todo-express build:client
+export TODO_MYSQL_PASSWORD="$(openssl rand -hex 24)"
+pnpm --filter @ontahi/example-todo-express db:mysql:start
+pnpm --filter @ontahi/example-todo-express dev:mysql
+```
+
+`TODO_STORAGE=mysql` selects the adapter. The local host uses `TODO_MYSQL_PASSWORD` on port 33069;
+`DATABASE_URL` can instead supply a complete connection URI. Keep the same password when restarting
+a database with an existing volume; generate a new one only for a new database. The MySQL Compose profile owns a separate named volume and initializes it
+from `migrations-mysql/`. Those SQL files own tables, foreign keys, edge uniqueness, and a trigger
+that assigns each new item a position while locking its list. Ontahi owns subsequent ordered moves.
+Changes to init SQL apply only when creating a fresh volume. Stop MySQL with
+`docker compose --profile mysql stop mysql` from this example directory; stopping retains its data.
+
+The integration test requires Docker running and generates a fresh random database password per run. It starts and removes its own isolated MySQL container,
+without using the Compose volume, and starts two separate Express host processes to
+verify that lists, items, tags, and order survive the first host's shutdown:
+
+```sh
+pnpm --filter @ontahi/example-todo-express exec vitest run src/mysql-storage.integration.test.ts
+```
 
 The browser client needs only the common Runtime Protocol WebSocket endpoint:
 

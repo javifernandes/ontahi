@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@ontahi/core": "workspace:*",
+    "@ontahi/sql": "workspace:*",
     "@types/pg": "^8.15.5",
     "effect": "^3.21.0",
     "pg": "^8.16.3"

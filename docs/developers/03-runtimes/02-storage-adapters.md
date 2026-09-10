@@ -105,3 +105,18 @@ RPC execution; Ontahí does not translate it into a race-prone PostgREST read fo
 
 The invariant is the useful part: changing where state lives must not redefine the Selection,
 Query, Command, or operation that acts on it.
+
+## MySQL support
+
+`@ontahi/mysql` provides `createMysqlDataGraphStorage({ pool })` for a `mysql2/promise` pool.
+It shares mappings and the SQL read interpreter with PostgreSQL through `@ontahi/sql`.
+The host still owns schema and migrations; mutations require InnoDB and a mapped primary key.
+
+The adapter executes reads and derived fields, CRUD with exact returned records, explicit-target
+upsert, Entity Mutation Commands, transactions, and reflection. Direct, many-to-many, and ordered
+Relationship Commands support exact deltas, preconditions, and participant constraints. Direct
+relation counts serialize additions through a destination lock; ordered moves lock the owner.
+Each command has a savepoint so a caught failure cannot leave partial writes inside a larger
+transaction. The Todo example runs against MySQL and proves persistence across host restarts.
+See the [MySQL package contract](../../../packages/mysql/README.md) for physical schema requirements
+and limitations, including driver type representations and separate MariaDB conformance.

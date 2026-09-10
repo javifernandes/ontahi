@@ -1,6 +1,6 @@
 # Releasing Ontahi
 
-Ontahi publishes all thirteen `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
+Ontahi publishes all fifteen `@ontahi/*` packages at one exact lockstep prerelease version. Each feature
 records its consumer-visible change; merging the generated release pull request publishes that
 immutable version.
 
@@ -33,7 +33,7 @@ A pull request that changes a package's behavior or public contract includes a c
 pnpm changeset
 ```
 
-Select the directly affected packages and describe the consumer-visible result. Ontahi's thirteen public
+Select the directly affected packages and describe the consumer-visible result. Ontahi's fifteen public
 packages are a fixed group: the highest requested release type determines one shared version for
 the complete set. Documentation, CI, examples, and repository-only tooling normally need no
 changeset.
@@ -90,8 +90,8 @@ The trust can be inspected or restored with npm CLI 11.15 or newer and an intera
 2FA-authenticated npm session:
 
 ```sh
-for package in codegen core devtools explorer-react language language-codemirror opentelemetry postgres react \
-  runtime-express runtime-nextjs runtime-vercel-workflows supabase; do
+for package in codegen core devtools explorer-react language language-codemirror mysql opentelemetry postgres react \
+  runtime-express runtime-nextjs runtime-vercel-workflows sql supabase; do
   npm trust github "@ontahi/$package" \
     --file release.yml \
     --repo javifernandes/ontahi \
@@ -119,7 +119,7 @@ stable-release change exits that train.
 
 ## Failure and rollback
 
-npm releases are immutable and the thirteen publishes cannot be transactional. Before publishing
+npm releases are immutable and the fifteen publishes cannot be transactional. Before publishing
 anything, the script checks every package version. If a network failure leaves a partial release,
 rerun the same workflow: identical existing tarballs are skipped and the missing packages continue
 in dependency order. A version that exists with different contents stops the release.

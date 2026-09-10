@@ -34,6 +34,7 @@ const keepArtifacts =
 const artifactsPathFile = process.env.ONTAHI_ARTIFACT_PATH_FILE;
 
 const supportDependencies = {
+  effect: '^3.21.0',
   '@opentelemetry/api': '^1.9.1',
   '@tanstack/react-query': '^5.51.0',
   '@types/express': '^4.17.21',
@@ -293,6 +294,7 @@ const verifyArtifacts = () => {
       copyFixture: true,
     });
     run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], { cwd: completeConsumer });
+    run('node', ['src/mysql-runtime.mjs'], { cwd: completeConsumer });
 
     process.stdout.write(
       'Ontahi package artifacts passed clean-room install, type, and runtime checks.\n',
