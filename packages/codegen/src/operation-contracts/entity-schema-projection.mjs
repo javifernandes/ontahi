@@ -48,6 +48,47 @@ const resolveProjectionValueNode = (node, context, visited = new Set()) => {
     : { expression, context };
 };
 
+// Only portable data and Core schema constructors may cross into generated browser modules.
+export const projectSelectionFactories = (node, context) => {
+  const { expression } = resolveProjectionValueNode(node, context);
+  const portable = node => {
+    const value = unwrapExpression(node);
+    if (ts.isObjectLiteralExpression(value))
+      return value.properties.every(
+        property =>
+          ts.isPropertyAssignment(property) &&
+          (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+          portable(property.initializer),
+      );
+    if (ts.isArrayLiteralExpression(value)) return value.elements.every(portable);
+    if (ts.isCallExpression(value))
+      return (
+        ts.isPropertyAccessExpression(value.expression) &&
+        ts.isIdentifier(value.expression.expression) &&
+        (value.expression.expression.text === 'field' ||
+          (value.expression.expression.text === 'graphSchema' &&
+            value.expression.name.text === 'object')) &&
+        value.arguments.every(portable)
+      );
+    if (ts.isPrefixUnaryExpression(value))
+      return value.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(value.operand);
+    return (
+      ts.isStringLiteral(value) ||
+      ts.isNumericLiteral(value) ||
+      [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(
+        value.kind,
+      )
+    );
+  };
+  return ts.isObjectLiteralExpression(expression) && portable(expression)
+    ? { selectionFactoriesText: expression.getText() }
+    : {
+        diagnostics: [
+          'Selection factories must use portable object data and field/graphSchema constructors; opaque expressions cannot be emitted to the browser.',
+        ],
+      };
+};
+
 const unwrapReferenceFieldCall = node => {
   const expression = unwrapExpression(node);
   if (

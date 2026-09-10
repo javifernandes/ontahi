@@ -2,6 +2,7 @@ import {
   field,
   graphSchema,
   reflectSchemaRelations,
+  reflectSelectionFactories,
   value,
   type AnyEntityDefinition,
   type ReflectedSchemaRelation,
@@ -22,6 +23,7 @@ import type {
 import { describeExplorerEntityDisplay } from './entity-display.js';
 import {
   describeRuntimeSchema,
+  describeReflectedSchema,
   undeclaredInputSchema,
   undeclaredResultSchema,
 } from './schema-descriptor.js';
@@ -607,9 +609,20 @@ export const getExplorerEntityDetail = (
   const reflectedRelations = reflectSchemaRelations(
     input.entities as readonly AnyEntityDefinition[],
   ).filter(relation => relation.subjectEntityName === shape.name);
+  const factories = reflectSelectionFactories(shape);
   const entityDetail = {
     ...describeExplorerEntity(entity, summaries.get(shape.name ?? ''), reflectedRelations.length),
     identity: getEntityIdentity(shape),
+    ...(factories
+      ? {
+          selectionFactories: Object.fromEntries(
+            Object.entries(factories).map(([name, factory]) => [
+              name,
+              { ...factory, inputSchema: describeReflectedSchema(factory.input) },
+            ]),
+          ),
+        }
+      : {}),
     entityRole: getEntityRole(shape),
     fields: Object.entries(shape.fields ?? {}).map(([name, field]) => {
       const fieldShape = field as ExplorerEntityFieldLike;

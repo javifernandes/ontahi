@@ -6,6 +6,11 @@ The canonical [Reflection and Explorer](../../docs/developers/04-reflection-and-
 chapter explains semantic Ref links, read-only Relation topology, Query-backed related instances,
 and the authority boundary. This README is the package-level reference.
 
+The Entity Structure panel lists discovered Selection factories with version, input schema,
+optional shorthand, Selection output entity, and an expandable pure template. Input schemas reuse
+the existing field/JSON viewer. This is contract inspection, not a factory execution form or an
+authorization grant. In Todo, open `Tag` → Structure to inspect `identity` and `named`.
+
 The browser package exports the Explorer shell and focused components:
 
 ```tsx

@@ -6,6 +6,8 @@ import {
   createInMemoryDataGraphRuntime,
   entity,
   field,
+  graphSchema,
+  withSelectionFactories,
 } from '@ontahi/core/data-graph';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
@@ -38,6 +40,36 @@ afterEach(cleanup);
 const uiTestOptions = { timeout: 15_000 };
 
 describe('Console dialect switching', uiTestOptions, () => {
+  it('runs intersected factories and retains them through dialect and table ordering edits', async () => {
+    const { view, request, result } = mountConsole(
+      'Tag.by({ named: "Zulu" }).by({ identity: "t-z" }).where(active = true).many()',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    expect(result.getByText('Zulu')).toBeDefined();
+    expect(result.queryByText('Alpha')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Declarative' }));
+    expect(view.state.doc.toString()).toBe(
+      'Tag by named "Zulu" and by identity "t-z" where active = true many',
+    );
+    expect(request).toHaveBeenCalledOnce();
+    fireEvent.click(result.getByRole('button', { name: /Sort by name/ }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(view.state.doc.toString()).toContain(
+      'by named "Zulu" and by identity "t-z" where active = true order by name',
+    );
+    expect(request.mock.calls[0]![0].body).toMatchObject({
+      selection: Tag.by({ named: 'Zulu' })
+        .and(Tag.by({ identity: 't-z' }))
+        .and(t => t.active.eq(true))
+        .toAst(),
+    });
+  });
+  it('executes disjoint factory selections as an intersection, not an override or union', async () => {
+    const { result } = mountConsole('Tag.by({ named: "Zulu" }).by({ identity: "t-a" }).count()');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await result.findByText('0')).toBeDefined();
+  });
   it('converts without executing and restores exact source plus parser on undo/redo', async () => {
     const source = '  Tag.where( active = true ).limit(2).many()  ';
     const { view, request, result } = mountConsole(source);
@@ -142,7 +174,23 @@ describe('Console dialect switching', uiTestOptions, () => {
   });
 });
 
-const Tag = entity('Tag', { id: field.id(), name: field.string(), active: field.boolean() });
+const Tag = withSelectionFactories(
+  entity('Tag', { id: field.id(), name: field.string(), active: field.boolean() }),
+  {
+    identity: {
+      version: 1,
+      input: graphSchema.object({ id: field.id() }),
+      scalarInput: 'id',
+      template: { kind: 'identity', bindings: { id: 'id' } },
+    },
+    named: {
+      version: 1,
+      input: graphSchema.object({ text: field.string() }),
+      scalarInput: 'text',
+      template: { kind: 'predicate', fieldName: 'name', operator: 'eq', input: 'text' },
+    },
+  },
+);
 const Other = entity('Other', { id: field.id(), name: field.string() });
 const rows = [
   { id: 't-z', name: 'Zulu', active: true },
@@ -165,7 +213,7 @@ const mountConsole = (
         maxLimit: 50,
         scope: 'all',
         fields: {
-          id: { select: true },
+          id: { select: true, filter: ['eq'] },
           name: { select: true, filter: ['eq'], order: true },
           active: { select: true, filter: ['eq'] },
         },

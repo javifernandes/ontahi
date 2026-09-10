@@ -4,6 +4,7 @@
 
 DeclarativeGraphReadExpression {
   EntityName
+  (DeclarativeFactoryClause DeclarativeFactoryIntersection*)?
   DeclarativeWhereClause?
   DeclarativeOrderByClause?
   DeclarativeLimitClause?
@@ -17,11 +18,20 @@ DeclarativeLimitClause { Limit NumberLiteral }
 ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
   EntityName
+  FactoryClause*
   WhereClause?
   OrderByClause?
   LimitClause?
   Dot ReadTerminal OpenParen CloseParen
 }
+FactoryClause { Dot By OpenParen OpenBrace FactoryName Colon FactoryArgument CloseBrace CloseParen }
+DeclarativeFactoryClause { By FactoryName FactoryArgument }
+DeclarativeFactoryIntersection { And By FactoryName FactoryArgument }
+FactoryName { Identifier | StringLiteral }
+FactoryArgument { ScalarLiteral | Null | FactoryObject }
+FactoryObject { OpenBrace (FactoryProperty (Comma FactoryProperty)*)? CloseBrace }
+FactoryProperty { InputName Colon (ScalarLiteral | Null) }
+InputName { Identifier | StringLiteral }
 WhereClause { Dot Where OpenParen OrExpression CloseParen }
 OrderByClause { Dot OrderBy OpenParen FieldName (Comma OrderDirection)? CloseParen }
 OrderDirection { Identifier }
@@ -81,6 +91,9 @@ OpenBracket { "[" }
 CloseBracket { "]" }
 Comma { "," }
 Dot { "." }
+OpenBrace { "{" }
+CloseBrace { "}" }
+Colon { ":" }
 
 @tokens {
   Identifier { $[A-Za-z_] $[A-Za-z0-9_]* }

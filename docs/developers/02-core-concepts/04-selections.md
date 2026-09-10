@@ -60,6 +60,35 @@ When `TodoItem` comes from a configured runtime, the Selection also carries that
 in memory. The binding is deliberately absent from `toJSON()`: the value stays portable even though
 the local object knows how this application executes it.
 
+## Experimental parameterized factories
+
+The data-first `withSelectionFactories` Core helper adds a typed `by({ name: inputs })` surface
+alongside existing locators. A declared factory expands explicit inputs into an ordinary Selection,
+without reading records. For example, `Customer.by({ archivedSince: { date } })` can bind a `date`
+input to an `archivedAt >= date` predicate even though `date` is not an Entity Field.
+
+The initial declaration, reflection, and compatibility contract is documented in the
+[Core factory example](../../../packages/core/README.md#experimental-named-selection-factories).
+It supports pure scalar-predicate and canonical-identity templates, not arbitrary callbacks or
+external resolution. Automatic runtime binding remains a follow-up.
+`by` returns an unbound Selection that can cross an Operation input
+boundary or be consumed by an explicit runtime.
+
+Graph discovery exposes each factory's strict input schema and Selection output entity, without a
+cardinality promise. Codegen preserves portable declarations in typed browser facades. Explorer's
+Entity Structure panel shows their schemas and templates; dynamic invocation forms remain separate.
+The Console accepts factories plus optional `where` in either dialect, for example
+`Tag.by({ named: "Work" }).many()` or `Tag by named "Work" many`. Factory and input completion
+use the reflected schema; dialect switching and table modifiers preserve the authored invocation.
+Additional Console factories intersect membership: `Tag by named "Work" and by identity "tag-work" many`,
+or `Tag.by({ named: "Work" }).by({ identity: "tag-work" }).many()` in the TS-like dialect. In the Core
+SDK, compose the resulting Selections with `.and(...)`; chained `.by(...)` belongs to Console syntax.
+
+Factories do not assert uniqueness. The receiving input's `one`/`many` contract controls cardinality;
+identity references, existence, and uniqueness of current authorized membership remain distinct.
+Consumers can compose constraints without modifying the caller's Selection, then build a Command
+without a preliminary read. That capability does not widen the current exact remote Command API.
+
 ## Identities can describe membership too
 
 An operation input declared as `self.many()` accepts a predicate-defined Selection, explicit

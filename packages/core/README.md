@@ -16,6 +16,84 @@ Current docs:
 5. [Application Data Access](../../docs/application-data-access.md) - end-to-end Query, View,
    policy, React, and Operation authoring across the public packages
 
+## Experimental named Selection factories
+
+`withSelectionFactories` adds `by` to an Entity definition and to `defineClientEntity(definition)`.
+Apply it after declaring the Entity's identity and locators. This first data-first slice coexists
+with legacy `refByX` methods; it does not deprecate them.
+
+```ts
+import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+
+const Customer = withSelectionFactories(
+  entity('Customer', { id: field.id(), archivedAt: field.datetime() }),
+  {
+    identity: {
+      version: 1,
+      input: graphSchema.object({ id: field.id() }),
+      scalarInput: 'id',
+      template: { kind: 'identity', bindings: { id: 'id' } },
+    },
+    archivedSince: {
+      version: 1,
+      input: graphSchema.object({ date: field.datetime() }),
+      template: { kind: 'predicate', fieldName: 'archivedAt', operator: 'gte', input: 'date' },
+    },
+  },
+);
+
+const explicitMember = Customer.by({ identity: 'c1' });
+const archived = Customer.by({ archivedSince: { date: '2026-06-01T00:00:00Z' } });
+const portable = archived.toAst(); // No fetch; ordinary Selection AST.
+```
+
+Factory names select meanings, not Entity Fields: `date` is an input, not a Customer Field.
+Exactly one named alternative is accepted per call; compose resulting Selections with `and`/`or`.
+Shorthand is opt-in and must name the sole input. The bounded template forms are a scalar predicate
+(`eq`, `lt`, `lte`, `gt`, `gte`) or explicit canonical identity (including composite bindings).
+Inputs are required scalar Fields, optionally nullable; optional/nested inputs, callbacks, hidden
+time, and external I/O are not supported. Datetime uses the existing JSON-string scalar.
+
+`Customer.selectionFactories` exposes copied, serializable schema/template descriptors, also
+available in `application.graph.describe().entities[].selectionFactories`. Each descriptor includes
+strict `input`, `output: { kind: 'selection', entityName }`, version, template and optional shorthand.
+Output describes membership, not fetched records or guaranteed cardinality. The receiver's ordinary
+authorization still applies; discovery is not permission to execute a factory's expanded predicate.
+Versions are positive declaration versions owned by the application; no server registry is implied.
+`selection.factoryInvocation` retains normalized original input/name/version as authoring metadata.
+`toAst`/`toJSON` exclude it; composition and bridge hydration return ordinary Selections and do not
+pretend the original invocation describes the entire resulting expression. Source dialects must
+retain authored invocations themselves rather than reverse-inferring them from expanded predicates.
+
+Construction does not prove existence or freeze membership. Factories assign no `one`/`many`
+cardinality: Operation input schemas and other consumers impose it. An identity template preserves
+`references` intent without calling a legacy locator resolver. Expanded predicates and identity
+values are validated against the target Entity; the receiver still applies its ordinary policy.
+`by` results are unbound Selection values: pass them into an Operation or an explicit runtime/client
+read rather than assuming a runtime was attached. Generic in-process Commands can consume composed
+Selections, but exact remote update/delete contracts still require their existing Ref targets.
+
+No factory names are auto-generated or reserved for identity; `identity` above is explicitly
+declared. A pre-existing legacy locator named `by` conflicts with the new facade method and is
+rejected rather than silently overridden. Register the factories once per Entity.
+
+Codegen supports exported `withSelectionFactories(entity({ ... }), { ... })` declarations, including
+a local Entity variable and a named object-literal factory map. The generated browser definition and
+client facade retain typed `by` and the same descriptors. Factory data must contain literals and
+Core `field`/`graphSchema.object` constructors; opaque expressions produce diagnostics, not server
+imports. Explorer's Entity Structure panel displays these contracts using its existing schema UI.
+Console supports intersected `by` invocations plus an optional `where` predicate in both dialects, with
+schema-driven completion. For example, `Tag.by({ named: "Work" }).many()` and
+`Tag by named "Work" many` preserve their authored invocation when converting dialect or editing
+table ordering/limits. Additional Console factories use `.by(...).by(...)` in TS-like syntax or
+`by ... and by ...` in declarative; the Core SDK continues to compose Selection results with
+`.and(...)`. Dynamic Explorer invocation forms remain a follow-up.
+
+`expandSelectionFactory(descriptor, argument)` is the shared pure expansion boundary for tools
+holding only reflected JSON. It returns validated, normalized `input` and a Selection `expression`;
+it neither reads records nor grants authority. As with any client-authored Selection, the receiving
+runtime must validate the expression against the actual Entity and apply its ordinary policies.
+
 ## Application composition
 
 `ontahi(...)` is the application composition root for new applications. It binds storage, optional

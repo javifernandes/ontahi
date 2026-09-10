@@ -1,4 +1,9 @@
-import { createInMemoryDataGraphStorage, field, graphSchema } from '@ontahi/core/data-graph';
+import {
+  createInMemoryDataGraphStorage,
+  field,
+  graphSchema,
+  withSelectionFactories,
+} from '@ontahi/core/data-graph';
 import { entity, ontahi } from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import express from 'express';
@@ -25,6 +30,15 @@ const TodoList = entity({
   }),
 });
 
+const TodoListSelections = withSelectionFactories(TodoList, {
+  identity: {
+    version: 1,
+    input: graphSchema.object({ id: field.id() }),
+    scalarInput: 'id',
+    template: { kind: 'identity', bindings: { id: 'id' } },
+  },
+});
+
 const dataset = {
   TodoList: [{ id: 'list-research', name: 'Research backlog' }],
 };
@@ -35,11 +49,17 @@ const application = ontahi({
 
 const listed = await TodoList.list();
 const renamed = await TodoList.rename({
-  list: TodoList.refById('list-research'),
+  list: TodoListSelections.by({ identity: 'list-research' }),
   name: 'Research queue',
 });
 
-if (!listed.ok || listed.value.length !== 1 || !renamed.ok) {
+if (
+  !listed.ok ||
+  listed.value.length !== 1 ||
+  !renamed.ok ||
+  renamed.value.id !== 'list-research' ||
+  renamed.value.name !== 'Research queue'
+) {
   throw new Error('Packed Core failed the in-memory Todo smoke.');
 }
 
@@ -59,7 +79,12 @@ try {
   const response = await fetch(`http://127.0.0.1:${address.port}/runtime/ontahi/application`);
   const description = await response.json();
 
-  if (!response.ok || description.entities?.[0]?.name !== 'TodoList') {
+  if (
+    !response.ok ||
+    description.entities?.[0]?.name !== 'TodoList' ||
+    description.entities[0].selectionFactories?.identity.output.entityName !== 'TodoList' ||
+    description.entities[0].selectionFactories?.identity.input.unknownKeys !== 'strict'
+  ) {
     throw new Error('Packed Express runtime failed its mount smoke.');
   }
 } finally {

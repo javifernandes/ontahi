@@ -8,6 +8,7 @@ import { cx } from '../internal/cx.js';
 import { ExplorerCollapsibleSection } from './collapsible-section.js';
 import { useExplorerRoutes } from './config.js';
 import { ExplorerFieldRow } from './schema-fields.js';
+import { ExplorerSchemaPanel } from './schema-panel.js';
 
 type ExplorerEntityReferenceProps = {
   entityName: string;
@@ -81,6 +82,37 @@ export const ExplorerEntityStructurePanel = ({
         ))}
       </div>
     </ExplorerCollapsibleSection>
+
+    {entity.selectionFactories && Object.keys(entity.selectionFactories).length > 0 ? (
+      <ExplorerCollapsibleSection title='Selection factories'>
+        <p className='text-sm text-muted-foreground'>
+          Build membership without fetching. The consumer imposes one/many.
+        </p>
+        {Object.entries(entity.selectionFactories).map(([name, factory]) => (
+          <div key={name} className='grid gap-2 rounded-md border p-3'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <span className='font-mono text-foreground'>{name}</span>
+              <Badge>v{factory.version}</Badge>
+              <span className='font-mono text-sm text-muted-foreground'>
+                → Selection&lt;{factory.output.entityName}&gt;
+              </span>
+            </div>
+            {factory.scalarInput ? (
+              <p className='text-xs text-muted-foreground'>
+                Scalar shorthand: {factory.scalarInput}
+              </p>
+            ) : null}
+            <ExplorerSchemaPanel title={`${name} input`} schema={factory.inputSchema} />
+            <details className='text-xs text-muted-foreground'>
+              <summary>Expansion template</summary>
+              <pre className='overflow-auto whitespace-pre-wrap'>
+                {JSON.stringify(factory.template, null, 2)}
+              </pre>
+            </details>
+          </div>
+        ))}
+      </ExplorerCollapsibleSection>
+    ) : null}
 
     <ExplorerCollapsibleSection title='Relations'>
       {entity.relations.length === 0 ? (

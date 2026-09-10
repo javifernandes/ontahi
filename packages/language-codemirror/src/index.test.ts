@@ -59,6 +59,67 @@ const TodoItem = {
 } as const;
 
 describe('Console dialect editor state', () => {
+  it.each([
+    ['declarative', 'TodoItem by state true an', 'and by', 'TodoItem by state true and by '],
+    ['ts', 'TodoItem.by({ state: true }).b', 'by', 'TodoItem.by({ state: true }).by({'],
+  ] as const)(
+    'offers factory names immediately after accepting a second %s by',
+    async (dialect, source, label, completed) => {
+      const entity = {
+        ...TodoItem,
+        selectionFactories: {
+          state: {
+            version: 1,
+            input: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { enabled: { kind: 'scalar', type: 'boolean' } },
+            },
+            scalarInput: 'enabled',
+            output: { kind: 'selection', entityName: 'TodoItem' },
+            template: {
+              kind: 'predicate',
+              fieldName: 'completed',
+              operator: 'eq',
+              input: 'enabled',
+            },
+          },
+        },
+      } as const;
+      const view = new EditorView({
+        parent: document.body,
+        state: EditorState.create({
+          doc: source,
+          selection: { anchor: source.length },
+          extensions: consoleExpressionExtensions({ entities: [entity] }, { dialect }),
+        }),
+      });
+      try {
+        view.focus();
+        startCompletion(view);
+        await vi.waitFor(() =>
+          expect(currentCompletions(view.state).map(item => item.label)).toEqual([label]),
+        );
+        await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+        expect(view.state.doc.toString()).toBe(completed);
+        await vi.waitFor(() =>
+          expect(currentCompletions(view.state).map(item => item.label)).toEqual(['state']),
+        );
+        await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+        await vi.waitFor(() =>
+          expect(
+            currentCompletions(view.state)
+              .map(item => item.label)
+              .sort(),
+          ).toEqual(['false', 'true', '{…}']),
+        );
+      } finally {
+        view.destroy();
+      }
+    },
+  );
+
   it('repairs a missing TS direction after an explicit comma with either choice', () => {
     const parent = document.createElement('div');
     document.body.append(parent);

@@ -7,6 +7,13 @@ server application graph and caller-owned browser Views and Queries.
 
 ## Conventional browser client
 
+Exported `withSelectionFactories(entity({ ... }), declarations)` definitions preserve their typed
+`by` method and reflected input/output/template contract in generated browser Entities. A local
+Entity variable and named object-literal declarations are supported too. The declaration map must
+be portable literal data with Core `field`/`graphSchema.object` constructors; arbitrary expressions,
+callbacks and server-only dependencies are diagnosed rather than copied to the browser. See the
+[Core factory examples](../core/README.md#experimental-named-selection-factories) and Todo's `Tag`.
+
 Apps using the conventional `src/graph.ts` composition root and
 `src/generated/client-entities.ts` output need no generation script:
 

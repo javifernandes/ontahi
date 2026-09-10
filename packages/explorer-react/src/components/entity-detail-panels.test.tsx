@@ -1,7 +1,14 @@
+import {
+  entity as defineEntity,
+  field,
+  graphSchema,
+  withSelectionFactories,
+} from '@ontahi/core/data-graph';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ExplorerEntityDetail, ExplorerEventDescriptor } from '../contracts/index.js';
+import { getExplorerEntityDetail } from '../server/descriptors.js';
 
 import {
   createExplorerRoutes,
@@ -11,6 +18,32 @@ import {
 } from './index.js';
 
 afterEach(cleanup);
+
+it('renders discovered factory contracts in the Entity structure panel', () => {
+  const Book = withSelectionFactories(
+    defineEntity('Book', { id: field.id(), status: field.enum(['draft', 'published']) }),
+    {
+      byStatus: {
+        version: 2,
+        input: graphSchema.object({ state: field.enum(['draft', 'published']) }),
+        scalarInput: 'state',
+        template: { kind: 'predicate', fieldName: 'status', operator: 'eq', input: 'state' },
+      },
+    },
+  );
+  const detail = JSON.parse(JSON.stringify(getExplorerEntityDetail({ entities: [Book] }, 'Book')));
+  render(
+    <ExplorerProvider>
+      <ExplorerEntityStructurePanel entity={detail} />
+    </ExplorerProvider>,
+  );
+  expect(screen.getByText('Selection factories')).toBeTruthy();
+  expect(screen.getByText('byStatus')).toBeTruthy();
+  expect(screen.getByText('v2')).toBeTruthy();
+  expect(screen.getByText('→ Selection<Book>')).toBeTruthy();
+  expect(screen.getByText('state')).toBeTruthy();
+  expect(screen.getByText('Scalar shorthand: state')).toBeTruthy();
+});
 
 const entity: ExplorerEntityDetail = {
   name: 'Book',

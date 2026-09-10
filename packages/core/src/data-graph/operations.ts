@@ -1,3 +1,5 @@
+import { hasOwn } from '../value/object.js';
+
 import type { InferGraphSchemaClientInput } from './client-input.js';
 import type {
   AnyEntityDefinition,
@@ -36,6 +38,10 @@ import {
 } from './relationship-command.js';
 import { isGraphSchemaDefinition } from './schema-descriptor.js';
 import type { SemanticSelection } from './selection-ast.js';
+import {
+  reflectSelectionFactories,
+  type SelectionFactoryDescriptor,
+} from './selection-factories.js';
 import {
   selection,
   type EntitySelectionFactory,
@@ -547,6 +553,7 @@ type GraphApiDomainOperation<TEntities extends Record<string, AnyGraphApiEntity>
 
 type GraphApiEntitySummary = {
   name: string;
+  selectionFactories?: Readonly<Record<string, SelectionFactoryDescriptor>>;
   graphExposure?: GraphEntityExposure;
   graphOperationNames: string[];
   domainOperationNames: string[];
@@ -969,6 +976,10 @@ export const defineClientDomainOperationsForEntity = <
     operations,
   ) as ResolveDomainOperations<EntityName<TEntity>, TOperations>;
 
+type ClientSelectionFactorySurface<TEntity> = TEntity extends { readonly by: infer TBy }
+  ? { readonly by: TBy }
+  : {};
+
 export const defineClientEntity = <
   TEntity extends Pick<AnyEntityDefinition, 'name'> | string,
   TOperations extends ClientDomainOperationDeclarations = {},
@@ -982,7 +993,8 @@ export const defineClientEntity = <
     relations?: TRelations;
   },
 ): ClientEntityWithDomainOperations<TEntity, TOperations> &
-  ClientEntityRefLocatorSurface<TEntity, TOperations, TRelations> => {
+  ClientEntityRefLocatorSurface<TEntity, TOperations, TRelations> &
+  ClientSelectionFactorySurface<TEntity> => {
   const entityName = typeof entityOrName === 'string' ? entityOrName : entityOrName.name;
   const domain = resolveDomainOperations(
     entityName,
@@ -998,6 +1010,9 @@ export const defineClientEntity = <
     ...(typeof entityOrName === 'object' && 'fields' in entityOrName
       ? {
           definition: entityOrName,
+          ...('by' in entityOrName && typeof entityOrName.by === 'function'
+            ? { by: entityOrName.by }
+            : {}),
           ...createEntityMutationAuthoring(entityOrName as AnyEntityDefinition),
           all: () => query(entityOrName as AnyEntityDefinition),
           where: (build: SelectionBuilder<AnyEntityDefinition>) =>
@@ -1033,8 +1048,12 @@ export const defineClientEntity = <
         run: ({ operation, input }) => createDomainOperationInvocationFromRef(operation, input),
       }),
     );
-  const bindLocators = <TLocators extends EntityRefLocatorDeclarations>(locators: TLocators) =>
-    Object.assign(
+  const bindLocators = <TLocators extends EntityRefLocatorDeclarations>(locators: TLocators) => {
+    if (typeof entityOrName === 'object' && 'by' in entityOrName && hasOwn(locators, 'by'))
+      throw new TypeError(
+        `Legacy locator by on ${entityName} conflicts with Selection factory authoring.`,
+      );
+    return Object.assign(
       clientEntity,
       Object.fromEntries(
         Object.entries(locators).map(([name, toLocator]) => [
@@ -1044,6 +1063,7 @@ export const defineClientEntity = <
         ]),
       ),
     );
+  };
   const clientEntityWithLocatorApi = Object.assign(clientEntity, {
     ref: <TLocator extends EntityRefLocator>(locator: TLocator) =>
       bindRefRelations(createEntityRef(entityOrName, locator)),
@@ -1055,7 +1075,8 @@ export const defineClientEntity = <
       ? clientEntityWithLocatorApi.locators(entityLocators)
       : clientEntityWithLocatorApi
   ) as ClientEntityWithDomainOperations<TEntity, TOperations> &
-    ClientEntityRefLocatorSurface<TEntity, TOperations, TRelations>;
+    ClientEntityRefLocatorSurface<TEntity, TOperations, TRelations> &
+    ClientSelectionFactorySurface<TEntity>;
 };
 
 const toPascalCase = (value: string) =>
@@ -1356,6 +1377,9 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
     describe: () => ({
       entities: getEntityEntries().map(([name, entity]) => ({
         name,
+        ...(reflectSelectionFactories(entity)
+          ? { selectionFactories: reflectSelectionFactories(entity) }
+          : {}),
         graphExposure: hasGraphMetadata(entity) ? entity.graph.exposure : undefined,
         graphOperationNames: hasGraphOperations(entity) ? Object.keys(entity.operations) : [],
         domainOperationNames: hasDomainOperations(entity) ? Object.keys(entity.domain) : [],

@@ -27,14 +27,14 @@ describe('authoring syntax contrast', () => {
     }
   });
 
-  it.each(['ts', 'declarative'] as const)('highlights where and many in %s', dialect => {
+  it.each(['ts', 'declarative'] as const)('highlights by, where and many in %s', dialect => {
     const view = new EditorView({
       parent: document.body,
       state: EditorState.create({
         doc:
           dialect === 'ts'
-            ? 'TodoItem.where(completed = false).many()'
-            : 'TodoItem where completed = false many',
+            ? 'TodoItem.by({ identity: "t1" }).where(completed = false).many()'
+            : 'TodoItem by identity "t1" where completed = false many',
         extensions: consoleExpressionExtensions(
           {
             entities: [
@@ -53,6 +53,7 @@ describe('authoring syntax contrast', () => {
         node => node.textContent,
       );
       expect(keywords).toContain('where');
+      expect(keywords).toContain('by');
       expect(keywords).toContain('many');
       expect(view.state.facet(EditorView.darkTheme)).toBe(true);
     } finally {

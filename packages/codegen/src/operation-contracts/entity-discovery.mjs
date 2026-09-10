@@ -67,6 +67,15 @@ const inferRelationSourceName = (entityName, relationName) => {
 };
 
 export const resolveEntityDeclaration = (initializer, declarations, visited = new Set()) => {
+  if (
+    ts.isCallExpression(initializer) &&
+    ts.isIdentifier(initializer.expression) &&
+    initializer.expression.text === 'withSelectionFactories'
+  ) {
+    const [target, factories] = initializer.arguments;
+    const resolved = target && resolveEntityDeclaration(target, declarations, visited);
+    return resolved ? { ...resolved, selectionFactories: factories } : undefined;
+  }
   if (ts.isAsExpression(initializer) || ts.isParenthesizedExpression(initializer)) {
     return resolveEntityDeclaration(initializer.expression, declarations, visited);
   }

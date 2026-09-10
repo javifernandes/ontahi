@@ -303,7 +303,7 @@ describe('data-graph schema DSL', () => {
 
     expect(foreignSelection).not.toBeInstanceOf(Selection);
     expect(normalizeGraphSchemaClientInput(Input, { books: foreignSelection })).toMatchObject({
-      books: foreignSelection,
+      books: { root: Book, expression: authored.expression, cardinality: 'many' },
     });
     expect(safeParseGraphSchema(Input, { books: foreignSelection })).toMatchObject({
       success: true,
@@ -316,6 +316,26 @@ describe('data-graph schema DSL', () => {
       },
     });
   });
+
+  it.each([undefined, 'one', 'many'] as const)(
+    'applies consumer cardinality without mutating a Selection authored with %s',
+    authoredCardinality => {
+      const Book = entity('ConsumerCardinalityBook', { id: field.id() });
+      const authored = new Selection(Book, { kind: 'all' }, undefined, authoredCardinality);
+      for (const cardinality of ['one', 'many'] as const) {
+        const normalized = normalizeGraphSchemaClientInput(
+          graphSchema.selection(Book, { cardinality }),
+          authored,
+        );
+        expect(normalized).toMatchObject({
+          root: Book,
+          expression: authored.expression,
+          cardinality,
+        });
+        expect(authored.cardinality).toBe(authoredCardinality);
+      }
+    },
+  );
 
   it('validates statically knowable selection cardinality and defers predicates', () => {
     const Book = entity('CardinalityBook', { id: field.id(), status: field.string() })

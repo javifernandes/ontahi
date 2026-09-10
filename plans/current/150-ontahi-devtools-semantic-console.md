@@ -358,8 +358,12 @@ The Read Console shipped in PR #148. Before adding mutable syntax, the agreed ne
    language or assume Ref removal before testing the alternatives.
 2. Prove two read-only dialects while the language is small: the existing TS-like fluent surface
    and a declarative surface. Both target the same canonical Read/Selection values.
-3. Add Graph Commands.
-4. Add Operation invocation.
+3. Prove [120a's named Selection factories](../done/120a-pure-named-selection-factory-contract.md) before
+   freezing mutable targeting syntax. This bounded proof is complete: Core, discovery/codegen/inspection,
+   and Console factory intersections plus `where` are implemented. Union/grouping and broader factory
+   extensions remain deferred in Plan 120.
+4. Harden consumer cardinality/read shaping in 116a, then add Graph Commands.
+5. Add Operation invocation.
 
 The following A/B sections retain the original walking-skeleton scope and history. The research
 gate is closed: start read-only dialects without factory implementation or Ref migration. Named
@@ -583,7 +587,9 @@ smoke or package export was added in this slice.
 
 ### D. Graph Commands
 
-Status: not started; after the read-only dialect proof.
+Status: not started; 120a's factory/Read-language proof is complete; 116a cardinality hardening is next.
+The agreed sequence now validates deferred Selection authoring before exposing mutable syntax;
+legacy locators remain compatible until representative consumers prove a replacement.
 
 - [ ] Add exact Entity mutation and Relationship Command discovery from the application model.
 - [ ] Lower direct, many-to-many, and ordered forms to the existing versioned Command body.

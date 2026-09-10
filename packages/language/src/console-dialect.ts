@@ -18,6 +18,10 @@ export const renderConsoleDialect = (
   if (dialect === 'declarative') {
     return [
       entity,
+      ...expression.factories.map(
+        (factory, index) =>
+          `${index ? 'and by' : 'by'} ${factory.name!.text} ${factory.argument!.text}`,
+      ),
       ...(selection ? [`where ${selection}`] : []),
       ...(field ? [`order by ${field}${descending ? ' descending' : ''}`] : []),
       ...(limit === undefined ? [] : [`limit ${limit}`]),
@@ -26,6 +30,9 @@ export const renderConsoleDialect = (
   }
   return [
     entity,
+    ...expression.factories.map(
+      factory => `.by({ ${factory.name!.text}: ${factory.argument!.text} })`,
+    ),
     ...(selection ? [`.where(${selection})`] : []),
     ...(field ? [`.orderBy(${field}${descending ? ', desc' : ''})`] : []),
     ...(limit === undefined ? [] : [`.limit(${limit})`]),

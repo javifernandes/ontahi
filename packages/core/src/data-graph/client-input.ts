@@ -111,7 +111,10 @@ const normalizeSelectionInput = (
   },
   value: unknown,
 ) => {
-  if (isSelection(value)) return value;
+  if (isSelection(value))
+    return value.cardinality === schema.cardinality
+      ? value
+      : new Selection(value.root, value.expression, value.name, schema.cardinality);
   const values = schema.cardinality === 'many' && Array.isArray(value) ? value : [value];
   return Selection.references(
     schema.entity,

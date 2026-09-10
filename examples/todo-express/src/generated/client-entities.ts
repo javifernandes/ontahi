@@ -7,6 +7,7 @@ import {
   defineClientEntity,
   entity as defineEntitySchema,
   field,
+  withSelectionFactories,
   graphSchema,
   value,
 } from '@ontahi/core/data-graph';
@@ -25,11 +26,27 @@ const TodoListSchemaBase = defineEntitySchema('TodoList', {
   }),
   color: field.named('Color', field.nonEmptyString({ trim: true })),
 }).display({ primary: 'name', search: ['name'] });
-export const TagSchema = defineEntitySchema('Tag', {
-  id: field.id(),
-  name: field.nonEmptyString({ trim: true }),
-  color: TodoListSchemaBase.fields.color,
-}).display({ primary: 'name', search: ['name'] });
+export const TagSchema = withSelectionFactories(
+  defineEntitySchema('Tag', {
+    id: field.id(),
+    name: field.nonEmptyString({ trim: true }),
+    color: TodoListSchemaBase.fields.color,
+  }).display({ primary: 'name', search: ['name'] }),
+  {
+    identity: {
+      version: 1,
+      input: graphSchema.object({ id: field.id() }),
+      scalarInput: 'id',
+      template: { kind: 'identity', bindings: { id: 'id' } },
+    },
+    named: {
+      version: 1,
+      input: graphSchema.object({ text: field.nonEmptyString({ trim: true }) }),
+      scalarInput: 'text',
+      template: { kind: 'predicate', fieldName: 'name', operator: 'eq', input: 'text' },
+    },
+  },
+);
 export const TodoItemSchema = defineEntitySchema('TodoItem', {
   id: field.id(),
   list: field.ref(TodoListSchemaBase),
