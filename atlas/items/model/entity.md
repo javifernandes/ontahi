@@ -56,8 +56,12 @@ input: canonical base Ref in, classified base record out, checked before the bod
 resolvers. Reflection separates the classification descriptor from identity. Base resolution and
 authorization remain host-owned. Graph discovery now exposes the input descriptor, and codegen
 reconstructs static classified inputs on generated base schemas without server resolvers. Automatic
-variant policy composition, standalone variant exports and REPL introspection/autocomplete remain
-pending. This is not general-purpose variant schema support.
+variant-specific policies and standalone variant exports remain pending. Registered Graph Read
+roots now inherit their base policy; the receiver imposes classification outside caller NOT/OR
+while preserving canonical base Refs. Capability discovery exposes these registrations as data.
+The Console projects that catalog over base reflection for shared TS/declarative root, Field,
+narrowed enum and factory completion before a data read. Variant contextual targets/navigation,
+Views and writes remain outside this slice. This is not general-purpose variant schema support.
 
 The conventional identity is declared at the [[ontahi.model.field|Field]] itself. An exact, required
 `id: field.id()` field gives the Entity a `refById` locator and makes it the default identity:

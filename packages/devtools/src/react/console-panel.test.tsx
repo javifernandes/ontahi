@@ -40,6 +40,87 @@ afterEach(cleanup);
 // Match the mounted Devtools integration budget under parallel CI coverage.
 const uiTestOptions = { timeout: 15_000 };
 
+describe('discovered variant Console roots', uiTestOptions, () => {
+  it.each(['ts', 'declarative'] as const)(
+    'discovers and executes a classified root in %s without a preliminary read',
+    async initialDialect => {
+      const Node = entity('ContentNode', {
+        id: field.id(),
+        type: field.enum(['part', 'chapter']),
+        title: field.string(),
+      });
+      const Chapter = Node.variant('Chapter', { discriminator: { type: 'chapter' } });
+      const runtime = createInMemoryDataGraphRuntime({
+        entities: [Node],
+        dataset: {
+          ContentNode: [
+            { id: 'p1', type: 'part', title: 'Part heading' },
+            { id: 'c1', type: 'chapter', title: 'Intro' },
+          ],
+        },
+      });
+      const execute = vi.fn(query => Effect.runPromise(runtime.run(query, undefined)));
+      const dispatch = createGraphReadDispatcher({
+        policies: [
+          {
+            entity: Node,
+            variants: [Chapter],
+            scope: 'all',
+            modes: ['run'],
+            cardinalities: ['many'],
+            maxLimit: 25,
+            fields: {
+              id: { select: true },
+              type: { select: true, filter: ['eq'] },
+              title: { select: true, order: true },
+            },
+          },
+        ],
+        execute,
+      });
+      const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+        const response = await dispatch(envelope.body, { authority: undefined });
+        if (!isJsonValue(response)) throw new Error('Expected portable response');
+        return createRuntimeProtocolResponse(envelope, response);
+      });
+      render(
+        <ConsolePanel
+          options={{ entities: [Node], initialDocument: 'Chap', initialDialect }}
+          runtimeTransport={{ request }}
+        />,
+      );
+      const view = EditorView.findFromDOM(
+        screen.getByRole('textbox', { name: 'Ontahí Console expression' }),
+      )!;
+      await waitFor(() => expect(request).toHaveBeenCalled());
+      await act(async () => {
+        view.focus();
+        fireEvent.keyDown(view.contentDOM, { key: ' ', code: 'Space', ctrlKey: true });
+      });
+      await screen.findByText('Variant of ContentNode');
+      expect(execute).not.toHaveBeenCalled();
+      const source = initialDialect === 'ts' ? 'Chapter.many()' : 'Chapter many';
+      act(() => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } }));
+      await waitFor(() =>
+        expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
+          false,
+        ),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+      const result = within(screen.getByLabelText('Console result'));
+      await result.findByRole('table');
+      expect(result.getByText('Intro')).toBeDefined();
+      expect(result.queryByText('Part heading')).toBeNull();
+      expect(execute.mock.calls[0]![0].root).toBe(Node);
+      fireEvent.click(result.getByRole('button', { name: /Sort by title/ }));
+      await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+      expect(view.state.doc.toString()).toContain(
+        initialDialect === 'ts' ? '.orderBy(title' : 'order by title',
+      );
+    },
+  );
+});
+
 const mountContextualConsole = (
   supported = true,
   initialDocument = 'List.openItems.where(completed = false).many()',
@@ -825,7 +906,10 @@ describe('Console bidirectional Query ordering', uiTestOptions, () => {
       'namestring',
     ]);
     expect(request).not.toHaveBeenCalled();
-    expect(metadata).toHaveBeenCalledOnce();
+    expect(metadata.mock.calls.map(([envelope]) => envelope.body)).toEqual([
+      { version: 1, kind: 'graph-read-capabilities', entityName: 'Tag' },
+      { version: 1, kind: 'graph-read-capabilities', entityName: 'Other' },
+    ]);
     fireEvent.change(screen.getByRole('combobox', { name: 'Order field for Tag' }), {
       target: { value: 'name' },
     });

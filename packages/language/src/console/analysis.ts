@@ -66,7 +66,11 @@ export const analyzeConsoleSyntax = (
       try {
         membership = selectionAnd(
           membership,
-          resolveConsoleFactory(step, entity.name, entity.selectionFactories),
+          resolveConsoleFactory(
+            step,
+            entity.variant?.baseEntityName ?? entity.name,
+            entity.selectionFactories,
+          ),
         );
       } catch (cause) {
         return {

@@ -1,5 +1,6 @@
 import {
   completionWordRange,
+  consoleEntityCompletionItems,
   consoleOrderCompletions,
   consoleContinuationItems,
   contextualCompletionItems,
@@ -37,14 +38,7 @@ export const completeDeclarativeConsoleDocument = (
     items: items.filter(item => item.label.startsWith(prefix)),
   });
   if (/^\s*\w*$/.test(document.slice(0, pos))) {
-    return result(
-      application.entities.map(entity => ({
-        label: entity.name,
-        apply: entity.name,
-        kind: 'entity',
-        detail: 'Entity',
-      })),
-    );
+    return result(consoleEntityCompletionItems(application));
   }
   const syntax = dialect.parse(document).syntax.expression;
   const entity = resolveConsoleContext(syntax, application, pos);

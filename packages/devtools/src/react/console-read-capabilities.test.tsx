@@ -1,3 +1,4 @@
+import type { EntityVariantDescriptor } from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolResponse,
   createRuntimeTransportRouter,
@@ -22,13 +23,18 @@ const pendingTransport = () => {
         pending.push({ envelope, resolve });
       }),
   );
-  const reply = (index: number, entityName: string, orderBy: string[]) => {
+  const reply = (
+    index: number,
+    entityName: string,
+    orderBy: string[],
+    variants?: EntityVariantDescriptor[],
+  ) => {
     const call = pending[index]!;
     call.resolve(
       createRuntimeProtocolResponse(call.envelope, {
         kind: 'graph-read-capabilities-result',
         entityName,
-        capabilities: { orderBy },
+        capabilities: { orderBy, ...(variants ? { variants } : {}) },
       }),
     );
   };
@@ -36,6 +42,51 @@ const pendingTransport = () => {
 };
 
 describe('Console capabilities discovery', () => {
+  const chapter: EntityVariantDescriptor = {
+    kind: 'entity-variant',
+    name: 'Chapter',
+    baseEntityName: 'Node',
+    discriminator: { fieldName: 'type', value: 'chapter' },
+  };
+
+  it('loads the root catalog independently of the draft and inherits only the owning base permissions', async () => {
+    const { transport, reply } = pendingTransport();
+    const { result, rerender } = renderHook(
+      ({ entityName }) =>
+        useConsoleReadCapabilities(transport, entityName, 'alice', ['Node', 'Other']),
+      { initialProps: { entityName: 'Node' } },
+    );
+    await act(async () => reply(0, 'Node', ['title'], [chapter]));
+    expect(result.current.variants).toEqual([chapter]);
+    expect(result.current.orderableFields('Chapter')).toEqual(['title']);
+    // A failed base lookup must not discard successful roots from the rest of the catalog.
+    await act(async () => reply(1, 'Wrong', ['secret'], [{ ...chapter, name: 'Forged' }]));
+    rerender({ entityName: 'Chapter' });
+    expect(result.current.capabilities?.orderBy).toEqual(['title']);
+    expect(result.current.orderableFields('Other')).toEqual([]);
+    expect(result.current.variants).toEqual([chapter]);
+    expect(result.current.loading).toBe(false);
+    expect(transport.request).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops classified roots across identities and ignores late metadata and foreign-base claims', async () => {
+    const { transport, reply } = pendingTransport();
+    const { result, rerender } = renderHook(
+      ({ identityKey }) => useConsoleReadCapabilities(transport, 'Chapter', identityKey, ['Node']),
+      { initialProps: { identityKey: 'alice' } },
+    );
+    await act(async () => reply(0, 'Node', ['title'], [chapter]));
+    act(() => result.current.refresh());
+    rerender({ identityKey: 'bob' });
+    expect(result.current.variants).toEqual([]);
+    expect(result.current.orderableFields('Chapter')).toEqual([]);
+    await act(async () => reply(2, 'Node', ['id'], [{ ...chapter, baseEntityName: 'Other' }]));
+    await act(async () => reply(1, 'Node', ['title'], [chapter]));
+    expect(result.current.variants).toEqual([]);
+    expect(result.current.orderableFields('Chapter')).toEqual([]);
+    expect(result.current.orderableFields('Node')).toEqual(['id']);
+  });
+
   it('invalidates authority metadata and ignores replies from a previous authority on the same transport', async () => {
     const { transport, reply } = pendingTransport();
     const { result, rerender } = renderHook(

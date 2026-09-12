@@ -1,6 +1,7 @@
 import {
   createEntityIdentityRef,
   createEntityRef,
+  createGraphReadDispatcher,
   createInMemoryDataGraphRuntime,
   defineGraphApi,
   entity,
@@ -14,6 +15,12 @@ import {
   defineDomainOperationsForEntity,
   runServerDomainOperationRaw,
 } from '@ontahi/core/runtime/server';
+import {
+  analyzeConsoleDocument,
+  completeConsoleDocument,
+  reflectConsoleApplicationVariants,
+  reflectSelectionLanguageEntity,
+} from '@ontahi/language';
 import { Effect } from 'effect';
 
 const Node = entity('PackedNode', {
@@ -43,6 +50,57 @@ const wrong = await Effect.runPromise(
   runtime.run(Chapter.references([createEntityRef(Node, { id: 'part' })]).many(), undefined),
 );
 if (wrong.length !== 0) throw new Error('Packed variant treated a base ref as membership proof.');
+
+const dispatch = createGraphReadDispatcher({
+  policies: [
+    {
+      entity: Node,
+      variants: [Chapter],
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 25,
+      scope: 'all',
+      fields: {
+        id: { select: true },
+        type: { select: true },
+        title: { select: true, filter: ['eq'], order: true },
+      },
+    },
+  ],
+  execute: query => Effect.runPromise(runtime.run(query, undefined)),
+});
+const metadata = await dispatch(
+  { version: 1, kind: 'graph-read-capabilities', entityName: Node.name },
+  { authority: undefined },
+);
+if (metadata.kind !== 'graph-read-capabilities-result')
+  throw new Error('Packed variant metadata unavailable.');
+const application = reflectConsoleApplicationVariants(
+  [reflectSelectionLanguageEntity(Node)],
+  JSON.parse(JSON.stringify(metadata.capabilities.variants)),
+);
+for (const dialect of ['ts', 'declarative']) {
+  if (
+    !completeConsoleDocument('Chap', 4, application, { dialect }).items.some(
+      item => item.label === 'Chapter',
+    )
+  )
+    throw new Error('Packed Console did not discover the classified root.');
+  const source =
+    dialect === 'ts'
+      ? 'Chapter.where(not title = "Intro").many()'
+      : 'Chapter where not title = "Intro" many';
+  const analysis = analyzeConsoleDocument(source, application, { dialect });
+  const result = await dispatch(JSON.parse(JSON.stringify(analysis.request)), {
+    authority: undefined,
+  });
+  if (
+    result.kind !== 'graph-read-result' ||
+    result.value.length !== 1 ||
+    result.value[0].id !== 'end'
+  )
+    throw new Error('Packed Console variant read escaped receiver classification.');
+}
 
 const chapterInput = graphSchema
   .existingRef(Chapter)

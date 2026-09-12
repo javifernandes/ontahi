@@ -9,6 +9,7 @@ import {
   type RelationDefinition,
   type RelationKind,
 } from './definitions.js';
+import type { AnyEntityVariant, EntityVariantDescriptor } from './entity-variant-contract.js';
 import type { QuerySpec } from './query.js';
 import {
   graphReadProtocolError,
@@ -21,6 +22,7 @@ import {
   type GraphReadCapabilities,
   type GraphReadProtocolError,
 } from './read-protocol.js';
+import { createReadVariantRegistry, readVariantCapabilities } from './read-variants.js';
 import {
   selectionAnd,
   type EntitySelectionSource,
@@ -64,6 +66,8 @@ export type GraphReadPolicy<
   TAuthority = unknown,
 > = GraphReadPolicyNode<TEntity> & {
   readonly entity: TEntity;
+  /** Classified read roots inherit this policy; registration grants no additional Field permissions. */
+  readonly variants?: readonly AnyEntityVariant[];
   readonly modes: readonly GraphReadMode[];
   readonly cardinalities: readonly GraphReadCardinality[];
   readonly maxLimit: number;
@@ -500,6 +504,7 @@ const authorizeGraphRead = <TAuthority>(
   policyByEntityName: ReadonlyMap<string, GraphReadPolicy<any, TAuthority>>,
   reportError?: (error: unknown) => void,
   relationSelections?: true,
+  variants: ReadonlyMap<string, EntityVariantDescriptor> = new Map(),
 ): AuthorizedGraphRead => {
   const parsed = parseGraphReadRequest(input);
   if (!parsed.success) return parsed;
@@ -512,12 +517,32 @@ const authorizeGraphRead = <TAuthority>(
       ),
     };
 
-  const policy = policyByEntityName.get(parsed.request.selection.entityName);
+  const variant = variants.get(parsed.request.selection.entityName);
+  const policy = policyByEntityName.get(
+    variant?.baseEntityName ?? parsed.request.selection.entityName,
+  );
   if (!policy) return { success: false, error: graphReadAccessDenied() };
 
-  const resolved = resolveGraphReadRequest(parsed.request, {
-    entities: [...policyByEntityName.values()].map(entry => entry.entity),
-  });
+  if (variant && parsed.request.view)
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'invalid_projection',
+        'Variant-root Views are not supported yet.',
+      ),
+    };
+
+  const resolved = resolveGraphReadRequest(
+    variant
+      ? {
+          ...parsed.request,
+          selection: { ...parsed.request.selection, entityName: variant.baseEntityName },
+        }
+      : parsed.request,
+    {
+      entities: [...policyByEntityName.values()].map(entry => entry.entity),
+    },
+  );
   if (!resolved.success) return resolved;
   const membershipAuthority = createRelationSelectionAuthority(
     policyByEntityName,
@@ -535,6 +560,16 @@ const authorizeGraphRead = <TAuthority>(
   let query = resolved.query;
   try {
     query = { ...query, selection: membershipAuthority.scoped(query.selection, policy) };
+    if (variant)
+      query = {
+        ...query,
+        selection: selectionAnd(query.selection, {
+          kind: 'predicate',
+          fieldName: variant.discriminator.fieldName,
+          operator: 'eq',
+          value: variant.discriminator.value,
+        }),
+      };
     if (parsed.request.mode !== 'count' && query.limit === undefined) {
       query = { ...query, limit: policy.maxLimit };
     }
@@ -550,7 +585,10 @@ const authorizeGraphRead = <TAuthority>(
     ...(parsed.request.includeCapabilities
       ? {
           capabilities: {
-            ...relationSelectionCapabilities(policy, policyByEntityName, relationSelections),
+            ...readVariantCapabilities(variants, policy.entity.name),
+            ...(variant
+              ? {}
+              : relationSelectionCapabilities(policy, policyByEntityName, relationSelections)),
             orderBy:
               parsed.request.mode === 'count'
                 ? []
@@ -570,12 +608,14 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
   relationSelections,
 }: CreateGraphReadDispatcherOptions<TAuthority>): GraphReadDispatcher<TAuthority> => {
   const policyByEntityName = createGraphReadPolicyRegistry(policies);
+  const variants = createReadVariantRegistry(policies);
 
   return async (input, context) => {
     const parsed = parseGraphReadFamilyRequest(input);
     if (!parsed.success) return parsed.error;
     if (parsed.request.kind === 'graph-read-capabilities') {
-      const policy = policyByEntityName.get(parsed.request.entityName);
+      const variant = variants.get(parsed.request.entityName);
+      const policy = policyByEntityName.get(variant?.baseEntityName ?? parsed.request.entityName);
       if (!policy) return graphReadAccessDenied();
       try {
         const scope = resolveScope(policy, context);
@@ -583,9 +623,12 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
         if (invalidScope) throw new Error(invalidScope.error.message);
         return {
           kind: 'graph-read-capabilities-result',
-          entityName: policy.entity.name,
+          entityName: parsed.request.entityName,
           capabilities: {
-            ...relationSelectionCapabilities(policy, policyByEntityName, relationSelections),
+            ...readVariantCapabilities(variants, policy.entity.name),
+            ...(variant
+              ? {}
+              : relationSelectionCapabilities(policy, policyByEntityName, relationSelections)),
             orderBy: policy.modes.some(mode => mode !== 'count')
               ? Object.keys(policy.entity.fields).filter(field =>
                   allowsOrdering(policy.entity, field, policy),
@@ -604,6 +647,7 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
       policyByEntityName,
       reportError,
       relationSelections,
+      variants,
     );
     if (!authorized.success) return authorized.error;
 
@@ -631,9 +675,17 @@ export const createGraphReadObserver = <TAuthority = unknown>({
   reportError,
 }: CreateGraphReadObserverOptions<TAuthority>): GraphReadObserver<TAuthority> => {
   const policyByEntityName = createGraphReadPolicyRegistry(policies);
+  const variants = createReadVariantRegistry(policies);
 
   return (input, context) => {
-    const authorized = authorizeGraphRead(input, context, policyByEntityName, reportError);
+    const authorized = authorizeGraphRead(
+      input,
+      context,
+      policyByEntityName,
+      reportError,
+      undefined,
+      variants,
+    );
 
     return (async function* () {
       if (!authorized.success) {

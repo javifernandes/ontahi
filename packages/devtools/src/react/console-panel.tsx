@@ -26,6 +26,8 @@ import {
   editConsoleLimit,
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
+  reflectConsoleApplicationVariants,
+  parseConsoleDocument,
   resolveConsoleContext,
   type ConsoleLanguageApplicationReflection,
   type ConsoleDocumentAnalysis,
@@ -436,14 +438,14 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   );
   const [preferenceNotice, setPreferenceNotice] = useState('');
   const limit = options.limit ?? 25;
-  const application = useMemo<ConsoleLanguageApplicationReflection>(
-    () => ({ entities: options.entities.map(entity => reflectSelectionLanguageEntity(entity)) }),
+  const baseEntities = useMemo(
+    () => options.entities.map(entity => reflectSelectionLanguageEntity(entity)),
     [options.entities],
   );
   const initialDocument =
     options.initialDocument ??
-    (application.entities[0]
-      ? application.entities[0].name + (options.initialDialect === 'declarative' ? '' : '.many()')
+    (baseEntities[0]
+      ? baseEntities[0].name + (options.initialDialect === 'declarative' ? '' : '.many()')
       : '');
   const [{ document, dialect }, setDraft] = useState({
     document: initialDocument,
@@ -481,12 +483,28 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
     [runtimeTransport],
   );
+  const draftSyntax = useMemo(
+    () => parseConsoleDocument(document, dialect).syntax.expression,
+    [document, dialect],
+  );
+  const discoveryTarget =
+    resolveConsoleContext(draftSyntax, { entities: baseEntities })?.name ??
+    draftSyntax?.entity?.text;
+  const discovery = useConsoleReadCapabilities(
+    runtimeTransport,
+    discoveryTarget,
+    identityKey,
+    baseEntities.map(entity => entity.name),
+  );
+  const application = useMemo(
+    () => reflectConsoleApplicationVariants(baseEntities, discovery.variants),
+    [baseEntities, discovery.variants],
+  );
   const analysis = useMemo(
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
   const entityName = resolveConsoleContext(analysis.syntax.expression, application)?.name;
-  const discovery = useConsoleReadCapabilities(runtimeTransport, entityName, identityKey);
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;

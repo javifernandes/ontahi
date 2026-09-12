@@ -4,6 +4,7 @@ import type {
   SelectionPredicate,
   SelectionAst,
   GraphReadRequest,
+  EntityVariantDescriptor,
 } from '@ontahi/core/data-graph';
 
 export type ConsoleFactorySyntax = SelectionLanguageRange & {
@@ -56,6 +57,7 @@ export type SelectionLanguageFieldReflection = {
 
 export type SelectionLanguageEntityReflection<TEntityName extends string = string> = {
   readonly name: TEntityName;
+  readonly variant?: EntityVariantDescriptor;
   readonly selectionFactories?: Readonly<Record<string, SelectionFactoryDescriptor>>;
   readonly contextualSelections?: Readonly<Record<string, ContextualSelectionDescriptor>>;
   readonly fields: readonly SelectionLanguageFieldReflection[];

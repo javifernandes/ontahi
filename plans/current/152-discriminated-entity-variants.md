@@ -79,7 +79,7 @@ assembly remain distinct consumers; this plan must not reintroduce read-then-wri
 - [ ] Discriminator writes/transitions are explicitly supported or explicitly rejected.
 - [ ] Factories can target variants without repeating their discriminator predicates at call sites.
 - [ ] Reflection, generated clients and both language projections preserve the contract.
-- [ ] REPL introspection/autocomplete discover variants, narrowed inherited fields and factories from
+- [x] REPL introspection/autocomplete discover variants, narrowed inherited fields and factories from
       the canonical reflected contract, consistently across both dialects and incomplete drafts.
 - [ ] BookOps rehearsal documents the changed existence semantics and the release/adoption boundary.
 
@@ -252,3 +252,45 @@ and execution of a generated browser module with imported/aliased variant inputs
 coverage gates passed, as did builds, package/example typechecks, lint and repository formatting.
 Clean-room artifact verification includes the classified input descriptor in graph discovery and
 the receiver's successful/wrong-kind materialization paths. No REPL/browser UI proof is claimed.
+
+## Registered read roots and shared REPL checkpoint — 2026-09-12
+
+The Operation input/discovery/codegen work was committed as `3b9796e`. A base `GraphReadPolicy` now
+accepts `variants: [Chapter]`. Registrations must be actual variants of that exact base definition;
+ambiguous root names and fabricated descriptors are rejected at setup. Graph Read keeps its
+existing request shape and can address the registered Chapter root by name. The receiver resolves
+the base policy, authorizes caller membership, then adds classification and the existing authority
+scope outside caller NOT/OR. Execution/observation use the base Query and canonical base Refs.
+Filter/order grants, modes, cardinalities and limits are inherited, never widened by registration.
+
+Graph Read capability metadata advertises the canonical variant descriptors without materializing
+rows. The Console requests metadata for all configured base Entities, projects variants over base
+reflection and autocompletes roots, inherited Fields, narrowed enum values and declared `by`
+factories in both TS and declarative dialects. Dialect adapters share the root catalog and existing
+semantic assistance; no dialect-specific classification logic is added. Factory inputs expand
+against the base contract while the outgoing request retains Chapter as its required read root.
+The server, not the editor, adds the classifier.
+
+The discovery catalog is scoped to transport, effective route and execution identity, with late
+responses discarded. Failed base lookups do not discard other successful roots. Result ordering and
+source edits reuse the owning base capability policy. Colocated React/CodeMirror integration tests
+exercise actual root autocomplete before Run, then classified reads and table-driven ordering
+through a real dispatcher in both dialects; this is an automated DOM proof, not a live browser demo.
+
+Boundaries remain explicit: no separate variant-specific policy/grant, standalone generated variant
+export, variant-root View, variant contextual navigation/target, write/transition lifecycle or
+deferred Operation Selection input. `existingRef` still uses its own host-owned materialization and
+authorization boundary. No Todo/BookOps domain schema is changed merely to manufacture a variant.
+
+Next bounded slice: let contextual Selection declarations target a variant (for example Book.parts
+and Part.chapters), preserving classification and canonical identity through typed authoring,
+reflection, receiver relation membership and both Console dialects. Avoid implementing navigation
+only in the editor; prove receiver-side composition before advertising those hops. Cache/provider
+transition tests and the BookOps migration rehearsal remain separate pending acceptance work.
+
+Validation: 1,067 Core, 335 Language and 107 Devtools tests passed with coverage gates; 137 codegen
+and 70 CodeMirror tests passed. Builds,
+all package and Todo/Classroom typechecks, and touched-package lint passed. The clean-room artifact
+verification passed, including capability discovery, shared autocomplete, both dialects and a
+serialized NOT read against the classified receiver using published entrypoints. Repository
+formatting and root script lint also passed.

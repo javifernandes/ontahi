@@ -245,6 +245,28 @@ the receiver independently authorizes every hop. Dialect switches and result sor
 the full source membership. Activity displays expanded source/relation/target meaning in the chosen
 dialect rather than trying to infer a factory name from its predicate.
 
+## Discovered classified roots
+
+`reflectConsoleApplicationVariants(baseEntities, descriptors)` projects receiver-advertised Entity
+variants over existing base reflection. It is a pure data transformation: it retains base Fields
+and named `by` factory contracts, narrows the discriminator enum, and adds the variant name and
+base identity descriptor. Unavailable bases, collisions and invalid classifications add no root.
+It does not reflect contextual navigation from variants yet.
+
+Both dialects consume this same application reflection, including on incomplete drafts:
+
+```text
+Chapter.where(title = "Intro").many()
+Chapter where title = "Intro" many
+```
+
+Root completion labels Chapter as a variant of ContentNode. Field/value suggestions, factory
+expansion, ordering assistance and dialect conversion share the same semantic model. The host's
+`orderableFields` callback must resolve variant names to the base receiver policy. The emitted
+Graph Read retains `entityName: 'Chapter'`; only the registered receiver adds the classifier.
+Core SDK `Chapter.all().toQuery()` instead explicitly lowers to a base Query. Reflection and
+autocomplete neither fetch rows nor prove execution authority.
+
 ## Implementation boundaries
 
 The public entrypoint only re-exports the supported API. Internal modules separate source contracts

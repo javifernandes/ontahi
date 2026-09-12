@@ -55,13 +55,55 @@ Query shaping after membership composition. Result records and variant predicate
 the discriminator to its literal value. Exact-one checks happen after classification and before
 read shaping; apply `one` after narrowing, not on a source passed to `from`.
 
-This is an experimental **local read surface**, not yet a fully polymorphic Entity schema target.
+This is an experimental read surface, not yet a fully polymorphic Entity schema target.
 It accepts one required, stored, non-null enum discriminator. Variants/selections reject implicit
 JSON serialization. Explicit lowering retains the filter but produces a base read, not a portable
-variant contract or extra permission. Register/authorize the base Entity; no variant-specific
-policy is implemented yet. Discovery/codegen, Console syntax, automatic
-typed contextual targets, variant writes and classification transitions remain unsupported.
+variant contract or extra permission. For remote classified roots, register them explicitly on the
+base read policy as below. Separate variant-specific policies, automatic typed contextual targets,
+variant writes and classification transitions remain unsupported.
 Base Entity mutations are unchanged; declaring a read variant does not freeze the base field.
+
+### Registered remote read roots and Console discovery
+
+Register each classified root on its **base** `GraphReadPolicy`:
+
+```ts
+const reads = createGraphReadDispatcher({
+  policies: [
+    {
+      entity: ContentNode,
+      variants: [Chapter],
+      modes: ['get', 'run', 'count'],
+      cardinalities: ['one', 'many'],
+      maxLimit: 25,
+      fields: {
+        id: { select: true },
+        type: { select: true },
+        title: { select: true, filter: ['eq'], order: true },
+      },
+      scope: 'all', // replace with the host's ordinary authority-dependent scope
+    },
+  ],
+  execute, // existing host executor receives a ContentNode Query
+});
+```
+
+Graph Read v1 accepts `selection.entityName: 'Chapter'` only when registered. The receiver checks
+the caller's predicates against the base policy, then intersects the required classifier and base
+authority scope **outside** caller NOT/OR before execution. Registration grants no additional
+filter/order permissions, modes, cardinalities or limits. Canonical reference predicates remain
+ContentNode-named. Observation uses the same authorization path. Duplicate root names and variants
+registered against a different base are rejected at setup.
+
+`graph-read-capabilities` for ContentNode advertises `variants: [Chapter.descriptor]` without
+reading rows; querying capabilities for Chapter inherits the same base policy. Devtools combines
+that metadata with the configured base Entity reflection, so `Chapter.many()` / `Chapter many`,
+inherited fields, narrowed enum values and declared `by` factories autocomplete before execution.
+The request keeps the Chapter root; the client does not supply or enforce its classifier.
+
+Variant-root Views, navigation from a variant and variant contextual targets are not exposed in
+the Console yet. This does not add a standalone generated Chapter export, a second storage mapping
+or automatic Operation-input authorization: `existingRef` retains its resolution boundary below.
 
 ### Classified Operation participants
 
@@ -90,7 +132,7 @@ proof. `defineGraphApi(...).describe().domainOperations` includes each graph-nat
 including these variant requirements. Codegen projects literal `existingRef(Chapter)` inputs onto
 the generated base schema, without copying custom resolvers or importing server declarations.
 The base Entity must be in the generated graph; see the [codegen boundaries](../codegen/README.md).
-Remote variant read roots and shared REPL introspection/autocomplete are not wired yet.
+Registered remote read roots are discovered separately through Graph Read capabilities as above.
 
 ## Experimental named Selection factories
 

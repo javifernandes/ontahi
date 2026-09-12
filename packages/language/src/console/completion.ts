@@ -28,6 +28,16 @@ const terminals = [
   { name: 'exists', detail: 'Whether any Entity matches the Selection' },
 ] as const;
 
+export const consoleEntityCompletionItems = (
+  application: ConsoleLanguageApplicationReflection,
+): readonly ConsoleLanguageCompletionItem[] =>
+  application.entities.map(entity => ({
+    label: entity.name,
+    apply: entity.name,
+    kind: 'entity',
+    detail: entity.variant ? `Variant of ${entity.variant.baseEntityName}` : 'Entity',
+  }));
+
 export const consoleOrderCompletions = (
   entity: SelectionLanguageEntityReflection,
   order: ConsoleOrderBySyntax,

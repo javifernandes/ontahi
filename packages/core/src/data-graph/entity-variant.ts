@@ -22,7 +22,8 @@ import {
 } from './selection-ast.js';
 import { Selection, type SelectionBuilder } from './selection-value.js';
 
-export type { EntityVariantDescriptor } from './entity-variant-contract.js';
+export { isEntityVariantDescriptor } from './entity-variant-contract.js';
+export type { EntityVariantDescriptor, AnyEntityVariant } from './entity-variant-contract.js';
 
 /** Only finite string-valued fields can describe the initial, fixed enum classification. */
 export type EntityVariantDiscriminator<TEntity extends AnyEntityDefinition> = {
