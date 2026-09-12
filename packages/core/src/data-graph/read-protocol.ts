@@ -4,7 +4,12 @@ import { hasOwn, isRecord } from '../value/object.js';
 import type { AnyEntityDefinition } from './definitions.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
 import { isEntityRef } from './ref/index.js';
-import { toSelectionAst, type SelectionAst, type SelectionExpression } from './selection-ast.js';
+import {
+  assertNoRelationImage,
+  toSelectionAst,
+  type SelectionAst,
+  type SelectionExpression,
+} from './selection-ast.js';
 import { applyViewToQuerySpec } from './view-query.js';
 import { createRecursiveEntityViewFromAst, type EntityViewAst } from './view.js';
 
@@ -182,6 +187,7 @@ export const toGraphReadRequest = (
   mode: GraphReadMode,
 ): GraphReadRequestV1 => {
   const spec = 'build' in query ? query.build() : query;
+  assertNoRelationImage(spec.selection, 'Graph read protocol v1');
   if (!spec.view && (spec.select || spec.includes)) {
     throw new Error('Data graph read transport currently requires a View for projected Queries.');
   }
@@ -341,6 +347,8 @@ export const validateGraphReadSelection = (
     return selectionError('Data graph read Selection is invalid or too deep.');
   }
   if (value.kind === 'all' || value.kind === 'none') return undefined;
+  if (value.kind === 'relation-image')
+    return selectionError('Graph read protocol v1 does not yet support relation-image Selections.');
   if (value.kind === 'references') {
     if (!Array.isArray(value.refs) || value.refs.some(ref => !isEntityRef(ref))) {
       return selectionError('Data graph read Selection references are invalid.');

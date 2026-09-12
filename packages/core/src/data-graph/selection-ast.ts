@@ -49,6 +49,11 @@ export type SelectionExpression =
   | { readonly kind: 'none' }
   | { readonly kind: 'references'; readonly refs: readonly AnyEntityRef[] }
   | {
+      readonly kind: 'relation-image';
+      readonly source: SelectionAst;
+      readonly relationName: string;
+    }
+  | {
       readonly kind: 'and';
       readonly operands: readonly SelectionExpression[];
     }
@@ -166,6 +171,9 @@ export const selectionNot = (operand: SelectionExpression): SelectionExpression 
 };
 
 export const copySelectionExpression = (expression: SelectionExpression): SelectionExpression => {
+  if (expression.kind === 'relation-image') {
+    return { ...expression, source: structuredClone(expression.source) };
+  }
   if (expression.kind === 'predicate') {
     return copyPredicate(expression);
   }
@@ -192,6 +200,16 @@ export const copySelectionExpression = (expression: SelectionExpression): Select
 };
 
 export const lowerSelectionReferences = (expression: SelectionExpression): SelectionExpression => {
+  if (expression.kind === 'relation-image') {
+    const source = structuredClone(expression.source);
+    return {
+      ...expression,
+      source: {
+        ...source,
+        expression: lowerSelectionReferences(source.expression),
+      },
+    };
+  }
   if (expression.kind === 'references') {
     return selectionOr(
       ...expression.refs.map(ref =>
@@ -250,3 +268,16 @@ export const toSelectionAst = <TEntityName extends string>(
   entityName: source.root.name,
   expression: copySelectionExpression(source.selection),
 });
+
+/** Graph membership is deliberately unsupported by v1 transport and mutation consumers. */
+export const hasRelationImage = (expression: SelectionExpression): boolean => {
+  if (expression.kind === 'relation-image') return true;
+  if (expression.kind === 'and' || expression.kind === 'or')
+    return expression.operands.some(hasRelationImage);
+  return expression.kind === 'not' && hasRelationImage(expression.operand);
+};
+
+export const assertNoRelationImage = (expression: SelectionExpression, consumer: string): void => {
+  if (hasRelationImage(expression))
+    throw new TypeError(`${consumer} does not yet support relation-image Selections.`);
+};

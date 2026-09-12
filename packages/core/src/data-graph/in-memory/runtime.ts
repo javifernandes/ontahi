@@ -43,6 +43,7 @@ import { getInMemoryDataGraphObservationHub } from './observation.js';
 import { executeInMemoryOrderedRelationshipCommandEffect } from './ordered-relationship-command.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
+import { lowerInMemoryRelationSelection } from './selection.js';
 
 const selectRows = (
   spec: QuerySpec<any, any>,
@@ -404,10 +405,34 @@ export const createInMemoryDataGraphRuntime = (input: {
   const relationships = input.relationships ?? [];
   const observationHub = getInMemoryDataGraphObservationHub(input.dataset);
   input.relationships = relationships;
+  const prepareRead = <TParams, TResult>(
+    read: QueryOrView<TParams, TResult>,
+    params: TParams,
+  ): QueryOrView<TParams, TResult> => {
+    const lower = <TEntity extends AnyEntityDefinition, TRow>(spec: QuerySpec<TEntity, TRow>) =>
+      lowerInMemoryRelationSelection(
+        spec,
+        input.entities ?? [],
+        related =>
+          executeRelatedRootRead(related, input.dataset, relationships) as Array<
+            Record<string, unknown>
+          >,
+      );
+    if (isRelatedRootReadSpec(read)) {
+      return {
+        ...read,
+        target: lower(read.target),
+        source: prepareRead(read.source, undefined),
+      } as QueryOrView<TParams, TResult>;
+    }
+    return lower(resolveQuerySpec(read as PlainGraphRead<TParams, TResult>, params));
+  };
   return {
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset, relationships)[0] ?? null,
+        try: () =>
+          executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships)[0] ??
+          null,
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -415,7 +440,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     run: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset, relationships),
+        try: () =>
+          executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -424,7 +450,8 @@ export const createInMemoryDataGraphRuntime = (input: {
     stream: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Stream.fromEffect(
         Effect.try({
-          try: () => executeRead(queryOrView, params, input.dataset, relationships),
+          try: () =>
+            executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
           catch: cause =>
             cause instanceof InMemoryDataGraphError
               ? cause
@@ -439,7 +466,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       observationHub.changes().pipe(
         Stream.mapEffect(() =>
           Effect.try({
-            try: () => executeRead(queryOrView, params, input.dataset, relationships),
+            try: () =>
+              executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
             catch: cause =>
               cause instanceof InMemoryDataGraphError
                 ? cause
@@ -458,7 +486,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       ),
     count: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => countRead(queryOrView, params, input.dataset, relationships),
+        try: () =>
+          countRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause

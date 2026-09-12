@@ -244,6 +244,7 @@ const allowsSelection = (
   entity: AnyEntityDefinition,
 ): boolean => {
   if (expression.kind === 'all' || expression.kind === 'none') return true;
+  if (expression.kind === 'relation-image') return false;
   if (expression.kind === 'references') {
     return expression.refs.every(ref =>
       Object.keys(ref.locator).every(fieldName =>

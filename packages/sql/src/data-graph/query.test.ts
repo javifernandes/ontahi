@@ -1,4 +1,4 @@
-import { entity, field, query } from '@ontahi/core/data-graph';
+import { entity, field, query, Selection } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import type { SqlDialect } from './dialect.js';
@@ -20,6 +20,16 @@ const dialect: SqlDialect = {
 const compiler = createSqlQueryCompiler(dialect);
 
 describe('SQL compiler dialect boundary', () => {
+  it('rejects relation-image membership instead of dropping traversal in reads or mutations', () => {
+    const Group = entity('Group', { id: field.id() }).hasMany('items', Item);
+    const selected = Selection.all(Group).through('items');
+    expect(() => compiler.compileQuery(selected.toQuery(), undefined, mapping)).toThrow(
+      'relation-image',
+    );
+    expect(() => compiler.compileSelection(selected.not().expression, mapping, [])).toThrow(
+      'relation-image',
+    );
+  });
   it('parameterizes values and delegates physical syntax while preserving semantic projection', () => {
     const compiled = compiler.compileQuery(
       query(Item)

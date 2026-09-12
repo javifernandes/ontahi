@@ -21,6 +21,7 @@ relatedPlans:
   - ontahi://plans/125-ontahi-reference-fields
   - ontahi://plans/131-ontahi-relationship-semantics
   - ontahi://plans/131a-relationship-command-delta-core-experiment
+  - ontahi://plans/152-discriminated-entity-variants
 exemplars:
   - bookops.model.book
   - bookops.model.paragraph
@@ -33,6 +34,12 @@ An [[ontahi.model.entity|Entity]] is a named domain thing with
 [[ontahi.model.relation|Relations]], operations, policies, and evidence across runtime boundaries.
 
 An Entity defines the universe over which a [[ontahi.model.selection|Selection]] describes membership.
+
+Planned discriminated variants would name a classified population, such as Chapter within
+ContentNode, as a schema target while retaining the base Entity's canonical identity and storage.
+This is distinct from a reusable Selection factory or a View: classification membership must be
+enforced by the runtime, not just expressed by a caller's filter or label. Plan 152 follows the
+contextual Selection factory work; variants are not currently a supported Entity declaration.
 
 The conventional identity is declared at the [[ontahi.model.field|Field]] itself. An exact, required
 `id: field.id()` field gives the Entity a `refById` locator and makes it the default identity:

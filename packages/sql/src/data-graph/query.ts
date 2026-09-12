@@ -48,6 +48,8 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
     description: string,
   ): string => {
     switch (expression.kind) {
+      case 'relation-image':
+        throw new TypeError('SQL does not yet support relation-image Selections.');
       case 'all':
         return 'TRUE';
       case 'none':

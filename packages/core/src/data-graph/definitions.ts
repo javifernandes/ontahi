@@ -370,6 +370,8 @@ export interface GraphSelectionDefinition<
   kind: 'schema.selection';
   entity: TEntity;
   cardinality: TCardinality;
+  /** Receiver-owned model context for source-relative Selection validation. Not wire data. */
+  entities?: readonly AnyEntityDefinition[];
   __value?: SemanticSelection<TEntity['name'], TEntity, TCardinality>;
 }
 
@@ -1350,11 +1352,12 @@ export const graphSelection = <
   const TCardinality extends 'one' | 'many' = 'many',
 >(
   entityDefinition: TEntity,
-  options?: { cardinality?: TCardinality },
+  options?: { cardinality?: TCardinality; entities?: readonly AnyEntityDefinition[] },
 ): GraphSelectionDefinition<TEntity, TCardinality> => ({
   kind: 'schema.selection',
   entity: entityDefinition,
   cardinality: options?.cardinality ?? ('many' as TCardinality),
+  ...(options?.entities ? { entities: options.entities } : {}),
 });
 
 export const describeGraphSchema = <TSchema extends object>(

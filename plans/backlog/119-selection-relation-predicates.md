@@ -11,6 +11,7 @@ Source commit: `a27ef5d1`
 Related plans:
 
 1. [116 Ontahí Selection Model](../done/116-ontahi-selection-model.md)
+2. [120b Contextual Selection Factories](../current/120b-contextual-selection-factories.md)
 
 ## Proposal
 
@@ -26,3 +27,6 @@ Extend the canonical Selection algebra with graph-aware relation predicates such
 ## Non-Goal
 
 This is a useful algebra extension, not a prerequisite for the base Selection model.
+
+120b now needs the minimal graph-membership representation for source-relative factory navigation.
+Coordinate that node here without pulling all relation quantifiers into its first slice.

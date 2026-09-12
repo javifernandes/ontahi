@@ -10,6 +10,7 @@ import type {
   InferEntityMutationRecord,
   InferEntityRecord,
 } from './definitions.js';
+import { contextualSelectionProperties, type SelectionProperties } from './entity-selections.js';
 import {
   query,
   type AnyRelationQueryBuilder,
@@ -306,6 +307,15 @@ export type BoundGraphSelectionRuntimeApi<
   ) => BoundGraphRead<ViewDefinition<undefined, TEntity, TResult>, TReadError, TReadOptions>;
 };
 
+type BoundContextualSelections<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions> =
+  {
+    readonly [K in keyof SelectionProperties<TEntity>]: SelectionProperties<TEntity>[K] extends {
+      root: infer TTarget extends AnyEntityDefinition;
+    }
+      ? BoundSelection<TTarget, undefined, TReadError, TReadOptions, TCommandError, TCommandOptions>
+      : never;
+  };
+
 export type BoundGraphSelection<
   TEntity extends AnyEntityDefinition,
   TResult = InferEntityRecord<TEntity['fields']>,
@@ -333,7 +343,8 @@ export type BoundGraphSelection<
     TCommandError,
     TCommandOptions
   > &
-  BoundGraphSelectionRuntimeApi<TEntity, TResult, TReadError, TReadOptions>;
+  BoundGraphSelectionRuntimeApi<TEntity, TResult, TReadError, TReadOptions> &
+  BoundContextualSelections<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions>;
 
 type BoundSelectionCardinality = 'one' | 'many' | undefined;
 
@@ -526,7 +537,8 @@ export type BoundSelection<
   TCommandOptions
 > &
   BoundSelectionRuntimeApi<TEntity, TReadError, TReadOptions> &
-  Selection<TEntity, TCardinality>;
+  Selection<TEntity, TCardinality> &
+  BoundContextualSelections<TEntity, TReadError, TReadOptions, TCommandError, TCommandOptions>;
 
 export type BoundSelectionEntityBase<
   TEntity extends AnyEntityDefinition,
@@ -534,7 +546,7 @@ export type BoundSelectionEntityBase<
   TReadOptions = undefined,
   TCommandError = TReadError,
   TCommandOptions = TReadOptions,
-> = TEntity & {
+> = Omit<TEntity, 'selection' | 'all' | 'where'> & {
   selection: (
     build: SelectionBuilder<TEntity>,
   ) => BoundSelection<TEntity, undefined, TReadError, TReadOptions, TCommandError, TCommandOptions>;
@@ -802,6 +814,7 @@ export const createGraphSelectionAssembly = <
     BaseGraphSelection<TEntity, TResult>;
 
   const graphSelectionFactories: GraphSelectionFactories = {
+    createSemanticSelection: selected => createBoundSelection(selected),
     createSelection: <TEntity extends AnyEntityDefinition, TResult>(
       builder: QueryBuilder<TEntity, TResult>,
     ) => createGraphSelection(builder) as BaseGraphSelection<TEntity, TResult>,
@@ -888,7 +901,7 @@ export const createGraphSelectionAssembly = <
     const deleteReturning = value.deleteReturning.bind(value);
     const asGraphSelection = () => createGraphSelection(value.toQuery());
 
-    return Object.assign(value, {
+    const bound = Object.assign(value, {
       and: (operand: Selection<TEntity> | SelectionBuilder<TEntity>) =>
         createBoundSelection(and(operand)),
       or: (operand: Selection<TEntity> | SelectionBuilder<TEntity>) =>
@@ -930,6 +943,12 @@ export const createGraphSelectionAssembly = <
       TCommandError,
       TCommandOptions
     >;
+    return contextualSelectionProperties(
+      bound,
+      value.root,
+      () => value,
+      selected => createBoundSelection(selected),
+    );
   };
 
   const bindSelectionEntity = <TEntity extends AnyEntityDefinition>(

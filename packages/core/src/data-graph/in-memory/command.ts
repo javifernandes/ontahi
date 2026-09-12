@@ -8,6 +8,7 @@ import {
   lowerEntityReferenceRecord,
   lowerEntityReferenceSelection,
 } from '../reference-field.js';
+import { hasRelationImage } from '../selection-ast.js';
 
 import type { InMemoryDataset } from './materialization.js';
 import { applySelectionExpression } from './query.js';
@@ -131,6 +132,11 @@ const assertOneAffectedRow = (
 };
 
 const executeMutation = (dataset: InMemoryDataset, command: GraphCommandSpec<any, any, any>) => {
+  if (hasRelationImage(command.selection))
+    throw new InMemoryDataGraphError(
+      'Graph Commands do not yet support relation-image Selections.',
+      'invalid_command',
+    );
   assertReturnableFields(command);
   const entityName = command.root.name;
   const currentRows = [...(dataset[entityName] ?? [])];

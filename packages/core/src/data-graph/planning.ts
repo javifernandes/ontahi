@@ -199,6 +199,8 @@ export const compileSelectionExpression = (
   entityDefinition: AnyEntityDefinition,
   expression: SelectionExpression,
 ): CompiledSelectionExpression => {
+  if (expression.kind === 'relation-image')
+    throw new TypeError('Storage compilation does not yet support relation-image Selections.');
   if (expression.kind === 'references') {
     return compileSelectionExpression(entityDefinition, lowerSelectionReferences(expression));
   }

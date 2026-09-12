@@ -14,6 +14,7 @@ import {
   type EntityMutationAuthoring,
   type EntityRefMutationAuthoring,
 } from './entity-mutation-authoring.js';
+import { reflectContextualSelections } from './entity-selections.js';
 import type { PortableOperationConditions } from './model-expression/index.js';
 import type { DomainOperationExecutionMetadata } from './operation-execution.js';
 import { attachOperationInputSchema, type OperationInputSchema } from './operation-input.js';
@@ -554,6 +555,9 @@ type GraphApiDomainOperation<TEntities extends Record<string, AnyGraphApiEntity>
 type GraphApiEntitySummary = {
   name: string;
   selectionFactories?: Readonly<Record<string, SelectionFactoryDescriptor>>;
+  contextualSelections?: Readonly<
+    Record<string, import('./contextual-selection-factories.js').ContextualSelectionDescriptor>
+  >;
   graphExposure?: GraphEntityExposure;
   graphOperationNames: string[];
   domainOperationNames: string[];
@@ -1379,6 +1383,9 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         name,
         ...(reflectSelectionFactories(entity)
           ? { selectionFactories: reflectSelectionFactories(entity) }
+          : {}),
+        ...(reflectContextualSelections(entity)
+          ? { contextualSelections: reflectContextualSelections(entity) }
           : {}),
         graphExposure: hasGraphMetadata(entity) ? entity.graph.exposure : undefined,
         graphOperationNames: hasGraphOperations(entity) ? Object.keys(entity.operations) : [],

@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/119-selection-relation-predicates
   - ontahi://plans/120-named-and-saved-selections
   - ontahi://plans/120a-pure-named-selection-factory-contract
+  - ontahi://plans/120b-contextual-selection-factories
   - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
 migratedFrom: bookops://atlas/model/selection
@@ -227,6 +228,25 @@ Persisting an editable draft document is a separate product choice and does not 
 tree into Ontahí's semantic model. Explorer should embed the editor through an adapter.
 
 Explorer's operation-input projection recognizes reflected selection fields by entity, cardinality, and identity locator. It presents the mutually exclusive scopes `None`, `Selected (n)`, and `All`, defaults bulk selections to `None`, and loads reflected entity data for editing the references behind `Selected`. Single-cardinality inputs use radio semantics and omit `All`; many-cardinality inputs use checkbox semantics. The raw JSON inspector remains available for composed expressions. Predicate and set-composition controls can extend this projection without changing the transported Selection AST.
+
+## Contextual Factory Direction
+
+A source-relative factory such as `Book.parts` should consume Book membership and produce related
+ContentNode membership without fetching the source population. It shares the pure Selection-factory
+nature of `by`, with source Selection context rather than only scalar inputs. Relation metadata
+belongs to the declared graph; factory call sites do not repeat join fields or locator hints.
+
+The experimental Core slice now represents this as a canonical `relation-image` expression holding
+a source Selection AST and a relation key. `Selection.through` and `contextualSelectionFactory`
+produce ordinary deferred Selections; schema validation resolves paths from receiver-owned model
+definitions. In-memory reads reuse relation-root execution to evaluate membership before shaping.
+Multiple source members imply a set of target members, not grouping, ordering, or singleton
+cardinality. Entity `selections: ({ self }) => ({ ... })` declarations expose named properties on
+Selections, including composition and runtime binding. Discovery exposes copied context/target
+contracts; generated clients receive portable templates with typed target facades rather than server
+callbacks. Self-relation targets retain their declared contract rather than an infinitely inferred
+recursive facade. Protocol v1, Commands and SQL still reject this expression; graph policy support
+and contextual language/UI authoring remain in Plan 120b.
 
 ## Evaluation And Snapshots
 

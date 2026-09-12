@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import { compileModelExpressionCallback } from '../model-expression/compiler.mjs';
 
+import { projectContextualSelections } from './contextual-selections.mjs';
 import { isOntahiEntityDeclarationCall } from './entity-discovery.mjs';
 import { resolveImportedSchemaContext } from './source-resolution.mjs';
 import {
@@ -338,9 +339,22 @@ export const projectEntitySchemaConfig = (configArg, context) => {
       ? projectDerivedFields(fieldsProperty.initializer, context, relations)
       : { fieldsText, derivedFields: [], diagnostics: [] };
 
+  const selections = readObjectLiteralProperty(configArg, 'selections');
+  const contextualProjection =
+    selections && ts.isPropertyAssignment(selections)
+      ? projectContextualSelections(selections.initializer)
+      : {};
+  const diagnostics = [
+    ...derivedProjection.diagnostics,
+    ...(contextualProjection.diagnostics ?? []),
+  ];
+
   return {
     name,
     fieldsText: derivedProjection.fieldsText,
+    ...(contextualProjection.contextualSelectionsText
+      ? { contextualSelectionsText: contextualProjection.contextualSelectionsText }
+      : {}),
     ...(propertyText('display') ? { displayText: propertyText('display') } : {}),
     ...(propertyText('freshness') ? { freshnessText: propertyText('freshness') } : {}),
     ...(propertyText('locators') ? { locatorsText: propertyText('locators') } : {}),
@@ -350,9 +364,7 @@ export const projectEntitySchemaConfig = (configArg, context) => {
     ...(derivedProjection.derivedFields.length > 0
       ? { derivedFields: derivedProjection.derivedFields }
       : {}),
-    ...(derivedProjection.diagnostics.length > 0
-      ? { diagnostics: derivedProjection.diagnostics }
-      : {}),
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
   };
 };
 

@@ -14,6 +14,7 @@ Related plans:
 2. [118 Ontahí Selection Language Editor Research](../done/118-ontahi-selection-language-editor.md)
 3. [150a Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
 4. [120a Pure Named Selection Factory Contract](../done/120a-pure-named-selection-factory-contract.md)
+5. [120b Contextual Selection Factories](../current/120b-contextual-selection-factories.md)
 
 ## Proposal
 
@@ -53,3 +54,7 @@ does not implement saved-selection persistence or deprecate locators.
 - User-owned persisted selections, ownership/versioning, and product UX from the original scope.
 
 These are deferred, not requirements for completing 120a or starting the subsequent consumer work.
+
+The contextual, source-Selection factory portion is now active in 120b. It takes the BookOps
+`Book.parts.chapters` example through membership, runtime and reflective authoring before Entity
+variants. Saved selections and the other extensions above remain backlog work.
