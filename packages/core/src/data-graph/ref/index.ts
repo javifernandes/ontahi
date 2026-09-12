@@ -22,6 +22,7 @@ export {
 } from './schema-reference.js';
 export type {
   GraphSchemaReferenceDefinition,
+  GraphSchemaVariantReferenceDefinition,
   GraphSchemaReferenceRequirement,
   GraphSchemaReferenceResolver,
 } from './schema-reference.js';

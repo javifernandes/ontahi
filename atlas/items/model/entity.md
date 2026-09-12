@@ -47,10 +47,17 @@ canonical base identity. A base-named Ref is not evidence of classification: the
 must enforce the required discriminator and base/variant authority without leaking inaccessible
 membership. Lowering to base Selections preserves one storage population and cache record; renaming
 an ordinary Entity does not. The initial direction is fixed classification, with generic
-discriminator writes guarded before public exposure. Schema-native runtime integration remains
-pending. The subsequent local read facade separates relative Selection membership from the variant
+discriminator writes guarded before public exposure. The subsequent local read facade separates relative Selection membership from the variant
 universe: complement/union compose first, and lowering applies the discriminator outside that
 expression. It reuses base identity/storage and does not imply portable variant policy or writes.
+
+The next bounded implementation supports `graphSchema.existingRef(Variant)` as a direct Operation
+input: canonical base Ref in, classified base record out, checked before the body even with custom
+resolvers. Reflection separates the classification descriptor from identity. Base resolution and
+authorization remain host-owned. Graph discovery now exposes the input descriptor, and codegen
+reconstructs static classified inputs on generated base schemas without server resolvers. Automatic
+variant policy composition, standalone variant exports and REPL introspection/autocomplete remain
+pending. This is not general-purpose variant schema support.
 
 The conventional identity is declared at the [[ontahi.model.field|Field]] itself. An exact, required
 `id: field.id()` field gives the Entity a `refById` locator and makes it the default identity:

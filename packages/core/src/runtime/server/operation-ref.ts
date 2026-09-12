@@ -9,11 +9,13 @@ import type {
 } from '../../data-graph/definitions.js';
 import {
   bindEntityRefInputResolver,
+  getEntityIdentityLocator,
   getGraphSchemaReferenceResolver,
   isEntityRef,
   type EntityRefInputResolutionScope,
   type EntityRefInputResolver,
 } from '../../data-graph/ref/index.js';
+import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
 import { isPlainObject } from '../../value/object.js';
 
 import { failOperation } from './failures.js';
@@ -149,10 +151,21 @@ export const materializeExistingOperationRefs = <TInput extends object>(
       if (!isEntityRef(portableRef) || typeof hydratedRef?.resolve !== 'function') continue;
 
       const participant = yield* toEffect(() => hydratedRef.resolve?.());
-      if (participant == null) {
+      const variant = reference.variant;
+      const identityFields = variant
+        ? getEntityIdentityLocator(reference.target)?.locator.fields
+        : undefined;
+      if (
+        participant == null ||
+        (variant &&
+          (!isPlainObject(participant) ||
+            participant[variant.discriminator.fieldName] !== variant.discriminator.value ||
+            !identityFields?.length ||
+            identityFields.some(field => participant[field] !== portableRef.locator[field])))
+      ) {
         return yield* failOperation(
           'entity_not_found',
-          `Referenced ${reference.target.name} was not found.`,
+          `Referenced ${variant?.name ?? reference.target.name} was not found.`,
           { entityName: reference.target.name, inputPath: path },
         );
       }
@@ -160,6 +173,14 @@ export const materializeExistingOperationRefs = <TInput extends object>(
         return yield* Effect.die(
           new Error(
             `Existing Ref resolver for ${reference.target.name} must return an Entity record or null.`,
+          ),
+        );
+      }
+
+      if (variant && !safeParseUnknownGraphSchema(reference.target, participant).success) {
+        return yield* Effect.die(
+          new Error(
+            `Existing Ref resolver for ${variant.name} returned an invalid base Entity record.`,
           ),
         );
       }

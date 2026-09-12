@@ -568,6 +568,51 @@ describe('Ontahi application declaration analysis', () => {
     });
   }, 30_000);
 
+  it.each([
+    'graphSchema.existingRef(Chapter)',
+    'graphSchema.optional(graphSchema.existingRef(Chapter).resolveWith(loadChapter))',
+    "graphSchema.existingRef(Base.variant('Chapter', { discriminator: { type: 'chapter' } }))",
+  ])(
+    'discovers variant inputs and requires their canonical base in the generated graph: %s',
+    reference => {
+      const analysis = analyzeSpecificDomainEntityExport(
+        `
+        import { entity } from '@ontahi/core/entity';
+        const Base = entity({ name: 'Node', fields: {
+          id: field.id(), type: field.enum(['part', 'chapter']),
+        } });
+        const Chapter = Base.variant('Chapter', { discriminator: { type: 'chapter' } });
+        export const Note = entity({
+          name: 'Note', fields: { id: field.id() },
+          domainOperationDefaults: { authority: 'server', exposure: 'bridge', layer: 'notes' },
+          operations: ({ operation }) => ({
+            inspect: operation({
+              input: graphSchema.object({ chapter: ${reference} }),
+              run: ({ chapter }) => chapter,
+            }),
+          }),
+        });
+      `,
+        'Note',
+      );
+      expect(analysis.diagnostics).toEqual([]);
+      expect(analysis.definition.operations[0].variantInputs).toEqual([
+        {
+          placeholder: '__ontahi_variant_input_0__',
+          descriptor: {
+            kind: 'entity-variant',
+            name: 'Chapter',
+            baseEntityName: 'Node',
+            discriminator: { fieldName: 'type', value: 'chapter' },
+          },
+        },
+      ]);
+      expect(() => renderGeneratedClientEntityModule({ entities: [analysis.definition] })).toThrow(
+        'requires base Entity Node in the generated graph',
+      );
+    },
+  );
+
   it('compiles named Operation conditions from real Ref input schemas without executing them', async () => {
     const analysis = analyzeSpecificDomainEntityExport(
       `

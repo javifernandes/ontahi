@@ -60,6 +60,24 @@ or emitted by codegen.
 
 ## Lower-level API
 
+### Experimental classified Operation inputs
+
+`graphSchema.existingRef(Chapter)` inputs are projected when Chapter resolves to a literal
+`ContentNode.variant('Chapter', { discriminator: { type: 'chapter' } })` declaration. Local and
+imported declarations (including import aliases), direct optional/nullable wrappers and named
+object inputs are supported. Operation config shorthand `{ input }` preserves that input too.
+
+Codegen extracts a data descriptor and emits the variant on the **generated base schema**. The base
+must be an `entity({ name, fields })` declaration included in the generated graph; missing bases
+are diagnosed rather than imported from server source. Custom `.resolveWith(...)` resolvers remain
+server-owned and are omitted from client code. Canonical Ref identity and the reflected variant
+requirement survive generation, without implying that client validation proves membership.
+
+Opaque declarations, named Values containing variants, portable conditions on variant inputs and
+portable `graphSchema.ref(Variant)` are
+not supported by this slice. Standalone generated variant exports, variant read roots and REPL
+autocomplete remain follow-ups; generated input schemas are not a new read authorization surface.
+
 This package evaluates the supported TypeScript/JavaScript DSL shape into a serializable application model that can be consumed by generic projections and runtime-specific emitters. Application declarations, target selection, alias values, and output paths remain host-owned.
 
 ```js

@@ -2,7 +2,10 @@ import ts from 'typescript';
 
 import { compileModelExpressionCallback } from '../model-expression/compiler.mjs';
 
-import { resolveEntitySchemaProjection } from './entity-schema-projection.mjs';
+import {
+  containsVariantReference,
+  resolveEntitySchemaProjection,
+} from './entity-schema-projection.mjs';
 import {
   deriveGraphOutputFromSchemaNode,
   isGraphOutputSchemaCall,
@@ -11,6 +14,7 @@ import {
 import { resolveOperationInitializer } from './operation-discovery.mjs';
 import { resolveImportedSchemaContext } from './source-resolution.mjs';
 import { unwrapExpression } from './typescript-ast.mjs';
+import { projectVariantInputs } from './variant-inputs.mjs';
 
 const getNodeText = node => node.getText();
 
@@ -615,6 +619,8 @@ export const parseOperationDefinition = (
   for (const item of configArg.properties) {
     if (ts.isPropertyAssignment(item) && ts.isIdentifier(item.name)) {
       config.set(item.name.text, item.initializer);
+    } else if (ts.isShorthandPropertyAssignment(item)) {
+      config.set(item.name.text, item.name);
     }
   }
 
@@ -699,6 +705,7 @@ export const parseOperationDefinition = (
   let graphOutputText;
   let clientCacheText;
   let inputSchemaText;
+  let variantInputs;
   let outputSchemaText;
   let inputNamedDefinition;
   let outputNamedDefinition;
@@ -725,12 +732,39 @@ export const parseOperationDefinition = (
         : unwrappedInput;
     resolvedInputNode = localInputNode;
 
+    if (
+      exposure !== 'server-only' &&
+      localInputNode &&
+      containsVariantReference(localInputNode, importedInputContext ?? schemaContext)
+    ) {
+      try {
+        if (contractsNode)
+          throw new Error('Portable conditions on variant inputs are not supported yet.');
+        const projected = projectVariantInputs(
+          localInputNode,
+          importedInputContext ?? schemaContext,
+        );
+        if (!projected.variants.length)
+          throw new Error('Use graphSchema.existingRef for variant inputs.');
+        inputSchemaText = projected.schemaText;
+        variantInputs = projected.variants;
+      } catch (cause) {
+        return { diagnostics: [`${operationName}.input: ${cause.message}`] };
+      }
+    }
+
     inputNamedDefinition = analyzeNamedValueDefinition({
       node: localInputNode,
       declaration: localInputDeclaration ?? importedInputDeclaration,
       context: localInputDeclaration ? schemaContext : (importedInputContext ?? schemaContext),
       fallbackDeclaration: `${operationName}.input`,
     });
+    if (variantInputs && inputNamedDefinition)
+      return {
+        diagnostics: [
+          `${operationName}.input: named Values containing variants are not supported yet; use a direct object input.`,
+        ],
+      };
 
     if (
       localInputNode &&
@@ -738,7 +772,7 @@ export const parseOperationDefinition = (
     ) {
       const candidateInputSchemaText = getNodeText(unwrapExpression(localInputNode));
       if (candidateInputSchemaText.trim() !== 'undefined') {
-        inputSchemaText = candidateInputSchemaText;
+        inputSchemaText ??= candidateInputSchemaText;
       }
     }
   }
@@ -877,6 +911,7 @@ export const parseOperationDefinition = (
     graphOutputText,
     clientCacheText,
     inputSchemaText,
+    ...(variantInputs ? { variantInputs } : {}),
     outputSchemaText,
     inputNamedDefinition,
     outputNamedDefinition,

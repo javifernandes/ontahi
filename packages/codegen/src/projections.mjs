@@ -4,6 +4,7 @@ import {
   printClientEntitySchemaImports,
   printClientEntitySchemaStatements,
 } from './generated-module/client-entity-schema.mjs';
+import { renderVariantInputs } from './operation-contracts/variant-inputs.mjs';
 
 const INLINE_BRIDGE_QUERY_INPUT_TYPE_PATTERN = /(:\s*)(\{\s*[^{}]*?\s*\})(\s*\)\s*=>)/g;
 
@@ -103,10 +104,15 @@ ${relationDefinitions
         operation.graphOutputText,
         projectedNames,
       );
-      const inputSchemaText = operation.inputNamedDefinition
+      const projectedInputSchemaText = operation.inputNamedDefinition
         ? (namedDefinitionLocalNames.get(operation.inputNamedDefinition.name) ??
           replaceProjectedEntityNames(operation.inputSchemaText, projectedNames))
         : replaceProjectedEntityNames(operation.inputSchemaText, projectedNames);
+      const inputSchemaText = renderVariantInputs(
+        projectedInputSchemaText,
+        operation.variantInputs,
+        projectedNames,
+      );
       const outputSchemaText = operation.outputNamedDefinition
         ? (namedDefinitionLocalNames.get(operation.outputNamedDefinition.name) ??
           replaceProjectedEntityNames(operation.outputSchemaText, projectedNames))

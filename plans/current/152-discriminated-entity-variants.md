@@ -17,7 +17,7 @@ This is distinct from a named Selection. A Selection can describe any changing c
 declares a domain classification with an enforceable discriminator and a usable schema contract.
 Not every `activeChapters` or date-dependent factory should become a new Entity type.
 
-## Proposed form (illustrative, not an existing API)
+## Target form (declaration and direct existingRef input now experimental)
 
 ```ts
 const Part = ContentNode.variant('Part', { discriminator: { type: 'part' } });
@@ -79,6 +79,8 @@ assembly remain distinct consumers; this plan must not reintroduce read-then-wri
 - [ ] Discriminator writes/transitions are explicitly supported or explicitly rejected.
 - [ ] Factories can target variants without repeating their discriminator predicates at call sites.
 - [ ] Reflection, generated clients and both language projections preserve the contract.
+- [ ] REPL introspection/autocomplete discover variants, narrowed inherited fields and factories from
+      the canonical reflected contract, consistently across both dialects and incomplete drafts.
 - [ ] BookOps rehearsal documents the changed existence semantics and the release/adoption boundary.
 
 ## Verification and boundaries
@@ -175,7 +177,7 @@ Use the base for Ref creation/cache writes; accidental `createEntityRef(Chapter,
 instead of silently creating a Chapter identity namespace. No writes are exposed by the variant
 selection; existing base Commands, including discriminator updates, remain unchanged.
 
-Remaining next slice: receiver-owned variant schema targets, canonical Ref assignability and
+Next slice at this checkpoint: receiver-owned variant schema targets, canonical Ref assignability and
 `existingRef` integration. Enforce classification plus base/variant authorization at that boundary;
 do not trust this authoring facade or an expanded client predicate. Before enabling variant writes,
 define and enforce guards on discriminator updates through both base and variant paths.
@@ -187,3 +189,66 @@ repository formatting, and clean-room tarball type/runtime verification passed. 
 executes complement and wrong-kind Ref reads using only published entrypoints. No live SQL,
 variant-specific receiver authorization, generated variant declarations or Console UI support
 is claimed. A Core patch Changeset records this experimental read surface.
+
+## Classified Operation participant checkpoint — 2026-09-12
+
+The local read slice was committed as `a254a2a`. `graphSchema.existingRef(Chapter)` now accepts a
+canonical ContentNode Ref as client input and narrows the materialized Operation participant to
+`type: 'chapter'`. Resolution uses the existing base runtime or host-provided resolver. Before the
+body, the receiver checks classification, canonical identity and the complete base record schema.
+Custom resolvers retain these checks; they cannot replace the record with an arbitrary DTO.
+Optional/nullable direct fields work; nested participants and stored variant Reference Fields
+remain explicitly unsupported. A previously resolved base participant is not membership proof.
+
+Missing, wrong-kind, wrong-identity and host-filtered inaccessible records share `entity_not_found`.
+This proves the classification gate and scoped resolver behavior, **not** automatic base/variant
+policy composition in the Graph Read dispatcher. Hosts still own visibility/authorization through
+the existing resolution boundary. No new policy registry or deferred Selection consumer is added.
+
+`Chapter.descriptor` and reflected Ref/JSON Schema contracts expose the variant name, base Entity
+name and discriminator separately from canonical identity. Returned descriptor copies cannot alter
+the receiver requirement. Codegen now diagnoses unsupported generated variant Operation inputs
+instead of emitting an unbound `Chapter` identifier. This does not yet generate variant declarations.
+
+### Next bounded slice
+
+Carry this descriptor into discovery and generated client declarations, then make the REPL consume
+that canonical contract for introspection and autocomplete in both dialects. Resolve base Fields
+and factories through the base Entity descriptor and narrow the discriminator to the variant value.
+Completions must work on incomplete drafts, without requiring a prior execution, and must not offer
+variant roots until the receiver supports their read contract. Do not duplicate semantic completion
+rules in each dialect. Typed contextual factory targets and receiver policy composition remain
+explicit remaining work; no REPL UI implementation is claimed by this checkpoint.
+
+Validation: all 1,059 Core tests (12 new participant cases) and 129 codegen tests passed. Core
+coverage gates, Core build/lint, codegen lint/types, package and example typechecks, repository
+formatting and root script lint passed. Clean-room tarball installation/type/runtime verification
+executes both successful Chapter materialization and wrong-kind rejection using public entrypoints.
+
+## Operation discovery/codegen checkpoint — 2026-09-12
+
+Graph `describe()` now includes each graph-native Operation input descriptor, including variant
+classification separately from canonical Ref identity. Codegen analyzes local/imported literal
+`existingRef(Chapter)` inputs (including import aliases and optional/nullable direct wrappers),
+records the classification as data, and reconstructs it on the generated base schema. Custom
+`resolveWith` implementations are not emitted. The same serializable input contract is observable
+on server and generated-client discovery. Operation config shorthand `{ input }` now preserves the
+contract; a generated-module type test exposed its previous omission.
+
+This closes **Operation input projection**, not the full variant discovery/read surface. The base
+must be included in the generated graph and resolve to a supported Entity declaration. Opaque
+classifiers, portable `ref(Variant)`, portable conditions on variant inputs and named Values containing
+variants are explicitly rejected; condition compilation still needs canonical base/variant symbols.
+No standalone Chapter export, contextual variant target or remote variant read root is added.
+
+Next: expose registered variants as discoverable read targets with receiver semantics, then connect
+the shared language reflection/completion model to both REPL dialects. Keep canonical base identity,
+inherited Fields/factories and narrowed enum values; completions must work on incomplete drafts
+before any execution. This turn deliberately stops at the generated input boundary instead of
+advertising read roots that the receiver does not yet understand. The REPL remains unchanged.
+
+Validation: 1,059 Core tests and 137 codegen tests passed, including semantic TypeScript validation
+and execution of a generated browser module with imported/aliased variant inputs. Core/codegen
+coverage gates passed, as did builds, package/example typechecks, lint and repository formatting.
+Clean-room artifact verification includes the classified input descriptor in graph discovery and
+the receiver's successful/wrong-kind materialization paths. No REPL/browser UI proof is claimed.

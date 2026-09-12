@@ -1,6 +1,10 @@
 import { isJsonValue, type JsonValue } from '../value/json.js';
 
-import { EntityVariant, type EntityVariantDiscriminator } from './entity-variant.js';
+import {
+  EntityVariant,
+  type EntityVariantDescriptor,
+  type EntityVariantDiscriminator,
+} from './entity-variant.js';
 import {
   assertModelExpressionProgram,
   collectModelExpressionDependencies,
@@ -65,6 +69,8 @@ export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEn
     source?: AnyEntityDefinition;
     fieldName?: string;
     referenceRequirement?: 'existing';
+    /** Receiver-owned classification requirement; portable Refs retain the base entityName. */
+    variant?: EntityVariantDescriptor;
   };
 
 export type AnyReferenceFieldDefinition = ReferenceFieldDefinition<AnyEntityDefinition>;
@@ -1021,10 +1027,13 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
   EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
 > => {
   const entityFields = Object.fromEntries(
-    Object.entries(fields).map(([fieldName, definition]) => [
-      fieldName,
-      isReferenceFieldDefinition(definition) ? { ...definition } : definition,
-    ]),
+    Object.entries(fields).map(([fieldName, definition]) => {
+      if (isReferenceFieldDefinition(definition) && definition.variant)
+        throw new TypeError(
+          'Variant references are supported as Operation inputs, not stored Reference Fields yet.',
+        );
+      return [fieldName, isReferenceFieldDefinition(definition) ? { ...definition } : definition];
+    }),
   ) as TFields;
   const hasConventionalId =
     entityFields.id?.fieldType === 'id' && !entityFields.id.nullable && !entityFields.id.optional;

@@ -37,7 +37,11 @@ import {
   bindEntityRefRelationshipCommands,
   type RelationshipCommandExecutor,
 } from './relationship-command.js';
-import { isGraphSchemaDefinition } from './schema-descriptor.js';
+import {
+  isGraphSchemaDefinition,
+  toGraphSchemaDescriptor,
+  type GraphSchemaDescriptor,
+} from './schema-descriptor.js';
 import type { SemanticSelection } from './selection-ast.js';
 import {
   reflectSelectionFactories,
@@ -616,6 +620,7 @@ type GraphApiSummary = {
     execution?: DomainOperationExecutionMetadata;
     conditions?: PortableOperationConditions;
     hasBridgeQuery: boolean;
+    input?: GraphSchemaDescriptor;
   }>;
   durableOperations: GraphApiDurableOperationSummary[];
   ingress: GraphApiIngressSummary[];
@@ -1416,6 +1421,9 @@ export const defineGraphApi = <TEntities extends Record<string, AnyGraphApiEntit
         ...(operation.execution ? { execution: operation.execution } : {}),
         ...(operation.conditions ? { conditions: operation.conditions } : {}),
         hasBridgeQuery: Boolean(operation.bridge?.query?.length),
+        ...(isGraphSchemaDefinition(operation.input)
+          ? { input: toGraphSchemaDescriptor(operation.input) }
+          : {}),
       })),
       durableOperations: listDurableDomainOperations().map(operation => {
         const durable = operation.durable as DurableOperationMetadata<any, any>;

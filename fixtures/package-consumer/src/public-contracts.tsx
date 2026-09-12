@@ -123,8 +123,9 @@ const chapters = Chapter.where(node => node.title.eq('Intro'))
 export const narrowedChapterRead: 'chapter' | undefined = chapters.__result?.type;
 // @ts-expect-error Chapter predicates retain the narrowed discriminator type.
 Chapter.where(node => node.type.eq('part'));
-// @ts-expect-error Read-only variants are not yet Operation schema targets.
-graphSchema.existingRef(Chapter);
+export const existingChapterInput = graphSchema.object({
+  chapter: graphSchema.existingRef(Chapter),
+});
 // @ts-expect-error Variant selections do not expose generic writes.
 Chapter.all().update({ type: 'part' });
 

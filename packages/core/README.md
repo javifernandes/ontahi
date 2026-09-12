@@ -59,9 +59,38 @@ This is an experimental **local read surface**, not yet a fully polymorphic Enti
 It accepts one required, stored, non-null enum discriminator. Variants/selections reject implicit
 JSON serialization. Explicit lowering retains the filter but produces a base read, not a portable
 variant contract or extra permission. Register/authorize the base Entity; no variant-specific
-policy is implemented yet. `existingRef(Chapter)`, discovery/codegen, Console syntax, automatic
+policy is implemented yet. Discovery/codegen, Console syntax, automatic
 typed contextual targets, variant writes and classification transitions remain unsupported.
 Base Entity mutations are unchanged; declaring a read variant does not freeze the base field.
+
+### Classified Operation participants
+
+Operations can now require a classified participant explicitly:
+
+```ts
+input: graphSchema.object({ chapter: graphSchema.existingRef(Chapter) });
+```
+
+The caller sends an ordinary **ContentNode** Ref. Before entering the Operation body, the receiver
+resolves it using the existing base runtime/resolver, checks canonical identity, validates the base
+record and requires `type: 'chapter'`. The body's participant type narrows that discriminator and
+keeps a non-enumerable canonical `.ref`. This materializes intentionally; it is not a deferred
+Selection input. Optional/nullable direct input fields are supported, not nested participants or
+stored variant Reference Fields.
+
+`.resolveWith(...)` retains these checks and must return a complete base Entity record, not a
+custom DTO. Visibility/authorization remains host-owned through the existing resolution boundary;
+this does not add a variant policy registry. Missing, wrong-kind, wrong-identity and visibility-
+filtered records use the same `entity_not_found` response without entering the body.
+
+`Chapter.descriptor`, schema descriptors and JSON Schema expose the classification as data separate
+from base identity: `{ kind: 'entity-variant', name: 'Chapter', baseEntityName: 'ContentNode',
+discriminator: { fieldName: 'type', value: 'chapter' } }`. Ref validation alone is not membership
+proof. `defineGraphApi(...).describe().domainOperations` includes each graph-native input schema,
+including these variant requirements. Codegen projects literal `existingRef(Chapter)` inputs onto
+the generated base schema, without copying custom resolvers or importing server declarations.
+The base Entity must be in the generated graph; see the [codegen boundaries](../codegen/README.md).
+Remote variant read roots and shared REPL introspection/autocomplete are not wired yet.
 
 ## Experimental named Selection factories
 

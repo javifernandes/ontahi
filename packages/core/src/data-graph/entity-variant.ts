@@ -7,6 +7,11 @@ import type {
   InferEntityRecord,
   InferFieldValue,
 } from './definitions.js';
+import {
+  getEntityVariantContract,
+  registerEntityVariantContract,
+  type EntityVariantDescriptor,
+} from './entity-variant-contract.js';
 import { query, QueryBuilder } from './query.js';
 import type { EntityRef } from './ref/index.js';
 import { parseGraphSchema } from './schema.js';
@@ -16,6 +21,8 @@ import {
   type SelectionExpression,
 } from './selection-ast.js';
 import { Selection, type SelectionBuilder } from './selection-value.js';
+
+export type { EntityVariantDescriptor } from './entity-variant-contract.js';
 
 /** Only finite string-valued fields can describe the initial, fixed enum classification. */
 export type EntityVariantDiscriminator<TEntity extends AnyEntityDefinition> = {
@@ -47,7 +54,7 @@ type FactoryInput<TEntity> = TEntity extends {
   ? TInput
   : never;
 
-/** Experimental local read surface. Schema inputs, discovery and writes are not yet supported. */
+/** Experimental classified reads and existingRef inputs; discovery and writes are not yet supported. */
 export class EntityVariant<
   TEntity extends AnyEntityDefinition,
   TName extends string,
@@ -79,6 +86,16 @@ export class EntityVariant<
     )
       throw new TypeError('Variant discriminator must match a required stored enum field.');
     this.#membership = new Selection(base, { kind: 'predicate', fieldName, operator: 'eq', value });
+    registerEntityVariantContract(this, base, {
+      kind: 'entity-variant',
+      name,
+      baseEntityName: base.name,
+      discriminator: { fieldName, value },
+    });
+  }
+
+  get descriptor(): EntityVariantDescriptor {
+    return getEntityVariantContract(this)!.descriptor;
   }
 
   all() {
