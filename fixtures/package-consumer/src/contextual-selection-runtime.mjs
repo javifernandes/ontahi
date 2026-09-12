@@ -149,7 +149,9 @@ if (
     'Packed client failed contextual capability negotiation and application execution.',
   );
 
-const languageApplication = { entities: [Lists, FactoryItem].map(reflectSelectionLanguageEntity) };
+const languageApplication = {
+  entities: [Lists, FactoryItem].map(entity => reflectSelectionLanguageEntity(entity)),
+};
 const source = 'FactoryList.by({ id: "l1" }).where(id = "l1").pending.where(done = false).many()';
 const analysis = analyzeConsoleDocument(source, languageApplication);
 const declarative = convertConsoleDocument(source, languageApplication, 'declarative');

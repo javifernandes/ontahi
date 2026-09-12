@@ -10,6 +10,8 @@ import {
   reflectSelectionLanguageEntity,
 } from '../index.js';
 
+import { completeConsoleFactory } from './factories.js';
+
 const User = withSelectionFactories(
   entity('User', {
     id: field.id(),
@@ -43,6 +45,41 @@ const User = withSelectionFactories(
     },
   },
 );
+
+describe('conjoined factory keyword completion', () => {
+  it.each([
+    { source: 'and ', pos: 4, from: 4, to: 4 },
+    { source: 'and b', pos: 5, from: 4, to: 5 },
+    { source: 'and by', pos: 5, from: 4, to: 6 },
+    { source: 'and !', pos: 5, from: 5, to: 5 },
+    { source: 'and café', pos: 8, from: 8, to: 8 },
+  ])('preserves word replacement bounds for $source at $pos', ({ source, pos, from, to }) => {
+    const result = completeConsoleFactory(source, pos, {
+      from: 0,
+      to: source.length,
+      conjunction: { from: 0, to: 3 },
+    });
+    expect(result).toMatchObject({ from, to, items: [{ label: 'by', apply: 'by ' }] });
+  });
+
+  it('does not backtrack over a long invalid prefix before the cursor', () => {
+    const source = 'and ' + 'a'.repeat(100_000) + '!';
+    const started = performance.now();
+    const result = completeConsoleFactory(source, source.length, {
+      from: 0,
+      to: source.length,
+      conjunction: { from: 0, to: 3 },
+    });
+    expect(result).toMatchObject({
+      from: source.length,
+      to: source.length,
+      items: [{ label: 'by' }],
+    });
+    // The previous unanchored suffix regex retries the entire word at every offset (quadratic).
+    // A generous one-second budget guards that regression, not normal editor latency.
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
 const application = JSON.parse(
   JSON.stringify({ entities: [reflectSelectionLanguageEntity(User)] }),
 );

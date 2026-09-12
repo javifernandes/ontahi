@@ -141,6 +141,12 @@ const valueItems = (schema: GraphSchemaDescriptor): ConsoleLanguageCompletionIte
       ];
 };
 
+const wordStartBeforeCursor = (document: string, position: number, lowerBound: number) => {
+  let start = position;
+  while (start > lowerBound && /\w/.test(document[start - 1]!)) start -= 1;
+  return start;
+};
+
 export const completeConsoleFactory = (
   document: string,
   pos: number,
@@ -150,10 +156,9 @@ export const completeConsoleFactory = (
 ): ConsoleLanguageCompletionResult | undefined => {
   if (!factory || pos < factory.from || pos > factory.to) return undefined;
   if (factory.conjunction && (!factory.by || pos <= factory.by.to)) {
-    const prefix = document.slice(factory.conjunction.to, pos).match(/\w*$/)![0];
     return {
-      from: factory.by?.from ?? pos - prefix.length,
-      to: factory.by?.to ?? pos + document.slice(pos, factory.to).match(/^\w*/)![0].length,
+      from: factory.by?.from ?? wordStartBeforeCursor(document, pos, factory.conjunction.to),
+      to: factory.by?.to ?? pos + /^\w*/.exec(document.slice(pos, factory.to))![0].length,
       items: [
         {
           label: 'by',
