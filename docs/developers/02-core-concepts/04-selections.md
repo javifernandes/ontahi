@@ -89,6 +89,22 @@ identity references, existence, and uniqueness of current authorized membership 
 Consumers can compose constraints without modifying the caller's Selection, then build a Command
 without a preliminary read. That capability does not widen the current exact remote Command API.
 
+## Exact-one membership is not a row limit
+
+An exact-one consumer requires exactly one member of the Selection **after authorization scope is
+applied, but before read shaping**. Zero or multiple authorized members fail with a cardinality
+mismatch. Ordering, projection, and a positive limit cannot turn a non-unique Selection into a
+unique one; the same rule applies to counts. `one` with `limit(0)` is contradictory and rejected.
+
+Use nullable `first` when you deliberately want the first matching row, or `exists` when you only
+need to know whether there is a match. Neither asserts uniqueness. The Console keeps its stricter
+authoring rule: explicit limits are not accepted with `one`; implicit policy limits still cannot
+hide duplicate membership.
+
+SQL adapters check up to two authorized rows in one statement. Supabase requests exact count
+metadata together with the rows, because a server row cap can otherwise hide additional matches.
+These are read checks, not persistent uniqueness guarantees or read-before-write mutation steps.
+
 ## Identities can describe membership too
 
 An operation input declared as `self.many()` accepts a predicate-defined Selection, explicit

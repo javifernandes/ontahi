@@ -266,6 +266,11 @@ describe('data graph read protocol', () => {
       code: 'invalid_request',
     },
     {
+      name: 'exact-one with zero limit',
+      request: validReadRequest({ cardinality: 'one', limit: 0 }),
+      code: 'invalid_request',
+    },
+    {
       name: 'non-object View',
       request: validReadRequest({ view: 'TripList' }),
       code: 'invalid_request',

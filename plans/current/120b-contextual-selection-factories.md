@@ -67,8 +67,8 @@ that extension is implemented. Do not create competing registries with inconsist
   read; neither belongs in the factory's membership template. Source read shaping is not accepted
   as an implicit membership boundary.
 - One/many requirements belong to consumers. A belongs-to relation from many sources does not
-  establish a singleton result. [116a](../next/116a-selection-cardinality-before-read-shaping.md)
-  remains the cardinality hardening gate before using these as exact-one inputs.
+  establish a singleton result. [116a](../done/116a-selection-cardinality-before-read-shaping.md)
+  now enforces consumer exact-one membership before read shaping.
 - Expanded graph membership must authorize every source, relation and target at the receiver.
   Neither a public factory name nor client-side expansion grants authority. Unsupported adapters
   or protocol paths must fail explicitly; never drop traversal and read the entire target Entity.
@@ -350,7 +350,7 @@ shaping. Interleaved source filters and `by` after navigation, parameterized con
 raw relation authoring, observation/source invalidation, and mutation support remain separate work.
 Keep richer Console composition with [150](150-ontahi-devtools-semantic-console.md), relation membership
 extensions with [119](../backlog/119-selection-relation-predicates.md), cardinality hardening with
-[116a](../next/116a-selection-cardinality-before-read-shaping.md), and variants with
+[116a](../done/116a-selection-cardinality-before-read-shaping.md), and variants with
 [152](../next/152-discriminated-entity-variants.md). Review this read-only boundary before commands
 or adapting BookOps after a release.
 

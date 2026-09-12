@@ -375,7 +375,9 @@ The Read Console shipped in PR #148. Before adding mutable syntax, the agreed ne
    freezing mutable targeting syntax. This bounded proof is complete: Core, discovery/codegen/inspection,
    and Console factory intersections plus `where` are implemented. Union/grouping and broader factory
    extensions remain deferred in Plan 120.
-4. Harden consumer cardinality/read shaping in 116a, then add Graph Commands.
+4. Consumer cardinality/read shaping is hardened in
+   [116a](../done/116a-selection-cardinality-before-read-shaping.md). The agreed next slice is
+   [152's Entity variants](../next/152-discriminated-entity-variants.md), before Graph Commands.
 5. Add Operation invocation.
 
 The following A/B sections retain the original walking-skeleton scope and history. The research
@@ -600,7 +602,8 @@ smoke or package export was added in this slice.
 
 ### D. Graph Commands
 
-Status: not started; 120a's factory/Read-language proof is complete; 116a cardinality hardening is next.
+Status: not started; 120a's factory/Read-language proof and 116a cardinality hardening are complete.
+Entity variants (152) are the next agreed slice before exposing Commands.
 The agreed sequence now validates deferred Selection authoring before exposing mutable syntax;
 legacy locators remain compatible until representative consumers prove a replacement.
 

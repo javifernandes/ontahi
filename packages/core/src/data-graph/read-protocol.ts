@@ -331,6 +331,12 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       ),
     };
   }
+  if (value.cardinality === 'one' && value.limit === 0) {
+    return {
+      success: false,
+      error: graphReadProtocolError('invalid_request', 'Exact-one reads cannot use limit(0).'),
+    };
+  }
   if (value.view !== undefined && !isRecord(value.view)) {
     return {
       success: false,

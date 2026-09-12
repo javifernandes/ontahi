@@ -91,6 +91,36 @@ const harness = (responses: (Row[] | Error)[], graph = model(), relationSelectio
   });
   return { ...graph, runtime, calls };
 };
+
+describe('exact-one membership before SQL shaping', () => {
+  it('probes for a second member in the same read even with limit one', async () => {
+    const h = harness([[parent]]);
+    const read = { ...query(h.Parent).limit(1).build(), cardinality: 'one' as const };
+    await expect(Effect.runPromise(h.runtime.run(read, undefined))).resolves.toEqual([parent]);
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0]?.text).toMatch(/ LIMIT 2$/);
+  });
+
+  it('enforces cardinality on counts too', async () => {
+    const h = harness([[{ count: 2 }]]);
+    const read = { ...query(h.Parent).limit(1).build(), cardinality: 'one' as const };
+    await expect(Effect.runPromise(h.runtime.count(read, undefined))).rejects.toThrow(
+      'Expected exactly one',
+    );
+  });
+
+  it.each(['run', 'count'] as const)(
+    'rejects one with limit zero before %s executes SQL',
+    async mode => {
+      const h = harness([]);
+      const read = { ...query(h.Parent).limit(0).build(), cardinality: 'one' as const };
+      await expect(
+        Effect.runPromise<unknown, unknown>(h.runtime[mode](read, undefined)),
+      ).rejects.toThrow('cannot use limit(0)');
+      expect(h.calls).toEqual([]);
+    },
+  );
+});
 const related = (
   graph: ReturnType<typeof model>,
   mode: RelatedRootReadMode,
@@ -110,6 +140,38 @@ const related = (
 };
 
 describe('shared SQL read materialization', () => {
+  it.each([false, true])(
+    'checks related target cardinality, including empty source (many=%s)',
+    async many => {
+      for (const emptySource of [false, true]) {
+        for (const mode of ['run', 'count'] as const) {
+          const target = many ? tag : child;
+          const h = harness(
+            emptySource
+              ? [[]]
+              : [
+                  [many ? child : parent],
+                  ...(many
+                    ? [
+                        [
+                          { source_value: 'c1', target_value: 't1' },
+                          { source_value: 'c1', target_value: 't2' },
+                        ],
+                      ]
+                    : []),
+                  [target, { ...target, id: 'second' }],
+                ],
+          );
+          const read = related(h, 'rows', many);
+          read.target = { ...read.target, cardinality: 'one', limit: 1 };
+          await expect(
+            Effect.runPromise<unknown, unknown>(h.runtime[mode](read, undefined)),
+          ).rejects.toThrow('Expected exactly one');
+        }
+      }
+    },
+  );
+
   it('keeps contextual membership disabled unless a provider opts in', async () => {
     const graph = harness([]);
     await expect(

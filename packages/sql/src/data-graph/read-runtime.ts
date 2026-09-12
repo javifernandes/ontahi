@@ -181,22 +181,36 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
     return materialized;
   };
 
+  const assertReadLimit = (spec: QuerySpec) => {
+    if (spec.cardinality === 'one' && spec.limit === 0) {
+      throw new input.Error('Exact-one reads cannot use limit(0).', 'execution_failed');
+    }
+  };
+
+  const assertCardinality = (spec: QuerySpec, count: number, bounded = false) => {
+    assertReadLimit(spec);
+    if (spec.cardinality === 'one' && count !== 1) {
+      throw new input.Error(
+        `Expected exactly one ${spec.root.name}, received ${count}${bounded && count >= 2 ? ' or more' : ''}.`,
+        'cardinality_mismatch',
+      );
+    }
+  };
+
   const readSpec = async (
     spec: QuerySpec,
     options: {
       entityRows?: boolean;
-      applyLimit?: boolean;
       projectedFields?: readonly string[];
       physicalOrderBy?: readonly string[];
     } = {},
   ): Promise<Record<string, unknown>[]> => {
-    const effectiveSpec =
-      options.applyLimit === false
-        ? {
-            ...spec,
-            limit: undefined,
-          }
-        : spec;
+    assertReadLimit(spec);
+    // One statement proves uniqueness without a separate count/read race.
+    const effectiveSpec = {
+      ...spec,
+      limit: spec.cardinality === 'one' ? 2 : spec.limit,
+    };
     const result = await executeQuery<Record<string, unknown>>(
       compiler.compileQuery(effectiveSpec, undefined, mappingFor(registry, spec.root), {
         ...(input.relationSelections ? { selectionMappings: input.mappings } : {}),
@@ -208,12 +222,7 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
     );
     if (input.normalizeRow)
       result.rows = result.rows.map(row => input.normalizeRow!(spec.root, row));
-    if (spec.cardinality === 'one' && result.rows.length !== 1) {
-      throw new input.Error(
-        `Expected exactly one ${spec.root.name}, received ${result.rows.length}.`,
-        'cardinality_mismatch',
-      );
-    }
+    assertCardinality(spec, result.rows.length, true);
     return options.entityRows
       ? result.rows
       : Promise.all(result.rows.map(row => materializeRow(row, spec)));
@@ -380,6 +389,7 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
     spec: RelatedRootReadSpec<any, any, any, any, any>,
     projectedFields?: readonly string[],
   ): Promise<any[]> => {
+    assertReadLimit(spec.target);
     const relationEntity = spec.relationOwner === 'source' ? spec.sourceEntity : spec.target.root;
     const many = relationEntity.relations[spec.relationName]?.relationKind === 'manyToMany';
     const traversal = many ? resolveEdgeTraversal(spec) : undefined;
@@ -392,7 +402,10 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
         spec.relationOwner,
       );
     const { sourceRows, sourceValues } = await relatedSourceRows(spec, sourceField);
-    if (sourceValues.length === 0) return emptyRelatedResult(spec.mode, sourceRows);
+    if (sourceValues.length === 0) {
+      assertCardinality(spec.target, 0);
+      return emptyRelatedResult(spec.mode, sourceRows);
+    }
     const edges = traversal ? await loadEdges(traversal, sourceValues) : undefined;
     const targetValues = edges ? edges.map(edge => edge.target_value) : sourceValues;
     const targetSpec = withRelatedTargetPredicate(spec, targetField, targetValues);
@@ -449,15 +462,17 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
     count: (queryOrView, params) => {
       if (isRelatedRootReadSpec(queryOrView)) {
         return Effect.tryPromise({
-          try: () =>
-            executeRelatedRootRead(
+          try: () => {
+            assertReadLimit(queryOrView.target);
+            return executeRelatedRootRead(
               {
                 ...queryOrView,
                 mode: 'entityRows',
                 target: { ...queryOrView.target, limit: undefined },
               },
               [],
-            ).then(rows => rows.length),
+            ).then(rows => rows.length);
+          },
           catch: cause =>
             cause instanceof input.Error
               ? cause
@@ -466,15 +481,23 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
       }
       const spec = resolveQuerySpec(queryOrView, params);
       return Effect.tryPromise({
-        try: () =>
-          executeQuery<{ count: number }>(
+        try: async () => {
+          assertReadLimit(spec);
+          const result = await executeQuery<{ count: number }>(
             compiler.compileQuery(queryOrView, params, mappingFor(registry, spec.root), {
               count: true,
               ...(input.relationSelections ? { selectionMappings: input.mappings } : {}),
             }),
-          ),
-        catch: cause => new input.Error('SQL data graph count failed.', 'execution_failed', cause),
-      }).pipe(Effect.map(result => Number(result.rows[0]?.count ?? 0)));
+          );
+          const count = Number(result.rows[0]?.count ?? 0);
+          assertCardinality(spec, count);
+          return count;
+        },
+        catch: cause =>
+          cause instanceof input.Error
+            ? cause
+            : new input.Error('SQL data graph count failed.', 'execution_failed', cause),
+      });
     },
   };
 };

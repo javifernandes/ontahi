@@ -30,7 +30,12 @@ import { executeSupabaseGraphCommandEffect } from './command.js';
 import { executeSupabaseEntityMutationCommandEffect } from './entity-mutation-command.js';
 import { executeSupabaseManyToManyRelationshipCommandEffect } from './many-to-many.js';
 import { materializeSupabaseEntityRow } from './materialization.js';
-import { fetchSupabaseEntityRowsEffect, hydrateSupabaseEntityRowsEffect } from './query.js';
+import {
+  fetchSupabaseEntityRowsEffect,
+  fetchSupabaseEntityRowsResultEffect,
+  hydrateSupabaseEntityRowsEffect,
+} from './query.js';
+import { validateReadCardinality, validateReadLimit } from './read-cardinality.js';
 import { executeSupabaseRelationshipCommandEffect } from './relationship-command.js';
 import type {
   FetchEntityRowsInput,
@@ -66,16 +71,18 @@ export const executeSupabaseGraphQueryEffect = <
     }
 
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
+    yield* validateReadLimit(spec, deps.createError);
     const plan = compileResolvedQueryPlan(spec);
     const supabase = yield* deps.getClient(options);
 
-    const rootRows = yield* fetchSupabaseEntityRowsEffect({
+    const result = yield* fetchSupabaseEntityRowsResultEffect({
       supabase,
       entityDefinition: spec.root,
       predicates: (getConjunctiveSelectionPredicates(spec.selection) ??
         []) as FetchEntityRowsInput<TClient>['predicates'],
       orderBy: spec.orderBy,
-      limit: spec.limit,
+      limit: spec.cardinality === 'one' ? 2 : spec.limit,
+      exactCount: spec.cardinality === 'one',
       selectShape: spec.select,
       includeShape: spec.includes,
       tableName: plan.rootTable,
@@ -85,25 +92,18 @@ export const executeSupabaseGraphQueryEffect = <
       message: `Failed to load ${spec.root.name} records`,
       createError: deps.createError,
     });
+    yield* validateReadCardinality(spec, result.count, deps.createError);
+    // A valid total with missing/truncated data still cannot fulfill an exact-one read.
+    yield* validateReadCardinality(spec, result.rows.length, deps.createError);
 
     const hydratedRows = yield* hydrateSupabaseEntityRowsEffect({
       supabase,
-      rows: rootRows,
+      rows: result.rows,
       includeShape: spec.includes,
       includePlans: plan.includes,
       fetchEntityRowsEffect: nestedInput => fetchSupabaseEntityRowsEffect(nestedInput),
       createError: deps.createError,
     });
-
-    if (spec.cardinality === 'one' && hydratedRows.length !== 1) {
-      return yield* Effect.fail(
-        deps.createError({
-          message: `Expected exactly one ${spec.root.name}, received ${hydratedRows.length}`,
-          logMessage: `Data graph selection cardinality mismatch for ${spec.root.name}`,
-          cause: 'selection_cardinality_mismatch',
-        }),
-      );
-    }
 
     return hydratedRows.map(row =>
       materializeSupabaseEntityRow(row, spec.root, spec.select, spec.includes),
@@ -131,19 +131,12 @@ export const executeSupabaseGraphCountEffect = <
     }
 
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
+    yield* validateReadLimit(spec, deps.createError);
     const plan = compileResolvedQueryPlan(spec);
     const selection = compileSupabaseSelection(plan.selection);
 
     if (selection.kind === 'none') {
-      if (spec.cardinality === 'one') {
-        return yield* Effect.fail(
-          deps.createError({
-            message: `Expected exactly one ${spec.root.name}, received 0`,
-            logMessage: `Data graph selection cardinality mismatch for ${spec.root.name}`,
-            cause: 'selection_cardinality_mismatch',
-          }),
-        );
-      }
+      yield* validateReadCardinality(spec, 0, deps.createError);
       return 0;
     }
 
@@ -159,7 +152,7 @@ export const executeSupabaseGraphCountEffect = <
           throw result.error.message;
         }
 
-        return result.count ?? 0;
+        return (result.count ?? null) as number | null;
       },
       catch: cause =>
         deps.createError({
@@ -169,17 +162,8 @@ export const executeSupabaseGraphCountEffect = <
         }),
     });
 
-    if (spec.cardinality === 'one' && count !== 1) {
-      return yield* Effect.fail(
-        deps.createError({
-          message: `Expected exactly one ${spec.root.name}, received ${count}`,
-          logMessage: `Data graph selection cardinality mismatch for ${spec.root.name}`,
-          cause: 'selection_cardinality_mismatch',
-        }),
-      );
-    }
-
-    return count;
+    yield* validateReadCardinality(spec, count, deps.createError);
+    return count ?? 0;
   });
 
 const resolvePlainSourceSpec = <TParams, TResult>(
@@ -465,6 +449,7 @@ const executeSupabaseRelatedRootRunEffect = <
   options?: TReadOptions,
 ): Effect.Effect<TResult[], TError> =>
   Effect.gen(function* () {
+    yield* validateReadLimit(spec.target, deps.createError);
     const { sourceField, targetField } = resolveRelatedRootFields(
       spec.target.root,
       spec.sourceEntity,
@@ -479,10 +464,12 @@ const executeSupabaseRelatedRootRunEffect = <
     );
 
     if (!sourceContext.hasPublicSourceValues && sourceContext.sourceEntityRows.length === 0) {
+      yield* validateReadCardinality(spec.target, 0, deps.createError);
       return emptyRelatedRootResult(spec, sourceContext.sourceRows);
     }
 
     if (sourceContext.sourceValues.length === 0) {
+      yield* validateReadCardinality(spec.target, 0, deps.createError);
       return emptyRelatedRootResult(spec, sourceContext.sourceRows);
     }
 
@@ -510,6 +497,7 @@ const executeSupabaseRelatedRootCountEffect = <
   options?: TReadOptions,
 ): Effect.Effect<number, TError> =>
   Effect.gen(function* () {
+    yield* validateReadLimit(spec.target, deps.createError);
     const { sourceField } = resolveRelatedRootFields(
       spec.target.root,
       spec.sourceEntity,
@@ -519,6 +507,7 @@ const executeSupabaseRelatedRootCountEffect = <
     const sourceEntityRows = yield* resolveRelatedRootEntityRowsEffect(deps, spec.source, options);
 
     if (sourceEntityRows.length === 0) {
+      yield* validateReadCardinality(spec.target, 0, deps.createError);
       return 0;
     }
 
@@ -528,6 +517,7 @@ const executeSupabaseRelatedRootCountEffect = <
       sourceField,
     );
     if (sourceValues.length === 0) {
+      yield* validateReadCardinality(spec.target, 0, deps.createError);
       return 0;
     }
 

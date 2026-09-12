@@ -14,6 +14,7 @@ relatedPlans:
   - bookops://plans/53-entity-targets-and-mutations
   - bookops://plans/74-entity-refs-and-unit-of-work
   - ontahi://plans/116-ontahi-selection-model
+  - ontahi://plans/116a-selection-cardinality-before-read-shaping
   - ontahi://plans/121-ontahi-direct-postgres-adapter
   - ontahi://plans/118-ontahi-selection-language-editor
   - ontahi://plans/119-selection-relation-predicates
@@ -95,6 +96,17 @@ invocation are authoring metadata, not new execution AST nodes or authorization 
 derives another Selection; it does not mutate the caller's membership or preserve misleading
 whole-expression factory provenance. Versions identify application-owned declarations, not frozen
 membership. Locator migration and remote mutation widening remain separate.
+
+## Exact-one membership
+
+Consumer `one` constrains authorized membership, not shaped row count. Zero or multiple matching
+members fail before projection and positive read limits; counts honor the same contract. A policy's
+row cap cannot establish uniqueness. `one` with `limit(0)` is rejected as contradictory. Nullable
+first-result and existence intent do not assert uniqueness, and factories do not confer it.
+
+In-memory checks membership before slicing. PostgreSQL/MySQL probe two rows in one statement;
+Supabase requires exact count metadata alongside data to handle server-side row caps. These checks
+do not promise stability across later reads or introduce a preliminary read for mutations.
 
 ## Operation Contracts
 

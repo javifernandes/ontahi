@@ -310,18 +310,16 @@ describe('Plan 150a: identity versus Selection factory experiments', () => {
     });
   });
 
-  it('characterizes the current read-limit boundary rather than treating a limited row as proof of uniqueness', async () => {
+  it('does not treat a limited row as proof of unique selection membership (150a regression)', async () => {
     const runtime = runtimeFor();
     const selected = new Selection(Customer, Selection.all(Customer).expression, undefined, 'one');
     await expect(
       Effect.runPromise(runtime.run(selected.toQuery().build(), undefined)),
     ).rejects.toThrow('Expected exactly one');
-    // Current behavior: the adapter validates the shaped rows. This is research evidence,
-    // not approval to infer uniqueness of original membership from an explicit query limit.
-    const shaped = await Effect.runPromise(
-      runtime.run(selected.toQuery().limit(1).build(), undefined),
-    );
-    expect(shaped.map(row => row.id)).toEqual(['c1']);
+    // 150a originally characterized this as a false success; 116a fixes that boundary.
+    await expect(
+      Effect.runPromise(runtime.run(selected.toQuery().limit(1).build(), undefined)),
+    ).rejects.toThrow('Expected exactly one');
     expect(selected.cardinality).toBe('one');
   });
 

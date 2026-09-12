@@ -1,3 +1,5 @@
+import { Cause, Option, Runtime } from 'effect';
+
 import { isJsonValue, type JsonValue } from '../value/json.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
@@ -143,13 +145,19 @@ const cardinalityMismatchMarkers = new Set([
 const isCardinalityMismatchMarker = (value: unknown) =>
   typeof value === 'string' && cardinalityMismatchMarkers.has(value);
 
-const isGraphReadCardinalityMismatch = (error: unknown) =>
+const hasCardinalityMismatchMarker = (error: unknown) =>
   isRecord(error) &&
   (isCardinalityMismatchMarker(error.reason) ||
     isCardinalityMismatchMarker(error.cause) ||
     (isRecord(error.cause) &&
       (isCardinalityMismatchMarker(error.cause.reason) ||
         isCardinalityMismatchMarker(error.cause.cause))));
+
+const isGraphReadCardinalityMismatch = (error: unknown) => {
+  if (!Runtime.isFiberFailure(error)) return hasCardinalityMismatchMarker(error);
+  const failure = Cause.failureOption(error[Runtime.FiberFailureCauseId]);
+  return Option.isSome(failure) && hasCardinalityMismatchMarker(failure.value);
+};
 
 const graphReadCardinalityMismatch = (entityName: string) =>
   graphReadProtocolError(

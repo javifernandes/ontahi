@@ -154,7 +154,7 @@ This closes the bounded contract and Console proof, not the larger named/saved-s
 Deferred factory union/grouping, composed templates, richer inputs, Explorer invocation forms, and
 representative locator migrations are tracked in [120](../backlog/120-named-and-saved-selections.md).
 No locator is deprecated. Consumer cardinality before read shaping remains
-[116a](../next/116a-selection-cardinality-before-read-shaping.md), ahead of Console Commands.
+[116a](116a-selection-cardinality-before-read-shaping.md), ahead of Console Commands (now complete).
 
 Closure validation: Language 262, CodeMirror 66 and Devtools 99 tests passed with coverage;
 affected typechecks/builds/lint, repository formatting/root lint, and clean-room installed-package

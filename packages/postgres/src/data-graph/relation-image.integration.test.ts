@@ -173,6 +173,24 @@ describe('PostgreSQL contextual Selection execution', () => {
       spy.mockRestore();
     }
   });
+  it('validates exact-one contextual membership in the same SQL statement before limit one', async () => {
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings: graph.mappings });
+    const read = graph.chapters.toQuery().limit(1).one().read;
+    const spy = vi.spyOn(pool, 'query');
+    try {
+      await expect(Effect.runPromise(runtime.run(read, undefined))).rejects.toThrow(
+        'Expected exactly one',
+      );
+      expect(spy).toHaveBeenCalledTimes(1);
+      await expect(Effect.runPromise(runtime.count(read, undefined))).rejects.toThrow(
+        'Expected exactly one',
+      );
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('preserves empty sets, complement and union', async () => {
     const runtime = createPostgresDataGraphRuntime({ pool, mappings: graph.mappings });
     const memory = createInMemoryDataGraphRuntime({

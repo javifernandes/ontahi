@@ -359,7 +359,7 @@ identity and authoring guarantees. Narrow the distinction and migrate deliberate
 
 ## Follow-Ups And Proposed Gate Decision
 
-1. [116a. Selection Cardinality Before Read Shaping](../next/116a-selection-cardinality-before-read-shaping.md)
+1. [116a. Selection Cardinality Before Read Shaping](116a-selection-cardinality-before-read-shaping.md)
    records the concrete in-memory limit finding. Confirm the expected boundary and prove adapters
    independently; do not silently change it in this test-only research.
 2. [120a. Pure Named Selection Factory Contract](120a-pure-named-selection-factory-contract.md)
