@@ -22,7 +22,17 @@ const referenceVariant = (node, context) => {
     !call.arguments[0]
   )
     return undefined;
-  const target = resolveProjectionValueNode(call.arguments[0], resolved.context);
+  return projectEntityVariant(
+    call.arguments[0],
+    resolved.context,
+    call.expression.name.text === 'ref',
+    true,
+  );
+};
+
+/** Read only the variant contract; do not recursively project its base's contextual declarations. */
+export const projectEntityVariant = (node, context, portableRef = false, validateBase = false) => {
+  const target = resolveProjectionValueNode(node, context);
   const variant = target.expression;
   if (
     !ts.isCallExpression(variant) ||
@@ -30,7 +40,7 @@ const referenceVariant = (node, context) => {
     variant.expression.name.text !== 'variant'
   )
     return undefined;
-  if (call.expression.name.text !== 'existingRef')
+  if (portableRef)
     throw new Error('Variant inputs require graphSchema.existingRef, not graphSchema.ref.');
   const [name, options] = variant.arguments;
   const config = options && resolveProjectionValueNode(options, target.context).expression;
@@ -63,13 +73,18 @@ const referenceVariant = (node, context) => {
     !ts.isObjectLiteralExpression(base.expression.arguments[0])
   )
     throw new Error('Variant input base must resolve to an entity({ name, fields }) declaration.');
-  const projection = projectEntitySchemaConfig(base.expression.arguments[0], base.context);
-  if (!projection?.name || projection.diagnostics?.length)
+  const baseName = readObjectLiteralProperty(base.expression.arguments[0], 'name')?.initializer;
+  if (!baseName || !ts.isStringLiteral(baseName))
     throw new Error('Variant input base schema could not be projected safely.');
+  if (validateBase) {
+    const projection = projectEntitySchemaConfig(base.expression.arguments[0], base.context);
+    if (!projection?.name || projection.diagnostics?.length)
+      throw new Error('Variant input base schema could not be projected safely.');
+  }
   return {
     kind: 'entity-variant',
     name: name.text,
-    baseEntityName: projection.name,
+    baseEntityName: baseName.text,
     discriminator: {
       fieldName: property.name.text,
       value: property.initializer.text,

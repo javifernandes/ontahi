@@ -7,6 +7,7 @@ import type {
   InferEntityRecord,
   InferFieldValue,
 } from './definitions.js';
+import { contextualSelectionProperties, type SelectionProperties } from './entity-selections.js';
 import {
   getEntityVariantContract,
   registerEntityVariantContract,
@@ -55,7 +56,7 @@ type FactoryInput<TEntity> = TEntity extends {
   ? TInput
   : never;
 
-/** Experimental classified reads and existingRef inputs; discovery and writes are not yet supported. */
+/** Experimental classified reads and existingRef inputs; writes are not yet supported. */
 export class EntityVariant<
   TEntity extends AnyEntityDefinition,
   TName extends string,
@@ -100,7 +101,7 @@ export class EntityVariant<
   }
 
   all() {
-    return new VariantSelection(this, selectionAll());
+    return createVariantSelection(this, selectionAll());
   }
 
   where(build: SelectionBuilder<VariantReadEntity<TEntity, TDiscriminator>>) {
@@ -128,7 +129,7 @@ export class EntityVariant<
       throw new TypeError(`Expected a ${this.base.name} Selection from this model definition.`);
     if (source.cardinality === 'one')
       throw new TypeError('Apply exact-one cardinality after narrowing to a variant.');
-    return new VariantSelection(this, source.build());
+    return createVariantSelection(this, source.build());
   }
 
   /** @internal Lower only at the read boundary, never before complement or union composition. */
@@ -141,18 +142,39 @@ export class EntityVariant<
   }
 }
 
+const relativeSelections = new WeakMap<object, Selection<any>>();
+
+const createVariantSelection = <
+  TEntity extends AnyEntityDefinition,
+  TName extends string,
+  TDiscriminator extends EntityVariantDiscriminator<TEntity>,
+>(
+  variant: EntityVariant<TEntity, TName, TDiscriminator>,
+  expression: SelectionExpression,
+): VariantSelection<TEntity, TName, TDiscriminator> & SelectionProperties<TEntity> =>
+  new VariantSelection(variant, expression) as VariantSelection<TEntity, TName, TDiscriminator> &
+    SelectionProperties<TEntity>;
+
 export class VariantSelection<
   TEntity extends AnyEntityDefinition,
   TName extends string,
   TDiscriminator extends EntityVariantDiscriminator<TEntity>,
 > {
-  readonly #relative: Selection<TEntity>;
+  private get relative(): Selection<TEntity> {
+    return relativeSelections.get(this)!;
+  }
 
   constructor(
     readonly variant: EntityVariant<TEntity, TName, TDiscriminator>,
     expression: SelectionExpression,
   ) {
-    this.#relative = new Selection(variant.base, copySelectionExpression(expression));
+    const relative = new Selection(variant.base, copySelectionExpression(expression));
+    relativeSelections.set(this, relative);
+    const projected = contextualSelectionProperties(this, variant.base, () =>
+      variant.constrain(relative.build()),
+    );
+    relativeSelections.set(projected, relative);
+    return projected;
   }
 
   where(build: SelectionBuilder<VariantReadEntity<TEntity, TDiscriminator>>) {
@@ -164,7 +186,7 @@ export class VariantSelection<
       | VariantSelection<TEntity, TName, TDiscriminator>
       | SelectionBuilder<VariantReadEntity<TEntity, TDiscriminator>>,
   ) {
-    return new VariantSelection(this.variant, this.#relative.and(this.resolve(operand)).build());
+    return createVariantSelection(this.variant, this.relative.and(this.resolve(operand)).build());
   }
 
   or(
@@ -172,11 +194,11 @@ export class VariantSelection<
       | VariantSelection<TEntity, TName, TDiscriminator>
       | SelectionBuilder<VariantReadEntity<TEntity, TDiscriminator>>,
   ) {
-    return new VariantSelection(this.variant, this.#relative.or(this.resolve(operand)).build());
+    return createVariantSelection(this.variant, this.relative.or(this.resolve(operand)).build());
   }
 
   not() {
-    return new VariantSelection(this.variant, this.#relative.not().build());
+    return createVariantSelection(this.variant, this.relative.not().build());
   }
 
   /** Explicit lowering to an ordinary base read; does not establish a remote variant contract. */
@@ -186,7 +208,7 @@ export class VariantSelection<
     return new QueryBuilder<
       TEntity,
       InferEntityRecord<VariantReadEntity<TEntity, TDiscriminator>['fields']>
-    >(query(this.variant.base).where(this.variant.constrain(this.#relative.build())).build());
+    >(query(this.variant.base).where(this.variant.constrain(this.relative.build())).build());
   }
 
   many() {
@@ -229,7 +251,7 @@ export class VariantSelection<
         throw new TypeError(
           'Variant composition requires the same classification; narrow explicitly with from().',
         );
-      return operand.#relative;
+      return operand.relative;
     }
     // Both proxies expose the same field names; only discriminator value types are narrower.
     const expression = Selection.where(

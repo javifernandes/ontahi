@@ -174,6 +174,7 @@ export const createUpsertManyCommandSpec: <TEntity extends AnyEntityDefinition>(
 
 export interface GraphSelectionFactories {
   createSemanticSelection?(selection: Selection<any>): unknown;
+  createClassifiedSelection?(selection: unknown): unknown;
   createSelection<TEntity extends AnyEntityDefinition, TResult>(
     builder: QueryBuilder<TEntity, TResult>,
   ): GraphSelection<TEntity, TResult>;
@@ -214,6 +215,7 @@ export class GraphSelection<
         return new Selection(builder.spec.root, builder.spec.selection);
       },
       factories.createSemanticSelection,
+      factories.createClassifiedSelection,
     );
   }
 

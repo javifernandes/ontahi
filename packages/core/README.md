@@ -59,7 +59,7 @@ This is an experimental read surface, not yet a fully polymorphic Entity schema 
 It accepts one required, stored, non-null enum discriminator. Variants/selections reject implicit
 JSON serialization. Explicit lowering retains the filter but produces a base read, not a portable
 variant contract or extra permission. For remote classified roots, register them explicitly on the
-base read policy as below. Separate variant-specific policies, automatic typed contextual targets,
+base read policy as below. Separate variant-specific policies,
 variant writes and classification transitions remain unsupported.
 Base Entity mutations are unchanged; declaring a read variant does not freeze the base field.
 
@@ -101,9 +101,77 @@ that metadata with the configured base Entity reflection, so `Chapter.many()` / 
 inherited fields, narrowed enum values and declared `by` factories autocomplete before execution.
 The request keeps the Chapter root; the client does not supply or enforce its classifier.
 
-Variant-root Views, navigation from a variant and variant contextual targets are not exposed in
-the Console yet. This does not add a standalone generated Chapter export, a second storage mapping
+Variant-root Views are not exposed in the Console yet. This does not add a standalone generated
+Chapter export, a second storage mapping
 or automatic Operation-input authorization: `existingRef` retains its resolution boundary below.
+
+### Classified contextual destinations
+
+A contextual factory can narrow its relation target with `.as(Variant)`. This is classification,
+not an unchecked cast or a View projection. The variant must belong to the exact relation target:
+
+```ts
+const Base = entity('ContentNode', {
+  id: field.id(),
+  bookId: field.string(),
+  parentId: field.nullable(field.string()),
+  type: field.enum(['part', 'chapter']),
+});
+const Chapter = Base.variant('Chapter', { discriminator: { type: 'chapter' } });
+const Nodes = withContextualSelections(
+  Base.hasMany('children', Base, { via: 'parentId' }),
+  ({ self }) => ({ chapters: self.children.as(Chapter) }),
+);
+const Part = Nodes.variant('Part', { discriminator: { type: 'part' } });
+const Books = withContextualSelections(
+  entity('Book', { id: field.id() }).hasMany('nodes', Nodes, { via: 'bookId' }),
+  ({ self }) => ({ parts: self.nodes.as(Part) }),
+);
+const chapters = Selection.where(Books, book => book.id.eq('b1')).parts.chapters;
+const read = chapters.many(); // runtime.run(read, undefined); still no intermediate fetch
+```
+
+`self.nodes.where(predicate).as(Part)` can add ordinary membership before classification. Result
+types narrow the discriminator, while canonical identity/storage remain ContentNode. Variants
+inherit contextual properties from their base; narrowing the source is retained in every later
+hop. Complement stays relative to the current classified universe, including on contextual results.
+Classified hops remain read-only. From a runtime-bound source they preserve the runtime without
+using the ordinary mutable Selection facade. Standalone variants can be bound explicitly:
+
+```ts
+const api = createRuntimeBoundDataGraphApi(() => runtime);
+const selected = api.bindVariantSelection(Chapter.all());
+const rows = await Effect.runPromise(
+  selected
+    .orderBy(node => node.id.asc())
+    .limit(25)
+    .run(),
+);
+const exists = await Effect.runPromise(selected.exists().run());
+// Also: api.bindSelectionEntity(Books).selection(book => book.id.eq('b1')).parts.chapters.run()
+```
+
+`where`/`and`/`or`/`not`, classified contextual hops and final `many`/`orderBy`/`limit` retain
+binding. Terminal `first`/`one`/`count`/`exists` remain read expressions and gain `.run(options)`.
+`one` checks exact membership before the limit and rejects `limit(0)`. Creating a selection or
+Effect does not fetch: the current runtime is resolved when the Effect executes. `.exec()` exposes
+the existing read executor, including `stream` and runtime-supported `observe` (options are its
+second argument, after `undefined` params). No `update`/`delete`/transition API is added.
+
+`toQuery()` deliberately lowers to an **unbound base Query**. This is also the boundary for existing
+providers and `reconcileGraphReadSnapshot`: base and variant snapshots normalize to the same base
+Entity identity. A cached base record alone never establishes classified membership. Cache lifetime,
+authority isolation and subscription invalidation remain host/provider responsibilities; this
+binding does not add a cache or expand remote observation support. Ordinary, non-classified target
+hops from a variant remain unbound in this slice.
+
+Discovery names Part/Chapter as the contextual output and preserves the physical relation name.
+Codegen emits validated portable variant templates, not server callbacks. Register Part and Chapter
+on the base read policy and enable Graph Read v2 plus each ordinary `selectionRelations` grant to
+use `Book.parts.chapters.many()` / `Book through parts through chapters many` in the Console.
+The receiver enforces classification at every nested source and final target, separately from
+caller filter permissions, and applies each base authority scope. The editor cannot turn a Chapter
+into a Part by relabeling a reference or inserting a filter. Variant writes and Views remain deferred.
 
 ### Classified Operation participants
 

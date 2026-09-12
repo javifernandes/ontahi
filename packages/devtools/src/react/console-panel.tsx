@@ -505,6 +505,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     [application, document, limit, dialect],
   );
   const entityName = resolveConsoleContext(analysis.syntax.expression, application)?.name;
+  const targetDiscovery = discovery.forEntity(entityName);
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
@@ -641,7 +642,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     }
   }, [preferredDialect, options.initialDialect]);
   const snapshot = result.snapshot;
-  const orderingCapabilities = discovery.capabilities;
+  const orderingCapabilities = targetDiscovery.capabilities;
   const orderableFields = discovery.orderableFields;
   const orderingCompletionNotice = () => {
     const syntax = analysis.syntax.expression;
@@ -649,8 +650,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     if (!syntax?.orderBy || !application.entities.some(entity => entity.name === entityName))
       return null;
     if (!runtimeTransport) return 'Ordering suggestions require a configured Runtime Transport.';
-    if (discovery.loading) return 'Loading ordering permissions…';
-    if (discovery.error) return `Ordering permissions unavailable: ${discovery.error}`;
+    if (targetDiscovery.loading) return 'Loading ordering permissions…';
+    if (targetDiscovery.error) return `Ordering permissions unavailable: ${targetDiscovery.error}`;
     return orderingCapabilities?.orderBy.length === 0
       ? 'The current Graph Read policy allows no ordering Fields for this Entity.'
       : null;
@@ -790,7 +791,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
           <span>{orderingCompletionNotice()}</span>
-          {analysis.syntax.expression?.orderBy && discovery.error ? (
+          {analysis.syntax.expression?.orderBy && targetDiscovery.error ? (
             <button type='button' style={styles.mode} onClick={discovery.refresh}>
               Retry ordering permissions
             </button>

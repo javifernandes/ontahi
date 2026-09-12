@@ -29,6 +29,8 @@ export const reflectConsoleApplicationVariants = (
       name: variant.name,
       variant: structuredClone(variant),
       ...(base.selectionFactories ? { selectionFactories: base.selectionFactories } : {}),
+      ...(base.contextualSelections ? { contextualSelections: base.contextualSelections } : {}),
+      ...(base.relations ? { relations: base.relations } : {}),
       fields: base.fields.map(field =>
         field === discriminator
           ? { ...field, nullable: false, enumValues: [variant.discriminator.value] }

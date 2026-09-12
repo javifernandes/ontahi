@@ -22,7 +22,11 @@ import {
   type GraphReadCapabilities,
   type GraphReadProtocolError,
 } from './read-protocol.js';
-import { createReadVariantRegistry, readVariantCapabilities } from './read-variants.js';
+import {
+  createReadVariantRegistry,
+  lowerReadVariantSelection,
+  readVariantCapabilities,
+} from './read-variants.js';
 import {
   selectionAnd,
   type EntitySelectionSource,
@@ -533,12 +537,10 @@ const authorizeGraphRead = <TAuthority>(
     };
 
   const resolved = resolveGraphReadRequest(
-    variant
-      ? {
-          ...parsed.request,
-          selection: { ...parsed.request.selection, entityName: variant.baseEntityName },
-        }
-      : parsed.request,
+    {
+      ...parsed.request,
+      selection: lowerReadVariantSelection(parsed.request.selection, variants),
+    },
     {
       entities: [...policyByEntityName.values()].map(entry => entry.entity),
     },
@@ -557,19 +559,18 @@ const authorizeGraphRead = <TAuthority>(
   );
   if (accessError) return { success: false, error: accessError };
 
-  let query = resolved.query;
+  // Caller membership was checked without mandatory classifiers, which need no filter grant.
+  const classified = resolveGraphReadRequest(
+    {
+      ...parsed.request,
+      selection: lowerReadVariantSelection(parsed.request.selection, variants, true),
+    },
+    { entities: [...policyByEntityName.values()].map(entry => entry.entity) },
+  );
+  if (!classified.success) return classified;
+  let query = classified.query;
   try {
     query = { ...query, selection: membershipAuthority.scoped(query.selection, policy) };
-    if (variant)
-      query = {
-        ...query,
-        selection: selectionAnd(query.selection, {
-          kind: 'predicate',
-          fieldName: variant.discriminator.fieldName,
-          operator: 'eq',
-          value: variant.discriminator.value,
-        }),
-      };
     if (parsed.request.mode !== 'count' && query.limit === undefined) {
       query = { ...query, limit: policy.maxLimit };
     }
@@ -586,9 +587,7 @@ const authorizeGraphRead = <TAuthority>(
       ? {
           capabilities: {
             ...readVariantCapabilities(variants, policy.entity.name),
-            ...(variant
-              ? {}
-              : relationSelectionCapabilities(policy, policyByEntityName, relationSelections)),
+            ...relationSelectionCapabilities(policy, policyByEntityName, relationSelections),
             orderBy:
               parsed.request.mode === 'count'
                 ? []
@@ -626,9 +625,7 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
           entityName: parsed.request.entityName,
           capabilities: {
             ...readVariantCapabilities(variants, policy.entity.name),
-            ...(variant
-              ? {}
-              : relationSelectionCapabilities(policy, policyByEntityName, relationSelections)),
+            ...relationSelectionCapabilities(policy, policyByEntityName, relationSelections),
             orderBy: policy.modes.some(mode => mode !== 'count')
               ? Object.keys(policy.entity.fields).filter(field =>
                   allowsOrdering(policy.entity, field, policy),

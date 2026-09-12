@@ -49,6 +49,8 @@ describe('contextual Selection declaration compiler', () => {
     '({ self }) => ({ ...other })',
     '({ self }) => ({ nodes: other.nodes })',
     '({ self }) => ({ nodes: self.nodes.limit(1) })',
+    '({ self }) => ({ nodes: self.nodes.as(View) })',
+    '({ self }) => ({ nodes: self.nodes.as(Chapter, Other) })',
     '({ self }) => ({ nodes: self.nodes.where(filter) })',
     '({ self }) => ({ nodes: self.nodes.where(n => n.active) })',
     '({ self }) => ({ nodes: self.nodes.where(n => n.active.eq(secret)) })',

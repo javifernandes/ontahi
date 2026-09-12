@@ -53,6 +53,7 @@ export * from './selection-factories.js';
 export { contextualSelectionFactory } from './contextual-selection-factories.js';
 export type {
   ContextualSelectionFactory,
+  ClassifiedContextualSelectionFactory,
   ContextualSelectionDescriptor,
 } from './contextual-selection-factories.js';
 export { withContextualSelections, reflectContextualSelections } from './entity-selections.js';
@@ -68,3 +69,4 @@ export * from './storage.js';
 export * from './transaction.js';
 export * from './view.js';
 export * from './view-query.js';
+export type { BoundVariantSelection, BoundVariantQuery } from './variant-binding.js';

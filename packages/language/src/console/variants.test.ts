@@ -1,4 +1,10 @@
-import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+import {
+  entity,
+  field,
+  graphSchema,
+  withSelectionFactories,
+  withContextualSelections,
+} from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -32,6 +38,90 @@ const application = JSON.parse(
 );
 
 describe('shared classified read reflection', () => {
+  it.each(['ts', 'declarative'] as const)(
+    'navigates named classified targets in %s with destination-based assistance',
+    dialect => {
+      const Base = entity('ContentNode', {
+        id: field.id(),
+        bookId: field.string(),
+        parentId: field.nullable(field.string()),
+        type: field.enum(['part', 'chapter']),
+      });
+      const Chapter = Base.variant('Chapter', { discriminator: { type: 'chapter' } });
+      const Node = withContextualSelections(
+        Base.hasMany('children', Base, { via: 'parentId' }),
+        ({ self }) => ({ chapters: self.children.as(Chapter) }),
+      );
+      const Part = Node.variant('Part', { discriminator: { type: 'part' } });
+      const Book = withContextualSelections(
+        entity('Book', { id: field.id() }).hasMany('nodes', Node, { via: 'bookId' }),
+        ({ self }) => ({ parts: self.nodes.as(Part) }),
+      );
+      const bases = [Book, Node].map(reflectSelectionLanguageEntity);
+      const reflected = JSON.parse(
+        JSON.stringify(
+          reflectConsoleApplicationVariants(bases, [Part.descriptor, Chapter.descriptor]),
+        ),
+      );
+      const source =
+        dialect === 'ts'
+          ? 'Book.where(id = "b1").parts.chapters.many()'
+          : 'Book where id = "b1" through parts through chapters many';
+      const result = analyzeConsoleDocument(source, reflected, { dialect });
+      expect(result.semanticDiagnostics).toEqual([]);
+      expect(result.request).toMatchObject({
+        version: 2,
+        selection: {
+          entityName: 'Chapter',
+          expression: {
+            kind: 'relation-image',
+            relationName: 'children',
+            source: {
+              entityName: 'Part',
+              expression: {
+                kind: 'relation-image',
+                relationName: 'nodes',
+                source: { entityName: 'Book' },
+              },
+            },
+          },
+        },
+      });
+      const prefix = dialect === 'ts' ? 'Book.parts.' : 'Book through parts through ';
+      expect(
+        completeConsoleDocument(prefix, prefix.length, reflected, { dialect }).items.map(
+          item => item.label,
+        ),
+      ).toContain('chapters');
+      const where =
+        dialect === 'ts'
+          ? 'Book.parts.chapters.where(type = '
+          : 'Book through parts through chapters where type = ';
+      expect(
+        completeConsoleDocument(where, where.length, reflected, { dialect }).items.map(
+          item => item.label,
+        ),
+      ).toEqual(['"chapter"']);
+      const switched = convertConsoleDocument(
+        source,
+        reflected,
+        dialect === 'ts' ? 'declarative' : 'ts',
+        { dialect },
+      );
+      expect(
+        analyzeConsoleDocument(switched!, reflected, {
+          dialect: dialect === 'ts' ? 'declarative' : 'ts',
+        }).request,
+      ).toEqual(result.request);
+      for (let end = 0; end <= source.length; end++)
+        expect(() =>
+          completeConsoleDocument(source.slice(0, end), end, reflected, { dialect }),
+        ).not.toThrow();
+      expect(
+        analyzeConsoleDocument(source, { entities: bases }, { dialect }).request,
+      ).toBeUndefined();
+    },
+  );
   it.each(['ts', 'declarative'] as const)(
     'completes roots, narrowed fields, ordering and factories in %s before any execution',
     dialect => {

@@ -15,6 +15,8 @@ import {
   withSelectionFactories,
   withContextualSelections,
   defineClientEntity,
+  createRuntimeBoundDataGraphApi,
+  type DataGraphExecutionRuntime,
 } from '@ontahi/core/data-graph';
 import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
@@ -71,6 +73,31 @@ type PublicModules = [
 ];
 
 export type PublicModuleCount = PublicModules['length'];
+
+export const classifiedRuntimeContract = (runtime: DataGraphExecutionRuntime) => {
+  const Base = entity('BoundContractNode', {
+    id: field.id(),
+    type: field.enum(['part', 'chapter']),
+  });
+  const Chapter = Base.variant('BoundContractChapter', { discriminator: { type: 'chapter' } });
+  const selected = createRuntimeBoundDataGraphApi(() => runtime).bindVariantSelection(
+    Chapter.all(),
+  );
+  selected.where(node => {
+    // @ts-expect-error Bound membership retains the narrowed discriminator.
+    node.type.eq('part');
+    return node.type.eq('chapter');
+  });
+  // @ts-expect-error Binding classified reads does not grant writes.
+  selected.update({ type: 'part' });
+  // @ts-expect-error Read shaping does not grant writes either.
+  selected.limit(1).delete();
+  return selected
+    .and(selected)
+    .orderBy(node => node.id.asc())
+    .limit(25)
+    .run();
+};
 
 const ContextItem = entity('ContextItem', {
   id: field.id(),

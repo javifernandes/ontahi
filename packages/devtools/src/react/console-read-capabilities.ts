@@ -104,7 +104,14 @@ export const useConsoleReadCapabilities = (
           variants.find(variant => variant.name === name)?.baseEntityName ?? name,
         )
       : undefined;
-  const entry = getEntry(entityName);
+  const forEntity = (name: string | undefined) => {
+    const entry = getEntry(name);
+    return {
+      capabilities: entry?.capabilities,
+      error: entry?.error,
+      loading: Boolean(transport && name && !entry),
+    };
+  };
   const orderableFields = useMemo(
     () => (name: string) => {
       const base = variants.find(variant => variant.name === name)?.baseEntityName ?? name;
@@ -115,10 +122,9 @@ export const useConsoleReadCapabilities = (
   return {
     route,
     variants,
-    capabilities: entry?.capabilities,
+    ...forEntity(entityName),
+    forEntity,
     orderableFields,
-    error: entry?.error,
-    loading: Boolean(transport && entityName && !entry),
     refresh: () => {
       setDiscovery(undefined);
       setRevision(value => value + 1);

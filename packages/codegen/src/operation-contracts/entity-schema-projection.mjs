@@ -380,7 +380,7 @@ export const projectEntitySchemaConfig = (configArg, context) => {
   const selections = readObjectLiteralProperty(configArg, 'selections');
   const contextualProjection =
     selections && ts.isPropertyAssignment(selections)
-      ? projectContextualSelections(selections.initializer)
+      ? projectContextualSelections(selections.initializer, context)
       : {};
   const diagnostics = [
     ...derivedProjection.diagnostics,

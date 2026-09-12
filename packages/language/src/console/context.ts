@@ -22,7 +22,7 @@ export const consoleNavigationTarget = (
   );
   if (
     descriptor.version !== 1 ||
-    descriptor.input.context.entityName !== entity.name ||
+    descriptor.input.context.entityName !== (entity.variant?.baseEntityName ?? entity.name) ||
     descriptor.template.target.entityName !== target?.name ||
     !entity.relations?.some(relation => relation.name === descriptor.template.relationName) ||
     !target

@@ -251,13 +251,16 @@ dialect rather than trying to infer a factory name from its predicate.
 variants over existing base reflection. It is a pure data transformation: it retains base Fields
 and named `by` factory contracts, narrows the discriminator enum, and adds the variant name and
 base identity descriptor. Unavailable bases, collisions and invalid classifications add no root.
-It does not reflect contextual navigation from variants yet.
+It also inherits declared contextual navigation from the base. A classified destination is
+available only when its variant is present in the receiver-discovered catalog.
 
 Both dialects consume this same application reflection, including on incomplete drafts:
 
 ```text
 Chapter.where(title = "Intro").many()
 Chapter where title = "Intro" many
+Book.parts.chapters.many()
+Book through parts through chapters many
 ```
 
 Root completion labels Chapter as a variant of ContentNode. Field/value suggestions, factory
@@ -266,6 +269,11 @@ expansion, ordering assistance and dialect conversion share the same semantic mo
 Graph Read retains `entityName: 'Chapter'`; only the registered receiver adds the classifier.
 Core SDK `Chapter.all().toQuery()` instead explicitly lowers to a base Query. Reflection and
 autocomplete neither fetch rows nor prove execution authority.
+
+Contextual hops keep each classified source name in the v2 relation-image AST and the final variant
+name at the read root. This allows the receiver to impose the correct universe at **every** hop,
+not only on the returned rows. Shared destination resolution drives inherited navigation, enum
+widgets, field completion and order/limit edits; no dialect-specific classification rules are used.
 
 ## Implementation boundaries
 

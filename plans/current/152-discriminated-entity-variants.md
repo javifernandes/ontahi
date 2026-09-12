@@ -77,7 +77,7 @@ assembly remain distinct consumers; this plan must not reintroduce read-then-wri
 - [ ] Base/variant policy composition and existence/error disclosure are explicitly tested.
 - [ ] Existing-ref materialization and deferred Selection consumers retain distinct semantics.
 - [ ] Discriminator writes/transitions are explicitly supported or explicitly rejected.
-- [ ] Factories can target variants without repeating their discriminator predicates at call sites.
+- [x] Factories can target variants without repeating their discriminator predicates at call sites.
 - [ ] Reflection, generated clients and both language projections preserve the contract.
 - [x] REPL introspection/autocomplete discover variants, narrowed inherited fields and factories from
       the canonical reflected contract, consistently across both dialects and incomplete drafts.
@@ -294,3 +294,80 @@ all package and Todo/Classroom typechecks, and touched-package lint passed. The 
 verification passed, including capability discovery, shared autocomplete, both dialects and a
 serialized NOT read against the classified receiver using published entrypoints. Repository
 formatting and root script lint also passed.
+
+## Classified contextual destinations checkpoint — 2026-09-12
+
+The registered-root/REPL slice was committed as `a15e945`. Contextual factories now support
+`parts: self.nodes.as(Part)` and `chapters: self.children.as(Chapter)`, optionally after an ordinary
+`where` declaration. `as` names a classifier of the exact physical relation target; a foreign
+variant is rejected. The factory descriptor names its output variant while retaining the relation
+and deferred target membership. No new relation or copy of the discriminator is required at use sites.
+
+`Selection.where(Book, ...).parts.chapters.many()` and the Console's `Book.parts.chapters.many()` /
+`Book through parts through chapters many` retain source membership and narrow the result. Variants
+inherit contextual declarations from their base. Codegen projects static `.as(Variant)` declarations
+to validated portable templates using the shared variant-contract analysis; generated modules are
+typechecked and executed, including self-referential ContentNode → children relationships. No
+server declaration/closure is copied to the generated browser module.
+
+Graph Read v2 preserves registered variant names at each nested Selection source and the final root.
+The receiver first normalizes names to validate caller membership against base policies, then imposes
+classifiers outside caller Boolean expressions and applies base scopes at each hop. Classifiers do
+not require caller filter grants; ordinary factory predicates still do. Unknown variants, foreign
+targets and denied source relations fail without a downgraded data read. V1 flat reads remain valid;
+v2 observation and variant-root Views remain outside this slice.
+
+Console completion uses one shared destination resolver, including inherited contextual names and
+narrowed enum values on incomplete drafts. Result ordering now selects capabilities **after** the
+full discovered path resolves, so Chapter fields/permissions are not taken from Book. React tests
+exercise actual autocomplete, a real receiver, classified rows and table-driven source edits in both
+dialects without a preliminary data read. The packed-consumer fixture repeats multi-hop execution
+through the public language and Core entrypoints.
+
+Important boundary: classified hops return **unbound read-only VariantSelections**, even from a
+bound source. They intentionally bypass the ordinary mutable bound Selection wrapper; execute their
+final Query with a runtime. This does not promise bound `.run()`/observation or permit variant writes.
+No BookOps/example schema migration, extra variant-specific authority policy, standalone variant
+export or discriminator lifecycle is introduced here.
+
+Next bounded work: integrate read-only variants with runtime-bound read consumers and prove canonical
+cache/provider behavior before the BookOps migration rehearsal. Keep explicit materializing
+`existingRef` distinct from deferred Selection inputs, and settle classification transitions before
+opening variant Commands. The broad plan remains current; the factory acceptance item is now closed.
+
+Validation: all 1,073 Core, 337 Language, 140 codegen and 109 Devtools tests passed with coverage
+gates. Public package builds, all package and Todo/Classroom typechecks, touched-package lint,
+root script lint and repository formatting passed. Clean-room tarball installation, type and
+runtime checks passed, including the two-dialect classified multi-hop proof. No live SQL server,
+normalized-cache variant integration or BookOps migration is claimed by these tests.
+
+## Read-only runtime binding checkpoint — 2026-09-12
+
+`api.bindVariantSelection(Chapter.all())` adds execution without converting classified membership
+to the mutable bound Selection facade. Classified destinations reached from either bound semantic
+Selections or bound Query selections retain the same read runtime. `where`/`and`/`or`/`not`, further
+classified hops, `many`, `orderBy` and `limit` retain binding and narrowed result types. Terminal
+read expressions keep their data contract and gain `.run(options)`; `.exec()` delegates streaming
+and supported observation to the existing runtime. No row reads occur while composing or creating
+Effects, and the runtime is resolved at execution. Exact-one errors and `one` plus `limit(0)`
+rejection remain owned by the existing runtime cardinality boundary.
+
+`toQuery()` is explicitly an unbound base read, not a new variant storage/identity namespace.
+In-process tests execute base and classified reads, reconcile both through the real normalized
+cache, compare canonical refs, invalidate the shared record, and reject a cached non-member base
+reference as classified membership. Cache scope/lifetime and invalidation subscriptions remain
+host-owned. This proves Core normalization, not an integrated SQL or React provider transition
+lifecycle. Ordinary non-classified destinations from a variant still return unbound Selections.
+
+The packed consumer exercises bound reads, terminal intent execution, canonical cache writes and
+public types with negative write/narrowing checks. No Commands, variant-root Views, standalone
+generated variant export, remote v2 observation or BookOps schema migration is introduced.
+
+Next: provider-level observation/invalidation and classification-change acceptance tests, followed
+by the BookOps migration rehearsal. Keep discriminator lifecycle and deferred Operation inputs
+separate from this read-only execution slice.
+
+Validation: 1,077 Core tests passed with coverage gates; 337 Language, 109 Devtools and 140 codegen
+tests passed. Core build/lint, all package and Todo/Classroom typechecks, repository formatting
+and clean-room tarball install/type/runtime checks passed. This checkpoint remains local and
+uncommitted together with the preceding classified-contextual-destinations slice.

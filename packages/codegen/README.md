@@ -14,6 +14,14 @@ case. The current grammar accepts `self.relation` or one literal `where` predica
 (`eq/lt/lte/gt/gte`); opaque callbacks are diagnosed, never imported into browser code.
 See [Core contextual factories](../core/README.md#experimental-contextual-selection-factories).
 
+`self.nodes.as(Part)` and `self.nodes.where(predicate).as(Part)` additionally name a classified
+destination. The target must resolve to a literal Entity variant declaration. Codegen uses the
+same static variant-contract analysis as Operation inputs and emits a portable descriptor on the
+contextual template; it does not import the server's Part value. Generated `parts.chapters` reads
+retain narrowed result types and the base identity, including self relations. Invalid or opaque
+targets are diagnosed. These hops produce unbound read-only VariantSelections, not mutable bound
+Selections. Register the variants and relation grants separately in the receiver's read policies.
+
 Exported `withSelectionFactories(entity({ ... }), declarations)` definitions preserve their typed
 `by` method and reflected input/output/template contract in generated browser Entities. A local
 Entity variable and named object-literal declarations are supported too. The declaration map must
@@ -75,8 +83,9 @@ requirement survive generation, without implying that client validation proves m
 
 Opaque declarations, named Values containing variants, portable conditions on variant inputs and
 portable `graphSchema.ref(Variant)` are
-not supported by this slice. Standalone generated variant exports, variant read roots and REPL
-autocomplete remain follow-ups; generated input schemas are not a new read authorization surface.
+not supported by this slice. Standalone generated variant exports remain a follow-up. Registered
+variant read roots and REPL autocomplete are discovered through receiver capabilities; generated
+input schemas are not a new read authorization surface.
 
 This package evaluates the supported TypeScript/JavaScript DSL shape into a serializable application model that can be consumed by generic projections and runtime-specific emitters. Application declarations, target selection, alias values, and output paths remain host-owned.
 

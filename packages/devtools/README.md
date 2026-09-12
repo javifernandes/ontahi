@@ -203,7 +203,10 @@ as roots (for example `Chapter.many()` / `Chapter many`), labeled with their bas
 variant client export or Console configuration is required. Both dialects share inherited Fields,
 narrowed enum values and declared `by` factories; ordering uses the owning base policy, including
 table-driven source edits. The server imposes classification rather than trusting a client filter.
-Variant contextual navigation and Views are not exposed yet.
+Contextual factories targeting variants also support `Book.parts.chapters.many()` and declarative
+`Book through parts through chapters many`. Completion and table sorting use the final classified
+destination's base policy, not the starting Book policy. Graph Read v2 independently enforces every
+source and target classification plus base scopes. Variant-root Views remain unsupported.
 
 The catalog is scoped to the active transport, route and execution identity; switching any of these
 drops old metadata and ignores late replies. A failed base lookup does not hide successful roots

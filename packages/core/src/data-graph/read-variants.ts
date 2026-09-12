@@ -1,9 +1,53 @@
+import { isRecord } from '../value/object.js';
+
 import type { AnyEntityDefinition } from './definitions.js';
 import {
   getEntityVariantContract,
   type AnyEntityVariant,
   type EntityVariantDescriptor,
 } from './entity-variant-contract.js';
+import { selectionAnd, type SelectionAst, type SelectionExpression } from './selection-ast.js';
+
+/** Normalize root names for ordinary validation, then impose receiver classifiers after grants. */
+export const lowerReadVariantSelection = (
+  selection: SelectionAst,
+  variants: ReadonlyMap<string, EntityVariantDescriptor>,
+  classify = false,
+): SelectionAst => {
+  const visit = (expression: SelectionExpression): SelectionExpression => {
+    if (!isRecord(expression)) return expression;
+    if (expression.kind === 'relation-image' && isRecord(expression.source))
+      return {
+        ...expression,
+        source: lowerReadVariantSelection(expression.source, variants, classify),
+      };
+    if (
+      (expression.kind === 'and' || expression.kind === 'or') &&
+      Array.isArray(expression.operands)
+    )
+      return {
+        ...expression,
+        operands: expression.operands.map(visit),
+      };
+    if (expression.kind === 'not') return { ...expression, operand: visit(expression.operand) };
+    return expression;
+  };
+  const variant = variants.get(selection.entityName);
+  const expression = visit(selection.expression);
+  return {
+    ...selection,
+    entityName: variant?.baseEntityName ?? selection.entityName,
+    expression:
+      variant && classify
+        ? selectionAnd(expression, {
+            kind: 'predicate',
+            fieldName: variant.discriminator.fieldName,
+            operator: 'eq',
+            value: variant.discriminator.value,
+          })
+        : expression,
+  };
+};
 
 /** Receiver-owned registrations; client predicates and descriptors are never membership proof. */
 export const createReadVariantRegistry = (

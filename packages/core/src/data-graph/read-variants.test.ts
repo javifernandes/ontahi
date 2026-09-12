@@ -258,7 +258,7 @@ describe('registered variant read roots', () => {
     });
   });
 
-  it('does not advertise unsupported variant navigation on metadata or read results', async () => {
+  it('advertises negotiated variant navigation on metadata and read results', async () => {
     const { execute } = setup();
     const dispatch = createGraphReadDispatcher({
       policies: [policy],
@@ -273,10 +273,10 @@ describe('registered variant read roots', () => {
     const variant = await dispatch({ ...metadata, entityName: 'Chapter' }, context);
     if (variant.kind !== 'graph-read-capabilities-result')
       throw new Error('Expected variant metadata');
-    expect(variant.capabilities.relationSelections).toBeUndefined();
+    expect(variant.capabilities.relationSelections).toEqual({ version: 2, relations: [] });
     const result = await dispatch({ ...request(), includeCapabilities: true }, context);
     if (result.kind !== 'graph-read-result') throw new Error('Expected variant read');
-    expect(result.capabilities?.relationSelections).toBeUndefined();
+    expect(result.capabilities?.relationSelections).toEqual({ version: 2, relations: [] });
     expect(result.capabilities?.variants).toEqual([Chapter.descriptor]);
   });
 });
