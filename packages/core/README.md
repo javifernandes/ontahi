@@ -16,7 +16,56 @@ Current docs:
 5. [Application Data Access](../../docs/application-data-access.md) - end-to-end Query, View,
    policy, React, and Operation authoring across the public packages
 
+## Experimental Entity variant reads
+
+An Entity can name a fixed classification for local read authoring without creating another
+identity or storage population:
+
+```ts
+import { entity, field } from '@ontahi/core/data-graph';
+
+const ContentNode = entity('ContentNode', {
+  id: field.id(),
+  type: field.enum(['part', 'chapter']),
+  title: field.string(),
+});
+const Chapter = ContentNode.variant('Chapter', { discriminator: { type: 'chapter' } });
+
+const chapters = Chapter.all();
+const otherChapters = Chapter.where(node => node.title.eq('Intro')).not();
+const read = otherChapters.many(); // QueryBuilder: pass to runtime.run(read, undefined)
+```
+
+`not` complements within Chapter, not within all ContentNodes. `and`, `or` and chained `where`
+compose relative membership; the required discriminator is applied outside that expression only
+when lowering to a read. Mixing base or different variant selections implicitly is rejected.
+Use `Chapter.from(baseSelection)` to restrict a base Selection explicitly, including contextual
+membership such as `Selection.all(Book).through('nodes')`. No source rows are fetched.
+
+`Chapter.by(input)` reuses the base's `withSelectionFactories` declarations and input types; no
+new factory is generated. If the base declares an `id` factory, `Chapter.by({ id: 'c1' })` works.
+`Chapter.references(refs)` accepts canonical **ContentNode** Refs and intersects them with Chapter
+membership. A Part ref yields no Chapter; it is not relabeled. Create identities/Refs and cache
+records through `Chapter.base`, which is the original ContentNode object. Passing the variant
+itself to `createEntityRef` is rejected to avoid a new identity namespace.
+
+`many()`/`toQuery()` prepare an ordinary base Query; `one()`, `first()`, `count()` and `exists()`
+prepare the existing unbound read-intent expressions. `orderBy` and `limit` transition to ordinary
+Query shaping after membership composition. Result records and variant predicate callbacks narrow
+the discriminator to its literal value. Exact-one checks happen after classification and before
+read shaping; apply `one` after narrowing, not on a source passed to `from`.
+
+This is an experimental **local read surface**, not yet a fully polymorphic Entity schema target.
+It accepts one required, stored, non-null enum discriminator. Variants/selections reject implicit
+JSON serialization. Explicit lowering retains the filter but produces a base read, not a portable
+variant contract or extra permission. Register/authorize the base Entity; no variant-specific
+policy is implemented yet. `existingRef(Chapter)`, discovery/codegen, Console syntax, automatic
+typed contextual targets, variant writes and classification transitions remain unsupported.
+Base Entity mutations are unchanged; declaring a read variant does not freeze the base field.
+
 ## Experimental named Selection factories
+
+For classified read universes, see [Entity variants](#experimental-entity-variant-reads).
 
 For the source-relative counterpart, see [contextual Selection factories](#experimental-contextual-selection-factories).
 

@@ -1,5 +1,6 @@
 import { isJsonValue, type JsonValue } from '../value/json.js';
 
+import { EntityVariant, type EntityVariantDiscriminator } from './entity-variant.js';
 import {
   assertModelExpressionProgram,
   collectModelExpressionDependencies,
@@ -675,6 +676,15 @@ export type EntityDefinition<
   displayMetadata?: EntityDisplayDescriptor;
   freshnessMetadata?: EntityFreshnessDescriptor;
   mapping?: EntityMapping<TFields>;
+  variant: <
+    TEntity extends AnyEntityDefinition,
+    const TVariantName extends string,
+    const TDiscriminator extends EntityVariantDiscriminator<TEntity>,
+  >(
+    this: TEntity,
+    name: TVariantName,
+    options: { discriminator: TDiscriminator },
+  ) => EntityVariant<TEntity, TVariantName, TDiscriminator>;
   one: () => GraphSelectionDefinition<
     EntityDefinition<TName, TFields, TRelations, TLocators>,
     'one'
@@ -1049,6 +1059,12 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     identityLocatorName: (hasConventionalId ? 'refById' : undefined) as string | undefined,
     displayMetadata: undefined as EntityDisplayDescriptor | undefined,
     freshnessMetadata: undefined as EntityFreshnessDescriptor | undefined,
+    variant<
+      TVariantName extends string,
+      TDiscriminator extends EntityVariantDiscriminator<AnyEntityDefinition>,
+    >(variantName: TVariantName, options: { discriminator: TDiscriminator }) {
+      return new EntityVariant(this, variantName, options);
+    },
     one() {
       return { kind: 'schema.selection' as const, entity: this, cardinality: 'one' as const };
     },

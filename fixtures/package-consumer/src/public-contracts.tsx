@@ -111,6 +111,23 @@ const factoryClient = defineClientEntity(FactoryEntity);
 export const factorySelection = factoryClient.by({ identity: 'example' });
 export const legacyFactoryRef = factoryClient.refById('example');
 
+const VariantNode = entity('VariantNode', {
+  id: field.id(),
+  type: field.enum(['part', 'chapter']),
+  title: field.string(),
+});
+const Chapter = VariantNode.variant('Chapter', { discriminator: { type: 'chapter' } });
+const chapters = Chapter.where(node => node.title.eq('Intro'))
+  .not()
+  .many();
+export const narrowedChapterRead: 'chapter' | undefined = chapters.__result?.type;
+// @ts-expect-error Chapter predicates retain the narrowed discriminator type.
+Chapter.where(node => node.type.eq('part'));
+// @ts-expect-error Read-only variants are not yet Operation schema targets.
+graphSchema.existingRef(Chapter);
+// @ts-expect-error Variant selections do not expose generic writes.
+Chapter.all().update({ type: 'part' });
+
 export type UnifiedRuntimeProtocolPublicContracts = [
   typeof createRuntimeProtocolExchange,
   typeof createFetchGraphClient,

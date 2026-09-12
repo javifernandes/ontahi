@@ -377,7 +377,7 @@ The Read Console shipped in PR #148. Before adding mutable syntax, the agreed ne
    extensions remain deferred in Plan 120.
 4. Consumer cardinality/read shaping is hardened in
    [116a](../done/116a-selection-cardinality-before-read-shaping.md). The agreed next slice is
-   [152's Entity variants](../next/152-discriminated-entity-variants.md), before Graph Commands.
+   [152's Entity variants](152-discriminated-entity-variants.md), before Graph Commands.
 5. Add Operation invocation.
 
 The following A/B sections retain the original walking-skeleton scope and history. The research

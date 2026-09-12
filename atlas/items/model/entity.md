@@ -39,7 +39,18 @@ Planned discriminated variants would name a classified population, such as Chapt
 ContentNode, as a schema target while retaining the base Entity's canonical identity and storage.
 This is distinct from a reusable Selection factory or a View: classification membership must be
 enforced by the runtime, not just expressed by a caller's filter or label. Plan 152 follows the
-contextual Selection factory work; variants are not currently a supported Entity declaration.
+contextual Selection factory work. An experimental `.variant(...)` local read declaration now
+exists, but variants are not yet general-purpose Entity schema/Operation targets.
+
+The first executable contract experiment separates the classification/schema target from the
+canonical base identity. A base-named Ref is not evidence of classification: the receiving schema
+must enforce the required discriminator and base/variant authority without leaking inaccessible
+membership. Lowering to base Selections preserves one storage population and cache record; renaming
+an ordinary Entity does not. The initial direction is fixed classification, with generic
+discriminator writes guarded before public exposure. Schema-native runtime integration remains
+pending. The subsequent local read facade separates relative Selection membership from the variant
+universe: complement/union compose first, and lowering applies the discriminator outside that
+expression. It reuses base identity/storage and does not imply portable variant policy or writes.
 
 The conventional identity is declared at the [[ontahi.model.field|Field]] itself. An exact, required
 `id: field.id()` field gives the Entity a `refById` locator and makes it the default identity:
