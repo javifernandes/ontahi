@@ -369,5 +369,37 @@ separate from this read-only execution slice.
 
 Validation: 1,077 Core tests passed with coverage gates; 337 Language, 109 Devtools and 140 codegen
 tests passed. Core build/lint, all package and Todo/Classroom typechecks, repository formatting
-and clean-room tarball install/type/runtime checks passed. This checkpoint remains local and
-uncommitted together with the preceding classified-contextual-destinations slice.
+and clean-room tarball install/type/runtime checks passed. Committed together with the preceding
+classified-contextual-destinations slice as `37b92b2`.
+
+## Provider lifecycle acceptance checkpoint — 2026-09-12
+
+The in-process proof now connects two runtimes from shared in-memory storage to the real read
+observer/dispatcher, Runtime Transport bridge, Runtime Graph client, normalized cache and React
+provider. A host-side base update simulates `chapter → part → chapter`; these tests do not introduce
+a supported variant write or transition API. Scoped base and classified observations recalculate
+membership, ordering and limits. The hidden principal's rows never enter either result or cache.
+Both readers update one base identity. A departure from Chapter does not evict a still-existing
+ContentNode, and disappearance from a snapshot does not invent a global delete event. Confirmed
+deletion remains an explicit host invalidation.
+
+React hooks keep separate base/variant/scalar query keys under the canonical base Entity prefix.
+Invalidating that prefix refetches base rows, sibling variants, `count` and `exists`; Entity-cache
+notifications remain a distinct subscription. Hooks do not silently turn into observation streams.
+
+The integration exposed a generic cancellation defect: an idle async generator queues `return()`
+behind its pending `next()`, preventing subscription release. Each remote read subscription now owns
+an AbortSignal passed separately from caller options to `observeTransport`. Cancellation aborts it
+before waiting for iterator closure. The React Runtime Transport adapter forwards that signal.
+Regression tests cover idle cancellation, independent subscriptions, finite/early completion,
+transport/setup failure and iterators without `return`. Transports must honor cancellation.
+
+Next: rehearse BookOps adoption and document exact migration boundaries. Live SQL/provider change
+feeds, mutable-discriminator domain policy, variant-root Views, remote contextual observation and
+deferred Operation Selection inputs remain separate pending work. The broad plan stays current;
+the in-memory/React lifecycle evidence is not a blanket claim about every storage provider.
+
+Validation: 1,080 Core and 119 React tests passed with coverage gates; Core/React builds and lint,
+all package and Todo/Classroom typechecks, repository formatting and clean-room tarball
+installation/type/runtime verification passed. The artifact proof also checks observation lifetime
+release through published Core entrypoints. New lifecycle work is local and uncommitted.

@@ -67,7 +67,10 @@ and destination; the v2 receiver enforces each universe and base scope. Classifi
 sources now retain read-only runtime execution; standalone variants can be bound explicitly.
 Composition and final read shaping preserve binding without adding writes. Explicit base Query
 lowering feeds existing cache reconciliation: base and classified snapshots share canonical identity.
-Provider subscription/transition integration, variant-root Views and writes remain pending.
+In-memory provider/Runtime Transport integration verifies reclassification across observed reads,
+base cache identity and host-triggered React invalidation. Leaving a classified result is not a
+global Entity deletion; confirmed-delete eviction and cache authority scope remain host-owned.
+Live SQL change feeds, variant-root Views and the variant write/transition API remain pending.
 This is not general-purpose variant schema support.
 
 The conventional identity is declared at the [[ontahi.model.field|Field]] itself. An exact, required

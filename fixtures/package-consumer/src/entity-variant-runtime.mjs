@@ -5,6 +5,7 @@ import {
   createGraphClientCache,
   createInMemoryDataGraphRuntime,
   createRuntimeBoundDataGraphApi,
+  createRemoteDataGraphRuntime,
   defineGraphApi,
   entity,
   field,
@@ -25,7 +26,7 @@ import {
   reflectConsoleApplicationVariants,
   reflectSelectionLanguageEntity,
 } from '@ontahi/language';
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 
 const Node = entity('PackedNode', {
   id: field.id(),
@@ -65,6 +66,22 @@ const cache = createGraphClientCache();
 const snapshot = reconcileGraphReadSnapshot(cache, bound.toQuery(), undefined, boundRows);
 if (JSON.stringify(snapshot.writes[0]?.ref) !== JSON.stringify(identity))
   throw new Error('Packed bound variant snapshot did not use canonical base identity.');
+
+let observationSignal;
+const observedRuntime = createRemoteDataGraphRuntime({
+  transport: async () => {
+    throw new Error('Observation must not issue a one-shot read.');
+  },
+  observeTransport: async function* (_request, _options, lifecycle) {
+    observationSignal = lifecycle?.signal;
+    yield { kind: 'graph-read-result', value: boundRows };
+  },
+});
+await Effect.runPromise(
+  observedRuntime.observe(bound.toQuery(), undefined).pipe(Stream.take(1), Stream.runDrain),
+);
+if (!observationSignal?.aborted)
+  throw new Error('Packed remote observation did not release its lifetime.');
 
 const dispatch = createGraphReadDispatcher({
   policies: [

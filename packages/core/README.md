@@ -165,6 +165,12 @@ authority isolation and subscription invalidation remain host/provider responsib
 binding does not add a cache or expand remote observation support. Ordinary, non-classified target
 hops from a variant remain unbound in this slice.
 
+Remote observation allocates a separate lifetime per subscription. Custom
+`observeTransport(request, options, lifecycle)` implementations should honor `lifecycle?.signal`
+to release a pending pull. The runtime aborts it before awaiting iterator closure on interruption,
+early termination or completion; caller-owned options remain unchanged. This also applies to
+ordinary base reads, not only variants.
+
 Discovery names Part/Chapter as the contextual output and preserves the physical relation name.
 Codegen emits validated portable variant templates, not server callbacks. Register Part and Chapter
 on the base read policy and enable Graph Read v2 plus each ordinary `selectionRelations` grant to
