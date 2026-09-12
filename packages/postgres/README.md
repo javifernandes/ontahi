@@ -29,6 +29,14 @@ The runtime supports semantic selections, ordering, limits, counts, streams, pro
 relation includes, relation-root reads, inserts, bulk inserts, upserts, updates, deletes, returning
 rows and cardinality enforcement.
 
+Local contextual Selections such as `Book.by(...).parts.chapters` execute as correlated `EXISTS`
+subqueries without fetching source IDs. Register mappings for every source/target Entity. The
+database evaluates membership before final projection/order/limit, and counts ignore result limits.
+Direct has-many/belongs-to joins, self-navigation, and single-field-identity many-to-many edges are
+supported. Direct joins retain composite target identities; composite many-to-many edge joins and
+virtual filter fields are explicitly unsupported. Commands and graph-read protocol v1 remain closed
+to this AST: per-hop authority and remote capability negotiation are separate follow-up work.
+
 When constructed with a PostgreSQL `Pool`, the runtime also exposes an optional compositional
 transaction capability. Application Operations normally enter it through the contextual graph
 facade, so bound execution discovers the runtime associated with one checked-out connection:

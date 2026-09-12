@@ -10,6 +10,7 @@ import {
   withSelectionFactories,
 } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
+import { compilePostgresQuery } from '@ontahi/postgres';
 
 const FactoryItem = graphEntity('FactoryItem', {
   id: field.id(),
@@ -60,4 +61,22 @@ if (JSON.stringify(namedRows) !== JSON.stringify(factoryRows))
   throw new Error('Packed contextual Selection properties lost membership.');
 if (factoryRows.length !== 1 || factoryRows[0].id !== 'i1') {
   throw new Error('Packed Core failed contextual Selection round-trip and execution.');
+}
+
+const itemMapping = {
+  entity: FactoryItem,
+  table: 'factory_items',
+  columns: { id: 'id', listId: 'list_id', done: 'done' },
+};
+const compiled = compilePostgresQuery(factorySelection.toQuery(), undefined, itemMapping, {
+  selectionMappings: [
+    itemMapping,
+    { entity: FactoryList, table: 'factory_lists', columns: { id: 'id' } },
+  ],
+});
+if (
+  !compiled.text.includes('EXISTS (SELECT 1') ||
+  JSON.stringify(compiled.values) !== JSON.stringify(['l1', false])
+) {
+  throw new Error('Packed PostgreSQL lost contextual membership or its parameter values.');
 }

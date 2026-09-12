@@ -230,3 +230,36 @@ formatting passed. No remote provider, Console UI or SQL execution support is cl
 **Next actionable slice:** PostgreSQL relation-image reads plus source/relation/target policy and
 wire capability/version handling. Keep unsupported providers explicit. Console navigation, both
 dialects and Todo UI proof follow those execution/authority guarantees. Do not begin variants (152) yet.
+
+## PostgreSQL local-read checkpoint — 2026-09-12
+
+The declaration/Core work was committed as `3c38cb4`. This next bounded slice implements trusted
+local PostgreSQL reads; it deliberately does not open protocol v1 or reuse an include permission as
+permission to observe source membership.
+
+- Relational images lower to correlated `EXISTS`, including nested/self navigation and set union/
+  complement. Every source uses a distinct quoted alias and the query shares one parameter list.
+  Receiver-owned mappings and canonical schema validation resolve names; no caller supplies joins.
+- PostgreSQL opts into the shared SQL compiler's explicit Selection mapping context. Plain reads,
+  projected reads, count/get/stream use it; ordinary Selection/Command compilation remains closed.
+  Membership is evaluated by the database on each execution, before final result modifiers.
+- Direct joins reuse declared relation fields and retain composite target identities. Many-to-many
+  joins use declared edge mapping and require single-field source/target identities. Composite edge
+  joins and virtual filter fields fail explicitly; their implementation remains provider work.
+- MySQL runtime and Supabase remain unsupported for this AST. No new Console syntax or new wire
+  capability was introduced. SQL support is not permission to traverse the graph remotely.
+
+Receiver follow-up: authorize every source Entity and relation hop explicitly, and apply each
+Entity's scope at its own membership boundary, including under `not`/`or`. Target-only policy and
+include grants do not establish this contract. Define/version and advertise this capability before
+accepting relation-image JSON; keep legacy v1 fail-closed.
+
+Validation: 23 SQL tests and 107 PostgreSQL tests passed, with coverage. The PostgreSQL suite used
+disposable containers (the external database override was checked absent); six new live cases cover
+nested/self navigation, one-statement execution, final shaping/count, empty/complement/union sets,
+shared many-to-many targets, nullable belongs-to, fresh evaluation and composite direct targets.
+SQL/PostgreSQL typechecks and lint, all 15 package builds, formatting, and clean-room installed
+package type/runtime checks passed. The focused PostgreSQL suite was rerun after rebuilding packages.
+No live MySQL/Supabase contextual support or remote authority contract is claimed.
+
+Next: receiver policy/protocol vertical slice, then UI.

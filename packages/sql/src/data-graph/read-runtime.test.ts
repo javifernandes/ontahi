@@ -7,6 +7,7 @@ import {
   mapRelation,
   query,
   resolveQuerySpec,
+  Selection,
   type RelatedRootReadMode,
 } from '@ontahi/core/data-graph';
 import { Effect, Stream } from 'effect';
@@ -38,9 +39,9 @@ const model = () => {
     parent: field.ref(Parent),
     active: field.boolean(),
   });
-  const Parents = Parent.hasMany('children', Child, { via: 'parent', ordered: true });
   const Tag = entity('ReadTag', { id: field.id(), label: field.string() });
   const Children = Child.manyToMany('tags', Tag);
+  const Parents = Parent.hasMany('children', Children, { via: 'parent', ordered: true });
   mapEntity(Parents).toTable('parents');
   mapEntity(Children).toTable('children', { parent: 'parent_id' });
   mapEntity(Tag).toTable('tags');
@@ -71,10 +72,11 @@ const parent = { id: 'p1', name: 'Parent' };
 const child = { id: 'c1', parent: 'p1', active: true };
 const tag = { id: 't1', label: 'Tag' };
 type Row = Record<string, unknown>;
-const harness = (responses: (Row[] | Error)[], graph = model()) => {
+const harness = (responses: (Row[] | Error)[], graph = model(), relationSelections?: true) => {
   const calls: ParameterizedSql[] = [];
   const runtime = createSqlReadRuntime({
     mappings: graph.mappings,
+    relationSelections,
     dialect,
     Error: ReadError,
     normalizeRow: (entity, row) =>
@@ -108,6 +110,29 @@ const related = (
 };
 
 describe('shared SQL read materialization', () => {
+  it('keeps contextual membership disabled unless a provider opts in', async () => {
+    const graph = harness([]);
+    await expect(
+      Effect.runPromise(
+        graph.runtime.run(Selection.all(graph.Parent).through('children').toQuery(), undefined),
+      ),
+    ).rejects.toThrow('SQL data graph execution failed');
+    expect(graph.calls).toEqual([]);
+  });
+  it('passes receiver mappings to reads and counts without source-ID prefetch', async () => {
+    const graph = harness([[tag], [{ count: 1 }]], model(), true);
+    const read = Selection.where(graph.Parent, p => p.id.eq('p1'))
+      .through('children')
+      .through('tags')
+      .toQuery()
+      .limit(1);
+    expect(await Effect.runPromise(graph.runtime.run(read, undefined))).toEqual([tag]);
+    expect(graph.calls).toHaveLength(1);
+    expect(graph.calls[0]!.values).toEqual(['p1']);
+    expect(graph.calls[0]!.text.match(/EXISTS/g)).toHaveLength(2);
+    expect(await Effect.runPromise(graph.runtime.count(read, undefined))).toBe(1);
+    expect(graph.calls[1]!.text).not.toContain('LIMIT');
+  });
   it('lifts references, normalizes driver values, and hides auxiliary keys from nested projections', async () => {
     const h = harness([[{ ...child, active: 1 }]]);
     const read = query(h.Child).as(h.Child.view('ReadChildView', { parent: true, active: true }));

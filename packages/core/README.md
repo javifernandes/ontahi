@@ -159,9 +159,10 @@ in `entities`. Rehydrate serialized membership with
 definitions, not definitions or join metadata supplied by the caller. The schema checks every
 source, relation and predicate, with a maximum depth of 32 and 1000 expression nodes.
 
-This is a **local, read-only experimental slice**. Protocol v1, SQL/Supabase compilation and
-Commands reject relation-image selections explicitly. PostgreSQL execution, graph policy support
-and both Console dialects remain follow-ups. For unbound Selections, execute `selected.toQuery()`
+This is a **local, read-only experimental slice**. Protocol v1, Supabase, MySQL runtime and Commands
+reject relation-image selections explicitly. PostgreSQL supports trusted local reads using registered
+mappings and correlated `EXISTS` (stored filter fields and single-identity many-to-many edges).
+Graph policy support and both Console dialects remain follow-ups. For unbound Selections, execute `selected.toQuery()`
 with a graph read runtime. This does not fetch IDs in the client, create a new identity, or enable
 derived-relation writes.
 

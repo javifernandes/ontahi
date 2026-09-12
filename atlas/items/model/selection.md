@@ -245,8 +245,11 @@ cardinality. Entity `selections: ({ self }) => ({ ... })` declarations expose na
 Selections, including composition and runtime binding. Discovery exposes copied context/target
 contracts; generated clients receive portable templates with typed target facades rather than server
 callbacks. Self-relation targets retain their declared contract rather than an infinitely inferred
-recursive facade. Protocol v1, Commands and SQL still reject this expression; graph policy support
-and contextual language/UI authoring remain in Plan 120b.
+recursive facade. PostgreSQL local reads lower this membership to correlated `EXISTS` using
+receiver-owned mappings, retaining set semantics without source-ID prefetch. Composite edge joins
+and virtual filter fields remain unsupported. Protocol v1, Commands, MySQL runtime and Supabase
+still reject this expression; per-hop graph authority and contextual language/UI authoring remain
+in Plan 120b.
 
 ## Evaluation And Snapshots
 

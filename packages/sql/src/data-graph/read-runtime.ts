@@ -28,6 +28,8 @@ import { createSqlQueryCompiler, type ParameterizedSql } from './query.js';
 export const createSqlReadRuntime = <TError extends Error>(input: {
   mappings: readonly SqlEntityMapping[];
   dialect: SqlDialect;
+  /** Enable local relational membership only after the provider has verified its SQL semantics. */
+  relationSelections?: true;
   normalizeRow?: (
     entity: AnyEntityDefinition,
     row: Record<string, unknown>,
@@ -197,6 +199,7 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
         : spec;
     const result = await executeQuery<Record<string, unknown>>(
       compiler.compileQuery(effectiveSpec, undefined, mappingFor(registry, spec.root), {
+        ...(input.relationSelections ? { selectionMappings: input.mappings } : {}),
         ...(options.entityRows
           ? { projectedFields: options.projectedFields ?? Object.keys(spec.root.fields) }
           : {}),
@@ -467,6 +470,7 @@ export const createSqlReadRuntime = <TError extends Error>(input: {
           executeQuery<{ count: number }>(
             compiler.compileQuery(queryOrView, params, mappingFor(registry, spec.root), {
               count: true,
+              ...(input.relationSelections ? { selectionMappings: input.mappings } : {}),
             }),
           ),
         catch: cause => new input.Error('SQL data graph count failed.', 'execution_failed', cause),

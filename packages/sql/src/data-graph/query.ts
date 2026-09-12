@@ -3,6 +3,9 @@ import {
   lowerSelectionReferences,
   lowerEntityReferenceSelection,
   isDerivedFieldDefinition,
+  hasRelationImage,
+  graphSchema,
+  parseGraphSchema,
   resolveQuerySpec,
   resolveRelationFields,
   type AnyRelationQueryBuilder,
@@ -15,6 +18,7 @@ import {
 import { createSqlDerivedFieldCompiler } from './derived-field.js';
 import type { SqlDialect } from './dialect.js';
 import type { SqlEntityMapping } from './mapping.js';
+import { compileRelationImage } from './relation-image.js';
 
 export type ParameterizedSql = {
   text: string;
@@ -46,10 +50,23 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
     values: unknown[],
     compileLeaf: SqlSelectionLeafCompiler,
     description: string,
+    context?: { mappings: readonly SqlEntityMapping[]; qualifier: string; nextAlias: () => string },
   ): string => {
     switch (expression.kind) {
       case 'relation-image':
-        throw new TypeError('SQL does not yet support relation-image Selections.');
+        if (!context)
+          throw new TypeError('SQL relation-image Selections require explicit read mappings.');
+        return compileRelationImage(
+          expression,
+          mapping,
+          context,
+          dialect,
+          (expression, source, qualifier) =>
+            compileSqlSelectionTree(expression, source, values, compileLeaf, description, {
+              ...context,
+              qualifier,
+            }),
+        );
       case 'all':
         return 'TRUE';
       case 'none':
@@ -58,7 +75,7 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
       case 'or':
         return `(${expression.operands
           .map(operand =>
-            compileSqlSelectionTree(operand, mapping, values, compileLeaf, description),
+            compileSqlSelectionTree(operand, mapping, values, compileLeaf, description, context),
           )
           .join(expression.kind === 'and' ? ' AND ' : ' OR ')})`;
       case 'not':
@@ -68,6 +85,7 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
           values,
           compileLeaf,
           description,
+          context,
         )})`;
       case 'references':
         throw new Error(`SQL ${description} references could not be lowered.`);
@@ -77,7 +95,13 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
     if (predicate.kind !== 'predicate') {
       throw new Error(`SQL ${description} predicate could not be lowered.`);
     }
-    const fieldSql = resolveSqlFieldSql(mapping, predicate.fieldName);
+    if (context && !mapping.columns[predicate.fieldName])
+      throw new TypeError(
+        `Relation-image reads currently require stored filter fields: ${mapping.entity.name}.${predicate.fieldName}.`,
+      );
+    const fieldSql = context
+      ? `${quoteIdentifier(context.qualifier)}.${quoteIdentifier(mapping.columns[predicate.fieldName]!)}`
+      : resolveSqlFieldSql(mapping, predicate.fieldName);
     if (!fieldSql)
       throw new Error(`Field ${mapping.entity.name}.${predicate.fieldName} is not mapped.`);
     return compileLeaf(predicate, fieldSql, values);
@@ -225,6 +249,8 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
       count?: boolean;
       projectedFields?: readonly string[];
       physicalOrderBy?: readonly string[];
+      /** Receiver-owned mappings, only for trusted local relation-image reads. */
+      selectionMappings?: readonly SqlEntityMapping[];
     } = {},
   ): ParameterizedSql => {
     const spec = resolveQuerySpec(queryOrView, params) as QuerySpec;
@@ -233,7 +259,38 @@ export const createSqlQueryCompiler = (dialect: SqlDialect) => {
     }
 
     const values: unknown[] = [];
-    const selection = compileSqlSelection(spec.selection, mapping, values);
+    let selection: string;
+    if (hasRelationImage(spec.selection) && options.selectionMappings) {
+      const entities = options.selectionMappings.map(mapping => mapping.entity);
+      const ast = parseGraphSchema(graphSchema.selection(spec.root, { entities }), {
+        kind: 'selection',
+        entityName: spec.root.name,
+        expression: spec.selection,
+      });
+      let alias = 0;
+      const tables = new Set([
+        mapping.table,
+        ...options.selectionMappings.map(mapping => mapping.table),
+      ]);
+      selection = compileSqlSelectionTree(
+        lowerSelectionReferences(ast.expression),
+        mapping,
+        values,
+        compileSqlSelectionLeaf,
+        'selection',
+        {
+          mappings: options.selectionMappings,
+          qualifier: mapping.table,
+          nextAlias: () => {
+            let name: string;
+            do {
+              name = `__ontahi_image_${alias++}`;
+            } while (tables.has(name));
+            return name;
+          },
+        },
+      );
+    } else selection = compileSqlSelection(spec.selection, mapping, values);
     let order = '';
     if (!options.count && spec.orderBy.length > 0) {
       order = spec.orderBy
