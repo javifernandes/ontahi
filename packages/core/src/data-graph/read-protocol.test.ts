@@ -201,7 +201,7 @@ describe('data graph read protocol', () => {
   it('rejects unsupported versions before interpreting the request', () => {
     expect(
       parseGraphReadRequest({
-        version: 2,
+        version: 3,
         kind: 'graph-read',
         mode: 'run',
         selection: { kind: 'selection', entityName: 'Trip', expression: { kind: 'all' } },
@@ -213,7 +213,7 @@ describe('data graph read protocol', () => {
         kind: 'protocol-error',
         error: {
           code: 'unsupported_version',
-          message: 'Unsupported data graph read protocol version: 2.',
+          message: 'Unsupported data graph read protocol version: 3.',
         },
       },
     });
@@ -263,6 +263,11 @@ describe('data graph read protocol', () => {
     {
       name: 'unknown cardinality',
       request: validReadRequest({ cardinality: 'some' }),
+      code: 'invalid_request',
+    },
+    {
+      name: 'exact-one with zero limit',
+      request: validReadRequest({ cardinality: 'one', limit: 0 }),
       code: 'invalid_request',
     },
     {

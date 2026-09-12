@@ -189,6 +189,14 @@ the same configured Runtime Transport as application traffic. Submission is expl
 `Mod-Enter`; results default to the same semantic visual projection used by Activity, can be switched
 to JSON, remain in the panel, and the exchange appears in Activity.
 
+Contextual Entity Selections are also available as `Book.parts.chapters.many()` or declarative
+`Book through parts through chapters many`. Completion, finite-value widgets, capability discovery
+and result ordering use the current destination Entity. The shared language model preserves source
+factories and hops through dialect switching and table-driven sort/limit edits. Contextual reads
+negotiate Graph Read v2 support on the active transport before execution; unsupported providers do
+not receive a downgraded read. Activity renders the expanded relation membership in the chosen
+dialect, without guessing which named factory produced it.
+
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
 ```ts

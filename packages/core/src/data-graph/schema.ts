@@ -1,5 +1,7 @@
 import { z, type ZodType } from 'zod';
 
+import { isRecord } from '../value/object.js';
+
 import type {
   AnyEntityDefinition,
   AnyEntityViewDefinition,
@@ -27,6 +29,8 @@ import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/i
 import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref/index.js';
 import { lowerEntityReferenceValue } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
+import { withinSelectionBudget } from './selection-budget.js';
+import { resolveSelectionRelation } from './selection-relations.js';
 import { isSelection, Selection } from './selection-value.js';
 
 const isFieldDefinition = (schema: GraphSchemaDefinition): schema is AnyFieldDefinition =>
@@ -134,6 +138,19 @@ const selectionExpressionSchema: z.ZodType<SelectionExpression> = z.lazy(() =>
       operands: z.array(selectionExpressionSchema),
     }),
     z.object({ kind: z.literal('not'), operand: selectionExpressionSchema }),
+    z
+      .object({
+        kind: z.literal('relation-image'),
+        relationName: z.string().min(1),
+        source: z
+          .object({
+            kind: z.literal('selection'),
+            entityName: z.string().min(1),
+            expression: selectionExpressionSchema,
+          })
+          .strict(),
+      })
+      .strict(),
   ]),
 );
 
@@ -141,7 +158,34 @@ const validateSelectionFields = (
   expression: SelectionExpression,
   entity: AnyEntityDefinition,
   context: z.RefinementCtx,
+  entities: readonly AnyEntityDefinition[] = [],
 ) => {
+  if (expression.kind === 'relation-image') {
+    try {
+      const source = resolveSelectionRelation(entity, expression, entities);
+      validateSelectionFields(
+        expression.source.expression,
+        source,
+        {
+          ...context,
+          addIssue: issue =>
+            context.addIssue(
+              typeof issue === 'string'
+                ? issue
+                : { ...issue, path: ['expression', 'source', ...(issue.path ?? [])] },
+            ),
+        },
+        entities,
+      );
+    } catch (cause) {
+      context.addIssue({
+        code: 'custom',
+        message: cause instanceof Error ? cause.message : 'Invalid Selection relation.',
+        path: ['expression', 'relationName'],
+      });
+    }
+    return;
+  }
   if (expression.kind === 'references') {
     for (const [index, ref] of expression.refs.entries()) {
       if (ref.entityName !== entity.name) {
@@ -213,16 +257,29 @@ const validateSelectionFields = (
   }
 
   if (expression.kind === 'and' || expression.kind === 'or') {
-    expression.operands.forEach(operand => validateSelectionFields(operand, entity, context));
+    expression.operands.forEach(operand =>
+      validateSelectionFields(operand, entity, context, entities),
+    );
   } else if (expression.kind === 'not') {
-    validateSelectionFields(expression.operand, entity, context);
+    validateSelectionFields(expression.operand, entity, context, entities);
   }
 };
 
 const hydrateSelectionValues = (
   expression: SelectionExpression,
   entity: AnyEntityDefinition,
+  entities: readonly AnyEntityDefinition[] = [],
 ): SelectionExpression => {
+  if (expression.kind === 'relation-image') {
+    const source = resolveSelectionRelation(entity, expression, entities);
+    return {
+      ...expression,
+      source: {
+        ...expression.source,
+        expression: hydrateSelectionValues(expression.source.expression, source, entities),
+      },
+    };
+  }
   if (expression.kind === 'references') return expression;
 
   if (expression.kind === 'predicate') {
@@ -245,11 +302,13 @@ const hydrateSelectionValues = (
   if (expression.kind === 'and' || expression.kind === 'or') {
     return {
       ...expression,
-      operands: expression.operands.map(operand => hydrateSelectionValues(operand, entity)),
+      operands: expression.operands.map(operand =>
+        hydrateSelectionValues(operand, entity, entities),
+      ),
     };
   }
   if (expression.kind === 'not') {
-    return { ...expression, operand: hydrateSelectionValues(expression.operand, entity) };
+    return { ...expression, operand: hydrateSelectionValues(expression.operand, entity, entities) };
   }
   return expression;
 };
@@ -257,7 +316,16 @@ const hydrateSelectionValues = (
 const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
   z
     .preprocess(
-      value => (isSelection(value) ? value.toAst() : value),
+      (value, context) => {
+        if (isRecord(value) && !withinSelectionBudget(value.expression)) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Selection exceeds the maximum depth (32) or node budget (1000).',
+          });
+          return z.NEVER;
+        }
+        return isSelection(value) ? value.toAst() : value;
+      },
       z.object({
         kind: z.literal('selection'),
         entityName: z.literal(schema.entity.name),
@@ -265,7 +333,7 @@ const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
       }),
     )
     .superRefine((ast, context) => {
-      validateSelectionFields(ast.expression, schema.entity, context);
+      validateSelectionFields(ast.expression, schema.entity, context, schema.entities);
       if (schema.cardinality !== 'one') return;
 
       const knownCount =
@@ -286,7 +354,7 @@ const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
       ast =>
         new Selection(
           schema.entity,
-          hydrateSelectionValues(ast.expression, schema.entity),
+          hydrateSelectionValues(ast.expression, schema.entity, schema.entities),
           undefined,
           schema.cardinality,
         ),

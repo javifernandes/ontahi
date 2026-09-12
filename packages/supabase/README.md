@@ -14,6 +14,18 @@ This package depends on `@ontahi/core` and should not leak back into core. It cu
 Product-specific graph schemas, repositories, task definitions, and workflow descriptors stay in
 the host application.
 
+## Exact-one reads
+
+Exact-one reads request `{ count: 'exact' }` with at most two root rows in the same PostgREST request,
+before loading includes. The count measures filtered, RLS-visible membership before caller/server
+row limits; a single returned row is not proof of uniqueness. Custom `SupabaseLikeClient`
+implementations must preserve the exact count metadata. Missing metadata fails closed instead of
+accepting a potentially capped result. Counting can cost more than a bounded row probe for large
+Selections, but avoids a separate count/read race and handles server row caps correctly.
+
+Reads and counts reject zero/multiple members and reject `one` combined with `limit(0)`.
+Ordinary many-result and nullable first-result reads do not request additional count metadata.
+
 ## Exact Entity mutations
 
 `createSupabaseDataGraphRuntime({ entities: [...] })` advertises Ontahi's focused

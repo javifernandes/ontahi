@@ -156,6 +156,23 @@ the selected authoring dialect. Commands follow that proof; Operation invocation
 
 ## Reflection And Assistance
 
+Read authoring retains an ordered sequence of root factory calls, filters and contextual navigation
+stages, followed by final read shaping. A filter intersects the current Entity's membership; a hop
+constructs the existing relation-image from that membership and changes the current Entity. Source
+and target predicates cannot be flattened into one target predicate. Both dialects lower this
+sequence to the existing nested Selection AST without intermediate execution; `one` remains a read
+terminal. Completion and finite-value controls use the Entity at the cursor/predicate, while result
+ordering and limit apply to the destination. See
+[Plan 150c](../../plans/done/150c-ordered-read-composition.md).
+
+The implementation now resolves a serializable dialect ID to an internal strategy object. Each
+strategy owns its parser configuration, recovered-cursor adaptation, printing and source-edit
+spelling. Console analysis, contextual target resolution, semantic continuation candidates and
+capability filtering remain shared; the public entrypoint is an export boundary rather than an
+implementation monolith. This does not introduce a public extension framework or require complete,
+executable ASTs for assistance. See
+[Plan 150b](../../plans/done/150b-language-modules-and-dialect-contract.md).
+
 Initial semantic resolution needs static reflected facts already projected by Explorer: Entity
 name, Field name, scalar type, nullability, enum values, value type, and reference target where
 present. The language service consumes a narrow framework-owned reflection input rather than
@@ -208,6 +225,13 @@ resolves authorized target rows, writes only identity text, and treats richer la
 presentation. Missing or denied lookup never invalidates otherwise meaningful source. Explorer
 adapts its existing reflected Entity data reader for this path, so selection editing does not gain a
 provider shortcut or a second authority model.
+
+Context-constrained Reference assistance is a separate evolution tracked by
+[Plan 118f](../../plans/backlog/118f-context-aware-reference-assistance.md). Its candidate Selection
+may include completed source predicates and relation context, but current matches are not intrinsic
+validity: a manually authored Reference may legitimately yield zero results. Dynamic population and
+cost profiles belong to Runtime Data Reflection, not static schema metadata or parsing. Enumeration
+versus typeahead remains a host presentation choice over bounded, authorized runtime facts.
 
 Only after the Selection proof is sound should a new plan investigate complete Query text such as
 `order by` or `limit`. Relation quantifiers wait for the canonical Selection work in Plan 119. Plan

@@ -28,10 +28,19 @@ export const fetchSupabaseEntityRowsEffect = <TClient extends SupabaseLikeClient
     createError: SupabaseErrorFactory<TError>;
   },
 ): Effect.Effect<EntityRow[], TError> =>
+  fetchSupabaseEntityRowsResultEffect(input).pipe(Effect.map(result => result.rows));
+
+// Preserve count metadata for exact-one reads: PostgREST can cap data independently of LIMIT.
+export const fetchSupabaseEntityRowsResultEffect = <TClient extends SupabaseLikeClient, TError>(
+  input: FetchEntityRowsInput<TClient> & {
+    exactCount?: boolean;
+    createError: SupabaseErrorFactory<TError>;
+  },
+): Effect.Effect<{ rows: EntityRow[]; count: number | null }, TError> =>
   input.compiledSelection && compileSupabaseSelection(input.compiledSelection).kind === 'none'
-    ? Effect.succeed([])
+    ? Effect.succeed({ rows: [], count: 0 })
     : hasEmptySupabaseInPredicate(input.compiledWhere ?? input.predicates)
-      ? Effect.succeed([])
+      ? Effect.succeed({ rows: [], count: 0 })
       : Effect.tryPromise({
           try: async () => {
             const selectColumns = selectColumnsForQuery({
@@ -40,9 +49,12 @@ export const fetchSupabaseEntityRowsEffect = <TClient extends SupabaseLikeClient
               includeShape: input.includeShape,
             });
 
-            let query = input.supabase
-              .from(input.tableName ?? getEntityMapping(input.entityDefinition).tableName)
-              .select(selectColumns.join(', '));
+            const table = input.supabase.from(
+              input.tableName ?? getEntityMapping(input.entityDefinition).tableName,
+            );
+            let query = input.exactCount
+              ? table.select(selectColumns.join(', '), { count: 'exact' })
+              : table.select(selectColumns.join(', '));
 
             query = input.compiledSelection
               ? applySupabaseSelection(query, compileSupabaseSelection(input.compiledSelection))
@@ -65,9 +77,12 @@ export const fetchSupabaseEntityRowsEffect = <TClient extends SupabaseLikeClient
               throw result.error.message;
             }
 
-            return (result.data ?? []).map((row: Record<string, unknown>) =>
-              toSupabaseEntityRow(input.entityDefinition, row),
-            );
+            return {
+              rows: (result.data ?? []).map((row: Record<string, unknown>) =>
+                toSupabaseEntityRow(input.entityDefinition, row),
+              ),
+              count: result.count ?? null,
+            };
           },
           catch: cause =>
             input.createError({

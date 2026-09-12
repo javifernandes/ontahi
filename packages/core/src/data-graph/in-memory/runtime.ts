@@ -43,24 +43,41 @@ import { getInMemoryDataGraphObservationHub } from './observation.js';
 import { executeInMemoryOrderedRelationshipCommandEffect } from './ordered-relationship-command.js';
 import { applyEntitySelectionExpression, applyOrder } from './query.js';
 import { executeInMemoryRelationshipCommandEffect } from './relationship-command.js';
+import { lowerInMemoryRelationSelection } from './selection.js';
+
+const assertReadLimit = (spec: QuerySpec) => {
+  if (spec.cardinality === 'one' && spec.limit === 0) {
+    throw new InMemoryDataGraphError('Exact-one reads cannot use limit(0).', 'read_failed');
+  }
+};
+
+const assertCardinality = (spec: QuerySpec, count: number) => {
+  assertReadLimit(spec);
+  if (spec.cardinality === 'one' && count !== 1) {
+    throw new InMemoryDataGraphError(
+      `Expected exactly one ${spec.root.name}, received ${count}.`,
+      'cardinality_mismatch',
+    );
+  }
+};
+
+const shapeRows = <TRow>(spec: QuerySpec, rows: TRow[]) => {
+  assertCardinality(spec, rows.length);
+  return rows.slice(0, spec.limit ?? Number.POSITIVE_INFINITY);
+};
 
 const selectRows = (
   spec: QuerySpec<any, any>,
   dataset: InMemoryDataset,
   relationships: readonly RelationshipFact[] = [],
-  options?: { applyLimit?: boolean },
 ) => {
   const candidateRows = (dataset[spec.root.name] ?? []).map(row =>
     materializeDerivedFields(row, spec.root, dataset, relationships),
   );
-  const rows = applyOrder(
+  return applyOrder(
     applyEntitySelectionExpression(spec.root, candidateRows, spec.selection),
     spec.orderBy,
   );
-
-  return options?.applyLimit === false
-    ? rows
-    : rows.slice(0, spec.limit ?? Number.POSITIVE_INFINITY);
 };
 
 const materializeRows = <TResult>(
@@ -89,21 +106,9 @@ const executePlainRead = <TParams, TResult>(
   options?: { entityRows?: boolean },
 ) => {
   const spec = resolveQuerySpec(queryOrView, params);
-
-  const rows = materializeRows(
-    spec,
-    selectRows(spec, dataset, relationships),
-    dataset,
-    relationships,
-    options,
-  );
-  if (spec.cardinality === 'one' && rows.length !== 1) {
-    throw new InMemoryDataGraphError(
-      `Expected exactly one ${spec.root.name}, received ${rows.length}.`,
-      'cardinality_mismatch',
-    );
-  }
-  return rows;
+  assertReadLimit(spec);
+  const rows = shapeRows(spec, selectRows(spec, dataset, relationships));
+  return materializeRows(spec, rows, dataset, relationships, options);
 };
 
 const uniqueNonNullValues = (
@@ -183,6 +188,7 @@ const executeRelatedRootRead = <TResult>(
   dataset: InMemoryDataset,
   relationships: readonly RelationshipFact[] = [],
 ): TResult[] => {
+  assertReadLimit(spec.target);
   const relationEntity = spec.relationOwner === 'source' ? spec.sourceEntity : spec.target.root;
   const relationDefinition = relationEntity.relations[spec.relationName];
   if (relationDefinition?.relationKind === 'manyToMany') {
@@ -228,9 +234,12 @@ const executeRelatedRootRead = <TResult>(
           return refKey(relatedTarget, targetIdentityFields);
         }),
     );
-    const targetRows = selectRows(spec.target, dataset, relationships, { applyLimit: false })
-      .filter(row => relatedTargetKeys.has(rowKey(row, targetIdentityFields)))
-      .slice(0, spec.target.limit ?? Number.POSITIVE_INFINITY);
+    const targetRows = shapeRows(
+      spec.target,
+      selectRows(spec.target, dataset, relationships).filter(row =>
+        relatedTargetKeys.has(rowKey(row, targetIdentityFields)),
+      ),
+    );
     const entityRows = materializeRows<Record<string, unknown>>(
       spec.target,
       targetRows,
@@ -285,11 +294,12 @@ const executeRelatedRootRead = <TResult>(
   const sourceValues = uniqueNonNullValues(sourceEntityRows, spec.sourceEntity, sourceField);
 
   if (sourceEntityRows.length === 0 || sourceValues.length === 0) {
+    assertCardinality(spec.target, 0);
     return emptyRelatedRootResult(spec.mode, sourceRows);
   }
 
   const targetSpec = withRelatedTargetPredicate(spec, targetField, sourceValues);
-  const targetRows = selectRows(targetSpec, dataset, relationships);
+  const targetRows = shapeRows(targetSpec, selectRows(targetSpec, dataset, relationships));
   const entityRows = materializeRows<Record<string, unknown>>(
     targetSpec,
     targetRows,
@@ -335,16 +345,13 @@ const countRead = <TParams, TResult>(
 ) => {
   if (!isRelatedRootReadSpec(queryOrView)) {
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
-    const count = selectRows(spec, dataset, relationships, { applyLimit: false }).length;
-    if (spec.cardinality === 'one' && count !== 1) {
-      throw new InMemoryDataGraphError(
-        `Expected exactly one ${spec.root.name}, received ${count}.`,
-        'cardinality_mismatch',
-      );
-    }
+    assertReadLimit(spec);
+    const count = selectRows(spec, dataset, relationships).length;
+    assertCardinality(spec, count);
     return count;
   }
 
+  assertReadLimit(queryOrView.target);
   const relationEntity =
     queryOrView.relationOwner === 'source' ? queryOrView.sourceEntity : queryOrView.target.root;
   if (relationEntity.relations[queryOrView.relationName]?.relationKind === 'manyToMany') {
@@ -371,16 +378,18 @@ const countRead = <TParams, TResult>(
     sourceField,
   );
 
-  if (sourceValues.length === 0) return 0;
+  if (sourceValues.length === 0) {
+    assertCardinality(queryOrView.target, 0);
+    return 0;
+  }
 
-  return selectRows(
+  const count = selectRows(
     withRelatedTargetPredicate(queryOrView, targetField, sourceValues),
     dataset,
     relationships,
-    {
-      applyLimit: false,
-    },
   ).length;
+  assertCardinality(queryOrView.target, count);
+  return count;
 };
 
 export type InMemoryDataGraphRuntime = DataGraphExecutionRuntime<
@@ -404,10 +413,34 @@ export const createInMemoryDataGraphRuntime = (input: {
   const relationships = input.relationships ?? [];
   const observationHub = getInMemoryDataGraphObservationHub(input.dataset);
   input.relationships = relationships;
+  const prepareRead = <TParams, TResult>(
+    read: QueryOrView<TParams, TResult>,
+    params: TParams,
+  ): QueryOrView<TParams, TResult> => {
+    const lower = <TEntity extends AnyEntityDefinition, TRow>(spec: QuerySpec<TEntity, TRow>) =>
+      lowerInMemoryRelationSelection(
+        spec,
+        input.entities ?? [],
+        related =>
+          executeRelatedRootRead(related, input.dataset, relationships) as Array<
+            Record<string, unknown>
+          >,
+      );
+    if (isRelatedRootReadSpec(read)) {
+      return {
+        ...read,
+        target: lower(read.target),
+        source: prepareRead(read.source, undefined),
+      } as QueryOrView<TParams, TResult>;
+    }
+    return lower(resolveQuerySpec(read as PlainGraphRead<TParams, TResult>, params));
+  };
   return {
     get: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset, relationships)[0] ?? null,
+        try: () =>
+          executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships)[0] ??
+          null,
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -415,7 +448,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       }),
     run: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => executeRead(queryOrView, params, input.dataset, relationships),
+        try: () =>
+          executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause
@@ -424,7 +458,8 @@ export const createInMemoryDataGraphRuntime = (input: {
     stream: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Stream.fromEffect(
         Effect.try({
-          try: () => executeRead(queryOrView, params, input.dataset, relationships),
+          try: () =>
+            executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
           catch: cause =>
             cause instanceof InMemoryDataGraphError
               ? cause
@@ -439,7 +474,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       observationHub.changes().pipe(
         Stream.mapEffect(() =>
           Effect.try({
-            try: () => executeRead(queryOrView, params, input.dataset, relationships),
+            try: () =>
+              executeRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
             catch: cause =>
               cause instanceof InMemoryDataGraphError
                 ? cause
@@ -458,7 +494,8 @@ export const createInMemoryDataGraphRuntime = (input: {
       ),
     count: <TParams, TResult>(queryOrView: QueryOrView<TParams, TResult>, params: TParams) =>
       Effect.try({
-        try: () => countRead(queryOrView, params, input.dataset, relationships),
+        try: () =>
+          countRead(prepareRead(queryOrView, params), params, input.dataset, relationships),
         catch: cause =>
           cause instanceof InMemoryDataGraphError
             ? cause

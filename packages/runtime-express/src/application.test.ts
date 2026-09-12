@@ -10,6 +10,8 @@ import {
   field,
   query,
   selection,
+  Selection,
+  withContextualSelections,
   value,
   type EntityMutationCommandPolicy,
   type GraphReadPolicy,
@@ -18,6 +20,8 @@ import {
 import { entity as defineOntahiEntity, relation as defineRelation } from '@ontahi/core/entity';
 import {
   createRuntimeProtocolDispatcher,
+  createRuntimeProtocolExchange,
+  parseRuntimeProtocolResponse,
   createRuntimeProtocolRequest,
   toDurableOperationProtocolRequest,
   toDurableOperationSnapshotResponse,
@@ -141,6 +145,129 @@ describe('Ontahi Express application middleware', () => {
     server?.close();
     server = undefined;
     resetServerRuntimeForTests();
+  });
+
+  it('negotiates contextual reads over HTTP with provider support and server-owned authority', async () => {
+    const Item = defineOntahiEntity({
+      name: 'HttpItem',
+      fields: {
+        id: field.id(),
+        listId: field.string(),
+        done: field.boolean(),
+      },
+    });
+    const List = defineOntahiEntity({
+      name: 'HttpList',
+      fields: { id: field.id(), owner: field.string() },
+      relations: { items: defineRelation.hasMany(Item, { via: 'listId' }) },
+      selections: ({ self }) => ({ pending: self.items.where(item => item.done.eq(false)) }),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: {
+          HttpList: [
+            { id: 'a', owner: 'alice' },
+            { id: 'b', owner: 'bob' },
+          ],
+          HttpItem: [
+            { id: '1', listId: 'a', done: false },
+            { id: '2', listId: 'b', done: false },
+          ],
+        },
+      }),
+      entities: [List, Item],
+    });
+    type Authority = { owner: string };
+    const listPolicy: GraphReadPolicy<typeof List, Authority> = {
+      entity: List,
+      fields: {},
+      selectionRelations: ['items'],
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 25,
+      scope: ({ authority }) => Selection.where(List, list => list.owner.eq(authority.owner)),
+    };
+    const itemPolicy: GraphReadPolicy<typeof Item, Authority> = {
+      entity: Item,
+      fields: {
+        id: { select: true },
+        listId: { select: true },
+        done: { select: true, filter: ['eq'] },
+      },
+      scope: 'all',
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 25,
+    };
+    const expressApp = express();
+    const graphReadDispatcher = application.createGraphReadDispatcher([listPolicy, itemPolicy]);
+    expressApp.use(
+      ontahiExpress(application, {
+        runtimeProtocol: {
+          dispatcher: createRuntimeProtocolDispatcher<{ authority: Authority }>({
+            handlers: { 'graph.read': graphReadDispatcher },
+          }),
+          context: request => ({ authority: { owner: request.header('x-owner') ?? 'missing' } }),
+        },
+        graphRead: {
+          policies: [listPolicy, itemPolicy],
+          authority: (_context, request) => ({ owner: request.header('x-owner') ?? 'missing' }),
+        },
+      }),
+    );
+    server = await new Promise<Server>(resolve => {
+      const started = expressApp.listen(0, '127.0.0.1', () => resolve(started));
+    });
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const exchange = createRuntimeProtocolExchange<Authority>({
+      transport: {
+        request: async (envelope, options) => {
+          const response = await fetch(`${origin}/runtime`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-owner': options?.transportOptions?.owner ?? 'missing',
+            },
+            body: JSON.stringify({
+              ...envelope,
+              body: { ...(envelope.body as object), authority: { owner: 'bob' } },
+            }),
+          });
+          expect(response.status).toBe(200);
+          const parsed = parseRuntimeProtocolResponse(await response.json(), envelope);
+          if (!parsed.success) throw new Error(parsed.error.error.message);
+          return parsed.response;
+        },
+      },
+    });
+    const transport = vi.fn((body, options?: Authority) =>
+      exchange({ family: 'graph.read', body }, { transportOptions: options }),
+    );
+    const remote = createRemoteDataGraphRuntime({ transport });
+    const ClientItem = defineEntitySchema('HttpItem', {
+      id: field.id(),
+      listId: field.string(),
+      done: field.boolean(),
+    });
+    const ClientList = withContextualSelections(
+      defineEntitySchema('HttpList', { id: field.id(), owner: field.string() }).hasMany(
+        'items',
+        ClientItem,
+        { via: 'listId' },
+      ),
+      ({ self }) => ({ pending: self.items.where(item => item.done.eq(false)) }),
+    );
+    const read = Selection.all(ClientList).pending.toQuery();
+    expect(await Effect.runPromise(remote.run(read, undefined, { owner: 'alice' }))).toEqual([
+      { id: '1', listId: 'a', done: false },
+    ]);
+    expect(transport.mock.calls.map(([body]) => [body.kind, body.version])).toEqual([
+      ['graph-read-capabilities', 1],
+      ['graph-read', 2],
+    ]);
+    expect(await Effect.runPromise(remote.run(read, undefined, { owner: 'bob' }))).toEqual([
+      { id: '2', listId: 'b', done: false },
+    ]);
   });
 
   it('transports opted-in internal error causes as JSON-safe diagnostics', async () => {

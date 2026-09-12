@@ -8,7 +8,7 @@ import {
   getSelectionReferenceValueContext,
   hoverSelectionDocument,
   type SelectionLanguageCompletionResult,
-} from './index.js';
+} from '../index.js';
 
 const WorkItem = {
   name: 'WorkItem',

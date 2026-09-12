@@ -102,8 +102,8 @@ const consoleParser = consoleDocumentParser.configure({
     styleTags({
       EntityName: tags.typeName,
       'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
-      'Order By Ascending Descending OrderDirection': tags.keyword,
-      'FieldName FactoryName InputName': tags.variableName,
+      'Order By Through Ascending Descending OrderDirection': tags.keyword,
+      'FieldName FactoryName InputName NavigationName': tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
       'All None': tags.atom,
@@ -467,6 +467,8 @@ const consoleDialectExtensions = (
     activateOnCompletion: completion =>
       ['where', 'order by', 'by', 'and by', 'orderBy'].includes(completion.label) ||
       completion.detail?.startsWith('Selection factory') === true ||
+      (completion.detail?.startsWith('Contextual Selection') === true &&
+        options.dialect === 'declarative') ||
       (typeof completion.apply === 'string' && completion.apply.endsWith(': ')),
     icons: false,
   }),

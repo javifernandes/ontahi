@@ -85,6 +85,7 @@ const createPostgresBaseDataGraphRuntime = (
     ...createSqlReadRuntime({
       mappings: input.mappings,
       dialect: postgresDialect,
+      relationSelections: true,
       executeQuery,
       Error: PostgresDataGraphError,
     }),

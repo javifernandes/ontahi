@@ -7,7 +7,7 @@ import {
   completeConsoleDocument,
   parseConsoleDocument,
   reflectSelectionLanguageEntity,
-} from './index.js';
+} from '../index.js';
 
 const application = {
   entities: [

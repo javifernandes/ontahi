@@ -4,13 +4,16 @@ import type {
   InferEntityMutationRecord,
   InferEntityRecord,
 } from './definitions.js';
+import { contextualSelectionProperties, type SelectionProperties } from './entity-selections.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
 import {
+  assertNoRelationImage,
   selectionNone,
   type EntitySelectionSource,
   type SemanticSelection,
   type SelectionExpression,
 } from './selection-ast.js';
+import { Selection } from './selection-value.js';
 import type { RecursiveEntityViewDefinition } from './view.js';
 
 type EntityMutationPayload<TEntity extends AnyEntityDefinition> = Partial<
@@ -55,6 +58,10 @@ const resolveEntitySelection = <TEntity extends AnyEntityDefinition>(
   root: TEntity,
   selection: EntitySelection<TEntity>,
 ) => {
+  assertNoRelationImage(
+    'expression' in selection ? selection.expression : selection,
+    'Graph Commands',
+  );
   if (!('expression' in selection)) return selection;
   if (selection.root !== root && selection.root.name !== root.name) {
     throw new Error(`Cannot target ${root.name} with a ${selection.root.name} selection.`);
@@ -166,6 +173,7 @@ export const createUpsertManyCommandSpec: <TEntity extends AnyEntityDefinition>(
   createUpsertCommandSpecForPayload;
 
 export interface GraphSelectionFactories {
+  createSemanticSelection?(selection: Selection<any>): unknown;
   createSelection<TEntity extends AnyEntityDefinition, TResult>(
     builder: QueryBuilder<TEntity, TResult>,
   ): GraphSelection<TEntity, TResult>;
@@ -178,7 +186,7 @@ let defaultGraphSelectionFactories!: GraphSelectionFactories;
 
 type SelectionFromBuilder<TBuilder> =
   TBuilder extends QueryBuilder<infer TEntity, infer TResult>
-    ? GraphSelection<TEntity, TResult>
+    ? GraphSelection<TEntity, TResult> & SelectionProperties<TEntity>
     : never;
 
 export class GraphSelection<
@@ -188,7 +196,26 @@ export class GraphSelection<
   constructor(
     protected readonly builder: QueryBuilder<TEntity, TResult>,
     protected readonly factories: GraphSelectionFactories = defaultGraphSelectionFactories,
-  ) {}
+  ) {
+    return contextualSelectionProperties(
+      this,
+      builder.spec.root,
+      () => {
+        if (
+          builder.spec.limit !== undefined ||
+          builder.spec.orderBy.length > 0 ||
+          builder.spec.select ||
+          builder.spec.includes ||
+          builder.spec.view
+        )
+          throw new TypeError(
+            'Contextual Selections accept membership, not source read shaping; apply orderBy/limit/projections to the target read.',
+          );
+        return new Selection(builder.spec.root, builder.spec.selection);
+      },
+      factories.createSemanticSelection,
+    );
+  }
 
   get root(): TEntity {
     return this.builder.spec.root;

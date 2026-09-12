@@ -38,6 +38,10 @@ import {
   type RelationshipDelta,
   selection,
   type SelectionBuilder,
+  withContextualSelections,
+  type ContextualSelectionDeclarations,
+  type EntitySelectionContext,
+  type EntityWithSelections,
 } from '../../data-graph/index.js';
 
 import type {
@@ -554,6 +558,7 @@ export type OntahiEntityConfig<
   TValues extends RuntimeValueRefDeclarations,
   TCapabilities extends OntahiCapabilities = {},
   TEntities extends OntahiEntityDependencies = {},
+  TSelections extends ContextualSelectionDeclarations = {},
 > = {
   name: TName;
   fields: TFields;
@@ -563,6 +568,9 @@ export type OntahiEntityConfig<
   identity?: keyof EffectiveEntityLocatorDeclarations<TFields, TLocators> & string;
   exposure?: GraphEntityExposure;
   relations?: TRelations | (() => TRelations);
+  selections?: (context: {
+    self: EntitySelectionContext<EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>>;
+  }) => TSelections;
   domainOperationDefaults?: DomainOperationDefaults;
   values?: TValues;
   uses?: OntahiEntityUses<TCapabilities, TEntities>;
@@ -954,6 +962,7 @@ const defineOntahiEntity = <
   const TLocators extends EntityLocatorDeclarations<TFields> = {},
   const TCapabilities extends OntahiCapabilities = {},
   const TEntities extends OntahiEntityDependencies = {},
+  const TSelections extends ContextualSelectionDeclarations = {},
 >(
   config: OntahiEntityConfig<
     TName,
@@ -963,10 +972,11 @@ const defineOntahiEntity = <
     TOperations,
     TValues,
     TCapabilities,
-    TEntities
+    TEntities,
+    TSelections
   >,
 ): OntahiEntityDeclaration<
-  EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>,
+  EntityWithSelections<EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>, TSelections>,
   TOperations,
   TValues
 > => {
@@ -983,6 +993,7 @@ const defineOntahiEntity = <
     writable: true,
     value: (build: SelectionBuilder<typeof schema>) => selection(schema, build),
   });
+  if (config.selections) withContextualSelections(schema, config.selections);
   let referencesResolved = false;
   let entityDependencyNames: Record<string, string> | undefined;
   const materializeRelations = (
@@ -1232,7 +1243,10 @@ const defineOntahiEntity = <
   }
 
   return schema as OntahiEntityDeclaration<
-    EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>,
+    EntityWithSelections<
+      EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>,
+      TSelections
+    >,
     TOperations,
     TValues
   >;

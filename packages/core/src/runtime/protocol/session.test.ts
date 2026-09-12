@@ -138,6 +138,16 @@ describe('Runtime Protocol session frames', () => {
     ).toMatchObject({ success: true });
   });
 
+  it('keeps graph observation closed to v2 until source invalidation is supported', () => {
+    const frame = graphObserveFrame();
+    expect(
+      parseRuntimeProtocolSessionClientFrame({
+        ...frame,
+        request: { ...frame.request, version: 2 },
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_frame' } } });
+  });
+
   it('fails closed for unknown keys, versions, kinds, and malformed snapshots', () => {
     expect(
       parseRuntimeProtocolSessionClientFrame({ ...observeFrame(), authority: 'admin' }),

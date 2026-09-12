@@ -6,6 +6,7 @@ import {
   query,
   relationship,
   relationshipSet,
+  Selection,
   type GraphCommandSpec,
 } from '@ontahi/core/data-graph';
 import {
@@ -33,6 +34,54 @@ describe('Fetch graph read executor', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it.each([false, true])(
+    'negotiates contextual reads with identical request options (legacy route: %s)',
+    async legacy => {
+      const List = entity('ReadList', { id: field.id() }).hasMany('todos', Todo);
+      const calls: Array<{ body: any; init?: RequestInit; url: string }> = [];
+      const fetchRequest = vi.fn<typeof fetch>(async (url, init) => {
+        const envelope = JSON.parse(String(init?.body));
+        const body = legacy ? envelope : envelope.body;
+        calls.push({ body, init, url: String(url) });
+        const result =
+          body.kind === 'graph-read-capabilities'
+            ? {
+                kind: 'graph-read-capabilities-result',
+                entityName: 'Todo',
+                capabilities: {
+                  orderBy: [],
+                  relationSelections: { version: 2, relations: [] },
+                },
+              }
+            : { kind: 'graph-read-result', value: [{ id: 'one' }] };
+        return new Response(
+          JSON.stringify(legacy ? result : createRuntimeProtocolResponse(envelope, result)),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      });
+      const executor = createFetchGraphReadExecutor<{ credential: string }>({
+        fetch: fetchRequest,
+        ...(legacy ? { endpoint: '/graph/reads' } : {}),
+        requestInit: options => ({ headers: { authorization: `Bearer ${options?.credential}` } }),
+      });
+      expect(
+        await executor.run(Selection.all(List).through('todos').toQuery(), undefined, {
+          credential: 'same-session',
+        }),
+      ).toEqual([{ id: 'one' }]);
+      expect(calls.map(call => [call.body.kind, call.body.version, call.url])).toEqual([
+        ['graph-read-capabilities', 1, legacy ? '/graph/reads' : '/runtime'],
+        ['graph-read', 2, legacy ? '/graph/reads' : '/runtime'],
+      ]);
+      expect(
+        calls.every(
+          call => new Headers(call.init?.headers).get('authorization') === 'Bearer same-session',
+        ),
+      ).toBe(true);
+      expect(calls.every(call => !String(call.init?.body).includes('same-session'))).toBe(true);
+    },
+  );
 
   it('executes Graph Reads through the versioned graph.read family', async () => {
     const request = vi.fn<RuntimeTransport['request']>(async envelope =>

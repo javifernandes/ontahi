@@ -40,6 +40,7 @@ export const createInMemoryDataGraphStorage = (
 
   return {
     kind: 'in-memory',
+    graphReadCapabilities: { relationSelections: true },
     dataset,
     relationships,
     bindEntities: declarations => {

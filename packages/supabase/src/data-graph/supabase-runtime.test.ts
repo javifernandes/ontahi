@@ -761,6 +761,7 @@ describe('data-graph supabase runtime helpers', () => {
 
     const readSupabase = new TestSupabaseDouble();
     readSupabase.queueQuery('cardinality_books', {
+      count: 2,
       data: [
         { id: 'book-1', status: 'draft' },
         { id: 'book-2', status: 'draft' },
@@ -788,6 +789,117 @@ describe('data-graph supabase runtime helpers', () => {
         ),
       ),
     ).rejects.toThrow('Expected exactly one CardinalityBook, received 0');
+  });
+
+  it('does not infer uniqueness from a row limited by the caller or PostgREST', async () => {
+    const Book = entity('CappedBook', { id: field.id() });
+    mapEntity(Book).toTable('capped_books');
+    const supabase = new TestSupabaseDouble();
+    // A server row cap can return only one row even when the requested limit is two.
+    supabase.queueQuery('capped_books', { data: [{ id: 'b1' }], count: 2 });
+    const read = { ...query(Book).limit(1).build(), cardinality: 'one' as const };
+    await expect(
+      Effect.runPromise(
+        executeSupabaseGraphQueryEffect(
+          { getClient: () => Effect.succeed(supabase), createError },
+          read,
+          undefined,
+        ),
+      ),
+    ).rejects.toThrow('Expected exactly one CappedBook, received 2');
+    expect(supabase.queries).toHaveLength(1);
+    expect(supabase.queries[0]?.operations).toContainEqual({
+      method: 'select',
+      args: ['id', { count: 'exact' }],
+    });
+  });
+
+  it.each([undefined, 1, 2])('checks exact counts before Supabase limit %s', async limit => {
+    const Book = entity('ExactBook', { id: field.id() });
+    mapEntity(Book).toTable('exact_books');
+    for (const count of [0, 1, 2]) {
+      for (const execute of [executeSupabaseGraphQueryEffect, executeSupabaseGraphCountEffect]) {
+        const supabase = new TestSupabaseDouble();
+        supabase.queueQuery('exact_books', { count, data: count === 0 ? [] : [{ id: 'b1' }] });
+        const read = { ...query(Book).build(), cardinality: 'one' as const, limit };
+        const execution: Effect.Effect<unknown, Error> = execute(
+          { getClient: () => Effect.succeed(supabase), createError },
+          read,
+          undefined,
+        );
+        if (count === 1)
+          expect((await Effect.runPromise(execution.pipe(Effect.either)))._tag).toBe('Right');
+        else
+          await expect(Effect.runPromise<unknown, unknown>(execution)).rejects.toThrow(
+            `received ${count}`,
+          );
+      }
+    }
+  });
+
+  it('fails closed when exact count metadata is absent, even with one returned row', async () => {
+    const Book = entity('UnverifiedBook', { id: field.id() });
+    mapEntity(Book).toTable('unverified_books');
+    for (const execute of [executeSupabaseGraphQueryEffect, executeSupabaseGraphCountEffect]) {
+      const supabase = new TestSupabaseDouble();
+      supabase.queueQuery('unverified_books', { data: [{ id: 'b1' }] });
+      await expect(
+        Effect.runPromise<unknown, unknown>(
+          execute(
+            { getClient: () => Effect.succeed(supabase), createError },
+            query(Book).limit(1).one().read,
+            undefined,
+          ),
+        ),
+      ).rejects.toThrow('exact count is unavailable');
+    }
+  });
+
+  it('rejects count/data disagreement before hydrating includes', async () => {
+    const Parent = entity('ProbeParent', { id: field.id() });
+    const Child = entity('ProbeChild', { id: field.id(), parent: field.ref(Parent) });
+    const Parents = Parent.hasMany('children', Child, { via: 'parent' });
+    mapEntity(Parents).toTable('probe_parents');
+    mapEntity(Child).toTable('probe_children');
+    mapRelation(Parents, 'children', {
+      type: 'one-to-many',
+      from: 'probe_parents.id',
+      to: 'probe_children.parent',
+    });
+    for (const result of [
+      { count: 1, data: [] },
+      { count: 2, data: [{ id: 'p1' }] },
+    ]) {
+      const supabase = new TestSupabaseDouble();
+      supabase.queueQuery('probe_parents', result);
+      const read = query(Parents)
+        .include(parent => ({ children: parent.children }))
+        .limit(1)
+        .one().read;
+      await expect(
+        Effect.runPromise(
+          executeSupabaseGraphQueryEffect(
+            { getClient: () => Effect.succeed(supabase), createError },
+            read,
+            undefined,
+          ),
+        ),
+      ).rejects.toThrow('Expected exactly one');
+      expect(supabase.queries).toHaveLength(1);
+    }
+  });
+
+  it('rejects one with limit zero before obtaining a Supabase client', async () => {
+    const Book = entity('ZeroLimitBook', { id: field.id() });
+    const getClient = vi.fn(() => Effect.succeed(new TestSupabaseDouble()));
+    for (const execute of [executeSupabaseGraphQueryEffect, executeSupabaseGraphCountEffect]) {
+      await expect(
+        Effect.runPromise<unknown, unknown>(
+          execute({ getClient, createError }, query(Book).limit(0).one().read, undefined),
+        ),
+      ).rejects.toThrow('cannot use limit(0)');
+    }
+    expect(getClient).not.toHaveBeenCalled();
   });
 
   it('executes relation-root read specs with the generic Supabase runtime', async () => {

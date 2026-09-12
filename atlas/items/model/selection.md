@@ -14,11 +14,13 @@ relatedPlans:
   - bookops://plans/53-entity-targets-and-mutations
   - bookops://plans/74-entity-refs-and-unit-of-work
   - ontahi://plans/116-ontahi-selection-model
+  - ontahi://plans/116a-selection-cardinality-before-read-shaping
   - ontahi://plans/121-ontahi-direct-postgres-adapter
   - ontahi://plans/118-ontahi-selection-language-editor
   - ontahi://plans/119-selection-relation-predicates
   - ontahi://plans/120-named-and-saved-selections
   - ontahi://plans/120a-pure-named-selection-factory-contract
+  - ontahi://plans/120b-contextual-selection-factories
   - ontahi://plans/122-ontahi-developer-book
   - ontahi://plans/128-ontahi-data-graph-execution-bridge
 migratedFrom: bookops://atlas/model/selection
@@ -94,6 +96,17 @@ invocation are authoring metadata, not new execution AST nodes or authorization 
 derives another Selection; it does not mutate the caller's membership or preserve misleading
 whole-expression factory provenance. Versions identify application-owned declarations, not frozen
 membership. Locator migration and remote mutation widening remain separate.
+
+## Exact-one membership
+
+Consumer `one` constrains authorized membership, not shaped row count. Zero or multiple matching
+members fail before projection and positive read limits; counts honor the same contract. A policy's
+row cap cannot establish uniqueness. `one` with `limit(0)` is rejected as contradictory. Nullable
+first-result and existence intent do not assert uniqueness, and factories do not confer it.
+
+In-memory checks membership before slicing. PostgreSQL/MySQL probe two rows in one statement;
+Supabase requires exact count metadata alongside data to handle server-side row caps. These checks
+do not promise stability across later reads or introduce a preliminary read for mutations.
 
 ## Operation Contracts
 
@@ -227,6 +240,41 @@ Persisting an editable draft document is a separate product choice and does not 
 tree into Ontahí's semantic model. Explorer should embed the editor through an adapter.
 
 Explorer's operation-input projection recognizes reflected selection fields by entity, cardinality, and identity locator. It presents the mutually exclusive scopes `None`, `Selected (n)`, and `All`, defaults bulk selections to `None`, and loads reflected entity data for editing the references behind `Selected`. Single-cardinality inputs use radio semantics and omit `All`; many-cardinality inputs use checkbox semantics. The raw JSON inspector remains available for composed expressions. Predicate and set-composition controls can extend this projection without changing the transported Selection AST.
+
+## Contextual Factory Direction
+
+A source-relative factory such as `Book.parts` should consume Book membership and produce related
+ContentNode membership without fetching the source population. It shares the pure Selection-factory
+nature of `by`, with source Selection context rather than only scalar inputs. Relation metadata
+belongs to the declared graph; factory call sites do not repeat join fields or locator hints.
+
+The experimental Core slice now represents this as a canonical `relation-image` expression holding
+a source Selection AST and a relation key. `Selection.through` and `contextualSelectionFactory`
+produce ordinary deferred Selections; schema validation resolves paths from receiver-owned model
+definitions. In-memory reads reuse relation-root execution to evaluate membership before shaping.
+Multiple source members imply a set of target members, not grouping, ordering, or singleton
+cardinality. Entity `selections: ({ self }) => ({ ... })` declarations expose named properties on
+Selections, including composition and runtime binding. Discovery exposes copied context/target
+contracts; generated clients receive portable templates with typed target facades rather than server
+callbacks. Self-relation targets retain their declared contract rather than an infinitely inferred
+recursive facade. PostgreSQL local reads lower this membership to correlated `EXISTS` using
+receiver-owned mappings, retaining set semantics without source-ID prefetch. Composite edge joins
+and virtual filter fields remain unsupported. Protocol v1, Commands, MySQL runtime and Supabase
+still reject this expression. Opt-in Graph Read v2 request/response receivers authorize outgoing
+`selectionRelations` independently of View/include grants and intersect each source and target
+with its own policy scope outside caller boolean logic. Discovery advertises advisory capability;
+low-level default receivers and graph observation remain closed. Application dispatchers use
+provider-declared execution support (in-memory/PostgreSQL); remote clients negotiate on each
+contextual read using the same authority options, without source-ID prefetch or downgrade fallback.
+Console authoring preserves contextual names in a shared source model: TS `.parts.chapters` and
+declarative `through parts through chapters` expand to the same deferred AST. Semantic destination
+resolution and continuation candidates are shared between dialect adapters, finite-value widgets,
+and receiver-backed ordering controls. Dialect conversion and table edits preserve the authored hops;
+Activity renders their expanded canonical meaning. The initial grammar places root `by` factories
+before hops, then target predicates/read shaping. Plan 150c extends that authoring model to ordered
+filter/navigation stages: source predicates stay inside the relation-image source, while subsequent
+predicates intersect the current target. Repeated filters intersect without executing or asserting
+singleton membership. Contextual parameters remain deferred.
 
 ## Evaluation And Snapshots
 

@@ -1,9 +1,12 @@
+import { hasOwn } from '../value/object.js';
+
 import { GraphCommand } from './command.js';
 import type {
   AnyEntityDefinition,
   InferEntityMutationRecord,
   InferEntityRecord,
 } from './definitions.js';
+import { contextualSelectionProperties, type SelectionProperties } from './entity-selections.js';
 import { query, type EntityFieldProxy, type QueryBuilder } from './query.js';
 import type { AnyEntityRef, EntityRef } from './ref/index.js';
 import {
@@ -41,7 +44,9 @@ export type SelectionBuilder<TEntity extends AnyEntityDefinition> = (
 export type EntitySelectionFactory<TEntity extends AnyEntityDefinition> = {
   all: () => QueryBuilder<TEntity>;
   where: (build: SelectionBuilder<TEntity>) => QueryBuilder<TEntity>;
-  selection: (build: SelectionBuilder<TEntity>) => Selection<TEntity>;
+  selection: (
+    build: SelectionBuilder<TEntity>,
+  ) => Selection<TEntity> & SelectionProperties<TEntity>;
 };
 
 type SelectionCardinality = 'one' | 'many' | undefined;
@@ -74,21 +79,24 @@ export class Selection<
     readonly cardinality?: TCardinality,
   ) {
     Object.defineProperty(this, ONTAHI_SELECTION, { value: true });
+    return contextualSelectionProperties(this, root, () => this);
   }
 
   static all<TEntity extends AnyEntityDefinition>(root: TEntity) {
-    return new Selection(root, selectionAll());
+    return new Selection(root, selectionAll()) as Selection<TEntity> & SelectionProperties<TEntity>;
   }
 
   static none<TEntity extends AnyEntityDefinition>(root: TEntity) {
-    return new Selection(root, selectionNone());
+    return new Selection(root, selectionNone()) as Selection<TEntity> &
+      SelectionProperties<TEntity>;
   }
 
   static where<TEntity extends AnyEntityDefinition>(
     root: TEntity,
     build: SelectionBuilder<TEntity>,
   ) {
-    return new Selection(root, expressionFromBuilder(root, build));
+    return new Selection(root, expressionFromBuilder(root, build)) as Selection<TEntity> &
+      SelectionProperties<TEntity>;
   }
 
   static references<
@@ -104,7 +112,7 @@ export class Selection<
       selectionReferences(refs as readonly AnyEntityRef[]),
       undefined,
       cardinality,
-    );
+    ) as Selection<TEntity, TCardinality> & SelectionProperties<TEntity>;
   }
 
   and(operand: SelectionOperand<TEntity>) {
@@ -113,7 +121,20 @@ export class Selection<
       selectionAnd(this.expression, this.resolveOperand(operand)),
       this.name,
       this.cardinality,
-    );
+    ) as Selection<TEntity, TCardinality> & SelectionProperties<TEntity>;
+  }
+
+  /** Deferred relational image; multiplicity of a hop does not imply consumer cardinality. */
+  through<TKey extends keyof TEntity['relations'] & string>(relationName: TKey) {
+    if (!hasOwn(this.root.relations, relationName)) {
+      throw new TypeError(`Unknown relation ${this.root.name}.${relationName}.`);
+    }
+    const target: TEntity['relations'][TKey]['target'] = this.root.relations[relationName]!.target;
+    return new Selection<typeof target, undefined>(target, {
+      kind: 'relation-image',
+      source: structuredClone(this.toAst()),
+      relationName,
+    }) as Selection<typeof target, undefined> & SelectionProperties<typeof target>;
   }
 
   or(operand: SelectionOperand<TEntity>) {
@@ -122,18 +143,27 @@ export class Selection<
       selectionOr(this.expression, this.resolveOperand(operand)),
       this.name,
       this.cardinality,
-    );
+    ) as Selection<TEntity, TCardinality> & SelectionProperties<TEntity>;
   }
 
   not() {
-    return new Selection(this.root, selectionNot(this.expression), this.name, this.cardinality);
+    return new Selection(
+      this.root,
+      selectionNot(this.expression),
+      this.name,
+      this.cardinality,
+    ) as Selection<TEntity, TCardinality> & SelectionProperties<TEntity>;
   }
 
   named(name: string) {
     if (name.trim().length === 0) {
       throw new Error('Selection name cannot be empty.');
     }
-    return new Selection(this.root, this.expression, name, this.cardinality);
+    return new Selection(this.root, this.expression, name, this.cardinality) as Selection<
+      TEntity,
+      TCardinality
+    > &
+      SelectionProperties<TEntity>;
   }
 
   toQuery(): QueryBuilder<TEntity> {

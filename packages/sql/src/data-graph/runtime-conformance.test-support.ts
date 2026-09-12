@@ -454,6 +454,62 @@ export const dataGraphRuntimeConformance = (
         });
       }));
 
+    it('checks exact-one membership before limits across all read modes', async () =>
+      withHarness(async ({ runtime }) => {
+        const { BookWithChapters } = conformanceGraph;
+        for (const ids of [[], ['book-1'], ['book-1', 'book-2']]) {
+          for (const limit of [undefined, 1, 2]) {
+            const read = {
+              ...query(BookWithChapters)
+                .where(book => book.id.in(ids))
+                .orderBy(book => book.title.desc())
+                .select(book => ({ id: book.id }))
+                .build(),
+              cardinality: 'one' as const,
+              limit,
+            };
+            const executions = [
+              runtime.run(read, undefined),
+              runtime.get(read, undefined),
+              runtime.count(read, undefined),
+              Stream.runCollect(runtime.stream(read, undefined)),
+            ];
+            for (const execution of executions) {
+              const result = await Effect.runPromise(execution.pipe(Effect.either));
+              if (ids.length === 1) expect(result._tag).toBe('Right');
+              else
+                expect(result).toMatchObject({
+                  _tag: 'Left',
+                  left: { reason: 'cardinality_mismatch' },
+                });
+            }
+          }
+        }
+        const contradictory = {
+          ...query(BookWithChapters)
+            .where(book => book.id.eq('book-1'))
+            .limit(0)
+            .build(),
+          cardinality: 'one' as const,
+        };
+        for (const execution of [
+          runtime.run(contradictory, undefined),
+          runtime.count(contradictory, undefined),
+        ]) {
+          await expect(Effect.runPromise<unknown, unknown>(execution)).rejects.toThrow(
+            'cannot use limit(0)',
+          );
+        }
+        const many = query(BookWithChapters)
+          .orderBy(book => book.title.desc())
+          .limit(1);
+        await expect(Effect.runPromise(runtime.run(many, undefined))).resolves.toHaveLength(1);
+        await expect(Effect.runPromise(runtime.get(many, undefined))).resolves.toMatchObject({
+          id: 'book-2',
+        });
+        await expect(Effect.runPromise(runtime.count(many, undefined))).resolves.toBe(2);
+      }));
+
     it('materializes ordered nested relation includes', async () =>
       withHarness(async ({ runtime }) => {
         const { BookWithChapters } = conformanceGraph;

@@ -48,6 +48,7 @@ const schemaExpressionEntries = schema => [
   ['locators', schema.locators],
   ['identity', schema.identity],
   ['selectionFactories', schema.selectionFactories],
+  ['contextualSelections', schema.contextualSelections],
 ];
 
 const replaceProjectedEntityNames = (sourceText, projectedNames) =>
@@ -206,9 +207,25 @@ export const createClientEntitySchemaModuleModel = ({
         selectionFactories: projection.selectionFactoriesText
           ? sourceExpression(projection.selectionFactoriesText)
           : undefined,
+        contextualSelections: projection.contextualSelectionsText
+          ? sourceExpression(projection.contextualSelectionsText)
+          : undefined,
         relations: (projection.relations ?? [])
           .filter(relation => !relation.deferred)
-          .map(relation => createRelationModel(relation, initializationNames)),
+          .map(relation => ({
+            ...createRelationModel(relation, initializationNames),
+            // The base and completed declaration are the same runtime object. Preserve the
+            // completed target's Selection capabilities on incoming, non-recursive edges.
+            ...(initializationNames.get(relation.targetName) !==
+              projectedNames.get(relation.targetName) &&
+            schemaEntities.some(
+              target =>
+                target.entityName === relation.targetName &&
+                target.entitySchemaProjection?.contextualSelectionsText,
+            )
+              ? { targetTypeLocalName: projectedNames.get(relation.targetName) }
+              : {}),
+          })),
       };
     });
   const diagnostics = entitySchemas.flatMap(schema =>
@@ -251,6 +268,9 @@ export const createClientEntitySchemaModuleModel = ({
           ? [{ importedName: 'entity', localName: 'defineEntitySchema' }]
           : []),
         ...(usesField ? [{ importedName: 'field', localName: 'field' }] : []),
+        ...(entitySchemas.some(schema => schema.contextualSelections)
+          ? [{ importedName: 'withContextualSelections', localName: 'withContextualSelections' }]
+          : []),
         ...(usesFactories
           ? [
               { importedName: 'withSelectionFactories', localName: 'withSelectionFactories' },
@@ -320,7 +340,12 @@ const createRelationArguments = relation => {
   ];
   return [
     ts.factory.createStringLiteral(relation.name),
-    ts.factory.createIdentifier(relation.targetLocalName),
+    relation.targetTypeLocalName
+      ? ts.factory.createAsExpression(
+          ts.factory.createIdentifier(relation.targetLocalName),
+          ts.factory.createTypeQueryNode(ts.factory.createIdentifier(relation.targetTypeLocalName)),
+        )
+      : ts.factory.createIdentifier(relation.targetLocalName),
     ...(options.length > 0 ? [ts.factory.createObjectLiteralExpression(options)] : []),
   ];
 };
@@ -340,7 +365,8 @@ const createEntitySchemaDeclaration = schema => {
   );
 
   for (const [method, expression] of schemaExpressionEntries(schema).slice(1)) {
-    if (!expression || method === 'selectionFactories') continue;
+    if (!expression || method === 'selectionFactories' || method === 'contextualSelections')
+      continue;
 
     initializer = ts.factory.createCallExpression(
       ts.factory.createPropertyAccessExpression(initializer, ts.factory.createIdentifier(method)),
@@ -351,7 +377,14 @@ const createEntitySchemaDeclaration = schema => {
   for (const relation of schema.relations) {
     initializer = createRelationCall(initializer, relation);
   }
-  if (schema.selectionFactories) {
+  if (schema.contextualSelections && !schema.deferred) {
+    initializer = ts.factory.createCallExpression(
+      ts.factory.createIdentifier('withContextualSelections'),
+      undefined,
+      [initializer, readExpression(schema.contextualSelections)],
+    );
+  }
+  if (schema.selectionFactories && !schema.deferred) {
     initializer = ts.factory.createCallExpression(
       ts.factory.createIdentifier('withSelectionFactories'),
       undefined,
@@ -375,7 +408,7 @@ const createEntitySchemaDeclaration = schema => {
   );
 };
 
-const createDeferredRelationStatements = deferredRelations => {
+const createDeferredRelationStatements = (deferredRelations, schemas) => {
   const relationsBySource = new Map();
   for (const relation of deferredRelations) {
     const relations = relationsBySource.get(relation.sourceLocalName) ?? [];
@@ -385,6 +418,18 @@ const createDeferredRelationStatements = deferredRelations => {
   return Array.from(relationsBySource.entries()).map(([sourceLocalName, relations]) => {
     let initializer = ts.factory.createIdentifier(relations[0].sourceDeclarationLocalName);
     for (const relation of relations) initializer = createRelationCall(initializer, relation);
+    const schema = schemas.find(schema => schema.localName === sourceLocalName);
+    for (const [key, helper] of [
+      ['contextualSelections', 'withContextualSelections'],
+      ['selectionFactories', 'withSelectionFactories'],
+    ]) {
+      if (schema?.[key])
+        initializer = ts.factory.createCallExpression(
+          ts.factory.createIdentifier(helper),
+          undefined,
+          [initializer, readExpression(schema[key])],
+        );
+    }
     return ts.factory.createVariableStatement(
       [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
       ts.factory.createVariableDeclarationList(
@@ -419,7 +464,7 @@ export const printClientEntitySchemaImports = model =>
 export const printClientEntitySchemaStatements = model =>
   printStatements([
     ...model.entitySchemas.map(createEntitySchemaDeclaration),
-    ...createDeferredRelationStatements(model.deferredRelations),
+    ...createDeferredRelationStatements(model.deferredRelations, model.entitySchemas),
   ]);
 
 export const printClientEntitySchemaModule = model => {
@@ -436,7 +481,7 @@ export const printClientEntitySchemaModule = model => {
       coreImport,
       ...model.schemaImports.map(createNamedImport),
       ...model.entitySchemas.map(createEntitySchemaDeclaration),
-      ...createDeferredRelationStatements(model.deferredRelations),
+      ...createDeferredRelationStatements(model.deferredRelations, model.entitySchemas),
     ],
     ts.factory.createToken(ts.SyntaxKind.EndOfFileToken),
     ts.NodeFlags.None,

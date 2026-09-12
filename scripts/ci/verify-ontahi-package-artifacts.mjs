@@ -295,6 +295,7 @@ const verifyArtifacts = () => {
     });
     run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], { cwd: completeConsumer });
     run('node', ['src/mysql-runtime.mjs'], { cwd: completeConsumer });
+    run('node', ['src/contextual-selection-runtime.mjs'], { cwd: completeConsumer });
 
     process.stdout.write(
       'Ontahi package artifacts passed clean-room install, type, and runtime checks.\n',

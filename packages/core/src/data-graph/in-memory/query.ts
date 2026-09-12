@@ -59,6 +59,10 @@ export const matchesSelectionExpression = (
   row: Record<string, unknown>,
   expression: SelectionExpression,
 ): boolean => {
+  if (expression.kind === 'relation-image')
+    throw new TypeError(
+      'Row-only evaluation does not support relation-image Selections; use the graph read runtime.',
+    );
   if (expression.kind === 'references') {
     return matchesSelectionExpression(row, lowerSelectionReferences(expression));
   }

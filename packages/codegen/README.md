@@ -7,6 +7,13 @@ server application graph and caller-owned browser Views and Queries.
 
 ## Conventional browser client
 
+Entity `selections: ({ self }) => ({ parts: self.nodes.where(n => n.type.eq('part')) })`
+declarations compile to portable contextual templates. Generated Selections keep named properties,
+target field types and deferred membership, including the `Book → parts → chapters` self-relation
+case. The current grammar accepts `self.relation` or one literal `where` predicate
+(`eq/lt/lte/gt/gte`); opaque callbacks are diagnosed, never imported into browser code.
+See [Core contextual factories](../core/README.md#experimental-contextual-selection-factories).
+
 Exported `withSelectionFactories(entity({ ... }), declarations)` definitions preserve their typed
 `by` method and reflected input/output/template contract in generated browser Entities. A local
 Entity variable and named object-literal declarations are supported too. The declaration map must

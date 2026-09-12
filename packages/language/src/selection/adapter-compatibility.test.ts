@@ -6,7 +6,7 @@ import {
 } from '@ontahi/supabase/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { analyzeSelectionDocument } from './index.js';
+import { analyzeSelectionDocument } from '../index.js';
 
 interface TestSupabaseQuery extends SupabaseSelectionQuery<TestSupabaseQuery> {}
 

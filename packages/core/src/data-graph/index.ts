@@ -49,6 +49,18 @@ export * from './schema-descriptor.js';
 export * from './selection.js';
 export * from './selection-value.js';
 export * from './selection-factories.js';
+export { contextualSelectionFactory } from './contextual-selection-factories.js';
+export type {
+  ContextualSelectionFactory,
+  ContextualSelectionDescriptor,
+} from './contextual-selection-factories.js';
+export { withContextualSelections, reflectContextualSelections } from './entity-selections.js';
+export type {
+  EntitySelectionContext,
+  EntityWithSelections,
+  ContextualSelectionDeclarations,
+  SelectionProperties,
+} from './entity-selections.js';
 export * from './selection-ast.js';
 export * from './selection-assembly.js';
 export * from './storage.js';

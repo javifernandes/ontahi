@@ -7,6 +7,7 @@ import {
   defineClientEntity,
   entity as defineEntitySchema,
   field,
+  withContextualSelections,
   withSelectionFactories,
   graphSchema,
   value,
@@ -47,18 +48,26 @@ export const TagSchema = withSelectionFactories(
     },
   },
 );
-export const TodoItemSchema = defineEntitySchema('TodoItem', {
-  id: field.id(),
-  list: field.ref(TodoListSchemaBase),
-  title: field.nonEmptyString({ trim: true }),
-  completed: field.boolean(),
-})
-  .display({ primary: 'title', search: ['title'] })
-  .manyToMany('tags', TagSchema);
-export const TodoListSchema = TodoListSchemaBase.hasMany('items', TodoItemSchema, {
-  via: 'list',
-  ordered: true,
-});
+export const TodoItemSchema = withContextualSelections(
+  defineEntitySchema('TodoItem', {
+    id: field.id(),
+    list: field.ref(TodoListSchemaBase),
+    title: field.nonEmptyString({ trim: true }),
+    completed: field.boolean(),
+  })
+    .display({ primary: 'title', search: ['title'] })
+    .manyToMany('tags', TagSchema),
+  { labels: { relationName: 'tags', expression: { kind: 'all' } } },
+);
+export const TodoListSchema = withContextualSelections(
+  TodoListSchemaBase.hasMany('items', TodoItemSchema, { via: 'list', ordered: true }),
+  {
+    openItems: {
+      relationName: 'items',
+      expression: { kind: 'predicate', fieldName: 'completed', operator: 'eq', value: false },
+    },
+  },
+);
 
 const CompleteAllOutputValue = value('CompleteAllOutput', {
   completed: field.nonNegativeInteger(),

@@ -456,6 +456,7 @@ export const ontahi = <
   const createGraphReadDispatcher: ApplicationGraphReadDispatcherFactory = policies => {
     return createDataGraphReadDispatcher({
       policies,
+      relationSelections: options.storage.graphReadCapabilities?.relationSelections,
       execute: (read, mode) => {
         const runtime = options.storage.createRuntime();
         if (mode === 'get') return runDataGraphEffect(runtime.get(read, undefined));

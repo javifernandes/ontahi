@@ -41,6 +41,42 @@ const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity
 });
 
 describe('Devtools activity model', () => {
+  it('shows canonical relation membership and source predicates in both dialects', () => {
+    const image = {
+      kind: 'relation-image',
+      relationName: 'items',
+      source: {
+        kind: 'selection',
+        entityName: 'List',
+        expression: { kind: 'predicate', fieldName: 'id', operator: 'eq', value: 'inbox' },
+      },
+    };
+    expect(formatSelectionExpression(image)).toBe(
+      'memberOf(List.where(id eq "inbox").through("items"))',
+    );
+    expect(formatSelectionExpression(image, 'declarative')).toBe(
+      'where member of (List where id = "inbox" through items)',
+    );
+    const body = {
+      kind: 'graph-read',
+      selection: {
+        entityName: 'Item',
+        expression: {
+          kind: 'and',
+          operands: [
+            image,
+            { kind: 'predicate', fieldName: 'completed', operator: 'eq', value: false },
+          ],
+        },
+      },
+    };
+    expect(graphReadSummary(body, 'declarative')).toBe(
+      'Item where member of (List where id = "inbox" through items) and completed = false',
+    );
+    expect(graphReadSummary(body)).toContain(
+      'memberOf(List.where(id eq "inbox").through("items")) && completed eq false',
+    );
+  });
   it('projects declarative predicates from the captured tree, preserving nested grouping', () => {
     expect(
       formatSelectionExpression(

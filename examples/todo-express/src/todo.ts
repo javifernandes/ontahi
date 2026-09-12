@@ -57,8 +57,14 @@ const TodoItemCommandRef = entity.ref('TodoItem', {
 export const TodoList = entity({
   name: 'TodoList',
   fields: todoListFields,
-  relations: () => ({
-    items: relation.hasMany(entity.ref('TodoItem'), { via: 'list', ordered: true }),
+  relations: {
+    items: relation.hasMany(entity.ref('TodoItem', { fields: { completed: field.boolean() } }), {
+      via: 'list',
+      ordered: true,
+    }),
+  },
+  selections: ({ self }) => ({
+    openItems: self.items.where(item => item.completed.eq(false)),
   }),
   display: { primary: 'name', search: ['name'] },
   domainOperationDefaults: entityDefaults,
@@ -172,6 +178,7 @@ export const TodoItem = entity({
       ],
     }),
   },
+  selections: ({ self }) => ({ labels: self.tags }),
   uses: {
     entities: () => ({ TodoList }),
   },

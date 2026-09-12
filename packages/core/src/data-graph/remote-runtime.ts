@@ -22,7 +22,11 @@ import {
 import { resolveQuerySpec, type QueryOrView } from './query.js';
 import {
   isGraphReadProtocolError,
+  isGraphReadCapabilities,
   toGraphReadRequest,
+  toGraphReadRequestV2,
+  type GraphReadFamilyRequest,
+  type GraphReadRequest,
   type GraphReadMode,
   type GraphReadProtocolErrorCode,
   type GraphReadRequestV1,
@@ -41,6 +45,7 @@ import type {
   RelationshipCommandExecutionRuntime,
 } from './relationship-command.js';
 import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from './runtime.js';
+import { hasRelationImage } from './selection-ast.js';
 
 export type RemoteDataGraphErrorCode =
   | GraphReadProtocolErrorCode
@@ -66,7 +71,7 @@ export class RemoteDataGraphError extends Error {
 }
 
 export type RemoteGraphReadTransport<TOptions = undefined> = (
-  request: GraphReadRequestV1,
+  request: GraphReadFamilyRequest,
   options?: TOptions,
 ) => Promise<unknown>;
 
@@ -124,6 +129,20 @@ const unsupportedCapability = (capability: string) =>
     'unsupported_capability',
     `Remote data graph ${capability} execution is not supported.`,
   );
+
+const requireRelationSelectionCapability = (response: unknown, entityName: string): void => {
+  if (isGraphReadProtocolError(response))
+    throw new RemoteDataGraphError(response.error.code, response.error.message);
+  if (
+    !isRecord(response) ||
+    response.kind !== 'graph-read-capabilities-result' ||
+    response.entityName !== entityName ||
+    !isGraphReadCapabilities(response.capabilities)
+  )
+    throw invalidResponse('Graph Read capabilities');
+  if (response.capabilities.relationSelections?.version !== 2)
+    throw unsupportedCapability('contextual Selection (Graph Read v2)');
+};
 
 const readCommandResponseValue = (response: unknown): RelationshipCommandResult => {
   if (!isRecord(response)) throw invalidResponse('Relationship Command');
@@ -196,6 +215,20 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
   OrderedRelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   RelationshipCommandExecutionRuntime<RemoteDataGraphError, TOptions> &
   EntityMutationCommandExecutionRuntime<RemoteDataGraphError, TOptions> => {
+  const sendRead = async (
+    request: GraphReadFamilyRequest,
+    options?: TOptions,
+  ): Promise<unknown> => {
+    try {
+      return await transport(request, options);
+    } catch (cause) {
+      throw new RemoteDataGraphError(
+        'transport_failure',
+        'Remote data graph transport failed.',
+        cause,
+      );
+    }
+  };
   const executeRead = <TParams, TResult>(
     read: QueryOrView<TParams, TResult>,
     params: TParams,
@@ -204,9 +237,12 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
   ) =>
     Effect.tryPromise({
       try: async () => {
-        let request: GraphReadRequestV1;
+        let request: GraphReadRequest;
         try {
-          request = toGraphReadRequest(resolveQuerySpec(read, params), mode);
+          const spec = resolveQuerySpec(read, params);
+          request = hasRelationImage(spec.selection)
+            ? toGraphReadRequestV2(spec, mode)
+            : toGraphReadRequest(spec, mode);
         } catch (cause) {
           throw new RemoteDataGraphError(
             'invalid_request',
@@ -215,16 +251,23 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
           );
         }
 
-        let response: unknown;
-        try {
-          response = await transport(request, options);
-        } catch (cause) {
-          throw new RemoteDataGraphError(
-            'transport_failure',
-            'Remote data graph transport failed.',
-            cause,
+        if (request.version === 2) {
+          // No cross-request cache: credentials/authority and receiver support may have changed.
+          // Discovery is advisory. The receiver still authorizes all source hops on the data read.
+          const entityName = request.selection.entityName;
+          requireRelationSelectionCapability(
+            await sendRead(
+              {
+                version: 1,
+                kind: 'graph-read-capabilities',
+                entityName,
+              },
+              options,
+            ),
+            entityName,
           );
         }
+        const response = await sendRead(request, options);
         return readResponseValue(response, mode);
       },
       catch: toRemoteDataGraphError,
@@ -326,8 +369,12 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
           try: () => {
             let request: GraphReadRequestV1;
             try {
-              request = toGraphReadRequest(resolveQuerySpec(read, params), 'run');
+              const spec = resolveQuerySpec(read, params);
+              if (hasRelationImage(spec.selection))
+                throw unsupportedCapability('contextual Selection observation');
+              request = toGraphReadRequest(spec, 'run');
             } catch (cause) {
+              if (cause instanceof RemoteDataGraphError) throw cause;
               throw new RemoteDataGraphError(
                 'invalid_request',
                 'Failed to encode the remote data graph observation.',

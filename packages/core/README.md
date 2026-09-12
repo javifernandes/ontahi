@@ -18,6 +18,8 @@ Current docs:
 
 ## Experimental named Selection factories
 
+For the source-relative counterpart, see [contextual Selection factories](#experimental-contextual-selection-factories).
+
 `withSelectionFactories` adds `by` to an Entity definition and to `defineClientEntity(definition)`.
 Apply it after declaring the Entity's identity and locators. This first data-first slice coexists
 with legacy `refByX` methods; it does not deprecate them.
@@ -93,6 +95,123 @@ table ordering/limits. Additional Console factories use `.by(...).by(...)` in TS
 holding only reflected JSON. It returns validated, normalized `input` and a Selection `expression`;
 it neither reads records nor grants authority. As with any client-authored Selection, the receiving
 runtime must validate the expression against the actual Entity and apply its ordinary policies.
+
+## Experimental contextual Selection factories
+
+Declare reusable membership relative to a source Selection, using an existing relation:
+
+```ts
+import { entity, relation } from '@ontahi/core/runtime/server';
+
+const Book = entity({
+  name: 'Book',
+  fields: { id: field.id() },
+  relations: { contentNodes: relation.hasMany(ContentNode, { via: 'bookId' }) },
+  selections: ({ self }) => ({
+    parts: self.contentNodes.where(node => node.type.eq('part')),
+  }),
+});
+
+const selected = Selection.where(Book, book => book.id.eq('my-book')).parts;
+// With a named `by` factory attached: Book.by({ slug: 'my-book' }).parts
+// With `chapters` declared on ContentNode: selected.chapters
+```
+
+These properties live on Selections, not loaded rows. `and`, `or`, `not`, `named` and `where`
+retain contextual navigation. A runtime-bound Selection keeps its runtime across hops. Source
+read shaping (`limit`, ordering, projection/includes) is rejected instead of silently dropped;
+apply it to the target read. Source consumer cardinality is not inherited by a hop.
+
+The declaration is compiled once when used or reflected, after relation targets are resolved.
+`contextualSelections` and application graph discovery expose copied source/target contracts and
+membership templates. Codegen supports `self.relation` and `self.relation.where(field =>
+field.name.eq(literal))` (also `lt/lte/gt/gte`), emitting portable data, never server callbacks.
+Unsupported callback expressions produce diagnostics. Self-relation targets retain their declared
+contract; this is not unrestricted recursively inferred Entity typing.
+
+`withContextualSelections(entity, callback)` offers the same registration for low-level definitions.
+It also accepts portable `{ name: { relationName, expression } }` templates for generated clients.
+The explicit low-level counterpart remains available:
+
+```ts
+import { contextualSelectionFactory, Selection } from '@ontahi/core/data-graph';
+
+// Book.contentNodes and ContentNode.children are actual declared relations.
+const parts = contextualSelectionFactory(Book, 'contentNodes', node => node.type.eq('part'));
+const chapters = contextualSelectionFactory(ContentNode, 'children', node =>
+  node.type.eq('chapter'),
+);
+const selected = chapters.from(parts.from(Book.by({ slug: 'my-book' })));
+const ast = selected.toAst(); // Portable membership; no read yet.
+
+// Unfiltered navigation uses the same canonical relation-image node.
+const allNodes = Selection.all(Book).through('contentNodes');
+```
+
+The callback compiles once to a copied, JSON-safe template. `.descriptor` reports the source
+context and target Selection contracts. The result is an ordinary Selection supporting `and`,
+`or`, `not` and `toQuery()`. Navigation drops the source consumer's one/many requirement; multiple
+source members produce a set of target members, not grouped rows or an implicit ordering.
+
+In-memory reads support this membership when `createInMemoryDataGraphRuntime` receives the model
+in `entities`. Rehydrate serialized membership with
+`graphSchema.selection(ContentNode, { entities: [Book, ContentNode] })`; these are receiver-owned
+definitions, not definitions or join metadata supplied by the caller. The schema checks every
+source, relation and predicate, with a maximum depth of 32 and 1000 expression nodes.
+
+This is a **read-only experimental slice**. Protocol v1, Supabase, MySQL runtime and Commands
+reject relation-image selections explicitly. PostgreSQL supports trusted local reads using registered
+mappings and correlated `EXISTS` (stored filter fields and single-identity many-to-many edges).
+For unbound Selections, execute `selected.toQuery()`
+with a graph read runtime. This does not fetch IDs in the client, create a new identity, or enable
+derived-relation writes.
+
+### Opt-in contextual Graph Reads
+
+The low-level receiver supports request/response v2 when its executor supports relation images:
+
+```ts
+const dispatch = createGraphReadDispatcher({
+  relationSelections: true,
+  policies: [
+    { ...bookPolicy, selectionRelations: ['contentNodes'] },
+    { ...contentNodePolicy, selectionRelations: ['children'] },
+  ],
+  execute: (read, mode) => executeSupportedGraphRead(read, mode),
+});
+// Discover graph-read-capabilities first. A v2 receiver reports:
+// { orderBy: [...], relationSelections: { version: 2, relations: ['contentNodes'] } }
+const request = toGraphReadRequestV2(selected.toQuery(), 'run');
+await dispatch(request, { authority });
+```
+
+Each hop needs an explicit `selectionRelations` grant on its source policy and registered policies
+for source and target. Every source must allow the requested read mode and its caller-supplied
+filter operators. Source projection, cardinality and limits do not apply: sources are membership,
+not materialized reads. The final target retains normal projection/order/cardinality/limit checks.
+View/include permissions (`relations`) do **not** grant membership navigation.
+
+Every source and the final target is intersected with its own authority scope, outside caller
+`not`/`or`; scopes are resolved once per Entity per request. Scope definitions remain scalar
+Selections in this slice (no recursive relation-image policy expansion). Grants and scopes are
+rechecked on every request; discovered capabilities are advisory, not authorization tokens.
+
+`ontahi(...).createGraphReadDispatcher(policies)` uses the storage's provider-owned
+`graphReadCapabilities.relationSelections` flag. In-memory and PostgreSQL storage declare this
+support; other/custom storage remains closed unless it explicitly implements and declares it.
+This enables the protocol, not the relation grants: `selectionRelations` remains required.
+
+`createRemoteDataGraphRuntime` and React graph clients automatically discover the target's v2
+capability before each contextual `get`/`run`/`count`, then send the deferred Selection. Metadata
+and execution use the same transport options; no capabilities are cached across requests or
+authorities. Missing capability fails explicitly, and authorization/execution failures never trigger
+v1 fallback or source-ID prefetch. Plain reads and `toGraphReadRequest` stay v1 without extra requests.
+
+Custom `RemoteGraphReadTransport` functions now accept `GraphReadFamilyRequest`, including metadata
+requests. Forward all members unchanged, or narrow `request.kind === 'graph-read'` before accessing
+`mode`/`selection`. The standard Runtime Transport and legacy HTTP adapters already handle both.
+Console navigation and both dialects remain follow-ups. Graph observation rejects contextual reads
+until source-change invalidation is supported and verified.
 
 ## Application composition
 

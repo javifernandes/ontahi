@@ -7,7 +7,7 @@ import {
   isGraphReadCapabilities,
   type AnyEntityDefinition,
   type GraphReadCapabilities,
-  type GraphReadRequestV1,
+  type GraphReadRequest,
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
 import {
@@ -26,6 +26,7 @@ import {
   editConsoleLimit,
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
+  resolveConsoleContext,
   type ConsoleLanguageApplicationReflection,
   type ConsoleDocumentAnalysis,
   type ConsoleDialect,
@@ -69,7 +70,7 @@ export type ConsolePanelProps = {
 type ConsoleResultSnapshot = {
   readonly document: string;
   readonly exists: boolean;
-  readonly request: GraphReadRequestV1;
+  readonly request: GraphReadRequest;
   readonly value: unknown;
   readonly durationMs: number;
   readonly capabilities?: GraphReadCapabilities;
@@ -484,9 +485,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
-  const entityName = application.entities.find(
-    entity => entity.name === analysis.syntax.expression?.entity?.text,
-  )?.name;
+  const entityName = resolveConsoleContext(analysis.syntax.expression, application)?.name;
   const discovery = useConsoleReadCapabilities(runtimeTransport, entityName, identityKey);
 
   const runDocument = (source: string) => {
@@ -517,10 +516,37 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     executingRef.current = controller;
     const startedAt = performance.now();
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
-    void exchange(
-      { family: 'graph.read', body: { ...request, includeCapabilities: true } },
-      { signal: controller.signal },
-    )
+    const execute = async () => {
+      if (request.version === 2) {
+        const response = await exchange(
+          {
+            family: 'graph.read',
+            body: {
+              version: 1,
+              kind: 'graph-read-capabilities',
+              entityName: request.selection.entityName,
+            },
+          },
+          { signal: controller.signal },
+        );
+        if (isRecord(response) && response.kind === 'protocol-error') graphReadResult(response);
+        if (
+          !isRecord(response) ||
+          response.kind !== 'graph-read-capabilities-result' ||
+          response.entityName !== request.selection.entityName ||
+          !isGraphReadCapabilities(response.capabilities)
+        )
+          throw new Error('This server did not return valid Graph Read capabilities.');
+        if (response.capabilities.relationSelections?.version !== 2)
+          throw new Error('This Graph Read provider does not support contextual Selections (v2).');
+      }
+      if (controller.signal.aborted) throw new Error('Console execution was cancelled.');
+      return exchange(
+        { family: 'graph.read', body: { ...request, includeCapabilities: true } },
+        { signal: controller.signal },
+      );
+    };
+    void execute()
       .then(graphReadResult)
       .then(result => {
         if (controller.signal.aborted) return;
@@ -601,7 +627,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   const orderableFields = discovery.orderableFields;
   const orderingCompletionNotice = () => {
     const syntax = analysis.syntax.expression;
-    const entityName = syntax?.entity?.text;
+    const entityName = resolveConsoleContext(syntax, application)?.name;
     if (!syntax?.orderBy || !application.entities.some(entity => entity.name === entityName))
       return null;
     if (!runtimeTransport) return 'Ordering suggestions require a configured Runtime Transport.';

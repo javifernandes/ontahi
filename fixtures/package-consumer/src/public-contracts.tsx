@@ -7,10 +7,13 @@ import {
 } from '@ontahi/codegen';
 import { createRuntimeProtocolExchange } from '@ontahi/core/runtime/protocol';
 import {
+  contextualSelectionFactory,
+  Selection,
   entity,
   field,
   graphSchema,
   withSelectionFactories,
+  withContextualSelections,
   defineClientEntity,
 } from '@ontahi/core/data-graph';
 import { createFetchGraphClient } from '@ontahi/react/graph';
@@ -68,6 +71,33 @@ type PublicModules = [
 ];
 
 export type PublicModuleCount = PublicModules['length'];
+
+const ContextItem = entity('ContextItem', {
+  id: field.id(),
+  listId: field.string(),
+  done: field.boolean(),
+});
+const ContextList = entity('ContextList', { id: field.id() }).hasMany('items', ContextItem, {
+  via: 'listId',
+});
+const pendingItems = contextualSelectionFactory(ContextList, 'items', item => item.done.eq(false));
+const contextSelection: Selection<typeof ContextItem, undefined> = pendingItems.from(
+  Selection.all(ContextList),
+);
+void contextSelection.toAst();
+// @ts-expect-error Context factory source is a List, not an Item.
+pendingItems.from(Selection.all(ContextItem));
+
+const ContextLists = withContextualSelections(ContextList, ({ self }) => ({
+  pending: self.items.where(item => item.done.eq(false)),
+}));
+const pending: Selection<typeof ContextItem, undefined> = Selection.all(ContextLists).pending;
+void pending;
+Selection.all(ContextLists)
+  .where(list => list.id.eq('l1'))
+  .pending.and(item => item.done.eq(true));
+// @ts-expect-error target fields are checked
+Selection.all(ContextLists).pending.and(item => item.missing.eq('x'));
 
 const FactoryEntity = withSelectionFactories(entity('FactoryEntity', { id: field.id() }), {
   identity: {

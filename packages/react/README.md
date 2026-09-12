@@ -62,6 +62,12 @@ configured client with `client={createFetchGraphClient(...)}`, or set `client={f
 explicit provider. Server routes, read policies, and authorization remain opt-in and authoritative;
 the default removes client wiring, not the server security boundary.
 
+Contextual Selection reads (for example `Book.by(...).parts.chapters.toQuery()`) negotiate Graph
+Read v2 through the same transport before execution, with the same request options/credentials.
+The server must use supporting storage and grant each outgoing `selectionRelations` hop. Discovery
+does not authorize the read or fetch source IDs; missing support fails explicitly without fallback.
+Plain reads remain v1 with no discovery round trip. Contextual observation is not supported yet.
+
 The same client supports fluent execution outside React hooks:
 
 ```ts

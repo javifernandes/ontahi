@@ -1,3 +1,5 @@
+import { Cause, Option, Runtime } from 'effect';
+
 import { isJsonValue, type JsonValue } from '../value/json.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
@@ -65,6 +67,8 @@ export type GraphReadPolicy<
   readonly modes: readonly GraphReadMode[];
   readonly cardinalities: readonly GraphReadCardinality[];
   readonly maxLimit: number;
+  /** Outgoing Selection membership hops. View/include grants never imply this permission. */
+  readonly selectionRelations?: readonly (keyof TEntity['relations'] & string)[];
   readonly scope:
     | 'all'
     | ((
@@ -113,6 +117,8 @@ export type GraphReadObserver<TAuthority> = (
 export type CreateGraphReadDispatcherOptions<TAuthority> = {
   readonly policies: readonly GraphReadPolicy<any, TAuthority>[];
   readonly execute: GraphReadDispatchExecutor;
+  /** Enable v2 only when the executor supports deferred relation-image reads. */
+  readonly relationSelections?: true;
   readonly reportError?: (error: unknown) => void;
 };
 
@@ -139,13 +145,19 @@ const cardinalityMismatchMarkers = new Set([
 const isCardinalityMismatchMarker = (value: unknown) =>
   typeof value === 'string' && cardinalityMismatchMarkers.has(value);
 
-const isGraphReadCardinalityMismatch = (error: unknown) =>
+const hasCardinalityMismatchMarker = (error: unknown) =>
   isRecord(error) &&
   (isCardinalityMismatchMarker(error.reason) ||
     isCardinalityMismatchMarker(error.cause) ||
     (isRecord(error.cause) &&
       (isCardinalityMismatchMarker(error.cause.reason) ||
         isCardinalityMismatchMarker(error.cause.cause))));
+
+const isGraphReadCardinalityMismatch = (error: unknown) => {
+  if (!Runtime.isFiberFailure(error)) return hasCardinalityMismatchMarker(error);
+  const failure = Cause.failureOption(error[Runtime.FiberFailureCauseId]);
+  return Option.isSome(failure) && hasCardinalityMismatchMarker(failure.value);
+};
 
 const graphReadCardinalityMismatch = (entityName: string) =>
   graphReadProtocolError(
@@ -186,6 +198,10 @@ const validatePolicyNode = (
 };
 
 const validatePolicy = (policy: GraphReadPolicy<any, any>): void => {
+  for (const relation of policy.selectionRelations ?? []) {
+    if (!hasOwn(policy.entity.relations, relation))
+      throw new Error(`Unknown graph read Selection relation ${policy.entity.name}.${relation}.`);
+  }
   if (!Number.isInteger(policy.maxLimit) || policy.maxLimit < 1) {
     throw new Error(`Graph read policy ${policy.entity.name} requires a positive maxLimit.`);
   }
@@ -242,8 +258,13 @@ const allowsSelection = (
   expression: SelectionExpression,
   policy: GraphReadPolicyNode,
   entity: AnyEntityDefinition,
+  allowsImage?: (
+    image: Extract<SelectionExpression, { kind: 'relation-image' }>,
+    target: AnyEntityDefinition,
+  ) => boolean,
 ): boolean => {
   if (expression.kind === 'all' || expression.kind === 'none') return true;
+  if (expression.kind === 'relation-image') return allowsImage?.(expression, entity) ?? false;
   if (expression.kind === 'references') {
     return expression.refs.every(ref =>
       Object.keys(ref.locator).every(fieldName =>
@@ -252,9 +273,12 @@ const allowsSelection = (
     );
   }
   if (expression.kind === 'and' || expression.kind === 'or') {
-    return expression.operands.every(operand => allowsSelection(operand, policy, entity));
+    return expression.operands.every(operand =>
+      allowsSelection(operand, policy, entity, allowsImage),
+    );
   }
-  if (expression.kind === 'not') return allowsSelection(expression.operand, policy, entity);
+  if (expression.kind === 'not')
+    return allowsSelection(expression.operand, policy, entity, allowsImage);
 
   return Boolean(
     readFieldPolicy(policy, expression.fieldName)?.filter?.includes(expression.operator) &&
@@ -328,13 +352,14 @@ const queryAccessError = (
   query: QuerySpec,
   mode: GraphReadMode,
   policy: GraphReadPolicy<any, any>,
+  allowsImage?: Parameters<typeof allowsSelection>[3],
 ): GraphReadProtocolError | undefined => {
   if (
     !policy.modes.includes(mode) ||
     (mode !== 'count' &&
       !policy.cardinalities.includes(query.cardinality ?? (mode === 'get' ? 'one' : 'many'))) ||
     (query.limit !== undefined && query.limit > policy.maxLimit) ||
-    !allowsSelection(query.selection, policy, query.root) ||
+    !allowsSelection(query.selection, policy, query.root, allowsImage) ||
     !allowsProjection(query, policy, mode)
   )
     return graphReadAccessDenied();
@@ -385,6 +410,81 @@ const createGraphReadPolicyRegistry = <TAuthority>(
   return policyByEntityName;
 };
 
+const relationSelectionCapabilities = <TAuthority>(
+  policy: GraphReadPolicy<any, TAuthority>,
+  policies: ReadonlyMap<string, GraphReadPolicy<any, TAuthority>>,
+  enabled?: true,
+): Pick<GraphReadCapabilities, 'relationSelections'> =>
+  enabled
+    ? {
+        relationSelections: {
+          version: 2,
+          relations: (policy.selectionRelations ?? []).filter(name => {
+            const target = policy.entity.relations[name]?.target;
+            return target && policies.get(target.name)?.entity === target;
+          }),
+        },
+      }
+    : {};
+
+/** Authorize caller membership first; mandatory scopes are added only after all grants pass. */
+const createRelationSelectionAuthority = <TAuthority>(
+  policies: ReadonlyMap<string, GraphReadPolicy<any, TAuthority>>,
+  mode: GraphReadMode,
+  context: GraphReadDispatchContext<TAuthority>,
+) => {
+  const allowsImage: NonNullable<Parameters<typeof allowsSelection>[3]> = (image, target) => {
+    const source = policies.get(image.source.entityName);
+    if (
+      !source ||
+      !source.modes.includes(mode) ||
+      !source.selectionRelations?.includes(image.relationName) ||
+      !hasOwn(source.entity.relations, image.relationName) ||
+      source.entity.relations[image.relationName]!.target !== target
+    )
+      return false;
+    return allowsSelection(image.source.expression, source, source.entity, allowsImage);
+  };
+  const scopes = new Map<string, SelectionExpression | undefined>();
+  const scoped = (
+    expression: SelectionExpression,
+    policy: GraphReadPolicy<any, TAuthority>,
+  ): SelectionExpression => {
+    if (!scopes.has(policy.entity.name)) {
+      const scope = resolveScope(policy, context);
+      // Policy scopes remain receiver-owned scalar membership in this slice; avoid recursive
+      // policy expansion and never place a mandatory scope inside the caller's NOT operand.
+      const invalid = scope && validateGraphReadSelection(scope, policy.entity);
+      if (invalid) throw new Error(invalid.error.message);
+      scopes.set(policy.entity.name, scope);
+    }
+    const scope = scopes.get(policy.entity.name);
+    const membership = visit(expression);
+    return scope ? selectionAnd(membership, scope) : membership;
+  };
+  const visit = (expression: SelectionExpression): SelectionExpression => {
+    if (expression.kind === 'relation-image')
+      return {
+        ...expression,
+        source: {
+          ...expression.source,
+          expression: scoped(
+            expression.source.expression,
+            policies.get(expression.source.entityName)!,
+          ),
+        },
+      };
+    if (expression.kind === 'and' || expression.kind === 'or')
+      return {
+        ...expression,
+        operands: expression.operands.map(visit),
+      };
+    if (expression.kind === 'not') return { ...expression, operand: visit(expression.operand) };
+    return expression;
+  };
+  return { allowsImage, scoped };
+};
+
 type AuthorizedGraphRead =
   | {
       readonly success: true;
@@ -399,26 +499,42 @@ const authorizeGraphRead = <TAuthority>(
   context: GraphReadDispatchContext<TAuthority>,
   policyByEntityName: ReadonlyMap<string, GraphReadPolicy<any, TAuthority>>,
   reportError?: (error: unknown) => void,
+  relationSelections?: true,
 ): AuthorizedGraphRead => {
   const parsed = parseGraphReadRequest(input);
   if (!parsed.success) return parsed;
+  if (parsed.request.version === 2 && !relationSelections)
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'unsupported_version',
+        'This receiver does not support Graph Read v2 relation Selections.',
+      ),
+    };
 
   const policy = policyByEntityName.get(parsed.request.selection.entityName);
   if (!policy) return { success: false, error: graphReadAccessDenied() };
 
-  const resolved = resolveGraphReadRequest(parsed.request, { entities: [policy.entity] });
+  const resolved = resolveGraphReadRequest(parsed.request, {
+    entities: [...policyByEntityName.values()].map(entry => entry.entity),
+  });
   if (!resolved.success) return resolved;
-  const accessError = queryAccessError(resolved.query, parsed.request.mode, policy);
+  const membershipAuthority = createRelationSelectionAuthority(
+    policyByEntityName,
+    parsed.request.mode,
+    context,
+  );
+  const accessError = queryAccessError(
+    resolved.query,
+    parsed.request.mode,
+    policy,
+    relationSelections ? membershipAuthority.allowsImage : undefined,
+  );
   if (accessError) return { success: false, error: accessError };
 
   let query = resolved.query;
   try {
-    const scope = resolveScope(policy, context);
-    if (scope) {
-      const invalidScope = validateGraphReadSelection(scope, policy.entity);
-      if (invalidScope) throw new Error(invalidScope.error.message);
-      query = { ...query, selection: selectionAnd(query.selection, scope) };
-    }
+    query = { ...query, selection: membershipAuthority.scoped(query.selection, policy) };
     if (parsed.request.mode !== 'count' && query.limit === undefined) {
       query = { ...query, limit: policy.maxLimit };
     }
@@ -434,6 +550,7 @@ const authorizeGraphRead = <TAuthority>(
     ...(parsed.request.includeCapabilities
       ? {
           capabilities: {
+            ...relationSelectionCapabilities(policy, policyByEntityName, relationSelections),
             orderBy:
               parsed.request.mode === 'count'
                 ? []
@@ -450,6 +567,7 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
   policies,
   execute,
   reportError,
+  relationSelections,
 }: CreateGraphReadDispatcherOptions<TAuthority>): GraphReadDispatcher<TAuthority> => {
   const policyByEntityName = createGraphReadPolicyRegistry(policies);
 
@@ -467,6 +585,7 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
           kind: 'graph-read-capabilities-result',
           entityName: policy.entity.name,
           capabilities: {
+            ...relationSelectionCapabilities(policy, policyByEntityName, relationSelections),
             orderBy: policy.modes.some(mode => mode !== 'count')
               ? Object.keys(policy.entity.fields).filter(field =>
                   allowsOrdering(policy.entity, field, policy),
@@ -479,7 +598,13 @@ export const createGraphReadDispatcher = <TAuthority = unknown>({
         return graphReadExecutionUnavailable();
       }
     }
-    const authorized = authorizeGraphRead(input, context, policyByEntityName, reportError);
+    const authorized = authorizeGraphRead(
+      input,
+      context,
+      policyByEntityName,
+      reportError,
+      relationSelections,
+    );
     if (!authorized.success) return authorized.error;
 
     try {

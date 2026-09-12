@@ -53,6 +53,7 @@ export const createPostgresDataGraphStorage = (options: {
   };
   return {
     kind: 'postgres',
+    graphReadCapabilities: { relationSelections: true },
     bindEntities: declarations => {
       entities = declarations;
       if (!hasExplicitMappings) mappings = inferPostgresMappings(declarations, options);

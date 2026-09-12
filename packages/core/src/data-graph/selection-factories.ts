@@ -8,6 +8,7 @@ import type {
   GraphObjectDefinition,
   InferGraphSchemaValue,
 } from './definitions.js';
+import type { SelectionProperties } from './entity-selections.js';
 import { getEntityIdentityLocator, createEntityRef } from './ref/index.js';
 import {
   toGraphSchemaDescriptor,
@@ -255,9 +256,10 @@ export const withSelectionFactories = <
     };
     return Object.defineProperty(selected, 'factoryInvocation', {
       get: () => cloneJson(factoryInvocation),
-    }) as Selection<TEntity, undefined> & {
-      readonly factoryInvocation: SelectionFactoryInvocation;
-    };
+    }) as Selection<TEntity, undefined> &
+      SelectionProperties<TEntity> & {
+        readonly factoryInvocation: SelectionFactoryInvocation;
+      };
   };
   // Authoring capabilities are not definition data copied by runtime entity binding.
   return Object.defineProperties(entity, {

@@ -11,6 +11,7 @@ import {
 import {
   analyzeSelectionDocument,
   parseConsoleDocument,
+  resolveConsoleContext,
   type ConsoleDialect,
   type ConsoleLanguageApplicationReflection,
   type SelectionExpressionSyntax,
@@ -123,28 +124,33 @@ type FiniteValueProjectionContext = {
   readonly projections: readonly EditorFiniteValueProjection[];
 };
 
-const consoleFiniteValueProjectionContext = (
+const consoleFiniteValueProjectionContexts = (
   document: string,
   application: ConsoleLanguageApplicationReflection,
   dialect: ConsoleDialect = 'ts',
-): FiniteValueProjectionContext | undefined => {
+): readonly FiniteValueProjectionContext[] => {
   const expression = parseConsoleDocument(document, dialect).syntax.expression;
-  if (!expression?.entity || !expression.selection) return undefined;
-  const selection = expression.selection;
-  const entity = application.entities.find(candidate => candidate.name === expression.entity?.text);
-  return entity
-    ? {
-        entityName: entity.name,
-        projections: deriveSelectionFiniteValueProjections(
-          document.slice(selection.from, selection.to),
-          entity,
-        ).map(projection => ({
-          ...projection,
-          from: projection.from + selection.from,
-          to: projection.to + selection.from,
-        })),
-      }
-    : undefined;
+  if (!expression?.entity) return [];
+  return expression.steps.flatMap(step => {
+    if (step.kind !== 'filter' || !step.selection) return [];
+    const selection = step.selection;
+    const entity = resolveConsoleContext(expression, application, selection.from);
+    return entity
+      ? [
+          {
+            entityName: entity.name,
+            projections: deriveSelectionFiniteValueProjections(
+              document.slice(selection.from, selection.to),
+              entity,
+            ).map(projection => ({
+              ...projection,
+              from: projection.from + selection.from,
+              to: projection.to + selection.from,
+            })),
+          },
+        ]
+      : [];
+  });
 };
 
 export const deriveConsoleFiniteValueProjections = (
@@ -152,7 +158,9 @@ export const deriveConsoleFiniteValueProjections = (
   application: ConsoleLanguageApplicationReflection,
   dialect: ConsoleDialect = 'ts',
 ): readonly SelectionFiniteValueProjection[] =>
-  consoleFiniteValueProjectionContext(document, application, dialect)?.projections ?? [];
+  consoleFiniteValueProjectionContexts(document, application, dialect).flatMap(
+    context => context.projections,
+  );
 
 const revealFiniteValueProjection = StateEffect.define<SelectionLanguageRange>();
 
@@ -303,25 +311,26 @@ const finiteValueProjectionTheme = EditorView.theme({
 
 const finiteValueDecorations = (
   view: EditorView,
-  context: FiniteValueProjectionContext | undefined,
+  contexts: readonly FiniteValueProjectionContext[],
 ): DecorationSet => {
-  if (!context) return Decoration.none;
   const revealed = view.state.field(revealedFiniteValueProjection);
   return Decoration.set(
-    context.projections.flatMap(projection =>
-      sameRange(revealed, projection)
-        ? []
-        : [
-            (projection.from === projection.to
-              ? Decoration.widget({
-                  widget: new FiniteValueWidget(context.entityName, projection),
-                  side: 1,
-                })
-              : Decoration.replace({
-                  widget: new FiniteValueWidget(context.entityName, projection),
-                })
-            ).range(projection.from, projection.to),
-          ],
+    contexts.flatMap(context =>
+      context.projections.flatMap(projection =>
+        sameRange(revealed, projection)
+          ? []
+          : [
+              (projection.from === projection.to
+                ? Decoration.widget({
+                    widget: new FiniteValueWidget(context.entityName, projection),
+                    side: 1,
+                  })
+                : Decoration.replace({
+                    widget: new FiniteValueWidget(context.entityName, projection),
+                  })
+              ).range(projection.from, projection.to),
+            ],
+      ),
     ),
     true,
   );
@@ -329,7 +338,7 @@ const finiteValueDecorations = (
 
 type FiniteValueProjectionContextSource = (
   document: string,
-) => FiniteValueProjectionContext | undefined;
+) => readonly FiniteValueProjectionContext[];
 
 const finiteValueProjectionExtensions = (
   context: FiniteValueProjectionContextSource,
@@ -372,10 +381,12 @@ const finiteValueProjectionExtensions = (
 export const selectionFiniteValueProjectionExtensions = (
   entity: SelectionLanguageEntityReflection,
 ): readonly Extension[] =>
-  finiteValueProjectionExtensions(document => ({
-    entityName: entity.name,
-    projections: deriveSelectionFiniteValueProjections(document, entity),
-  }));
+  finiteValueProjectionExtensions(document => [
+    {
+      entityName: entity.name,
+      projections: deriveSelectionFiniteValueProjections(document, entity),
+    },
+  ]);
 
 export const consoleFiniteValueProjectionExtensions = (
   application: ConsoleLanguageApplicationReflection,
@@ -383,10 +394,11 @@ export const consoleFiniteValueProjectionExtensions = (
   orderableFields?: (entityName: string) => readonly string[],
 ): readonly Extension[] =>
   finiteValueProjectionExtensions(document => {
-    const values = consoleFiniteValueProjectionContext(document, application, dialect);
+    const values = consoleFiniteValueProjectionContexts(document, application, dialect);
     const ordering = consoleOrderProjections(document, application, dialect, orderableFields);
-    const entityName = parseConsoleDocument(document, dialect).syntax.expression?.entity?.text;
-    return entityName
-      ? { entityName, projections: [...(values?.projections ?? []), ...ordering] }
-      : undefined;
+    const entityName = resolveConsoleContext(
+      parseConsoleDocument(document, dialect).syntax.expression,
+      application,
+    )?.name;
+    return [...values, ...(entityName ? [{ entityName, projections: ordering }] : [])];
   });

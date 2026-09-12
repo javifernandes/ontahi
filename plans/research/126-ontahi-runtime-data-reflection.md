@@ -193,6 +193,20 @@ search prefix, supported operators, or a maximum sampled population.
 
 ## Closure / Evolution
 
+### Reference assistance consumer — 2026-09-12
+
+[118f Context-Aware Reference Assistance](../backlog/118f-context-aware-reference-assistance.md)
+adds a concrete consumer: a Reference editor can enumerate a small authorized population or use
+typeahead for a large/unknown one. Profile the **candidate Selection**, not just the global target
+Entity: preceding semantic constraints and relation navigation can greatly reduce its population.
+Source order alone is not a valid interpretation of Boolean query context.
+
+Keep exact/estimated/unknown counts, freshness, bounded enumeration, search support and expected
+cost separate from static schema reflection. A capped result page does not prove a small complete
+population. The UI chooses presentation; the profile does not return a widget name. Profile and
+candidate reads both require current authority, privacy-safe aggregates, cancellation and scoped
+cache keys. This use case remains deferred; the language refactor performs no dynamic queries.
+
 This research is complete when it produces a provider-neutral profile, proves authority-safe
 population quality across at least two materially different cases, and gives Alive UI enough
 evidence to choose a viable interaction without knowing the storage technology.
