@@ -3,6 +3,8 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { entity, relation, ontahi } from '../runtime/server/index.js';
 
+import type { InferEntityRecord } from './definitions.js';
+
 import {
   createInMemoryDataGraphStorage,
   createInMemoryDataGraphRuntime,
@@ -74,18 +76,14 @@ describe('Entity contextual Selections', () => {
     });
     expect(defineClientEntity(Book).by({ id: 'b1' }).parts.toAst()).toEqual(parts.toAst());
     expect(declare).toHaveBeenCalledTimes(1);
-    if (false) {
-      const row: import('./definitions.js').InferEntityRecord<typeof Book.fields> = {
-        id: 'b1',
-        // @ts-expect-error contextual selections are not fields on entity rows
-        parts: [],
-      };
-      void row;
-      // @ts-expect-error unknown contextual selection
-      source.unknown;
-      // @ts-expect-error filters are typed against the target
-      parts.and(n => n.unknown.eq('x'));
-    }
+    expectTypeOf<InferEntityRecord<typeof Book.fields>>().not.toHaveProperty('parts');
+    expectTypeOf(source).not.toHaveProperty('unknown');
+    expect(
+      parts.and(n => {
+        expectTypeOf(n).not.toHaveProperty('unknown');
+        return n.type.eq('part');
+      }).root,
+    ).toBe(Node);
   });
 
   it('discovers portable contracts and evaluates the composed membership in memory', async () => {

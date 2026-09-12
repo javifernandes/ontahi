@@ -193,7 +193,8 @@ describe('ordered filter and navigation composition', () => {
     ],
   ] as const)('completes stage-specific Fields: %s %s', (dialect, marked, included, excluded) => {
     const pos = marked.indexOf('|');
-    const source = marked.replace('|', '');
+    expect(pos).toBeGreaterThanOrEqual(0);
+    const source = marked.slice(0, pos) + marked.slice(pos + 1);
     const labels = completeConsoleDocument(source, pos, application, { dialect }).items.map(
       item => item.label,
     );
@@ -367,7 +368,9 @@ describe('contextual Console navigation', () => {
     orderableFields?: (name: string) => readonly string[],
   ) => {
     const position = source.indexOf('|');
-    return completeConsoleDocument(source.replace('|', ''), position, application, {
+    expect(position).toBeGreaterThanOrEqual(0);
+    const document = source.slice(0, position) + source.slice(position + 1);
+    return completeConsoleDocument(document, position, application, {
       dialect,
       orderableFields,
     });

@@ -7,9 +7,6 @@ import { completeTsConsoleDocument } from './ts-completion.js';
 
 const print = (document: string, expression: ConsoleGraphReadSyntax): string => {
   const entity = expression.entity!.text;
-  const selection = expression.selection
-    ? document.slice(expression.selection.from, expression.selection.to)
-    : undefined;
   const field = expression.orderBy?.field?.text;
   const descending = ['desc', 'descending'].includes(expression.orderBy?.direction?.text ?? '');
   const terminal = expression.terminal?.text ?? 'many';
