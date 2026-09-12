@@ -11,6 +11,7 @@ import {
 import {
   analyzeSelectionDocument,
   parseConsoleDocument,
+  resolveConsoleContext,
   type ConsoleDialect,
   type ConsoleLanguageApplicationReflection,
   type SelectionExpressionSyntax,
@@ -131,7 +132,7 @@ const consoleFiniteValueProjectionContext = (
   const expression = parseConsoleDocument(document, dialect).syntax.expression;
   if (!expression?.entity || !expression.selection) return undefined;
   const selection = expression.selection;
-  const entity = application.entities.find(candidate => candidate.name === expression.entity?.text);
+  const entity = resolveConsoleContext(expression, application);
   return entity
     ? {
         entityName: entity.name,
@@ -385,7 +386,10 @@ export const consoleFiniteValueProjectionExtensions = (
   finiteValueProjectionExtensions(document => {
     const values = consoleFiniteValueProjectionContext(document, application, dialect);
     const ordering = consoleOrderProjections(document, application, dialect, orderableFields);
-    const entityName = parseConsoleDocument(document, dialect).syntax.expression?.entity?.text;
+    const entityName = resolveConsoleContext(
+      parseConsoleDocument(document, dialect).syntax.expression,
+      application,
+    )?.name;
     return entityName
       ? { entityName, projections: [...(values?.projections ?? []), ...ordering] }
       : undefined;

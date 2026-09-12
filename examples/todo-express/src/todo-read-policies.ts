@@ -25,6 +25,7 @@ const TagReadPolicy = {
 
 const TodoItemReadPolicy = {
   entity: TodoItem,
+  selectionRelations: ['tags'],
   modes: ['get', 'run', 'count'],
   cardinalities: ['one', 'many'],
   maxLimit: 500,
@@ -42,6 +43,7 @@ const TodoItemReadPolicy = {
 
 const TodoListReadPolicy = {
   entity: TodoList,
+  selectionRelations: ['items'],
   modes: ['get', 'run', 'count'],
   cardinalities: ['one', 'many'],
   maxLimit: 200,

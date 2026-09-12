@@ -248,8 +248,19 @@ callbacks. Self-relation targets retain their declared contract rather than an i
 recursive facade. PostgreSQL local reads lower this membership to correlated `EXISTS` using
 receiver-owned mappings, retaining set semantics without source-ID prefetch. Composite edge joins
 and virtual filter fields remain unsupported. Protocol v1, Commands, MySQL runtime and Supabase
-still reject this expression; per-hop graph authority and contextual language/UI authoring remain
-in Plan 120b.
+still reject this expression. Opt-in Graph Read v2 request/response receivers authorize outgoing
+`selectionRelations` independently of View/include grants and intersect each source and target
+with its own policy scope outside caller boolean logic. Discovery advertises advisory capability;
+low-level default receivers and graph observation remain closed. Application dispatchers use
+provider-declared execution support (in-memory/PostgreSQL); remote clients negotiate on each
+contextual read using the same authority options, without source-ID prefetch or downgrade fallback.
+Console authoring preserves contextual names in a shared source model: TS `.parts.chapters` and
+declarative `through parts through chapters` expand to the same deferred AST. Semantic destination
+resolution and continuation candidates are shared between dialect adapters, finite-value widgets,
+and receiver-backed ordering controls. Dialect conversion and table edits preserve the authored hops;
+Activity renders their expanded canonical meaning. The initial grammar places root `by` factories
+before hops, then target predicates/read shaping; interleaved source filters and contextual parameters
+remain follow-ups in Plan 120b.
 
 ## Evaluation And Snapshots
 

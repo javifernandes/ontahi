@@ -58,6 +58,64 @@ const TodoItem = {
   ],
 } as const;
 
+const contextualApplication = {
+  entities: [
+    TodoItem,
+    {
+      name: 'TodoList',
+      fields: [{ name: 'id', type: 'id', nullable: false }],
+      relations: [{ name: 'items' }],
+      contextualSelections: {
+        openItems: {
+          version: 1,
+          input: { context: { kind: 'selection', entityName: 'TodoList' } },
+          output: { kind: 'selection', entityName: 'TodoItem' },
+          template: {
+            relationName: 'items',
+            target: { kind: 'selection', entityName: 'TodoItem', expression: { kind: 'all' } },
+          },
+        },
+      },
+    },
+  ],
+} as const;
+
+describe('contextual editor projections', () => {
+  it.each([
+    ['ts', 'TodoList.openItems.where(completed = false).orderBy(title).many()'],
+    ['declarative', 'TodoList through openItems where completed = false order by title many'],
+  ] as const)(
+    'projects %s target values and order Fields and survives deleting every suffix',
+    (dialect, source) => {
+      const parent = document.createElement('div');
+      document.body.append(parent);
+      const view = new EditorView({
+        parent,
+        state: EditorState.create({
+          doc: source,
+          extensions: consoleExpressionExtensions(contextualApplication, {
+            dialect,
+            finiteValueProjections: true,
+            orderableFields: name => (name === 'TodoItem' ? ['title'] : []),
+          }),
+        }),
+      });
+      try {
+        expect(parent.querySelector('[aria-label="Value for TodoItem.completed"]')).not.toBeNull();
+        expect(parent.querySelector('[aria-label="Order field for TodoItem"]')).not.toBeNull();
+        while (view.state.doc.length)
+          view.dispatch({
+            changes: { from: view.state.doc.length - 1, to: view.state.doc.length, insert: '' },
+          });
+        expect(view.state.doc.toString()).toBe('');
+      } finally {
+        view.destroy();
+        parent.remove();
+      }
+    },
+  );
+});
+
 describe('Console dialect editor state', () => {
   it.each([
     ['declarative', 'TodoItem by state true an', 'and by', 'TodoItem by state true and by '],

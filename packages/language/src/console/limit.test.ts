@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { analyzeConsoleDocument, editConsoleLimit } from './index.js';
+import { analyzeConsoleDocument, editConsoleLimit } from '../index.js';
 
 const application = {
   entities: [{ name: 'Tag', fields: [{ name: 'name', type: 'string', nullable: false }] }],

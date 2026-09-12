@@ -8,23 +8,9 @@ import { hasOwn } from '@ontahi/core/value/object';
 
 import type {
   ConsoleLanguageCompletionResult,
-  SelectionLanguageRange,
+  ConsoleFactorySyntax,
   ConsoleLanguageCompletionItem,
-} from './index.js';
-
-export type ConsoleFactorySyntax = SelectionLanguageRange & {
-  readonly conjunction?: SelectionLanguageRange;
-  readonly by?: SelectionLanguageRange;
-  readonly name?: SelectionLanguageRange & { readonly text: string; readonly value: string };
-  readonly argument?: SelectionLanguageRange & { readonly text: string };
-  readonly properties?: readonly (SelectionLanguageRange & {
-    readonly name?: SelectionLanguageRange & { readonly text: string };
-    readonly colon?: SelectionLanguageRange;
-    readonly value?: SelectionLanguageRange;
-  })[];
-  readonly value?: unknown;
-  readonly error?: string;
-};
+} from '../model/contracts.js';
 
 const readName = (text: string) => (text.startsWith('"') ? (JSON.parse(text) as string) : text);
 
@@ -160,7 +146,7 @@ export const completeConsoleFactory = (
   pos: number,
   factory: ConsoleFactorySyntax | undefined,
   factories: Readonly<Record<string, SelectionFactoryDescriptor>> = {},
-  dialect: 'ts' | 'declarative' = 'ts',
+  nameSeparator: string = ': ',
 ): ConsoleLanguageCompletionResult | undefined => {
   if (!factory || pos < factory.from || pos > factory.to) return undefined;
   if (factory.conjunction && (!factory.by || pos <= factory.by.to)) {
@@ -187,14 +173,13 @@ export const completeConsoleFactory = (
       items: Object.keys(factories).map(label => ({
         label,
         apply: `${/^[A-Za-z_]\w*$/.test(label) && !['all', 'none', 'and', 'or', 'not', 'in', 'is', 'null', 'true', 'false'].includes(label) ? label : JSON.stringify(label)}${
-          dialect === 'ts'
-            ? document
-                .slice(name?.to ?? pos)
-                .trimStart()
-                .startsWith(':')
-              ? ''
-              : ': '
-            : ' '
+          nameSeparator.trim() &&
+          document
+            .slice(name?.to ?? pos)
+            .trimStart()
+            .startsWith(nameSeparator.trim())
+            ? ''
+            : nameSeparator
         }`,
         kind: 'member',
         detail: `Selection factory → ${factories[label]!.output.entityName}`,

@@ -96,6 +96,8 @@ const declarativePredicate = (value: unknown): string => {
   if (value.kind === 'all' || value.kind === 'none') return value.kind;
   if (value.kind === 'references' && Array.isArray(value.refs))
     return `references (${value.refs.length})`;
+  if (value.kind === 'relation-image' && isRecord(value.source))
+    return `member of (${String(value.source.entityName)} ${formatSelectionExpression(value.source.expression, 'declarative')} through ${String(value.relationName)})`;
   if (value.kind === 'predicate' && typeof value.fieldName === 'string') {
     if (value.operator === 'in' && Array.isArray(value.values))
       return `${value.fieldName} in ${formatInlineValue(value.values)}`;
@@ -125,7 +127,7 @@ export const formatSelectionExpression = (
     const predicate = declarativePredicate(value);
     return isRecord(value) &&
       typeof value.kind === 'string' &&
-      ['predicate', 'and', 'or', 'not'].includes(value.kind)
+      ['predicate', 'and', 'or', 'not', 'relation-image'].includes(value.kind)
       ? `where ${predicate}`
       : predicate;
   }
@@ -134,6 +136,8 @@ export const formatSelectionExpression = (
   if (value.kind === 'references' && Array.isArray(value.refs)) {
     return `byRef(${value.refs.length})`;
   }
+  if (value.kind === 'relation-image' && isRecord(value.source))
+    return `memberOf(${String(value.source.entityName)}.${formatSelectionExpression(value.source.expression)}.through(${JSON.stringify(value.relationName)}))`;
   if (value.kind === 'predicate' && typeof value.fieldName === 'string') {
     if (value.operator === 'in' && Array.isArray(value.values)) {
       return `where(${value.fieldName} in ${formatInlineValue(value.values)})`;

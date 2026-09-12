@@ -8,7 +8,7 @@ import {
   editConsoleLimit,
   editConsoleOrderBy,
   reflectSelectionLanguageEntity,
-} from './index.js';
+} from '../index.js';
 
 const User = withSelectionFactories(
   entity('User', {

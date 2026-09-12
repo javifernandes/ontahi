@@ -16,6 +16,7 @@ import {
   type GraphReadPolicy,
   type QuerySpec,
   type RemoteDataGraphError,
+  type RemoteGraphReadTransport,
 } from './index.js';
 
 const defineTodoGraph = () => {
@@ -148,9 +149,10 @@ describe('remote data graph runtime', () => {
       run: { kind: 'graph-read-result', value: [{ id: 'todo-1' }] },
       count: { kind: 'graph-read-result', value: 1 },
     } as const;
-    const transport = vi.fn((request: { mode: GraphReadMode }) =>
-      Promise.resolve(responses[request.mode]),
-    );
+    const transport = vi.fn<RemoteGraphReadTransport>(request => {
+      if (request.kind !== 'graph-read') throw new Error('Unexpected discovery for a scalar query');
+      return Promise.resolve(responses[request.mode]);
+    });
     const runtime = createRemoteDataGraphRuntime({ transport });
     const read = query(Todo).where(todo => todo.id.eq('todo-1'));
 
@@ -161,7 +163,9 @@ describe('remote data graph runtime', () => {
       { id: 'todo-1' },
     ]);
     await expect(Effect.runPromise(runtime.count(read, undefined))).resolves.toBe(1);
-    expect(transport.mock.calls.map(([request]) => request.mode)).toEqual(['get', 'run', 'count']);
+    expect(
+      transport.mock.calls.map(([request]) => request.kind === 'graph-read' && request.mode),
+    ).toEqual(['get', 'run', 'count']);
   });
 
   it('observes repeated complete results through the remote Graph transport', async () => {
@@ -267,7 +271,7 @@ describe('remote data graph runtime', () => {
       transport: request =>
         Promise.resolve({
           kind: 'graph-read-result',
-          value: request.mode === 'get' ? [] : -1,
+          value: request.kind === 'graph-read' && request.mode === 'get' ? [] : -1,
         }),
     });
     await expect(

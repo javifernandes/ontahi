@@ -1,11 +1,16 @@
 import {
   createInMemoryDataGraphRuntime,
+  createGraphReadDispatcher,
+  createRemoteDataGraphRuntime,
+  toGraphReadRequestV2,
   Selection,
   createEntityRef,
   entity,
   field,
   type RelationshipFact,
+  type GraphReadPolicy,
 } from '@ontahi/core/data-graph';
+import { ontahi } from '@ontahi/core/runtime/server';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Effect, Stream } from 'effect';
 import { Pool } from 'pg';
@@ -14,6 +19,7 @@ import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import { postgresMapping } from './mapping.js';
 import { contextualGraph } from './relation-image.test-support.js';
 import { createPostgresDataGraphRuntime } from './runtime.js';
+import { createPostgresDataGraphStorage } from './storage.js';
 
 describe('PostgreSQL contextual Selection execution', () => {
   let container: StartedPostgreSqlContainer;
@@ -42,6 +48,102 @@ describe('PostgreSQL contextual Selection execution', () => {
   afterAll(async () => {
     await pool?.end();
     await container?.stop();
+  });
+
+  it('enforces v2 source, intermediate and target scopes in one SQL read, including complement', async () => {
+    const runtime = createPostgresDataGraphRuntime({ pool, mappings: graph.mappings });
+    type Authority = { excludedNodeId: string };
+    const book: GraphReadPolicy<typeof graph.Book, Authority> = {
+      entity: graph.Book,
+      fields: {},
+      selectionRelations: ['nodes'],
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 25,
+      scope: () => Selection.where(graph.Book, b => b.visible.eq(true)),
+    };
+    const node: GraphReadPolicy<typeof graph.Node, Authority> = {
+      entity: graph.Node,
+      fields: {
+        id: { select: true, order: true },
+        bookId: { select: true },
+        parentId: { select: true },
+        type: { select: true, filter: ['eq'] },
+      },
+      selectionRelations: ['children'],
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 25,
+      scope: ({ authority }) =>
+        Selection.where(graph.Node, n => n.id.eq(authority.excludedNodeId)).not(),
+    };
+    const execute = vi.fn(read => Effect.runPromise(runtime.run(read, undefined)));
+    const dispatch = createGraphReadDispatcher({
+      relationSelections: true,
+      policies: [book, node],
+      execute,
+    });
+    const selected = Selection.all(graph.Book).parts.chapters;
+    const request = toGraphReadRequestV2(
+      selected.toQuery().orderBy(n => n.id.asc()),
+      'run',
+    );
+    const spy = vi.spyOn(pool, 'query');
+    try {
+      const result = await dispatch(request, { authority: { excludedNodeId: 'orphan' } });
+      expect(result).toEqual({
+        kind: 'graph-read-result',
+        value: graph.dataset.ImageNode.slice(2, 4),
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+      const application = ontahi({
+        storage: createPostgresDataGraphStorage({ pool, mappings: graph.mappings }),
+        entities: { ImageBook: graph.Book, ImageNode: graph.Node, ImageTag: graph.Tag },
+      });
+      const applicationDispatch = application.createGraphReadDispatcher([book, node]);
+      const transport = vi.fn(async (input: unknown) =>
+        applicationDispatch(JSON.parse(JSON.stringify(input)), {
+          authority: { excludedNodeId: 'orphan' },
+        }),
+      );
+      const remote = createRemoteDataGraphRuntime({ transport });
+      spy.mockClear();
+      expect(
+        await Effect.runPromise(
+          remote.run(
+            selected.toQuery().orderBy(n => n.id.asc()),
+            undefined,
+          ),
+        ),
+      ).toEqual(graph.dataset.ImageNode.slice(2, 4));
+      expect(transport).toHaveBeenCalledTimes(2);
+      // Capability negotiation does not execute SQL or prefetch source membership.
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(await dispatch(request, { authority: { excludedNodeId: 'p1' } })).toEqual({
+        kind: 'graph-read-result',
+        value: [],
+      });
+      expect(await dispatch(request, { authority: { excludedNodeId: 'c1' } })).toEqual({
+        kind: 'graph-read-result',
+        value: [graph.dataset.ImageNode[3]],
+      });
+      const complement = toGraphReadRequestV2(
+        selected
+          .not()
+          .and(n => n.type.eq('chapter'))
+          .toQuery()
+          .orderBy(n => n.id.asc()),
+        'run',
+      );
+      expect(await dispatch(complement, { authority: { excludedNodeId: 'c3' } })).toEqual({
+        kind: 'graph-read-result',
+        value: [graph.dataset.ImageNode[5], graph.dataset.ImageNode[6]].sort((a, b) =>
+          a!.id.localeCompare(b!.id),
+        ),
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('matches in-memory navigation, count and final shaping without prefetch', async () => {

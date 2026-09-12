@@ -15,6 +15,7 @@ Related plans:
 7. [147. Application-Bound Headless Graph Reads](../done/147-application-bound-headless-graph-reads.md)
 8. [148. Ontahí Devtools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
 9. [150a. Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
+10. [150b. Language Modules And Dialect Contract](../done/150b-language-modules-and-dialect-contract.md)
 
 Related Atlas shapes:
 
@@ -94,6 +95,17 @@ linked follow-ups before closing the parent plan. Additional language dialects a
 CLI are likewise outside the immediate next slice.
 
 ## Context
+
+### Read composition checkpoint — 2026-09-12
+
+Plan 120b now provides contextual navigation in both dialects, with shared target assistance and v2
+Graph Read execution. Plan 150b completed the behavior-preserving language module/dialect strategy
+refactor. Further source-filter/navigation composition remains a separate behavior slice; this
+checkpoint does not implement Commands, Operations or the headless execution session.
+Context-aware Reference candidates are deferred in
+[118f](../backlog/118f-context-aware-reference-assistance.md), consuming dynamic population/cost
+profiles from [126](../research/126-ontahi-runtime-data-reflection.md). These are not static schema
+reflection or implicit execution during parsing.
 
 Plan 148 gives Devtools an Activity stream for observing semantic runtime work after application
 code initiates it. Explorer can inspect reflected structure and invoke one reflected Operation from

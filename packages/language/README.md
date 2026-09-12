@@ -136,7 +136,7 @@ const source = 'TodoItem where completed = false order by title descending limit
 const analysis = analyzeConsoleDocument(source, applicationReflection, { dialect: 'declarative' });
 ```
 
-The declarative order is `Entity [by factory argument (and by factory argument)*] [where predicate] [order by Field [ascending|descending]]
+The declarative order is `Entity [by factory argument (and by factory argument)*] [through name]* [where predicate] [order by Field [ascending|descending]]
 [limit number] [terminal]`. Omitted terminal means `many`; explicit terminals are `many`, `first`,
 `one`, `count`, and `exists`. Ordering defaults to ascending. All type, precedence, cardinality,
 default-limit, and modifier restrictions remain the same as TS-like Console reads. This is Ontahí
@@ -199,3 +199,49 @@ consumer cardinality still apply. The original factory name and argument remain 
 so dialect conversion and table-driven order/limit edits preserve them instead of displaying the
 expanded predicate. Any invalid invocation blocks the entire read, not just its suffix.
 `or by`, factory-expression grouping, nested inputs, and external resolvers remain outside this slice.
+
+## Contextual Selection navigation
+
+Entity `selections` declarations are reflected as portable `contextualSelections` descriptors. Both
+dialects retain their named navigation in the authoring tree and expand the same deferred membership:
+
+```text
+Book.by({ slug: "my-book" }).parts.chapters.where(title = "Intro").many()
+Book by slug "my-book" through parts through chapters where title = "Intro" many
+```
+
+The clause order in this slice is root `by` factories, zero or more contextual hops, target `where`,
+then target read modifiers/terminal. Interleaved source `where`, `by` after a hop, raw relation
+navigation and parameterized contextual factories are not supported yet. A hop only accepts a named
+contextual Selection, not an arbitrary Field or relation name. Every source/target Entity must be
+present in the application reflection. Unknown paths block execution; they never fall back to an
+unfiltered target read.
+
+`resolveConsoleContext(syntax, application, position?)` resolves the semantic Entity through completed
+hops, including in incomplete drafts. Both dialect adapters share contextual candidates, continuation
+rules, Field/value completion and target-based ordering permissions; only cursor recognition and
+inserted spelling vary. Rich Boolean/enum values and order dropdowns use this same destination context.
+Completion does not execute a data read. Source ranges and factory names remain available even though
+the expanded execution AST intentionally contains their canonical meaning rather than their names.
+
+Navigation analyzes to a `GraphReadRequest` with version 2 and `relation-image` membership. Ordinary
+reads remain v1. The Devtools Console negotiates contextual capability before each v2 execution;
+the receiver independently authorizes every hop. Dialect switches and result sort/limit edits retain
+the full source membership. Activity displays expanded source/relation/target meaning in the chosen
+dialect rather than trying to infer a factory name from its predicate.
+
+## Implementation boundaries
+
+The public entrypoint only re-exports the supported API. Internal modules separate source contracts
+(`model/`), Selection parsing/resolution/assistance (`selection/`), reflection projection
+(`reflection/`), and Console analysis, navigation, factories and source-preserving edits
+(`console/`). Tests live beside these responsibilities and continue exercising public exports.
+
+`dialects/` contains the TS and declarative strategies behind an internal `Dialect` contract:
+parser configuration, cursor adaptation, printing, completion spelling and clause edits. Public
+`ConsoleDialect` values remain serializable `'ts' | 'declarative'` IDs; the service resolves the
+object at its boundary. There is no public plugin registry or new semantic AST.
+
+Both strategies consume one semantic continuation catalog and the same target-context resolver,
+Field/operator suggestions, capability hints and canonical lowering. Cursor assistance uses recovered
+source structure, not only a complete executable AST. Neither parsing nor completion performs I/O.

@@ -5,7 +5,7 @@ import {
   completeConsoleDocument,
   editConsoleOrderBy,
   isConsoleOrderableField,
-} from './index.js';
+} from '../index.js';
 
 const application = {
   entities: [

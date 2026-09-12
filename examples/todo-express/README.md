@@ -354,6 +354,22 @@ can reveal server implementation details.
 
 ## Verify it
 
+The Console supports contextual Selection navigation with the in-memory and PostgreSQL providers:
+
+```text
+TodoList.openItems.many()
+TodoList.openItems.labels.many()
+
+TodoList through openItems many
+TodoList through openItems through labels many
+```
+
+`openItems` is declared on TodoList from `self.items.where(item => item.completed.eq(false))`;
+`labels` is declared on TodoItem from `self.tags`. The outgoing `items`/`tags` membership hops are
+explicitly granted by the read policies. No source rows are fetched to build these selections.
+Filters, ordering suggestions and rich value editors after a hop use its destination Entity.
+MySQL contextual reads remain unsupported and the Console explains that capability boundary.
+
 ```sh
 pnpm --filter @ontahi/example-todo-express codegen:check
 pnpm --filter @ontahi/example-todo-express typecheck

@@ -97,6 +97,13 @@ compositional transaction capability because it can check out and own a connecti
 
 Migration generation and schema evolution remain host responsibilities.
 
+PostgreSQL storage declares `graphReadCapabilities.relationSelections`, allowing an `ontahi(...)`
+application's read dispatcher to negotiate v2 contextual reads with remote clients. Each hop still
+requires an explicit `selectionRelations` policy grant and source/target scopes. Discovery executes
+no SQL; the authorized membership remains one correlated SQL read. Existing limitations on virtual
+filter fields and composite many-to-many edges remain; this does not enable contextual Commands or
+observation.
+
 Hosts can validate their bound Entity mappings against a migration-built PostgreSQL database
 without starting the application runtime:
 

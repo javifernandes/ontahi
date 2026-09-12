@@ -5,6 +5,7 @@
 DeclarativeGraphReadExpression {
   EntityName
   (DeclarativeFactoryClause DeclarativeFactoryIntersection*)?
+  DeclarativeNavigationClause*
   DeclarativeWhereClause?
   DeclarativeOrderByClause?
   DeclarativeLimitClause?
@@ -19,12 +20,16 @@ ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
   EntityName
   FactoryClause*
+  NavigationClause*
   WhereClause?
   OrderByClause?
   LimitClause?
   Dot ReadTerminal OpenParen CloseParen
 }
 FactoryClause { Dot By OpenParen OpenBrace FactoryName Colon FactoryArgument CloseBrace CloseParen }
+NavigationClause { Dot NavigationName }
+DeclarativeNavigationClause { Through NavigationName }
+NavigationName { Identifier }
 DeclarativeFactoryClause { By FactoryName FactoryArgument }
 DeclarativeFactoryIntersection { And By FactoryName FactoryArgument }
 FactoryName { Identifier | StringLiteral }
@@ -76,6 +81,7 @@ Limit { @extend<Identifier, "limit"> }
 OrderBy { @extend<Identifier, "orderBy"> }
 Order { @extend<Identifier, "order"> }
 By { @extend<Identifier, "by"> }
+Through { @extend<Identifier, "through"> }
 Ascending { @extend<Identifier, "ascending"> }
 Descending { @extend<Identifier, "descending"> }
 

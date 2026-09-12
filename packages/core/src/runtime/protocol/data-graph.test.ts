@@ -8,6 +8,8 @@ import {
   query,
   toGraphCommandRequest,
   toGraphReadRequest,
+  toGraphReadRequestV2,
+  Selection,
 } from '../../data-graph/index.js';
 
 import {
@@ -30,6 +32,24 @@ const registry = createRuntimeProtocolRegistry([
 ] as const);
 
 describe('Runtime Protocol Data Graph families', () => {
+  it('preserves contextual Graph Read body v2 inside the existing runtime envelope', () => {
+    const Chapter = entity('Chapter', { id: field.id(), bookId: field.string() });
+    const Books = entity('LibraryBook', { id: field.id() }).hasMany('chapters', Chapter, {
+      via: 'bookId',
+    });
+    const request = createRuntimeProtocolRequest({
+      id: 'contextual-read',
+      family: 'graph.read',
+      body: toGraphReadRequestV2(Selection.all(Books).through('chapters').toQuery(), 'run'),
+    });
+    expect(request.version).toBe(1);
+    expect(request.body.version).toBe(2);
+    expect(registry.parseRequest(JSON.parse(JSON.stringify(request)))).toEqual({
+      success: true,
+      request,
+    });
+  });
+
   it('carries metadata discovery through the graph.read family without Query syntax', () => {
     const request = createRuntimeProtocolRequest({
       id: 'metadata',
@@ -83,7 +103,7 @@ describe('Runtime Protocol Data Graph families', () => {
   it.each([
     {
       family: 'graph.read',
-      body: { version: 2, kind: 'graph-read' },
+      body: { version: 3, kind: 'graph-read' },
       familyCode: 'unsupported_version',
     },
     {

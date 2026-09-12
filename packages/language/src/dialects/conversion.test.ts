@@ -7,7 +7,7 @@ import {
   completeConsoleDocument,
   editConsoleLimit,
   editConsoleOrderBy,
-} from './index.js';
+} from '../index.js';
 
 const application = {
   entities: [

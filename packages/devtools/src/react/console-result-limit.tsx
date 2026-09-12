@@ -1,4 +1,4 @@
-import type { GraphReadRequestV1 } from '@ontahi/core/data-graph';
+import type { GraphReadRequest } from '@ontahi/core/data-graph';
 import { useEffect, useState } from 'react';
 
 import { styles } from './devtools-styles.js';
@@ -9,7 +9,7 @@ export const ConsoleResultLimit = ({
   disabledReason,
   onApply,
 }: {
-  readonly request: GraphReadRequestV1;
+  readonly request: GraphReadRequest;
   readonly defaultLimit: number;
   readonly disabledReason?: string;
   readonly onApply: (limit: number) => void;

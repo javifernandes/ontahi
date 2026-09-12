@@ -1,6 +1,8 @@
 import {
   contextualSelectionFactory,
-  createInMemoryDataGraphRuntime,
+  createInMemoryDataGraphStorage,
+  createRemoteDataGraphRuntime,
+  toGraphReadRequestV2,
   entity as graphEntity,
   parseGraphSchema,
   Selection,
@@ -9,8 +11,15 @@ import {
   withContextualSelections,
   withSelectionFactories,
 } from '@ontahi/core/data-graph';
+import { ontahi } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { compilePostgresQuery } from '@ontahi/postgres';
+import {
+  analyzeConsoleDocument,
+  completeConsoleDocument,
+  convertConsoleDocument,
+  reflectSelectionLanguageEntity,
+} from '@ontahi/language';
 
 const FactoryItem = graphEntity('FactoryItem', {
   id: field.id(),
@@ -27,7 +36,7 @@ const hydratedFactorySelection = parseGraphSchema(
   factorySchema,
   JSON.parse(JSON.stringify(factorySelection)),
 );
-const factoryRuntime = createInMemoryDataGraphRuntime({
+const factoryStorage = createInMemoryDataGraphStorage({
   entities: [FactoryList],
   dataset: {
     FactoryList: [{ id: 'l1' }, { id: 'l2' }],
@@ -38,6 +47,7 @@ const factoryRuntime = createInMemoryDataGraphRuntime({
     ],
   },
 });
+const factoryRuntime = factoryStorage.createRuntime();
 const factoryRows = await Effect.runPromise(
   factoryRuntime.run(hydratedFactorySelection.toQuery(), undefined),
 );
@@ -80,3 +90,87 @@ if (
 ) {
   throw new Error('Packed PostgreSQL lost contextual membership or its parameter values.');
 }
+
+const application = ontahi({ storage: factoryStorage, entities: { FactoryList, FactoryItem } });
+const dispatch = application.createGraphReadDispatcher([
+  {
+    entity: FactoryList,
+    modes: ['run'],
+    cardinalities: ['many'],
+    maxLimit: 25,
+    fields: { id: { filter: ['eq'] } },
+    selectionRelations: ['items'],
+    scope: () => Selection.where(FactoryList, list => list.id.eq('l1')),
+  },
+  {
+    entity: FactoryItem,
+    modes: ['run'],
+    cardinalities: ['many'],
+    maxLimit: 25,
+    fields: {
+      id: { select: true },
+      listId: { select: true },
+      done: { select: true, filter: ['eq'] },
+    },
+    scope: 'all',
+  },
+]);
+const wire = JSON.parse(
+  JSON.stringify(
+    toGraphReadRequestV2(pendingItems.from(Selection.all(FactoryList)).toQuery(), 'run'),
+  ),
+);
+const remote = await dispatch(wire, { authority: undefined });
+if (
+  remote.kind !== 'graph-read-result' ||
+  JSON.stringify(remote.value) !== JSON.stringify(factoryRows)
+)
+  throw new Error('Packed v2 receiver lost contextual authority or membership.');
+
+const requests = [];
+const clientRuntime = createRemoteDataGraphRuntime({
+  transport: async request => {
+    requests.push([request.kind, request.version]);
+    return dispatch(JSON.parse(JSON.stringify(request)), { authority: undefined });
+  },
+});
+const negotiatedRows = await Effect.runPromise(
+  clientRuntime.run(Selection.all(Lists).pending.toQuery(), undefined),
+);
+if (
+  JSON.stringify(negotiatedRows) !== JSON.stringify(factoryRows) ||
+  JSON.stringify(requests) !==
+    JSON.stringify([
+      ['graph-read-capabilities', 1],
+      ['graph-read', 2],
+    ])
+)
+  throw new Error(
+    'Packed client failed contextual capability negotiation and application execution.',
+  );
+
+const languageApplication = { entities: [Lists, FactoryItem].map(reflectSelectionLanguageEntity) };
+const source = 'FactoryList.by({ id: "l1" }).pending.many()';
+const analysis = analyzeConsoleDocument(source, languageApplication);
+const declarative = convertConsoleDocument(source, languageApplication, 'declarative');
+if (
+  !analysis.request ||
+  !declarative ||
+  JSON.stringify(
+    analyzeConsoleDocument(declarative, languageApplication, { dialect: 'declarative' }).request,
+  ) !== JSON.stringify(analysis.request)
+)
+  throw new Error('Packed language lost contextual navigation while switching dialects.');
+const completionSource = 'FactoryList through ';
+if (
+  !completeConsoleDocument(completionSource, completionSource.length, languageApplication, {
+    dialect: 'declarative',
+  }).items.some(item => item.label === 'pending')
+)
+  throw new Error('Packed language lost contextual completion.');
+const consoleResult = await dispatch(analysis.request, { authority: undefined });
+if (
+  consoleResult.kind !== 'graph-read-result' ||
+  JSON.stringify(consoleResult.value) !== JSON.stringify(factoryRows)
+)
+  throw new Error('Packed Console request lost deferred contextual membership.');

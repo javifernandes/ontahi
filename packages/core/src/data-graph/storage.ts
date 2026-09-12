@@ -10,6 +10,8 @@ export type DataGraphDefaultStorage<
     any
   >,
 > = {
+  /** Provider-owned execution support, not a caller's authorization to navigate relations. */
+  readonly graphReadCapabilities?: { readonly relationSelections?: true };
   bindEntities?: (entities: readonly AnyEntityDefinition[]) => void;
   createRuntime: () => TRuntime;
   readEntityData: ReflectedEntityDataReader['readEntityData'];

@@ -1,15 +1,17 @@
 import { cloneJson, isJsonValue } from '../value/json.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
-import type { AnyEntityDefinition } from './definitions.js';
+import { graphSchema, type AnyEntityDefinition } from './definitions.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
 import { isEntityRef } from './ref/index.js';
+import { parseGraphSchema } from './schema.js';
 import {
   assertNoRelationImage,
   toSelectionAst,
   type SelectionAst,
   type SelectionExpression,
 } from './selection-ast.js';
+import { withinSelectionBudget } from './selection-budget.js';
 import { applyViewToQuerySpec } from './view-query.js';
 import { createRecursiveEntityViewFromAst, type EntityViewAst } from './view.js';
 
@@ -33,9 +35,15 @@ export type GraphReadRequestV1 = {
   readonly includeCapabilities?: boolean;
 };
 
+/** Relation membership requires an explicitly enabled v2 receiver. */
+export type GraphReadRequestV2 = Omit<GraphReadRequestV1, 'version'> & { readonly version: 2 };
+export type GraphReadRequest = GraphReadRequestV1 | GraphReadRequestV2;
+
 /** Receiver policy at the time of the read; subsequent reads must still be authorized. */
 export type GraphReadCapabilities = {
   readonly orderBy: readonly string[];
+  /** Outgoing membership hops, distinct from View/include permissions. Advisory only. */
+  readonly relationSelections?: { readonly version: 2; readonly relations: readonly string[] };
 };
 
 /** Advisory Entity policy discovery. Does not select, count, or materialize data. */
@@ -51,7 +59,7 @@ export type GraphReadCapabilitiesResult = {
   readonly capabilities: GraphReadCapabilities;
 };
 
-export type GraphReadFamilyRequest = GraphReadRequestV1 | GraphReadCapabilitiesRequestV1;
+export type GraphReadFamilyRequest = GraphReadRequest | GraphReadCapabilitiesRequestV1;
 
 export const parseGraphReadFamilyRequest = (
   value: unknown,
@@ -85,7 +93,12 @@ export const parseGraphReadFamilyRequest = (
 export const isGraphReadCapabilities = (value: unknown): value is GraphReadCapabilities =>
   isRecord(value) &&
   Array.isArray(value.orderBy) &&
-  value.orderBy.every(field => typeof field === 'string');
+  value.orderBy.every(field => typeof field === 'string') &&
+  (value.relationSelections === undefined ||
+    (isRecord(value.relationSelections) &&
+      value.relationSelections.version === 2 &&
+      Array.isArray(value.relationSelections.relations) &&
+      value.relationSelections.relations.every(relation => typeof relation === 'string')));
 
 export type GraphReadProtocolErrorCode =
   | 'invalid_request'
@@ -136,13 +149,13 @@ export const isGraphReadProtocolError = (value: unknown): value is GraphReadProt
       typeof value.error.details.fieldName === 'string'));
 
 export type GraphReadRequestParseResult =
-  | { readonly success: true; readonly request: GraphReadRequestV1 }
+  | { readonly success: true; readonly request: GraphReadRequest }
   | { readonly success: false; readonly error: GraphReadProtocolError };
 
 export type GraphReadRequestResolveResult =
   | {
       readonly success: true;
-      readonly request: GraphReadRequestV1;
+      readonly request: GraphReadRequest;
       readonly query: QuerySpec;
     }
   | { readonly success: false; readonly error: GraphReadProtocolError };
@@ -157,6 +170,10 @@ export const graphReadProtocolError = (
 });
 
 const assertJsonSafeSelection = (expression: SelectionExpression): void => {
+  if (expression.kind === 'relation-image') {
+    assertJsonSafeSelection(expression.source.expression);
+    return;
+  }
   if (expression.kind === 'predicate') {
     const values =
       expression.operator === 'in'
@@ -185,15 +202,29 @@ const assertJsonSafeSelection = (expression: SelectionExpression): void => {
 export const toGraphReadRequest = (
   query: QueryBuilder<any, any> | QuerySpec,
   mode: GraphReadMode,
-): GraphReadRequestV1 => {
+): GraphReadRequestV1 => serializeGraphReadRequest(query, mode, 1);
+
+/** Use only after discovering relationSelections.version === 2 on the receiver. */
+export const toGraphReadRequestV2 = (
+  query: QueryBuilder<any, any> | QuerySpec,
+  mode: GraphReadMode,
+): GraphReadRequestV2 => serializeGraphReadRequest(query, mode, 2);
+
+const serializeGraphReadRequest = <TVersion extends 1 | 2>(
+  query: QueryBuilder<any, any> | QuerySpec,
+  mode: GraphReadMode,
+  version: TVersion,
+): Omit<GraphReadRequestV1, 'version'> & { readonly version: TVersion } => {
   const spec = 'build' in query ? query.build() : query;
-  assertNoRelationImage(spec.selection, 'Graph read protocol v1');
+  if (!withinSelectionBudget(spec.selection))
+    throw new Error('Graph Read Selection exceeds its depth or node budget.');
+  if (version === 1) assertNoRelationImage(spec.selection, 'Graph read protocol v1');
   if (!spec.view && (spec.select || spec.includes)) {
     throw new Error('Data graph read transport currently requires a View for projected Queries.');
   }
   assertJsonSafeSelection(spec.selection);
-  const request = {
-    version: 1,
+  const request: Omit<GraphReadRequestV1, 'version'> & { readonly version: TVersion } = {
+    version,
     kind: 'graph-read',
     mode,
     selection: toSelectionAst(spec),
@@ -204,7 +235,7 @@ export const toGraphReadRequest = (
     })),
     ...(spec.limit === undefined ? {} : { limit: spec.limit }),
     ...(spec.cardinality === undefined ? {} : { cardinality: spec.cardinality }),
-  } satisfies GraphReadRequestV1;
+  };
 
   if (!isJsonValue(request)) {
     throw new Error('Data graph read request must be JSON-safe.');
@@ -222,7 +253,7 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       ),
     };
   }
-  if (value.version !== 1) {
+  if (value.version !== 1 && value.version !== 2) {
     return {
       success: false,
       error: graphReadProtocolError(
@@ -258,6 +289,14 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       ),
     };
   }
+  if (value.version === 2 && !withinSelectionBudget(value.selection.expression))
+    return {
+      success: false,
+      error: graphReadProtocolError(
+        'invalid_selection',
+        'Graph Read Selection exceeds its depth or node budget.',
+      ),
+    };
   const validOrder = value.orderBy.every(
     order =>
       isRecord(order) &&
@@ -320,7 +359,7 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
   return {
     success: true,
     request: cloneJson({
-      version: 1,
+      version: value.version,
       kind: 'graph-read',
       mode: value.mode,
       selection: value.selection,
@@ -331,7 +370,7 @@ export const parseGraphReadRequest = (value: unknown): GraphReadRequestParseResu
       ...(value.includeCapabilities === undefined
         ? {}
         : { includeCapabilities: value.includeCapabilities }),
-    }) as unknown as GraphReadRequestV1,
+    }) as unknown as GraphReadRequest,
   };
 };
 
@@ -403,7 +442,7 @@ export const validateGraphReadSelection = (
 };
 
 export const resolveGraphReadRequest = (
-  request: GraphReadRequestV1,
+  request: GraphReadRequest,
   options: { readonly entities: readonly AnyEntityDefinition[] },
 ): GraphReadRequestResolveResult => {
   if (
@@ -429,8 +468,23 @@ export const resolveGraphReadRequest = (
       ),
     };
   }
-  const invalidSelection = validateGraphReadSelection(request.selection.expression, entity);
-  if (invalidSelection) return { success: false, error: invalidSelection };
+  let expression = request.selection.expression;
+  if (request.version === 2) {
+    try {
+      expression = parseGraphSchema(
+        graphSchema.selection(entity, { entities: options.entities }),
+        request.selection,
+      ).expression;
+    } catch {
+      return {
+        success: false,
+        error: selectionError('Invalid contextual Selection for the receiver model.'),
+      };
+    }
+  } else {
+    const invalidSelection = validateGraphReadSelection(expression, entity);
+    if (invalidSelection) return { success: false, error: invalidSelection };
+  }
   for (const order of request.orderBy) {
     if (!hasOwn(entity.fields, order.fieldName)) {
       return {
@@ -443,7 +497,7 @@ export const resolveGraphReadRequest = (
   const base: QuerySpec = {
     kind: 'query',
     root: entity,
-    selection: request.selection.expression,
+    selection: expression,
     orderBy: request.orderBy.map(order => ({ ...order, kind: 'order' as const })),
     ...(request.limit === undefined ? {} : { limit: request.limit }),
     ...(request.cardinality === undefined ? {} : { cardinality: request.cardinality }),

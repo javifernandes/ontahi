@@ -1,6 +1,7 @@
 import {
   isConsoleOrderableField,
   parseConsoleDocument,
+  resolveConsoleContext,
   type ConsoleDialect,
   type ConsoleLanguageApplicationReflection,
 } from '@ontahi/language';
@@ -19,7 +20,7 @@ export const consoleOrderProjections = (
   orderableFields?: (entityName: string) => readonly string[],
 ): readonly EditorFiniteValueProjection[] => {
   const expression = parseConsoleDocument(document, dialect).syntax.expression;
-  const entity = application.entities.find(entity => entity.name === expression?.entity?.text);
+  const entity = resolveConsoleContext(expression, application);
   const order = expression?.orderBy;
   if (!entity || !order) return [];
   // Lezer recovery may synthesize empty Field/direction tokens in a closed clause.

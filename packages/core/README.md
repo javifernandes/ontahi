@@ -159,12 +159,59 @@ in `entities`. Rehydrate serialized membership with
 definitions, not definitions or join metadata supplied by the caller. The schema checks every
 source, relation and predicate, with a maximum depth of 32 and 1000 expression nodes.
 
-This is a **local, read-only experimental slice**. Protocol v1, Supabase, MySQL runtime and Commands
+This is a **read-only experimental slice**. Protocol v1, Supabase, MySQL runtime and Commands
 reject relation-image selections explicitly. PostgreSQL supports trusted local reads using registered
 mappings and correlated `EXISTS` (stored filter fields and single-identity many-to-many edges).
-Graph policy support and both Console dialects remain follow-ups. For unbound Selections, execute `selected.toQuery()`
+For unbound Selections, execute `selected.toQuery()`
 with a graph read runtime. This does not fetch IDs in the client, create a new identity, or enable
 derived-relation writes.
+
+### Opt-in contextual Graph Reads
+
+The low-level receiver supports request/response v2 when its executor supports relation images:
+
+```ts
+const dispatch = createGraphReadDispatcher({
+  relationSelections: true,
+  policies: [
+    { ...bookPolicy, selectionRelations: ['contentNodes'] },
+    { ...contentNodePolicy, selectionRelations: ['children'] },
+  ],
+  execute: (read, mode) => executeSupportedGraphRead(read, mode),
+});
+// Discover graph-read-capabilities first. A v2 receiver reports:
+// { orderBy: [...], relationSelections: { version: 2, relations: ['contentNodes'] } }
+const request = toGraphReadRequestV2(selected.toQuery(), 'run');
+await dispatch(request, { authority });
+```
+
+Each hop needs an explicit `selectionRelations` grant on its source policy and registered policies
+for source and target. Every source must allow the requested read mode and its caller-supplied
+filter operators. Source projection, cardinality and limits do not apply: sources are membership,
+not materialized reads. The final target retains normal projection/order/cardinality/limit checks.
+View/include permissions (`relations`) do **not** grant membership navigation.
+
+Every source and the final target is intersected with its own authority scope, outside caller
+`not`/`or`; scopes are resolved once per Entity per request. Scope definitions remain scalar
+Selections in this slice (no recursive relation-image policy expansion). Grants and scopes are
+rechecked on every request; discovered capabilities are advisory, not authorization tokens.
+
+`ontahi(...).createGraphReadDispatcher(policies)` uses the storage's provider-owned
+`graphReadCapabilities.relationSelections` flag. In-memory and PostgreSQL storage declare this
+support; other/custom storage remains closed unless it explicitly implements and declares it.
+This enables the protocol, not the relation grants: `selectionRelations` remains required.
+
+`createRemoteDataGraphRuntime` and React graph clients automatically discover the target's v2
+capability before each contextual `get`/`run`/`count`, then send the deferred Selection. Metadata
+and execution use the same transport options; no capabilities are cached across requests or
+authorities. Missing capability fails explicitly, and authorization/execution failures never trigger
+v1 fallback or source-ID prefetch. Plain reads and `toGraphReadRequest` stay v1 without extra requests.
+
+Custom `RemoteGraphReadTransport` functions now accept `GraphReadFamilyRequest`, including metadata
+requests. Forward all members unchanged, or narrow `request.kind === 'graph-read'` before accessing
+`mode`/`selection`. The standard Runtime Transport and legacy HTTP adapters already handle both.
+Console navigation and both dialects remain follow-ups. Graph observation rejects contextual reads
+until source-change invalidation is supported and verified.
 
 ## Application composition
 

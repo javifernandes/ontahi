@@ -312,6 +312,7 @@ export const parseRuntimeProtocolSessionClientFrame = (
       !hasOnlyKeys(value, graphObserveFrameKeys) ||
       !isSessionId(value.id) ||
       !request.success ||
+      request.request.version !== 1 ||
       request.request.mode !== 'run'
     ) {
       return invalidFrame('Runtime Protocol Graph observe frame is invalid.', value);

@@ -8,6 +8,7 @@ import {
   field,
   graphSchema,
   withSelectionFactories,
+  withContextualSelections,
 } from '@ontahi/core/data-graph';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
@@ -38,6 +39,136 @@ afterEach(cleanup);
 
 // Match the mounted Devtools integration budget under parallel CI coverage.
 const uiTestOptions = { timeout: 15_000 };
+
+const mountContextualConsole = (supported = true) => {
+  const Item = entity('Item', {
+    id: field.id(),
+    listId: field.string(),
+    title: field.string(),
+    completed: field.boolean(),
+  });
+  const List = withContextualSelections(
+    entity('List', { id: field.id() }).hasMany('items', Item, { via: 'listId' }),
+    ({ self }) => ({
+      openItems: self.items.where(item => item.completed.eq(false)),
+    }),
+  );
+  const runtime = createInMemoryDataGraphRuntime({
+    entities: [List, Item],
+    dataset: {
+      List: [{ id: 'l1' }],
+      Item: [
+        { id: 'i1', listId: 'l1', title: 'Open task', completed: false },
+        { id: 'i2', listId: 'l1', title: 'Closed task', completed: true },
+        { id: 'i3', listId: 'missing', title: 'Outside context', completed: false },
+      ],
+    },
+  });
+  const dispatch = createGraphReadDispatcher({
+    ...(supported ? { relationSelections: true as const } : {}),
+    policies: [
+      {
+        entity: List,
+        scope: 'all',
+        modes: ['run'],
+        cardinalities: ['many'],
+        maxLimit: 50,
+        selectionRelations: ['items'],
+        fields: { id: { filter: ['eq'] } },
+      },
+      {
+        entity: Item,
+        scope: 'all',
+        modes: ['run'],
+        cardinalities: ['many'],
+        maxLimit: 50,
+        fields: {
+          id: { select: true },
+          listId: { select: true },
+          title: { select: true, order: true },
+          completed: { select: true, filter: ['eq'] },
+        },
+      },
+    ],
+    execute: query => Effect.runPromise(runtime.run(query, undefined)),
+  });
+  const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+    const body = await dispatch(envelope.body, { authority: undefined });
+    if (!isJsonValue(body)) throw new Error('Expected portable response');
+    return createRuntimeProtocolResponse(envelope, body);
+  });
+  render(
+    <ConsolePanel
+      options={{
+        entities: [List, Item],
+        initialDocument: 'List.openItems.where(completed = false).many()',
+      }}
+      runtimeTransport={{ request }}
+    />,
+  );
+  const view = EditorView.findFromDOM(
+    screen.getByRole('textbox', { name: 'Ontahí Console expression' }),
+  )!;
+  return { view, request, result: within(screen.getByLabelText('Console result')) };
+};
+
+describe('contextual Console execution', uiTestOptions, () => {
+  it('negotiates v2, renders target controls, and preserves membership through dialect and table edits', async () => {
+    const { view, request, result } = mountContextualConsole();
+    expect(screen.getByRole('combobox', { name: 'Value for Item.completed' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    expect(result.getByText('Open task')).toBeDefined();
+    expect(result.queryByText('Closed task')).toBeNull();
+    expect(result.queryByText('Outside context')).toBeNull();
+    const reads = () =>
+      request.mock.calls
+        .map(([envelope]) => envelope.body)
+        .filter(body => (body as { kind: string }).kind === 'graph-read');
+    expect(reads()[0]).toMatchObject({ version: 2, selection: { entityName: 'Item' } });
+    expect(request.mock.calls.map(([envelope]) => envelope.body)).toContainEqual({
+      version: 1,
+      kind: 'graph-read-capabilities',
+      entityName: 'Item',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Declarative' }));
+    expect(view.state.doc.toString()).toBe('List through openItems where completed = false many');
+    await waitFor(() =>
+      expect(result.getByRole('button', { name: /Sort by title/ }).hasAttribute('disabled')).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(result.getByRole('button', { name: /Sort by title/ }));
+    await waitFor(() => expect(reads()).toHaveLength(2));
+    expect(view.state.doc.toString()).toContain(
+      'through openItems where completed = false order by title',
+    );
+    expect(reads()[1]).toMatchObject({
+      selection: (reads()[0] as { selection: unknown }).selection,
+    });
+    fireEvent.change(result.getByRole('spinbutton', { name: 'Result limit' }), {
+      target: { value: '1' },
+    });
+    fireEvent.click(result.getByRole('button', { name: 'Apply limit' }));
+    await waitFor(() => expect(reads()).toHaveLength(3));
+    expect(reads()[2]).toMatchObject({
+      limit: 1,
+      selection: (reads()[0] as { selection: unknown }).selection,
+    });
+  });
+  it('explains unsupported providers without sending a downgraded data read', async () => {
+    const { request, result } = mountContextualConsole(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect((await result.findByRole('alert')).textContent).toContain(
+      'does not support contextual Selections (v2)',
+    );
+    expect(
+      request.mock.calls.every(
+        ([envelope]) => (envelope.body as { kind: string }).kind === 'graph-read-capabilities',
+      ),
+    ).toBe(true);
+  });
+});
 
 describe('Console dialect switching', uiTestOptions, () => {
   it('runs intersected factories and retains them through dialect and table ordering edits', async () => {

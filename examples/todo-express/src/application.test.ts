@@ -116,7 +116,10 @@ describe('Ontahi todo portability example', () => {
         ).toEqual({
           kind: 'graph-read-capabilities-result',
           entityName: 'TodoItem',
-          capabilities: { orderBy: ['title'] },
+          capabilities: {
+            orderBy: ['title'],
+            relationSelections: { version: 2, relations: ['tags'] },
+          },
         });
       }
     } finally {
@@ -197,6 +200,30 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', title: 'Read plan' },
       { id: 'todo-2', title: 'Write bridge' },
     ]);
+  });
+
+  it('runs generated contextual Selections over HTTP without fetching List or Item populations first', async () => {
+    getTodoDataset().TodoItem = [
+      { id: 'open', list: 'list-1', title: 'Open', completed: false },
+      { id: 'closed', list: 'list-1', title: 'Closed', completed: true },
+      { id: 'outside', list: 'list-2', title: 'Outside', completed: false },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-1', name: 'Important', color: '#dd6658' }];
+    const source = createEntityRef(TodoItem, { id: 'open' });
+    const target = createEntityRef(Tag, { id: 'tag-1' });
+    getTodoRelationships().push({
+      relation: relationshipSet(TodoItem, 'tags', source).add(target).relation,
+      source,
+      target,
+    });
+    const client = createFetchGraphClient({ runtimeTransport: { endpoint: `${origin}/runtime` } });
+    const selected = Selection.all(ClientTodoListSchema).openItems;
+    expect(await client.graphExecutor.run(selected.toQuery(), undefined)).toEqual([
+      { ...getTodoDataset().TodoItem[0], list: createEntityRef(TodoList, { id: 'list-1' }) },
+    ]);
+    expect(await client.graphExecutor.run(selected.labels.toQuery(), undefined)).toEqual(
+      getTodoDataset().Tag,
+    );
   });
 
   it('allows the Selection language string operators on public TodoList fields', async () => {

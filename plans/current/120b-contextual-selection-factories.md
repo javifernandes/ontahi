@@ -50,6 +50,14 @@ that extension is implemented. Do not create competing registries with inconsist
 
 ## Semantic decisions
 
+- Distinguish same-Entity restriction (`archived`: Selection<TodoList> → Selection<TodoList>) from
+  relation-derived navigation (`openItems`: Selection<TodoList> → Selection<TodoItem>). Both build
+  deferred membership, but the latter changes the population via relation image and target filtering.
+  It resembles a derived relation, not a scalar computed Field or a row-shaped projection retaining
+  one source row. Keep this distinction in the model without renaming the current API or introducing
+  materialization/invalidation semantics during the language refactor. `TodoList.archived().openItems`
+  is a design illustration, not a newly supported declaration or call syntax.
+
 - Construction, composition and serialization perform no reads. Membership is evaluated by the
   consumer; a factory is neither a cached population nor an existence/uniqueness assertion.
 - Navigation from multiple source members produces the union of related target members, deduplicated
@@ -106,11 +114,11 @@ coherent supported boundary rather than expanding all layers in the first change
 - [x] `by` → contextual factory → contextual factory composes without fetching source members.
 - [x] Canonical round-trip and validation preserve every hop and reject malformed/unknown paths.
 - [x] Empty/multiple roots and shared targets have explicit set semantics; no accidental grouping.
-- [ ] Receiver scopes, invalid paths and unsupported providers cannot broaden the target set.
-- [ ] In-memory and PostgreSQL behavior agree, with other provider support explicitly tracked.
+- [x] Receiver scopes, invalid paths and unsupported providers cannot broaden the target set.
+- [x] In-memory and PostgreSQL behavior agree, with other provider support explicitly tracked.
 - [x] Discovery/codegen and installed package tests preserve source/input/output contracts.
-- [ ] Both language dialects, completion, Activity and result controls preserve the same meaning.
-- [ ] Todo and simplified BookOps cases pass; remaining work is linked before closing this plan.
+- [x] Both language dialects, completion, Activity and result controls preserve the same meaning.
+- [x] Todo and simplified BookOps cases pass; remaining work is linked before closing this plan.
 
 ## Non-goals and follow-ups
 
@@ -263,3 +271,94 @@ package type/runtime checks passed. The focused PostgreSQL suite was rerun after
 No live MySQL/Supabase contextual support or remote authority contract is claimed.
 
 Next: receiver policy/protocol vertical slice, then UI.
+
+## Receiver authority checkpoint — 2026-09-12
+
+PostgreSQL local reads were committed as `270d3b3`. The next bounded slice adds low-level v2
+request/response authorization; it does not automatically enable application adapters or clients.
+
+- `toGraphReadRequestV2` transports the canonical Selection; v2 resolution uses the receiver's
+  schema registry, strict expression validation and bounded AST depth/node count. v1 stays closed.
+- A dispatcher must explicitly enable `relationSelections` for a compatible executor. Every hop
+  requires source/target policies, a source `selectionRelations` grant, the requested mode and
+  permitted source filters. View/include grants do not imply membership authority.
+- Each source and final target gets its own scope outside caller `not`/`or`. A policy scope resolves
+  once per Entity per request, is not cached across requests, and remains scalar membership to
+  avoid recursive authority expansion. Only the final result has projection/cardinality/limits.
+- Capability discovery reports advisory v2 support and outgoing membership grants without reading
+  data. Default dispatchers, existing remote clients and graph observation remain closed to v2.
+
+Validation: Core coverage suite, real disposable-PostgreSQL contextual tests (including v2 scopes
+and one-statement execution), clean-room installed-package type/runtime proof, all package builds,
+workspace typechecks including examples, and Core/PostgreSQL lint passed. New regressions cover
+missing grants/policies/modes/filters, independent source/intermediate/target scopes, `not`/`or`,
+per-request reevaluation, private scope failures, malformed/bounded ASTs and legacy rejection.
+
+Next: application/provider opt-in wiring and client capability negotiation, then Console navigation
+in both dialects and Todo UI proof. Observation needs source-change invalidation evidence before
+enabling v2. Commands and discriminated Entity variants (152) remain later work.
+
+## Application/client checkpoint — 2026-09-12
+
+- In-memory and PostgreSQL storage declare `graphReadCapabilities.relationSelections`; application
+  dispatchers use that provider-owned support flag. Unsupported/custom storage stays closed by
+  default; declaring support never replaces source/target policies or outgoing grants.
+- Remote and React clients detect contextual ASTs and encode a copied v2 request before I/O.
+  They discover the target's v2 capability with the same transport/options before sending the read.
+  Capability results are validated, advisory and not cached across requests or authorities.
+- Plain reads stay on v1 without extra requests. Missing capability, metadata errors and denied
+  reads fail without downgrade, retry or source-ID prefetch. Custom read transports accept the
+  Graph Read family union (including metadata). Both common and legacy HTTP paths carry it.
+- Contextual observation remains explicitly unsupported. No new Console syntax was added here.
+
+Validation: 1008 Core, 108 PostgreSQL, 117 React and 45 Express tests passed with coverage. The
+Express proof used real loopback HTTP and server-owned request authority; PostgreSQL ran in
+disposable containers and proved metadata-only negotiation followed by one SQL statement. All
+15 package builds, workspace/example typechecks, affected-package lint, repository formatting
+and clean-room installed-package negotiation/runtime verification passed. The initial HTTP run
+was blocked by sandbox `listen` permissions; the host-permitted run passed after explicitly
+mounting the test's `/runtime` route.
+
+Next: contextual navigation authoring and completion in both Console dialects, with Todo UI proof.
+Keep observation/source invalidation, Commands and Entity variants separate.
+
+## Language/product checkpoint — 2026-09-12
+
+- Both dialects share navigation syntax nodes and destination resolution. TS uses
+  `Book.by({ slug: "my-book" }).parts.chapters.many()`; declarative uses
+  `Book by slug "my-book" through parts through chapters many`. The same portable descriptors
+  expand to the same v2 Selection AST; no invocation callback or source population is read.
+- Completion now shares one semantic continuation catalog, contextual candidates, target Field/value
+  resolution and ordering permission hints. Dialect adapters retain cursor recovery and spelling.
+  A complete executable AST is not required for cursor assistance: incomplete drafts resolve only
+  their completed hops. Unknown/unavailable prefixes never fall back to the root Entity.
+- Boolean/enum widgets, order dropdowns and Console capability discovery use the destination Entity.
+  Dialect conversion and table sort/limit edits retain all authored factories and hops. Mounted
+  CodeMirror tests delete every suffix without hanging; mounted Console tests cover execution,
+  conversion, target widgets, sorting, limit changes and explicit unsupported-provider failure.
+- Console discovers v2 capability before every contextual execution, on the active transport, with
+  cancellation retained. Activity renders expanded canonical source/relation/target meaning rather
+  than inferring a factory name. Plain reads remain v1.
+- Todo declares `openItems` from `self.items.where(item => item.completed.eq(false))` and `labels`
+  from `self.tags`, grants outgoing `items`/`tags` membership explicitly, and regenerates its client.
+  HTTP tests execute generated `.openItems.labels` through the normal runtime endpoint. The
+  simplified BookOps grammar proof retains `type = part/chapter` over ContentNode's self-relation;
+  it does not introduce variant Entities or change the BookOps application.
+
+Scope retained: root scalar `by` clauses precede contextual hops, then target `where` and read
+shaping. Interleaved source filters and `by` after navigation, parameterized contextual factories,
+raw relation authoring, observation/source invalidation, and mutation support remain separate work.
+Keep richer Console composition with [150](150-ontahi-devtools-semantic-console.md), relation membership
+extensions with [119](../backlog/119-selection-relation-predicates.md), cardinality hardening with
+[116a](../next/116a-selection-cardinality-before-read-shaping.md), and variants with
+[152](../next/152-discriminated-entity-variants.md). Review this read-only boundary before commands
+or adapting BookOps after a release.
+
+Validation: 289 language, 68 CodeMirror and 102 Devtools tests passed with coverage; all 70 Todo
+tests passed, including real HTTP/WebSocket and its disposable MySQL baseline. Initial Todo test
+invocation omitted the official authentication-mode setup; the official test script passed.
+All 15 package builds, package/example typechecks, affected-package lint and repository formatting
+passed. Clean-room tarball installation/type/runtime checks include Console compilation, dialect
+conversion, contextual completion and execution through the real v2 dispatcher. Active Todo
+watchers briefly overwrote declaration outputs during parser regeneration; final type/artifact
+verification used the generated parser and freshly rebuilt outputs without stopping the dev session.
