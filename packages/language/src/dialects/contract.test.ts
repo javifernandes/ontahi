@@ -27,6 +27,7 @@ describe('dialect strategies over shared semantics', () => {
     };
     expect(candidates('ts')).toEqual(candidates('declarative'));
     expect(candidates('ts').map(candidate => candidate.kind)).toEqual([
+      'filter',
       'order',
       'limit',
       'terminal',

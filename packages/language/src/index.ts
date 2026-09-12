@@ -34,6 +34,8 @@ export type {
   ConsoleLanguageDiagnostic,
   ConsoleOrderBySyntax,
   ConsoleGraphReadSyntax,
+  ConsoleFilterSyntax,
+  ConsoleMembershipStep,
   ConsoleDocumentSyntax,
   ConsoleDocumentParseResult,
   ConsoleDocumentAnalysis,

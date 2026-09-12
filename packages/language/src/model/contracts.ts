@@ -236,13 +236,32 @@ export type ConsoleOrderBySyntax = SelectionLanguageRange & {
   readonly close?: SelectionLanguageToken<'close-parenthesis'>;
 };
 
+export type ConsoleFilterSyntax = SelectionLanguageRange & {
+  readonly kind: 'filter';
+  readonly where?: SelectionLanguageToken<'where-member'>;
+  readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
+  readonly selection?: SelectionExpressionSyntax;
+  readonly whereClose?: SelectionLanguageToken<'close-parenthesis'>;
+};
+
+export type ConsoleMembershipStep =
+  | (ConsoleFactorySyntax & { readonly kind: 'factory' })
+  | (SelectionLanguageRange & {
+      readonly kind: 'navigation';
+      readonly name?: SelectionLanguageToken<'navigation-name'>;
+    })
+  | ConsoleFilterSyntax;
+
 export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly kind: 'graph-read';
+  /** Authoring stages in source order, before final read shaping. */
+  readonly steps: readonly ConsoleMembershipStep[];
   readonly factories: readonly ConsoleFactorySyntax[];
   readonly navigations: readonly (SelectionLanguageRange & {
     readonly name?: SelectionLanguageToken<'navigation-name'>;
   })[];
   readonly entity?: SelectionLanguageToken<'entity-name'>;
+  /** Compatibility projection of the last filter, if it is the final membership stage. */
   readonly where?: SelectionLanguageToken<'where-member'>;
   readonly whereOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly selection?: SelectionExpressionSyntax;

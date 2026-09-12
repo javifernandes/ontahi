@@ -259,8 +259,10 @@ declarative `through parts through chapters` expand to the same deferred AST. Se
 resolution and continuation candidates are shared between dialect adapters, finite-value widgets,
 and receiver-backed ordering controls. Dialect conversion and table edits preserve the authored hops;
 Activity renders their expanded canonical meaning. The initial grammar places root `by` factories
-before hops, then target predicates/read shaping; interleaved source filters and contextual parameters
-remain follow-ups in Plan 120b.
+before hops, then target predicates/read shaping. Plan 150c extends that authoring model to ordered
+filter/navigation stages: source predicates stay inside the relation-image source, while subsequent
+predicates intersect the current target. Repeated filters intersect without executing or asserting
+singleton membership. Contextual parameters remain deferred.
 
 ## Evaluation And Snapshots
 

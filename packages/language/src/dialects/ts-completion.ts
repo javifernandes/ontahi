@@ -47,8 +47,15 @@ export const completeTsConsoleDocument = (
     dialect.factoryNameSeparator,
   );
   if (factoryCompletion) return factoryCompletion;
-  const selectionFrom = syntax?.whereOpen?.to;
-  const selectionTo = syntax?.whereClose?.from;
+  const filter = syntax?.steps.find(
+    step =>
+      step.kind === 'filter' &&
+      safePosition >= (step.whereOpen?.to ?? step.from) &&
+      safePosition <= (step.whereClose?.from ?? step.to),
+  );
+  const selectionFrom = filter?.kind === 'filter' ? filter.whereOpen?.to : undefined;
+  const selectionTo =
+    filter?.kind === 'filter' ? (filter.whereClose?.from ?? filter.to) : undefined;
   if (
     entity &&
     selectionFrom !== undefined &&

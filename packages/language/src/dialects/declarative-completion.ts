@@ -72,10 +72,24 @@ export const completeDeclarativeConsoleDocument = (
       : [];
   const orderItems = declarativeOrderCompletionItems(syntax, entity, pos, options);
   if (orderItems) return result([...orderItems, ...continuation]);
-  const from = syntax.where?.to;
-  const to = syntax.orderBy?.from ?? syntax.limit?.from ?? syntax.terminal?.from ?? document.length;
+  let filterIndex = -1;
+  syntax.steps.forEach((step, index) => {
+    if (step.kind === 'filter' && pos >= (step.where?.to ?? step.from)) filterIndex = index;
+  });
+  const filter = syntax.steps[filterIndex];
+  const from = filter?.kind === 'filter' ? filter.where?.to : undefined;
+  const to =
+    syntax.steps[filterIndex + 1]?.from ??
+    syntax.orderBy?.from ??
+    syntax.limit?.from ??
+    syntax.terminal?.from ??
+    document.length;
   if (from !== undefined && pos >= from && pos <= to) {
-    const end = beforeWord.request ? range.from : to;
+    // Recovery can interpret a following clause keyword as a missing Field.
+    // Before that recovered expression, offer Fields at the actual value hole.
+    const beforeExpression =
+      filter?.kind === 'filter' && filter.selection && pos < filter.selection.from;
+    const end = beforeExpression ? pos : beforeWord.request ? range.from : to;
     const completion = completeSelectionDocument(
       document.slice(from, end),
       Math.min(pos, end) - from,

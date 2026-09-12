@@ -16,6 +16,7 @@ Related plans:
 8. [148. Ontahí Devtools Runtime Inspection](../current/148-ontahi-devtools-runtime-inspection.md)
 9. [150a. Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
 10. [150b. Language Modules And Dialect Contract](../done/150b-language-modules-and-dialect-contract.md)
+11. [150c. Ordered Read Composition](../done/150c-ordered-read-composition.md)
 
 Related Atlas shapes:
 
@@ -100,7 +101,7 @@ CLI are likewise outside the immediate next slice.
 
 Plan 120b now provides contextual navigation in both dialects, with shared target assistance and v2
 Graph Read execution. Plan 150b completed the behavior-preserving language module/dialect strategy
-refactor. Further source-filter/navigation composition remains a separate behavior slice; this
+refactor. Plan 150c subsequently delivered interleaved source-filter/navigation composition; this
 checkpoint does not implement Commands, Operations or the headless execution session.
 Context-aware Reference candidates are deferred in
 [118f](../backlog/118f-context-aware-reference-assistance.md), consuming dynamic population/cost

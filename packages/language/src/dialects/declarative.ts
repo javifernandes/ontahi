@@ -17,12 +17,12 @@ const print = (document: string, expression: ConsoleGraphReadSyntax): string => 
 
   return [
     entity,
-    ...expression.factories.map(
-      (factory, index) =>
-        `${index ? 'and by' : 'by'} ${factory.name!.text} ${factory.argument!.text}`,
-    ),
-    ...expression.navigations.map(navigation => `through ${navigation.name!.text}`),
-    ...(selection ? [`where ${selection}`] : []),
+    ...expression.steps.map((step, index) => {
+      if (step.kind === 'factory')
+        return `${index ? 'and by' : 'by'} ${step.name!.text} ${step.argument!.text}`;
+      if (step.kind === 'navigation') return `through ${step.name!.text}`;
+      return `where ${document.slice(step.selection!.from, step.selection!.to)}`;
+    }),
     ...(field ? [`order by ${field}${descending ? ' descending' : ''}`] : []),
     ...(limit === undefined ? [] : [`limit ${limit}`]),
     terminal,

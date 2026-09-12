@@ -77,9 +77,11 @@ export const consoleContinuationCandidates = (
   application: ConsoleLanguageApplicationReflection,
 ): readonly ConsoleCandidate[] => {
   if (syntax.terminal) return [];
-  const membership = !syntax.where && !syntax.orderBy && !syntax.limit;
+  const membership = !syntax.orderBy && !syntax.limit;
   return [
-    ...(membership && !syntax.navigations.length && entity.selectionFactories
+    ...(membership &&
+    !syntax.steps.some(step => step.kind !== 'factory') &&
+    entity.selectionFactories
       ? [{ kind: 'factory' as const, repeated: syntax.factories.length > 0 }]
       : []),
     ...(membership

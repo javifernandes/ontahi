@@ -7,6 +7,8 @@ import type {
   ConsoleLanguageDiagnostic,
   ConsoleOrderBySyntax,
   ConsoleGraphReadSyntax,
+  ConsoleFilterSyntax,
+  ConsoleMembershipStep,
   ConsoleDocumentSyntax,
   ConsoleDocumentParseResult,
 } from '../model/contracts.js';
@@ -44,7 +46,33 @@ export const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocu
     return { kind: 'console-document', from: 0, to: document.length };
   }
 
-  const whereClause = firstChildNamed(graphRead, ['WhereClause', 'DeclarativeWhereClause']);
+  const steps: ConsoleMembershipStep[] = [];
+  for (let node = graphRead.firstChild; node; node = node.nextSibling) {
+    if (
+      ['FactoryClause', 'DeclarativeFactoryClause', 'DeclarativeFactoryIntersection'].includes(
+        node.name,
+      )
+    ) {
+      steps.push({ ...parseConsoleFactory(node, document)!, kind: 'factory' });
+    } else if (['NavigationClause', 'DeclarativeNavigationClause'].includes(node.name)) {
+      steps.push({
+        kind: 'navigation',
+        ...rangeOf(node),
+        name: tokenOf('navigation-name', node.getChild('NavigationName'), document),
+      });
+    } else if (['WhereClause', 'DeclarativeWhereClause'].includes(node.name)) {
+      steps.push({
+        kind: 'filter',
+        ...rangeOf(node),
+        where: tokenOf('where-member', node.getChild('Where'), document),
+        whereOpen: tokenOf('open-parenthesis', node.getChild('OpenParen'), document),
+        selection: expressionSyntax(node.getChild('OrExpression'), document),
+        whereClose: tokenOf('close-parenthesis', node.getChild('CloseParen'), document),
+      });
+    }
+  }
+  const last = steps.at(-1);
+  const filter = last?.kind === 'filter' ? last : undefined;
   const orderClause = firstChildNamed(graphRead, ['OrderByClause', 'DeclarativeOrderByClause']);
   const limitClause = firstChildNamed(graphRead, ['LimitClause', 'DeclarativeLimitClause']);
   const readTerminal = graphRead.getChild('ReadTerminal');
@@ -60,27 +88,14 @@ export const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocu
     expression: {
       kind: 'graph-read',
       ...rangeOf(graphRead),
-      factories: [
-        ...graphRead.getChildren('FactoryClause'),
-        ...graphRead.getChildren('DeclarativeFactoryClause'),
-        ...graphRead.getChildren('DeclarativeFactoryIntersection'),
-      ].map(node => parseConsoleFactory(node, document)!),
-      navigations: [
-        ...graphRead.getChildren('NavigationClause'),
-        ...graphRead.getChildren('DeclarativeNavigationClause'),
-      ].map(node => ({
-        ...rangeOf(node),
-        name: tokenOf('navigation-name', node.getChild('NavigationName'), document),
-      })),
+      steps,
+      factories: steps.filter(step => step.kind === 'factory'),
+      navigations: steps.filter(step => step.kind === 'navigation'),
       entity: tokenOf('entity-name', graphRead.getChild('EntityName'), document),
-      where: tokenOf('where-member', whereClause?.getChild('Where') ?? null, document),
-      whereOpen: tokenOf('open-parenthesis', whereClause?.getChild('OpenParen') ?? null, document),
-      selection: expressionSyntax(whereClause?.getChild('OrExpression') ?? null, document),
-      whereClose: tokenOf(
-        'close-parenthesis',
-        whereClause?.getChild('CloseParen') ?? null,
-        document,
-      ),
+      where: filter?.where,
+      whereOpen: filter?.whereOpen,
+      selection: filter?.selection,
+      whereClose: filter?.whereClose,
       orderBy: orderClause
         ? {
             ...rangeOf(orderClause),
@@ -151,9 +166,11 @@ export const consoleTerminalStructureDiagnostic = (expression: ConsoleGraphReadS
 export const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   const expression = syntax.expression;
   if (!expression?.entity) return 'Expected an Entity name to begin the Console expression.';
-  if (expression.where && !expression.whereOpen) return 'Expected "(" after .where.';
-  if (expression.where && !expression.whereClose)
-    return 'Expected ")" to close the Selection expression.';
+  for (const step of expression.steps) {
+    if (step.kind !== 'filter') continue;
+    if (!step.whereOpen) return 'Expected "(" after .where.';
+    if (!step.whereClose) return 'Expected ")" to close the Selection expression.';
+  }
   return (
     consoleOrderStructureDiagnostic(expression.orderBy) ??
     consoleLimitStructureDiagnostic(expression) ??
@@ -165,7 +182,7 @@ export const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
   const expression = syntax.expression;
   return Boolean(
     expression?.entity &&
-    (!expression.where || (expression.whereOpen && expression.whereClose)) &&
+    expression.steps.every(step => step.kind !== 'filter' || (step.whereOpen && step.whereClose)) &&
     (!expression.orderBy ||
       (expression.orderBy.open &&
         expression.orderBy.field &&
@@ -198,12 +215,18 @@ export const parseConsoleSyntax = (
   if (document.trim().length === 0) return { syntax, syntaxDiagnostics: [] };
 
   const error = firstErrorRange(tree);
-  const invalidStrings = invalidStringRanges({
-    kind: 'selection-document',
-    from: 0,
-    to: document.length,
-    expression: syntax.expression?.selection,
-  });
+  const filters =
+    syntax.expression?.steps.filter(
+      (step): step is ConsoleFilterSyntax => step.kind === 'filter',
+    ) ?? [];
+  const invalidStrings = filters.flatMap(filter =>
+    invalidStringRanges({
+      kind: 'selection-document',
+      from: filter.from,
+      to: filter.to,
+      expression: filter.selection,
+    }),
+  );
   const syntaxDiagnostics: ConsoleLanguageDiagnostic[] = invalidStrings.map(range => ({
     channel: 'syntax',
     code: 'selection.syntax.invalid',
@@ -221,18 +244,22 @@ export const parseConsoleSyntax = (
       });
 
   if (error) {
-    const expression = syntax.expression;
+    const filter = filters.find(
+      filter =>
+        error.from >= (filter.whereOpen?.to ?? filter.where?.to ?? filter.from) &&
+        error.to <= (filter.whereClose?.from ?? filter.to),
+    );
     const isSelectionError =
       consoleStructureComplete(syntax) &&
-      expression?.whereOpen &&
-      expression.whereClose &&
-      error.from >= expression.whereOpen.to &&
-      error.to <= expression.whereClose.from;
+      filter?.whereOpen &&
+      filter.whereClose &&
+      error.from >= filter.whereOpen.to &&
+      error.to <= filter.whereClose.from;
     const selectionSyntax: SelectionDocumentSyntax = {
       kind: 'selection-document',
       from: 0,
       to: document.length,
-      expression: syntax.expression?.selection,
+      expression: filter?.selection,
     };
     syntaxDiagnostics.unshift({
       channel: 'syntax',

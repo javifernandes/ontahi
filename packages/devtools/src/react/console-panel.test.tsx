@@ -40,7 +40,10 @@ afterEach(cleanup);
 // Match the mounted Devtools integration budget under parallel CI coverage.
 const uiTestOptions = { timeout: 15_000 };
 
-const mountContextualConsole = (supported = true) => {
+const mountContextualConsole = (
+  supported = true,
+  initialDocument = 'List.openItems.where(completed = false).many()',
+) => {
   const Item = entity('Item', {
     id: field.id(),
     listId: field.string(),
@@ -101,7 +104,7 @@ const mountContextualConsole = (supported = true) => {
     <ConsolePanel
       options={{
         entities: [List, Item],
-        initialDocument: 'List.openItems.where(completed = false).many()',
+        initialDocument,
       }}
       runtimeTransport={{ request }}
     />,
@@ -113,6 +116,41 @@ const mountContextualConsole = (supported = true) => {
 };
 
 describe('contextual Console execution', uiTestOptions, () => {
+  it('executes source filters before navigation and retains them when switching dialects', async () => {
+    const source = 'List.where(id = "l1").openItems.where(completed = false).many()';
+    const { view, request, result } = mountContextualConsole(true, source);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByRole('table');
+    expect(result.getByText('Open task')).toBeDefined();
+    expect(result.queryByText('Outside context')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Declarative' }));
+    expect(view.state.doc.toString()).toBe(
+      'List where id = "l1" through openItems where completed = false many',
+    );
+    const reads = () =>
+      request.mock.calls
+        .map(([envelope]) => envelope.body)
+        .filter(body => (body as { kind: string }).kind === 'graph-read');
+    expect(reads()).toHaveLength(1);
+    fireEvent.click(result.getByRole('button', { name: /Sort by title/ }));
+    await waitFor(() => expect(reads()).toHaveLength(2));
+    expect(reads()[1]).toMatchObject({
+      selection: (reads()[0] as { selection: unknown }).selection,
+    });
+    act(() =>
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: 'List where id = "missing" through openItems where completed = false many',
+        },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(reads()).toHaveLength(3));
+    await waitFor(() => expect(result.queryByText('Open task')).toBeNull());
+  });
+
   it('negotiates v2, renders target controls, and preserves membership through dialect and table edits', async () => {
     const { view, request, result } = mountContextualConsole();
     expect(screen.getByRole('combobox', { name: 'Value for Item.completed' })).toBeDefined();

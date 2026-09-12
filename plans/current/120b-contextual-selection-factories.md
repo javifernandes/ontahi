@@ -354,6 +354,11 @@ extensions with [119](../backlog/119-selection-relation-predicates.md), cardinal
 [152](../next/152-discriminated-entity-variants.md). Review this read-only boundary before commands
 or adapting BookOps after a release.
 
+Follow-up: [150c](../done/150c-ordered-read-composition.md) now implements interleaved source/target
+filters and contextual hops in both Console dialects. This evolves the language checkpoint above
+without changing Core membership or introducing intermediate reads. Named factories after a
+filter/hop, parameterized contextual factories, raw relations and mutation remain deferred.
+
 Validation: 289 language, 68 CodeMirror and 102 Devtools tests passed with coverage; all 70 Todo
 tests passed, including real HTTP/WebSocket and its disposable MySQL baseline. Initial Todo test
 invocation omitted the official authentication-mode setup; the official test script passed.

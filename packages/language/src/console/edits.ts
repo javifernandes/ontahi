@@ -29,13 +29,7 @@ export const editConsoleLimit = (
       ? []
       : [{ from: syntax.limitValue.from, to: syntax.limitValue.to, insert: String(limit) }];
   }
-  const position =
-    syntax.orderBy?.to ??
-    syntax.whereClose?.to ??
-    syntax.selection?.to ??
-    syntax.navigations.at(-1)?.to ??
-    syntax.factories.at(-1)?.to ??
-    syntax.entity.to;
+  const position = syntax.orderBy?.to ?? syntax.steps.at(-1)?.to ?? syntax.entity.to;
   return [
     {
       from: position,
@@ -100,12 +94,7 @@ export const editConsoleOrderBy = (
       ),
     );
   } else {
-    const position =
-      syntax.whereClose?.to ??
-      syntax.selection?.to ??
-      syntax.navigations.at(-1)?.to ??
-      syntax.factories.at(-1)?.to ??
-      syntax.entity.to;
+    const position = syntax.steps.at(-1)?.to ?? syntax.entity.to;
     changes.push({
       from: position,
       to: position,

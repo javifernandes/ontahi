@@ -5,8 +5,7 @@
 DeclarativeGraphReadExpression {
   EntityName
   (DeclarativeFactoryClause DeclarativeFactoryIntersection*)?
-  DeclarativeNavigationClause*
-  DeclarativeWhereClause?
+  (DeclarativeNavigationClause | DeclarativeWhereClause)*
   DeclarativeOrderByClause?
   DeclarativeLimitClause?
   ReadTerminal?
@@ -20,8 +19,7 @@ ConsoleExpression { GraphReadExpression }
 GraphReadExpression {
   EntityName
   FactoryClause*
-  NavigationClause*
-  WhereClause?
+  (NavigationClause | WhereClause)*
   OrderByClause?
   LimitClause?
   Dot ReadTerminal OpenParen CloseParen

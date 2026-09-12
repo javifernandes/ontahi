@@ -359,15 +359,19 @@ The Console supports contextual Selection navigation with the in-memory and Post
 ```text
 TodoList.openItems.many()
 TodoList.openItems.labels.many()
+TodoList.where(name = "Later").openItems.where(completed = false).many()
 
 TodoList through openItems many
 TodoList through openItems through labels many
+TodoList where name = "Later" through openItems where completed = false many
 ```
 
 `openItems` is declared on TodoList from `self.items.where(item => item.completed.eq(false))`;
 `labels` is declared on TodoItem from `self.tags`. The outgoing `items`/`tags` membership hops are
 explicitly granted by the read policies. No source rows are fetched to build these selections.
-Filters, ordering suggestions and rich value editors after a hop use its destination Entity.
+Filters and rich value editors resolve the Entity at each stage: `name` belongs to TodoList,
+`completed` to TodoItem. Filters can precede or follow a hop; repeated filters intersect.
+Ordering/limit still shape only the final result. There is no intermediate `.one()` or fetch.
 MySQL contextual reads remain unsupported and the Console explains that capability boundary.
 
 ```sh

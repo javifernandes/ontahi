@@ -16,7 +16,7 @@ import type {
   ConsoleDocumentAnalysis,
   ConsoleDocumentAnalysisOptions,
 } from '../model/contracts.js';
-import { type SemanticResolution, resolveExpression } from '../selection/semantics.js';
+import { resolveExpression } from '../selection/semantics.js';
 
 import { consoleNavigationTarget } from './context.js';
 import { resolveConsoleFactory } from './factories.js';
@@ -53,63 +53,68 @@ export const analyzeConsoleSyntax = (
   }
 
   let entity: SelectionLanguageEntityReflection = root;
-  const selections: SelectionExpression[] = [];
-  for (const factory of expression.factories) {
-    try {
-      const selected = resolveConsoleFactory(factory, entity.name, entity.selectionFactories);
-      selections.push(selected);
-    } catch (cause) {
-      return {
-        ...parsed,
-        semanticDiagnostics: [
-          {
-            from: factory.from,
-            to: factory.to,
-            channel: 'semantic',
-            code: 'console.semantic.invalid-factory',
-            message: cause instanceof Error ? cause.message : 'Invalid Selection factory input.',
-          },
-        ],
-      };
+  let membership: SelectionExpression = selectionAll();
+  const semanticDiagnostics: ConsoleLanguageDiagnostic[] = [];
+  for (const step of expression.steps) {
+    if (step.kind === 'filter') {
+      if (!step.selection) return { ...parsed, semanticDiagnostics };
+      const resolved = resolveExpression(step.selection, entity);
+      semanticDiagnostics.push(...resolved.diagnostics);
+      if (!resolved.expression) return { ...parsed, semanticDiagnostics };
+      membership = selectionAnd(membership, resolved.expression);
+    } else if (step.kind === 'factory') {
+      try {
+        membership = selectionAnd(
+          membership,
+          resolveConsoleFactory(step, entity.name, entity.selectionFactories),
+        );
+      } catch (cause) {
+        return {
+          ...parsed,
+          semanticDiagnostics: [
+            ...semanticDiagnostics,
+            {
+              from: step.from,
+              to: step.to,
+              channel: 'semantic',
+              code: 'console.semantic.invalid-factory',
+              message: cause instanceof Error ? cause.message : 'Invalid Selection factory input.',
+            },
+          ],
+        };
+      }
+    } else {
+      const target = step.name && consoleNavigationTarget(entity, step.name.text, application);
+      if (!target)
+        return {
+          ...parsed,
+          semanticDiagnostics: [
+            ...semanticDiagnostics,
+            {
+              from: step.from,
+              to: step.to,
+              channel: 'semantic',
+              code: 'console.semantic.invalid-navigation',
+              message: `Unknown or unavailable contextual Selection ${entity.name}.${step.name?.text ?? ''}.`,
+            },
+          ],
+        };
+      membership = selectionAnd(
+        {
+          kind: 'relation-image',
+          source: { kind: 'selection', entityName: entity.name, expression: membership },
+          relationName: target.descriptor.template.relationName,
+        },
+        structuredClone(target.descriptor.template.target.expression),
+      );
+      entity = target.entity;
     }
   }
-  let membership = selectionAnd(...selections);
-  for (const navigation of expression.navigations) {
-    const target =
-      navigation.name && consoleNavigationTarget(entity, navigation.name.text, application);
-    if (!target)
-      return {
-        ...parsed,
-        semanticDiagnostics: [
-          {
-            from: navigation.from,
-            to: navigation.to,
-            channel: 'semantic',
-            code: 'console.semantic.invalid-navigation',
-            message: `Unknown or unavailable contextual Selection ${entity.name}.${navigation.name?.text ?? ''}.`,
-          },
-        ],
-      };
-    membership = selectionAnd(
-      {
-        kind: 'relation-image',
-        source: { kind: 'selection', entityName: entity.name, expression: membership },
-        relationName: target.descriptor.template.relationName,
-      },
-      structuredClone(target.descriptor.template.target.expression),
-    );
-    entity = target.entity;
-  }
-  const resolved: SemanticResolution = expression.selection
-    ? resolveExpression(expression.selection, entity)
-    : { diagnostics: [], expression: selectionAll() };
-  const semanticDiagnostics = [
-    ...resolved.diagnostics,
+  semanticDiagnostics.push(
     ...consoleOrderDiagnostics(expression, entity, dialect),
     ...consoleLimitDiagnostics(expression, dialect),
-  ];
-  if (!resolved.expression || semanticDiagnostics.length > 0)
-    return { ...parsed, semanticDiagnostics };
+  );
+  if (semanticDiagnostics.length) return { ...parsed, semanticDiagnostics };
   const order = expression.orderBy;
   return {
     ...parsed,
@@ -124,7 +129,7 @@ export const analyzeConsoleSyntax = (
       selection: {
         kind: 'selection',
         entityName: entity.name,
-        expression: selectionAnd(membership, resolved.expression),
+        expression: membership,
       },
       orderBy: order?.field
         ? [

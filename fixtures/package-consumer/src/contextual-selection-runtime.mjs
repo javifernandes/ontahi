@@ -150,7 +150,7 @@ if (
   );
 
 const languageApplication = { entities: [Lists, FactoryItem].map(reflectSelectionLanguageEntity) };
-const source = 'FactoryList.by({ id: "l1" }).pending.many()';
+const source = 'FactoryList.by({ id: "l1" }).where(id = "l1").pending.where(done = false).many()';
 const analysis = analyzeConsoleDocument(source, languageApplication);
 const declarative = convertConsoleDocument(source, languageApplication, 'declarative');
 if (
@@ -174,3 +174,11 @@ if (
   JSON.stringify(consoleResult.value) !== JSON.stringify(factoryRows)
 )
   throw new Error('Packed Console request lost deferred contextual membership.');
+
+const excludedSource = source.replace('where(id = "l1")', 'where(id = "l2")');
+const excluded = analyzeConsoleDocument(excludedSource, languageApplication);
+if (!excluded.request)
+  throw new Error('Packed Console failed to compile intersected source filters.');
+const excludedResult = await dispatch(excluded.request, { authority: undefined });
+if (excludedResult.kind !== 'graph-read-result' || JSON.stringify(excludedResult.value) !== '[]')
+  throw new Error('Packed Console dropped a contradictory source filter before navigation.');

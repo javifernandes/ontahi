@@ -210,9 +210,18 @@ Book.by({ slug: "my-book" }).parts.chapters.where(title = "Intro").many()
 Book by slug "my-book" through parts through chapters where title = "Intro" many
 ```
 
-The clause order in this slice is root `by` factories, zero or more contextual hops, target `where`,
-then target read modifiers/terminal. Interleaved source `where`, `by` after a hop, raw relation
-navigation and parameterized contextual factories are not supported yet. A hop only accepts a named
+After root `by` factories, filters and contextual hops may be interleaved. Every `where` intersects
+the current Entity's Selection; every hop changes to the related target population. Ordering, limit
+and the read terminal remain final shaping:
+
+```text
+TodoList.where(name = "Later").openItems.where(completed = false).many()
+TodoList where name = "Later" through openItems where completed = false many
+```
+
+Repeated filters intersect, including on the same Entity. No intermediate read is executed;
+`.one()` remains a terminal, not something needed before navigation. `by` after a filter/hop, raw
+relation navigation and parameterized contextual factories are not supported yet. A hop only accepts a named
 contextual Selection, not an arbitrary Field or relation name. Every source/target Entity must be
 present in the application reflection. Unknown paths block execution; they never fall back to an
 unfiltered target read.
@@ -223,6 +232,12 @@ rules, Field/value completion and target-based ordering permissions; only cursor
 inserted spelling vary. Rich Boolean/enum values and order dropdowns use this same destination context.
 Completion does not execute a data read. Source ranges and factory names remain available even though
 the expanded execution AST intentionally contains their canonical meaning rather than their names.
+
+`ConsoleGraphReadSyntax.steps` retains the ordered factory/filter/navigation authoring stages.
+The existing `factories` and `navigations` arrays are projections; the singular `where`/`selection`
+fields project a final filter only, when present. Consumers displaying or editing multiple filters
+must use `steps` and resolve context at each predicate's position. Rich controls retain the source
+Entity labels even when the final read targets another Entity.
 
 Navigation analyzes to a `GraphReadRequest` with version 2 and `relation-image` membership. Ordinary
 reads remain v1. The Devtools Console negotiates contextual capability before each v2 execution;
