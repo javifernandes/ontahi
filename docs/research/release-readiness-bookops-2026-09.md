@@ -55,6 +55,14 @@ existence filters, self-relation disambiguation, Boolean composition, final card
 and source/target RLS. Reusing the direct-SQL compiler does not itself solve that transport boundary.
 Do not substitute client-side source-ID prefetch. BookOps source and dependencies remain unchanged.
 
+The subsequent [PostgREST feasibility proof](./supabase-contextual-membership.md) passed on
+disposable PostgreSQL/PostgREST containers, including the self-FK path without custom SQL
+functions and RLS at each membership boundary. Native lowering is recommended as the next
+bounded provider slice. The subsequent local implementation now executes the same membership
+through the Supabase client/runtime and explicit Graph Read v2 receivers; see the research
+document's implementation checkpoint. Physical schema requirements remain host-owned. This
+additional unmerged work does not alter the frozen baseline below or prove a BookOps upgrade.
+
 ## What the pending release actually adds
 
 | Area                       | Shipped candidate surface                                                                                                                                       | Boundaries and BookOps impact                                                                                                                                                |

@@ -397,3 +397,34 @@ PostgreSQL regressions passed. MySQL/SQL/PostgreSQL typechecks and lint, all 15 
 and clean-room tarball installation/type/runtime checks passed; the installed consumer exercises
 MySQL contextual compilation and capability advertisement. Supabase remains separate provider
 work; neither its support nor a BookOps migration is implied by this checkpoint.
+
+The subsequent [Supabase/PostgREST experiment](../../docs/research/supabase-contextual-membership.md)
+proves native membership for the BookOps-shaped self-FK path, Boolean composition, final count/limit
+and RLS, without custom SQL functions or source prefetch. Eight new live cases pass. This is a
+transport feasibility result only; Supabase AST lowering and protocol/client integration remain
+the next provider slice, and the adapter does not yet advertise support.
+
+## Supabase native-read checkpoint — 2026-09-13
+
+The next slice now lowers contextual Selections in the Supabase runtime, using the complete
+receiver-owned `entities` registry. Membership becomes independent native PostgREST empty embeds
+with scoped Boolean filters; root projections and count/exact-one shaping remain separate.
+No source-ID prefetch, generic SQL RPC, new domain AST or BookOps migration was introduced.
+Scalar predicate serialization is shared, with negation corrected to valid PostgREST syntax.
+
+The actual Supabase PostgREST client 2.98.0 executes these plans against disposable PostgreSQL 17
+and PostgREST 13.0.0. Graph Read v2 tests negotiate support, enforce source/intermediate/target
+scopes and deny ungranted hops before runtime execution. Low-level hosts explicitly configure
+their dispatcher; the Supabase runtime does not install a new application-storage assembly.
+
+Supported physical paths are direct hasMany (including self-FK navigation), non-self belongsTo,
+and PostgREST-recognized mapped many-to-many edges with single-field endpoint identities. The
+host must keep physical FKs and declared join fields consistent. Inverse self belongsTo,
+composite edges, virtual filters and non-simple identifiers fail closed; protocol v1, contextual
+Commands, observation and automatic schema installation remain out of scope.
+
+Validation: 92 Supabase tests passed with coverage (including 13 live PostgREST cases and eight
+compiler-boundary cases); the new compiler has 100% line coverage. Package typecheck/lint,
+all 15 package builds, repository formatting and clean-room tarball installation/type/runtime
+proofs passed. Canonical developer docs, provider contract, release inventory and Selection Atlas
+item reflect this extension. The installed BookOps upgrade remains a separate release gate.

@@ -93,6 +93,15 @@ edge mutation, and delta capture stay inside one database transaction while gran
 authoritative. Its current application-storage assembly remains lower-level than the PostgreSQL
 path, so it belongs in production adapter reference rather than the main form.
 
+Contextual Selection reads, such as `Book.by({ slug: 'book-one' }).parts.chapters`, also execute
+through native PostgREST. Supply the complete server Entity registry to the Supabase runtime and
+ensure its physical foreign keys match the declared relations. Each hop becomes an existence
+filter; source populations are not fetched into the client. RLS remains active at each hop, and
+final count, limit and exact-one rules apply to the selected targets. Remote hosts explicitly
+enable Graph Read v2 and authorize each `selectionRelations` hop; database RLS does not replace
+those policies. See the [Supabase contract](../../../packages/supabase/README.md#contextual-selection-reads)
+for supported physical paths and remaining limitations.
+
 Direct conditional Relation mutations use a companion RPC with the same invoker-rights boundary.
 Each RPC is atomic for its own Relationship Command. The Supabase/PostgREST runtime does not expose
 the compositional transaction capability, because several client requests cannot share rollback;
