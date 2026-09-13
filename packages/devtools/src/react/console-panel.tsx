@@ -5,6 +5,8 @@ import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import {
   isGraphReadCapabilities,
+  graphOutput,
+  type GraphClientCache,
   type AnyEntityDefinition,
   type GraphReadCapabilities,
   type GraphReadRequest,
@@ -18,6 +20,7 @@ import {
 import {
   createRuntimeProtocolExchange,
   type RuntimeTransport,
+  type RuntimeProtocolGraphObservationBody,
 } from '@ontahi/core/runtime/protocol';
 import {
   analyzeConsoleDocument,
@@ -65,6 +68,7 @@ export type OntahiDevtoolsConsoleOptions = {
 };
 
 export type ConsolePanelProps = {
+  readonly clientCache?: GraphClientCache;
   readonly options: OntahiDevtoolsConsoleOptions;
   readonly runtimeTransport?: RuntimeTransport<any>;
 };
@@ -75,6 +79,7 @@ type ConsoleResultSnapshot = {
   readonly request: GraphReadRequest;
   readonly value: unknown;
   readonly durationMs: number;
+  readonly observed?: boolean;
   readonly capabilities?: GraphReadCapabilities;
   readonly transport?: RuntimeTransport<any>;
   readonly route?: string;
@@ -374,10 +379,14 @@ const ConsoleResultPanel = ({
           {snapshot ? (
             <span
               style={styles.consoleResultStatus}
-              aria-label='Last query duration'
-              title='Last successful round-trip time (including transport)'
+              aria-label={snapshot.observed ? 'Last snapshot arrival' : 'Last query duration'}
+              title={
+                snapshot.observed
+                  ? 'Time from Observe until this snapshot arrived'
+                  : 'Last successful round-trip time (including transport)'
+              }
             >
-              {Math.round(snapshot.durationMs)} ms
+              {Math.round(snapshot.durationMs)} ms{snapshot.observed ? ' since Observe' : ''}
             </span>
           ) : null}
           {snapshot?.request.mode === 'run' && Array.isArray(snapshot.value) ? (
@@ -430,7 +439,7 @@ const ConsoleResultPanel = ({
   );
 };
 
-export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) => {
+export const ConsolePanel = ({ options, runtimeTransport, clientCache }: ConsolePanelProps) => {
   const preferredDialect = useSyncExternalStore(
     authoringDialectPreference.subscribe,
     authoringDialectPreference.getSnapshot,
@@ -469,8 +478,32 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
   const viewRef = useRef<EditorView>();
   const executingRef = useRef<AbortController>();
+  const observationRef = useRef<{
+    controller: AbortController;
+    iterator: AsyncIterator<RuntimeProtocolGraphObservationBody>;
+  }>();
+  const [observation, setObservation] = useState<{
+    status: 'observing' | 'stopped' | 'completed';
+    updates: number;
+  }>();
+  const stopObservation = () => {
+    const active = observationRef.current;
+    if (!active) return;
+    observationRef.current = undefined;
+    active.controller.abort();
+    if (executingRef.current === active.controller) executingRef.current = undefined;
+    void Promise.resolve(active.iterator.return?.()).catch(() => undefined);
+    setObservation(previous => previous && { ...previous, status: 'stopped' });
+    setResult(previous => ({
+      status: previous.snapshot ? 'success' : 'idle',
+      snapshot: previous.snapshot,
+    }));
+  };
+  useEffect(() => () => stopObservation(), [runtimeTransport, clientCache, identityKey]);
+
   useEffect(() => {
     setStoredResult(undefined);
+    setObservation(undefined);
     return () => {
       executingRef.current?.abort();
       executingRef.current = undefined;
@@ -507,6 +540,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
+    setObservation(undefined);
     const executedAnalysis = analyzeConsoleDocument(source, application, {
       limit,
       dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
@@ -606,6 +640,105 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       });
   };
 
+  const observeDisabledReason = () => {
+    if (!runtimeTransport?.graph)
+      return 'The configured transport does not support query observation.';
+    if (!analysis.request) return 'Fix the Console expression before observing it.';
+    if (analysis.request.version !== 1)
+      return 'Contextual Selections (v2) do not support observation yet.';
+    if (analysis.request.mode !== 'run' || analysis.request.cardinality === 'one')
+      return 'Observe requires a many query.';
+    if (result.status === 'executing' || observation?.status === 'observing')
+      return 'Stop the observation or wait for Run to finish.';
+    return undefined;
+  };
+  const observe = () => {
+    if (executingRef.current || observeDisabledReason()) return;
+    const source = viewRef.current?.state.doc.toString() ?? document;
+    const request = analyzeConsoleDocument(source, application, {
+      limit,
+      dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
+    }).request;
+    if (
+      !request ||
+      request.version !== 1 ||
+      request.mode !== 'run' ||
+      request.cardinality === 'one' ||
+      !runtimeTransport?.graph
+    )
+      return;
+    const controller = new AbortController();
+    const startedAt = performance.now();
+    executingRef.current = controller;
+    setObservation({ status: 'observing', updates: 0 });
+    setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
+    // Freeze the submitted read, authority and cache; later editor changes remain drafts.
+    const reflected = application.entities.find(
+      entity => entity.name === request.selection.entityName,
+    );
+    const entity = options.entities.find(
+      entity =>
+        entity.name === (reflected?.variant?.baseEntityName ?? request.selection.entityName),
+    );
+    void (async () => {
+      let updates = 0;
+      try {
+        // Observation frames carry rows only; use the separate capability discovery request.
+        const iterator = runtimeTransport
+          .graph!.observe(request, { signal: controller.signal })
+          [Symbol.asyncIterator]();
+        observationRef.current = { controller, iterator };
+        for await (const response of { [Symbol.asyncIterator]: () => iterator }) {
+          if (controller.signal.aborted) break;
+          const snapshot = graphReadResult(response);
+          if (!Array.isArray(snapshot.value) || !snapshot.value.every(isRecord))
+            throw new Error('Graph observation expected an array of Entity records.');
+          if (clientCache && entity)
+            clientCache.normalizeOutput(
+              graphOutput.array(graphOutput.entity(entity)),
+              snapshot.value,
+            );
+          if (controller.signal.aborted) break;
+          updates += 1;
+          setObservation({ status: 'observing', updates });
+          setResult({
+            status: 'success',
+            snapshot: {
+              document: source,
+              exists: false,
+              observed: true,
+              request,
+              ...snapshot,
+              transport: runtimeTransport,
+              route: discovery.route,
+              durationMs: Math.max(0, performance.now() - startedAt),
+            },
+          });
+        }
+        if (!controller.signal.aborted) {
+          setObservation({ status: 'completed', updates });
+          setResult(previous => ({
+            status: previous.snapshot ? 'success' : 'idle',
+            snapshot: previous.snapshot,
+          }));
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error instanceof ConsoleGraphReadError && error.code === 'access_denied')
+          discovery.refresh();
+        setObservation({ status: 'stopped', updates });
+        setResult(previous => ({
+          status: 'error',
+          snapshot: previous.snapshot,
+          message: error instanceof Error ? error.message : 'Query observation failed.',
+        }));
+      } finally {
+        controller.abort();
+        if (observationRef.current?.controller === controller) observationRef.current = undefined;
+        if (executingRef.current === controller) executingRef.current = undefined;
+      }
+    })();
+  };
   const run = () => runDocument(viewRef.current?.state.doc.toString() ?? document);
   const changeDialect = (nextDialect: ConsoleDialect, focus = true): boolean => {
     const view = viewRef.current;
@@ -658,6 +791,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     entity => entity.name === snapshot?.request.selection.entityName,
   );
   const sortDisabledReason = (fieldName: string): string | undefined => {
+    if (observation?.status === 'observing')
+      return 'Stop observing before changing the executed query.';
     if (result.status === 'executing') return 'Wait for the current query to finish.';
     if (!exchange) return 'Ordering requires a configured Runtime Transport.';
     if (snapshot?.transport !== runtimeTransport || snapshot?.route !== discovery.route)
@@ -697,6 +832,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   };
 
   const limitDisabledReason = () => {
+    if (observation?.status === 'observing')
+      return 'Stop observing before changing the executed query.';
     if (result.status === 'executing') return 'Wait for the current query to finish.';
     if (
       !exchange ||
@@ -764,15 +901,41 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
               type='button'
               style={{
                 ...styles.primaryButton,
-                ...(!analysis.request || result.status === 'executing'
+                ...(!analysis.request ||
+                result.status === 'executing' ||
+                observation?.status === 'observing'
                   ? styles.disabledButton
                   : {}),
               }}
-              disabled={!analysis.request || result.status === 'executing'}
+              disabled={
+                !analysis.request ||
+                result.status === 'executing' ||
+                observation?.status === 'observing'
+              }
               onClick={run}
             >
-              {result.status === 'executing' ? 'Running…' : 'Run'}
+              {result.status === 'executing' && observation?.status !== 'observing'
+                ? 'Running…'
+                : 'Run'}
             </button>
+            {observation?.status === 'observing' ? (
+              <button type='button' style={styles.primaryButton} onClick={stopObservation}>
+                Stop
+              </button>
+            ) : (
+              <button
+                type='button'
+                style={{
+                  ...styles.primaryButton,
+                  ...(observeDisabledReason() ? styles.disabledButton : {}),
+                }}
+                disabled={Boolean(observeDisabledReason())}
+                title={observeDisabledReason() ?? 'Observe this query until stopped.'}
+                onClick={observe}
+              >
+                Observe
+              </button>
+            )}
           </span>
         </div>
         <ConsoleEditor
@@ -788,6 +951,20 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         />
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
+          {observation ? (
+            <span role='status'>
+              {observation.status === 'observing'
+                ? 'Observing'
+                : observation.status === 'completed'
+                  ? 'Observation completed'
+                  : 'Observation stopped'}{' '}
+              · {observation.updates} updates.
+              {observation.status === 'observing'
+                ? ' Edits remain drafts. Stop before running another query; closing Devtools stops observation.'
+                : ''}
+            </span>
+          ) : null}
+
           <span>{orderingCompletionNotice()}</span>
           {analysis.syntax.expression?.orderBy && targetDiscovery.error ? (
             <button type='button' style={styles.mode} onClick={discovery.refresh}>

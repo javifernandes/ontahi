@@ -281,3 +281,28 @@ History captures local cache field values, independently of Activity's payload r
 debugging record of this client's observed state, not persisted entity versioning or a complete
 audit. Cache writes do not yet carry observation/exchange IDs, so this release does not infer causal
 links between an Activity snapshot and a cache write.
+
+## Observe from the Console
+
+Use **Observe** next to **Run** to subscribe to the current many-query expression. For example,
+in Todo enter `TodoItem.where(completed = false).many()` (or the corresponding declarative query),
+then complete an item in the application: a new snapshot removes it from the Console result.
+**Stop** cancels the subscription and keeps the last received snapshot visible.
+
+Observe requires a transport with `graph.observe`, such as Todo's WebSocket route. The initial
+slice supports Graph Read v1 many queries; scalar terminals (`first`, `one`, `count`, `exists`),
+invalid expressions and contextual v2 selections cannot start an observation. No `.observe()`
+Console syntax is introduced. Graph observation frames carry rows rather than read capabilities;
+the Console continues using its separate capability discovery requests.
+
+The submitted expression stays fixed while observing. Editor and dialect changes remain drafts;
+Run and the result's sort/limit execution controls wait for Stop. Switching to Activity, Cache or
+Settings keeps the observation alive. Closing Devtools, unmounting it, replacing its transport or
+cache, or changing `console.identity` cancels it. Late responses cannot update results or the cache.
+
+With `clientCache` connected, received Entity rows are normalized using the host's Entity
+reflection, including base identities of discovered variants. This lets enabled History record
+those writes. A row disappearing from a query does not delete its canonical entity. Console
+observations do not create retained output skeletons, and historical output semantics remain
+independent. The Console result itself uses the received snapshot; it does not live-denormalize
+older results through newer cache values.
