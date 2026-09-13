@@ -25,13 +25,18 @@ const replaceProjectedEntityNames = (text, projectedNames) => {
 };
 
 const containsEntityTargetSchema = text =>
-  /\b(?:graphSelection|graphSchema\.selection)\b/.test(text) ||
+  /\b(?:graphSelection|graphSchema\.(?:selection|ref|existingRef))\b/.test(text) ||
   /\b[A-Z][A-Za-z0-9_$]*\.(?:one|many)\s*\(/.test(text);
 
 const shouldRenderInputContract = (operation, operationContracts) =>
   Boolean(operation.inputSchemaText) &&
   (operationContracts === 'all' ||
     (operationContracts === 'selection' && containsEntityTargetSchema(operation.inputSchemaText)));
+
+const shouldRenderOutputContract = (operation, operationContracts) =>
+  operationContracts === 'all' ||
+  (operationContracts === 'selection' &&
+    /\bgraphSchema\.(?:ref|existingRef)\b/.test(operation.inputSchemaText ?? ''));
 
 const hoistClientBridgeQueryInputTypes = sourceText => {
   const aliasesByType = new Map();
@@ -146,7 +151,7 @@ ${relationDefinitions
       } else if (operationContracts === 'all') {
         lines.push('      input: graphSchema.void(),');
       }
-      if (operationContracts === 'all' && outputSchemaText) {
+      if (shouldRenderOutputContract(operation, operationContracts) && outputSchemaText) {
         lines.push(`      output: ${outputSchemaText},`);
       }
 
@@ -219,12 +224,13 @@ export const renderGeneratedClientEntityModule = ({
         : [],
     ),
   );
-  const outputSchemaTexts =
-    operationContracts === 'all'
-      ? entities.flatMap(entity =>
-          entity.operations.flatMap(operation => operation.outputSchemaText ?? []),
-        )
-      : [];
+  const outputSchemaTexts = entities.flatMap(entity =>
+    entity.operations.flatMap(operation =>
+      shouldRenderOutputContract(operation, operationContracts)
+        ? (operation.outputSchemaText ?? [])
+        : [],
+    ),
+  );
   const namedValueDefinitions = namedDefinitions.filter(
     definition => definition.kind === 'value' && definition.schemaText,
   );
@@ -295,9 +301,11 @@ export const renderGeneratedClientEntityModule = ({
                   ? (operation.inputSchemaText ?? [])
                   : [],
               ),
-              ...(operationContracts === 'all'
-                ? entity.operations.flatMap(operation => operation.outputSchemaText ?? [])
-                : []),
+              ...entity.operations.flatMap(operation =>
+                shouldRenderOutputContract(operation, operationContracts)
+                  ? (operation.outputSchemaText ?? [])
+                  : [],
+              ),
             ].join('\n'),
           ),
         ].filter(name => name && !projectedEntityNames.has(name)),

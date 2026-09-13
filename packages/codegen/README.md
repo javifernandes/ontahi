@@ -69,6 +69,11 @@ or emitted by codegen.
 
 ## Lower-level API
 
+The compatibility renderer mode `operationContracts: 'selection'` also includes schema-native
+`graphSchema.ref` / `existingRef` inputs and their output contracts. This keeps reference participants
+and query results typed while a host migrates older scalar-only operations. The default `'all'` mode
+remains the complete projection; existing Selection-only behavior of the compatibility mode is unchanged.
+
 ### Named Value dependencies
 
 Named Operation input/output Values project their static dependency closure: local or imported

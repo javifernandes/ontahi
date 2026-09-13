@@ -28,7 +28,7 @@ const withGraph = async (
       const Input = Request;
       export const Item = entity({ name: 'Item', fields: { id: field.id() },
         domainOperationDefaults: { authority: 'server', exposure: 'bridge', layer: 'items' },
-        operations: ({ operation }) => ({
+        operations: ({ operation, self }) => ({
           ${extra}
           run: operation({ input: ${input}, output: ${output}, run: () => serverImplementation() }),
         }),
@@ -61,6 +61,41 @@ const transformedSchema = `
   });`;
 
 describe('Operation wire inputs with server processing', () => {
+  it.each(['ref', 'existingRef'])(
+    'includes %s participants in selection-mode client contracts',
+    async kind => {
+      await withGraph(
+        {
+          schema: 'export const Input = field.string();',
+          input: `value('Target', { item: graphSchema.${kind}(self) })`,
+        },
+        async (analysis, directory) => {
+          expect(analysis.diagnostics).toEqual([]);
+          const source = renderGeneratedClientEntityModule({
+            entities: analysis.clientEntities,
+            schemaEntities: analysis.entities,
+            namedDefinitions: analysis.namedDefinitions,
+            operationContracts: 'selection',
+          });
+          const generated = await importGeneratedModule({
+            directory,
+            source: `${source}
+          export const parsed = Item.domain.run.input.safeParse({ item: Item.refById('item-1') });
+          type Result = NonNullable<typeof Item.domain.run.__clientTypes>['output'];
+          const result: Result = 'done';
+          // @ts-expect-error selected operations keep their output contract too
+          const invalid: Result = 42;
+        `,
+          });
+          expect(generated.parsed).toMatchObject({
+            success: true,
+            data: { item: { kind: 'entity-ref', entityName: 'Item', locator: { id: 'item-1' } } },
+          });
+        },
+      );
+    },
+    30_000,
+  );
   it.each(['Input', 'graphSchema.union([Input, value("Empty", {})])'])(
     'projects raw input without executing server callbacks: %s',
     async input => {

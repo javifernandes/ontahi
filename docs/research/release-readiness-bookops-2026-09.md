@@ -464,3 +464,29 @@ capability discovery rather than automatically copying closures.
 A preview remains optional and non-authoritative. Do not introduce double application of a transform
 by silently changing what the client submits; transformations need not be idempotent. This exploration
 is deferred and is not a prerequisite for the BookOps upgrade or this release.
+
+## TaskRun participant rehearsal — 2026-09-13
+
+After local commit `a5ea602` and host preparation commit `13e1b175`, BookOps migrated its first
+legacy input declaration: `TaskRun.getMine` accepts `{ taskRun: Ref }` in a schema-native Value.
+Authentication still precedes deferred storage resolution and ownership checks precede reconciliation.
+The wizard now submits the composite Ref rather than repeating taskId/runId as scalar inputs.
+
+This uncovered fixes required before release: selection-mode codegen must include native Ref
+input/output contracts; schema-native Ref parsing must not apply persisted foreign-key identity
+restrictions; React query-key typing must accept the same portable schema inputs as query hooks.
+The local fixes retain existing Selection-only projection behavior and single-field storage limits.
+Native refs validate complete declared locators; classified participants retain canonical identity.
+
+All 1,104 Core tests, 120 React tests and 172 codegen tests pass, plus their builds/typechecks/lint
+and codegen coverage thresholds. The installed host candidate is
+`.artifacts/npm/bookops-rehearsal-taskrun-composite/release-manifest.json` (working changes atop
+`a5ea602`). Its 12 reached packages / 13 peer contexts are audited. Actual codegen/drift and 34
+focused host tests plus 18 generator fixtures pass; full host typechecking falls from 97 to 93 remaining diagnostics, with
+none in the touched TaskRun/wizard or generated modules. Full host migration remains incomplete.
+
+The host keeps the candidate installed locally to continue, without committing tarball pins.
+Unlike the prior compatible preparations, its new source now requires this candidate. Final
+registry pins, full checks and release approval remain gates. Invitations and the other legacy
+input declarations are next; full-contract projection also needs a later pass over anonymous
+output schemas and old `valueOf` usage exposed by the rehearsal.
