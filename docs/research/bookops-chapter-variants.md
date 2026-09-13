@@ -158,6 +158,12 @@ from choosing or validating a Chapter.
 
 ## Release and adoption boundary
 
+After PR 154 merged, the user approved investigating a real host rehearsal with temporary candidate
+tarballs **before** publishing. The [September release inventory](./release-readiness-bookops-2026-09.md)
+now owns that updated sequence, the wider alpha.3 compatibility gap and the review of local BookOps
+changes. The publication-first checklist below records the original adoption boundary; final
+registry pins still require an approved release. No actual candidate installation has occurred yet.
+
 1. **Pause before adoption to review the accumulated release.** Reconcile Changesets, changed/completed
    Plans, Atlas and developer documentation using the gate in [RELEASING.md](../../RELEASING.md).
    Produce a consumer-facing inventory of additions, breaking changes, deprecations and explicitly

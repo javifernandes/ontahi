@@ -472,8 +472,10 @@ version → candidate; the latter can include changes already published in inter
 Use the [release documentation gate](../../RELEASING.md#developer-documentation-gate) and the
 [adoption checklist](../../docs/research/bookops-chapter-variants.md#release-and-adoption-boundary).
 Do not infer permission to publish, merge the generated release PR, bump versions or update BookOps
-from approval to continue this codegen work. Review the inventory/scope with the user first. The
-actual host migration starts only after the approved Ontahi release exists at an exact version.
+from approval to continue this codegen work. Review the inventory/scope with the user first. Final
+host dependency pins require the approved Ontahi release at an exact version. The later
+user-approved pre-release rehearsal below allows temporary packed artifacts to reveal compatibility
+problems before publishing, without treating them as the finalized host upgrade.
 
 Plan 152 remains current: Reader/View and guided-input decisions, write/transition lifecycle,
 provider-specific lifecycle and deferred Operation inputs are still explicit boundaries. The next
@@ -501,3 +503,25 @@ materialization boundary is distinct from Graph Read policy. Plan 152 therefore 
 
 After PR review/merge, pause for the release reconciliation described above. Submitting this PR
 does not authorize publishing, merging the generated release PR or migrating BookOps.
+
+## Post-merge release inventory — 2026-09-13
+
+PR 154 was merged as `6770db7`. The user approved a release/migration inventory and reconsidered the
+publication order: rehearse the real host with packed candidate artifacts before release, then
+finalize the exact registry pins after approval/publication. The user explicitly cancelled worktree
+creation; the inventory uses the existing Ontahi checkout on `docs/release-readiness-bookops`.
+Parallel unmerged Devtools feature work is outside this frozen candidate.
+
+The [release and BookOps inventory](../../docs/research/release-readiness-bookops-2026-09.md) separates
+alpha.11 → candidate from BookOps alpha.3 → candidate, indexes the 60 pending Changesets, and records
+mandatory compatibility work, optional adoption and documentation gaps. Candidate codegen on actual
+BookOps source rejects an old callback `contracts.pre`; 29 Operations still author `inputRefs`.
+Existing no-option Fetch adapters also need explicit transport compatibility, while Supabase's
+unsupported contextual membership prevents assuming the Chapter navigation proof runs unchanged.
+
+The six pending BookOps files form a coherent output/picker cleanup and should be retained as the
+baseline, without attributing uncommitted authorship. Their 27 focused tests pass with installed
+alpha.3 packages. No host source or dependency change, installed-candidate trial, data migration,
+release publication or new worktree occurred during this inventory. Next: checkpoint the reviewed
+host edits, establish the full baseline, and execute the temporary-tarball compatibility rehearsal.
+The final release still requires documentation reconciliation and explicit approval.
