@@ -490,3 +490,25 @@ Unlike the prior compatible preparations, its new source now requires this candi
 registry pins, full checks and release approval remain gates. Invitations and the other legacy
 input declarations are next; full-contract projection also needs a later pass over anonymous
 output schemas and old `valueOf` usage exposed by the rehearsal.
+
+## Invitation participant rehearsal — 2026-09-13
+
+BookOps now uses schema-native input participants for its three invitation operations. The real
+Ref shortcut regression revealed that binding still flattened the locator into legacy scalar
+inputs. Core now derives the receiver from a unique matching top-level native Ref field, including
+named Values and optional/nullable wrappers, for server and callable generated-client operations.
+Ambiguous receivers fail with explicit-invocation guidance. Legacy locator inputs, storage reference
+fields and custom input adapters retain their behavior.
+
+Core's 1,113 tests, typecheck, build and lint pass. The new candidate is
+`.artifacts/npm/bookops-rehearsal-invite-proxy-final/release-manifest.json` (working fix atop
+`1fdf574`). BookOps installed-path auditing verifies 12 reached packages / 13 peer contexts, and
+all 46 invitation/TaskRun/client tests plus 18 generator fixtures pass. Host codegen drift and lint
+pass. Its full typecheck still has 79 migration diagnostics outside this slice.
+The offline npm dry-run passes for all 15 tarballs with npm 11.19; npm 11.11's older flat JSON
+output is incompatible with the release proof script's keyed result format. Nothing was published.
+
+Remaining: 14 Book and 10 conversation operations with legacy input participants, Chapter-path
+metadata/callers, obsolete runtime/reflection tests, complete output projection, full host checks,
+one classified Chapter adoption proof and the release documentation reconciliation above. Final
+publication and exact host registry pins remain explicitly gated; no release happened in this slice.

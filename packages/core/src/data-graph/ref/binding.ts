@@ -1,4 +1,4 @@
-import { isPlainObject } from '../../value/object.js';
+import { isPlainObject, isRecord } from '../../value/object.js';
 import type { AnyEntityDefinition } from '../definitions.js';
 
 import {
@@ -187,6 +187,45 @@ export const getDefaultEntityRefOperationInput = (
     : ref.locator;
 };
 
+const isReceiverSchema = (schema: unknown, entityName: string): boolean => {
+  if (!isRecord(schema)) return false;
+  if (schema.kind === 'schema.optional' || schema.kind === 'schema.nullable') {
+    return isReceiverSchema(schema.item, entityName);
+  }
+  return (
+    schema.kind === 'field' &&
+    schema.fieldType === 'reference' &&
+    (schema.referenceRequirement === 'portable' || schema.referenceRequirement === 'existing') &&
+    isRecord(schema.target) &&
+    schema.target.name === entityName
+  );
+};
+
+const getEntityRefOperationInput = (
+  ref: AnyEntityRef,
+  operation: unknown,
+  args: readonly unknown[],
+): EntityRefLocator => {
+  const schema =
+    (isRecord(operation) || typeof operation === 'function') && 'input' in operation
+      ? operation.input
+      : undefined;
+  const fields =
+    isRecord(schema) && (schema.kind === 'value' || schema.kind === 'schema.object')
+      ? schema.fields
+      : undefined;
+  const receivers = isRecord(fields)
+    ? Object.keys(fields).filter(name => isReceiverSchema(fields[name], ref.entityName))
+    : [];
+  if (receivers.length > 1) {
+    throw new TypeError(
+      `Ambiguous ${ref.entityName} receiver (${receivers.join(', ')}). Invoke the Operation with explicit participant inputs.`,
+    );
+  }
+  if (receivers.length === 0) return getDefaultEntityRefOperationInput(ref, args);
+  return { [receivers[0]]: ref, ...(isLocatorObject(args[0]) ? args[0] : {}) };
+};
+
 export const bindEntityRefOperationProxy = <
   TRef extends AnyEntityRef,
   TOperations extends Record<string, unknown>,
@@ -227,7 +266,7 @@ export const bindEntityRefOperationProxy = <
           operation: operations[operationName],
           input: options.input
             ? options.input({ ref, operationName, args })
-            : getDefaultEntityRefOperationInput(ref, args),
+            : getEntityRefOperationInput(ref, operations[operationName], args),
         });
     },
   }) as BoundEntityRefOperationProxy<TRef, TOperations, TResult>;
