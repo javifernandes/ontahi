@@ -1,5 +1,55 @@
 # @ontahi/supabase
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- f16a848: Support contextual Selection reads through native PostgREST existence filters, including nested/self hasMany navigation, belongs-to and mapped many-to-many membership. Pass the complete receiver-owned Entity registry to the Supabase runtime. Source membership stays in the database, with independent filters and RLS per hop; final projections, count, exact-one checks and buffered streams reuse the same membership plan. Graph Read v2 hosts can explicitly enable relational Selections with per-hop policies. Physical foreign keys must match declared mappings; unsupported identifiers, inverse self-navigation, composite edges and virtual filter fields remain closed.
+
+  Fix Boolean negation serialization to valid PostgREST logic syntax, including scalar negation and nested contextual complements.
+
+### Patch Changes
+
+- 40b6e3c: Validate exact-one Selection membership before read limits, including policy-imposed limits and
+  related-root reads. PostgreSQL and MySQL probe for a second match in the same SQL statement;
+  Supabase requests an exact count with the rows so server row caps cannot masquerade as uniqueness.
+  Supabase exact-one reads fail closed when exact count metadata is unavailable.
+
+  Enforce the same cardinality contract for counts, reject contradictory exact-one reads with
+  `limit(0)`, and preserve cardinality diagnostics through Effect-backed read dispatchers. Nullable
+  first-result and existence intent, many-result shaping, and atomic mutation semantics are unchanged.
+
+- Updated dependencies [14026dd]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes

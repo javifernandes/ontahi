@@ -1,5 +1,181 @@
 # @ontahi/core
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- 14026dd: Add a capability-validating, inspectable Runtime Transport router and let Devtools derive its own
+  generic transport Settings from that runtime. Use the Ontahí ceibo mark for the launcher, project
+  Operation inputs and returned values without Runtime Protocol wrappers in Visual detail, and present
+  the panel as a full-width, vertically resizable bottom drawer.
+- 6770db7: Register Entity variants on base Graph Read policies and discover them as Console roots in both
+  TS and declarative dialects. The receiver enforces classification outside caller predicates and
+  inherits base authorization, limits and canonical identity. Console metadata discovery provides
+  shared root, Field, narrowed enum and named-factory autocomplete before any data query, with
+  ordering permissions and catalog invalidation scoped to the active transport and identity.
+- 6770db7: Declare classified contextual Selection targets with `self.nodes.as(Part)` and compose read-only
+  paths such as `Book.parts.chapters`. Generated clients preserve narrowed types and portable
+  contracts. Both Console dialects discover and autocomplete the final target, using its ordering
+  permissions. Graph Read v2 enforces registered classification and base authority scopes at every
+  nested source and final target without changing canonical identity or granting extra permissions.
+- 40b6e3c: Add opt-in Graph Read v2 request/response support for contextual Selection membership. Receivers
+  must enable relationSelections and grant each outgoing selectionRelations hop separately from
+  View/include permissions. Each source and final target uses its own policy scope, outside caller
+  boolean expressions. Discovery advertises advisory v2 capability and outgoing grants.
+
+  Keep v1 serialization, default low-level receivers and graph observation closed to
+  relation-image requests. This slice does not enable Commands or add Console syntax.
+
+- 40b6e3c: Connect contextual Selection reads through application storage and remote clients. In-memory and
+  PostgreSQL storage declare graphReadCapabilities.relationSelections, which enables application
+  Graph Read v2 receivers while retaining explicit per-hop policy grants.
+
+  Remote and React graph clients discover the target's v2 capability before each contextual read,
+  using the same transport options for metadata and execution. Ordinary reads stay v1 with no
+  extra requests; missing capabilities and read denials never fall back to v1 or prefetch IDs.
+
+  Custom RemoteGraphReadTransport implementations now accept GraphReadFamilyRequest (metadata and
+  v1/v2 reads); narrow by kind before reading mode or selection. Contextual observation remains
+  unsupported pending source-change invalidation.
+
+- 40b6e3c: Add experimental deferred relation-image membership, Selection.through and parameterless contextual
+  Selection factories. Selection schemas validate source paths against explicit receiver-owned model
+  definitions, and in-memory reads evaluate composed navigation before final read shaping. Commands,
+  graph read protocol v1 and SQL explicitly reject this membership until their corresponding support
+  is implemented. Entities can declare parameterless contextual selections with
+  `selections: ({ self }) => ({ parts: self.contentNodes.where(node => node.type.eq('part')) })`.
+  Selection properties preserve deferred membership and target types through composition and runtime
+  binding. Discovery exposes copied contracts; codegen compiles supported declarations to portable
+  data for generated clients. Language/UI authoring and remote execution remain follow-up work.
+- 65e6d30: Add native ordered `hasMany` Relations with portable move commands, exact neighborhood conflict
+  checks and deltas, natural ordered reads, in-memory and transactional PostgreSQL execution,
+  Fetch/WebSocket transport support, React hooks, reflection, and semantic Devtools summaries.
+- ced6a65: Add transport-neutral Query observation to runtime-bound reads and an in-memory implementation that
+  emits complete current results after successful graph commits. Add a framework-owned TaskRun Entity
+  and native in-process Task lifecycle observation backed by that Query capability. Project authorized
+  Query observations through Runtime Protocol WebSocket sessions, reconcile pushed snapshots through
+  the Graph Client Cache, and let Express hosts install a receiver-owned Graph observer. Adapt native
+  TaskRun streams into Durable Protocol progress so WebSocket hosts can push task lifecycle snapshots
+  without polling while preserving the existing Durable client API. Preserve public EntityRef input
+  inference when a schema-backed durable operation is consumed through React.
+- cfca984: Expose opt-in, policy-derived ordering capabilities on successful Graph Reads and use them to
+  enable Console result headers. Explain unavailable ordering without sending denied header actions,
+  and refresh advisory permissions after transport replacement or policy rejection.
+- 740cfd0: Add experimental data-first named Selection factories alongside existing locators. Declare scalar
+  input schemas and pure predicate/canonical-identity templates with `withSelectionFactories`, then
+  use typed `Entity.by({ factoryName: inputs })` on the definition or its client facade. Preserve
+  portable membership, explicit identity, consumer cardinality, and ordinary receiver authorization.
+  Expose declaration and original invocation metadata separately from execution ASTs; no fetch,
+  external resolver, locator deprecation, or remote Command protocol change is introduced.
+
+  Apply the consumer's one/many contract when normalizing an already constructed Selection input,
+  without mutating the caller's Selection. Previously that path preserved the caller's cardinality
+  and could bypass an Operation's exact-one mutation requirement.
+
+- 6770db7: Bind classified Selections to the current runtime without adding mutation capabilities. Preserve
+  read execution through classified contextual hops, membership composition, ordering, limits and
+  terminal read intents. Explicit `toQuery()` lowering retains the base Entity's canonical cache
+  identity and existing provider boundaries.
+- 740cfd0: Expose named Selection factory contracts in graph discovery: strict input schemas, Selection output
+  entity, version, shorthand and pure expansion template. Preserve consumer-owned cardinality.
+  Generate typed browser factories from portable withSelectionFactories declarations without server
+  imports, and show discovered contracts in Explorer's Entity structure panel. Existing locators
+  remain supported; Console grammar and dynamic factory invocation forms are not introduced here.
+- 5d9f605: Present cached outputs using semantic read and operation names, selection summaries, and visible identity scopes. Keep complete cache keys in an expandable JSON view. Graph and operation query hooks attach optional descriptive source metadata to output records; this metadata does not confer freshness or change reconciliation policy.
+- cfca984: Add the first keyword-free Devtools Console walking skeleton. It reuses the Selection grammar,
+  reflection, diagnostics, and CodeMirror assistance inside `Entity.where(...).many()`,
+  `Entity.where(...).first()`, and `Entity.where(...).one()`, lowers valid documents to canonical
+  Graph Read requests, and executes them through the configured Runtime Transport. Console results
+  can be inspected through the same visual projection used by Activity or as JSON. Exact-one
+  cardinality mismatches cross the Graph Read protocol as an authority-safe structured rejection
+  rather than an opaque availability failure. Boolean and enum literals use the same schema-aware,
+  source-backed value controls as the Explorer Selection editor. Omitting `.where(...)` defaults to
+  the canonical `all` Selection, so unfiltered reads can use `Entity.many()`, `Entity.first()`, or
+  `Entity.one()` directly. `Entity.count()` and `Entity.where(Selection).count()` use the existing
+  Graph Read count mode and render its scalar result without applying a row limit or cardinality.
+  Many reads accept a source-backed `.limit(nonNegativeInteger)` modifier before their terminal;
+  invalid limits and meaningless combinations with `first()`, `one()`, or `count()` are rejected
+  before execution.
+- 5af84ba: Unify Fetch Operation, Graph Read, Graph Command, and Durable inspection clients behind one Runtime Transport and `/runtime` endpoint by default, with correlated family exchanges and explicit per-family legacy endpoint compatibility.
+- 96629f2: Add a versioned WebSocket Runtime Protocol session, a multiplexed browser Runtime Transport with
+  pushed Durable Operation progress, and an Express server projection with receiver-owned session
+  context and host-controlled upgrade authorization. Schema-backed Operation inputs are made
+  portable before either Fetch or WebSocket Runtime Protocol transmission.
+
+### Patch Changes
+
+- 6770db7: Allow contextual factories to target variants declared before their base entity is enriched with
+  relations or contextual selections. Preserve narrowed destination types while still requiring the
+  exact same base object at runtime, so root and nested classified navigation compose without casts.
+- 6770db7: Support experimental `graphSchema.existingRef(Variant)` Operation inputs using canonical base
+  Refs. The receiver checks the resolved record's classification, identity and base schema before
+  entering the Operation body, including custom resolvers. Reflect the variant contract separately
+  from base identity in schema descriptors and JSON Schema. Stored variant Reference Fields remain
+  unsupported.
+- 6770db7: Release idle remote Graph observation subscriptions by aborting their lifetime signal before
+  waiting for iterator closure. Forward cancellation through the React Runtime Transport bridge
+  without changing caller options or other subscriptions. Verify classified membership changes,
+  shared canonical cache identity and host-driven React query invalidation across real provider reads.
+- a8e1dbc: Reopen Console completion after accepting ordering and predicate clauses so their Fields appear
+  without another keystroke. Discover receiver-owned ordering permissions through a metadata-only
+  graph.read request before executing data, with loading/error feedback and retry. Share that policy
+  snapshot between completion, source-backed field/direction dropdowns in both dialects, and result
+  headers. Preserve keyboard editing and undo, and invalidate stale metadata when Entity, transport,
+  graph.read routing, or host-provided ExecutionIdentity changes. Identity changes clear prior Console
+  results and cancel pending reads without discarding the draft or undo history. Support discovery through Runtime Protocol and standalone Express
+  and Next.js Graph Read handlers; ordinary reads and observations retain their existing contracts.
+- cfca984: Preserve Console member names as contextual identifiers in Selection fields and Entity names.
+  Report structured cardinality mismatches for implicit get cardinality. Simplify Console analysis
+  and result rendering while retaining source-backed controls and native accessible result status.
+- 740cfd0: Support reflected named Selection factories in TS-like and declarative Console reads. Share pure
+  schema-validated expansion with Core, complete factory names and inputs, and preserve authored
+  invocations during dialect conversion and result-table ordering/limit edits. One factory can be
+  combined with a where predicate and the existing read terminals; receiver authorization is unchanged.
+- 6770db7: Add experimental fixed-enum Entity variants as local read universes. Compose all/where, declared
+  base by factories, canonical references, and explicit contextual narrowing with complement and
+  union constrained to the variant. Reads retain the base identity/storage and narrowed row types.
+  Companion changes add existingRef Operation inputs, discovery, and Graph Read transport.
+  Variant-specific writes remain unsupported.
+- 40b6e3c: Validate exact-one Selection membership before read limits, including policy-imposed limits and
+  related-root reads. PostgreSQL and MySQL probe for a second match in the same SQL statement;
+  Supabase requests an exact count with the rows so server row caps cannot masquerade as uniqueness.
+  Supabase exact-one reads fail closed when exact count metadata is unavailable.
+
+  Enforce the same cardinality contract for counts, reject contradictory exact-one reads with
+  `limit(0)`, and preserve cardinality diagnostics through Effect-backed read dispatchers. Nullable
+  first-result and existence intent, many-result shaping, and atomic mutation semantics are unchanged.
+
+- b81adfe: Add MySQL 8.4/InnoDB storage with exact CRUD results, explicit-target upsert, primary-key updates,
+  Entity Mutation deltas, direct/many-to-many/ordered Relationship Commands, transactions, command
+  savepoints, and reflected Entity data. Include concurrent constraint tests and a Todo Express
+  configuration with persistence verified across host restarts.
+
+  Extract shared mappings, query compilation, and read materialization into @ontahi/sql while
+  preserving PostgreSQL's public entrypoints and provider-owned mutation implementation.
+
+  Preserve explicit relation mappings during Core application composition so physical join mappings
+  remain available to the storage adapter. Date/time, JSON, large-number conformance, and broader
+  schema diagnostics continue separately in Plan 151b.
+
+- cfca984: Explain Graph Read ordering policy rejections with the requested Entity and Field, preserving the
+  stable access_denied code and adding optional structured ordering_not_allowed details. Other
+  authorization failures remain generic, and no read permissions are broadened.
+- 6770db7: Expose graph-native Operation input descriptors in graph discovery. Project static classified
+  existingRef inputs to browser-safe schemas while preserving base Ref identity and the classification
+  requirement, including imported variants and optional/nullable fields. Do not emit server resolvers.
+  Diagnose missing generated base schemas and unsupported declaration shapes. Preserve shorthand
+  Operation input declarations instead of silently omitting them from generated clients.
+- 6770db7: Reject unsupported nested classified Operation participants during code generation, matching the
+  runtime's direct object/Value field contract (including optional/nullable wrappers).
+
+  Require a declared canonical base identity for existingRef variant targets. Validate the complete
+  identity locator before resolution, including composite identities; alternate or incomplete
+  locators report invalid input instead of a misleading entity-not-found failure.
+
+- 8e627d2: Harden WebSocket Runtime sessions by bounding completed request identity retention, releasing
+  observation and socket resources deterministically, reporting handshake send failures, and making
+  Express upgrade-boundary ownership explicit.
+
 ## 1.0.0-alpha.11
 
 ## 1.0.0-alpha.10

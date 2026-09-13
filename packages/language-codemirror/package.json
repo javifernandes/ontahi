@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/language-codemirror",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "CodeMirror 6 adapter for Ontahi textual languages",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/language-codemirror",
   "license": "Apache-2.0",

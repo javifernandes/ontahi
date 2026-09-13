@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/mysql",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "MySQL data graph storage for Ontahi",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/mysql",
   "license": "Apache-2.0",
