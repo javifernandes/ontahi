@@ -4,34 +4,65 @@ import { historyFieldChanges, type EntityHistory } from '../entity-history.js';
 
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
+import { transportSettingsStyles as settingsStyles } from './transport-settings-styles.js';
 
 export const EntityHistorySettings = ({ history }: { readonly history: EntityHistory }) => {
   const snapshot = useSyncExternalStore(history.subscribe, history.inspect, history.inspect);
   return (
-    <section aria-label='Entity history settings'>
-      <h3>Entity history</h3>
-      <label>
+    <section
+      aria-label='Entity history settings'
+      style={{ ...settingsStyles.root, marginBottom: 24 }}
+    >
+      <h3 style={settingsStyles.title}>Entity history</h3>
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          color: '#dce8e1',
+          width: 'fit-content',
+          cursor: 'pointer',
+        }}
+      >
         <input
           type='checkbox'
+          style={{ margin: 0, width: 16, height: 16, accentColor: '#80bb98', colorScheme: 'dark' }}
           checked={snapshot.recording}
           onChange={event => history.setRecording(event.target.checked)}
-        />{' '}
+        />
         Record entity history
       </label>
-      <p>
+      <p style={{ ...settingsStyles.description, color: '#b6c8be' }}>
         Capture local entity snapshots in memory, including their field values. Recording continues
         while Devtools is closed. Disable to stop recording and retain captured history.
       </p>
-      <p>
-        {snapshot.entries.length} entries · {snapshot.bytes.toLocaleString()} approximate bytes ·
-        limits: {history.limits.capacity} entries / {history.limits.maxBytes.toLocaleString()} bytes
-      </p>
-      <p>
-        {snapshot.dropped} entries dropped · {snapshot.captureErrors} capture errors
-      </p>
-      <button type='button' style={styles.subtleButton} onClick={history.clear}>
-        Clear entity history
-      </button>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          padding: 14,
+          border: '1px solid #1f3128',
+          borderRadius: 11,
+          background: '#0e1813',
+        }}
+      >
+        <div style={{ display: 'grid', gap: 6 }}>
+          <p style={{ ...settingsStyles.description, color: '#b6c8be' }}>
+            {snapshot.entries.length} entries · {snapshot.bytes.toLocaleString()} approximate bytes
+            · limits: {history.limits.capacity} entries / {history.limits.maxBytes.toLocaleString()}{' '}
+            bytes
+          </p>
+          <p style={settingsStyles.description}>
+            {snapshot.dropped} entries dropped · {snapshot.captureErrors} capture errors
+          </p>
+        </div>
+        <button type='button' style={styles.subtleButton} onClick={history.clear}>
+          Clear entity history
+        </button>
+      </div>
     </section>
   );
 };

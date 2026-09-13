@@ -220,7 +220,11 @@ export const DevtoolsPanel = ({
             hidden={view !== 'console'}
             style={view === 'console' ? { display: 'contents' } : undefined}
           >
-            <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />
+            <ConsolePanel
+              options={consoleOptions}
+              runtimeTransport={runtimeTransport}
+              clientCache={clientCache}
+            />
           </div>
         ) : null}
         {renderContent()}

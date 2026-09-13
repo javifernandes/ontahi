@@ -17,6 +17,7 @@ relatedPlans:
   - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
   - ontahi://plans/148b-devtools-live-history
+  - ontahi://plans/148c-devtools-console-observe
   - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
@@ -148,3 +149,10 @@ This is local debugging history, not persistent entity versions or audit storage
 Activity-to-cache links require future propagation of observation/exchange IDs through cache writes;
 time adjacency is not evidence of causality. Operation output declarations for current versus
 historical snapshots remain separate backlog work.
+
+The Console can initiate a Graph observation through Observe / Stop over the same many-query
+expression used by Run. Its submitted source remains fixed while drafts change. Incoming snapshots
+update the result view and normalize known Entity rows into the supplied client cache; a row leaving
+the query does not imply entity deletion. Changing tabs preserves the subscription, while closing
+the drawer or replacing its identity, cache or transport cancels it. This v1 many-query execution
+mode adds no language syntax and does not introduce observation support for contextual v2 reads.
