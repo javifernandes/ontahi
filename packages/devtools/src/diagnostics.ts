@@ -101,7 +101,39 @@ export type ObservationDiagnosticEvent =
       readonly error?: DiagnosticError;
     });
 
-export type OntahiDiagnosticEvent = ExchangeDiagnosticEvent | ObservationDiagnosticEvent;
+type GraphObservationIdentity = {
+  readonly observationId: string;
+  readonly family: 'graph.observe';
+  readonly transportId: string;
+  readonly transportKind: string;
+  readonly startedAt: number;
+  readonly request?: unknown;
+};
+
+export type GraphObservationDiagnosticEvent = GraphObservationIdentity &
+  (
+    | { readonly kind: 'graph-observation.started'; readonly at: number }
+    | {
+        readonly kind: 'graph-observation.snapshot';
+        readonly at: number;
+        readonly sequence: number;
+        readonly rowCount?: number;
+        readonly snapshot?: unknown;
+      }
+    | {
+        readonly kind: 'graph-observation.settled';
+        readonly sequence: number;
+        readonly at: number;
+        readonly durationMs: number;
+        readonly outcome: RuntimeDiagnosticOutcome;
+        readonly error?: unknown;
+      }
+  );
+
+export type OntahiDiagnosticEvent =
+  | ExchangeDiagnosticEvent
+  | ObservationDiagnosticEvent
+  | GraphObservationDiagnosticEvent;
 
 export type OntahiDiagnosticsSnapshot = {
   readonly version: number;

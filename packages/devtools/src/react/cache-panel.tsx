@@ -2,11 +2,13 @@ import type { GraphClientCache } from '@ontahi/core/data-graph';
 import { useContext, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { cloneDiagnosticValue } from '../diagnostics.js';
+import type { EntityHistory } from '../entity-history.js';
 
 import { AuthoringDialectContext } from './authoring-dialect.js';
 import { createCacheStore, outputEntityKeys } from './cache-model.js';
 import { presentCacheOutput } from './cache-output-presentation.js';
 import { styles } from './devtools-styles.js';
+import { EntityHistoryPanel } from './entity-history-panel.js';
 import { JsonView } from './json-view.js';
 
 const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) => {
@@ -286,12 +288,55 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
   );
 };
 
-export const CachePanel = ({ clientCache }: { readonly clientCache?: GraphClientCache }) =>
-  clientCache ? (
-    <ConnectedCachePanel cache={clientCache} />
-  ) : (
-    <div style={styles.empty}>
-      No client cache connected. Pass the application’s clientCache to OntahiDevtools to inspect
-      local runtime state.
+export const CachePanel = ({
+  clientCache,
+  history,
+}: {
+  readonly clientCache?: GraphClientCache;
+  readonly history?: EntityHistory;
+}) => {
+  const [view, setView] = useState<'live' | 'history'>('live');
+  return (
+    <div
+      style={{
+        display: 'grid',
+        minHeight: 0,
+        gridTemplateRows: history ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)',
+      }}
+    >
+      {history ? (
+        <nav
+          aria-label='Cache time views'
+          style={{ ...styles.views, padding: '6px 12px', borderBottom: '1px solid #213229' }}
+        >
+          <button
+            type='button'
+            style={{ ...styles.view, ...(view === 'live' ? styles.activeView : {}) }}
+            aria-pressed={view === 'live'}
+            onClick={() => setView('live')}
+          >
+            Live state
+          </button>
+          <button
+            type='button'
+            style={{ ...styles.view, ...(view === 'history' ? styles.activeView : {}) }}
+            aria-pressed={view === 'history'}
+            onClick={() => setView('history')}
+          >
+            History
+          </button>
+        </nav>
+      ) : null}
+      {view === 'history' && history ? (
+        <EntityHistoryPanel history={history} />
+      ) : clientCache ? (
+        <ConnectedCachePanel cache={clientCache} />
+      ) : (
+        <div style={styles.empty}>
+          No client cache connected. Pass the application’s clientCache to OntahiDevtools to inspect
+          local runtime state.
+        </div>
+      )}
     </div>
   );
+};
