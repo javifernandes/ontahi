@@ -14,6 +14,43 @@ This package depends on `@ontahi/core` and should not leak back into core. It cu
 Product-specific graph schemas, repositories, task definitions, and workflow descriptors stay in
 the host application.
 
+## Contextual Selection reads
+
+`createSupabaseDataGraphRuntime({ entities: [...] })` supports contextual membership such as
+`Book.by({ slug: 'book-one' }).parts.chapters.toQuery()`. Supply the complete receiver-owned
+Entity registry, including source, intermediate and target definitions. The existing read methods
+(`run`, `get`, `count`, buffered `stream`) retain their ordinary API and authority options.
+
+The adapter lowers each hop to a native PostgREST empty embed and existence filter. It does not
+prefetch source IDs or require a generic SQL RPC. Source predicates remain inside each membership
+boundary; Boolean composition, target projections, ordering and limits preserve final target
+membership. Count and exact-one reads use exact server count metadata. PostgREST executes with
+the client supplied by the host, so RLS applies to source, intermediate, target and edge rows.
+
+Physical FKs must match the declared relation join fields. Supported paths include `hasMany`
+(including a self-FK such as `ContentNode.parent_id`), non-self `belongsTo`, and mapped many-to-many
+relationships recognized by PostgREST. Many-to-many edges require single-field endpoint identities
+and a physical composite key containing the endpoint FKs. Conventional table/column names and
+explicit Entity mappings both work; this slice accepts simple SQL identifiers only. Missing or
+ambiguous physical relationships fail at PostgREST, without a fallback to broader membership.
+
+Inverse self `belongsTo`, composite many-to-many identities, virtual filter fields, contextual
+Commands and observation remain unsupported. Custom computed-relationship overrides and schema
+installation are not part of this API. The host owns schema compatibility and migrations.
+
+For remote execution, a host may explicitly set `relationSelections: true` on its
+`createGraphReadDispatcher`, backed by this runtime and its complete Entity registry. Policies
+must grant each outgoing `selectionRelations` hop and scope each participating Entity. RLS is
+additional protection, not a replacement for protocol authorization. Protocol v1 remains closed;
+the low-level Supabase adapter does not automatically configure an application dispatcher.
+
+Custom `SupabaseLikeClient` implementations must honor `.or(filter, { referencedTable })` for
+nested alias paths as well as ordinary `.select(...)` embeddings. Ignoring the scoped-filter
+option violates the contextual read contract. Exact-one/count clients must preserve count metadata.
+
+Integration tests exercise PostgreSQL 17, PostgREST 13.0.0 and the actual Supabase PostgREST client
+2.98.0 in disposable containers. They do not connect to a hosted Supabase project.
+
 ## Exact-one reads
 
 Exact-one reads request `{ count: 'exact' }` with at most two root rows in the same PostgREST request,

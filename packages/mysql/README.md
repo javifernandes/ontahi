@@ -34,6 +34,11 @@ construction requires mappings and a promise pool exposing `execute` and `getCon
 - Scalar Selections, reference lowering/lifting, aliases, nested projections and relation reads,
   related-root reads, ordering, count, and stream from one buffered query execution.
 - Derived-field projections, predicates, and ordering, including correlated relation counts.
+- Contextual Selections such as `Book.parts.chapters`, using the shared SQL correlated-`EXISTS`
+  compiler without source-ID prefetch. Nested/self navigation, direct and many-to-many membership,
+  Boolean composition, projections, count and exact-one checks operate on final target membership.
+  Storage advertises Graph Read v2 support; application policies must grant each
+  `selectionRelations` hop and scope each participating Entity independently.
 - Insert, bulk insert, update (including primary keys), delete, returning stored fields, and Entity Mutation deltas.
 - Upsert with explicit unique conflict targets and merge/ignore semantics.
 - Direct Relationship Commands with participant eligibility, conditional replacement, exact deltas,
@@ -58,6 +63,11 @@ representations are not yet covered by provider conformance; configure and valid
 before depending on them.
 
 ## Explicit limitations
+
+Contextual membership is read-only: protocol v1 and Commands remain closed. Direct joins preserve
+composite target identities; many-to-many contextual joins require single-field endpoint identities
+and matching receiver-owned edge mappings. Virtual filter fields remain unsupported in contextual
+membership. Supabase/PostgREST support is separate from this direct-SQL implementation.
 
 Upsert requires a full physical unique index matching `conflictOn`. A collision on another unique
 key fails and rolls back the command. It does not use broad `INSERT IGNORE` or let MySQL choose an
