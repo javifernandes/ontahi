@@ -235,8 +235,12 @@ initial view. Pass the same `clientCache` used by the application's graph provid
 ```
 
 Cache is a live, read-only view of canonical entity records, locator aliases, freshness markers,
-and normalized output skeletons. Filter entities by identity or alias, inspect present fields,
-and follow explicit references between outputs and entities. These values come directly from the
+and normalized output skeletons. Instances are grouped by entity type with collapsible groups and
+counts. Search names, identities or aliases across groups; matching groups expand while searching.
+Names and titles supplement canonical identities when available. In Data, follow normalized field
+references to cached instances; the Console entity definitions also identify embedded relationship
+rows by their declared identity. Missing targets are marked unavailable. Back restores the previous
+selection, search and detail section, including navigation between outputs and entities. These values come directly from the
 local cache; Activity payload capture/redaction settings do not transform them. Mount Devtools only
 in the development contexts where inspecting application data is intended.
 

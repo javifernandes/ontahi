@@ -1,17 +1,28 @@
-import type { GraphClientCache } from '@ontahi/core/data-graph';
+import type { AnyEntityDefinition, GraphClientCache } from '@ontahi/core/data-graph';
 import { useContext, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { cloneDiagnosticValue } from '../diagnostics.js';
 import type { EntityHistory } from '../entity-history.js';
 
 import { AuthoringDialectContext } from './authoring-dialect.js';
-import { createCacheStore, outputEntityKeys } from './cache-model.js';
+import {
+  cachedEntityLabel,
+  createCacheStore,
+  entityReferenceLinks,
+  outputEntityKeys,
+} from './cache-model.js';
 import { presentCacheOutput } from './cache-output-presentation.js';
 import { styles } from './devtools-styles.js';
 import { EntityHistoryPanel } from './entity-history-panel.js';
 import { JsonView } from './json-view.js';
 
-const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) => {
+const ConnectedCachePanel = ({
+  cache,
+  entities,
+}: {
+  readonly cache: GraphClientCache;
+  readonly entities?: readonly AnyEntityDefinition[];
+}) => {
   const dialect = useContext(AuthoringDialectContext);
   const store = useMemo(() => createCacheStore(cache), [cache]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -19,6 +30,15 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
   const [section, setSection] = useState<'data' | 'references' | 'aliases'>('data');
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [trail, setTrail] = useState<
+    {
+      kind: typeof kind;
+      key?: string;
+      section: typeof section;
+      filter: string;
+    }[]
+  >([]);
   const outputLinks = useMemo(
     () =>
       new Map(
@@ -30,8 +50,8 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
     kind === 'entities'
       ? snapshot.records.map(record => ({
           key: record.key,
-          title: record.key,
-          detail: undefined,
+          title: cachedEntityLabel(record.value) ?? record.key,
+          detail: cachedEntityLabel(record.value) ? record.key : undefined,
           scope: undefined,
           record,
         }))
@@ -66,12 +86,68 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
             value: record.ref,
           }))
     : [];
+  const groups = new Map<string, typeof filtered>();
+  for (const entry of filtered) {
+    const name = 'aliases' in entry.record ? entry.record.ref.entityName : '';
+    const group = groups.get(name);
+    if (group) group.push(entry);
+    else groups.set(name, [entry]);
+  }
+  const activeEntityName =
+    active && 'aliases' in active.record ? active.record.ref.entityName : undefined;
+  const relationships =
+    active && 'aliases' in active.record
+      ? entityReferenceLinks(
+          active.record.value,
+          snapshot,
+          entities?.find(entity => entity.name === activeEntityName),
+        )
+      : [];
   const navigate = (nextKind: typeof kind, key?: string) => {
+    if (active) setTrail(previous => [...previous, { kind, key: active.key, section, filter }]);
+    const target = snapshot.records.find(record => record.key === key);
+    if (target)
+      setCollapsed(previous => {
+        const next = new Set(previous);
+        next.delete(target.ref.entityName);
+        return next;
+      });
     setSection('data');
     setKind(nextKind);
     setSelected(key);
     setFilter('');
   };
+  const renderEntry = (entry: (typeof entries)[number]) => (
+    <li key={entry.key}>
+      <button
+        type='button'
+        aria-pressed={active?.key === entry.key}
+        onClick={() => navigate(kind, entry.key)}
+        style={{
+          ...styles.row,
+          gridTemplateColumns: 'minmax(0, 1fr)',
+          ...(active?.key === entry.key ? styles.selectedRow : {}),
+        }}
+      >
+        <span style={styles.rowTitle} title={entry.title}>
+          {entry.title}
+        </span>
+        {entry.detail ? (
+          <span style={styles.rowMeta} title={entry.detail}>
+            {entry.detail}
+          </span>
+        ) : null}
+        {entry.scope ? (
+          <span style={{ ...styles.family, overflowWrap: 'anywhere' }}>{entry.scope}</span>
+        ) : null}
+        {!('aliases' in entry.record) ? (
+          <span style={styles.rowMeta}>
+            {outputLinks.get(entry.key)?.size ?? 0} entity references
+          </span>
+        ) : null}
+      </button>
+    </li>
+  );
   return (
     <div style={styles.workspace}>
       <section style={styles.sidebar} aria-label='Local runtime state'>
@@ -104,40 +180,49 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
           />
         </div>
         <ul style={styles.list} aria-label='Cache entries'>
-          {filtered.map(entry => (
-            <li key={entry.key}>
-              <button
-                type='button'
-                aria-pressed={active?.key === entry.key}
-                onClick={() => {
-                  setSelected(entry.key);
-                  setSection('data');
-                }}
-                style={{
-                  ...styles.row,
-                  gridTemplateColumns: 'minmax(0, 1fr)',
-                  ...(active?.key === entry.key ? styles.selectedRow : {}),
-                }}
-              >
-                <span style={styles.rowTitle} title={entry.title}>
-                  {entry.title}
-                </span>
-                {entry.detail ? (
-                  <span style={styles.rowTitle} title={entry.detail}>
-                    {entry.detail}
-                  </span>
-                ) : null}
-                {entry.scope ? (
-                  <span style={{ ...styles.family, overflowWrap: 'anywhere' }}>{entry.scope}</span>
-                ) : null}
-                <span style={styles.rowMeta}>
-                  {'aliases' in entry.record
-                    ? `${entry.record.aliases.length} aliases`
-                    : `${outputLinks.get(entry.key)?.size ?? 0} entity references`}
-                </span>
-              </button>
-            </li>
-          ))}
+          {[...groups]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([name, groupEntries]) => (
+              <li key={name}>
+                {kind === 'entities' ? (
+                  <details open={Boolean(search) || !collapsed.has(name)}>
+                    <summary
+                      style={{
+                        ...styles.rowMeta,
+                        cursor: 'pointer',
+                        padding: '12px 8px',
+                        color: '#c7ddd1',
+                        fontWeight: 800,
+                        listStyle: 'none',
+                      }}
+                      onClick={event => {
+                        event.preventDefault();
+                        if (search) return;
+                        setCollapsed(previous => {
+                          const next = new Set(previous);
+                          if (next.has(name)) next.delete(name);
+                          else next.add(name);
+                          return next;
+                        });
+                      }}
+                    >
+                      <span aria-hidden='true' style={{ marginRight: 7 }}>
+                        {search || !collapsed.has(name) ? '▾' : '▸'}
+                      </span>
+                      {name} <span style={styles.count}>{groupEntries.length}</span>
+                    </summary>
+                    <ul
+                      style={{ ...styles.list, padding: '0 0 0 10px' }}
+                      aria-label={`${name} instances`}
+                    >
+                      {groupEntries.map(renderEntry)}
+                    </ul>
+                  </details>
+                ) : (
+                  <ul style={{ ...styles.list, padding: 0 }}>{groupEntries.map(renderEntry)}</ul>
+                )}
+              </li>
+            ))}
           {filtered.length === 0 ? (
             <li style={styles.empty}>
               {search ? 'No matching cache entries.' : `No cached ${kind} yet.`}
@@ -148,6 +233,22 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
       {active ? (
         <section style={styles.detail} aria-label='Selected cache entry'>
           <header style={styles.detailHeader}>
+            {trail.length ? (
+              <button
+                type='button'
+                style={styles.subtleButton}
+                onClick={() => {
+                  const previous = trail[trail.length - 1];
+                  setTrail(items => items.slice(0, -1));
+                  setKind(previous.kind);
+                  setSelected(previous.key);
+                  setSection(previous.section);
+                  setFilter(previous.filter);
+                }}
+              >
+                ← Back
+              </button>
+            ) : null}
             <div style={{ ...styles.detailHeadingGroup, flex: 1 }}>
               <h3 style={styles.detailTitle} title={active.title}>
                 {active.title}
@@ -193,6 +294,49 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
                     <summary style={{ cursor: 'pointer' }}>Cache key / JSON</summary>
                     <JsonView value={cloneDiagnosticValue(active.record.key)} label='Cache key' />
                   </details>
+                ) : null}
+                {kind === 'entities' ? (
+                  <>
+                    <h4>Relationships</h4>
+                    {relationships.length ? (
+                      <ul
+                        style={{ ...styles.list, padding: 0, display: 'grid', gap: 6 }}
+                        aria-label='Entity relationships'
+                      >
+                        {relationships.map(link => {
+                          const target = snapshot.records.find(record => record.key === link.key);
+                          return (
+                            <li key={link.path}>
+                              <button
+                                type='button'
+                                style={{
+                                  ...styles.row,
+                                  gridTemplateColumns: 'minmax(0, 1fr)',
+                                  border: '1px solid #293d32',
+                                  background: '#101c15',
+                                  ...(!target ? styles.disabledButton : {}),
+                                }}
+                                disabled={!target}
+                                onClick={() => navigate('entities', link.key)}
+                              >
+                                <span style={styles.rowTitle}>
+                                  {link.path} →{' '}
+                                  {target
+                                    ? (cachedEntityLabel(target.value) ?? target.ref.entityName)
+                                    : link.key}
+                                </span>
+                                <span style={styles.rowMeta}>
+                                  {target ? link.key : 'Not in cache'}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p style={styles.rowMeta}>No cached entity references in present fields.</p>
+                    )}
+                  </>
                 ) : null}
                 <h4>{kind === 'entities' ? 'Present fields' : 'Normalized output'}</h4>
                 <JsonView value={cloneDiagnosticValue(active.record.value)} label='Cached value' />
@@ -291,8 +435,10 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
 export const CachePanel = ({
   clientCache,
   history,
+  entities,
 }: {
   readonly clientCache?: GraphClientCache;
+  readonly entities?: readonly AnyEntityDefinition[];
   readonly history?: EntityHistory;
 }) => {
   const [view, setView] = useState<'live' | 'history'>('live');
@@ -330,7 +476,7 @@ export const CachePanel = ({
       {view === 'history' && history ? (
         <EntityHistoryPanel history={history} />
       ) : clientCache ? (
-        <ConnectedCachePanel cache={clientCache} />
+        <ConnectedCachePanel entities={entities} cache={clientCache} />
       ) : (
         <div style={styles.empty}>
           No client cache connected. Pass the application’s clientCache to OntahiDevtools to inspect
