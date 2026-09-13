@@ -1,3 +1,4 @@
+import type { GraphClientCache } from '@ontahi/core/data-graph';
 import {
   isConfigurableRuntimeTransport,
   type RuntimeTransport,
@@ -17,6 +18,7 @@ import {
 } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
 import { AuthoringSettings } from './authoring-settings.js';
+import { CachePanel } from './cache-panel.js';
 import { ConsolePanel, type OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { styles } from './devtools-styles.js';
 import { ExchangeDetail } from './exchange-detail.js';
@@ -25,6 +27,7 @@ import { PanelResizer } from './panel-resizer.js';
 import { RuntimeTransportSettings } from './runtime-transport-settings.js';
 
 export type DevtoolsPanelProps = {
+  readonly clientCache?: GraphClientCache;
   readonly consoleOptions?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly runtimeTransport?: RuntimeTransport<any>;
@@ -35,6 +38,7 @@ export type DevtoolsPanelProps = {
 
 export const DevtoolsPanel = ({
   consoleOptions,
+  clientCache,
   diagnostics,
   runtimeTransport,
   height,
@@ -52,7 +56,7 @@ export const DevtoolsPanel = ({
     diagnostics.inspect,
     diagnostics.inspect,
   );
-  const [view, setView] = useState<'activity' | 'console' | 'settings'>('activity');
+  const [view, setView] = useState<'activity' | 'console' | 'cache' | 'settings'>('activity');
   const [consoleOpened, setConsoleOpened] = useState(false);
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
@@ -93,6 +97,7 @@ export const DevtoolsPanel = ({
 
   const renderContent = () => {
     if (view === 'console' && consoleOptions) return null;
+    if (view === 'cache') return <CachePanel clientCache={clientCache} />;
     if (view === 'settings')
       return (
         <section style={styles.settingsPage} aria-label='Devtools settings'>
@@ -145,14 +150,6 @@ export const DevtoolsPanel = ({
             <h2 style={styles.title}>Ontahí Devtools</h2>
           </span>
           <nav style={styles.views} aria-label='Devtools views'>
-            <button
-              type='button'
-              style={{ ...styles.view, ...(view === 'activity' ? styles.activeView : {}) }}
-              onClick={() => setView('activity')}
-              aria-pressed={view === 'activity'}
-            >
-              Activity <span style={styles.count}>{filteredActivities.length}</span>
-            </button>
             {consoleOptions ? (
               <button
                 type='button'
@@ -166,6 +163,22 @@ export const DevtoolsPanel = ({
                 Console
               </button>
             ) : null}
+            <button
+              type='button'
+              style={{ ...styles.view, ...(view === 'activity' ? styles.activeView : {}) }}
+              onClick={() => setView('activity')}
+              aria-pressed={view === 'activity'}
+            >
+              Activity <span style={styles.count}>{filteredActivities.length}</span>
+            </button>
+            <button
+              type='button'
+              style={{ ...styles.view, ...(view === 'cache' ? styles.activeView : {}) }}
+              onClick={() => setView('cache')}
+              aria-pressed={view === 'cache'}
+            >
+              Cache
+            </button>
             <button
               type='button'
               style={{ ...styles.view, ...(view === 'settings' ? styles.activeView : {}) }}

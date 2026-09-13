@@ -604,6 +604,7 @@ export function useOperationQuery<TInput, TData>(
         cacheKey,
         operation.graphOutput,
         unwrapOperationInvocationValue(toOperationInvocationResult(await action(input))),
+        { kind: 'operation', name: `${operation.entityName}.${operation.name}()` },
       ).value,
     select: value => {
       void cacheVersion;

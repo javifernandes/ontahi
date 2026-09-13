@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  getGraphReadOutputDescriptor,
+  graphOutput,
   isGraphReadExpression,
   normalizeGraphSchemaClientInput,
   resolveQuerySpec,
@@ -23,7 +25,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { useExecutionIdentity, useGraphExecutor } from './context.js';
+import { useExecutionIdentity, useGraphClientCache, useGraphExecutor } from './context.js';
 import type {
   BuildableRead,
   CommandLike,
@@ -113,16 +115,18 @@ export function useGraphQuery<
 ): UseQueryResult<GraphQueryData<TRead, TMode>, Error> {
   const graphExecutor = useGraphExecutor<TReadOptions, TCommandOptions>();
   const identity = useExecutionIdentity();
+  const clientCache = useGraphClientCache();
   const expression = isGraphReadExpression(read) ? read : undefined;
   const source = (expression?.read ?? read) as PlainGraphReadSource<ReadResult<TRead>>;
   const mode = options?.mode ?? 'run';
   const intent = expression?.intent ?? intentFromMode(mode);
+  const queryKey =
+    options?.queryKey ??
+    deriveGraphQueryKey(source, intent, options?.params, executionIdentityCacheKey(identity));
 
   return useQuery({
     ...options,
-    queryKey:
-      options?.queryKey ??
-      deriveGraphQueryKey(source, intent, options?.params, executionIdentityCacheKey(identity)),
+    queryKey,
     queryFn: async () => {
       const resolved = resolveGraphRead(source);
       const params = options?.params as any;
@@ -135,6 +139,19 @@ export function useGraphQuery<
             : intent === 'exists'
               ? (await graphExecutor.get(resolved, params, options?.runtimeOptions)) != null
               : await graphExecutor.get(resolved, params, options?.runtimeOptions);
+
+      const descriptor =
+        intent === 'count' || intent === 'exists'
+          ? graphOutput.opaque()
+          : getGraphReadOutputDescriptor(resolved, params);
+      clientCache.writeOutput(
+        queryKey,
+        descriptor.kind === 'graph-output.array' && intent !== 'many'
+          ? graphOutput.nullable(descriptor.item)
+          : descriptor,
+        value,
+        { kind: 'graph-read', name: resolveQuerySpec(resolved, params).root.name },
+      );
 
       return value as GraphQueryData<TRead, TMode>;
     },

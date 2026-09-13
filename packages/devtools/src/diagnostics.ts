@@ -137,7 +137,10 @@ const defaultCreateId = (kind: 'observation') =>
   globalThis.crypto?.randomUUID?.() ??
   `ontahi-devtools-${kind}-${Date.now()}-${(fallbackIdSequence += 1)}`;
 
-const cloneDiagnosticValue = (value: unknown, seen: WeakSet<object> = new WeakSet()): unknown => {
+export const cloneDiagnosticValue = (
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+): unknown => {
   if (
     value === null ||
     typeof value === 'string' ||
