@@ -502,6 +502,9 @@ type AuthorizedGraphRead =
     }
   | { readonly success: false; readonly error: GraphReadProtocolError };
 
+const withDefaultReadLimit = (query: QuerySpec, mode: GraphReadMode, maxLimit: number): QuerySpec =>
+  mode !== 'count' && query.limit === undefined ? { ...query, limit: maxLimit } : query;
+
 const authorizeGraphRead = <TAuthority>(
   input: unknown,
   context: GraphReadDispatchContext<TAuthority>,
@@ -571,9 +574,7 @@ const authorizeGraphRead = <TAuthority>(
   let query = classified.query;
   try {
     query = { ...query, selection: membershipAuthority.scoped(query.selection, policy) };
-    if (parsed.request.mode !== 'count' && query.limit === undefined) {
-      query = { ...query, limit: policy.maxLimit };
-    }
+    query = withDefaultReadLimit(query, parsed.request.mode, policy.maxLimit);
   } catch (error) {
     reportError?.(error);
     return { success: false, error: graphReadExecutionUnavailable() };

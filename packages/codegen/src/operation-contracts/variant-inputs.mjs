@@ -6,6 +6,7 @@ import {
   resolveProjectionValueNode,
 } from './entity-schema-projection.mjs';
 import { readObjectLiteralProperty, unwrapExpression } from './typescript-ast.mjs';
+import { assertVariantInputPositions } from './variant-input-position.mjs';
 
 // Extract only static schema data. Never evaluate variant declarations or copy resolver closures.
 const referenceVariant = (node, context) => {
@@ -93,6 +94,7 @@ export const projectEntityVariant = (node, context, portableRef = false, validat
 };
 
 export const projectVariantInputs = (node, context) => {
+  assertVariantInputPositions(node, context, referenceVariant);
   const expression = unwrapExpression(node);
   const sourceText = expression.getText();
   const edits = [];
@@ -119,7 +121,7 @@ export const projectVariantInputs = (node, context) => {
   return {
     variants,
     schemaText: edits
-      .sort((a, b) => b.from - a.from)
+      .toSorted((a, b) => b.from - a.from)
       .reduce(
         (text, edit) => text.slice(0, edit.from) + edit.text + text.slice(edit.to),
         sourceText,
@@ -170,6 +172,6 @@ export const renderVariantInputs = (text, variants, projectedNames) => {
   };
   visit(source);
   return edits
-    .sort((a, b) => b.from - a.from)
+    .toSorted((a, b) => b.from - a.from)
     .reduce((result, edit) => result.slice(0, edit.from) + edit.text + result.slice(edit.to), text);
 };

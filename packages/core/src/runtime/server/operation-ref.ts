@@ -14,7 +14,9 @@ import {
   isEntityRef,
   type EntityRefInputResolutionScope,
   type EntityRefInputResolver,
+  type EntityRef,
 } from '../../data-graph/ref/index.js';
+import { variantReferenceInputError } from '../../data-graph/ref/variant-input.js';
 import { safeParseUnknownGraphSchema } from '../../data-graph/schema.js';
 import { isPlainObject } from '../../value/object.js';
 
@@ -116,6 +118,62 @@ export const hydrateSchemaNativeOperationRefs = <TInput extends object>(
   return (hydrated ?? input) as TInput;
 };
 
+const matchesVariantParticipant = (
+  reference: ReferenceFieldDefinition,
+  participant: unknown,
+  portableRef: EntityRef,
+) => {
+  const variant = reference.variant;
+  if (!variant) return true;
+  if (!isPlainObject(participant)) return false;
+  const fields = getEntityIdentityLocator(reference.target)?.locator.fields;
+  return (
+    participant[variant.discriminator.fieldName] === variant.discriminator.value &&
+    !!fields?.length &&
+    fields.every(field => participant[field] === portableRef.locator[field])
+  );
+};
+
+const resolveExistingParticipant = (
+  reference: ReferenceFieldDefinition,
+  portableRef: EntityRef,
+  resolve: () => unknown,
+  path: string,
+) =>
+  Effect.gen(function* () {
+    const participant = yield* toEffect(resolve);
+    const variant = reference.variant;
+    if (participant == null || !matchesVariantParticipant(reference, participant, portableRef)) {
+      return yield* failOperation(
+        'entity_not_found',
+        `Referenced ${variant?.name ?? reference.target.name} was not found.`,
+        { entityName: reference.target.name, inputPath: path },
+      );
+    }
+    if (!isPlainObject(participant)) {
+      return yield* Effect.die(
+        new Error(
+          `Existing Ref resolver for ${reference.target.name} must return an Entity record or null.`,
+        ),
+      );
+    }
+    if (variant && !safeParseUnknownGraphSchema(reference.target, participant).success) {
+      return yield* Effect.die(
+        new Error(
+          `Existing Ref resolver for ${variant.name} returned an invalid base Entity record.`,
+        ),
+      );
+    }
+    const projected = { ...participant };
+    Object.defineProperty(projected, 'ref', {
+      configurable: false,
+      enumerable: false,
+      value: portableRef,
+      writable: false,
+    });
+    return projected;
+  });
+
 export const materializeExistingOperationRefs = <TInput extends object>(
   schema: GraphSchemaLike,
   input: TInput,
@@ -145,55 +203,26 @@ export const materializeExistingOperationRefs = <TInput extends object>(
       const portableRef = (input as Record<string, unknown>)[path];
       if (portableRef == null) continue;
 
+      const inputError = variantReferenceInputError(reference, portableRef);
+      if (inputError)
+        return yield* failOperation('invalid_input', inputError, {
+          entityName: reference.target.name,
+          inputPath: path,
+        });
+
       const hydratedRef = (hydrated as Record<string, unknown>)[path] as {
         resolve?: () => unknown;
       };
       if (!isEntityRef(portableRef) || typeof hydratedRef?.resolve !== 'function') continue;
 
-      const participant = yield* toEffect(() => hydratedRef.resolve?.());
-      const variant = reference.variant;
-      const identityFields = variant
-        ? getEntityIdentityLocator(reference.target)?.locator.fields
-        : undefined;
-      if (
-        participant == null ||
-        (variant &&
-          (!isPlainObject(participant) ||
-            participant[variant.discriminator.fieldName] !== variant.discriminator.value ||
-            !identityFields?.length ||
-            identityFields.some(field => participant[field] !== portableRef.locator[field])))
-      ) {
-        return yield* failOperation(
-          'entity_not_found',
-          `Referenced ${variant?.name ?? reference.target.name} was not found.`,
-          { entityName: reference.target.name, inputPath: path },
-        );
-      }
-      if (!isPlainObject(participant)) {
-        return yield* Effect.die(
-          new Error(
-            `Existing Ref resolver for ${reference.target.name} must return an Entity record or null.`,
-          ),
-        );
-      }
-
-      if (variant && !safeParseUnknownGraphSchema(reference.target, participant).success) {
-        return yield* Effect.die(
-          new Error(
-            `Existing Ref resolver for ${variant.name} returned an invalid base Entity record.`,
-          ),
-        );
-      }
-
-      const projectedParticipant = { ...participant };
-      Object.defineProperty(projectedParticipant, 'ref', {
-        configurable: false,
-        enumerable: false,
-        value: portableRef,
-        writable: false,
-      });
+      const participant = yield* resolveExistingParticipant(
+        reference,
+        portableRef,
+        () => hydratedRef.resolve?.(),
+        path,
+      );
       materialized ??= { ...(hydrated as Record<string, unknown>) };
-      materialized[path] = projectedParticipant;
+      materialized[path] = participant;
     }
 
     return (materialized ?? hydrated) as TInput;

@@ -31,9 +31,8 @@ export const useConsoleReadCapabilities = (
     () => routing?.inspect().assignments['graph.read'],
     () => undefined,
   );
-  const targetsKey = JSON.stringify(
-    knownEntities.length ? knownEntities : entityName ? [entityName] : [],
-  );
+  const fallbackTargets = entityName ? [entityName] : [];
+  const targetsKey = JSON.stringify(knownEntities.length ? knownEntities : fallbackTargets);
   const [discovery, setDiscovery] = useState<Discovery>();
   const [revision, setRevision] = useState(0);
   useEffect(() => {

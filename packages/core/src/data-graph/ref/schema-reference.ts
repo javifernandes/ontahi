@@ -11,6 +11,7 @@ import type {
   VariantReadEntity,
 } from '../entity-variant.js';
 
+import { getEntityIdentityLocator } from './identity.js';
 import type { EntityRef, EntityRefLocator } from './model.js';
 
 export type GraphSchemaReferenceResolver<
@@ -108,6 +109,10 @@ export const graphSchemaExistingReference: ExistingReferenceFactory = (
 ) => {
   const variant = getEntityVariantContract(target);
   const base = variant?.base ?? target;
+  if (variant && !getEntityIdentityLocator(variant.base)?.locator.fields?.length)
+    throw new Error(
+      `Existing Ref variant ${variant.descriptor.name} requires a canonical identity on ${variant.base.name}.`,
+    );
   if ('fields' in base && 'ref' in base.fields) {
     throw new Error(
       `Existing Ref target ${base.name} cannot declare a Field named "ref" because that property preserves the participant's portable identity.`,

@@ -78,8 +78,7 @@ export class EntityVariant<
     const [fieldName, value] = entries[0]!;
     const field = hasOwn(base.fields, fieldName) ? base.fields[fieldName] : undefined;
     if (
-      !field ||
-      field.fieldType !== 'enum' ||
+      field?.fieldType !== 'enum' ||
       field.optional ||
       field.nullable ||
       field.derived ||
@@ -151,9 +150,16 @@ const createVariantSelection = <
 >(
   variant: EntityVariant<TEntity, TName, TDiscriminator>,
   expression: SelectionExpression,
-): VariantSelection<TEntity, TName, TDiscriminator> & SelectionProperties<TEntity> =>
-  new VariantSelection(variant, expression) as VariantSelection<TEntity, TName, TDiscriminator> &
+): VariantSelection<TEntity, TName, TDiscriminator> & SelectionProperties<TEntity> => {
+  const selection = new VariantSelection(variant, expression);
+  const relative = relativeSelections.get(selection)!;
+  const projected = contextualSelectionProperties(selection, variant.base, () =>
+    variant.constrain(relative.build()),
+  );
+  relativeSelections.set(projected, relative);
+  return projected as VariantSelection<TEntity, TName, TDiscriminator> &
     SelectionProperties<TEntity>;
+};
 
 export class VariantSelection<
   TEntity extends AnyEntityDefinition,
@@ -170,11 +176,6 @@ export class VariantSelection<
   ) {
     const relative = new Selection(variant.base, copySelectionExpression(expression));
     relativeSelections.set(this, relative);
-    const projected = contextualSelectionProperties(this, variant.base, () =>
-      variant.constrain(relative.build()),
-    );
-    relativeSelections.set(projected, relative);
-    return projected;
   }
 
   where(build: SelectionBuilder<VariantReadEntity<TEntity, TDiscriminator>>) {

@@ -15,6 +15,30 @@ import { importGeneratedModule } from './generated-module.test-support.js';
 
 describe('classified Operation input browser projection', () => {
   it.each([
+    'graphSchema.object({ nested: graphSchema.object({ chapter: graphSchema.existingRef(Chapter) }) })',
+    'graphSchema.object({ chapters: graphSchema.array(graphSchema.existingRef(Chapter)) })',
+    'graphSchema.object({ chapter: graphSchema.default(graphSchema.existingRef(Chapter), fallback) })',
+    "value('Input', { nested: value('Nested', { chapter: graphSchema.existingRef(Chapter) }) })",
+    'graphSchema.optional(graphSchema.object({ chapter: graphSchema.existingRef(Chapter) }))',
+    'graphSchema.existingRef(Chapter)',
+  ])('rejects variant participants outside direct input fields: %s', input => {
+    const analysis = analyzeSpecificDomainEntityExport(
+      `
+      const Base = entity({ name: 'Node', fields: { id: field.id(), type: field.enum(['part', 'chapter']) } });
+      const Chapter = Base.variant('Chapter', { discriminator: { type: 'chapter' } });
+      export const Book = entity({ name: 'Book', fields: { id: field.id() },
+        domainOperationDefaults: { authority: 'server', exposure: 'bridge', layer: 'books' },
+        operations: ({ operation }) => ({ inspect: operation({ input: ${input}, run: () => null }) }),
+      });
+      `,
+      'Book',
+    );
+    expect(analysis.diagnostics).toHaveLength(1);
+    expect(analysis.diagnostics[0]).toContain('inspect.input:');
+    expect(analysis.diagnostics[0]).toContain('direct top-level fields');
+  });
+
+  it.each([
     [
       'graphSchema.object({ chapter: graphSchema.ref(Chapter) })',
       '',

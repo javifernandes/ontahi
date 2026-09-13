@@ -58,7 +58,7 @@ export const createReadVariantRegistry = (
   for (const policy of policies) {
     for (const variant of policy.variants ?? []) {
       const contract = getEntityVariantContract(variant);
-      if (!contract || contract.base !== policy.entity)
+      if (contract?.base !== policy.entity)
         throw new Error(`Read variants must be declared on policy Entity ${policy.entity.name}.`);
       const descriptor = contract.descriptor;
       if (entityNames.has(descriptor.name) || variants.has(descriptor.name))

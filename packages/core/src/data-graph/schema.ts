@@ -6,6 +6,7 @@ import type {
   AnyEntityDefinition,
   AnyEntityViewDefinition,
   AnyFieldDefinition,
+  ReferenceFieldDefinition,
   AnyGraphObjectDefinition,
   AnyValueDefinition,
   GraphArrayDefinition,
@@ -27,6 +28,7 @@ import type {
 import { isReferenceFieldDefinition } from './definitions.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref/index.js';
+import { variantReferenceInputError } from './ref/variant-input.js';
 import { lowerEntityReferenceValue } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
 import { withinSelectionBudget } from './selection-budget.js';
@@ -360,13 +362,22 @@ const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
         ),
     );
 
+const validateReferenceInput = (field: ReferenceFieldDefinition, value: unknown): void => {
+  if (!field.variant) {
+    lowerEntityReferenceValue(field, value);
+    return;
+  }
+  const error = variantReferenceInputError(field, value);
+  if (error) throw new Error(error);
+};
+
 const toZodFieldSchema = (field: AnyFieldDefinition): ZodType => {
   let schema: ZodType;
 
   if (isReferenceFieldDefinition(field)) {
     schema = z.custom(isEntityRef).superRefine((value, context) => {
       try {
-        lowerEntityReferenceValue(field, value);
+        validateReferenceInput(field, value);
       } catch (cause) {
         context.addIssue({
           code: 'custom',

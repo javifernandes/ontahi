@@ -442,11 +442,9 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     () => options.entities.map(entity => reflectSelectionLanguageEntity(entity)),
     [options.entities],
   );
+  const initialTerminal = options.initialDialect === 'declarative' ? '' : '.many()';
   const initialDocument =
-    options.initialDocument ??
-    (baseEntities[0]
-      ? baseEntities[0].name + (options.initialDialect === 'declarative' ? '' : '.many()')
-      : '');
+    options.initialDocument ?? (baseEntities[0] ? baseEntities[0].name + initialTerminal : '');
   const [{ document, dialect }, setDraft] = useState({
     document: initialDocument,
     dialect: options.initialDialect ?? 'ts',

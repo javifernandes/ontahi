@@ -201,6 +201,12 @@ Optional/nullable direct fields work; nested participants and stored variant Ref
 remain explicitly unsupported. A previously resolved base participant is not membership proof.
 
 Missing, wrong-kind, wrong-identity and host-filtered inaccessible records share `entity_not_found`.
+PR review hardening distinguishes malformed lookup inputs from those resolution failures:
+classified `existingRef` targets require a declared canonical base identity, and the input locator
+must contain exactly its identity fields (including composite identities). Alternate or incomplete
+locators fail as `invalid_input` before any resolver runs. Codegen rejects nested participant
+schemas rather than projecting shapes the receiver cannot materialize; direct object/Value fields
+and their optional/nullable wrappers remain supported.
 This proves the classification gate and scoped resolver behavior, **not** automatic base/variant
 policy composition in the Graph Read dispatcher. Hosts still own visibility/authorization through
 the existing resolution boundary. No new policy registry or deferred Selection consumer is added.

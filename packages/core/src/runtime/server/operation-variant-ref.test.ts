@@ -13,6 +13,7 @@ import {
   toGraphSchemaDescriptor,
   toGraphJsonSchema,
   type EntityRef,
+  type EntityRefLocator,
   type InferGraphSchemaClientInput,
 } from '../../data-graph/index.js';
 
@@ -52,6 +53,37 @@ const operation = (input: ReturnType<typeof graphSchema.object>, run: (...args: 
   ).inspect;
 
 describe('schema-native variant participants', () => {
+  it('rejects classified participant targets without a canonical identity at declaration', () => {
+    const Unidentified = entity('Unidentified', { type: field.enum(['chapter', 'part']) });
+    const Classification = Unidentified.variant('Classification', {
+      discriminator: { type: 'chapter' },
+    });
+    expect(() => graphSchema.existingRef(Classification)).toThrow('canonical identity');
+  });
+
+  it.each<EntityRefLocator>([{ title: 'Chapter' }, { id: 'chapter', title: 'Chapter' }, {}])(
+    'rejects noncanonical variant locators before resolving: %j',
+    async locator => {
+      const load = vi.fn(() =>
+        Effect.succeed({ id: 'chapter', type: 'chapter', title: 'Chapter', visible: true }),
+      );
+      const body = vi.fn(() => Effect.succeed('reached'));
+      const input = graphSchema.object({
+        chapter: graphSchema.existingRef(Chapter).resolveWith(load),
+      });
+      const value = { chapter: createEntityRef(Node, locator) };
+      expect(safeParseGraphSchema(input, value).success).toBe(false);
+      expect(await runServerDomainOperationRaw(operation(input, body), value)).toMatchObject({
+        success: false,
+        reason: 'invalid_input',
+        message: expect.stringContaining('canonical identity'),
+        inputPath: 'chapter',
+      });
+      expect(load).not.toHaveBeenCalled();
+      expect(body).not.toHaveBeenCalled();
+    },
+  );
+
   it('reflects canonical identity and the classification requirement as separate data', () => {
     const reference = graphSchema.existingRef(Chapter);
     const input = graphSchema.object({ chapter: reference });
@@ -83,6 +115,51 @@ describe('schema-native variant participants', () => {
       safeParseGraphSchema(input, { chapter: createEntityRef('Chapter', { id: 'chapter' }) })
         .success,
     ).toBe(false);
+  });
+
+  it('validates complete composite identities without confusing them with alternate locators', async () => {
+    const ScopedNode = entity('ScopedNode', {
+      tenant: field.string(),
+      key: field.string(),
+      slug: field.string(),
+      type: field.enum(['chapter', 'part']),
+    })
+      .locators({ canonical: ['tenant', 'key'], bySlug: 'slug' })
+      .identity('canonical');
+    const ScopedChapter = ScopedNode.variant('ScopedChapter', {
+      discriminator: { type: 'chapter' },
+    });
+    const load = vi.fn(() =>
+      Effect.succeed({
+        tenant: 'acme',
+        key: 'chapter',
+        slug: 'intro',
+        type: 'chapter',
+      }),
+    );
+    const body = vi.fn(input => Effect.succeed(input.chapter.ref));
+    const input = graphSchema.object({
+      chapter: graphSchema.existingRef(ScopedChapter).resolveWith(load),
+    });
+    const inspect = operation(input, body);
+    const alternateLocators: EntityRefLocator[] = [{ tenant: 'acme' }, { slug: 'intro' }];
+    for (const locator of alternateLocators) {
+      const value = { chapter: createEntityRef(ScopedNode, locator) };
+      expect(safeParseGraphSchema(input, value).success).toBe(false);
+      expect(await runServerDomainOperationRaw(inspect, value)).toMatchObject({
+        success: false,
+        reason: 'invalid_input',
+      });
+    }
+    expect(load).not.toHaveBeenCalled();
+    expect(body).not.toHaveBeenCalled();
+    const ref = createEntityRef(ScopedNode, { tenant: 'acme', key: 'chapter' });
+    expect(safeParseGraphSchema(input, { chapter: ref }).success).toBe(true);
+    expect(await runServerDomainOperationRaw(inspect, { chapter: ref })).toEqual({
+      success: true,
+      data: ref,
+    });
+    expect(load).toHaveBeenCalledOnce();
   });
 
   it('materializes with the normal base runtime and narrows the Operation input type', async () => {

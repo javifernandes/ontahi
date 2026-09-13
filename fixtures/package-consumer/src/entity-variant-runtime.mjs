@@ -157,9 +157,10 @@ const metadata = await dispatch(
 );
 if (metadata.kind !== 'graph-read-capabilities-result')
   throw new Error('Packed variant metadata unavailable.');
+const metadataWire = JSON.stringify(metadata.capabilities.variants);
 const application = reflectConsoleApplicationVariants(
   [reflectSelectionLanguageEntity(Node)],
-  JSON.parse(JSON.stringify(metadata.capabilities.variants)),
+  JSON.parse(metadataWire),
 );
 for (const dialect of ['ts', 'declarative']) {
   if (
@@ -173,7 +174,8 @@ for (const dialect of ['ts', 'declarative']) {
       ? 'Chapter.where(not title = "Intro").many()'
       : 'Chapter where not title = "Intro" many';
   const analysis = analyzeConsoleDocument(source, application, { dialect });
-  const result = await dispatch(JSON.parse(JSON.stringify(analysis.request)), {
+  const requestWire = JSON.stringify(analysis.request);
+  const result = await dispatch(JSON.parse(requestWire), {
     authority: undefined,
   });
   if (
@@ -289,8 +291,10 @@ const treeMetadata = await treeReads(
   { kind: 'graph-read-capabilities', version: 1, entityName: Tree.name },
   { authority: undefined },
 );
+if (treeMetadata.kind !== 'graph-read-capabilities-result')
+  throw new Error('Packed contextual variant metadata unavailable.');
 const treeReflection = reflectConsoleApplicationVariants(
-  [Forest, Tree].map(reflectSelectionLanguageEntity),
+  [Forest, Tree].map(entity => reflectSelectionLanguageEntity(entity)),
   treeMetadata.capabilities.variants,
 );
 for (const dialect of ['ts', 'declarative']) {
@@ -299,7 +303,8 @@ for (const dialect of ['ts', 'declarative']) {
       ? 'Forest.branches.leaves.many()'
       : 'Forest through branches through leaves many';
   const read = analyzeConsoleDocument(text, treeReflection, { dialect }).request;
-  const result = await treeReads(JSON.parse(JSON.stringify(read)), { authority: undefined });
+  const requestWire = JSON.stringify(read);
+  const result = await treeReads(JSON.parse(requestWire), { authority: undefined });
   if (
     result.kind !== 'graph-read-result' ||
     result.value.length !== 1 ||
