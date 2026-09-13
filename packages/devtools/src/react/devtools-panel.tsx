@@ -7,6 +7,7 @@ import { authoringDialectPreference } from '@ontahi/language-codemirror';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
+import type { EntityHistory } from '../entity-history.js';
 
 import { ActivityList } from './activity-list.js';
 import {
@@ -21,12 +22,15 @@ import { AuthoringSettings } from './authoring-settings.js';
 import { CachePanel } from './cache-panel.js';
 import { ConsolePanel, type OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { styles } from './devtools-styles.js';
+import { EntityHistorySettings } from './entity-history-panel.js';
 import { ExchangeDetail } from './exchange-detail.js';
+import { GraphObservationDetail } from './graph-observation-detail.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
 import { PanelResizer } from './panel-resizer.js';
 import { RuntimeTransportSettings } from './runtime-transport-settings.js';
 
 export type DevtoolsPanelProps = {
+  readonly history?: EntityHistory;
   readonly clientCache?: GraphClientCache;
   readonly consoleOptions?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
@@ -39,6 +43,7 @@ export type DevtoolsPanelProps = {
 export const DevtoolsPanel = ({
   consoleOptions,
   clientCache,
+  history,
   diagnostics,
   runtimeTransport,
   height,
@@ -97,11 +102,12 @@ export const DevtoolsPanel = ({
 
   const renderContent = () => {
     if (view === 'console' && consoleOptions) return null;
-    if (view === 'cache') return <CachePanel clientCache={clientCache} />;
+    if (view === 'cache') return <CachePanel clientCache={clientCache} history={history} />;
     if (view === 'settings')
       return (
         <section style={styles.settingsPage} aria-label='Devtools settings'>
           <AuthoringSettings />
+          {history ? <EntityHistorySettings history={history} /> : null}
           {configurableRuntimeTransport ? (
             <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
           ) : null}
@@ -126,7 +132,12 @@ export const DevtoolsPanel = ({
             select={setSelected}
           />
         </section>
-        {activeActivity?.observation ? (
+        {activeActivity?.kind === 'graph-observation' ? (
+          <GraphObservationDetail
+            key={activeActivity.id}
+            activity={activeActivity.graphObservation}
+          />
+        ) : activeActivity?.observation ? (
           <OperationProgressDetail
             activity={activeActivity.observation}
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}

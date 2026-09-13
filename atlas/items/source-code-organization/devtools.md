@@ -16,6 +16,7 @@ relatedPlans:
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/145-ordered-relations-and-sequence-commands
   - ontahi://plans/148-ontahi-devtools-runtime-inspection
+  - ontahi://plans/148b-devtools-live-history
   - ontahi://plans/150-ontahi-devtools-semantic-console
 ---
 
@@ -47,7 +48,7 @@ meaning even when they share a connection or visual timeline.
 ## Component Boundary
 
 The diagnostic model should be headless and observable without the visual component. A
-transport-neutral decorator can record `RuntimeTransport.request(...)` and Durable observation
+transport-neutral decorator records `RuntimeTransport.request(...)`, Graph observation, and Durable observation
 lifecycle, while individual transports contribute optional HTTP, WebSocket, handshake, and
 connection evidence. The existing Graph Client Cache inspection and subscription boundary supplies
 cache state and events.
@@ -62,8 +63,8 @@ The headless diagnostic store and transport decorator live in `@ontahi/devtools`
 React surface is exported separately from `@ontahi/devtools/react`; it is one projection of that
 model, not the source of runtime truth. This keeps visual tooling and dependencies outside the
 non-visual `@ontahi/react` client. The shipped surface covers correlated Activity with inline
-Operation progress and a runtime-owned Settings projection; Cache and connection-state evidence
-remain Plan 148 work.
+Operation progress, Graph observation snapshots, a normalized Cache inspector, optional local entity
+history, and a runtime-owned Settings projection. Connection-state evidence remains Plan 148 work.
 
 Activity leads with reconstructed application intent, such as an Entity selection and named View,
 or an Operation's input and returned value with Entity Refs reduced to domain identity. Protocol
@@ -129,3 +130,21 @@ Ontahí Devtools does not create a second protocol, change application hooks, ow
 policy, or replace the browser's complete Network tooling. It realizes the runtime-inspection part
 of [[ontahi.developer-experience|Ontahí Developer Experience]] by showing the semantic system the
 browser tooling cannot know.
+
+## Local observation history
+
+Graph transport observations appear as grouped Activity entries with start, incoming snapshots,
+termination status and update count. Captured requests and snapshots honor the diagnostic payload
+redactor. Selecting earlier snapshots never pauses application consumption.
+
+Cache history is a separate opt-in recorder over the supplied Graph Client Cache. It retains a
+baseline plus writes, invalidations and clears, including detached field values; its count and
+approximate payload-byte bounds keep retention finite. Stopping recording retains history, while
+unmount/cache replacement releases subscriptions and recorded state. A new recording segment does
+not imply continuity across the stopped interval. Its values follow Cache inspection semantics,
+independently of the Activity redactor.
+
+This is local debugging history, not persistent entity versions or audit storage. Exact causal
+Activity-to-cache links require future propagation of observation/exchange IDs through cache writes;
+time adjacency is not evidence of causality. Operation output declarations for current versus
+historical snapshots remain separate backlog work.

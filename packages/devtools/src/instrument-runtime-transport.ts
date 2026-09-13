@@ -17,6 +17,7 @@ import {
   type OntahiDiagnostics,
   type RuntimeDiagnosticOutcome,
 } from './diagnostics.js';
+import { instrumentGraphObservation } from './graph-observation.js';
 
 type AnyRuntimeTransport = RuntimeTransport<any>;
 
@@ -250,6 +251,16 @@ export const instrumentRuntimeTransport = <TTransport extends AnyRuntimeTranspor
   return {
     ...transport,
     request,
+    ...(transport.graph
+      ? {
+          graph: instrumentGraphObservation(
+            transport.graph,
+            diagnostics,
+            transportId,
+            transportKind,
+          ),
+        }
+      : {}),
     ...(durableOperation ? { durableOperation } : {}),
     ...(routing ? { routing } : {}),
   } as TTransport;

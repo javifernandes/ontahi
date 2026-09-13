@@ -222,8 +222,8 @@ createOntahiDiagnostics({
 });
 ```
 
-This first release proves the behavioral boundary in Todo. Cache inspection and transport
-connection state are later Plan 148 slices.
+The Todo example exercises this integration. Transport connection-state evidence remains a later
+Plan 148 slice.
 
 ## Cache: local runtime state
 
@@ -249,3 +249,35 @@ Output entries use semantic read titles, View/Selection summaries, and visible i
 Operation query outputs carry explicit source labels; arbitrary custom keys remain generic rather
 than being guessed to be Operations. Full keys remain available under “Cache key / JSON”.
 Source labels are descriptive provenance, not a freshness or authority guarantee.
+
+## Query observations and entity history
+
+The transport decorator also instruments `RuntimeTransport.graph.observe(...)`. Activity groups
+its start, incoming snapshots, and termination into one query observation, with transport, status,
+update count, and a semantic query title when the request was captured. Results default to the visual
+projection, with JSON available in the detail header. Choose an earlier snapshot
+or **Follow latest**; inspecting a snapshot does not pause the application stream. Observations stay
+lazy and preserve cancellation, consumer closure, protocol errors, and transport errors.
+
+Query requests and snapshot payloads follow the same diagnostics capture/redaction policy as
+exchanges. With payload capture disabled, status and row/update counts remain visible. The bounded
+Activity store can evict older snapshots; the detail reports when the selected snapshot is lost.
+These entries describe actual graph transport streams, not React hook instances or every query that
+reruns after invalidation.
+
+With `clientCache` connected, enable **Settings → Record entity history** to capture a baseline and
+subsequent entity writes, invalidations, and cache clears. **Cache → History** shows the timeline,
+field differences from the previous retained snapshot in that recording segment, and a detached
+snapshot. Missing fields mean absent from that local snapshot, not server deletion. Repeated writes
+are retained even when field values are unchanged.
+
+Recording starts disabled and stays in memory: at most 200 entries and approximately 2 MB of
+serialized UTF-16 payloads, with dropped-entry and capture-error counts. Oversized entries are
+skipped. Recording continues while the panel is closed; stopping keeps the captured entries, and
+**Clear entity history** only clears that history. Reloading, unmounting Devtools, or replacing the
+cache drops the history; a replacement cache starts with recording disabled.
+
+History captures local cache field values, independently of Activity's payload redactor. It is a
+debugging record of this client's observed state, not persisted entity versioning or a complete
+audit. Cache writes do not yet carry observation/exchange IDs, so this release does not infer causal
+links between an Activity snapshot and a cache write.

@@ -37,6 +37,8 @@ export const ActivityList = ({
         if (!event) return null;
         const outcome = activityEntryOutcome(activity);
         const observation = activity.observation;
+        const graphObservation =
+          activity.kind === 'graph-observation' ? activity.graphObservation : undefined;
         const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
         return (
           <li key={activity.id}>
@@ -55,10 +57,23 @@ export const ActivityList = ({
                 <span style={styles.rowTitle}>{activityEntryTitle(activity, dialect)}</span>
                 <span style={styles.rowMeta}>
                   <span style={styles.family}>
-                    {exchange ? event.family : 'operation progress'}
+                    {graphObservation
+                      ? 'query observation'
+                      : exchange
+                        ? event.family
+                        : 'operation progress'}
                   </span>
                   <span>{event.transportId}</span>
                   <span>{formatClock(activity.at)}</span>
+                  {graphObservation ? (
+                    <span>
+                      {graphObservation.settled ? graphObservation.settled.outcome : 'observing'} ·{' '}
+                      {graphObservation.settled?.sequence ??
+                        graphObservation.snapshots.slice(-1)[0]?.sequence ??
+                        0}{' '}
+                      updates
+                    </span>
+                  ) : null}
                   {observation ? <span>{observation.snapshots.length} updates</span> : null}
                   {observation?.settled ? (
                     <span>{observation.settled.durationMs} ms</span>
