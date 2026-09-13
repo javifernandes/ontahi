@@ -251,6 +251,27 @@ describe('operation hooks', () => {
     });
   });
 
+  it('labels cached operation outputs independently of the query key', async () => {
+    const BookEntity = defineBookEntity();
+    const book = { id: 'book-1', slug: 'ontahi', title: 'Ontahi' };
+    const bridgeAction = vi.fn().mockResolvedValue({ data: book });
+    const operation = defineClientDomainOperationsForEntity(BookEntity, {
+      fetchBook: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        graphOutput: graphOutput.entity(BookEntity),
+      }),
+    }).fetchBook;
+    const { Wrapper, clientCache } = createWrapper(bridgeAction);
+    const { result } = renderHook(() => useOperationQuery(operation), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.data).toEqual(book));
+    expect(clientCache.inspect().outputs[0]?.source).toEqual({
+      kind: 'operation',
+      name: 'Book.fetchBook()',
+    });
+  });
+
   it('runs bridge domain operations and reconciles graph outputs in the client cache', async () => {
     const BookEntity = defineBookEntity();
     const book = {

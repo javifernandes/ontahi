@@ -65,6 +65,7 @@ describe('Graph Query cache reconciliation', () => {
     expect(cache.readEntity(createEntityRef(List, { id: 'l1' }))).toEqual(list);
     expect(cache.readEntity(createEntityRef(Item, { id: 'i1' }))).toEqual(first);
     expect(cache.readEntity(createEntityRef(Tag, { id: 't1' }))).toEqual(first.tags[0]);
+    expect(cache.inspect().outputs[0]?.source).toEqual({ kind: 'graph-read', name: 'List' });
     expect(cache.inspect().outputs).toHaveLength(1);
     expect(cache.inspect().outputs[0]?.key).toEqual(
       queryClient.getQueryCache().getAll()[0]?.queryKey,

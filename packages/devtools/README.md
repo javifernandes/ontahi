@@ -244,3 +244,8 @@ Output entries are not hook instances. The current inspector does not track acti
 Operation execution state, historical writers, field-level coverage, or indirect/transitive
 references. Missing fields are not classified as null or stale. Invalidating an entity may leave
 an output skeleton with an unresolved reference, visible in its normalized JSON.
+
+Output entries use semantic read titles, View/Selection summaries, and visible identity scopes.
+Operation query outputs carry explicit source labels; arbitrary custom keys remain generic rather
+than being guessed to be Operations. Full keys remain available under “Cache key / JSON”.
+Source labels are descriptive provenance, not a freshness or authority guarantee.

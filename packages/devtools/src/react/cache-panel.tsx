@@ -1,13 +1,16 @@
 import type { GraphClientCache } from '@ontahi/core/data-graph';
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useContext, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { cloneDiagnosticValue } from '../diagnostics.js';
 
+import { AuthoringDialectContext } from './authoring-dialect.js';
 import { createCacheStore, outputEntityKeys } from './cache-model.js';
+import { presentCacheOutput } from './cache-output-presentation.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
 
 const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) => {
+  const dialect = useContext(AuthoringDialectContext);
   const store = useMemo(() => createCacheStore(cache), [cache]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [kind, setKind] = useState<'entities' | 'outputs'>('entities');
@@ -23,11 +26,21 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
   );
   const entries =
     kind === 'entities'
-      ? snapshot.records.map(record => ({ key: record.key, title: record.key, record }))
-      : snapshot.outputs.map(record => ({ key: record.keyHash, title: record.keyHash, record }));
+      ? snapshot.records.map(record => ({
+          key: record.key,
+          title: record.key,
+          detail: undefined,
+          scope: undefined,
+          record,
+        }))
+      : snapshot.outputs.map(record => ({
+          key: record.keyHash,
+          ...presentCacheOutput(record, dialect),
+          record,
+        }));
   const search = filter.trim().toLowerCase();
   const filtered = entries.filter(entry =>
-    `${entry.title} ${'aliases' in entry.record ? JSON.stringify(entry.record.aliases) : ''}`
+    `${entry.title} ${entry.detail ?? ''} ${entry.scope ?? ''} ${entry.key} ${'aliases' in entry.record ? JSON.stringify(entry.record.aliases) : ''}`
       .toLowerCase()
       .includes(search),
   );
@@ -36,10 +49,20 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
     ? kind === 'entities'
       ? snapshot.outputs
           .filter(output => outputLinks.get(output.keyHash)?.has(active.key))
-          .map(output => ({ key: output.keyHash, title: output.keyHash, value: output.key }))
+          .map(output => ({
+            key: output.keyHash,
+            ...presentCacheOutput(output, dialect),
+            value: output.key,
+          }))
       : snapshot.records
           .filter(record => outputLinks.get(active.key)?.has(record.key))
-          .map(record => ({ key: record.key, title: record.key, value: record.ref }))
+          .map(record => ({
+            key: record.key,
+            title: record.key,
+            detail: undefined,
+            scope: undefined,
+            value: record.ref,
+          }))
     : [];
   const navigate = (nextKind: typeof kind, key?: string) => {
     setSection('data');
@@ -97,6 +120,14 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
                 <span style={styles.rowTitle} title={entry.title}>
                   {entry.title}
                 </span>
+                {entry.detail ? (
+                  <span style={styles.rowTitle} title={entry.detail}>
+                    {entry.detail}
+                  </span>
+                ) : null}
+                {entry.scope ? (
+                  <span style={{ ...styles.family, overflowWrap: 'anywhere' }}>{entry.scope}</span>
+                ) : null}
                 <span style={styles.rowMeta}>
                   {'aliases' in entry.record
                     ? `${entry.record.aliases.length} aliases`
@@ -119,6 +150,12 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
               <h3 style={styles.detailTitle} title={active.title}>
                 {active.title}
               </h3>
+              {active.detail ? (
+                <span style={styles.rowTitle} title={active.detail}>
+                  {active.detail}
+                </span>
+              ) : null}
+              {active.scope ? <span style={styles.family}>{active.scope}</span> : null}
               <span style={styles.detailMeta}>
                 Cached at {new Date(active.record.cachedAt).toISOString()}
               </span>
@@ -149,6 +186,12 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
           <div style={{ overflow: 'auto', padding: 16 }}>
             {section === 'data' || (section === 'aliases' && !('aliases' in active.record)) ? (
               <>
+                {!('aliases' in active.record) ? (
+                  <details>
+                    <summary style={{ cursor: 'pointer' }}>Cache key / JSON</summary>
+                    <JsonView value={cloneDiagnosticValue(active.record.key)} label='Cache key' />
+                  </details>
+                ) : null}
                 <h4>{kind === 'entities' ? 'Present fields' : 'Normalized output'}</h4>
                 <JsonView value={cloneDiagnosticValue(active.record.value)} label='Cached value' />
               </>
@@ -166,9 +209,7 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
                         <header
                           style={{ ...styles.payloadHeader, justifyContent: 'space-between' }}
                         >
-                          <span style={styles.rowTitle}>
-                            {kind === 'entities' ? `Output ${index + 1}` : entry.title}
-                          </span>
+                          <span style={styles.rowTitle}>{entry.title}</span>
                           <button
                             type='button'
                             style={styles.subtleButton}
@@ -185,14 +226,23 @@ const ConnectedCachePanel = ({ cache }: { readonly cache: GraphClientCache }) =>
                           </button>
                         </header>
                         <div style={{ padding: 12 }}>
-                          <JsonView
-                            value={cloneDiagnosticValue(entry.value)}
-                            label={
-                              kind === 'entities'
-                                ? `Output ${index + 1} key`
-                                : `${entry.title} reference`
-                            }
-                          />
+                          {entry.detail ? (
+                            <p style={{ margin: '0 0 8px' }}>{entry.detail}</p>
+                          ) : null}
+                          {entry.scope ? <p style={styles.family}>{entry.scope}</p> : null}
+                          <details>
+                            <summary style={{ cursor: 'pointer' }}>
+                              {kind === 'entities' ? 'Cache key / JSON' : 'Reference / JSON'}
+                            </summary>
+                            <JsonView
+                              value={cloneDiagnosticValue(entry.value)}
+                              label={
+                                kind === 'entities'
+                                  ? `Output ${index + 1} key`
+                                  : `${entry.title} reference`
+                              }
+                            />
+                          </details>
                         </div>
                       </li>
                     ))}

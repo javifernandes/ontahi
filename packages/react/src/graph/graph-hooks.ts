@@ -150,6 +150,7 @@ export function useGraphQuery<
           ? graphOutput.nullable(descriptor.item)
           : descriptor,
         value,
+        { kind: 'graph-read', name: resolveQuerySpec(resolved, params).root.name },
       );
 
       return value as GraphQueryData<TRead, TMode>;
