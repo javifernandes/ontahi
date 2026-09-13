@@ -27,6 +27,7 @@ import {
 import { Effect, Stream } from 'effect';
 
 import { executeSupabaseGraphCommandEffect } from './command.js';
+import { compileContextualSelection, applyContextualSelection } from './contextual-selection.js';
 import { executeSupabaseEntityMutationCommandEffect } from './entity-mutation-command.js';
 import { executeSupabaseManyToManyRelationshipCommandEffect } from './many-to-many.js';
 import { materializeSupabaseEntityRow } from './materialization.js';
@@ -55,6 +56,7 @@ export const executeSupabaseGraphQueryEffect = <
 >(
   deps: {
     getClient: (options?: TReadOptions) => Effect.Effect<TClient, TError>;
+    entities?: readonly AnyEntityDefinition[];
     createError: SupabaseErrorFactory<TError>;
   },
   queryOrView: QueryOrView<TParams, TResult>,
@@ -72,7 +74,7 @@ export const executeSupabaseGraphQueryEffect = <
 
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
     yield* validateReadLimit(spec, deps.createError);
-    const plan = compileResolvedQueryPlan(spec);
+    const { plan, contextual } = yield* compileReadPlan(spec, deps);
     const supabase = yield* deps.getClient(options);
 
     const result = yield* fetchSupabaseEntityRowsResultEffect({
@@ -89,6 +91,7 @@ export const executeSupabaseGraphQueryEffect = <
       compiledWhere: plan.where,
       compiledSelection: plan.selection,
       compiledOrderBy: plan.orderBy,
+      contextualSelection: contextual,
       message: `Failed to load ${spec.root.name} records`,
       createError: deps.createError,
     });
@@ -119,6 +122,7 @@ export const executeSupabaseGraphCountEffect = <
 >(
   deps: {
     getClient: (options?: TReadOptions) => Effect.Effect<TClient, TError>;
+    entities?: readonly AnyEntityDefinition[];
     createError: SupabaseErrorFactory<TError>;
   },
   queryOrView: QueryOrView<TParams, TResult>,
@@ -132,10 +136,10 @@ export const executeSupabaseGraphCountEffect = <
 
     const spec = resolveQuerySpec(queryOrView as PlainGraphRead<TParams, TResult>, params);
     yield* validateReadLimit(spec, deps.createError);
-    const plan = compileResolvedQueryPlan(spec);
+    const { plan, contextual } = yield* compileReadPlan(spec, deps);
     const selection = compileSupabaseSelection(plan.selection);
 
-    if (selection.kind === 'none') {
+    if (selection.kind === 'none' || contextual?.filter === false) {
       yield* validateReadCardinality(spec, 0, deps.createError);
       return 0;
     }
@@ -144,8 +148,12 @@ export const executeSupabaseGraphCountEffect = <
 
     const count = yield* Effect.tryPromise({
       try: async () => {
-        let query = supabase.from(plan.rootTable).select('*', { count: 'exact', head: true });
-        query = applySupabaseSelection(query, selection);
+        let query = supabase
+          .from(plan.rootTable)
+          .select(['*', ...(contextual?.embeds ?? [])].join(','), { count: 'exact', head: true });
+        query = contextual
+          ? applyContextualSelection(query, contextual)
+          : applySupabaseSelection(query, selection);
 
         const result = await query;
         if (result.error) {
@@ -170,6 +178,30 @@ const resolvePlainSourceSpec = <TParams, TResult>(
   read: PlainGraphRead<TParams, TResult>,
   params: TParams,
 ) => resolveQuerySpec(read, params);
+
+const compileReadPlan = <TError>(
+  spec: QuerySpec,
+  deps: {
+    entities?: readonly AnyEntityDefinition[];
+    createError: SupabaseErrorFactory<TError>;
+  },
+) =>
+  Effect.try({
+    try: () => {
+      const contextual = compileContextualSelection(spec.root, spec.selection, deps.entities);
+      // The flat planner owns projection/include shaping only when membership has its own plan.
+      const plan = compileResolvedQueryPlan(
+        contextual ? { ...spec, selection: { kind: 'all' } } : spec,
+      );
+      return { plan, contextual };
+    },
+    catch: cause =>
+      deps.createError({
+        message: cause instanceof Error ? cause.message : 'Invalid Supabase read plan.',
+        logMessage: `Failed to compile Supabase read for ${spec.root.name}`,
+        cause,
+      }),
+  });
 
 const resolveRelatedRootEntityRowsEffect = <
   TClient extends SupabaseLikeClient,
@@ -538,6 +570,7 @@ export const createSupabaseDataGraphRuntime = <
   getReadClient: (options?: TReadOptions) => Effect.Effect<TClient, TError>;
   getCommandClient: (options?: TCommandOptions) => Effect.Effect<TClient, TError>;
   createError: SupabaseErrorFactory<TError>;
+  /** Receiver-owned registry, required for contextual Selection reads and relationship commands. */
   entities?: readonly AnyEntityDefinition[];
   manyToManyRpcName?: string;
   relationshipRpcName?: string;
@@ -553,6 +586,7 @@ export const createSupabaseDataGraphRuntime = <
     executeSupabaseGraphQueryEffect(
       {
         getClient: deps.getReadClient,
+        entities: deps.entities,
         createError: deps.createError,
       },
       queryOrView,
@@ -567,6 +601,7 @@ export const createSupabaseDataGraphRuntime = <
     executeSupabaseGraphQueryEffect(
       {
         getClient: deps.getReadClient,
+        entities: deps.entities,
         createError: deps.createError,
       },
       queryOrView,
@@ -592,6 +627,7 @@ export const createSupabaseDataGraphRuntime = <
       executeSupabaseGraphQueryEffect(
         {
           getClient: deps.getReadClient,
+          entities: deps.entities,
           createError: deps.createError,
         },
         queryOrView,
@@ -608,6 +644,7 @@ export const createSupabaseDataGraphRuntime = <
     executeSupabaseGraphCountEffect(
       {
         getClient: deps.getReadClient,
+        entities: deps.entities,
         createError: deps.createError,
       },
       queryOrView,

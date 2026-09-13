@@ -14,6 +14,7 @@ import {
 import { ontahi } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { compilePostgresQuery } from '@ontahi/postgres';
+import { createSupabaseDataGraphRuntime } from '@ontahi/supabase';
 import {
   analyzeConsoleDocument,
   completeConsoleDocument,
@@ -72,6 +73,41 @@ if (JSON.stringify(namedRows) !== JSON.stringify(factoryRows))
 if (factoryRows.length !== 1 || factoryRows[0].id !== 'i1') {
   throw new Error('Packed Core failed contextual Selection round-trip and execution.');
 }
+
+// Installed-artifact binding proof; real PostgREST execution lives in the provider integration suite.
+const postgrestCalls = [];
+const postgrestQuery = Object.assign(
+  Promise.resolve({ data: factoryRows, count: 1, error: null }),
+  {
+    or: (filter, options) => {
+      postgrestCalls.push({ filter, options });
+      return postgrestQuery;
+    },
+  },
+);
+const supabaseRuntime = createSupabaseDataGraphRuntime({
+  entities: [FactoryList, FactoryItem],
+  getReadClient: () =>
+    Effect.succeed({
+      from: table => ({
+        select: columns => {
+          postgrestCalls.push({ table, columns });
+          return postgrestQuery;
+        },
+      }),
+    }),
+  getCommandClient: () => Effect.die('Read smoke must not acquire a command client.'),
+  createError: ({ message }) => new Error(message),
+});
+const supabaseRows = await Effect.runPromise(
+  supabaseRuntime.run(factorySelection.toQuery(), undefined),
+);
+if (
+  JSON.stringify(supabaseRows) !== JSON.stringify(factoryRows) ||
+  postgrestCalls.filter(call => call.table).length !== 1 ||
+  !postgrestCalls.some(call => call.options?.referencedTable)
+)
+  throw new Error('Packed Supabase lost contextual Selection planning or execution.');
 
 const itemMapping = {
   entity: FactoryItem,

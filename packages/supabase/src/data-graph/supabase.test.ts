@@ -62,7 +62,7 @@ describe('data-graph supabase adapter helpers', () => {
     expect(operations).toEqual([
       {
         method: 'or',
-        args: ['owner_id.eq."owner,1",not.title.eq."A \\"quoted\\" title"'],
+        args: ['owner_id.eq."owner,1",not.and(title.eq."A \\"quoted\\" title")'],
       },
     ]);
   });

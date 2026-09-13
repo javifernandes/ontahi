@@ -740,7 +740,7 @@ describe('data-graph supabase runtime helpers', () => {
     expect(rows).toEqual([{ id: 'book-1', ownerId: 'owner-1', title: 'A' }]);
     expect(supabase.queries[0]?.operations).toContainEqual({
       method: 'or',
-      args: ['owner_id.eq."owner-1",not.title.eq."Archived, old"'],
+      args: ['owner_id.eq."owner-1",not.and(title.eq."Archived, old")'],
     });
   });
 
@@ -1122,7 +1122,7 @@ describe('data-graph supabase runtime helpers', () => {
 
     expect(supabase.queries[0]?.operations).toEqual([
       { method: 'delete', args: [] },
-      { method: 'or', args: ['owner_id.eq."owner-1",not.title.eq."Keep"'] },
+      { method: 'or', args: ['owner_id.eq."owner-1",not.and(title.eq."Keep")'] },
     ]);
   });
 

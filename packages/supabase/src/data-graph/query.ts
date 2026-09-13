@@ -1,6 +1,7 @@
 import { getEntityMapping, isEntityRef, type CompiledIncludePlan } from '@ontahi/core/data-graph';
 import { Effect } from 'effect';
 
+import { applyContextualSelection } from './contextual-selection.js';
 import {
   materializeSupabaseEntityRow,
   selectColumnsForQuery,
@@ -37,7 +38,8 @@ export const fetchSupabaseEntityRowsResultEffect = <TClient extends SupabaseLike
     createError: SupabaseErrorFactory<TError>;
   },
 ): Effect.Effect<{ rows: EntityRow[]; count: number | null }, TError> =>
-  input.compiledSelection && compileSupabaseSelection(input.compiledSelection).kind === 'none'
+  input.contextualSelection?.filter === false ||
+  (input.compiledSelection && compileSupabaseSelection(input.compiledSelection).kind === 'none')
     ? Effect.succeed({ rows: [], count: 0 })
     : hasEmptySupabaseInPredicate(input.compiledWhere ?? input.predicates)
       ? Effect.succeed({ rows: [], count: 0 })
@@ -48,6 +50,7 @@ export const fetchSupabaseEntityRowsResultEffect = <TClient extends SupabaseLike
               selectShape: input.selectShape,
               includeShape: input.includeShape,
             });
+            selectColumns.push(...(input.contextualSelection?.embeds ?? []));
 
             const table = input.supabase.from(
               input.tableName ?? getEntityMapping(input.entityDefinition).tableName,
@@ -56,13 +59,15 @@ export const fetchSupabaseEntityRowsResultEffect = <TClient extends SupabaseLike
               ? table.select(selectColumns.join(', '), { count: 'exact' })
               : table.select(selectColumns.join(', '));
 
-            query = input.compiledSelection
-              ? applySupabaseSelection(query, compileSupabaseSelection(input.compiledSelection))
-              : applySupabasePredicates(
-                  input.entityDefinition,
-                  query,
-                  input.compiledWhere ?? input.predicates,
-                );
+            query = input.contextualSelection
+              ? applyContextualSelection(query, input.contextualSelection)
+              : input.compiledSelection
+                ? applySupabaseSelection(query, compileSupabaseSelection(input.compiledSelection))
+                : applySupabasePredicates(
+                    input.entityDefinition,
+                    query,
+                    input.compiledWhere ?? input.predicates,
+                  );
 
             query = applySupabaseOrderBy(
               input.entityDefinition,

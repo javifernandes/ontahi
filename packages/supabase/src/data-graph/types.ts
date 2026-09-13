@@ -9,6 +9,8 @@ import type {
 } from '@ontahi/core/data-graph';
 import type { Effect } from 'effect';
 
+import type { ContextualSelectionPlan } from './contextual-selection.js';
+
 export type SelectionShape = Record<string, SelectionValue>;
 export type IncludeShape = Record<string, RelationQueryBuilder<any, any, any>>;
 export type EntityRow = Record<string, unknown>;
@@ -68,6 +70,7 @@ export type FetchEntityRowsInput<TClient extends SupabaseLikeClient> = {
   compiledWhere?: CompiledPredicate[];
   compiledSelection?: CompiledSelectionExpression;
   compiledOrderBy?: CompiledOrderBy[];
+  contextualSelection?: ContextualSelectionPlan;
   message: string;
   createError: SupabaseErrorFactory<any>;
 };
@@ -78,5 +81,6 @@ export type SupabaseReadDeps<
   TReadOptions extends object,
 > = {
   getClient: (options?: TReadOptions) => Effect.Effect<TClient, TError>;
+  entities?: readonly AnyEntityDefinition[];
   createError: SupabaseErrorFactory<TError>;
 };

@@ -259,13 +259,18 @@ contracts; generated clients receive portable templates with typed target facade
 callbacks. Self-relation targets retain their declared contract rather than an infinitely inferred
 recursive facade. PostgreSQL and MySQL local reads lower this membership to correlated `EXISTS` using
 receiver-owned mappings, retaining set semantics without source-ID prefetch. Composite edge joins
-and virtual filter fields remain unsupported. Protocol v1, Commands and Supabase
-still reject this expression. Opt-in Graph Read v2 request/response receivers authorize outgoing
+and virtual filter fields remain unsupported. Supabase reads use native PostgREST empty embeds
+and existence filters with a receiver-owned Entity registry and matching physical FK mappings;
+they do not prefetch source IDs. Self hasMany, non-self belongsTo and mapped many-to-many paths
+are supported; inverse self belongsTo, composite edges and virtual filter fields remain closed.
+Protocol v1 and Commands still reject this expression. Opt-in Graph Read v2 request/response receivers authorize outgoing
 `selectionRelations` independently of View/include grants and intersect each source and target
 with its own policy scope outside caller boolean logic. Discovery advertises advisory capability;
 low-level default receivers and graph observation remain closed. Application dispatchers use
 provider-declared execution support (in-memory/PostgreSQL/MySQL); remote clients negotiate on each
 contextual read using the same authority options, without source-ID prefetch or downgrade fallback.
+Low-level Supabase hosts explicitly configure v2 receivers and per-hop policies; supplying its
+Entity registry does not automatically install an application dispatcher or bypass RLS.
 Console authoring preserves contextual names in a shared source model: TS `.parts.chapters` and
 declarative `through parts through chapters` expand to the same deferred AST. Semantic destination
 resolution and continuation candidates are shared between dialect adapters, finite-value widgets,

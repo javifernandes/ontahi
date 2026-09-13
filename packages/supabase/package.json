@@ -54,6 +54,7 @@
     "effect": "^3.21.0"
   },
   "devDependencies": {
+    "@supabase/postgrest-js": "2.98.0",
     "@testcontainers/postgresql": "^11.7.2",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.15.5",
