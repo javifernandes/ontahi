@@ -19,7 +19,8 @@ const Book = entity('Book', { id: field.id(), slug: field.string(), title: field
 
 afterEach(cleanup);
 
-describe('Cache inspector', () => {
+// Match the other Devtools UI suites: coverage on CI can exceed the 5s default.
+describe('Cache inspector', { timeout: 15_000 }, () => {
   it('orders the views and distinguishes an unconnected cache from an empty cache', () => {
     render(
       <OntahiDevtools
