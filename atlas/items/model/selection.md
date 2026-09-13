@@ -257,14 +257,14 @@ cardinality. Entity `selections: ({ self }) => ({ ... })` declarations expose na
 Selections, including composition and runtime binding. Discovery exposes copied context/target
 contracts; generated clients receive portable templates with typed target facades rather than server
 callbacks. Self-relation targets retain their declared contract rather than an infinitely inferred
-recursive facade. PostgreSQL local reads lower this membership to correlated `EXISTS` using
+recursive facade. PostgreSQL and MySQL local reads lower this membership to correlated `EXISTS` using
 receiver-owned mappings, retaining set semantics without source-ID prefetch. Composite edge joins
-and virtual filter fields remain unsupported. Protocol v1, Commands, MySQL runtime and Supabase
+and virtual filter fields remain unsupported. Protocol v1, Commands and Supabase
 still reject this expression. Opt-in Graph Read v2 request/response receivers authorize outgoing
 `selectionRelations` independently of View/include grants and intersect each source and target
 with its own policy scope outside caller boolean logic. Discovery advertises advisory capability;
 low-level default receivers and graph observation remain closed. Application dispatchers use
-provider-declared execution support (in-memory/PostgreSQL); remote clients negotiate on each
+provider-declared execution support (in-memory/PostgreSQL/MySQL); remote clients negotiate on each
 contextual read using the same authority options, without source-ID prefetch or downgrade fallback.
 Console authoring preserves contextual names in a shared source model: TS `.parts.chapters` and
 declarative `through parts through chapters` expand to the same deferred AST. Semantic destination

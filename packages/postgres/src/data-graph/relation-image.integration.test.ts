@@ -16,8 +16,9 @@ import { Effect, Stream } from 'effect';
 import { Pool } from 'pg';
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 
+import { contextualGraph } from '../../../sql/src/data-graph/relation-image.test-support.js';
+
 import { postgresMapping } from './mapping.js';
-import { contextualGraph } from './relation-image.test-support.js';
 import { createPostgresDataGraphRuntime } from './runtime.js';
 import { createPostgresDataGraphStorage } from './storage.js';
 

@@ -6,7 +6,7 @@ import {
   withContextualSelections,
 } from '@ontahi/core/data-graph';
 
-import { postgresMapping } from './mapping.js';
+import { sqlMapping } from './mapping.js';
 
 export const contextualGraph = () => {
   const NodeBase = entity('ImageNode', {
@@ -33,17 +33,17 @@ export const contextualGraph = () => {
     through: { table: 'image_book_tags', fromColumn: 'book_id', toColumn: 'tag_id' },
   });
   const mappings = [
-    postgresMapping({
+    sqlMapping({
       entity: Book,
       table: 'image_books',
       columns: { id: 'book_id', visible: 'is_visible' },
     }),
-    postgresMapping({
+    sqlMapping({
       entity: Node,
       table: 'image_nodes',
       columns: { id: 'node_id', bookId: 'book_id', parentId: 'parent_id', type: 'node_type' },
     }),
-    postgresMapping({
+    sqlMapping({
       entity: Tag,
       table: 'image_tags',
       columns: { id: 'tag_id', name: 'tag_name' },

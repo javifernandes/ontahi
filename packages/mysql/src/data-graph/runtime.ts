@@ -55,6 +55,7 @@ const createRuntime = (
   const reads = createSqlReadRuntime({
     mappings,
     dialect: mysqlDialect,
+    relationSelections: true,
     executeQuery: createMysqlQueryExecutor(client),
     Error: MysqlDataGraphError,
     normalizeRow: normalizeMysqlRecord,

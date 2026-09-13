@@ -1,7 +1,8 @@
 import { Selection, toGraphReadRequest, type GraphCommandSpec } from '@ontahi/core/data-graph';
 import { describe, expect, it } from 'vitest';
 
-import { contextualGraph } from './relation-image.test-support.js';
+import { contextualGraph } from '../../../sql/src/data-graph/relation-image.test-support.js';
+
 import { compilePostgresCommand, compilePostgresQuery } from './sql.js';
 
 describe('PostgreSQL relational membership compiler', () => {
