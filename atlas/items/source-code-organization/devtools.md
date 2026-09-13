@@ -65,7 +65,9 @@ React surface is exported separately from `@ontahi/devtools/react`; it is one pr
 model, not the source of runtime truth. This keeps visual tooling and dependencies outside the
 non-visual `@ontahi/react` client. The shipped surface covers correlated Activity with inline
 Operation progress, Graph observation snapshots, a normalized Cache inspector, optional local entity
-history, and a runtime-owned Settings projection. Connection-state evidence remains Plan 148 work.
+history, and a runtime-owned Settings projection. The Cache index groups instances by entity type;
+field references link to cached instances, and Back restores navigation context. Raw present fields
+remain inspectable alongside these links. Connection-state evidence remains Plan 148 work.
 
 Activity leads with reconstructed application intent, such as an Entity selection and named View,
 or an Operation's input and returned value with Entity Refs reduced to domain identity. Protocol

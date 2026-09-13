@@ -102,7 +102,14 @@ export const DevtoolsPanel = ({
 
   const renderContent = () => {
     if (view === 'console' && consoleOptions) return null;
-    if (view === 'cache') return <CachePanel clientCache={clientCache} history={history} />;
+    if (view === 'cache')
+      return (
+        <CachePanel
+          clientCache={clientCache}
+          history={history}
+          entities={consoleOptions?.entities}
+        />
+      );
     if (view === 'settings')
       return (
         <section style={styles.settingsPage} aria-label='Devtools settings'>

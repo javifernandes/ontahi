@@ -88,6 +88,40 @@ describe('Cache inspector', { timeout: 15_000 }, () => {
     expect(screen.getByText('No cached outputs yet.')).toBeTruthy();
   });
 
+  it('groups entities, searches collapsed groups, and follows cached relations with Back', () => {
+    const Tag = entity('Tag', { id: field.id(), name: field.string() });
+    const LinkedBook = Book.hasMany('tags', Tag);
+    const cache = createGraphClientCache();
+    cache.writeEntity(Book, {
+      id: 'b1',
+      slug: 'programming',
+      title: 'Programming',
+      tags: [{ id: 't1', name: 'Embedded name' }, createEntityRef(Tag, { id: 'missing' })],
+    });
+    cache.writeEntity(Tag, { id: 't1', name: 'Important' });
+    render(<CachePanel clientCache={cache} entities={[LinkedBook, Tag]} />);
+    expect(screen.getByRole('list', { name: 'Book instances' })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Tag instances' })).toBeTruthy();
+    const summary = screen.getByText('Tag', { selector: 'summary' });
+    fireEvent.click(summary);
+    expect(summary.parentElement?.hasAttribute('open')).toBe(false);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Important' } });
+    expect(summary.parentElement?.hasAttribute('open')).toBe(true);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Programming' } });
+    const relationships = screen.getByRole('list', { name: 'Entity relationships' });
+    expect(
+      within(relationships)
+        .getByRole('button', { name: /missing/ })
+        .hasAttribute('disabled'),
+    ).toBe(true);
+    fireEvent.click(within(relationships).getByRole('button', { name: /tags\[0\] → Important/ }));
+    expect(screen.getByRole('heading', { name: 'Important' })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Tag instances' }).closest('details')?.open).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    expect(screen.getByRole('heading', { name: 'Programming' })).toBeTruthy();
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('Programming');
+  });
+
   it('inspects local values containing bigint and cycles without changing the cache', () => {
     const cache = createGraphClientCache();
     const cycle: Record<string, unknown> = { amount: 42n };
