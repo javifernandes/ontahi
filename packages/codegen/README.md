@@ -11,7 +11,8 @@ Entity `selections: ({ self }) => ({ parts: self.nodes.where(n => n.type.eq('par
 declarations compile to portable contextual templates. Generated Selections keep named properties,
 target field types and deferred membership, including the `Book → parts → chapters` self-relation
 case. The current grammar accepts `self.relation` or one literal `where` predicate
-(`eq/lt/lte/gt/gte`); opaque callbacks are diagnosed, never imported into browser code.
+(`eq/lt/lte/gt/gte` or parameterless `isNull()`); opaque callbacks are diagnosed, never imported
+into browser code.
 See [Core contextual factories](../core/README.md#experimental-contextual-selection-factories).
 
 `self.nodes.as(Part)` and `self.nodes.where(predicate).as(Part)` additionally name a classified
@@ -73,7 +74,10 @@ or emitted by codegen.
 `graphSchema.existingRef(Chapter)` inputs are projected when Chapter resolves to a literal
 `ContentNode.variant('Chapter', { discriminator: { type: 'chapter' } })` declaration. Local and
 imported declarations (including import aliases), direct optional/nullable wrappers and named
-object inputs are supported. Operation config shorthand `{ input }` preserves that input too.
+object inputs are supported. Named `value('Input', { chapter: graphSchema.existingRef(Chapter) })`
+inputs also preserve their name and share one generated schema when reused across Operations.
+Local, inline and imported/aliased Values support direct optional/nullable participant fields.
+Operation config shorthand `{ input }` preserves that input too.
 
 Codegen extracts a data descriptor and emits the variant on the **generated base schema**. The base
 must be an `entity({ name, fields })` declaration included in the generated graph; missing bases
@@ -81,7 +85,7 @@ are diagnosed rather than imported from server source. Custom `.resolveWith(...)
 server-owned and are omitted from client code. Canonical Ref identity and the reflected variant
 requirement survive generation, without implying that client validation proves membership.
 
-Opaque declarations, named Values containing variants, portable conditions on variant inputs and
+Opaque declarations, nested existing participants, portable conditions on variant inputs and
 portable `graphSchema.ref(Variant)` are
 not supported by this slice. Standalone generated variant exports remain a follow-up. Registered
 variant read roots and REPL autocomplete are discovered through receiver capabilities; generated

@@ -81,7 +81,7 @@ assembly remain distinct consumers; this plan must not reintroduce read-then-wri
 - [ ] Reflection, generated clients and both language projections preserve the contract.
 - [x] REPL introspection/autocomplete discover variants, narrowed inherited fields and factories from
       the canonical reflected contract, consistently across both dialects and incomplete drafts.
-- [ ] BookOps rehearsal documents the changed existence semantics and the release/adoption boundary.
+- [x] BookOps rehearsal documents the changed existence semantics and the release/adoption boundary.
 
 ## Verification and boundaries
 
@@ -402,4 +402,96 @@ the in-memory/React lifecycle evidence is not a blanket claim about every storag
 Validation: 1,080 Core and 119 React tests passed with coverage gates; Core/React builds and lint,
 all package and Todo/Classroom typechecks, repository formatting and clean-room tarball
 installation/type/runtime verification passed. The artifact proof also checks observation lifetime
-release through published Core entrypoints. New lifecycle work is local and uncommitted.
+release through published Core entrypoints. Committed as `0af23b2`.
+
+## BookOps adoption rehearsal checkpoint — 2026-09-12
+
+The [rehearsal report](../../docs/research/bookops-chapter-variants.md) records the actual host
+checkout, including its preserved local changes and `0.1.0-alpha.3` dependency pins. An executable
+Core fixture declares root/nested Chapter navigation and one schema-native `existingRef(Chapter)`
+Operation input. It derives repository slugs on the server, preserves state filtering and tests
+duplicate slugs across Parts, empty/missing/wrong-kind/inaccessible Chapters and broken hierarchy.
+BookOps source, dependencies, generated client and local changes remain untouched.
+
+The key migration change is **existence**, not syntax: the old path resolver checks Book/Part but
+does not load the Chapter, and returns a location DTO. It cannot implement the new complete-record
+participant contract. The existing Reader's separate ChapterNode/SectionNode declarations also
+cannot be replaced blindly: their read shapes, typed children and identity names differ. Named
+Values containing variant inputs, generated standalone variants and variant-root Views remain gaps.
+The guided Explorer picker is separate from the Operation input; do not remove path hints without
+an interaction replacement or an explicit acceptance of that loss.
+
+Combining `.parts.chapters` and `.rootChapters` exposed a public type mismatch across fluent base
+enrichment. Contextual `as` now retains the variant's own base type, while the receiver-side factory
+still requires exact target object identity. Core and packed-consumer fixtures cover pre-enrichment
+classifiers alongside enriched targets; a structurally identical second base object is rejected.
+This is a narrow authoring fix, not new variant inheritance or a second identity namespace.
+
+The low-level raw Operation runner is not an input-validation ingress. Deferred classified
+Selections fail input schema parsing/serialization; callers must not bypass that boundary by
+passing arbitrary objects directly to the raw runner. No deferred Selection participant API was
+introduced. Participant authorization remains host-owned and separate from Graph Read policy.
+
+Next: review the remaining read-only acceptance gaps before calling 152 complete or upgrading the
+host. Prioritize a generated semantic-entity declaration/adoption proof (including named input
+Values), then the Reader/View and guided-input interaction decisions. Keep generic discriminator
+write guards/transitions, SQL provider lifecycle and deferred Operation inputs explicit, separate
+work rather than claiming this in-memory rehearsal closes them. A release plus one coordinated
+Operation/caller migration remains the BookOps adoption boundary.
+
+Validation: all 1,097 Core tests passed with coverage gates, including 16 BookOps rehearsal cases
+and the fluent-enrichment regression. All 140 codegen and 337 Language tests passed. Public package
+builds, all package and Todo/Classroom typechecks, Core lint, root script lint, repository formatting
+and whitespace checks passed. Clean-room tarball installation/type/runtime checks exercise both
+direct and nested classified destinations. This rehearsal and its narrow authoring fix are included
+in the read-only variants PR scope below; no real BookOps execution or database migration is claimed.
+
+## Named input projection and release gate checkpoint — 2026-09-13
+
+The follow-up supports named `value('ListThreadsForChapterInput', { chapter:
+graphSchema.existingRef(Chapter), ... })` contracts without replacing them with anonymous objects.
+Local, inline and imported/aliased declarations retain their Value name, shared schema identity,
+canonical ContentNode Ref and classification descriptor. Projection reuses the existing static
+variant analysis; no resolver closure crosses into browser code. Semantic Entity fixtures include
+Book.parts.chapters and Book.rootChapters alongside the Operation input. Generated modules are
+typechecked and imported, not merely inspected as source text. Portable refs and conditions remain
+rejected; nested participants and standalone generated variant exports are not added.
+The root-navigation proof also exposed missing `isNull()` compilation in contextual declarations;
+it now emits the existing null-test AST without a value argument or copied callback.
+
+**User-directed pause before BookOps migration:** close/review this Ontahi slice, then reconcile the
+accumulated Changesets with Plans, Atlas, developer docs and executable package contracts before
+preparing the release. Inventory both the last published release → candidate and BookOps's pinned
+version → candidate; the latter can include changes already published in intermediate versions.
+Use the [release documentation gate](../../RELEASING.md#developer-documentation-gate) and the
+[adoption checklist](../../docs/research/bookops-chapter-variants.md#release-and-adoption-boundary).
+Do not infer permission to publish, merge the generated release PR, bump versions or update BookOps
+from approval to continue this codegen work. Review the inventory/scope with the user first. The
+actual host migration starts only after the approved Ontahi release exists at an exact version.
+
+Plan 152 remains current: Reader/View and guided-input decisions, write/transition lifecycle,
+provider-specific lifecycle and deferred Operation inputs are still explicit boundaries. The next
+step is release reconciliation, not another unbounded BookOps implementation slice.
+
+Validation: all 147 codegen tests passed with coverage gates, including generated-module type/runtime
+proofs and a shared Value first used by a server-only Operation (its resolver must not reappear in
+browser output). Codegen build/types/lint, Todo/Classroom codegen checks and typechecks, repository
+formatting and root script lint passed. Clean-room tarball verification also executes the installed
+codegen and imports its generated named participant schema using the installed Core entrypoint.
+No release, version bump, dependency upgrade or BookOps source change was performed.
+
+## Read-only variants PR boundary — 2026-09-13
+
+The user approved submitting the accumulated variant work for review before considering a release.
+The PR delivers the experimental read-only classification surface, schema-native existing
+participants, discovery/codegen (including named Values), both Console dialects, contextual and
+bound reads, and the in-memory/React lifecycle and BookOps rehearsal evidence above.
+
+This does not close the broader acceptance list. Generic base Commands remain unchanged; there is
+no variant mutation API or enforced discriminator-transition lifecycle. Variant-root Views,
+standalone generated variant exports, variant-specific policy composition, provider-specific live
+change feeds and deferred classified Operation inputs remain outside this PR. The host-owned
+materialization boundary is distinct from Graph Read policy. Plan 152 therefore remains current.
+
+After PR review/merge, pause for the release reconciliation described above. Submitting this PR
+does not authorize publishing, merging the generated release PR or migrating BookOps.

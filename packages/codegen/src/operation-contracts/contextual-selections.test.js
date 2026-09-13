@@ -34,6 +34,14 @@ describe('contextual Selection declaration compiler', () => {
       JSON.parse(project('({ self }) => ({ nodes: self.nodes })').contextualSelectionsText),
     ).toEqual({ nodes: { relationName: 'nodes', expression: { kind: 'all' } } });
   });
+  it('compiles root membership without serializing a nonexistent null-test argument', () => {
+    expect(
+      JSON.parse(
+        project('({ self }) => ({ roots: self.nodes.where(n => n.parentId.isNull()) })')
+          .contextualSelectionsText,
+      ).roots.expression,
+    ).toEqual({ kind: 'predicate', operator: 'isNull', fieldName: 'parentId' });
+  });
   it.each(['lt', 'lte', 'gt', 'gte'])('retains operator %s', operator => {
     const result = project(
       `({ self }) => ({ items: self.items.where(i => i.count.${operator}(3)) })`,
@@ -56,6 +64,7 @@ describe('contextual Selection declaration compiler', () => {
     '({ self }) => ({ nodes: self.nodes.where(n => n.active.eq(secret)) })',
     '({ self }) => ({ nodes: self.nodes.where(n => other.active.eq(true)) })',
     '({ self }) => ({ nodes: self.nodes.where(n => n.active.eq(true, false)) })',
+    '({ self }) => ({ nodes: self.nodes.where(n => n.parentId.isNull(secret)) })',
   ])('diagnoses unsupported syntax without emitting a closure: %s', source => {
     const result = project(source);
     expect(result.contextualSelectionsText).toBeUndefined();

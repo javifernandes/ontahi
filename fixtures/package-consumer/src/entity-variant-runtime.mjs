@@ -27,6 +27,56 @@ import {
   reflectSelectionLanguageEntity,
 } from '@ontahi/language';
 import { Effect, Stream } from 'effect';
+import {
+  analyzeSpecificDomainEntityExport,
+  renderGeneratedClientEntityModule,
+} from '@ontahi/codegen';
+import ts from 'typescript';
+
+const namedInputAnalysis = analyzeSpecificDomainEntityExport(
+  `
+  export const Node = entity({ name: 'NamedInputNode', fields: {
+    id: field.id(), type: field.enum(['part', 'chapter']),
+  }, domainOperationDefaults: { authority: 'server', exposure: 'bridge', layer: 'packed' },
+  operations: ({ operation }) => ({ inspect: operation({
+    input: value('ChapterInput', { chapter: graphSchema.existingRef(Chapter).resolveWith(serverOnlyResolver) }),
+    run: () => null,
+  }) }) });
+  const Chapter = Node.variant('Chapter', { discriminator: { type: 'chapter' } });
+`,
+  'Node',
+);
+if (namedInputAnalysis.diagnostics.length)
+  throw new Error(namedInputAnalysis.diagnostics.join('\n'));
+const namedInputSource = renderGeneratedClientEntityModule({
+  entities: [namedInputAnalysis.definition],
+  namedDefinitions: namedInputAnalysis.definition.operations.flatMap(
+    operation => operation.namedDefinitions,
+  ),
+});
+if (namedInputSource.includes('serverOnlyResolver'))
+  throw new Error('Packed codegen emitted a server resolver.');
+// Resolve only the installed public entrypoint, never a workspace/source path.
+const namedInputModule = ts.transpileModule(
+  namedInputSource.replaceAll(
+    "'@ontahi/core/data-graph'",
+    JSON.stringify(import.meta.resolve('@ontahi/core/data-graph')),
+  ),
+  { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } },
+).outputText;
+const generatedNamedInput = await import(
+  `data:text/javascript;base64,${Buffer.from(namedInputModule).toString('base64')}`
+);
+const namedInputDescriptor = toGraphSchemaDescriptor(
+  generatedNamedInput.NamedInputNode.domain.inspect.input,
+);
+if (
+  namedInputDescriptor.name !== 'ChapterInput' ||
+  namedInputDescriptor.role !== 'value' ||
+  namedInputDescriptor.fields.chapter.variant?.name !== 'Chapter' ||
+  namedInputDescriptor.fields.chapter.entityName !== 'NamedInputNode'
+)
+  throw new Error('Packed codegen lost named participant reflection.');
 
 const Node = entity('PackedNode', {
   id: field.id(),
@@ -180,7 +230,10 @@ const Tree = withContextualSelections(
 const Branch = Tree.variant('Branch', { discriminator: { type: 'branch' } });
 const Forest = withContextualSelections(
   entity('Forest', { id: field.id() }).hasMany('nodes', Tree, { via: 'forestId' }),
-  ({ self }) => ({ branches: self.nodes.as(Branch) }),
+  ({ self }) => ({
+    branches: self.nodes.as(Branch),
+    rootLeaves: self.nodes.where(node => node.parentId.isNull()).as(Leaf),
+  }),
 );
 const treeRuntime = createInMemoryDataGraphRuntime({
   entities: [Forest, Tree],
@@ -189,6 +242,7 @@ const treeRuntime = createInMemoryDataGraphRuntime({
     TreeNode: [
       { id: 'branch', parentId: null, forestId: 'forest', type: 'branch' },
       { id: 'leaf', parentId: 'branch', forestId: 'forest', type: 'leaf' },
+      { id: 'root-leaf', parentId: null, forestId: 'forest', type: 'leaf' },
       { id: 'wrong-child', parentId: 'branch', forestId: 'forest', type: 'branch' },
     ],
   },
@@ -196,6 +250,11 @@ const treeRuntime = createInMemoryDataGraphRuntime({
 const leafQuery = Selection.all(Forest).branches.leaves.many();
 if (leafQuery.build().root !== Tree)
   throw new Error('Packed contextual variant lost base identity.');
+const rootLeaves = await Effect.runPromise(
+  treeRuntime.run(Selection.all(Forest).rootLeaves.many(), undefined),
+);
+if (rootLeaves.length !== 1 || rootLeaves[0].id !== 'root-leaf')
+  throw new Error('Packed pre-enrichment classifier lost root membership.');
 const treeReads = createGraphReadDispatcher({
   relationSelections: true,
   policies: [

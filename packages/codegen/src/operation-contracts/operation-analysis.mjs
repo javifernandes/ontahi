@@ -5,6 +5,7 @@ import { compileModelExpressionCallback } from '../model-expression/compiler.mjs
 import {
   containsVariantReference,
   resolveEntitySchemaProjection,
+  resolveProjectionValueNode,
 } from './entity-schema-projection.mjs';
 import {
   deriveGraphOutputFromSchemaNode,
@@ -713,37 +714,24 @@ export const parseOperationDefinition = (
   let resolvedInputNode;
 
   if (inputNode) {
-    const unwrappedInput = unwrapExpression(inputNode);
-    const localInputDeclaration =
-      unwrappedInput && ts.isIdentifier(unwrappedInput)
-        ? schemaContext?.declarations.get(unwrappedInput.text)
-        : undefined;
-    const importedInputContext =
-      schemaContext && unwrappedInput && ts.isIdentifier(unwrappedInput) && !localInputDeclaration
-        ? resolveImportedSchemaContext(unwrappedInput.text, schemaContext)
-        : undefined;
-    const importedInputDeclaration =
-      unwrappedInput && ts.isIdentifier(unwrappedInput)
-        ? importedInputContext?.declarations.get(unwrappedInput.text)
-        : undefined;
-    const localInputNode =
-      unwrappedInput && ts.isIdentifier(unwrappedInput)
-        ? (localInputDeclaration?.initializer ?? importedInputDeclaration?.initializer)
-        : unwrappedInput;
+    const resolvedInput = resolveProjectionValueNode(inputNode, schemaContext);
+    const localInputNode = resolvedInput.expression;
+    const inputContext = resolvedInput.context;
+    const inputDeclaration = [...(inputContext?.declarations.values() ?? [])].find(
+      declaration =>
+        declaration.initializer && unwrapExpression(declaration.initializer) === localInputNode,
+    );
     resolvedInputNode = localInputNode;
 
     if (
       exposure !== 'server-only' &&
       localInputNode &&
-      containsVariantReference(localInputNode, importedInputContext ?? schemaContext)
+      containsVariantReference(localInputNode, inputContext)
     ) {
       try {
         if (contractsNode)
           throw new Error('Portable conditions on variant inputs are not supported yet.');
-        const projected = projectVariantInputs(
-          localInputNode,
-          importedInputContext ?? schemaContext,
-        );
+        const projected = projectVariantInputs(localInputNode, inputContext);
         if (!projected.variants.length)
           throw new Error('Use graphSchema.existingRef for variant inputs.');
         inputSchemaText = projected.schemaText;
@@ -755,16 +743,14 @@ export const parseOperationDefinition = (
 
     inputNamedDefinition = analyzeNamedValueDefinition({
       node: localInputNode,
-      declaration: localInputDeclaration ?? importedInputDeclaration,
-      context: localInputDeclaration ? schemaContext : (importedInputContext ?? schemaContext),
+      declaration: inputDeclaration,
+      context: inputContext,
       fallbackDeclaration: `${operationName}.input`,
     });
-    if (variantInputs && inputNamedDefinition)
-      return {
-        diagnostics: [
-          `${operationName}.input: named Values containing variants are not supported yet; use a direct object input.`,
-        ],
-      };
+    if (variantInputs && inputNamedDefinition) {
+      inputNamedDefinition.schemaText = inputSchemaText;
+      inputNamedDefinition.variantInputs = variantInputs;
+    }
 
     if (
       localInputNode &&

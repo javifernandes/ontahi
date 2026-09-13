@@ -21,12 +21,17 @@ describe('classified Operation input browser projection', () => {
       'require graphSchema.existingRef',
     ],
     [
-      "value('Input', { chapter: graphSchema.existingRef(Chapter) })",
-      '',
-      'named Values containing variants',
+      'graphSchema.object({ chapter: graphSchema.existingRef(Chapter) })',
+      'contracts: { pre: {} },',
+      'Portable conditions on variant inputs',
     ],
     [
-      'graphSchema.object({ chapter: graphSchema.existingRef(Chapter) })',
+      "value('Input', { chapter: graphSchema.ref(Chapter) })",
+      '',
+      'require graphSchema.existingRef',
+    ],
+    [
+      "value('Input', { chapter: graphSchema.existingRef(Chapter) })",
       'contracts: { pre: {} },',
       'Portable conditions on variant inputs',
     ],

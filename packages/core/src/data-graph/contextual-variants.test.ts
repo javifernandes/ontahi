@@ -31,7 +31,10 @@ const fixture = () => {
     entity('Book', { id: field.id(), owner: field.string() }).hasMany('nodes', Node, {
       via: 'bookId',
     }),
-    ({ self }) => ({ parts: self.nodes.as(Part) }),
+    ({ self }) => ({
+      parts: self.nodes.as(Part),
+      rootChapters: self.nodes.where(node => node.parentId.isNull()).as(Chapter),
+    }),
   );
   const runtime = createInMemoryDataGraphRuntime({
     entities: [Book, Node],
@@ -143,6 +146,26 @@ const fixture = () => {
 };
 
 describe('classified contextual Selection destinations', () => {
+  it('accepts classifiers declared before fluent enrichment without accepting a second base object', async () => {
+    const { Book, Chapter, Node, runtime } = fixture();
+    const selected = Selection.where(Book, book => book.id.eq('b1')).rootChapters;
+    expect(selected.variant).toBe(Chapter);
+    expectTypeOf(selected.many().__result?.type).toEqualTypeOf<'chapter' | undefined>();
+    expect(
+      (await Effect.runPromise(runtime.run(selected.many(), undefined))).map(row => row.id),
+    ).toEqual(['fake-part']);
+    const OtherChapter = entity('Node', Node.fields).variant('OtherChapter', {
+      discriminator: { type: 'chapter' },
+    });
+    expect(
+      () =>
+        withContextualSelections(
+          entity('OtherBook', { id: field.id() }).hasMany('nodes', Node, { via: 'bookId' }),
+          ({ self }) => ({ chapters: self.nodes.as(OtherChapter) }),
+        ).contextualSelections,
+    ).toThrow('must classify');
+  });
+
   it('hydrates portable classified templates and rejects a descriptor for another relation target', () => {
     const { Node } = fixture();
     const base = () =>

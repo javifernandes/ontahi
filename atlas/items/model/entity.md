@@ -73,6 +73,15 @@ global Entity deletion; confirmed-delete eviction and cache authority scope rema
 Live SQL change feeds, variant-root Views and the variant write/transition API remain pending.
 This is not general-purpose variant schema support.
 
+The [BookOps Chapter rehearsal](../../../docs/research/bookops-chapter-variants.md) distinguishes
+an actual classified participant from a location DTO: resolving a Book/Part path does not prove
+Chapter existence. Contextual factories can compose root/nested classified destinations across
+fluent enrichment of the same base object; enrichment does not create a second identity. Host
+adoption still owns authorization, hierarchy integrity, generated-client compatibility and the
+guided selection interaction. Named Value inputs now preserve direct classified participants in
+generated clients, including imported aliases, without emitting server resolvers. Separate Reader
+Entities over one table are not automatically variants.
+
 The conventional identity is declared at the [[ontahi.model.field|Field]] itself. An exact, required
 `id: field.id()` field gives the Entity a `refById` locator and makes it the default identity:
 

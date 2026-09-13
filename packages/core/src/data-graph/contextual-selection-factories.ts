@@ -26,9 +26,13 @@ export interface ContextualSelectionFactory<
   TTarget extends AnyEntityDefinition,
 > {
   readonly descriptor: ContextualSelectionDescriptor;
-  as<TName extends string, TDiscriminator extends EntityVariantDiscriminator<TTarget>>(
-    variant: EntityVariant<TTarget, TName, TDiscriminator>,
-  ): ClassifiedContextualSelectionFactory<TSource, TTarget, TName, TDiscriminator>;
+  as<
+    TVariantTarget extends AnyEntityDefinition & Pick<TTarget, 'name' | 'fields'>,
+    TName extends string,
+    TDiscriminator extends EntityVariantDiscriminator<TVariantTarget>,
+  >(
+    variant: EntityVariant<TVariantTarget, TName, TDiscriminator>,
+  ): ClassifiedContextualSelectionFactory<TSource, TVariantTarget, TName, TDiscriminator>;
   from<TContext extends TSource>(
     source: Selection<TContext>,
   ): Selection<TTarget, undefined> & SelectionProperties<TTarget>;
@@ -90,7 +94,9 @@ export const contextualSelectionFactory = <
           };
         },
         from<TContext extends TSource>(source: Selection<TContext>) {
-          return variant.from(factory.from(source));
+          // Fluent enrichment preserves the base object but changes its static relation/factory
+          // type. After the identity check above, project membership onto the variant's own type.
+          return variant.from(new Selection(variant.base, factory.from(source).build()));
         },
       };
       compiledFactories.add(classified);

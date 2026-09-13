@@ -144,6 +144,19 @@ const VariantNode = entity('VariantNode', {
   title: field.string(),
 });
 const Chapter = VariantNode.variant('Chapter', { discriminator: { type: 'chapter' } });
+const EnrichedVariantNode = withContextualSelections(
+  VariantNode.hasMany('children', VariantNode),
+  ({ self }) => ({ chapters: self.children.as(Chapter) }),
+);
+const Part = EnrichedVariantNode.variant('Part', { discriminator: { type: 'part' } });
+const VariantBook = withContextualSelections(
+  entity('VariantBook', { id: field.id() }).hasMany('nodes', EnrichedVariantNode),
+  ({ self }) => ({ parts: self.nodes.as(Part), chapters: self.nodes.as(Chapter) }),
+);
+export const directClassifiedRead: 'chapter' | undefined =
+  Selection.all(VariantBook).chapters.many().__result?.type;
+export const nestedClassifiedRead: 'chapter' | undefined =
+  Selection.all(VariantBook).parts.chapters.many().__result?.type;
 const chapters = Chapter.where(node => node.title.eq('Intro'))
   .not()
   .many();

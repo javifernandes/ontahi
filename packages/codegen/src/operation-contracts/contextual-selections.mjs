@@ -55,9 +55,9 @@ export const projectContextualSelections = (node, context) => {
       const operator = call.expression;
       if (
         !ts.isCallExpression(call) ||
-        call.arguments.length !== 1 ||
         !ts.isPropertyAccessExpression(operator) ||
-        !['eq', 'lt', 'lte', 'gt', 'gte'].includes(operator.name.text)
+        !['eq', 'lt', 'lte', 'gt', 'gte', 'isNull'].includes(operator.name.text) ||
+        call.arguments.length !== (operator.name.text === 'isNull' ? 0 : 1)
       )
         throw new Error('unsupported predicate');
       const field = operator.expression;
@@ -71,7 +71,7 @@ export const projectContextualSelections = (node, context) => {
         kind: 'predicate',
         fieldName: field.name.text,
         operator: operator.name.text,
-        value: literal(call.arguments[0]),
+        ...(operator.name.text === 'isNull' ? {} : { value: literal(call.arguments[0]) }),
       };
     };
     const templates = Object.fromEntries(

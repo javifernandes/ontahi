@@ -321,8 +321,9 @@ export const renderGeneratedClientEntityModule = ({
     }
     usedGeneratedNames.add(localName);
     namedDefinitionLocalNames.set(definition.name, localName);
-    return `const ${localName} = ${replaceProjectedEntityNames(
-      definition.schemaText,
+    return `const ${localName} = ${renderVariantInputs(
+      replaceProjectedEntityNames(definition.schemaText, projectedNames),
+      definition.variantInputs,
       projectedNames,
     )};`;
   });
