@@ -11,7 +11,7 @@ Source commit: `a27ef5d1`
 Related plans:
 
 1. [116 Ontahí Selection Model](../done/116-ontahi-selection-model.md)
-2. [120b Contextual Selection Factories](../current/120b-contextual-selection-factories.md)
+2. [120b Contextual Selection Factories](../done/120b-contextual-selection-factories.md)
 
 ## Proposal
 

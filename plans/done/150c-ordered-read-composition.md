@@ -5,7 +5,7 @@ Status: done
 Canonical ID: `ontahi://plans/150c-ordered-read-composition`
 
 Builds on [150b](150b-language-modules-and-dialect-contract.md) and
-[120b](../current/120b-contextual-selection-factories.md).
+[120b](120b-contextual-selection-factories.md).
 
 ## Scope
 

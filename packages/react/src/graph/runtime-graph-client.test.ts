@@ -66,7 +66,7 @@ describe('Runtime Graph client', () => {
     ]);
     expect(observe).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'graph-read', mode: 'run' }),
-      undefined,
+      { signal: expect.objectContaining({ aborted: true }) },
     );
     expect(client.clientCache.inspect().records).toEqual(
       expect.arrayContaining([

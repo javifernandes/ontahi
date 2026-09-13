@@ -49,6 +49,15 @@ export type AnalyzedNamedDefinition = {
   declaration: string;
   sourcePath?: string;
   schemaText?: string;
+  variantInputs?: readonly {
+    placeholder: string;
+    descriptor: {
+      kind: 'entity-variant';
+      name: string;
+      baseEntityName: string;
+      discriminator: { fieldName: string; value: string };
+    };
+  }[];
 };
 
 export type OntahiApplicationAnalysis = {

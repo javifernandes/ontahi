@@ -51,6 +51,7 @@ export { parseSelectionDocument } from './selection/syntax.js';
 export { analyzeSelectionDocument } from './selection/semantics.js';
 
 export { reflectSelectionLanguageEntity } from './reflection/entity.js';
+export { reflectConsoleApplicationVariants } from './reflection/variants.js';
 
 export {
   parseConsoleDocument,

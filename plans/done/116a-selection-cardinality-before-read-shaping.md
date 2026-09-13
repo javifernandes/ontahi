@@ -81,6 +81,6 @@ data/count. No hosted Supabase or live PostgREST read endpoint was exercised in 
 ## Closure
 
 116a closes the cardinality/read-shaping gate. Variants remain in
-[152](../next/152-discriminated-entity-variants.md); Console Commands and Operations remain in
+[152](../current/152-discriminated-entity-variants.md); Console Commands and Operations remain in
 [150](../current/150-ontahi-devtools-semantic-console.md). This does not widen mutable Selection
 targeting, remove locators, or guarantee that membership stays unchanged after a read.

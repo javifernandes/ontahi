@@ -22,9 +22,17 @@ export const collectNamedDefinitions = entities => {
   const definitionsByName = new Map();
   const namedDefinitions = [];
   const diagnostics = [];
+  // A shared Value may first appear on a server-only Operation. Keep the portable projection
+  // discovered by a client-visible use, rather than re-emitting the server resolver expression.
+  const portableDefinitions = new Map(
+    definitions
+      .filter(definition => definition.variantInputs?.length)
+      .map(definition => [namedDefinitionOrigin(definition), definition]),
+  );
 
-  for (const definition of definitions) {
-    const origin = namedDefinitionOrigin(definition);
+  for (const candidate of definitions) {
+    const origin = namedDefinitionOrigin(candidate);
+    const definition = portableDefinitions.get(origin) ?? candidate;
     if (uniqueOrigins.has(origin)) continue;
     uniqueOrigins.add(origin);
 

@@ -1,6 +1,11 @@
 import { isJsonValue, type JsonValue } from '../value/json.js';
 
 import {
+  EntityVariant,
+  type EntityVariantDescriptor,
+  type EntityVariantDiscriminator,
+} from './entity-variant.js';
+import {
   assertModelExpressionProgram,
   collectModelExpressionDependencies,
   type ModelExpressionDependency,
@@ -64,6 +69,8 @@ export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEn
     source?: AnyEntityDefinition;
     fieldName?: string;
     referenceRequirement?: 'existing';
+    /** Receiver-owned classification requirement; portable Refs retain the base entityName. */
+    variant?: EntityVariantDescriptor;
   };
 
 export type AnyReferenceFieldDefinition = ReferenceFieldDefinition<AnyEntityDefinition>;
@@ -675,6 +682,15 @@ export type EntityDefinition<
   displayMetadata?: EntityDisplayDescriptor;
   freshnessMetadata?: EntityFreshnessDescriptor;
   mapping?: EntityMapping<TFields>;
+  variant: <
+    TEntity extends AnyEntityDefinition,
+    const TVariantName extends string,
+    const TDiscriminator extends EntityVariantDiscriminator<TEntity>,
+  >(
+    this: TEntity,
+    name: TVariantName,
+    options: { discriminator: TDiscriminator },
+  ) => EntityVariant<TEntity, TVariantName, TDiscriminator>;
   one: () => GraphSelectionDefinition<
     EntityDefinition<TName, TFields, TRelations, TLocators>,
     'one'
@@ -1011,10 +1027,13 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
   EntityRefLocatorFactories<TFields, ConventionalEntityLocatorDeclarations<TFields>>
 > => {
   const entityFields = Object.fromEntries(
-    Object.entries(fields).map(([fieldName, definition]) => [
-      fieldName,
-      isReferenceFieldDefinition(definition) ? { ...definition } : definition,
-    ]),
+    Object.entries(fields).map(([fieldName, definition]) => {
+      if (isReferenceFieldDefinition(definition) && definition.variant)
+        throw new TypeError(
+          'Variant references are supported as Operation inputs, not stored Reference Fields yet.',
+        );
+      return [fieldName, isReferenceFieldDefinition(definition) ? { ...definition } : definition];
+    }),
   ) as TFields;
   const hasConventionalId =
     entityFields.id?.fieldType === 'id' && !entityFields.id.nullable && !entityFields.id.optional;
@@ -1049,6 +1068,12 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     identityLocatorName: (hasConventionalId ? 'refById' : undefined) as string | undefined,
     displayMetadata: undefined as EntityDisplayDescriptor | undefined,
     freshnessMetadata: undefined as EntityFreshnessDescriptor | undefined,
+    variant<
+      TVariantName extends string,
+      TDiscriminator extends EntityVariantDiscriminator<AnyEntityDefinition>,
+    >(variantName: TVariantName, options: { discriminator: TDiscriminator }) {
+      return new EntityVariant(this, variantName, options);
+    },
     one() {
       return { kind: 'schema.selection' as const, entity: this, cardinality: 'one' as const };
     },

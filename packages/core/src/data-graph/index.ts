@@ -11,6 +11,7 @@ export * from './definitions.js';
 export * from './execution.js';
 export * from './entity-mutation-command.js';
 export * from './entity-mutation-authoring.js';
+export * from './entity-variant.js';
 export * from './in-memory/command.js';
 export * from './in-memory/entity-mutation-command.js';
 export * from './in-memory/relationship-command.js';
@@ -52,6 +53,7 @@ export * from './selection-factories.js';
 export { contextualSelectionFactory } from './contextual-selection-factories.js';
 export type {
   ContextualSelectionFactory,
+  ClassifiedContextualSelectionFactory,
   ContextualSelectionDescriptor,
 } from './contextual-selection-factories.js';
 export { withContextualSelections, reflectContextualSelections } from './entity-selections.js';
@@ -67,3 +69,4 @@ export * from './storage.js';
 export * from './transaction.js';
 export * from './view.js';
 export * from './view-query.js';
+export type { BoundVariantSelection, BoundVariantQuery } from './variant-binding.js';

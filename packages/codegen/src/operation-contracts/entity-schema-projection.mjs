@@ -30,7 +30,7 @@ const resolveProjectionValueText = (node, context, visited = new Set()) => {
     : expression.getText();
 };
 
-const resolveProjectionValueNode = (node, context, visited = new Set()) => {
+export const resolveProjectionValueNode = (node, context, visited = new Set()) => {
   const expression = unwrapExpression(node);
   if (!ts.isIdentifier(expression)) return { expression, context };
 
@@ -44,12 +44,50 @@ const resolveProjectionValueNode = (node, context, visited = new Set()) => {
   }
 
   const importedContext = resolveImportedSchemaContext(expression.text, context);
-  return importedContext
-    ? resolveProjectionValueNode(expression, importedContext, visited)
-    : { expression, context };
+  if (!importedContext) return { expression, context };
+  const binding = context.sourceFile.statements
+    .filter(ts.isImportDeclaration)
+    .flatMap(statement => {
+      const bindings = statement.importClause?.namedBindings;
+      return bindings && ts.isNamedImports(bindings) ? [...bindings.elements] : [];
+    })
+    .find(binding => binding.name.text === expression.text);
+  const importedName = binding?.propertyName?.text ?? expression.text;
+  const importedDeclaration = importedContext.declarations.get(importedName);
+  return importedDeclaration?.initializer
+    ? resolveProjectionValueNode(importedDeclaration.initializer, importedContext, visited)
+    : { expression, context: importedContext };
 };
 
 // Only portable data and Core schema constructors may cross into generated browser modules.
+export const containsVariantReference = (node, context, visited = new Set()) => {
+  const resolved = resolveProjectionValueNode(node, context);
+  const expression = resolved.expression;
+  if (!expression || visited.has(expression)) return false;
+  visited.add(expression);
+  if (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    ts.isIdentifier(expression.expression.expression) &&
+    ['graphSchema', 'field'].includes(expression.expression.expression.text) &&
+    ['existingRef', 'ref'].includes(expression.expression.name.text)
+  ) {
+    const target = expression.arguments[0];
+    const value = target && resolveProjectionValueNode(target, resolved.context).expression;
+    return Boolean(
+      value &&
+      ts.isCallExpression(value) &&
+      ts.isPropertyAccessExpression(value.expression) &&
+      value.expression.name.text === 'variant',
+    );
+  }
+  return Boolean(
+    ts.forEachChild(expression, child =>
+      containsVariantReference(child, resolved.context, visited),
+    ),
+  );
+};
+
 export const projectSelectionFactories = (node, context) => {
   const { expression } = resolveProjectionValueNode(node, context);
   const portable = node => {
@@ -342,7 +380,7 @@ export const projectEntitySchemaConfig = (configArg, context) => {
   const selections = readObjectLiteralProperty(configArg, 'selections');
   const contextualProjection =
     selections && ts.isPropertyAssignment(selections)
-      ? projectContextualSelections(selections.initializer)
+      ? projectContextualSelections(selections.initializer, context)
       : {};
   const diagnostics = [
     ...derivedProjection.diagnostics,

@@ -68,6 +68,24 @@ The server must use supporting storage and grant each outgoing `selectionRelatio
 does not authorize the read or fetch source IDs; missing support fails explicitly without fallback.
 Plain reads remain v1 with no discovery round trip. Contextual observation is not supported yet.
 
+Classified reads lower to the canonical base Entity before reaching these providers. Use
+`useGraphQuery(Chapter.all().many())` (or a runtime-bound variant's `.many()`) and the usual scalar
+intents. Base and sibling variant reads have distinct membership keys under the same base-Entity
+prefix, so host-triggered `invalidateQueries({ queryKey: [ContentNode.name] })` refetches all of them.
+`useGraphQuery` does not automatically subscribe to `observe()`.
+
+With an observation-capable Runtime Transport, `client.graph.bindVariantSelection(Chapter.all())`
+supports `.exec().observe()`. Complete snapshots recalculate membership, ordering and limits;
+the Runtime Graph client reconciles them through base Entity identity. Leaving a variant is not
+deleting its base record. Removing an Entity from a snapshot does not globally evict it: the host
+still owns confirmed-delete invalidation, cache scoping and lifetime. A simultaneously observed
+base Query can update the shared cached record when its classification changes.
+
+Cancelling an observation now aborts its transport signal before waiting for the iterator to close,
+releasing idle subscriptions without affecting other readers. Transports must honor that signal.
+These contracts have an in-process receiver/in-memory provider/React integration proof; they do
+not yet establish a variant mutation lifecycle or live SQL change-feed support.
+
 The same client supports fluent execution outside React hooks:
 
 ```ts

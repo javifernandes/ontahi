@@ -1,5 +1,6 @@
 import {
   completionWordRange,
+  consoleEntityCompletionItems,
   consoleOrderCompletions,
   consoleContinuationItems,
 } from '../console/completion.js';
@@ -29,12 +30,7 @@ export const completeTsConsoleDocument = (
     const range = completionWordRange(document, safePosition);
     return {
       ...range,
-      items: application.entities.map(entity => ({
-        label: entity.name,
-        apply: entity.name,
-        kind: 'entity',
-        detail: 'Entity',
-      })),
+      items: consoleEntityCompletionItems(application),
     };
   }
 

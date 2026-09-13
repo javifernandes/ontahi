@@ -26,6 +26,11 @@ import {
   type GraphSelectionAssembly,
 } from './selection-assembly.js';
 import type { Selection } from './selection-value.js';
+import {
+  createVariantReadBinder,
+  type BoundVariantSelection,
+  type VariantReadSource,
+} from './variant-binding.js';
 
 export type RuntimeBoundGraphCommand<
   TEntity extends AnyEntityDefinition,
@@ -115,6 +120,9 @@ export type RuntimeBoundDataGraphApi<
   TCommandOptions = TReadOptions,
   TCommandError = TError,
 > = DataGraphExecutor<TError, TReadOptions, TCommandOptions, TCommandError> & {
+  bindVariantSelection: <T extends VariantReadSource>(
+    selection: T,
+  ) => BoundVariantSelection<T, TError, TReadOptions>;
   bindGraphRead: <TRead extends QueryOrView<any, any>>(
     read: TRead,
   ) => BoundGraphRead<TRead, TError, TReadOptions>;
@@ -304,6 +312,7 @@ export const createRuntimeBoundDataGraphApi = <
       read: TRead,
     ): BoundGraphRead<TRead, TError, TReadOptions> => bindGraphRead(read, graphReadExecutor),
     bindClientEntity,
+    bindVariantSelection: createVariantReadBinder(createExecutableGraphRead).bind,
     bindSelectionEntity: <TEntity extends AnyEntityDefinition>(
       entityDefinition: TEntity,
     ): RuntimeBoundSelectionEntity<TEntity, TError, TReadOptions, TCommandOptions, TCommandError> =>

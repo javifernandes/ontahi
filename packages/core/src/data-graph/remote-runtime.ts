@@ -44,6 +44,7 @@ import type {
   RelationshipCommand,
   RelationshipCommandExecutionRuntime,
 } from './relationship-command.js';
+import { withObservationLifetime } from './remote-observation.js';
 import type { DataGraphExecutionRuntime, DataGraphObservationRuntime } from './runtime.js';
 import { hasRelationImage } from './selection-ast.js';
 
@@ -83,6 +84,7 @@ export type RemoteGraphCommandTransport<TOptions = undefined> = (
 export type RemoteGraphObservationTransport<TOptions = undefined> = (
   request: GraphReadRequestV1,
   options?: TOptions,
+  lifecycle?: { readonly signal: AbortSignal },
 ) => AsyncIterable<unknown>;
 
 export type CreateRemoteDataGraphRuntimeOptions<TOptions = undefined> = {
@@ -382,7 +384,7 @@ export const createRemoteDataGraphRuntime = <TOptions = undefined>({
               );
             }
             return Stream.fromAsyncIterable(
-              observeTransport(request, options),
+              withObservationLifetime(signal => observeTransport(request, options, { signal })),
               toRemoteDataGraphError,
             ).pipe(
               Stream.mapEffect(response =>

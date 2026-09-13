@@ -138,7 +138,11 @@ export const createFetchGraphReadCapability = <TOptions = undefined>({
         exchange!({ family: 'graph.command', body: request }, exchangeOptions(options));
   const observeTransport: RemoteGraphObservationTransport<TOptions> | undefined =
     runtimeTransport?.graph
-      ? (request, options) => runtimeTransport.graph!.observe(request, exchangeOptions(options))
+      ? (request, options, lifecycle) =>
+          runtimeTransport.graph!.observe(request, {
+            ...exchangeOptions(options),
+            signal: lifecycle?.signal,
+          })
       : undefined;
   const runtime = createRemoteDataGraphRuntime({
     transport,

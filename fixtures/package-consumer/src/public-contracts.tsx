@@ -15,6 +15,8 @@ import {
   withSelectionFactories,
   withContextualSelections,
   defineClientEntity,
+  createRuntimeBoundDataGraphApi,
+  type DataGraphExecutionRuntime,
 } from '@ontahi/core/data-graph';
 import { createFetchGraphClient } from '@ontahi/react/graph';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
@@ -72,6 +74,31 @@ type PublicModules = [
 
 export type PublicModuleCount = PublicModules['length'];
 
+export const classifiedRuntimeContract = (runtime: DataGraphExecutionRuntime) => {
+  const Base = entity('BoundContractNode', {
+    id: field.id(),
+    type: field.enum(['part', 'chapter']),
+  });
+  const Chapter = Base.variant('BoundContractChapter', { discriminator: { type: 'chapter' } });
+  const selected = createRuntimeBoundDataGraphApi(() => runtime).bindVariantSelection(
+    Chapter.all(),
+  );
+  selected.where(node => {
+    // @ts-expect-error Bound membership retains the narrowed discriminator.
+    node.type.eq('part');
+    return node.type.eq('chapter');
+  });
+  // @ts-expect-error Binding classified reads does not grant writes.
+  selected.update({ type: 'part' });
+  // @ts-expect-error Read shaping does not grant writes either.
+  selected.limit(1).delete();
+  return selected
+    .and(selected)
+    .orderBy(node => node.id.asc())
+    .limit(25)
+    .run();
+};
+
 const ContextItem = entity('ContextItem', {
   id: field.id(),
   listId: field.string(),
@@ -110,6 +137,37 @@ const FactoryEntity = withSelectionFactories(entity('FactoryEntity', { id: field
 const factoryClient = defineClientEntity(FactoryEntity);
 export const factorySelection = factoryClient.by({ identity: 'example' });
 export const legacyFactoryRef = factoryClient.refById('example');
+
+const VariantNode = entity('VariantNode', {
+  id: field.id(),
+  type: field.enum(['part', 'chapter']),
+  title: field.string(),
+});
+const Chapter = VariantNode.variant('Chapter', { discriminator: { type: 'chapter' } });
+const EnrichedVariantNode = withContextualSelections(
+  VariantNode.hasMany('children', VariantNode),
+  ({ self }) => ({ chapters: self.children.as(Chapter) }),
+);
+const Part = EnrichedVariantNode.variant('Part', { discriminator: { type: 'part' } });
+const VariantBook = withContextualSelections(
+  entity('VariantBook', { id: field.id() }).hasMany('nodes', EnrichedVariantNode),
+  ({ self }) => ({ parts: self.nodes.as(Part), chapters: self.nodes.as(Chapter) }),
+);
+export const directClassifiedRead: 'chapter' | undefined =
+  Selection.all(VariantBook).chapters.many().__result?.type;
+export const nestedClassifiedRead: 'chapter' | undefined =
+  Selection.all(VariantBook).parts.chapters.many().__result?.type;
+const chapters = Chapter.where(node => node.title.eq('Intro'))
+  .not()
+  .many();
+export const narrowedChapterRead: 'chapter' | undefined = chapters.__result?.type;
+// @ts-expect-error Chapter predicates retain the narrowed discriminator type.
+Chapter.where(node => node.type.eq('part'));
+export const existingChapterInput = graphSchema.object({
+  chapter: graphSchema.existingRef(Chapter),
+});
+// @ts-expect-error Variant selections do not expose generic writes.
+Chapter.all().update({ type: 'part' });
 
 export type UnifiedRuntimeProtocolPublicContracts = [
   typeof createRuntimeProtocolExchange,

@@ -3,7 +3,15 @@ import type {
   DeferredEntityReference,
   ReferenceFieldDefinition,
 } from '../definitions.js';
+import { getEntityVariantContract } from '../entity-variant-contract.js';
+import type {
+  EntityVariant,
+  EntityVariantDescriptor,
+  EntityVariantDiscriminator,
+  VariantReadEntity,
+} from '../entity-variant.js';
 
+import { getEntityIdentityLocator } from './identity.js';
 import type { EntityRef, EntityRefLocator } from './model.js';
 
 export type GraphSchemaReferenceResolver<
@@ -30,6 +38,15 @@ export type GraphSchemaReferenceDefinition<
 
 const resolvers = new WeakMap<object, GraphSchemaReferenceResolver<any, any>>();
 
+export type GraphSchemaVariantReferenceDefinition<TTarget extends AnyEntityDefinition> = Omit<
+  GraphSchemaReferenceDefinition<TTarget, never, 'existing'>,
+  'resolveWith'
+> & {
+  resolveWith: <TResult>(
+    resolver: GraphSchemaReferenceResolver<TTarget, TResult>,
+  ) => GraphSchemaVariantReferenceDefinition<TTarget>;
+};
+
 const attachResolveWith = <
   TTarget extends AnyEntityDefinition,
   TResolved,
@@ -37,6 +54,13 @@ const attachResolveWith = <
 >(
   definition: ReferenceFieldDefinition<TTarget>,
 ): GraphSchemaReferenceDefinition<TTarget, TResolved, TRequirement> => {
+  if (definition.variant) {
+    const descriptor = structuredClone(definition.variant);
+    Object.defineProperty(definition, 'variant', {
+      enumerable: true,
+      get: () => structuredClone(descriptor),
+    });
+  }
   Object.defineProperty(definition, 'resolveWith', {
     configurable: true,
     enumerable: false,
@@ -59,21 +83,49 @@ export const graphSchemaReference = <TTarget extends AnyEntityDefinition>(
     target: target as TTarget,
   });
 
-export const graphSchemaExistingReference = <TTarget extends AnyEntityDefinition>(
-  target: TTarget | DeferredEntityReference<TTarget>,
-): GraphSchemaReferenceDefinition<TTarget, never, 'existing'> => {
-  if ('fields' in target && 'ref' in target.fields) {
+type ExistingReferenceFactory = {
+  <
+    TEntity extends AnyEntityDefinition,
+    TName extends string,
+    TDiscriminator extends EntityVariantDiscriminator<TEntity>,
+  >(
+    target: EntityVariant<TEntity, TName, TDiscriminator>,
+  ): GraphSchemaVariantReferenceDefinition<VariantReadEntity<TEntity, TDiscriminator>>;
+  <TTarget extends AnyEntityDefinition>(
+    target: TTarget | DeferredEntityReference<TTarget>,
+  ): GraphSchemaReferenceDefinition<TTarget, never, 'existing'>;
+};
+
+export const graphSchemaExistingReference: ExistingReferenceFactory = (
+  target:
+    | AnyEntityDefinition
+    | DeferredEntityReference<AnyEntityDefinition>
+    | {
+        kind: 'entity-variant';
+        name: string;
+        base: AnyEntityDefinition;
+        descriptor: EntityVariantDescriptor;
+      },
+) => {
+  const variant = getEntityVariantContract(target);
+  const base = variant?.base ?? target;
+  if (variant && !getEntityIdentityLocator(variant.base)?.locator.fields?.length)
     throw new Error(
-      `Existing Ref target ${target.name} cannot declare a Field named "ref" because that property preserves the participant's portable identity.`,
+      `Existing Ref variant ${variant.descriptor.name} requires a canonical identity on ${variant.base.name}.`,
+    );
+  if ('fields' in base && 'ref' in base.fields) {
+    throw new Error(
+      `Existing Ref target ${base.name} cannot declare a Field named "ref" because that property preserves the participant's portable identity.`,
     );
   }
 
-  return attachResolveWith<TTarget, never, 'existing'>({
+  return attachResolveWith({
     kind: 'field',
     fieldType: 'reference',
-    target: target as TTarget,
+    target: base as AnyEntityDefinition,
     referenceRequirement: 'existing',
-  });
+    ...(variant ? { variant: variant.descriptor } : {}),
+  }) as never;
 };
 
 export const getGraphSchemaReferenceResolver = (

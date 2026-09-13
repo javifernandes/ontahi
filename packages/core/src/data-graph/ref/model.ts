@@ -52,8 +52,19 @@ export type AnyEntityRef = EntityRef<string, EntityRefLocator>;
 
 export const resolveEntityRefName = <TEntity extends NamedEntity | string>(
   entityOrName: TEntity,
-): EntityName<TEntity> =>
-  (typeof entityOrName === 'string' ? entityOrName : entityOrName.name) as EntityName<TEntity>;
+): EntityName<TEntity> => {
+  if (
+    typeof entityOrName === 'object' &&
+    'kind' in entityOrName &&
+    entityOrName.kind === 'entity-variant'
+  )
+    throw new TypeError(
+      'Variant Refs must use the canonical base Entity, not the classification name.',
+    );
+  return (
+    typeof entityOrName === 'string' ? entityOrName : entityOrName.name
+  ) as EntityName<TEntity>;
+};
 
 const compareCanonicalLocatorKeys = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;

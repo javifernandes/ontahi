@@ -197,6 +197,22 @@ negotiate Graph Read v2 support on the active transport before execution; unsupp
 not receive a downgraded read. Activity renders the expanded relation membership in the chosen
 dialect, without guessing which named factory produced it.
 
+The Console loads Graph Read capability metadata for all configured base Entities when mounted,
+without running row/count queries. Variants registered on a base read policy appear automatically
+as roots (for example `Chapter.many()` / `Chapter many`), labeled with their base Entity. No separate
+variant client export or Console configuration is required. Both dialects share inherited Fields,
+narrowed enum values and declared `by` factories; ordering uses the owning base policy, including
+table-driven source edits. The server imposes classification rather than trusting a client filter.
+Contextual factories targeting variants also support `Book.parts.chapters.many()` and declarative
+`Book through parts through chapters many`. Completion and table sorting use the final classified
+destination's base policy, not the starting Book policy. Graph Read v2 independently enforces every
+source and target classification plus base scopes. Variant-root Views remain unsupported.
+
+The catalog is scoped to the active transport, route and execution identity; switching any of these
+drops old metadata and ignores late replies. A failed base lookup does not hide successful roots
+from other bases. Changing the draft between known roots does not issue another metadata lookup.
+Hosts must keep passing the same `console.identity` as their transport's execution identity.
+
 Payload capture is disabled by default. Enabling it requires a host-owned redactor:
 
 ```ts

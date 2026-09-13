@@ -7,7 +7,7 @@ Canonical ID: `ontahi://plans/118f-context-aware-reference-assistance`
 Builds on [118e](../current/118e-runtime-backed-reference-value-projections.md) and consumes the
 authority-aware profiles researched in [126](../research/126-ontahi-runtime-data-reflection.md).
 Related: [150](../current/150-ontahi-devtools-semantic-console.md),
-[120b](../current/120b-contextual-selection-factories.md),
+[120b](../done/120b-contextual-selection-factories.md),
 [119](119-selection-relation-predicates.md).
 
 ## Intent

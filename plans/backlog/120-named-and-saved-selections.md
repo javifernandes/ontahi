@@ -14,7 +14,7 @@ Related plans:
 2. [118 Ontahí Selection Language Editor Research](../done/118-ontahi-selection-language-editor.md)
 3. [150a Selection Factories, Locators, And Refs](../done/150a-selection-factories-locators-and-refs.md)
 4. [120a Pure Named Selection Factory Contract](../done/120a-pure-named-selection-factory-contract.md)
-5. [120b Contextual Selection Factories](../current/120b-contextual-selection-factories.md)
+5. [120b Contextual Selection Factories](../done/120b-contextual-selection-factories.md)
 
 ## Proposal
 

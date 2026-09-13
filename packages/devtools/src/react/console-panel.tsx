@@ -26,6 +26,8 @@ import {
   editConsoleLimit,
   isConsoleOrderableField,
   reflectSelectionLanguageEntity,
+  reflectConsoleApplicationVariants,
+  parseConsoleDocument,
   resolveConsoleContext,
   type ConsoleLanguageApplicationReflection,
   type ConsoleDocumentAnalysis,
@@ -436,15 +438,13 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
   );
   const [preferenceNotice, setPreferenceNotice] = useState('');
   const limit = options.limit ?? 25;
-  const application = useMemo<ConsoleLanguageApplicationReflection>(
-    () => ({ entities: options.entities.map(entity => reflectSelectionLanguageEntity(entity)) }),
+  const baseEntities = useMemo(
+    () => options.entities.map(entity => reflectSelectionLanguageEntity(entity)),
     [options.entities],
   );
+  const initialTerminal = options.initialDialect === 'declarative' ? '' : '.many()';
   const initialDocument =
-    options.initialDocument ??
-    (application.entities[0]
-      ? application.entities[0].name + (options.initialDialect === 'declarative' ? '' : '.many()')
-      : '');
+    options.initialDocument ?? (baseEntities[0] ? baseEntities[0].name + initialTerminal : '');
   const [{ document, dialect }, setDraft] = useState({
     document: initialDocument,
     dialect: options.initialDialect ?? 'ts',
@@ -481,12 +481,29 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
       runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : undefined,
     [runtimeTransport],
   );
+  const draftSyntax = useMemo(
+    () => parseConsoleDocument(document, dialect).syntax.expression,
+    [document, dialect],
+  );
+  const discoveryTarget =
+    resolveConsoleContext(draftSyntax, { entities: baseEntities })?.name ??
+    draftSyntax?.entity?.text;
+  const discovery = useConsoleReadCapabilities(
+    runtimeTransport,
+    discoveryTarget,
+    identityKey,
+    baseEntities.map(entity => entity.name),
+  );
+  const application = useMemo(
+    () => reflectConsoleApplicationVariants(baseEntities, discovery.variants),
+    [baseEntities, discovery.variants],
+  );
   const analysis = useMemo(
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
   const entityName = resolveConsoleContext(analysis.syntax.expression, application)?.name;
-  const discovery = useConsoleReadCapabilities(runtimeTransport, entityName, identityKey);
+  const targetDiscovery = discovery.forEntity(entityName);
 
   const runDocument = (source: string) => {
     if (executingRef.current) return;
@@ -623,7 +640,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     }
   }, [preferredDialect, options.initialDialect]);
   const snapshot = result.snapshot;
-  const orderingCapabilities = discovery.capabilities;
+  const orderingCapabilities = targetDiscovery.capabilities;
   const orderableFields = discovery.orderableFields;
   const orderingCompletionNotice = () => {
     const syntax = analysis.syntax.expression;
@@ -631,8 +648,8 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
     if (!syntax?.orderBy || !application.entities.some(entity => entity.name === entityName))
       return null;
     if (!runtimeTransport) return 'Ordering suggestions require a configured Runtime Transport.';
-    if (discovery.loading) return 'Loading ordering permissions…';
-    if (discovery.error) return `Ordering permissions unavailable: ${discovery.error}`;
+    if (targetDiscovery.loading) return 'Loading ordering permissions…';
+    if (targetDiscovery.error) return `Ordering permissions unavailable: ${targetDiscovery.error}`;
     return orderingCapabilities?.orderBy.length === 0
       ? 'The current Graph Read policy allows no ordering Fields for this Entity.'
       : null;
@@ -772,7 +789,7 @@ export const ConsolePanel = ({ options, runtimeTransport }: ConsolePanelProps) =
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
           <span>{orderingCompletionNotice()}</span>
-          {analysis.syntax.expression?.orderBy && discovery.error ? (
+          {analysis.syntax.expression?.orderBy && targetDiscovery.error ? (
             <button type='button' style={styles.mode} onClick={discovery.refresh}>
               Retry ordering permissions
             </button>

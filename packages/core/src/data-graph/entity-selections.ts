@@ -5,14 +5,23 @@ import {
   contextualSelectionFactory,
   isContextualSelectionFactory,
   type ContextualSelectionFactory,
+  type ClassifiedContextualSelectionFactory,
   type ContextualSelectionDescriptor,
 } from './contextual-selection-factories.js';
 import type { AnyEntityDefinition } from './definitions.js';
+import {
+  isEntityVariantDescriptor,
+  type EntityVariantDescriptor,
+} from './entity-variant-contract.js';
+import type { EntityVariantDiscriminator } from './entity-variant.js';
 import type { SelectionExpression } from './selection-ast.js';
 import { Selection, type SelectionBuilder } from './selection-value.js';
 import { GraphSelection } from './selection.js';
 
-type ContextualFactory = ContextualSelectionFactory<any, any>;
+type ContextualFactory = {
+  readonly descriptor: ContextualSelectionDescriptor;
+  from(source: Selection<any>): unknown;
+};
 export type ContextualSelectionDeclarations = Record<string, ContextualFactory>;
 export type EntitySelectionContext<TEntity extends AnyEntityDefinition> = {
   readonly [K in keyof TEntity['relations'] & string]: {
@@ -51,6 +60,7 @@ export const contextualSelectionProperties = <
   entity: TEntity,
   source: () => Selection<TEntity>,
   project: (selection: Selection<any>) => unknown = selection => selection,
+  projectClassified: (selection: unknown) => unknown = selection => selection,
 ): T =>
   new Proxy(value, {
     get(target, name, receiver) {
@@ -59,9 +69,10 @@ export const contextualSelectionProperties = <
       // Promise assimilation must not compile an unresolved declaration or turn it into a thenable.
       if (name === 'then') return undefined;
       const factories = declarations.get(entity)?.();
-      return factories && hasOwn(factories, name)
-        ? project(factories[name]!.from(source()))
-        : undefined;
+      if (!factories || !hasOwn(factories, name)) return undefined;
+      const selected = factories[name]!.from(source());
+      // Classified membership remains read-only; ordinary bound Selection wrappers expose writes.
+      return selected instanceof Selection ? project(selected) : projectClassified(selected);
     },
   });
 
@@ -156,15 +167,29 @@ export type ContextualSelectionTemplates<TEntity extends AnyEntityDefinition> = 
   {
     readonly relationName: keyof TEntity['relations'] & string;
     readonly expression: SelectionExpression;
+    readonly variant?: EntityVariantDescriptor;
   }
 >;
+type TemplateFactory<
+  TEntity extends AnyEntityDefinition,
+  TTarget extends AnyEntityDefinition,
+  TTemplate,
+> = TTemplate extends { variant: infer TVariant extends EntityVariantDescriptor }
+  ? {
+      [K in TVariant['discriminator']['fieldName']]: TVariant['discriminator']['value'];
+    } extends infer TDiscriminator extends EntityVariantDiscriminator<TTarget>
+    ? ClassifiedContextualSelectionFactory<TEntity, TTarget, TVariant['name'], TDiscriminator>
+    : never
+  : ContextualSelectionFactory<TEntity, TTarget>;
+
 type FactoriesFromTemplates<
   TEntity extends AnyEntityDefinition,
   TTemplates extends ContextualSelectionTemplates<TEntity>,
 > = {
-  [K in keyof TTemplates]: ContextualSelectionFactory<
+  [K in keyof TTemplates]: TemplateFactory<
     TEntity,
-    TEntity['relations'][TTemplates[K]['relationName']]['target']
+    TEntity['relations'][TTemplates[K]['relationName']]['target'],
+    TTemplates[K]
   >;
 };
 
@@ -195,10 +220,30 @@ export function withContextualSelections<TEntity extends AnyEntityDefinition>(
       ? captured
       : () =>
           Object.fromEntries(
-            Object.entries(captured).map(([name, template]) => [
-              name,
-              contextualSelectionFactory(entity, template.relationName, () => template.expression),
-            ]),
+            Object.entries(captured).map(([name, template]) => {
+              const factory = contextualSelectionFactory(
+                entity,
+                template.relationName,
+                () => template.expression,
+              );
+              if (!template.variant) return [name, factory];
+              const target = entity.relations[template.relationName]!.target;
+              const variant = template.variant;
+              if (!isEntityVariantDescriptor(variant) || variant.baseEntityName !== target.name)
+                throw new TypeError(
+                  'Contextual variant template must classify its relation target.',
+                );
+              return [
+                name,
+                factory.as(
+                  target.variant(variant.name, {
+                    discriminator: {
+                      [variant.discriminator.fieldName]: variant.discriminator.value,
+                    } as never,
+                  }),
+                ),
+              ];
+            }),
           ),
   );
 }

@@ -2,6 +2,10 @@ import { cloneJson, isJsonValue } from '../value/json.js';
 import { hasOwn, isRecord } from '../value/object.js';
 
 import { graphSchema, type AnyEntityDefinition } from './definitions.js';
+import {
+  isEntityVariantDescriptor,
+  type EntityVariantDescriptor,
+} from './entity-variant-contract.js';
 import type { QueryBuilder, QuerySpec } from './query.js';
 import { isEntityRef } from './ref/index.js';
 import { parseGraphSchema } from './schema.js';
@@ -42,6 +46,8 @@ export type GraphReadRequest = GraphReadRequestV1 | GraphReadRequestV2;
 /** Receiver policy at the time of the read; subsequent reads must still be authorized. */
 export type GraphReadCapabilities = {
   readonly orderBy: readonly string[];
+  /** Registered classified roots sharing this Entity's read policy and canonical identity. */
+  readonly variants?: readonly EntityVariantDescriptor[];
   /** Outgoing membership hops, distinct from View/include permissions. Advisory only. */
   readonly relationSelections?: { readonly version: 2; readonly relations: readonly string[] };
 };
@@ -94,6 +100,8 @@ export const isGraphReadCapabilities = (value: unknown): value is GraphReadCapab
   isRecord(value) &&
   Array.isArray(value.orderBy) &&
   value.orderBy.every(field => typeof field === 'string') &&
+  (value.variants === undefined ||
+    (Array.isArray(value.variants) && value.variants.every(isEntityVariantDescriptor))) &&
   (value.relationSelections === undefined ||
     (isRecord(value.relationSelections) &&
       value.relationSelections.version === 2 &&

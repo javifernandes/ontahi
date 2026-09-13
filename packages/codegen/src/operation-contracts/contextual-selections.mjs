@@ -1,9 +1,10 @@
 import ts from 'typescript';
 
 import { unwrapExpression } from './typescript-ast.mjs';
+import { projectEntityVariant } from './variant-inputs.mjs';
 
 // Compile a deliberately small authoring grammar to data; never emit a server closure.
-export const projectContextualSelections = node => {
+export const projectContextualSelections = (node, context) => {
   try {
     const callback = unwrapExpression(node);
     const parameter = callback.parameters?.[0]?.name;
@@ -54,9 +55,9 @@ export const projectContextualSelections = node => {
       const operator = call.expression;
       if (
         !ts.isCallExpression(call) ||
-        call.arguments.length !== 1 ||
         !ts.isPropertyAccessExpression(operator) ||
-        !['eq', 'lt', 'lte', 'gt', 'gte'].includes(operator.name.text)
+        !['eq', 'lt', 'lte', 'gt', 'gte', 'isNull'].includes(operator.name.text) ||
+        call.arguments.length !== (operator.name.text === 'isNull' ? 0 : 1)
       )
         throw new Error('unsupported predicate');
       const field = operator.expression;
@@ -70,7 +71,7 @@ export const projectContextualSelections = node => {
         kind: 'predicate',
         fieldName: field.name.text,
         operator: operator.name.text,
-        value: literal(call.arguments[0]),
+        ...(operator.name.text === 'isNull' ? {} : { value: literal(call.arguments[0]) }),
       };
     };
     const templates = Object.fromEntries(
@@ -82,6 +83,17 @@ export const projectContextualSelections = node => {
           throw new Error('expected named Selection properties');
         let relation = unwrapExpression(property.initializer);
         let expression = { kind: 'all' };
+        let variant;
+        if (
+          ts.isCallExpression(relation) &&
+          ts.isPropertyAccessExpression(relation.expression) &&
+          relation.expression.name.text === 'as'
+        ) {
+          if (relation.arguments.length !== 1) throw new Error('expected as(Variant)');
+          variant = projectEntityVariant(relation.arguments[0], context);
+          if (!variant) throw new Error('expected a statically declared Entity variant');
+          relation = unwrapExpression(relation.expression.expression);
+        }
         if (ts.isCallExpression(relation)) {
           if (
             !ts.isPropertyAccessExpression(relation.expression) ||
@@ -98,7 +110,10 @@ export const projectContextualSelections = node => {
           relation.expression.text !== binding.name.text
         )
           throw new Error('expected self.relation');
-        return [property.name.text, { relationName: relation.name.text, expression }];
+        return [
+          property.name.text,
+          { relationName: relation.name.text, expression, ...(variant ? { variant } : {}) },
+        ];
       }),
     );
     return { contextualSelectionsText: JSON.stringify(templates) };

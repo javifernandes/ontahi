@@ -41,6 +41,11 @@ import {
   type QueryWhereArg,
   type PickEntityFields,
 } from './selection.js';
+import {
+  createVariantReadBinder,
+  type BoundVariantSelection,
+  type VariantReadSource,
+} from './variant-binding.js';
 import type { InferEntityViewResult, RecursiveEntityViewDefinition } from './view.js';
 
 type EntityMutationPayload<TEntity extends AnyEntityDefinition> = Partial<
@@ -313,7 +318,9 @@ type BoundContextualSelections<TEntity, TReadError, TReadOptions, TCommandError,
       root: infer TTarget extends AnyEntityDefinition;
     }
       ? BoundSelection<TTarget, undefined, TReadError, TReadOptions, TCommandError, TCommandOptions>
-      : never;
+      : SelectionProperties<TEntity>[K] extends VariantReadSource
+        ? BoundVariantSelection<SelectionProperties<TEntity>[K], TReadError, TReadOptions>
+        : SelectionProperties<TEntity>[K];
   };
 
 export type BoundGraphSelection<
@@ -761,6 +768,7 @@ export const createGraphSelectionAssembly = <
   createExecutableGraphRead: CreateExecutableGraphRead<TReadError, TReadOptions>;
   bindGraphRead: BindGraphReadFn<TReadError, TReadOptions>;
 }): GraphSelectionAssembly<TReadError, TReadOptions, TCommandError, TCommandOptions> => {
+  const variantReads = createVariantReadBinder(createExecutableGraphRead);
   const namedGraphRead = <TParams, TEntity extends AnyEntityDefinition, TResult>(
     name: string,
     selectionOrEntity: GraphSelectionRead<TEntity, TResult> | TEntity,
@@ -815,6 +823,7 @@ export const createGraphSelectionAssembly = <
 
   const graphSelectionFactories: GraphSelectionFactories = {
     createSemanticSelection: selected => createBoundSelection(selected),
+    createClassifiedSelection: variantReads.project,
     createSelection: <TEntity extends AnyEntityDefinition, TResult>(
       builder: QueryBuilder<TEntity, TResult>,
     ) => createGraphSelection(builder) as BaseGraphSelection<TEntity, TResult>,
@@ -948,6 +957,7 @@ export const createGraphSelectionAssembly = <
       value.root,
       () => value,
       selected => createBoundSelection(selected),
+      variantReads.project,
     );
   };
 

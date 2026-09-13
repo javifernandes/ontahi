@@ -16,7 +16,201 @@ Current docs:
 5. [Application Data Access](../../docs/application-data-access.md) - end-to-end Query, View,
    policy, React, and Operation authoring across the public packages
 
+## Experimental Entity variant reads
+
+An Entity can name a fixed classification for local read authoring without creating another
+identity or storage population:
+
+```ts
+import { entity, field } from '@ontahi/core/data-graph';
+
+const ContentNode = entity('ContentNode', {
+  id: field.id(),
+  type: field.enum(['part', 'chapter']),
+  title: field.string(),
+});
+const Chapter = ContentNode.variant('Chapter', { discriminator: { type: 'chapter' } });
+
+const chapters = Chapter.all();
+const otherChapters = Chapter.where(node => node.title.eq('Intro')).not();
+const read = otherChapters.many(); // QueryBuilder: pass to runtime.run(read, undefined)
+```
+
+`not` complements within Chapter, not within all ContentNodes. `and`, `or` and chained `where`
+compose relative membership; the required discriminator is applied outside that expression only
+when lowering to a read. Mixing base or different variant selections implicitly is rejected.
+Use `Chapter.from(baseSelection)` to restrict a base Selection explicitly, including contextual
+membership such as `Selection.all(Book).through('nodes')`. No source rows are fetched.
+
+`Chapter.by(input)` reuses the base's `withSelectionFactories` declarations and input types; no
+new factory is generated. If the base declares an `id` factory, `Chapter.by({ id: 'c1' })` works.
+`Chapter.references(refs)` accepts canonical **ContentNode** Refs and intersects them with Chapter
+membership. A Part ref yields no Chapter; it is not relabeled. Create identities/Refs and cache
+records through `Chapter.base`, which is the original ContentNode object. Passing the variant
+itself to `createEntityRef` is rejected to avoid a new identity namespace.
+
+`many()`/`toQuery()` prepare an ordinary base Query; `one()`, `first()`, `count()` and `exists()`
+prepare the existing unbound read-intent expressions. `orderBy` and `limit` transition to ordinary
+Query shaping after membership composition. Result records and variant predicate callbacks narrow
+the discriminator to its literal value. Exact-one checks happen after classification and before
+read shaping; apply `one` after narrowing, not on a source passed to `from`.
+
+This is an experimental read surface, not yet a fully polymorphic Entity schema target.
+It accepts one required, stored, non-null enum discriminator. Variants/selections reject implicit
+JSON serialization. Explicit lowering retains the filter but produces a base read, not a portable
+variant contract or extra permission. For remote classified roots, register them explicitly on the
+base read policy as below. Separate variant-specific policies,
+variant writes and classification transitions remain unsupported.
+Base Entity mutations are unchanged; declaring a read variant does not freeze the base field.
+
+### Registered remote read roots and Console discovery
+
+Register each classified root on its **base** `GraphReadPolicy`:
+
+```ts
+const reads = createGraphReadDispatcher({
+  policies: [
+    {
+      entity: ContentNode,
+      variants: [Chapter],
+      modes: ['get', 'run', 'count'],
+      cardinalities: ['one', 'many'],
+      maxLimit: 25,
+      fields: {
+        id: { select: true },
+        type: { select: true },
+        title: { select: true, filter: ['eq'], order: true },
+      },
+      scope: 'all', // replace with the host's ordinary authority-dependent scope
+    },
+  ],
+  execute, // existing host executor receives a ContentNode Query
+});
+```
+
+Graph Read v1 accepts `selection.entityName: 'Chapter'` only when registered. The receiver checks
+the caller's predicates against the base policy, then intersects the required classifier and base
+authority scope **outside** caller NOT/OR before execution. Registration grants no additional
+filter/order permissions, modes, cardinalities or limits. Canonical reference predicates remain
+ContentNode-named. Observation uses the same authorization path. Duplicate root names and variants
+registered against a different base are rejected at setup.
+
+`graph-read-capabilities` for ContentNode advertises `variants: [Chapter.descriptor]` without
+reading rows; querying capabilities for Chapter inherits the same base policy. Devtools combines
+that metadata with the configured base Entity reflection, so `Chapter.many()` / `Chapter many`,
+inherited fields, narrowed enum values and declared `by` factories autocomplete before execution.
+The request keeps the Chapter root; the client does not supply or enforce its classifier.
+
+Variant-root Views are not exposed in the Console yet. This does not add a standalone generated
+Chapter export, a second storage mapping
+or automatic Operation-input authorization: `existingRef` retains its resolution boundary below.
+
+### Classified contextual destinations
+
+A contextual factory can narrow its relation target with `.as(Variant)`. This is classification,
+not an unchecked cast or a View projection. The variant must belong to the exact relation target:
+
+```ts
+const Base = entity('ContentNode', {
+  id: field.id(),
+  bookId: field.string(),
+  parentId: field.nullable(field.string()),
+  type: field.enum(['part', 'chapter']),
+});
+const Chapter = Base.variant('Chapter', { discriminator: { type: 'chapter' } });
+const Nodes = withContextualSelections(
+  Base.hasMany('children', Base, { via: 'parentId' }),
+  ({ self }) => ({ chapters: self.children.as(Chapter) }),
+);
+const Part = Nodes.variant('Part', { discriminator: { type: 'part' } });
+const Books = withContextualSelections(
+  entity('Book', { id: field.id() }).hasMany('nodes', Nodes, { via: 'bookId' }),
+  ({ self }) => ({ parts: self.nodes.as(Part) }),
+);
+const chapters = Selection.where(Books, book => book.id.eq('b1')).parts.chapters;
+const read = chapters.many(); // runtime.run(read, undefined); still no intermediate fetch
+```
+
+`self.nodes.where(predicate).as(Part)` can add ordinary membership before classification. Result
+types narrow the discriminator, while canonical identity/storage remain ContentNode. Variants
+inherit contextual properties from their base; narrowing the source is retained in every later
+hop. Complement stays relative to the current classified universe, including on contextual results.
+Classified hops remain read-only. From a runtime-bound source they preserve the runtime without
+using the ordinary mutable Selection facade. Standalone variants can be bound explicitly:
+
+```ts
+const api = createRuntimeBoundDataGraphApi(() => runtime);
+const selected = api.bindVariantSelection(Chapter.all());
+const rows = await Effect.runPromise(
+  selected
+    .orderBy(node => node.id.asc())
+    .limit(25)
+    .run(),
+);
+const exists = await Effect.runPromise(selected.exists().run());
+// Also: api.bindSelectionEntity(Books).selection(book => book.id.eq('b1')).parts.chapters.run()
+```
+
+`where`/`and`/`or`/`not`, classified contextual hops and final `many`/`orderBy`/`limit` retain
+binding. Terminal `first`/`one`/`count`/`exists` remain read expressions and gain `.run(options)`.
+`one` checks exact membership before the limit and rejects `limit(0)`. Creating a selection or
+Effect does not fetch: the current runtime is resolved when the Effect executes. `.exec()` exposes
+the existing read executor, including `stream` and runtime-supported `observe` (options are its
+second argument, after `undefined` params). No `update`/`delete`/transition API is added.
+
+`toQuery()` deliberately lowers to an **unbound base Query**. This is also the boundary for existing
+providers and `reconcileGraphReadSnapshot`: base and variant snapshots normalize to the same base
+Entity identity. A cached base record alone never establishes classified membership. Cache lifetime,
+authority isolation and subscription invalidation remain host/provider responsibilities; this
+binding does not add a cache or expand remote observation support. Ordinary, non-classified target
+hops from a variant remain unbound in this slice.
+
+Remote observation allocates a separate lifetime per subscription. Custom
+`observeTransport(request, options, lifecycle)` implementations should honor `lifecycle?.signal`
+to release a pending pull. The runtime aborts it before awaiting iterator closure on interruption,
+early termination or completion; caller-owned options remain unchanged. This also applies to
+ordinary base reads, not only variants.
+
+Discovery names Part/Chapter as the contextual output and preserves the physical relation name.
+Codegen emits validated portable variant templates, not server callbacks. Register Part and Chapter
+on the base read policy and enable Graph Read v2 plus each ordinary `selectionRelations` grant to
+use `Book.parts.chapters.many()` / `Book through parts through chapters many` in the Console.
+The receiver enforces classification at every nested source and final target, separately from
+caller filter permissions, and applies each base authority scope. The editor cannot turn a Chapter
+into a Part by relabeling a reference or inserting a filter. Variant writes and Views remain deferred.
+
+### Classified Operation participants
+
+Operations can now require a classified participant explicitly:
+
+```ts
+input: graphSchema.object({ chapter: graphSchema.existingRef(Chapter) });
+```
+
+The caller sends an ordinary **ContentNode** Ref. Before entering the Operation body, the receiver
+resolves it using the existing base runtime/resolver, checks canonical identity, validates the base
+record and requires `type: 'chapter'`. The body's participant type narrows that discriminator and
+keeps a non-enumerable canonical `.ref`. This materializes intentionally; it is not a deferred
+Selection input. Optional/nullable direct input fields are supported, not nested participants or
+stored variant Reference Fields.
+
+`.resolveWith(...)` retains these checks and must return a complete base Entity record, not a
+custom DTO. Visibility/authorization remains host-owned through the existing resolution boundary;
+this does not add a variant policy registry. Missing, wrong-kind, wrong-identity and visibility-
+filtered records use the same `entity_not_found` response without entering the body.
+
+`Chapter.descriptor`, schema descriptors and JSON Schema expose the classification as data separate
+from base identity: `{ kind: 'entity-variant', name: 'Chapter', baseEntityName: 'ContentNode',
+discriminator: { fieldName: 'type', value: 'chapter' } }`. Ref validation alone is not membership
+proof. `defineGraphApi(...).describe().domainOperations` includes each graph-native input schema,
+including these variant requirements. Codegen projects literal `existingRef(Chapter)` inputs onto
+the generated base schema, without copying custom resolvers or importing server declarations.
+The base Entity must be in the generated graph; see the [codegen boundaries](../codegen/README.md).
+Registered remote read roots are discovered separately through Graph Read capabilities as above.
+
 ## Experimental named Selection factories
+
+For classified read universes, see [Entity variants](#experimental-entity-variant-reads).
 
 For the source-relative counterpart, see [contextual Selection factories](#experimental-contextual-selection-factories).
 
