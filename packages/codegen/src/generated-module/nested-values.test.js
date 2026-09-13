@@ -144,11 +144,7 @@ describe('nested Value client projections', () => {
       'Subject',
       'Cyclic Value schema dependencies',
     ],
-    [
-      '',
-      'graphSchema.transform(field.string(), serverNormalize)',
-      'Opaque schema constructor "graphSchema.transform"',
-    ],
+    ['', 'graphSchema.custom(serverNormalize)', 'Opaque schema constructor "graphSchema.custom"'],
   ])('diagnoses unsafe dependencies: %s', async (declaration, subject, message) => {
     await withApplication(
       {

@@ -14,6 +14,7 @@ import {
 } from './graph-output-analysis.mjs';
 import { createNamedValueProjector } from './named-value-projection.mjs';
 import { resolveOperationInitializer } from './operation-discovery.mjs';
+import { collectSchemaProcessing } from './schema-processing.mjs';
 import { resolveImportedSchemaContext } from './source-resolution.mjs';
 import { unwrapExpression } from './typescript-ast.mjs';
 import { projectVariantInputs } from './variant-inputs.mjs';
@@ -689,7 +690,15 @@ export const parseOperationDefinition = (
   let outputSchemaText;
   let inputNamedDefinition;
   let outputNamedDefinition;
-  const namedValues = createNamedValueProjector(entityContext);
+  let inputSchemaProjection;
+  const inputValues = createNamedValueProjector({
+    ...entityContext,
+    mode: exposure === 'server-only' ? 'inventory' : 'input',
+  });
+  const outputValues = createNamedValueProjector({
+    ...entityContext,
+    mode: exposure === 'server-only' ? 'inventory' : 'output',
+  });
   const helperDeclarations = new Map();
   let resolvedInputNode;
 
@@ -718,11 +727,25 @@ export const parseOperationDefinition = (
     }
 
     try {
-      inputNamedDefinition = namedValues.project({
+      inputNamedDefinition = inputValues.project({
         node: localInputNode,
         context: inputContext,
         fallbackDeclaration: `${operationName}.input`,
       });
+      if (
+        exposure !== 'server-only' &&
+        collectSchemaProcessing(localInputNode, inputContext).length
+      ) {
+        if (contractsNode)
+          throw new Error(
+            'Portable conditions on transformed/refined wire inputs are not supported yet.',
+          );
+        inputSchemaProjection = inputValues.projectSchema({
+          node: localInputNode,
+          context: inputContext,
+          fallbackDeclaration: `${operationName}.input`,
+        });
+      }
     } catch (cause) {
       return { diagnostics: [`${operationName}.input: ${cause.message}`] };
     }
@@ -765,7 +788,11 @@ export const parseOperationDefinition = (
         : unwrappedOutput;
 
     try {
-      outputNamedDefinition = namedValues.project({
+      if (exposure !== 'server-only' && collectSchemaProcessing(outputNode, schemaContext).length)
+        throw new Error(
+          'Transformed/refined outputs require an explicit portable output schema; the input schema does not describe the processed result.',
+        );
+      outputNamedDefinition = outputValues.project({
         node: outputNode,
         context: schemaContext,
         fallbackDeclaration: `${operationName}.output`,
@@ -879,11 +906,12 @@ export const parseOperationDefinition = (
     graphOutputText,
     clientCacheText,
     inputSchemaText,
+    ...(inputSchemaProjection ? { inputSchemaProjection } : {}),
     ...(variantInputs ? { variantInputs } : {}),
     outputSchemaText,
     inputNamedDefinition,
     outputNamedDefinition,
-    namedDefinitions: namedValues.definitions,
+    namedDefinitions: [...inputValues.definitions, ...outputValues.definitions],
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

@@ -80,9 +80,20 @@ and `schemaEntities` when calling `renderGeneratedClientEntityModule` directly.
 Receiver-bound `self.one()`, `self.many()` and `self.view(...)` inside these Values use the generated
 Entity schema, without importing the server Entity or altering field names and string literals.
 Unresolved dependencies, cycles and duplicate nominal definitions are diagnosed. Projection follows
-static schema data, not arbitrary JavaScript: executable `graphSchema.transform`, `refine`, `lazy`
-or custom factory dependencies require a separately designed portable contract and currently produce
-a diagnostic. Codegen does not execute or copy those host functions into browser modules.
+static schema data, not arbitrary JavaScript. Server-only Values are inventoried without requiring
+browser-portable implementations and are not emitted unless reached by a client-visible contract.
+
+For Operation inputs, `graphSchema.transform` and `refine` stay in the receiving runtime. Generated
+clients describe the pre-processing wire shape, so a string-to-number transform still accepts a string
+from the caller. Analysis records the portable `inputSchemaProjection` and its `serverProcessing`
+markers; generated input comments identify partial validation. Client parsing is not authoritative:
+post-transform refinements must not reject the unprocessed input. Defaults wrapping transformed
+schemas remain server-side, with optional wire inputs rather than defaults of the processed type.
+
+Codegen neither executes nor copies the callbacks. Transformed/refined outputs require an explicit
+portable output contract; codegen cannot infer the result schema from a callback's input. Opaque
+`lazy` or custom client-schema dependencies remain diagnosed. Client previews and portable transform
+expressions are deferred.
 
 ### Experimental classified Operation inputs
 

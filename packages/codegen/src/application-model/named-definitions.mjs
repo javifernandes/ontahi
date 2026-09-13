@@ -26,7 +26,7 @@ export const collectNamedDefinitions = entities => {
   // discovered by a client-visible use, rather than re-emitting the server resolver expression.
   const portableDefinitions = new Map(
     definitions
-      .filter(definition => definition.variantInputs?.length)
+      .filter(definition => definition.schemaText)
       .map(definition => [namedDefinitionOrigin(definition), definition]),
   );
 

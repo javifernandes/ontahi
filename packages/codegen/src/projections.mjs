@@ -4,7 +4,7 @@ import {
   printClientEntitySchemaImports,
   printClientEntitySchemaStatements,
 } from './generated-module/client-entity-schema.mjs';
-import { renderNamedValues } from './generated-module/named-values.mjs';
+import { renderNamedValues, renderSchemaProjection } from './generated-module/named-values.mjs';
 import { renderVariantInputs } from './operation-contracts/variant-inputs.mjs';
 
 const INLINE_BRIDGE_QUERY_INPUT_TYPE_PATTERN = /(:\s*)(\{\s*[^{}]*?\s*\})(\s*\)\s*=>)/g;
@@ -109,11 +109,13 @@ ${relationDefinitions
         ? (namedDefinitionLocalNames.get(operation.inputNamedDefinition.name) ??
           replaceProjectedEntityNames(operation.inputSchemaText, projectedNames))
         : replaceProjectedEntityNames(operation.inputSchemaText, projectedNames);
-      const inputSchemaText = renderVariantInputs(
-        projectedInputSchemaText,
-        operation.variantInputs,
-        projectedNames,
-      );
+      const inputSchemaText = operation.inputSchemaProjection
+        ? renderSchemaProjection(
+            operation.inputSchemaProjection,
+            namedDefinitionLocalNames,
+            projectedNames,
+          )
+        : renderVariantInputs(projectedInputSchemaText, operation.variantInputs, projectedNames);
       const outputSchemaText = operation.outputNamedDefinition
         ? (namedDefinitionLocalNames.get(operation.outputNamedDefinition.name) ??
           replaceProjectedEntityNames(operation.outputSchemaText, projectedNames))
@@ -136,6 +138,10 @@ ${relationDefinitions
       lines.push('      },');
 
       if (shouldRenderInputContract(operation, operationContracts)) {
+        if (operation.inputSchemaProjection?.serverProcessing?.length)
+          lines.push(
+            `      // Wire shape only; server applies ${operation.inputSchemaProjection.serverProcessing.join(' and ')}.`,
+          );
         lines.push(`      input: ${inputSchemaText},`);
       } else if (operationContracts === 'all') {
         lines.push('      input: graphSchema.void(),');

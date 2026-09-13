@@ -64,3 +64,10 @@ export const renderNamedValues = (definitions, names, entities, replaceEntityNam
   for (const definition of definitions) emit(definition);
   return declarations;
 };
+
+export const renderSchemaProjection = (projection, names, entities) =>
+  renderVariantInputs(
+    replaceReferences(projection.schemaText, projection.references, names, entities),
+    projection.variantInputs,
+    entities,
+  );

@@ -387,7 +387,80 @@ its semantics to make generation pass is not a fix. The 17 analyzed Entities / 6
 **partial** analysis because the Book declaration is rejected, not a successful whole-app generation.
 Do not infer that there are no further host issues behind this first diagnostic.
 
-Remaining gates: decide the executable-schema boundary, migrate the 29 legacy input declarations,
+Remaining gates after this first checkpoint: implement the executable-schema boundary agreed below, migrate the 29 legacy input declarations,
 repeat full installed-host generation/types/tests/build, rehearse the classified Chapter slice,
 run local-only database/auth/cache checks and reconcile release documentation. Database integration,
 data audit, browser smoke tests and release approval remain outstanding.
+
+## Decision: input transformations stay at the execution boundary for now
+
+Agreed after the codegen checkpoint: do not project `graphSchema.transform` callbacks into generated
+clients for this release. Keep the authoritative input transformation in the receiving runtime.
+Commit `51ecaab` alone does not support that separation. The subsequent local implementation and
+installed-host proof are recorded below; the preceding diagnostic is historical evidence.
+
+The concrete BookOps use is GitHub Markdown import normalization: `/docs/` becomes `docs`, and
+`Manual Docentes Copy` becomes `manual-docentes-copy`. The public operation explicitly parses the
+input on the server. Its internal durable operation is `server-only`; inventorying that declaration
+must not impose browser portability on its implementation. The existing wizard separately reuses
+the slug normalizer for UX, without requiring codegen to copy it.
+
+The implementation must distinguish model inventory, caller-facing input contract and executable
+parsing. Projecting the portable input shape is not projecting the callback. Preserve metadata
+that a transformation exists where useful; `toGraphSchemaDescriptor` already represents a transform
+and its underlying input without serializing the function. Keep server normalization and validation
+intact, and do not present client validation as complete when executable checks remain server-side.
+
+Do not equate the wire input type with the parsed value type: a transform can change both shape and
+type. Nor should a refinement after a transform be applied blindly to the raw input. For example,
+BookOps accepts uppercase words before normalization even though the resulting slug must match a
+lowercase pattern. Input-only projection does not establish how transformed Operation outputs should
+be described; diagnose missing output information rather than substitute the pre-transform schema.
+
+### Implemented boundary and second installed-host proof
+
+The codegen slice now separates server-only inventory, raw input projection and output projection.
+Input transforms/refinements preserve the underlying wire schema and record server processing;
+callbacks are neither emitted nor executed during analysis. Parsed defaults remain server-side.
+Opaque outputs still diagnose missing portable contracts. Generated-module tests compile strictly
+and verify raw client input, transformed server results, refinement rejection, defaults and shared
+Value identity across Operations.
+
+All 170 codegen tests, coverage thresholds, build/typecheck and lint pass. A final isolated consumer
+also installs the final codegen tarball and validates strict TypeScript, shared inline Values in an
+anonymous union reused across Operations, raw client parsing and absence of transform callbacks.
+Its codegen integrity is
+`sha512-MUJ/N8SlPY6lijSIQriwyUX30nxh0eNdtL8AczeI4gbnUU0O2ACowA/rUj2fuldzY0G+t7FknP5xY361NjJMvw==`.
+This final package proof includes the inline-Value identity regression fix added after the host pack.
+
+All 15 candidate packages were packed under
+`.artifacts/npm/bookops-rehearsal-wire-input-51ecaab/release-manifest.json` (local working changes atop
+`51ecaab`, not published bytes). BookOps resolution auditing verified all 12 reached packages across
+13 peer contexts. Its three real generation targets and drift check pass. All 18 Entities analyze
+without diagnostics. Full candidate typechecking still reports 97 host diagnostics, **none in the
+generated modules**; legacy input contracts and callers remain to migrate. Nine focused host tests
+and all 18 generator fixture tests pass on the installed candidate.
+
+The rehearsal exposed a separate nominal collision: BookOps declared two different
+`TaskSubjectOutput` Values. The private GitHub-import Value is now named
+`GithubMarkdownImportTaskSubject`, preserving its distinct unknown-key behavior. The custom host
+generator now passes the complete named-definition inventory. A fixture that used `.view()` on a
+plain object now declares a real Entity and supported named schema wrappers.
+
+Registry pins and generated artifacts were restored afterward. With those compatible preparations,
+BookOps passes 874 unit tests, 18 generator fixture tests, full typecheck, generation/drift and the
+registry-resolution guard. Manifests, lockfile and generated files have no pending changes. The next
+slice is the 29 legacy Operation input declarations and their callers, not client transform previews.
+Full candidate runtime/database/browser checks and release approval remain outstanding.
+
+### Deferred: portable transformations and client previews
+
+Pure, input-only transformations could later be introspected and reused for previews. Purity alone
+does not make an arbitrary JavaScript function serializable, inspectable or executable in Go/Rust
+clients. Explore explicit declarative transform expressions or known, versioned transformations if
+a concrete UI need warrants it. Preserve input/output schemas, deterministic semantics and runtime
+capability discovery rather than automatically copying closures.
+
+A preview remains optional and non-authoritative. Do not introduce double application of a transform
+by silently changing what the client submits; transformations need not be idempotent. This exploration
+is deferred and is not a prerequisite for the BookOps upgrade or this release.
