@@ -51,6 +51,12 @@ Views remain client source and are transported as JSON-safe ASTs; codegen does n
 register them as server application definitions. Entity and Operation-reachable Value declarations
 form the nominal server-model inventory.
 
+Named Operation Values carry their transitive static schema dependencies in that inventory.
+Client emission orders shared Value bindings before their consumers and resolves receiver-bound
+Entity references without copying host declarations. Nested Values obey the same nominal uniqueness
+rule as root Values. An unresolved, cyclic or executable schema dependency is a diagnostic, not a
+license to emit a partial contract or import server closures.
+
 `@ontahi/codegen` owns neutral source loading, configurable import resolution, diagnostics, generic client/task projections, and the reusable generation runner for cached analysis, deterministic writes, drift checks, target selection, and dependency-aware watch. `@ontahi/runtime-vercel-workflows/codegen` owns Vercel-specific static rendering. BookOps owns alias values, target/output configuration, formatting policy, and its configured workflow runtime. The generated domain-operation and HTTP ingress registries were removed because the graph API already exposes the runtime metadata needed for ordinary composition. The former Next Action client target was also removed: graph operations use the generic invocation bridge, and explicitly authored Next Actions can use `@ontahi/runtime-nextjs/actions` without codegen.
 
 Codegen tests follow the repository's colocated topology. Focused suites sit beside the analysis or

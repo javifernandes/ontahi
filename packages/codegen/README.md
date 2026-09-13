@@ -69,6 +69,21 @@ or emitted by codegen.
 
 ## Lower-level API
 
+### Named Value dependencies
+
+Named Operation input/output Values project their static dependency closure: local or imported
+Values (including aliases), scalar schema constants, object spreads and `.fields` reuse. The
+application's `namedDefinitions` includes the nested Values; the client renderer emits them in
+dependency order and reuses one binding per nominal name. Pass that inventory along with `entities`
+and `schemaEntities` when calling `renderGeneratedClientEntityModule` directly.
+
+Receiver-bound `self.one()`, `self.many()` and `self.view(...)` inside these Values use the generated
+Entity schema, without importing the server Entity or altering field names and string literals.
+Unresolved dependencies, cycles and duplicate nominal definitions are diagnosed. Projection follows
+static schema data, not arbitrary JavaScript: executable `graphSchema.transform`, `refine`, `lazy`
+or custom factory dependencies require a separately designed portable contract and currently produce
+a diagnostic. Codegen does not execute or copy those host functions into browser modules.
+
 ### Experimental classified Operation inputs
 
 `graphSchema.existingRef(Chapter)` inputs are projected when Chapter resolves to a literal

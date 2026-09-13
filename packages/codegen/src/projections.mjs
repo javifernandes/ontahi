@@ -4,6 +4,7 @@ import {
   printClientEntitySchemaImports,
   printClientEntitySchemaStatements,
 } from './generated-module/client-entity-schema.mjs';
+import { renderNamedValues } from './generated-module/named-values.mjs';
 import { renderVariantInputs } from './operation-contracts/variant-inputs.mjs';
 
 const INLINE_BRIDGE_QUERY_INPUT_TYPE_PATTERN = /(:\s*)(\{\s*[^{}]*?\s*\})(\s*\)\s*=>)/g;
@@ -308,7 +309,7 @@ export const renderGeneratedClientEntityModule = ({
     ...entityDefinitionImports.map(name => entityDefinitionAliases.get(name) ?? name),
   ]);
   const namedDefinitionLocalNames = new Map();
-  const namedValueDefinitionTexts = namedValueDefinitions.map(definition => {
+  for (const definition of namedValueDefinitions) {
     const identifierName = definition.name.replace(/[^A-Za-z0-9_$]/g, '_');
     const safeIdentifierName = /^[A-Za-z_$]/.test(identifierName)
       ? identifierName
@@ -321,12 +322,16 @@ export const renderGeneratedClientEntityModule = ({
     }
     usedGeneratedNames.add(localName);
     namedDefinitionLocalNames.set(definition.name, localName);
-    return `const ${localName} = ${renderVariantInputs(
-      replaceProjectedEntityNames(definition.schemaText, projectedNames),
-      definition.variantInputs,
-      projectedNames,
-    )};`;
-  });
+  }
+  const namedValueDefinitionTexts = renderNamedValues(
+    namedValueDefinitions,
+    namedDefinitionLocalNames,
+    new Map([
+      ...entityDefinitionImports.map(name => [name, entityDefinitionAliases.get(name) ?? name]),
+      ...projectedNames,
+    ]),
+    replaceProjectedEntityNames,
+  );
   const relationDefinitionsBySource = new Map();
   for (const relationDefinition of relationDefinitions) {
     const sourceRelations =

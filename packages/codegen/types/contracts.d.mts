@@ -49,6 +49,11 @@ export type AnalyzedNamedDefinition = {
   declaration: string;
   sourcePath?: string;
   schemaText?: string;
+  references?: readonly {
+    placeholder: string;
+    kind: 'value' | 'entity';
+    name: string;
+  }[];
   variantInputs?: readonly {
     placeholder: string;
     descriptor: {

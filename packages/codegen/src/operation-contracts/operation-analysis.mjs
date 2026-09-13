@@ -12,6 +12,7 @@ import {
   isGraphOutputSchemaCall,
   toClientGraphOutputText,
 } from './graph-output-analysis.mjs';
+import { createNamedValueProjector } from './named-value-projection.mjs';
 import { resolveOperationInitializer } from './operation-discovery.mjs';
 import { resolveImportedSchemaContext } from './source-resolution.mjs';
 import { unwrapExpression } from './typescript-ast.mjs';
@@ -570,28 +571,6 @@ const parseIngressDefinitions = (operationName, ingressNode) => {
   };
 };
 
-const analyzeNamedValueDefinition = ({ node, declaration, context, fallbackDeclaration }) => {
-  const resolved = node ? unwrapExpression(node) : undefined;
-  if (
-    !resolved ||
-    !ts.isCallExpression(resolved) ||
-    !ts.isIdentifier(resolved.expression) ||
-    resolved.expression.text !== 'value' ||
-    !resolved.arguments[0] ||
-    !ts.isStringLiteral(resolved.arguments[0])
-  ) {
-    return undefined;
-  }
-
-  return {
-    kind: 'value',
-    name: resolved.arguments[0].text,
-    declaration: declaration?.name.getText() ?? fallbackDeclaration,
-    sourcePath: context?.sourcePath,
-    schemaText: getNodeText(resolved),
-  };
-};
-
 export const parseOperationDefinition = (
   property,
   declarations,
@@ -710,6 +689,7 @@ export const parseOperationDefinition = (
   let outputSchemaText;
   let inputNamedDefinition;
   let outputNamedDefinition;
+  const namedValues = createNamedValueProjector(entityContext);
   const helperDeclarations = new Map();
   let resolvedInputNode;
 
@@ -717,10 +697,6 @@ export const parseOperationDefinition = (
     const resolvedInput = resolveProjectionValueNode(inputNode, schemaContext);
     const localInputNode = resolvedInput.expression;
     const inputContext = resolvedInput.context;
-    const inputDeclaration = [...(inputContext?.declarations.values() ?? [])].find(
-      declaration =>
-        declaration.initializer && unwrapExpression(declaration.initializer) === localInputNode,
-    );
     resolvedInputNode = localInputNode;
 
     if (
@@ -741,15 +717,14 @@ export const parseOperationDefinition = (
       }
     }
 
-    inputNamedDefinition = analyzeNamedValueDefinition({
-      node: localInputNode,
-      declaration: inputDeclaration,
-      context: inputContext,
-      fallbackDeclaration: `${operationName}.input`,
-    });
-    if (variantInputs && inputNamedDefinition) {
-      inputNamedDefinition.schemaText = inputSchemaText;
-      inputNamedDefinition.variantInputs = variantInputs;
+    try {
+      inputNamedDefinition = namedValues.project({
+        node: localInputNode,
+        context: inputContext,
+        fallbackDeclaration: `${operationName}.input`,
+      });
+    } catch (cause) {
+      return { diagnostics: [`${operationName}.input: ${cause.message}`] };
     }
 
     if (
@@ -789,12 +764,19 @@ export const parseOperationDefinition = (
         ? (localOutputDeclaration?.initializer ?? importedOutputDeclaration?.initializer)
         : unwrappedOutput;
 
-    outputNamedDefinition = analyzeNamedValueDefinition({
-      node: localOutputNode,
-      declaration: localOutputDeclaration ?? importedOutputDeclaration,
-      context: localOutputDeclaration ? schemaContext : (importedOutputContext ?? schemaContext),
-      fallbackDeclaration: `${operationName}.output`,
-    });
+    try {
+      outputNamedDefinition = namedValues.project({
+        node: outputNode,
+        context: schemaContext,
+        fallbackDeclaration: `${operationName}.output`,
+      });
+    } catch (cause) {
+      return { diagnostics: [`${operationName}.output: ${cause.message}`] };
+    }
+    if (outputNamedDefinition)
+      outputSchemaText = getNodeText(
+        resolveProjectionValueNode(outputNode, schemaContext).expression,
+      );
 
     if (
       localOutputNode &&
@@ -901,7 +883,7 @@ export const parseOperationDefinition = (
     outputSchemaText,
     inputNamedDefinition,
     outputNamedDefinition,
-    namedDefinitions: [inputNamedDefinition, outputNamedDefinition].filter(Boolean),
+    namedDefinitions: namedValues.definitions,
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

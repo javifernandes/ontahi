@@ -1,6 +1,6 @@
 # Release readiness and BookOps upgrade inventory — September 2026
 
-Status: inventory complete; installed-host rehearsal and release approval pending.
+Status: first installed-host rehearsal complete; compatibility fixes and release approval pending.
 
 ## Decision
 
@@ -10,9 +10,9 @@ not depend on modernizing every BookOps feature, removing every locator, or fini
 Devtools feature. Conversely, a successful Ontahi test suite is not evidence that BookOps can
 upgrade unchanged.
 
-This is an inventory, not an implementation or installed-host migration. No BookOps dependency,
-source, database, release tag or published version was changed. The user cancelled the proposed
-worktree: this work uses `docs/release-readiness-bookops` in the existing Ontahi checkout.
+The initial inventory below did not modify BookOps. Subsequent rehearsal evidence is recorded in
+the checkpoint at the end. The user cancelled the proposed worktree; all work uses the existing
+separated checkouts. No release was published.
 
 ## Frozen baselines
 
@@ -292,14 +292,14 @@ plans, Atlas, executable examples and the developer book. Concrete remaining wor
 - [x] Freeze Ontahi candidate and exclude unmerged Devtools work.
 - [x] Review pending host edits; run their narrow tests with installed packages.
 - [x] Analyze real BookOps source with old and candidate codegen without modifying artifacts.
-- [ ] Checkpoint the six reviewed host files locally; record the resulting host commit.
-- [ ] Establish current full type/build/test failures before attributing them to the upgrade.
+- [x] Checkpoint the six reviewed host files locally; host commit `7584ac2d`.
+- [x] Establish current full type/build/test failures before attributing them to the upgrade.
 
 ### B. Prove package compatibility before new domain adoption
 
-- [ ] Build and pack the candidate's complete fixed package set. Record source SHA and tarball
+- [x] Build and pack the candidate's complete fixed package set. Record source SHA and tarball
       integrities; package metadata may still carry alpha.11 until the release bot versions it.
-- [ ] Install tarballs with temporary exact overrides for **all reached Ontahi packages**, including
+- [x] Install tarballs with temporary exact overrides for **all reached Ontahi packages**, including
       transitive dependencies. No sibling-source resolution or mixture of alpha.3/registry alpha.11 and
       candidate bytes. Audit the actual installed paths and versions.
 - [ ] Migrate the mandatory input/contract/transport differences above in cohesive groups, preserving
@@ -350,5 +350,44 @@ src/components/internal/graph-ops/graph-ops-operation-ref-input.test.tsx` from B
 - Verified the 60-name Changeset index and local Markdown links; repository formatting and
   `git diff --check` passed. The reviewed host diff/file hashes remain unchanged.
 
-Full candidate installation, complete BookOps typecheck/build, database integration, data audit,
-browser smoke tests and final release-documentation reconciliation are **not yet performed**.
+## Installed-host and codegen checkpoint — 2026-09-13
+
+The first rehearsal built all 15 packages at `da149a3f8363455ebd875b3446a9f69ce4adbd65` (PR #156
+head), installed candidate tarballs in BookOps and audited all 12 reached packages across 13 peer
+contexts. Parallel Devtools #155/#157 were excluded; reconcile actual main before release approval.
+The manifest is `.artifacts/npm/bookops-rehearsal-da149a3/release-manifest.json`. Metadata remains
+alpha.11; these are candidate bytes, not the registry's alpha.11 payload.
+
+The baseline passed 871 tests and typecheck; the production build could not download Google Fonts
+in the sandbox. The candidate exposed 98 TypeScript diagnostics and the removed `app.graph.refInput`
+prevented many suites from loading. Two backward-compatible host preparations were retained:
+validation as a concern and an explicit legacy Operation endpoint. After restoring registry pins
+and generated artifacts, 873 tests and typecheck passed. The host manifest/lockfile remained unchanged.
+Detailed evidence lives at `bookops://docs/research/ontahi-upgrade-rehearsal-2026-09`.
+
+The rehearsal also isolated an Ontahi defect: `value('Input', { subject: Subject })` emitted an
+undefined `Subject` even with a complete analysis inventory. The correction on
+`fix/codegen-nested-value-projection` closes static Value dependencies, preserves shared identity,
+resolves imported aliases and binds `self` to the generated Entity schema. Eight new regressions
+cover semantic import, strict typechecking, identity, cycles, nominal conflicts and opaque inputs.
+All 161 codegen tests, coverage thresholds, package build/typecheck and lint pass.
+
+A separate clean consumer installed the corrected codegen tarball and the previously packed Core
+tarball. Strict TypeScript validation and runtime checks passed for the nested Value repro, shared
+Value identity and receiver-bound Selection identity. Installed modules resolved inside that
+consumer's own pnpm store. No BookOps dependency, generated file or source was changed in this pass.
+The codegen tarball integrity was
+`sha512-WkqXIkhCQi9AFKZIHHkt419y/kJ0bPrSvbX+FLVn9t+O+uf5mhr6VShVvE9E5+H9QhoGorv2mn10BSgcAna/lA==`;
+its source is the local fix atop `da149a3`, not a published version or a clean release candidate.
+
+Analyzing actual BookOps source with that installed codegen now stops at
+`internalImportFromGithubMarkdown.input`: its dependency uses executable `graphSchema.transform`.
+That requires an explicit portable-schema/normalization decision; copying the closure or removing
+its semantics to make generation pass is not a fix. The 17 analyzed Entities / 67 Values are a
+**partial** analysis because the Book declaration is rejected, not a successful whole-app generation.
+Do not infer that there are no further host issues behind this first diagnostic.
+
+Remaining gates: decide the executable-schema boundary, migrate the 29 legacy input declarations,
+repeat full installed-host generation/types/tests/build, rehearse the classified Chapter slice,
+run local-only database/auth/cache checks and reconcile release documentation. Database integration,
+data audit, browser smoke tests and release approval remain outstanding.
