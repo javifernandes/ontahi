@@ -1,5 +1,6 @@
 'use client';
 
+import type { GraphClientCache } from '@ontahi/core/data-graph';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
 import { useState } from 'react';
 
@@ -12,6 +13,7 @@ import { OntahiMark } from './ontahi-mark.js';
 import { defaultDevtoolsPanelHeight } from './panel-resizer.js';
 
 export type OntahiDevtoolsProps = {
+  readonly clientCache?: GraphClientCache;
   readonly console?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly initiallyOpen?: boolean;
@@ -20,6 +22,7 @@ export type OntahiDevtoolsProps = {
 
 export const OntahiDevtools = ({
   console,
+  clientCache,
   diagnostics,
   initiallyOpen = false,
   runtimeTransport,
@@ -28,6 +31,7 @@ export const OntahiDevtools = ({
   const [height, setHeight] = useState(defaultDevtoolsPanelHeight);
   return open ? (
     <DevtoolsPanel
+      clientCache={clientCache}
       consoleOptions={console}
       diagnostics={diagnostics}
       runtimeTransport={runtimeTransport}

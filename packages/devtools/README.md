@@ -224,3 +224,23 @@ createOntahiDiagnostics({
 
 This first release proves the behavioral boundary in Todo. Cache inspection and transport
 connection state are later Plan 148 slices.
+
+## Cache: local runtime state
+
+Views are ordered Console (when configured), Activity, Cache, Settings. Activity remains the
+initial view. Pass the same `clientCache` used by the application's graph provider/client:
+
+```tsx
+<OntahiDevtools diagnostics={diagnostics} clientCache={graphClient.clientCache} />
+```
+
+Cache is a live, read-only view of canonical entity records, locator aliases, freshness markers,
+and normalized output skeletons. Filter entities by identity or alias, inspect present fields,
+and follow explicit references between outputs and entities. These values come directly from the
+local cache; Activity payload capture/redaction settings do not transform them. Mount Devtools only
+in the development contexts where inspecting application data is intended.
+
+Output entries are not hook instances. The current inspector does not track active observers,
+Operation execution state, historical writers, field-level coverage, or indirect/transitive
+references. Missing fields are not classified as null or stale. Invalidating an entity may leave
+an output skeleton with an unresolved reference, visible in its normalized JSON.
