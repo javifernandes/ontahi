@@ -1,5 +1,81 @@
 # @ontahi/react
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- 40b6e3c: Connect contextual Selection reads through application storage and remote clients. In-memory and
+  PostgreSQL storage declare graphReadCapabilities.relationSelections, which enables application
+  Graph Read v2 receivers while retaining explicit per-hop policy grants.
+
+  Remote and React graph clients discover the target's v2 capability before each contextual read,
+  using the same transport options for metadata and execution. Ordinary reads stay v1 with no
+  extra requests; missing capabilities and read denials never fall back to v1 or prefetch IDs.
+
+  Custom RemoteGraphReadTransport implementations now accept GraphReadFamilyRequest (metadata and
+  v1/v2 reads); narrow by kind before reading mode or selection. Contextual observation remains
+  unsupported pending source-change invalidation.
+
+- 65e6d30: Add native ordered `hasMany` Relations with portable move commands, exact neighborhood conflict
+  checks and deltas, natural ordered reads, in-memory and transactional PostgreSQL execution,
+  Fetch/WebSocket transport support, React hooks, reflection, and semantic Devtools summaries.
+- ced6a65: Add transport-neutral Query observation to runtime-bound reads and an in-memory implementation that
+  emits complete current results after successful graph commits. Add a framework-owned TaskRun Entity
+  and native in-process Task lifecycle observation backed by that Query capability. Project authorized
+  Query observations through Runtime Protocol WebSocket sessions, reconcile pushed snapshots through
+  the Graph Client Cache, and let Express hosts install a receiver-owned Graph observer. Adapt native
+  TaskRun streams into Durable Protocol progress so WebSocket hosts can push task lifecycle snapshots
+  without polling while preserving the existing Durable client API. Preserve public EntityRef input
+  inference when a schema-backed durable operation is consumed through React.
+- 5af84ba: Unify Fetch Operation, Graph Read, Graph Command, and Durable inspection clients behind one Runtime Transport and `/runtime` endpoint by default, with correlated family exchanges and explicit per-family legacy endpoint compatibility.
+- 96629f2: Add a versioned WebSocket Runtime Protocol session, a multiplexed browser Runtime Transport with
+  pushed Durable Operation progress, and an Express server projection with receiver-owned session
+  context and host-controlled upgrade authorization. Schema-backed Operation inputs are made
+  portable before either Fetch or WebSocket Runtime Protocol transmission.
+
+### Patch Changes
+
+- 6770db7: Release idle remote Graph observation subscriptions by aborting their lifetime signal before
+  waiting for iterator closure. Forward cancellation through the React Runtime Transport bridge
+  without changing caller options or other subscriptions. Verify classified membership changes,
+  shared canonical cache identity and host-driven React query invalidation across real provider reads.
+- 9c9b9b5: Infer portable client input values for schema-backed Durable Operation hooks.
+- 5d9f605: Reconcile successful useGraphQuery reads and refetches into the provider's normalized client cache, including nested selected entities and query outputs. Cache inspection now includes initial page data and refreshed values after mutations, with correct singular and scalar result shapes.
+- 5d9f605: Present cached outputs using semantic read and operation names, selection summaries, and visible identity scopes. Keep complete cache keys in an expandable JSON view. Graph and operation query hooks attach optional descriptive source metadata to output records; this metadata does not confer freshness or change reconciliation policy.
+- 8e627d2: Harden WebSocket Runtime sessions by bounding completed request identity retention, releasing
+  observation and socket resources deterministically, reporting handshake send failures, and making
+  Express upgrade-boundary ownership explicit.
+- Updated dependencies [14026dd]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes

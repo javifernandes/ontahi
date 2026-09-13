@@ -1,5 +1,65 @@
 # @ontahi/runtime-nextjs
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- cfca984: Add the first keyword-free Devtools Console walking skeleton. It reuses the Selection grammar,
+  reflection, diagnostics, and CodeMirror assistance inside `Entity.where(...).many()`,
+  `Entity.where(...).first()`, and `Entity.where(...).one()`, lowers valid documents to canonical
+  Graph Read requests, and executes them through the configured Runtime Transport. Console results
+  can be inspected through the same visual projection used by Activity or as JSON. Exact-one
+  cardinality mismatches cross the Graph Read protocol as an authority-safe structured rejection
+  rather than an opaque availability failure. Boolean and enum literals use the same schema-aware,
+  source-backed value controls as the Explorer Selection editor. Omitting `.where(...)` defaults to
+  the canonical `all` Selection, so unfiltered reads can use `Entity.many()`, `Entity.first()`, or
+  `Entity.one()` directly. `Entity.count()` and `Entity.where(Selection).count()` use the existing
+  Graph Read count mode and render its scalar result without applying a row limit or cardinality.
+  Many reads accept a source-backed `.limit(nonNegativeInteger)` modifier before their terminal;
+  invalid limits and meaningless combinations with `first()`, `one()`, or `count()` are rejected
+  before execution.
+
+### Patch Changes
+
+- a8e1dbc: Reopen Console completion after accepting ordering and predicate clauses so their Fields appear
+  without another keystroke. Discover receiver-owned ordering permissions through a metadata-only
+  graph.read request before executing data, with loading/error feedback and retry. Share that policy
+  snapshot between completion, source-backed field/direction dropdowns in both dialects, and result
+  headers. Preserve keyboard editing and undo, and invalidate stale metadata when Entity, transport,
+  graph.read routing, or host-provided ExecutionIdentity changes. Identity changes clear prior Console
+  results and cancel pending reads without discarding the draft or undo history. Support discovery through Runtime Protocol and standalone Express
+  and Next.js Graph Read handlers; ordinary reads and observations retain their existing contracts.
+- Updated dependencies [14026dd]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes

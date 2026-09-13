@@ -1,5 +1,90 @@
 # @ontahi/runtime-express
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- 65e6d30: Add native ordered `hasMany` Relations with portable move commands, exact neighborhood conflict
+  checks and deltas, natural ordered reads, in-memory and transactional PostgreSQL execution,
+  Fetch/WebSocket transport support, React hooks, reflection, and semantic Devtools summaries.
+- ced6a65: Add transport-neutral Query observation to runtime-bound reads and an in-memory implementation that
+  emits complete current results after successful graph commits. Add a framework-owned TaskRun Entity
+  and native in-process Task lifecycle observation backed by that Query capability. Project authorized
+  Query observations through Runtime Protocol WebSocket sessions, reconcile pushed snapshots through
+  the Graph Client Cache, and let Express hosts install a receiver-owned Graph observer. Adapt native
+  TaskRun streams into Durable Protocol progress so WebSocket hosts can push task lifecycle snapshots
+  without polling while preserving the existing Durable client API. Preserve public EntityRef input
+  inference when a schema-backed durable operation is consumed through React.
+- cfca984: Add the first keyword-free Devtools Console walking skeleton. It reuses the Selection grammar,
+  reflection, diagnostics, and CodeMirror assistance inside `Entity.where(...).many()`,
+  `Entity.where(...).first()`, and `Entity.where(...).one()`, lowers valid documents to canonical
+  Graph Read requests, and executes them through the configured Runtime Transport. Console results
+  can be inspected through the same visual projection used by Activity or as JSON. Exact-one
+  cardinality mismatches cross the Graph Read protocol as an authority-safe structured rejection
+  rather than an opaque availability failure. Boolean and enum literals use the same schema-aware,
+  source-backed value controls as the Explorer Selection editor. Omitting `.where(...)` defaults to
+  the canonical `all` Selection, so unfiltered reads can use `Entity.many()`, `Entity.first()`, or
+  `Entity.one()` directly. `Entity.count()` and `Entity.where(Selection).count()` use the existing
+  Graph Read count mode and render its scalar result without applying a row limit or cardinality.
+  Many reads accept a source-backed `.limit(nonNegativeInteger)` modifier before their terminal;
+  invalid limits and meaningless combinations with `first()`, `one()`, or `count()` are rejected
+  before execution.
+- 96629f2: Add a versioned WebSocket Runtime Protocol session, a multiplexed browser Runtime Transport with
+  pushed Durable Operation progress, and an Express server projection with receiver-owned session
+  context and host-controlled upgrade authorization. Schema-backed Operation inputs are made
+  portable before either Fetch or WebSocket Runtime Protocol transmission.
+
+### Patch Changes
+
+- a8e1dbc: Reopen Console completion after accepting ordering and predicate clauses so their Fields appear
+  without another keystroke. Discover receiver-owned ordering permissions through a metadata-only
+  graph.read request before executing data, with loading/error feedback and retry. Share that policy
+  snapshot between completion, source-backed field/direction dropdowns in both dialects, and result
+  headers. Preserve keyboard editing and undo, and invalidate stale metadata when Entity, transport,
+  graph.read routing, or host-provided ExecutionIdentity changes. Identity changes clear prior Console
+  results and cancel pending reads without discarding the draft or undo history. Support discovery through Runtime Protocol and standalone Express
+  and Next.js Graph Read handlers; ordinary reads and observations retain their existing contracts.
+- 8e627d2: Harden WebSocket Runtime sessions by bounding completed request identity retention, releasing
+  observation and socket resources deterministically, reporting handshake send failures, and making
+  Express upgrade-boundary ownership explicit.
+- Updated dependencies [14026dd]
+- Updated dependencies [c16c898]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [5d510cc]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [b709e59]
+- Updated dependencies [1ece0ce]
+- Updated dependencies [b709e59]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+  - @ontahi/explorer-react@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes

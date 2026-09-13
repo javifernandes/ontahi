@@ -1,5 +1,80 @@
 # @ontahi/postgres
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- 40b6e3c: Execute local contextual Selection reads in PostgreSQL as correlated EXISTS subqueries, without
+  prefetching source IDs. Nested/self relations, direct belongs-to/has-many joins, and single-identity
+  many-to-many joins preserve set membership before final projection, ordering, limits and counts.
+  SQL compilation requires explicit receiver-owned Selection mappings; other SQL runtimes remain
+  opted out. Composite edge joins and virtual filter fields fail explicitly. Commands and graph read
+  protocol v1 still reject relational membership until their authority/transport contracts are implemented.
+- 40b6e3c: Connect contextual Selection reads through application storage and remote clients. In-memory and
+  PostgreSQL storage declare graphReadCapabilities.relationSelections, which enables application
+  Graph Read v2 receivers while retaining explicit per-hop policy grants.
+
+  Remote and React graph clients discover the target's v2 capability before each contextual read,
+  using the same transport options for metadata and execution. Ordinary reads stay v1 with no
+  extra requests; missing capabilities and read denials never fall back to v1 or prefetch IDs.
+
+  Custom RemoteGraphReadTransport implementations now accept GraphReadFamilyRequest (metadata and
+  v1/v2 reads); narrow by kind before reading mode or selection. Contextual observation remains
+  unsupported pending source-change invalidation.
+
+- 65e6d30: Add native ordered `hasMany` Relations with portable move commands, exact neighborhood conflict
+  checks and deltas, natural ordered reads, in-memory and transactional PostgreSQL execution,
+  Fetch/WebSocket transport support, React hooks, reflection, and semantic Devtools summaries.
+
+### Patch Changes
+
+- b81adfe: Add MySQL 8.4/InnoDB storage with exact CRUD results, explicit-target upsert, primary-key updates,
+  Entity Mutation deltas, direct/many-to-many/ordered Relationship Commands, transactions, command
+  savepoints, and reflected Entity data. Include concurrent constraint tests and a Todo Express
+  configuration with persistence verified across host restarts.
+
+  Extract shared mappings, query compilation, and read materialization into @ontahi/sql while
+  preserving PostgreSQL's public entrypoints and provider-owned mutation implementation.
+
+  Preserve explicit relation mappings during Core application composition so physical join mappings
+  remain available to the storage adapter. Date/time, JSON, large-number conformance, and broader
+  schema diagnostics continue separately in Plan 151b.
+
+- 22d6848: Restrict PostgreSQL `SELECT` lists to caller-selected Fields plus the internal join keys required
+  for Relations, avoiding transfer of unselected wide columns while preserving public result shapes.
+- Updated dependencies [14026dd]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+  - @ontahi/sql@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes
