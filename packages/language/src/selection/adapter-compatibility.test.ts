@@ -55,7 +55,7 @@ describe('Selection language adapter compatibility', () => {
       {
         method: 'or',
         arguments: [
-          'and(or(status.eq."open",status.eq."blocked"),score.gte.2,not.completed.eq.true)',
+          'and(or(status.eq."open",status.eq."blocked"),score.gte.2,not.and(completed.eq.true))',
         ],
       },
     ]);
