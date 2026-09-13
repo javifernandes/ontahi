@@ -375,3 +375,25 @@ ordered-composition and exact-one follow-ups. The supported read-only boundary a
 The follow-ups already linked above retain parameterized/navigation composition, provider and
 observation limitations; Commands and general locator removal are not implied by this closure.
 Plan [152](../current/152-discriminated-entity-variants.md) can now begin its contract experiment.
+
+## MySQL provider follow-up — 2026-09-13
+
+The BookOps release-readiness review prioritized the existing direct-SQL adapter before the
+Supabase/PostgREST feasibility study. MySQL now opts into the existing `@ontahi/sql` relational
+membership compiler and advertises Graph Read v2 support through storage. No second compiler,
+new AST, or caller-side source-ID prefetch was introduced. Transaction-bound reads use the same
+capability. PostgreSQL and MySQL now share the contextual graph fixture at the SQL test boundary.
+
+Verified on disposable MySQL 8.4: nested/self navigation, empty/intersected/unioned/complemented
+membership, nullable belongs-to, duplicate-free many-to-many targets, direct composite target
+identity, projections, final ordering/limit/count/get/stream, exact-one before limit, and fresh
+evaluation. Application/remote execution negotiates v2 and enforces source, intermediate and
+target scopes, including complement, without extra membership queries. Protocol v1 and mutation
+compilation remain closed; composite edge joins and virtual filter fields remain unsupported.
+
+Validation: the six initial live cases failed before enabling the two provider capabilities.
+After enabling them and expanding coverage, all 75 MySQL tests, 29 SQL tests and 11 focused
+PostgreSQL regressions passed. MySQL/SQL/PostgreSQL typechecks and lint, all 15 package builds,
+and clean-room tarball installation/type/runtime checks passed; the installed consumer exercises
+MySQL contextual compilation and capability advertisement. Supabase remains separate provider
+work; neither its support nor a BookOps migration is implied by this checkpoint.

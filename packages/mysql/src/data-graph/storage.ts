@@ -49,6 +49,7 @@ export const createMysqlDataGraphStorage = (options: {
   };
   return {
     kind: 'mysql',
+    graphReadCapabilities: { relationSelections: true },
     bindEntities: declarations => {
       entities = declarations;
       if (!hasExplicitMappings) mappings = inferMysqlMappings(declarations, options);
