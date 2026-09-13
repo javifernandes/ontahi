@@ -1,5 +1,40 @@
 # @ontahi/runtime-vercel-workflows
 
+## 1.0.0-alpha.12
+
+### Patch Changes
+
+- Updated dependencies [14026dd]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes

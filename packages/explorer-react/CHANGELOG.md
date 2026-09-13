@@ -1,5 +1,90 @@
 # @ontahi/explorer-react
 
+## 1.0.0-alpha.12
+
+### Minor Changes
+
+- c16c898: Extend the contextual Selection language with Boolean composition, grouping, scalar operators,
+  JSON-safe literals, reflection-aware diagnostics, and canonical Selection AST lowering.
+- 5d510cc: Add the first recoverable Ontahí Selection text language, its CodeMirror adapter, and an opt-in
+  Explorer proof that lowers a Boolean predicate to the canonical Selection AST and executes it
+  through `graph.read`.
+- 65e6d30: Add native ordered `hasMany` Relations with portable move commands, exact neighborhood conflict
+  checks and deltas, natural ordered reads, in-memory and transactional PostgreSQL execution,
+  Fetch/WebSocket transport support, React hooks, reflection, and semantic Devtools summaries.
+- b709e59: Add opt-in, reversible finite-value projections for resolved Boolean and enum Selection literals,
+  and enable them in Explorer with a compact filter surface, contextual help, keyboard editing, and
+  ordinary document history.
+- 1ece0ce: Add Selection completion, semantic highlighting, and hover help powered only by static reflection,
+  plus a host-themed completion UI, reliable Backspace editing, recoverable execution failures, and
+  typed Color result cells. Valid Selections continue to execute through the existing Graph Read
+  path.
+- b709e59: Support portable Reference identity literals in Selection documents, optional runtime-backed search
+  and rich Reference projections in CodeMirror, and authorized Reference lookup in Explorer filters.
+- 740cfd0: Expose named Selection factory contracts in graph discovery: strict input schemas, Selection output
+  entity, version, shorthand and pure expansion template. Preserve consumer-owned cardinality.
+  Generate typed browser factories from portable withSelectionFactories declarations without server
+  imports, and show discovered contracts in Explorer's Entity structure panel. Existing locators
+  remain supported; Console grammar and dynamic factory invocation forms are not introduced here.
+
+### Patch Changes
+
+- a8e1dbc: Share a browser-local authoring dialect preference through Devtools Settings and Explorer editors.
+  Preserve Console drafts and undo history across tab navigation and convert valid drafts without
+  executing when the preference changes. Add theme-aware, contrast-tested syntax highlighting for
+  TS-like and Declarative Console queries and contextual Explorer predicates.
+- Updated dependencies [14026dd]
+- Updated dependencies [c16c898]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [6770db7]
+- Updated dependencies [9c9b9b5]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [5d510cc]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [b81adfe]
+- Updated dependencies [65e6d30]
+- Updated dependencies [ced6a65]
+- Updated dependencies [40b6e3c]
+- Updated dependencies [cfca984]
+- Updated dependencies [cfca984]
+- Updated dependencies [740cfd0]
+- Updated dependencies [b709e59]
+- Updated dependencies [5d9f605]
+- Updated dependencies [1ece0ce]
+- Updated dependencies [b709e59]
+- Updated dependencies [6770db7]
+- Updated dependencies [740cfd0]
+- Updated dependencies [5d9f605]
+- Updated dependencies [cfca984]
+- Updated dependencies [a8e1dbc]
+- Updated dependencies [cfca984]
+- Updated dependencies [5af84ba]
+- Updated dependencies [6770db7]
+- Updated dependencies [6770db7]
+- Updated dependencies [96629f2]
+- Updated dependencies [8e627d2]
+  - @ontahi/core@1.0.0-alpha.12
+  - @ontahi/language@1.0.0-alpha.12
+  - @ontahi/language-codemirror@1.0.0-alpha.12
+  - @ontahi/react@1.0.0-alpha.12
+
 ## 1.0.0-alpha.11
 
 ### Patch Changes
