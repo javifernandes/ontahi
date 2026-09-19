@@ -120,6 +120,14 @@ jobs:
           pnpm release:npm:dry-run --
           --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
 
+      - name: Preserve verified release tarballs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-${{ env.RELEASE_VERSION }}-${{ env.RELEASE_COMMIT }}
+          path: ${{ env.RELEASE_OUTPUT }}/${{ env.RELEASE_VERSION }}/
+          if-no-files-found: error
+          retention-days: 14
+
   publish:
     name: Publish every package
     if: needs.resolve.outputs.mode == 'publish'
@@ -139,12 +147,6 @@ jobs:
         with:
           ref: ${{ env.RELEASE_COMMIT }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-
       - name: Setup Node for npm
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -154,22 +156,15 @@ jobs:
       - name: Pin trusted-publishing npm CLI
         run: npm install --global "npm@$NPM_VERSION"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Build packages
-        run: pnpm build:packages
-
-      - name: Prepare immutable release tarballs
-        run: >-
-          pnpm release:npm:prepare --
-          --version "$RELEASE_VERSION"
-          --tag "$RELEASE_CHANNEL"
-          --output "$RELEASE_OUTPUT/$RELEASE_VERSION"
+      - name: Download this run's verified release tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: npm-${{ env.RELEASE_VERSION }}-${{ env.RELEASE_COMMIT }}
+          path: ${{ env.RELEASE_OUTPUT }}/${{ env.RELEASE_VERSION }}
 
       - name: Publish with npm trusted publishing
         run: >-
-          pnpm release:npm:publish --
+          node scripts/release/npm-release.mjs publish
           --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
 
   metadata:

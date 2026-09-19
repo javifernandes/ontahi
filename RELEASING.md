@@ -65,8 +65,15 @@ version that already exists with different contents.
 The workspace `beforePacking` hook sorts dependency maps after pnpm resolves `workspace:` versions.
 It does not reorder conditional exports or change dependency values. Artifact verification packs
 every package twice, compares the complete tarball bytes, and logs SHA-512 integrity values for
-comparison across local and CI builds. Keep the pinned pnpm version and the hook enabled when
-preparing release artifacts; do not bootstrap an immutable version unless those hashes agree.
+comparison between builds. Keep the pinned pnpm version and the hook enabled when preparing release
+artifacts. gzip headers identify the originating OS, so macOS and Linux tarballs can have different
+integrity even when their package contents are identical.
+
+Preflight uploads the verified release tarballs and manifest as one artifact named for the version
+and source commit. Publication downloads that artifact from the same workflow run without rebuilding
+or repacking. For the initial authenticated bootstrap of a new npm package name, use the tarball from
+the candidate's Linux dry-run artifact, not a local repack. Verify its SHA-512 against the manifest;
+the refreshed candidate's integrity must still match before completing publication through OIDC.
 
 ## Developer documentation gate
 
