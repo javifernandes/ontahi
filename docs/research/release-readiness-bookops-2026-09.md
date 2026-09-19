@@ -1,7 +1,8 @@
 # Release readiness and BookOps upgrade inventory — September 2026
 
-Status: migrated host passes the frozen candidate's local checks; main reconciliation and release
-approval pending. Checkpoints below preserve the chronological evidence.
+Status: main is reconciled and the expanded candidate passes local package/host checks;
+release documentation, review and publication approval remain pending. Checkpoints below preserve
+the chronological evidence.
 
 ## Decision
 
@@ -326,7 +327,7 @@ Supabase support and a wholesale Reader migration are not implicit prerequisites
 
 ### D. Approve, publish, then finalize the host pins
 
-- [ ] Fix any demonstrated Ontahi defects in Ontahi; repack and rerun the host proof.
+- [x] Fix the demonstrated Ontahi defects in Ontahi; repack and rerun the host proof.
 - [ ] Reconcile release notes/developer docs and review the exact release PR scope with the user.
 - [ ] Publish only by the approved release workflow; no manual versioning/tags.
 - [ ] Replace temporary tarball overrides with the exact published version; repeat compatibility
@@ -566,3 +567,53 @@ repack and rerun the host gates before claiming the expanded candidate is ready.
 Publication remains gated on reviewed fixes, developer-documentation/Changeset reconciliation,
 fresh final-candidate checks and release approval. Tracked BookOps registry pins still target the
 old release; no tarball path belongs in the final committed lockfile.
+
+### Expanded main candidate verified — 2026-09-19
+
+Local checkpoints: host migration `9fa4fa58`, recursive schema/result fixes `4176196`, and the merge
+of approved main `e6584db` into the compatibility branch at `28a41a5`. Only the historical inventory
+document conflicted; the newer rehearsal checkpoints were retained. The React hook merge preserves
+both schema-native input typing and the new semantic cache-output metadata.
+
+The approved scope now also includes normalized-cache inspection, query-cache reconciliation,
+semantic output descriptions, live-query Activity, bounded local entity history, Console Observe/Stop
+for supported many-query transports, and grouped/cache-reference navigation. These are the surfaces
+from Devtools PRs #155, #157, #159 and #160, not a Commands/Operations Console or a general storage
+change-feed implementation. The original frozen inventory above is historical, not the final scope.
+
+Packed candidate: `.artifacts/npm/bookops-rehearsal-main-28a41a5/release-manifest.json`, all fifteen
+packages, source `28a41a5ab5bc55efc5d14229899ee1657d4c664d`. Package metadata remains alpha.11 only
+for this local rehearsal; these bytes are not the published alpha.11. The bot-owned release PR still
+needs these compatibility commits before versioning/publication.
+
+Verification against the merged source and installed tarballs:
+
+- All package builds, package/example typechecks and repository lint pass.
+- All fifteen package suites pass: **2,606 tests in 272 files**, combining the first ten passing
+  suites with the final five-package sequential run. Explorer's descriptor fixture needed the explicit
+  `resolution: 'portable'` expectation; `170d7a3` contains that test-only fix and an empty Changeset.
+  High parallel load caused later UI timeouts; sequential retries passed without increasing timeouts
+  or changing runtime behavior.
+- Todo: **70 tests**, including its disposable-MySQL host-restart proof. Classroom: **7 ordinary
+  tests plus all 5 PostgreSQL tests**, the latter run with a new Testcontainers database, then removed.
+- Clean-room artifact installation, exported types and runtime proofs pass. Offline npm dry-run with
+  npm 11.19 passes for all fifteen tarballs; nothing was published.
+- BookOps: **968 unit tests**, **47 integration tests**, **17 pgTAP checks**, **23 Chromium Storybook
+  cases**, typecheck, lint/guards, generation/drift and formatting pass. The production build was
+  repeated after preserving/removing the earlier Next cache; it compiles from the new installed
+  tarball paths. Existing Next/Vercel/Browserslist warnings remain non-fatal.
+- BookOps's installed-path audit confirms 12 reached packages / 13 peer contexts all from this
+  candidate. The tracked registry manifest/lockfile is unchanged; the candidate lock is saved locally
+  as `.cache/ontahi-rehearsal/main-28a41a5-pnpm-lock.yaml`. Its fresh isolated Supabase stack
+  `bookops_main_20260919` was removed after verification, without touching the developer stack.
+
+A comparison repack at `170d7a3` found identical integrity for 14 packages; Devtools differed only
+in dependency-key order in its packed package.json (parsed metadata and all other files identical).
+Keep the tested manifest and integrity set as the proof identifier; do not describe repacks as
+byte-identical merely because source behavior is unchanged.
+
+Next: review/merge the compatibility fixes and reconcile the developer book and accumulated release
+notes against this expanded scope. The existing documentation checklist still applies, especially
+classified/contextual selections, bound versus unbound factories and new codegen boundaries. Final
+publication, registry pin/lockfile updates and a full authenticated browser-to-database journey
+remain separate gates. No branch was pushed and no release/PR was mutated during this pass.
