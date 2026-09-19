@@ -1,10 +1,10 @@
 # Release readiness and BookOps upgrade inventory — September 2026
 
-Status: main is reconciled and the expanded candidate passes local package/host checks;
-release documentation, review and publication approval remain pending. Checkpoints below preserve
+Status: the expanded candidate passes local package/host checks and release documentation is reconciled;
+compatibility/release PR review, fresh CI and publication remain pending. Checkpoints below preserve
 the chronological evidence.
 
-## Decision
+## Initial decision
 
 Do not publish yet. First preserve the reviewed BookOps changes, prove baseline compatibility with
 the candidate's packed artifacts, then rehearse one classified Chapter Operation. Publication must
@@ -263,10 +263,11 @@ separate local checkpoint of the reviewed six-file baseline and confirm no concu
 added. Preserve baseline fixes separately from mandatory compatibility changes and optional variant
 adoption, even if they eventually share a host PR.
 
-## Release documentation is not reconciled yet
+## Initial release-documentation gaps
 
 The [release gate](../../RELEASING.md#developer-documentation-gate) requires agreement among notes,
-plans, Atlas, executable examples and the developer book. Concrete remaining work:
+plans, Atlas, executable examples and the developer book. The initial gaps below are historical;
+the release-closure checkpoint records their reconciliation:
 
 1. Normalize stage-oriented Changesets into an accurate final surface. For example,
    `console-read-dialects` still calls UI switching a follow-up; `selection-factory-discovery` says
@@ -617,3 +618,27 @@ notes against this expanded scope. The existing documentation checklist still ap
 classified/contextual selections, bound versus unbound factories and new codegen boundaries. Final
 publication, registry pin/lockfile updates and a full authenticated browser-to-database journey
 remain separate gates. No branch was pushed and no release/PR was mutated during this pass.
+
+### Release closure preparation — 2026-09-19
+
+The user approved closing the Ontahi version with the main-inclusive candidate. The
+[alpha.12 candidate guide](../releases/1.0.0-alpha.12.md) now connects the accumulated Changesets,
+completed Plans, current broader Plans, provider boundaries and host upgrade requirements.
+
+Developer chapters now cover classified Entities/participants, contextual navigation, wire schema
+projection and declarative recursive Values, shared language authoring and current Devtools
+Cache/History/Observe. Core's obsolete MySQL/Supabase and Console exclusions were corrected.
+Definition-owned and generated-facade `by` are still unbound, as the factory contract states;
+ordinary and classified runtime binding are distinguished. The Chapter raw-runner note now records
+PR 154's targeted guard without claiming general validation. Stage-oriented pending Changesets were
+reconciled where later slices had already delivered the previously deferred surface. Plans 150/152
+remain current; no deferred mutation, general inheritance or contextual observation scope was dropped.
+
+The generated release PR's previous Node 24 failure was a Supabase integration-fixture teardown
+race. A disposable PostgreSQL reproduction confirms `Pool.end()` resolves before the client's
+`end` event. The two sequential Supabase database fixtures now own a single Client, whose closure
+is awaited before stopping its database. This changes tests only and has an empty Changeset.
+
+These corrections still need the compatibility PR and refreshed release CI. They do not publish
+packages or change BookOps's tracked registry pins. The earlier frozen tables remain historical;
+use the candidate guide and latest checkpoints for the final scope.

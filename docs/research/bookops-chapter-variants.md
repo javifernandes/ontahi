@@ -120,10 +120,11 @@ than silently choose `first`. This is specific to `existingRef`; it is not a pre
 prefetch targets for future Commands. Deferred classified Selection inputs remain unsupported here.
 
 The fixture checks schema rejection and serialization rejection of a deferred VariantSelection.
-It invokes the low-level `runServerDomainOperationRaw` only with Ref-shaped inputs for the receiver
-cases. That internal runner is **not an input-validation ingress**: passing an arbitrary local
-Selection directly can bypass input parsing and reach the body unmaterialized. Applications must
-use the schema-validated boundary; this rehearsal does not claim general hardening of the raw runner.
+It invokes the low-level `runServerDomainOperationRaw` with Ref-shaped inputs for the receiver cases.
+PR 154 added a targeted classified-participant guard: an arbitrary VariantSelection cannot enter
+that body unmaterialized. The internal runner is still **not a general input-validation ingress**.
+Applications must use the schema-validated boundary; this rehearsal does not claim general hardening
+of the raw runner.
 
 ## Authority, hierarchy and repository adaptation
 

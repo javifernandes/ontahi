@@ -71,7 +71,7 @@ The initial declaration, reflection, and compatibility contract is documented in
 [Core factory example](../../../packages/core/README.md#experimental-named-selection-factories).
 It supports pure scalar-predicate and canonical-identity templates, not arbitrary callbacks or
 external resolution. Automatic runtime binding remains a follow-up.
-`by` returns an unbound Selection that can cross an Operation input
+Definition-owned and generated-facade `by` return an unbound Selection that can cross an Operation input
 boundary or be consumed by an explicit runtime.
 
 Graph discovery exposes each factory's strict input schema and Selection output entity, without a
@@ -88,6 +88,48 @@ Factories do not assert uniqueness. The receiving input's `one`/`many` contract 
 identity references, existence, and uniqueness of current authorized membership remain distinct.
 Consumers can compose constraints without modifying the caller's Selection, then build a Command
 without a preliminary read. That capability does not widen the current exact remote Command API.
+
+## Navigate relative to the current Selection
+
+An Entity can declare a parameterless contextual Selection using an existing Relation:
+
+```ts
+const Book = entity({
+  name: 'Book',
+  fields: { id: f.id() },
+  relations: { contentNodes: relation.hasMany(ContentNode, { via: 'bookId' }) },
+  selections: ({ self }) => ({
+    parts: self.contentNodes.where(node => node.type.eq('part')),
+  }),
+});
+
+const parts = Selection.where(Book, book => book.id.eq('book-42')).parts;
+```
+
+Here `ContentNode` declares `bookId` and the finite `type` Field. `parts` selects ContentNodes
+reachable from the selected Books; it does not select Books or attach a calculated scalar Field to
+each row. If ContentNode also declares `chapters`, `parts.chapters` composes another hop. Named
+same-Entity factories (`by`) and contextual navigation compose without loading intermediate records.
+Use `self.contentNodes.as(Part)` when the target should retain an explicitly declared variant.
+
+The portable membership node is `relation-image`. Several source instances produce one set of
+target instances, not grouped results. Apply ordering, limit and View shaping after navigation;
+source read shaping is rejected rather than silently discarded. Source `one` cardinality is not a
+promise about the destination. Ordinary runtime-bound Selections preserve their binding across
+ordinary hops; classified hops have the separate read-only binding described in Core's variant
+contract. Definition-owned Selections remain unbound.
+
+In-memory, PostgreSQL, MySQL and Supabase runtimes support contextual reads within their documented
+provider limits. SQL uses correlated `EXISTS`; Supabase uses PostgREST relationship embeddings and
+existence filters, requiring matching physical FKs. Neither prefetches IDs on the client.
+Remote reads negotiate Graph Read v2 and require explicit `selectionRelations` grants plus policy
+scopes for every source and the final target. Protocol v1, contextual Commands and contextual
+observation remain unsupported; there is no permissive fallback.
+
+See [declarations and protocol](../../../packages/core/README.md#experimental-contextual-selection-factories)
+and the [Supabase physical requirements](../../../packages/supabase/README.md#contextual-selection-reads).
+The executable [Chapter rehearsal](../../../packages/core/src/runtime/server/bookops-chapter-rehearsal.test.ts)
+composes named factories, classified destinations and existing participants.
 
 ## Exact-one membership is not a row limit
 

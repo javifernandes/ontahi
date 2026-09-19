@@ -93,6 +93,38 @@ The first slice is virtual only. It does not create database triggers, materiali
 permanent aggregate invariants, and it intentionally does not allow one derived Field to depend on
 another.
 
+## Name a classified population without another identity
+
+An experimental Entity variant gives a fixed classification its own name and narrowed read types:
+
+```ts
+const ContentNode = entity({
+  name: 'ContentNode',
+  fields: {
+    id: f.id(),
+    type: f.enum(['part', 'chapter'] as const),
+    title: f.string(),
+  },
+});
+const Chapter = ContentNode.variant('Chapter', { discriminator: { type: 'chapter' } });
+const introductions = Chapter.where(node => node.title.eq('Introduction')).many();
+```
+
+`Chapter.all()` describes only chapters. `not()` complements within that population, never within
+all ContentNodes. The discriminator is enforced outside caller membership expressions. Use
+`Chapter.from(baseSelection)` to narrow a base Selection explicitly; no rows are fetched by doing so.
+
+A Chapter still has ContentNode identity and storage. Create Refs through `Chapter.base`, not a new
+Chapter identity namespace. Base and classified snapshots normalize to the same canonical record;
+a cached base record alone is not proof of current Chapter membership.
+
+The supported classifier is one required, stored, non-null enum Field. Remote reads require explicit
+variant registration on the base read policy, and inherit its grants and authority scope. This is
+not general schema inheritance: variant writes, classification transitions, variant-root Console
+Views and standalone generated variant exports remain deferred. Existing base mutations are not
+disabled by declaring a variant. See the [Core contract](../../../packages/core/README.md#experimental-entity-variant-reads)
+for registration and runtime binding.
+
 ## `self` keeps Entity-shaped contracts local
 
 Inside `operations`, `self` refers to the Entity being declared:
