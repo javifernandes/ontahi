@@ -68,7 +68,7 @@ without copying callbacks. Parsed defaults stay server-side when they cannot des
 Executable outputs still require an explicit portable output contract, rather than substituting their
 pre-transform shape. Optional portable transformations/previews are deferred, not a reason to copy
 JavaScript closures or confuse wire input with the parsed value. See the
-[release rehearsal decision](../../docs/research/release-readiness-bookops-2026-09.md#decision-input-transformations-stay-at-the-execution-boundary-for-now).
+[release rehearsal decision](../../../docs/research/release-readiness-bookops-2026-09.md#decision-input-transformations-stay-at-the-execution-boundary-for-now).
 
 `@ontahi/codegen` owns neutral source loading, configurable import resolution, diagnostics, generic client/task projections, and the reusable generation runner for cached analysis, deterministic writes, drift checks, target selection, and dependency-aware watch. `@ontahi/runtime-vercel-workflows/codegen` owns Vercel-specific static rendering. BookOps owns alias values, target/output configuration, formatting policy, and its configured workflow runtime. The generated domain-operation and HTTP ingress registries were removed because the graph API already exposes the runtime metadata needed for ordinary composition. The former Next Action client target was also removed: graph operations use the generic invocation bridge, and explicitly authored Next Actions can use `@ontahi/runtime-nextjs/actions` without codegen.
 
