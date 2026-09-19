@@ -50,6 +50,89 @@ const render = analysis =>
   });
 
 describe('nested Value client projections', () => {
+  it.each(['all', 'selection'])(
+    'closes imported Value dependencies through output wrappers (%s contracts)',
+    async operationContracts => {
+      await withApplication(
+        {
+          'schemas.ts': `import { field, value, graphSchema } from '@ontahi/core/data-graph';
+            const Detail = value('Detail', { title: field.string() });
+            export const Output = graphSchema.named('Results', graphSchema.nullable(
+              graphSchema.array(graphSchema.union([Detail, value('Empty', { empty: field.boolean() })]))
+            ));
+            export { Detail };`,
+          'item.ts': itemSource(
+            `import { Output as Response, Detail } from './schemas';`,
+            `read: operation({ input: value('Input', { item: graphSchema.ref(self) }), output: Response, run: () => null }),
+             detail: operation({ input: value('DetailInput', { item: graphSchema.ref(self) }), output: Detail, run: () => null })`,
+          ),
+        },
+        async (analysis, directory) => {
+          expect(analysis.diagnostics).toEqual([]);
+          const generated = await importGeneratedModule({
+            directory,
+            source: `${renderGeneratedClientEntityModule({
+              entities: analysis.clientEntities,
+              schemaEntities: analysis.entities,
+              namedDefinitions: analysis.namedDefinitions,
+              operationContracts,
+            })}
+              import { safeParseUnknownGraphSchema } from '@ontahi/core/data-graph';
+              type Output = NonNullable<typeof Item.domain.read.__clientTypes>['output'];
+              const accepted: Output = [{ title: 'Title' }, { empty: true }];
+              const absent: Output = null;
+              // @ts-expect-error nested Value inference must survive every wrapper
+              const invalid: Output = [{ title: 123 }];
+              export const parsed = safeParseUnknownGraphSchema(Item.domain.read.output, accepted);
+              export const absentParsed = safeParseUnknownGraphSchema(Item.domain.read.output, absent);
+            `,
+          });
+          expect(generated.parsed).toMatchObject({ success: true });
+          expect(generated.absentParsed).toMatchObject({ success: true });
+          expect(generated.Item.domain.read.output.item.item.item.options[0]).toBe(
+            generated.Item.domain.detail.output,
+          );
+        },
+      );
+    },
+    30_000,
+  );
+
+  it.each([
+    ['graphSchema.custom(serverOnly)', 'Opaque schema constructor "graphSchema.custom"'],
+    ['unknownOutput', 'Unresolved schema dependency "unknownOutput"'],
+  ])(
+    'refuses unsafe anonymous outputs when their contract is emitted: %s',
+    async (output, message) => {
+      await withApplication(
+        {
+          'item.ts': itemSource(
+            '',
+            `read: operation({ output: graphSchema.union([
+          value('Partial', { title: field.string() }), ${output}
+        ]), run: () => null })`,
+          ),
+        },
+        analysis => {
+          expect(analysis.diagnostics).toEqual([]);
+          expect(
+            analysis.namedDefinitions.filter(definition => definition.kind === 'value'),
+          ).toEqual([]);
+          expect(() => render(analysis)).toThrow(`Item.read.output: ${message}`);
+          // Legacy metadata-only projections do not request this output contract.
+          expect(() =>
+            renderGeneratedClientEntityModule({
+              entities: analysis.clientEntities,
+              schemaEntities: analysis.entities,
+              namedDefinitions: analysis.namedDefinitions,
+              operationContracts: 'selection',
+            }),
+          ).not.toThrow();
+        },
+      );
+    },
+  );
+
   it.each(['local', 'imported-alias'])(
     'closes %s dependencies and preserves shared identity',
     async form => {

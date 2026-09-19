@@ -512,3 +512,25 @@ Remaining: 14 Book and 10 conversation operations with legacy input participants
 metadata/callers, obsolete runtime/reflection tests, complete output projection, full host checks,
 one classified Chapter adoption proof and the release documentation reconciliation above. Final
 publication and exact host registry pins remain explicitly gated; no release happened in this slice.
+
+## Basic Book read outputs rehearsal — 2026-09-19
+
+BookOps migrated four more participants (`fetchTableOfContents`, `fetchBookInfo`, `fetchLabels`,
+`fetchFirstChapter`) to native Book Refs. The real generated client reproduced unresolved Value
+dependencies below anonymous output wrappers. Codegen now projects these output expressions through
+the existing schema projector, including imported aliases and shared nested Values. Requested unsafe
+anonymous outputs fail at emission with Entity/Operation context; metadata-only compatibility
+projections may still exclude those outputs. Partially discovered dependencies from a failed
+projection are not emitted. This does not make opaque callbacks or recursive lazy outputs portable.
+
+All 176 codegen tests and coverage thresholds pass, including generated-module import, strict
+TypeScript inference, shared identity and unsafe-output rejection. Package build/typecheck and lint
+pass. The candidate at `.artifacts/npm/bookops-rehearsal-book-read-outputs/release-manifest.json`
+contains the working fix atop `0ba856a`; nothing was published. BookOps audits 12 reached packages /
+13 peer contexts and passes 88 focused host tests plus 18 generator fixtures, actual generation/drift
+and web lint. Its remaining full-typecheck diagnostics fall from 79 to 72, none in generated files.
+
+Chapter path selection/participant contracts, opaque Chapter outputs, remaining legacy operations,
+full host verification and release documentation reconciliation are still gates. Final host pins and
+lockfile remain on the published version until release approval; the local candidate install is not
+a reproducible registry upgrade yet.

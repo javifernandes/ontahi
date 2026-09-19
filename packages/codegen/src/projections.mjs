@@ -106,6 +106,11 @@ ${relationDefinitions
       : '';
   const operationBlocks = definition.operations
     .map(operation => {
+      const rendersOutput = shouldRenderOutputContract(operation, operationContracts);
+      if (rendersOutput && operation.outputSchemaProjectionError)
+        throw new Error(
+          `${definition.entityName}.${operation.name}.output: ${operation.outputSchemaProjectionError}`,
+        );
       const graphOutputText = replaceProjectedEntityNames(
         operation.graphOutputText,
         projectedNames,
@@ -121,10 +126,17 @@ ${relationDefinitions
             projectedNames,
           )
         : renderVariantInputs(projectedInputSchemaText, operation.variantInputs, projectedNames);
-      const outputSchemaText = operation.outputNamedDefinition
-        ? (namedDefinitionLocalNames.get(operation.outputNamedDefinition.name) ??
-          replaceProjectedEntityNames(operation.outputSchemaText, projectedNames))
-        : replaceProjectedEntityNames(operation.outputSchemaText, projectedNames);
+      const outputSchemaText =
+        rendersOutput && operation.outputSchemaProjection
+          ? renderSchemaProjection(
+              operation.outputSchemaProjection,
+              namedDefinitionLocalNames,
+              projectedNames,
+            )
+          : operation.outputNamedDefinition
+            ? (namedDefinitionLocalNames.get(operation.outputNamedDefinition.name) ??
+              replaceProjectedEntityNames(operation.outputSchemaText, projectedNames))
+            : replaceProjectedEntityNames(operation.outputSchemaText, projectedNames);
       const lines = [
         `    ${operation.name}: defineClientDomainOperation({`,
         `      authority: '${operation.authority}',`,
@@ -151,7 +163,7 @@ ${relationDefinitions
       } else if (operationContracts === 'all') {
         lines.push('      input: graphSchema.void(),');
       }
-      if (shouldRenderOutputContract(operation, operationContracts) && outputSchemaText) {
+      if (rendersOutput && outputSchemaText) {
         lines.push(`      output: ${outputSchemaText},`);
       }
 
@@ -337,13 +349,14 @@ export const renderGeneratedClientEntityModule = ({
     usedGeneratedNames.add(localName);
     namedDefinitionLocalNames.set(definition.name, localName);
   }
+  const schemaReferenceNames = new Map([
+    ...entityDefinitionImports.map(name => [name, entityDefinitionAliases.get(name) ?? name]),
+    ...projectedNames,
+  ]);
   const namedValueDefinitionTexts = renderNamedValues(
     namedValueDefinitions,
     namedDefinitionLocalNames,
-    new Map([
-      ...entityDefinitionImports.map(name => [name, entityDefinitionAliases.get(name) ?? name]),
-      ...projectedNames,
-    ]),
+    schemaReferenceNames,
     replaceProjectedEntityNames,
   );
   const relationDefinitionsBySource = new Map();
@@ -360,7 +373,7 @@ export const renderGeneratedClientEntityModule = ({
         entity,
         relationDefinitionsBySource,
         operationContracts,
-        projectedNames,
+        schemaReferenceNames,
         namedDefinitionLocalNames,
         usesOperationConditions ? 'operationConditions' : undefined,
       ),

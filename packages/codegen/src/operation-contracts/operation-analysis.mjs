@@ -691,6 +691,8 @@ export const parseOperationDefinition = (
   let inputNamedDefinition;
   let outputNamedDefinition;
   let inputSchemaProjection;
+  let outputSchemaProjection;
+  let outputSchemaProjectionError;
   const inputValues = createNamedValueProjector({
     ...entityContext,
     mode: exposure === 'server-only' ? 'inventory' : 'input',
@@ -799,6 +801,21 @@ export const parseOperationDefinition = (
       });
     } catch (cause) {
       return { diagnostics: [`${operationName}.output: ${cause.message}`] };
+    }
+    if (!outputNamedDefinition && exposure !== 'server-only') {
+      try {
+        outputSchemaProjection = outputValues.projectSchema({
+          node: outputNode,
+          context: schemaContext,
+        });
+        outputSchemaText = getNodeText(
+          resolveProjectionValueNode(outputNode, schemaContext).expression,
+        );
+      } catch (cause) {
+        // Compatibility projections may exclude outputs. Retain the failure so requesting this
+        // contract fails at emission rather than copying unsafe or unresolved server expressions.
+        outputSchemaProjectionError = cause.message;
+      }
     }
     if (outputNamedDefinition)
       outputSchemaText = getNodeText(
@@ -909,9 +926,14 @@ export const parseOperationDefinition = (
     ...(inputSchemaProjection ? { inputSchemaProjection } : {}),
     ...(variantInputs ? { variantInputs } : {}),
     outputSchemaText,
+    ...(outputSchemaProjection ? { outputSchemaProjection } : {}),
+    ...(outputSchemaProjectionError ? { outputSchemaProjectionError } : {}),
     inputNamedDefinition,
     outputNamedDefinition,
-    namedDefinitions: [...inputValues.definitions, ...outputValues.definitions],
+    namedDefinitions: [
+      ...inputValues.definitions,
+      ...(outputSchemaProjectionError ? [] : outputValues.definitions),
+    ],
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

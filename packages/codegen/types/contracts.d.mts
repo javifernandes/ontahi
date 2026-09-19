@@ -26,6 +26,10 @@ export type AnalyzedOperation = {
     AnalyzedNamedDefinition,
     'references' | 'variantInputs' | 'serverProcessing'
   > & { schemaText: string };
+  outputSchemaProjection?: Pick<AnalyzedNamedDefinition, 'references' | 'variantInputs'> & {
+    schemaText: string;
+  };
+  outputSchemaProjectionError?: string;
   [key: string]: unknown;
 };
 
