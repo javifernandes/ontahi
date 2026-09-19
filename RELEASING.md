@@ -69,9 +69,10 @@ comparison between builds. Keep the pinned pnpm version and the hook enabled whe
 artifacts. gzip headers identify the originating OS, so macOS and Linux tarballs can have different
 integrity even when their package contents are identical.
 
-Preflight uploads the verified release tarballs and manifest as one artifact named for the version
-and source commit. Publication downloads that artifact from the same workflow run without rebuilding
-or repacking. For the initial authenticated bootstrap of a new npm package name, use the tarball from
+Preflight uploads the verified release tarballs and manifest as one artifact named for the version,
+source commit and run attempt. Publication downloads that exact artifact ID from the same workflow
+run without rebuilding or repacking, failing on a digest mismatch. For the initial authenticated
+bootstrap of a new npm package name, use the tarball from
 the candidate's Linux dry-run artifact, not a local repack. Verify its SHA-512 against the manifest;
 the refreshed candidate's integrity must still match before completing publication through OIDC.
 
