@@ -169,6 +169,29 @@ describe('Console query observation', { timeout: 15_000 }, () => {
         kind: 'graph-observation.settled',
         outcome: 'aborted',
       });
+      history.dispose();
+    },
+  );
+
+  it.each(['ts', 'declarative'] as const)(
+    'can Run after stopping a %s observation and observe again',
+    async initialDialect => {
+      const source = setupTransport();
+      render(
+        <ConsolePanel
+          options={{
+            entities: [Book],
+            initialDialect,
+            initialDocument: initialDialect === 'ts' ? 'Book.many()' : 'Book many',
+          }}
+          runtimeTransport={source.transport}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+      await source.send(rows('Before Stop'));
+      fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+      await source.finish();
+      await waitFor(() => expect(source.close).toHaveBeenCalled());
       fireEvent.click(screen.getByRole('button', { name: 'Run' }));
       expect(await screen.findByText('Run result')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
@@ -177,7 +200,6 @@ describe('Console query observation', { timeout: 15_000 }, () => {
       expect(screen.getByText('Observe after Run')).toBeTruthy();
       await source.finish();
       expect(source.signal()?.aborted).toBe(true);
-      history.dispose();
     },
   );
 
