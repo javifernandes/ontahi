@@ -88,6 +88,12 @@ Unresolved dependencies, cycles and duplicate nominal definitions are diagnosed.
 static schema data, not arbitrary JavaScript. Server-only Values are inventoried without requiring
 browser-portable implementations and are not emitted unless reached by a client-visible contract.
 
+Declarative recursion is supported with `graphSchema.lazy('Node', () => value('Node', { ... }))`.
+The factory must be a zero-argument, non-async expression returning a Value with the same literal
+name. Self and mutual recursion retain runtime validation and generated model types inferred from
+the schema; host type annotations are not copied. Generated lazy handles are initialized before
+eager Values. Block bodies, arbitrary factory calls and opaque schema dependencies are rejected.
+
 For Operation inputs, `graphSchema.transform` and `refine` stay in the receiving runtime. Generated
 clients describe the pre-processing wire shape, so a string-to-number transform still accepts a string
 from the caller. Analysis records the portable `inputSchemaProjection` and its `serverProcessing`
@@ -97,7 +103,7 @@ schemas remain server-side, with optional wire inputs rather than defaults of th
 
 Codegen neither executes nor copies the callbacks. Transformed/refined outputs require an explicit
 portable output contract; codegen cannot infer the result schema from a callback's input. Opaque
-`lazy` or custom client-schema dependencies remain diagnosed. Client previews and portable transform
+lazy factories outside that declarative subset and custom client-schema dependencies remain diagnosed. Client previews and portable transform
 expressions are deferred.
 
 ### Experimental classified Operation inputs

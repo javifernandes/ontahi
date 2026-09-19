@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import { resolveEntityDeclaration } from './entity-discovery.mjs';
 import { resolveProjectionValueNode } from './entity-schema-projection.mjs';
+import { isLazyValue, readLazyValue } from './lazy-value-projection.mjs';
 import { collectSchemaProcessing } from './schema-processing.mjs';
 import { readStringLiteralObjectProperty, unwrapExpression } from './typescript-ast.mjs';
 import { projectEntityVariant } from './variant-inputs.mjs';
@@ -122,6 +123,8 @@ const renderExpression = (node, context, state, active = new Set()) => {
   const next = new Set(active).add(expression);
   const render = child => renderExpression(child, context, state, next);
   if (ts.isIdentifier(expression)) return renderIdentifier(expression, context, state, next);
+  if (isLazyValue(expression) && state.mode !== 'inventory')
+    return state.valueReference(expression, context);
   if (isValue(expression)) return state.valueReference(expression, context);
   if (ts.isPropertyAccessExpression(expression)) {
     if (expression.name.text !== 'fields') {
@@ -207,8 +210,10 @@ export const createNamedValueProjector = ({ entityName, mode = 'output' } = {}) 
     if (!node) return undefined;
     const resolved = resolveProjectionValueNode(node, context);
     const expression = resolved.expression;
-    if (!isValue(expression)) return undefined;
-    if (visiting.has(expression))
+    const lazy =
+      isLazyValue(expression) && mode !== 'inventory' ? readLazyValue(expression) : undefined;
+    if (!isValue(expression) && !lazy) return undefined;
+    if (visiting.has(expression) && !lazy)
       throw new Error('Cyclic Value schema dependencies are not supported.');
     if (projected.has(expression)) return projected.get(expression);
     const name = expression.arguments[0];
@@ -218,10 +223,13 @@ export const createNamedValueProjector = ({ entityName, mode = 'output' } = {}) 
     );
     visiting.add(expression);
     const declarationName = declaration?.name.getText() ?? fallbackDeclaration;
+    // A lazy edge closes a cycle without evaluating the referenced schema during module setup.
+    if (lazy) projected.set(expression, { name: lazy.name });
     const state = createState();
+    const body = lazy?.body ?? expression;
     const schemaText = rewriteChildren(
-      expression,
-      expression.arguments
+      body,
+      body.arguments
         .slice(1)
         .map(argument => [argument, renderExpression(argument, resolved.context, state)]),
     );
@@ -231,6 +239,7 @@ export const createNamedValueProjector = ({ entityName, mode = 'output' } = {}) 
       declaration: declarationName,
       sourcePath: resolved.context?.sourcePath,
       projection: mode,
+      ...(lazy ? { lazy: true } : {}),
       sourceSchemaText: expression.getText(),
       ...(mode === 'inventory' ? {} : { schemaText }),
       ...projectionMetadata(state),

@@ -261,6 +261,7 @@ export const renderGeneratedClientEntityModule = ({
     clientCacheTexts.some(text => /\bcreateEntityRef\b/.test(text)) ||
     helperTexts.some(helperText => /\bcreateEntityRef\b/.test(helperText));
   const usesGraphSchema =
+    namedValueDefinitions.some(definition => definition.lazy) ||
     schemaTexts.some(text => /\bgraphSchema\b/.test(text)) ||
     (operationContracts === 'all' &&
       entities.some(entity => entity.operations.some(operation => !operation.inputSchemaText)));

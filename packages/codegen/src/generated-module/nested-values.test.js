@@ -50,6 +50,71 @@ const render = analysis =>
   });
 
 describe('nested Value client projections', () => {
+  it.each(['Entry', 'graphSchema.nullable(Entry)'])(
+    'projects recursive Values through %s without host types',
+    async output => {
+      await withApplication(
+        {
+          'item.ts': itemSource(
+            `
+        const Entry = graphSchema.lazy<ServerEntry>('Entry', () => value('Entry', {
+          content: field.string(), children: graphSchema.optional(graphSchema.array(List))
+        }));
+        const List = graphSchema.lazy<ServerList>('List', () => value('List', {
+          style: field.enum(['bullet', 'numbered'] as const), items: graphSchema.array(Entry)
+        }));`,
+            `read: operation({ input: value('Input', { item: graphSchema.ref(self) }), output: ${output}, run: () => null })`,
+          ),
+        },
+        async (analysis, directory) => {
+          expect(analysis.diagnostics).toEqual([]);
+          const source = render(analysis);
+          expect(source).not.toContain('ServerEntry');
+          const generated = await importGeneratedModule({
+            directory,
+            source: `${source}
+        import { safeParseUnknownGraphSchema } from '@ontahi/core/data-graph';
+        type Output = NonNullable<typeof Item.domain.read.__clientTypes>['output'];
+        const accepted: Output = { content: 'a', children: [{ style: 'bullet', items: [{ content: 'b' }] }] };
+        // @ts-expect-error recursive fields retain their types
+        const invalid: Output = { content: 'a', children: [{ style: 'wrong', items: [] }] };
+        export const parsed = safeParseUnknownGraphSchema(Item.domain.read.output, accepted);
+        export const invalidParsed = safeParseUnknownGraphSchema(Item.domain.read.output, invalid);
+      `,
+          });
+          expect(generated.parsed).toMatchObject({ success: true });
+          expect(generated.invalidParsed).toMatchObject({ success: false });
+        },
+      );
+    },
+    30_000,
+  );
+
+  it.each([
+    '(input) => value("Entry", { content: field.string() })',
+    'async () => value("Entry", { content: field.string() })',
+    '() => { serverEffect(); return value("Entry", { content: field.string() }); }',
+    '() => loadServerSchema()',
+    '() => value("Other", { content: field.string() })',
+    '() => value("Entry", { content: graphSchema.custom(serverNormalize) })',
+  ])('rejects non-portable lazy factory %s', async factory => {
+    await withApplication(
+      {
+        'item.ts': itemSource(
+          `const Entry = graphSchema.lazy('Entry', ${factory});`,
+          'read: operation({ output: Entry, run: () => null })',
+        ),
+      },
+      analysis => {
+        expect(analysis.diagnostics).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ message: expect.stringMatching(/read.output:.*Opaque/) }),
+          ]),
+        );
+      },
+    );
+  });
+
   it.each(['all', 'selection'])(
     'closes imported Value dependencies through output wrappers (%s contracts)',
     async operationContracts => {

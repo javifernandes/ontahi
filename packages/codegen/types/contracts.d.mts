@@ -57,6 +57,7 @@ export type AnalyzedNamedDefinition = {
   declaration: string;
   sourcePath?: string;
   schemaText?: string;
+  lazy?: boolean;
   sourceSchemaText?: string;
   projection?: 'input' | 'output' | 'inventory';
   serverProcessing?: readonly ('transform' | 'refinement')[];

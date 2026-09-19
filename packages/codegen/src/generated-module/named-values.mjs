@@ -39,6 +39,35 @@ export const renderNamedValues = (definitions, names, entities, replaceEntityNam
   const visited = new Set();
   const visiting = new Set();
   const declarations = [];
+  const usedNames = new Set([...names.values(), ...entities.values()]);
+  const allocate = hint => {
+    let name = hint;
+    while (usedNames.has(name)) name += '_';
+    usedNames.add(name);
+    return name;
+  };
+  const renderDefinition = definition => {
+    const text = replaceReferences(definition.schemaText, definition.references, names, entities);
+    return renderVariantInputs(
+      definition.references ? text : replaceEntityNames(text, entities),
+      definition.variantInputs,
+      entities,
+    );
+  };
+  // Create lazy handles before eager Values. Only the generated factories touch dependencies.
+  for (const definition of definitions.filter(candidate => candidate.lazy)) {
+    const name = names.get(definition.name);
+    const factory = allocate(`${name}Factory`);
+    const model = allocate(`${name}Model`);
+    const shape = allocate(`${name}Shape`);
+    declarations.push(
+      `function ${factory}() { return ${renderDefinition(definition)}; }`,
+      `type ${shape} = import('@ontahi/core/data-graph').InferGraphSchemaValue<ReturnType<typeof ${factory}>>;`,
+      `interface ${model} extends ${shape} {}`,
+      `const ${name}: import('@ontahi/core/data-graph').GraphLazyDefinition<${model}> = graphSchema.lazy(${JSON.stringify(definition.name)}, ${factory});`,
+    );
+    visited.add(definition.name);
+  }
   const emit = definition => {
     if (visited.has(definition.name)) return;
     if (visiting.has(definition.name))
@@ -50,14 +79,7 @@ export const renderNamedValues = (definitions, names, entities, replaceEntityNam
       if (!dependency) throw new Error(`Missing Value schema dependency "${reference.name}".`);
       emit(dependency);
     }
-    const text = replaceReferences(definition.schemaText, definition.references, names, entities);
-    declarations.push(
-      `const ${names.get(definition.name)} = ${renderVariantInputs(
-        definition.references ? text : replaceEntityNames(text, entities),
-        definition.variantInputs,
-        entities,
-      )};`,
-    );
+    declarations.push(`const ${names.get(definition.name)} = ${renderDefinition(definition)};`);
     visiting.delete(definition.name);
     visited.add(definition.name);
   };

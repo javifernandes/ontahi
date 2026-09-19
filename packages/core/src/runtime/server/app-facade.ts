@@ -60,6 +60,7 @@ import {
   invokeConfiguredProjectedDomainOperation,
   inspectProjectedDomainOperationQuery,
   invokeServerDomainOperation,
+  type DomainOperationRun,
   type ResolvedDomainOperationDeclaration,
   runConfiguredServerDomainOperationRaw,
   runServerDomainOperationRaw,
@@ -151,9 +152,9 @@ type ConfiguredOperationInput<TOperation extends AnyResolvedDomainOperation> =
     : never;
 
 type ConfiguredOperationResult<TOperation extends AnyResolvedDomainOperation> =
-  TOperation extends ResolvedDomainOperationDeclaration<any, infer TResult, any, any>
-    ? TResult
-    : never;
+  // Infer from execution, not contravariant hooks plus a separately projected output schema.
+  // Combining those positions can collapse valid discriminated unions to never.
+  TOperation extends { run: DomainOperationRun<any, infer TResult, any, any> } ? TResult : never;
 
 type ConfiguredOperationFailure<TOperation extends AnyResolvedDomainOperation> =
   TOperation extends ResolvedDomainOperationDeclaration<any, any, infer TFailure, any>

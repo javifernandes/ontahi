@@ -1,6 +1,7 @@
 # Release readiness and BookOps upgrade inventory — September 2026
 
-Status: first installed-host rehearsal complete; compatibility fixes and release approval pending.
+Status: migrated host passes the frozen candidate's local checks; main reconciliation and release
+approval pending. Checkpoints below preserve the chronological evidence.
 
 ## Decision
 
@@ -302,9 +303,9 @@ plans, Atlas, executable examples and the developer book. Concrete remaining wor
 - [x] Install tarballs with temporary exact overrides for **all reached Ontahi packages**, including
       transitive dependencies. No sibling-source resolution or mixture of alpha.3/registry alpha.11 and
       candidate bytes. Audit the actual installed paths and versions.
-- [ ] Migrate the mandatory input/contract/transport differences above in cohesive groups, preserving
+- [x] Migrate the mandatory input/contract/transport differences above in cohesive groups, preserving
       current product behavior. Run all three codegen targets, typecheck, unit tests and production build.
-- [ ] Run local-only PostgreSQL/Supabase integration and auth/error/cache scenarios relevant to the
+- [x] Run local-only PostgreSQL/Supabase integration and auth/error/cache scenarios relevant to the
       app. Verify endpoints before executing anything; do not reset or migrate a production database.
 
 No worktree is required. Use the current host checkout with a checkpoint and reversible dependency
@@ -313,12 +314,12 @@ package directories; it is a fast authoring mode, **not** this tarball compatibi
 
 ### C. Rehearse one classified Chapter slice
 
-- [ ] Audit actual `ContentNode.type` values; declare a finite classifier only after that check.
-- [ ] Migrate `listThreadsForChapter`, its input and callers together. Carry loaded Chapter id into
+- [x] Audit actual `ContentNode.type` values; declare a finite classifier only after that check.
+- [x] Migrate `listThreadsForChapter`, its input and callers together. Carry loaded Chapter id into
       the context; preserve audience filtering, root/nested distinctions, thread state and viewer data.
-- [ ] Test unauthorized, missing, wrong-kind and ambiguous paths; verify cache invalidation and
+- [x] Test unauthorized, missing, wrong-kind and ambiguous paths; verify cache invalidation and
       initialData. Retain the legacy picker until its replacement interaction is actually proven.
-- [ ] Keep separate Reader `ChapterNode`/`SectionNode` shapes and the other locator consumers intact.
+- [x] Keep separate Reader `ChapterNode`/`SectionNode` shapes and the other locator consumers intact.
 
 Use the [Chapter rehearsal](./bookops-chapter-variants.md) for declaration/body details. Contextual
 Supabase support and a wholesale Reader migration are not implicit prerequisites for this pilot.
@@ -534,3 +535,34 @@ Chapter path selection/participant contracts, opaque Chapter outputs, remaining 
 full host verification and release documentation reconciliation are still gates. Final host pins and
 lockfile remain on the published version until release approval; the local candidate install is not
 a reproducible registry upgrade yet.
+
+## Completed frozen-host proof and main reconciliation — 2026-09-19
+
+The remaining Book, conversation and notification inputs are migrated in BookOps. Chapter content,
+navigation and thread reads use existing classified participants with canonical base IDs; the URL
+page entry retains scalar route inputs for access-shell-first behavior. Recursive output projection
+and configured Operation result-union inference exposed two further Core/codegen fixes, recorded
+with public Changesets. Declarative lazy Values project without executing host closures.
+
+The installed `bookops-rehearsal-book-native-final` tarballs (working fixes atop `736e9ff`) pass
+BookOps production build, zero type errors, 968 unit tests, 47 integration tests (including 18
+generator fixtures), 17 real pgTAP RLS/helper checks, 23 focused Chromium Storybook cases, lint,
+formatting and generated drift. New real Supabase cases verify root/nested Chapter reads, wrong-kind
+rejection, private-ID denial for anonymous/unrelated users and owner access. The disposable test
+stack was removed; development data was not reset. A full authenticated browser-to-database journey
+remains unverified. See `bookops://docs/research/ontahi-upgrade-rehearsal-2026-09` for host details.
+
+Ontahi's changed packages previously passed all builds, 1,115 Core tests, 184 codegen tests with
+coverage, typechecks and lint. The installed-path audit verifies 12 reached packages in 13 peer
+contexts. This proof is for the frozen tarballs, not for a moving release branch.
+
+Read-only GitHub inspection found main at `e6584dbc66fcd1f0a3e5d472c4acedaa7c767603`, including
+Devtools PRs #155, #157, #159 and #160 plus the provider merge #156. Release PR #123 proposes
+`1.0.0-alpha.12`, head `52b00fa4d13968e425fd1dd800e6fcd41b02f81e` at inspection; it does not yet
+include these local compatibility fixes. The user approved including main and repeating validation,
+instead of maintaining a separate frozen release train. Preserve local checkpoints, integrate main,
+repack and rerun the host gates before claiming the expanded candidate is ready.
+
+Publication remains gated on reviewed fixes, developer-documentation/Changeset reconciliation,
+fresh final-candidate checks and release approval. Tracked BookOps registry pins still target the
+old release; no tarball path belongs in the final committed lockfile.

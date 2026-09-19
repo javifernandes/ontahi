@@ -54,8 +54,12 @@ form the nominal server-model inventory.
 Named Operation Values carry their transitive static schema dependencies in that inventory.
 Client emission orders shared Value bindings before their consumers and resolves receiver-bound
 Entity references without copying host declarations. Nested Values obey the same nominal uniqueness
-rule as root Values. An unresolved or cyclic portable schema dependency is a diagnostic, not a
-license to emit a partial contract or import server closures.
+rule as root Values. Unresolved dependencies and eager cycles are diagnostics, not a license to
+emit a partial contract or import server closures. Declarative `graphSchema.lazy('Name', () =>
+value('Name', { ... }))` factories can close recursive Value dependencies: generated lazy handles
+precede eager consumers, retain recursive validation and derive types from their schemas. Only
+zero-argument expression factories with matching literal names are portable; opaque host factories
+remain rejected and are never executed during analysis.
 
 Inventory is separate from target-specific projection: server-only parsing does not require browser
 portability. Operation inputs project the raw wire schema; `graphSchema.transform` callbacks and
