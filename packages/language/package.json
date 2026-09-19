@@ -1,6 +1,6 @@
 {
   "name": "@ontahi/language",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "description": "Editor-neutral parsing and semantic analysis for Ontahi textual languages",
   "homepage": "https://github.com/javifernandes/ontahi/tree/main/packages/language",
   "license": "Apache-2.0",
