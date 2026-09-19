@@ -15,10 +15,17 @@ const importRules = {
 
 module.exports = {
   root: true,
-  ignorePatterns: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'apps/www/.next/**'],
+  ignorePatterns: [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/coverage/**',
+    'apps/www/.next/**',
+    '!.pnpmfile.cjs',
+  ],
   overrides: [
     {
       files: [
+        '.pnpmfile.cjs',
         'packages/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
         'examples/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
         'scripts/**/*.{js,mjs,cjs,ts,mts,cts}',

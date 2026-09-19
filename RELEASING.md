@@ -62,6 +62,12 @@ dry-run validates the exact public payload without credentials. The publish step
 incomplete package set, changed tarballs, a source/version mismatch, a stable version, or an npm
 version that already exists with different contents.
 
+The workspace `beforePacking` hook sorts dependency maps after pnpm resolves `workspace:` versions.
+It does not reorder conditional exports or change dependency values. Artifact verification packs
+every package twice, compares the complete tarball bytes, and logs SHA-512 integrity values for
+comparison across local and CI builds. Keep the pinned pnpm version and the hook enabled when
+preparing release artifacts; do not bootstrap an immutable version unless those hashes agree.
+
 ## Developer documentation gate
 
 Treat developer documentation as part of the release candidate, not as a follow-up after
