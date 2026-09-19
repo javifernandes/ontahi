@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -207,6 +208,20 @@ const packPackages = artifactsDirectory =>
 const relativeTarball = (consumerDirectory, tarball) =>
   `file:${path.relative(consumerDirectory, tarball).split(path.sep).join('/')}`;
 
+const verifyReproducibleTarballs = (tarballs, repeatedDirectory) => {
+  mkdirSync(repeatedDirectory);
+  const repeated = packPackages(repeatedDirectory);
+  for (const [name, tarball] of Object.entries(tarballs)) {
+    const contents = readFileSync(tarball);
+    assert(
+      contents.equals(readFileSync(repeated[name])),
+      `${name} produced different tarball bytes when packed again.`,
+    );
+    const integrity = `sha512-${createHash('sha512').update(contents).digest('base64')}`;
+    process.stdout.write(`Reproducible artifact: ${name}@${expectedVersion} ${integrity}\n`);
+  }
+};
+
 const installConsumer = ({ root, name, tarballs, dependencies, copyFixture = false }) => {
   const consumerDirectory = path.join(root, name);
   if (copyFixture) cpSync(fixtureRoot, consumerDirectory, { recursive: true });
@@ -252,6 +267,7 @@ const installConsumer = ({ root, name, tarballs, dependencies, copyFixture = fal
 };
 
 const verifyArtifacts = () => {
+  run('node', ['--test', 'scripts/release/before-packing.test.cjs']);
   validateSourceManifests();
   process.stdout.write(`Ontahi release order: ${releaseOrder().join(' -> ')}\n`);
 
@@ -266,6 +282,7 @@ const verifyArtifacts = () => {
   try {
     mkdirSync(artifactsDirectory);
     const tarballs = packPackages(artifactsDirectory);
+    verifyReproducibleTarballs(tarballs, path.join(temporaryRoot, 'repeated-artifacts'));
     const minimalTarballs = Object.fromEntries(
       ['@ontahi/core', '@ontahi/runtime-express'].map(name => [name, tarballs[name]]),
     );

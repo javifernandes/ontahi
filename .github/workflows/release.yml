@@ -74,6 +74,8 @@ jobs:
     name: Build and dry-run every package
     needs: resolve
     runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.tarballs.outputs.artifact-id }}
     env:
       RELEASE_CHANNEL: ${{ needs.resolve.outputs.channel }}
       RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
@@ -120,6 +122,15 @@ jobs:
           pnpm release:npm:dry-run --
           --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
 
+      - name: Preserve verified release tarballs
+        id: tarballs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-${{ env.RELEASE_VERSION }}-${{ env.RELEASE_COMMIT }}-${{ github.run_attempt }}
+          path: ${{ env.RELEASE_OUTPUT }}/${{ env.RELEASE_VERSION }}/
+          if-no-files-found: error
+          retention-days: 14
+
   publish:
     name: Publish every package
     if: needs.resolve.outputs.mode == 'publish'
@@ -139,12 +150,6 @@ jobs:
         with:
           ref: ${{ env.RELEASE_COMMIT }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-
       - name: Setup Node for npm
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -154,22 +159,16 @@ jobs:
       - name: Pin trusted-publishing npm CLI
         run: npm install --global "npm@$NPM_VERSION"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Build packages
-        run: pnpm build:packages
-
-      - name: Prepare immutable release tarballs
-        run: >-
-          pnpm release:npm:prepare --
-          --version "$RELEASE_VERSION"
-          --tag "$RELEASE_CHANNEL"
-          --output "$RELEASE_OUTPUT/$RELEASE_VERSION"
+      - name: Download this run's verified release tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact-id }}
+          path: ${{ env.RELEASE_OUTPUT }}/${{ env.RELEASE_VERSION }}
+          digest-mismatch: error
 
       - name: Publish with npm trusted publishing
         run: >-
-          pnpm release:npm:publish --
+          node scripts/release/npm-release.mjs publish
           --manifest "$RELEASE_OUTPUT/$RELEASE_VERSION/release-manifest.json"
 
   metadata:

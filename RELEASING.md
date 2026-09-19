@@ -62,6 +62,20 @@ dry-run validates the exact public payload without credentials. The publish step
 incomplete package set, changed tarballs, a source/version mismatch, a stable version, or an npm
 version that already exists with different contents.
 
+The workspace `beforePacking` hook sorts dependency maps after pnpm resolves `workspace:` versions.
+It does not reorder conditional exports or change dependency values. Artifact verification packs
+every package twice, compares the complete tarball bytes, and logs SHA-512 integrity values for
+comparison between builds. Keep the pinned pnpm version and the hook enabled when preparing release
+artifacts. gzip headers identify the originating OS, so macOS and Linux tarballs can have different
+integrity even when their package contents are identical.
+
+Preflight uploads the verified release tarballs and manifest as one artifact named for the version,
+source commit and run attempt. Publication downloads that exact artifact ID from the same workflow
+run without rebuilding or repacking, failing on a digest mismatch. For the initial authenticated
+bootstrap of a new npm package name, use the tarball from
+the candidate's Linux dry-run artifact, not a local repack. Verify its SHA-512 against the manifest;
+the refreshed candidate's integrity must still match before completing publication through OIDC.
+
 ## Developer documentation gate
 
 Treat developer documentation as part of the release candidate, not as a follow-up after
