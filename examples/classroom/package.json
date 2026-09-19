@@ -22,7 +22,7 @@
   "devDependencies": {
     "@ontahi/codegen": "workspace:*",
     "@ontahi/postgres": "workspace:*",
-    "@types/node": "^20.0.0",
+    "@types/node": "^26.4.1",
     "@types/pg": "^8.15.5",
     "oxfmt": "^0.53.0",
     "pg": "^8.16.3",
