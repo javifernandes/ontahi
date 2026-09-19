@@ -222,5 +222,91 @@ createOntahiDiagnostics({
 });
 ```
 
-This first release proves the behavioral boundary in Todo. Cache inspection and transport
-connection state are later Plan 148 slices.
+The Todo example exercises this integration. Transport connection-state evidence remains a later
+Plan 148 slice.
+
+## Cache: local runtime state
+
+Views are ordered Console (when configured), Activity, Cache, Settings. Activity remains the
+initial view. Pass the same `clientCache` used by the application's graph provider/client:
+
+```tsx
+<OntahiDevtools diagnostics={diagnostics} clientCache={graphClient.clientCache} />
+```
+
+Cache is a live, read-only view of canonical entity records, locator aliases, freshness markers,
+and normalized output skeletons. Instances are grouped by entity type with collapsible groups and
+counts. Search names, identities or aliases across groups; matching groups expand while searching.
+Names and titles supplement canonical identities when available. In Data, follow normalized field
+references to cached instances; the Console entity definitions also identify embedded relationship
+rows by their declared identity. Missing targets are marked unavailable. Back restores the previous
+selection, search and detail section, including navigation between outputs and entities. These values come directly from the
+local cache; Activity payload capture/redaction settings do not transform them. Mount Devtools only
+in the development contexts where inspecting application data is intended.
+
+Output entries are not hook instances. The current inspector does not track active observers,
+Operation execution state, historical writers, field-level coverage, or indirect/transitive
+references. Missing fields are not classified as null or stale. Invalidating an entity may leave
+an output skeleton with an unresolved reference, visible in its normalized JSON.
+
+Output entries use semantic read titles, View/Selection summaries, and visible identity scopes.
+Operation query outputs carry explicit source labels; arbitrary custom keys remain generic rather
+than being guessed to be Operations. Full keys remain available under “Cache key / JSON”.
+Source labels are descriptive provenance, not a freshness or authority guarantee.
+
+## Query observations and entity history
+
+The transport decorator also instruments `RuntimeTransport.graph.observe(...)`. Activity groups
+its start, incoming snapshots, and termination into one query observation, with transport, status,
+update count, and a semantic query title when the request was captured. Results default to the visual
+projection, with JSON available in the detail header. Choose an earlier snapshot
+or **Follow latest**; inspecting a snapshot does not pause the application stream. Observations stay
+lazy and preserve cancellation, consumer closure, protocol errors, and transport errors.
+
+Query requests and snapshot payloads follow the same diagnostics capture/redaction policy as
+exchanges. With payload capture disabled, status and row/update counts remain visible. The bounded
+Activity store can evict older snapshots; the detail reports when the selected snapshot is lost.
+These entries describe actual graph transport streams, not React hook instances or every query that
+reruns after invalidation.
+
+With `clientCache` connected, enable **Settings → Record entity history** to capture a baseline and
+subsequent entity writes, invalidations, and cache clears. **Cache → History** shows the timeline,
+field differences from the previous retained snapshot in that recording segment, and a detached
+snapshot. Missing fields mean absent from that local snapshot, not server deletion. Repeated writes
+are retained even when field values are unchanged.
+
+Recording starts disabled and stays in memory: at most 200 entries and approximately 2 MB of
+serialized UTF-16 payloads, with dropped-entry and capture-error counts. Oversized entries are
+skipped. Recording continues while the panel is closed; stopping keeps the captured entries, and
+**Clear entity history** only clears that history. Reloading, unmounting Devtools, or replacing the
+cache drops the history; a replacement cache starts with recording disabled.
+
+History captures local cache field values, independently of Activity's payload redactor. It is a
+debugging record of this client's observed state, not persisted entity versioning or a complete
+audit. Cache writes do not yet carry observation/exchange IDs, so this release does not infer causal
+links between an Activity snapshot and a cache write.
+
+## Observe from the Console
+
+Use **Observe** next to **Run** to subscribe to the current many-query expression. For example,
+in Todo enter `TodoItem.where(completed = false).many()` (or the corresponding declarative query),
+then complete an item in the application: a new snapshot removes it from the Console result.
+**Stop** cancels the subscription and keeps the last received snapshot visible.
+
+Observe requires a transport with `graph.observe`, such as Todo's WebSocket route. The initial
+slice supports Graph Read v1 many queries; scalar terminals (`first`, `one`, `count`, `exists`),
+invalid expressions and contextual v2 selections cannot start an observation. No `.observe()`
+Console syntax is introduced. Graph observation frames carry rows rather than read capabilities;
+the Console continues using its separate capability discovery requests.
+
+The submitted expression stays fixed while observing. Editor and dialect changes remain drafts;
+Run and the result's sort/limit execution controls wait for Stop. Switching to Activity, Cache or
+Settings keeps the observation alive. Closing Devtools, unmounting it, replacing its transport or
+cache, or changing `console.identity` cancels it. Late responses cannot update results or the cache.
+
+With `clientCache` connected, received Entity rows are normalized using the host's Entity
+reflection, including base identities of discovered variants. This lets enabled History record
+those writes. A row disappearing from a query does not delete its canonical entity. Console
+observations do not create retained output skeletons, and historical output semantics remain
+independent. The Console result itself uses the received snapshot; it does not live-denormalize
+older results through newer cache values.

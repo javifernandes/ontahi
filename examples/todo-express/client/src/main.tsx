@@ -110,6 +110,7 @@ const TodoClient = () => {
       {diagnostics ? (
         <OntahiDevtools
           console={{ ...devtoolsConsole, identity }}
+          clientCache={graphClient.clientCache}
           diagnostics={diagnostics}
           runtimeTransport={runtimeTransport}
         />

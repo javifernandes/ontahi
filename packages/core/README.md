@@ -674,3 +674,8 @@ Ontahi queues its Reactions: they are absent from the result inside the transact
 only after the provider confirms commit, and are visible before the outer transaction Effect
 returns. Rollback discards the queue. Follow-up Commands then resolve the restored parent runtime,
 not the released transaction runtime.
+
+Client cache output inspection can include optional `source` metadata (`kind: 'graph-read' |
+'operation'` and `name`). Pass it as the fourth argument to `clientCache.writeOutput` to identify
+the producing read or operation independently of custom cache keys. This metadata describes an
+output; it does not establish freshness or change entity reconciliation.

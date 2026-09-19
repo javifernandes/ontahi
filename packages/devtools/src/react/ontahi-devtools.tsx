@@ -1,9 +1,11 @@
 'use client';
 
+import type { GraphClientCache } from '@ontahi/core/data-graph';
 import type { RuntimeTransport } from '@ontahi/core/runtime/protocol';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
+import { createEntityHistory } from '../entity-history.js';
 
 import type { OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { DevtoolsPanel } from './devtools-panel.js';
@@ -12,6 +14,7 @@ import { OntahiMark } from './ontahi-mark.js';
 import { defaultDevtoolsPanelHeight } from './panel-resizer.js';
 
 export type OntahiDevtoolsProps = {
+  readonly clientCache?: GraphClientCache;
   readonly console?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly initiallyOpen?: boolean;
@@ -20,14 +23,22 @@ export type OntahiDevtoolsProps = {
 
 export const OntahiDevtools = ({
   console,
+  clientCache,
   diagnostics,
   initiallyOpen = false,
   runtimeTransport,
 }: OntahiDevtoolsProps) => {
+  const history = useMemo(
+    () => (clientCache ? createEntityHistory(clientCache) : undefined),
+    [clientCache],
+  );
+  useEffect(() => () => history?.dispose(), [history]);
   const [open, setOpen] = useState(initiallyOpen);
   const [height, setHeight] = useState(defaultDevtoolsPanelHeight);
   return open ? (
     <DevtoolsPanel
+      history={history}
+      clientCache={clientCache}
       consoleOptions={console}
       diagnostics={diagnostics}
       runtimeTransport={runtimeTransport}

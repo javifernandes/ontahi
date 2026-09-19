@@ -112,6 +112,14 @@ logout, service identity, tenant, or workspace changes. An explicit `queryKey` r
 for lower-level reads that cannot be encoded by the graph-read protocol, and the legacy explicit
 `mode` API remains compatible.
 
+Successful `useGraphQuery` reads and refetches also populate the provider's `clientCache`.
+Selected entity identities, including nested relations described by the View, are reconciled into
+canonical records; the output is stored under the query key. Singular reads retain their singular
+shape, and count/exists outputs remain scalars. Failed reads do not write cache entries. The hook
+continues returning the executor's result through React Query; this does not turn direct executor
+calls or optimistic component state into cache writes. A row disappearing from a filtered result
+does not imply that its canonical entity was deleted.
+
 First-class Operation invocations bind render-owned input without losing the declaration form:
 
 ```ts

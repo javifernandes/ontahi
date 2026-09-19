@@ -244,16 +244,31 @@ describe('classified reads across provider lifecycle changes', () => {
         ]);
         expect(result.current.parts.data).toEqual(result.current.base.data);
       });
-      // Query refetch and normalized Entity-cache invalidation are independent host contracts.
+      // Refetches reconcile base and variant reads under the same canonical identities.
+      expect(
+        result.current.cache.records.map(record => ({ ref: record.ref, value: record.value })),
+      ).toEqual([
+        {
+          ref: createEntityRef(Node, { id: 'n1' }),
+          value: { id: 'n1', type: 'part', owner: 'alice' },
+        },
+        {
+          ref: createEntityRef(Node, { id: 'n2' }),
+          value: { id: 'n2', type: 'part', owner: 'alice' },
+        },
+      ]);
       const ref = createEntityRef(Node, { id: 'n1' });
-      act(() => {
-        client.clientCache.writeEntity(Node, { id: 'n1', type: 'part', owner: 'alice' });
-      });
-      expect(result.current.cache.records).toHaveLength(1);
       act(() => {
         client.clientCache.invalidateEntity(ref);
       });
-      expect(result.current.cache.records).toEqual([]);
+      expect(
+        result.current.cache.records.map(record => ({ ref: record.ref, value: record.value })),
+      ).toEqual([
+        {
+          ref: createEntityRef(Node, { id: 'n2' }),
+          value: { id: 'n2', type: 'part', owner: 'alice' },
+        },
+      ]);
     } finally {
       unmount();
       queryClient.clear();

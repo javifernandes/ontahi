@@ -4,6 +4,7 @@ export {
   type DiagnosticProtocolEnvelope,
   type DiagnosticTaskSnapshot,
   type ExchangeDiagnosticEvent,
+  type GraphObservationDiagnosticEvent,
   type ObservationDiagnosticEvent,
   type OntahiDiagnosticEvent,
   type OntahiDiagnostics,

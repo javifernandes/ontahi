@@ -2,10 +2,17 @@ import type { ConsoleDialect } from '@ontahi/language';
 
 import type {
   ExchangeDiagnosticEvent,
+  GraphObservationDiagnosticEvent,
   ObservationDiagnosticEvent,
   OntahiDiagnosticEvent,
   RuntimeDiagnosticOutcome,
 } from '../diagnostics.js';
+
+import {
+  buildGraphObservationActivities,
+  graphObservationEvent,
+  type GraphObservationActivity,
+} from './graph-observation-model.js';
 
 export type ExchangeStarted = Extract<ExchangeDiagnosticEvent, { kind: 'exchange.started' }>;
 export type ExchangeSettled = Extract<ExchangeDiagnosticEvent, { kind: 'exchange.settled' }>;
@@ -39,6 +46,13 @@ export type OperationProgressActivity = {
 };
 
 export type ActivityEntry =
+  | {
+      readonly kind: 'graph-observation';
+      readonly id: string;
+      readonly at: number;
+      readonly graphObservation: GraphObservationActivity;
+      readonly observation?: never;
+    }
   | {
       readonly kind: 'exchange';
       readonly id: string;
@@ -384,33 +398,52 @@ const correlateActivity = (
   return [...exchangeEntries, ...observationEntries].sort((left, right) => right.at - left.at);
 };
 
-export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]) =>
-  correlateActivity(
-    buildExchangeActivities(
-      events.filter((event): event is ExchangeDiagnosticEvent =>
-        event.kind.startsWith('exchange.'),
+export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): ActivityEntry[] =>
+  [
+    ...correlateActivity(
+      buildExchangeActivities(
+        events.filter((event): event is ExchangeDiagnosticEvent =>
+          event.kind.startsWith('exchange.'),
+        ),
+      ),
+      buildOperationProgressActivities(
+        events.filter((event): event is ObservationDiagnosticEvent =>
+          event.kind.startsWith('observation.'),
+        ),
       ),
     ),
-    buildOperationProgressActivities(
-      events.filter((event): event is ObservationDiagnosticEvent =>
-        event.kind.startsWith('observation.'),
+    ...buildGraphObservationActivities(
+      events.filter((event): event is GraphObservationDiagnosticEvent =>
+        event.kind.startsWith('graph-observation.'),
       ),
-    ),
-  );
+    ).map(graphObservation => ({
+      kind: 'graph-observation' as const,
+      id: `graph-observation:${graphObservation.id}`,
+      at: graphObservation.at,
+      graphObservation,
+    })),
+  ].sort((left, right) => right.at - left.at);
 
 export const activityEntryEvent = (entry: ActivityEntry) =>
-  entry.kind === 'exchange'
-    ? (entry.exchange.settled ?? entry.exchange.started)
-    : (entry.observation.settled ??
-      entry.observation.snapshots[entry.observation.snapshots.length - 1] ??
-      entry.observation.started);
+  entry.kind === 'graph-observation'
+    ? graphObservationEvent(entry.graphObservation)
+    : entry.kind === 'exchange'
+      ? (entry.exchange.settled ?? entry.exchange.started)
+      : (entry.observation.settled ??
+        entry.observation.snapshots[entry.observation.snapshots.length - 1] ??
+        entry.observation.started);
 
 export const activityEntryOutcome = (entry: ActivityEntry): RuntimeDiagnosticOutcome | 'pending' =>
+  (entry.kind === 'graph-observation' ? entry.graphObservation.settled?.outcome : undefined) ??
   entry.observation?.settled?.outcome ??
   (entry.kind === 'exchange' ? entry.exchange.settled?.outcome : undefined) ??
   'pending';
 
 export const activityEntryTitle = (entry: ActivityEntry, dialect: ConsoleDialect = 'ts') => {
+  if (entry.kind === 'graph-observation') {
+    const request = graphObservationEvent(entry.graphObservation)?.request;
+    return `${isRecord(request) ? (graphReadSummary(request, dialect) ?? 'Graph read') : 'Graph read'} · observe`;
+  }
   if (entry.kind === 'exchange') return semanticSummary(entry.exchange, dialect);
   const event =
     entry.observation.settled ??

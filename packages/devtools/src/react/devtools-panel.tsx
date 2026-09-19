@@ -1,3 +1,4 @@
+import type { GraphClientCache } from '@ontahi/core/data-graph';
 import {
   isConfigurableRuntimeTransport,
   type RuntimeTransport,
@@ -6,6 +7,7 @@ import { authoringDialectPreference } from '@ontahi/language-codemirror';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 
 import type { OntahiDiagnostics } from '../diagnostics.js';
+import type { EntityHistory } from '../entity-history.js';
 
 import { ActivityList } from './activity-list.js';
 import {
@@ -17,14 +19,19 @@ import {
 } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
 import { AuthoringSettings } from './authoring-settings.js';
+import { CachePanel } from './cache-panel.js';
 import { ConsolePanel, type OntahiDevtoolsConsoleOptions } from './console-panel.js';
 import { styles } from './devtools-styles.js';
+import { EntityHistorySettings } from './entity-history-panel.js';
 import { ExchangeDetail } from './exchange-detail.js';
+import { GraphObservationDetail } from './graph-observation-detail.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
 import { PanelResizer } from './panel-resizer.js';
 import { RuntimeTransportSettings } from './runtime-transport-settings.js';
 
 export type DevtoolsPanelProps = {
+  readonly history?: EntityHistory;
+  readonly clientCache?: GraphClientCache;
   readonly consoleOptions?: OntahiDevtoolsConsoleOptions;
   readonly diagnostics: OntahiDiagnostics;
   readonly runtimeTransport?: RuntimeTransport<any>;
@@ -35,6 +42,8 @@ export type DevtoolsPanelProps = {
 
 export const DevtoolsPanel = ({
   consoleOptions,
+  clientCache,
+  history,
   diagnostics,
   runtimeTransport,
   height,
@@ -52,7 +61,7 @@ export const DevtoolsPanel = ({
     diagnostics.inspect,
     diagnostics.inspect,
   );
-  const [view, setView] = useState<'activity' | 'console' | 'settings'>('activity');
+  const [view, setView] = useState<'activity' | 'console' | 'cache' | 'settings'>('activity');
   const [consoleOpened, setConsoleOpened] = useState(false);
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<string>();
@@ -93,10 +102,19 @@ export const DevtoolsPanel = ({
 
   const renderContent = () => {
     if (view === 'console' && consoleOptions) return null;
+    if (view === 'cache')
+      return (
+        <CachePanel
+          clientCache={clientCache}
+          history={history}
+          entities={consoleOptions?.entities}
+        />
+      );
     if (view === 'settings')
       return (
         <section style={styles.settingsPage} aria-label='Devtools settings'>
           <AuthoringSettings />
+          {history ? <EntityHistorySettings history={history} /> : null}
           {configurableRuntimeTransport ? (
             <RuntimeTransportSettings runtimeTransport={configurableRuntimeTransport} />
           ) : null}
@@ -121,7 +139,12 @@ export const DevtoolsPanel = ({
             select={setSelected}
           />
         </section>
-        {activeActivity?.observation ? (
+        {activeActivity?.kind === 'graph-observation' ? (
+          <GraphObservationDetail
+            key={activeActivity.id}
+            activity={activeActivity.graphObservation}
+          />
+        ) : activeActivity?.observation ? (
           <OperationProgressDetail
             activity={activeActivity.observation}
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
@@ -145,14 +168,6 @@ export const DevtoolsPanel = ({
             <h2 style={styles.title}>Ontahí Devtools</h2>
           </span>
           <nav style={styles.views} aria-label='Devtools views'>
-            <button
-              type='button'
-              style={{ ...styles.view, ...(view === 'activity' ? styles.activeView : {}) }}
-              onClick={() => setView('activity')}
-              aria-pressed={view === 'activity'}
-            >
-              Activity <span style={styles.count}>{filteredActivities.length}</span>
-            </button>
             {consoleOptions ? (
               <button
                 type='button'
@@ -166,6 +181,22 @@ export const DevtoolsPanel = ({
                 Console
               </button>
             ) : null}
+            <button
+              type='button'
+              style={{ ...styles.view, ...(view === 'activity' ? styles.activeView : {}) }}
+              onClick={() => setView('activity')}
+              aria-pressed={view === 'activity'}
+            >
+              Activity <span style={styles.count}>{filteredActivities.length}</span>
+            </button>
+            <button
+              type='button'
+              style={{ ...styles.view, ...(view === 'cache' ? styles.activeView : {}) }}
+              onClick={() => setView('cache')}
+              aria-pressed={view === 'cache'}
+            >
+              Cache
+            </button>
             <button
               type='button'
               style={{ ...styles.view, ...(view === 'settings' ? styles.activeView : {}) }}
@@ -196,7 +227,11 @@ export const DevtoolsPanel = ({
             hidden={view !== 'console'}
             style={view === 'console' ? { display: 'contents' } : undefined}
           >
-            <ConsolePanel options={consoleOptions} runtimeTransport={runtimeTransport} />
+            <ConsolePanel
+              options={consoleOptions}
+              runtimeTransport={runtimeTransport}
+              clientCache={clientCache}
+            />
           </div>
         ) : null}
         {renderContent()}

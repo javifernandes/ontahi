@@ -42,7 +42,13 @@ export type GraphClientCacheOutputNormalizationResult = {
   value: unknown;
 };
 
+export type GraphClientCacheOutputSource = {
+  readonly kind: 'graph-read' | 'operation';
+  readonly name: string;
+};
+
 export type GraphClientCacheOutputRecord<TValue = unknown> = {
+  source?: GraphClientCacheOutputSource;
   cachedAt: number;
   key: readonly unknown[];
   keyHash: string;
@@ -810,6 +816,7 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
     key: readonly unknown[],
     descriptor: GraphOutputDescriptor | undefined,
     value: unknown,
+    source?: GraphClientCacheOutputSource,
   ): GraphClientCacheOutputNormalizationResult => {
     const normalized = normalizeOutput(descriptor, value);
 
@@ -823,6 +830,7 @@ export const createGraphClientCache = (options: GraphClientCacheOptions = {}) =>
       key: resolvedKey,
       keyHash: normalizeOutputCacheKey(resolvedKey),
       value: normalized.value,
+      ...(source ? { source } : {}),
     };
 
     outputRecordsByKey.set(output.keyHash, output);
