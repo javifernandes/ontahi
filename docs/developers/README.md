@@ -2,6 +2,8 @@
 
 Model the domain once. Let runtimes interpret it.
 
+For the pending package train, see the [alpha.12 candidate and upgrade guide](../releases/1.0.0-alpha.12.md).
+
 This book teaches the current Ontahí application model through its public declarations, executable
 examples, and runtime contracts. It begins with a working application, then names each core
 concept directly and shows how those concepts compose.

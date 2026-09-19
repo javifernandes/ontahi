@@ -305,7 +305,9 @@ const describeReferenceField = (
       : {}),
     ...(field.description ? { description: field.description } : {}),
     ...(field.presentation ? { presentation: field.presentation } : {}),
-    ...(field.referenceRequirement ? { resolution: field.referenceRequirement } : {}),
+    ...(field.referenceRequirement === 'existing'
+      ? { resolution: field.referenceRequirement }
+      : {}),
     ...(field.variant ? { variant: structuredClone(field.variant) } : {}),
   };
 };

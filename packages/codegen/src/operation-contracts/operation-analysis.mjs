@@ -12,7 +12,9 @@ import {
   isGraphOutputSchemaCall,
   toClientGraphOutputText,
 } from './graph-output-analysis.mjs';
+import { createNamedValueProjector } from './named-value-projection.mjs';
 import { resolveOperationInitializer } from './operation-discovery.mjs';
+import { collectSchemaProcessing } from './schema-processing.mjs';
 import { resolveImportedSchemaContext } from './source-resolution.mjs';
 import { unwrapExpression } from './typescript-ast.mjs';
 import { projectVariantInputs } from './variant-inputs.mjs';
@@ -570,28 +572,6 @@ const parseIngressDefinitions = (operationName, ingressNode) => {
   };
 };
 
-const analyzeNamedValueDefinition = ({ node, declaration, context, fallbackDeclaration }) => {
-  const resolved = node ? unwrapExpression(node) : undefined;
-  if (
-    !resolved ||
-    !ts.isCallExpression(resolved) ||
-    !ts.isIdentifier(resolved.expression) ||
-    resolved.expression.text !== 'value' ||
-    !resolved.arguments[0] ||
-    !ts.isStringLiteral(resolved.arguments[0])
-  ) {
-    return undefined;
-  }
-
-  return {
-    kind: 'value',
-    name: resolved.arguments[0].text,
-    declaration: declaration?.name.getText() ?? fallbackDeclaration,
-    sourcePath: context?.sourcePath,
-    schemaText: getNodeText(resolved),
-  };
-};
-
 export const parseOperationDefinition = (
   property,
   declarations,
@@ -710,6 +690,17 @@ export const parseOperationDefinition = (
   let outputSchemaText;
   let inputNamedDefinition;
   let outputNamedDefinition;
+  let inputSchemaProjection;
+  let outputSchemaProjection;
+  let outputSchemaProjectionError;
+  const inputValues = createNamedValueProjector({
+    ...entityContext,
+    mode: exposure === 'server-only' ? 'inventory' : 'input',
+  });
+  const outputValues = createNamedValueProjector({
+    ...entityContext,
+    mode: exposure === 'server-only' ? 'inventory' : 'output',
+  });
   const helperDeclarations = new Map();
   let resolvedInputNode;
 
@@ -717,10 +708,6 @@ export const parseOperationDefinition = (
     const resolvedInput = resolveProjectionValueNode(inputNode, schemaContext);
     const localInputNode = resolvedInput.expression;
     const inputContext = resolvedInput.context;
-    const inputDeclaration = [...(inputContext?.declarations.values() ?? [])].find(
-      declaration =>
-        declaration.initializer && unwrapExpression(declaration.initializer) === localInputNode,
-    );
     resolvedInputNode = localInputNode;
 
     if (
@@ -741,15 +728,28 @@ export const parseOperationDefinition = (
       }
     }
 
-    inputNamedDefinition = analyzeNamedValueDefinition({
-      node: localInputNode,
-      declaration: inputDeclaration,
-      context: inputContext,
-      fallbackDeclaration: `${operationName}.input`,
-    });
-    if (variantInputs && inputNamedDefinition) {
-      inputNamedDefinition.schemaText = inputSchemaText;
-      inputNamedDefinition.variantInputs = variantInputs;
+    try {
+      inputNamedDefinition = inputValues.project({
+        node: localInputNode,
+        context: inputContext,
+        fallbackDeclaration: `${operationName}.input`,
+      });
+      if (
+        exposure !== 'server-only' &&
+        collectSchemaProcessing(localInputNode, inputContext).length
+      ) {
+        if (contractsNode)
+          throw new Error(
+            'Portable conditions on transformed/refined wire inputs are not supported yet.',
+          );
+        inputSchemaProjection = inputValues.projectSchema({
+          node: localInputNode,
+          context: inputContext,
+          fallbackDeclaration: `${operationName}.input`,
+        });
+      }
+    } catch (cause) {
+      return { diagnostics: [`${operationName}.input: ${cause.message}`] };
     }
 
     if (
@@ -789,12 +789,38 @@ export const parseOperationDefinition = (
         ? (localOutputDeclaration?.initializer ?? importedOutputDeclaration?.initializer)
         : unwrappedOutput;
 
-    outputNamedDefinition = analyzeNamedValueDefinition({
-      node: localOutputNode,
-      declaration: localOutputDeclaration ?? importedOutputDeclaration,
-      context: localOutputDeclaration ? schemaContext : (importedOutputContext ?? schemaContext),
-      fallbackDeclaration: `${operationName}.output`,
-    });
+    try {
+      if (exposure !== 'server-only' && collectSchemaProcessing(outputNode, schemaContext).length)
+        throw new Error(
+          'Transformed/refined outputs require an explicit portable output schema; the input schema does not describe the processed result.',
+        );
+      outputNamedDefinition = outputValues.project({
+        node: outputNode,
+        context: schemaContext,
+        fallbackDeclaration: `${operationName}.output`,
+      });
+    } catch (cause) {
+      return { diagnostics: [`${operationName}.output: ${cause.message}`] };
+    }
+    if (!outputNamedDefinition && exposure !== 'server-only') {
+      try {
+        outputSchemaProjection = outputValues.projectSchema({
+          node: outputNode,
+          context: schemaContext,
+        });
+        outputSchemaText = getNodeText(
+          resolveProjectionValueNode(outputNode, schemaContext).expression,
+        );
+      } catch (cause) {
+        // Compatibility projections may exclude outputs. Retain the failure so requesting this
+        // contract fails at emission rather than copying unsafe or unresolved server expressions.
+        outputSchemaProjectionError = cause.message;
+      }
+    }
+    if (outputNamedDefinition)
+      outputSchemaText = getNodeText(
+        resolveProjectionValueNode(outputNode, schemaContext).expression,
+      );
 
     if (
       localOutputNode &&
@@ -897,11 +923,17 @@ export const parseOperationDefinition = (
     graphOutputText,
     clientCacheText,
     inputSchemaText,
+    ...(inputSchemaProjection ? { inputSchemaProjection } : {}),
     ...(variantInputs ? { variantInputs } : {}),
     outputSchemaText,
+    ...(outputSchemaProjection ? { outputSchemaProjection } : {}),
+    ...(outputSchemaProjectionError ? { outputSchemaProjectionError } : {}),
     inputNamedDefinition,
     outputNamedDefinition,
-    namedDefinitions: [inputNamedDefinition, outputNamedDefinition].filter(Boolean),
+    namedDefinitions: [
+      ...inputValues.definitions,
+      ...(outputSchemaProjectionError ? [] : outputValues.definitions),
+    ],
     durableRuntime,
     durableTask,
     ingress: parsedIngress.ingress,

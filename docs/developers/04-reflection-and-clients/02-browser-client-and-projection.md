@@ -91,6 +91,38 @@ stale compiled programs instead of silently running arbitrary code.
 > metadata. Ontahí projects those links from the application declaration and omits the executable
 > server implementation.
 
+## Preserve wire schemas without shipping server processing
+
+Generated Operation inputs describe the values the caller sends, before server processing. A
+`graphSchema.transform` that converts a string to a number therefore retains a string wire input.
+Transforms and refinements are not executed during analysis or copied into the browser; processing
+metadata identifies the partial client validation. Defaults of a processed type also stay on the
+server. Client parsing is advisory, never a replacement for authoritative input processing.
+
+Named input and output Values retain their transitive schema dependencies, including Values only
+reachable through another Value. Declarative recursion is supported in this bounded form:
+
+```ts
+type NodeModel = { title: string; children: NodeModel[] };
+const Node = graphSchema.lazy<NodeModel>('Node', () =>
+  value('Node', {
+    title: f.string(),
+    children: graphSchema.array(Node),
+  }),
+);
+```
+
+The expression-only factory must return a Value with the same literal name. Codegen initializes
+lazy handles before eager schemas and derives recursive model types from those schemas, without
+copying host type annotations. Opaque callbacks, block-bodied factories and unresolved dependencies
+produce diagnostics. A transformed output needs an explicit portable result schema: its input
+schema is not evidence of its output shape.
+
+Schema-native Ref inputs preserve canonical locator fields, including composite identities, in
+generated callers and React query hooks. `existingRef(Chapter)` projects the classification against
+the generated base Entity without copying a custom resolver. Client Ref validation still does not
+prove existence, classification or authority. See the [codegen boundaries](../../../packages/codegen/README.md#named-value-dependencies).
+
 ## Keep Views in the client
 
 A \concept{View} is a caller-owned materialization document. Codegen gives the browser the Entity

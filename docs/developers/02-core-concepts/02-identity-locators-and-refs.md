@@ -198,6 +198,26 @@ a transaction child UnitOfWork also start with fresh Ref-resolution stores, so n
 cross-request cache. The executable Enrollment lifecycle uses explicit resolution, while
 [`Student.transfer`](../../../examples/classroom/src/classroom.ts) demonstrates `existingRef`.
 
+## Require a classified participant
+
+An Operation can require the classified Entity introduced in the previous chapter:
+
+```ts
+input: graphSchema.object({ chapter: graphSchema.existingRef(Chapter) });
+```
+
+The caller sends a canonical ContentNode Ref. The receiver resolves and validates the complete base
+record, verifies the identity and requires the Chapter discriminator before entering the body.
+The body receives a narrowed Chapter record with its canonical `.ref`. A missing, wrong-kind,
+wrong-identity or visibility-filtered record yields `entity_not_found` without exposing which check
+failed. Host-owned resolution still determines visibility; read-root registration does not authorize
+Operation participants.
+
+This is deliberate materialization, not a deferred Selection parameter. A `.resolveWith(...)`
+resolver must return a complete base Entity record, not a location DTO. Direct optional/nullable
+inputs and their generated contracts are supported; nested participants, stored variant Ref Fields
+and deferred classified Operation inputs are not part of this slice.
+
 ## Composite identity
 
 Some identities need more than one field:

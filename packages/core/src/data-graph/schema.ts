@@ -28,6 +28,7 @@ import type {
 import { isReferenceFieldDefinition } from './definitions.js';
 import { getGraphOutputDescriptor, type GraphOutputDescriptor } from './output/index.js';
 import { isEntityRef, isEntityRefLocatorValue, type EntityRefLocatorValue } from './ref/index.js';
+import { schemaReferenceInputError } from './ref/schema-reference.js';
 import { variantReferenceInputError } from './ref/variant-input.js';
 import { lowerEntityReferenceValue } from './reference-field.js';
 import type { SelectionExpression } from './selection-ast.js';
@@ -363,11 +364,13 @@ const toZodSelectionSchema = (schema: GraphSelectionDefinition): ZodType =>
     );
 
 const validateReferenceInput = (field: ReferenceFieldDefinition, value: unknown): void => {
-  if (!field.variant) {
+  if (!field.variant && !field.referenceRequirement) {
     lowerEntityReferenceValue(field, value);
     return;
   }
-  const error = variantReferenceInputError(field, value);
+  const error = field.variant
+    ? variantReferenceInputError(field, value)
+    : schemaReferenceInputError(field, value);
   if (error) throw new Error(error);
 };
 

@@ -51,6 +51,25 @@ Views remain client source and are transported as JSON-safe ASTs; codegen does n
 register them as server application definitions. Entity and Operation-reachable Value declarations
 form the nominal server-model inventory.
 
+Named Operation Values carry their transitive static schema dependencies in that inventory.
+Client emission orders shared Value bindings before their consumers and resolves receiver-bound
+Entity references without copying host declarations. Nested Values obey the same nominal uniqueness
+rule as root Values. Unresolved dependencies and eager cycles are diagnostics, not a license to
+emit a partial contract or import server closures. Declarative `graphSchema.lazy('Name', () =>
+value('Name', { ... }))` factories can close recursive Value dependencies: generated lazy handles
+precede eager consumers, retain recursive validation and derive types from their schemas. Only
+zero-argument expression factories with matching literal names are portable; opaque host factories
+remain rejected and are never executed during analysis.
+
+Inventory is separate from target-specific projection: server-only parsing does not require browser
+portability. Operation inputs project the raw wire schema; `graphSchema.transform` callbacks and
+executable refinements remain authoritative in the receiving runtime. Analysis records this processing
+without copying callbacks. Parsed defaults stay server-side when they cannot describe raw input.
+Executable outputs still require an explicit portable output contract, rather than substituting their
+pre-transform shape. Optional portable transformations/previews are deferred, not a reason to copy
+JavaScript closures or confuse wire input with the parsed value. See the
+[release rehearsal decision](../../../docs/research/release-readiness-bookops-2026-09.md#decision-input-transformations-stay-at-the-execution-boundary-for-now).
+
 `@ontahi/codegen` owns neutral source loading, configurable import resolution, diagnostics, generic client/task projections, and the reusable generation runner for cached analysis, deterministic writes, drift checks, target selection, and dependency-aware watch. `@ontahi/runtime-vercel-workflows/codegen` owns Vercel-specific static rendering. BookOps owns alias values, target/output configuration, formatting policy, and its configured workflow runtime. The generated domain-operation and HTTP ingress registries were removed because the graph API already exposes the runtime metadata needed for ordinary composition. The former Next Action client target was also removed: graph operations use the generic invocation bridge, and explicitly authored Next Actions can use `@ontahi/runtime-nextjs/actions` without codegen.
 
 Codegen tests follow the repository's colocated topology. Focused suites sit beside the analysis or

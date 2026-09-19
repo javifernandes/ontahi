@@ -216,6 +216,29 @@ presence of required Ref fields.
 > security boundary. The host must protect the HTTP surface, operation invoker, Entity data reader,
 > task-run loaders, and any elevated credentials with its real access policy.
 
+## Inspect the executing client with Devtools
+
+`@ontahi/devtools` complements Explorer with Activity, the Semantic Console and a read-only Cache
+panel. Activity renders captured reads in the selected authoring dialect, with visual results or
+JSON. Query observations group incoming snapshots and termination without pausing the application
+stream when an older snapshot is inspected.
+
+Pass the application's actual `clientCache` to inspect canonical Entity records, aliases,
+freshness and normalized outputs. Entity groups and reference navigation follow locally available
+records; a missing field is not evidence of null or deletion. Output labels describe their source,
+not a guarantee of freshness or an inventory of React hook instances.
+
+Optional entity history starts disabled, records a bounded in-memory baseline and later writes,
+invalidations and clears, and is lost on reload/unmount. It is not persisted versioning or an audit
+trail. Cache/history values are independent of Activity payload redaction: mount these development
+tools only where inspecting that application data is appropriate.
+
+Console **Observe** subscribes to supported Graph Read v1 many queries; **Stop** cancels while
+retaining the last snapshot. It requires `graph.observe` transport support. Scalar terminals and
+contextual v2 selections cannot be observed in this slice. Changing execution identity, replacing
+the transport/cache or closing Devtools cancels the subscription; late responses are ignored.
+See [Devtools](../../../packages/devtools/README.md) for capture and lifecycle contracts.
+
 ## Keep the host boundary visible
 
 | Concern             | Ontahí supplies                                                   | The host supplies                                                                 |

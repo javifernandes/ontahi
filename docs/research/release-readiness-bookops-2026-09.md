@@ -1,8 +1,10 @@
 # Release readiness and BookOps upgrade inventory — September 2026
 
-Status: inventory complete; installed-host rehearsal and release approval pending.
+Status: the expanded candidate passes local package/host checks and release documentation is reconciled;
+compatibility/release PR review, fresh CI and publication remain pending. Checkpoints below preserve
+the chronological evidence.
 
-## Decision
+## Initial decision
 
 Do not publish yet. First preserve the reviewed BookOps changes, prove baseline compatibility with
 the candidate's packed artifacts, then rehearse one classified Chapter Operation. Publication must
@@ -10,9 +12,9 @@ not depend on modernizing every BookOps feature, removing every locator, or fini
 Devtools feature. Conversely, a successful Ontahi test suite is not evidence that BookOps can
 upgrade unchanged.
 
-This is an inventory, not an implementation or installed-host migration. No BookOps dependency,
-source, database, release tag or published version was changed. The user cancelled the proposed
-worktree: this work uses `docs/release-readiness-bookops` in the existing Ontahi checkout.
+The initial inventory below did not modify BookOps. Subsequent rehearsal evidence is recorded in
+the checkpoint at the end. The user cancelled the proposed worktree; all work uses the existing
+separated checkouts. No release was published.
 
 ## Frozen baselines
 
@@ -261,10 +263,11 @@ separate local checkpoint of the reviewed six-file baseline and confirm no concu
 added. Preserve baseline fixes separately from mandatory compatibility changes and optional variant
 adoption, even if they eventually share a host PR.
 
-## Release documentation is not reconciled yet
+## Initial release-documentation gaps
 
 The [release gate](../../RELEASING.md#developer-documentation-gate) requires agreement among notes,
-plans, Atlas, executable examples and the developer book. Concrete remaining work:
+plans, Atlas, executable examples and the developer book. The initial gaps below are historical;
+the release-closure checkpoint records their reconciliation:
 
 1. Normalize stage-oriented Changesets into an accurate final surface. For example,
    `console-read-dialects` still calls UI switching a follow-up; `selection-factory-discovery` says
@@ -292,19 +295,19 @@ plans, Atlas, executable examples and the developer book. Concrete remaining wor
 - [x] Freeze Ontahi candidate and exclude unmerged Devtools work.
 - [x] Review pending host edits; run their narrow tests with installed packages.
 - [x] Analyze real BookOps source with old and candidate codegen without modifying artifacts.
-- [ ] Checkpoint the six reviewed host files locally; record the resulting host commit.
-- [ ] Establish current full type/build/test failures before attributing them to the upgrade.
+- [x] Checkpoint the six reviewed host files locally; host commit `7584ac2d`.
+- [x] Establish current full type/build/test failures before attributing them to the upgrade.
 
 ### B. Prove package compatibility before new domain adoption
 
-- [ ] Build and pack the candidate's complete fixed package set. Record source SHA and tarball
+- [x] Build and pack the candidate's complete fixed package set. Record source SHA and tarball
       integrities; package metadata may still carry alpha.11 until the release bot versions it.
-- [ ] Install tarballs with temporary exact overrides for **all reached Ontahi packages**, including
+- [x] Install tarballs with temporary exact overrides for **all reached Ontahi packages**, including
       transitive dependencies. No sibling-source resolution or mixture of alpha.3/registry alpha.11 and
       candidate bytes. Audit the actual installed paths and versions.
-- [ ] Migrate the mandatory input/contract/transport differences above in cohesive groups, preserving
+- [x] Migrate the mandatory input/contract/transport differences above in cohesive groups, preserving
       current product behavior. Run all three codegen targets, typecheck, unit tests and production build.
-- [ ] Run local-only PostgreSQL/Supabase integration and auth/error/cache scenarios relevant to the
+- [x] Run local-only PostgreSQL/Supabase integration and auth/error/cache scenarios relevant to the
       app. Verify endpoints before executing anything; do not reset or migrate a production database.
 
 No worktree is required. Use the current host checkout with a checkpoint and reversible dependency
@@ -313,19 +316,19 @@ package directories; it is a fast authoring mode, **not** this tarball compatibi
 
 ### C. Rehearse one classified Chapter slice
 
-- [ ] Audit actual `ContentNode.type` values; declare a finite classifier only after that check.
-- [ ] Migrate `listThreadsForChapter`, its input and callers together. Carry loaded Chapter id into
+- [x] Audit actual `ContentNode.type` values; declare a finite classifier only after that check.
+- [x] Migrate `listThreadsForChapter`, its input and callers together. Carry loaded Chapter id into
       the context; preserve audience filtering, root/nested distinctions, thread state and viewer data.
-- [ ] Test unauthorized, missing, wrong-kind and ambiguous paths; verify cache invalidation and
+- [x] Test unauthorized, missing, wrong-kind and ambiguous paths; verify cache invalidation and
       initialData. Retain the legacy picker until its replacement interaction is actually proven.
-- [ ] Keep separate Reader `ChapterNode`/`SectionNode` shapes and the other locator consumers intact.
+- [x] Keep separate Reader `ChapterNode`/`SectionNode` shapes and the other locator consumers intact.
 
 Use the [Chapter rehearsal](./bookops-chapter-variants.md) for declaration/body details. Contextual
 Supabase support and a wholesale Reader migration are not implicit prerequisites for this pilot.
 
 ### D. Approve, publish, then finalize the host pins
 
-- [ ] Fix any demonstrated Ontahi defects in Ontahi; repack and rerun the host proof.
+- [x] Fix the demonstrated Ontahi defects in Ontahi; repack and rerun the host proof.
 - [ ] Reconcile release notes/developer docs and review the exact release PR scope with the user.
 - [ ] Publish only by the approved release workflow; no manual versioning/tags.
 - [ ] Replace temporary tarball overrides with the exact published version; repeat compatibility
@@ -350,5 +353,292 @@ src/components/internal/graph-ops/graph-ops-operation-ref-input.test.tsx` from B
 - Verified the 60-name Changeset index and local Markdown links; repository formatting and
   `git diff --check` passed. The reviewed host diff/file hashes remain unchanged.
 
-Full candidate installation, complete BookOps typecheck/build, database integration, data audit,
-browser smoke tests and final release-documentation reconciliation are **not yet performed**.
+## Installed-host and codegen checkpoint — 2026-09-13
+
+The first rehearsal built all 15 packages at `da149a3f8363455ebd875b3446a9f69ce4adbd65` (PR #156
+head), installed candidate tarballs in BookOps and audited all 12 reached packages across 13 peer
+contexts. Parallel Devtools #155/#157 were excluded; reconcile actual main before release approval.
+The manifest is `.artifacts/npm/bookops-rehearsal-da149a3/release-manifest.json`. Metadata remains
+alpha.11; these are candidate bytes, not the registry's alpha.11 payload.
+
+The baseline passed 871 tests and typecheck; the production build could not download Google Fonts
+in the sandbox. The candidate exposed 98 TypeScript diagnostics and the removed `app.graph.refInput`
+prevented many suites from loading. Two backward-compatible host preparations were retained:
+validation as a concern and an explicit legacy Operation endpoint. After restoring registry pins
+and generated artifacts, 873 tests and typecheck passed. The host manifest/lockfile remained unchanged.
+Detailed evidence lives at `bookops://docs/research/ontahi-upgrade-rehearsal-2026-09`.
+
+The rehearsal also isolated an Ontahi defect: `value('Input', { subject: Subject })` emitted an
+undefined `Subject` even with a complete analysis inventory. The correction on
+`fix/codegen-nested-value-projection` closes static Value dependencies, preserves shared identity,
+resolves imported aliases and binds `self` to the generated Entity schema. Eight new regressions
+cover semantic import, strict typechecking, identity, cycles, nominal conflicts and opaque inputs.
+All 161 codegen tests, coverage thresholds, package build/typecheck and lint pass.
+
+A separate clean consumer installed the corrected codegen tarball and the previously packed Core
+tarball. Strict TypeScript validation and runtime checks passed for the nested Value repro, shared
+Value identity and receiver-bound Selection identity. Installed modules resolved inside that
+consumer's own pnpm store. No BookOps dependency, generated file or source was changed in this pass.
+The codegen tarball integrity was
+`sha512-WkqXIkhCQi9AFKZIHHkt419y/kJ0bPrSvbX+FLVn9t+O+uf5mhr6VShVvE9E5+H9QhoGorv2mn10BSgcAna/lA==`;
+its source is the local fix atop `da149a3`, not a published version or a clean release candidate.
+
+Analyzing actual BookOps source with that installed codegen now stops at
+`internalImportFromGithubMarkdown.input`: its dependency uses executable `graphSchema.transform`.
+That requires an explicit portable-schema/normalization decision; copying the closure or removing
+its semantics to make generation pass is not a fix. The 17 analyzed Entities / 67 Values are a
+**partial** analysis because the Book declaration is rejected, not a successful whole-app generation.
+Do not infer that there are no further host issues behind this first diagnostic.
+
+Remaining gates after this first checkpoint: implement the executable-schema boundary agreed below, migrate the 29 legacy input declarations,
+repeat full installed-host generation/types/tests/build, rehearse the classified Chapter slice,
+run local-only database/auth/cache checks and reconcile release documentation. Database integration,
+data audit, browser smoke tests and release approval remain outstanding.
+
+## Decision: input transformations stay at the execution boundary for now
+
+Agreed after the codegen checkpoint: do not project `graphSchema.transform` callbacks into generated
+clients for this release. Keep the authoritative input transformation in the receiving runtime.
+Commit `51ecaab` alone does not support that separation. The subsequent local implementation and
+installed-host proof are recorded below; the preceding diagnostic is historical evidence.
+
+The concrete BookOps use is GitHub Markdown import normalization: `/docs/` becomes `docs`, and
+`Manual Docentes Copy` becomes `manual-docentes-copy`. The public operation explicitly parses the
+input on the server. Its internal durable operation is `server-only`; inventorying that declaration
+must not impose browser portability on its implementation. The existing wizard separately reuses
+the slug normalizer for UX, without requiring codegen to copy it.
+
+The implementation must distinguish model inventory, caller-facing input contract and executable
+parsing. Projecting the portable input shape is not projecting the callback. Preserve metadata
+that a transformation exists where useful; `toGraphSchemaDescriptor` already represents a transform
+and its underlying input without serializing the function. Keep server normalization and validation
+intact, and do not present client validation as complete when executable checks remain server-side.
+
+Do not equate the wire input type with the parsed value type: a transform can change both shape and
+type. Nor should a refinement after a transform be applied blindly to the raw input. For example,
+BookOps accepts uppercase words before normalization even though the resulting slug must match a
+lowercase pattern. Input-only projection does not establish how transformed Operation outputs should
+be described; diagnose missing output information rather than substitute the pre-transform schema.
+
+### Implemented boundary and second installed-host proof
+
+The codegen slice now separates server-only inventory, raw input projection and output projection.
+Input transforms/refinements preserve the underlying wire schema and record server processing;
+callbacks are neither emitted nor executed during analysis. Parsed defaults remain server-side.
+Opaque outputs still diagnose missing portable contracts. Generated-module tests compile strictly
+and verify raw client input, transformed server results, refinement rejection, defaults and shared
+Value identity across Operations.
+
+All 170 codegen tests, coverage thresholds, build/typecheck and lint pass. A final isolated consumer
+also installs the final codegen tarball and validates strict TypeScript, shared inline Values in an
+anonymous union reused across Operations, raw client parsing and absence of transform callbacks.
+Its codegen integrity is
+`sha512-MUJ/N8SlPY6lijSIQriwyUX30nxh0eNdtL8AczeI4gbnUU0O2ACowA/rUj2fuldzY0G+t7FknP5xY361NjJMvw==`.
+This final package proof includes the inline-Value identity regression fix added after the host pack.
+
+All 15 candidate packages were packed under
+`.artifacts/npm/bookops-rehearsal-wire-input-51ecaab/release-manifest.json` (local working changes atop
+`51ecaab`, not published bytes). BookOps resolution auditing verified all 12 reached packages across
+13 peer contexts. Its three real generation targets and drift check pass. All 18 Entities analyze
+without diagnostics. Full candidate typechecking still reports 97 host diagnostics, **none in the
+generated modules**; legacy input contracts and callers remain to migrate. Nine focused host tests
+and all 18 generator fixture tests pass on the installed candidate.
+
+The rehearsal exposed a separate nominal collision: BookOps declared two different
+`TaskSubjectOutput` Values. The private GitHub-import Value is now named
+`GithubMarkdownImportTaskSubject`, preserving its distinct unknown-key behavior. The custom host
+generator now passes the complete named-definition inventory. A fixture that used `.view()` on a
+plain object now declares a real Entity and supported named schema wrappers.
+
+Registry pins and generated artifacts were restored afterward. With those compatible preparations,
+BookOps passes 874 unit tests, 18 generator fixture tests, full typecheck, generation/drift and the
+registry-resolution guard. Manifests, lockfile and generated files have no pending changes. The next
+slice is the 29 legacy Operation input declarations and their callers, not client transform previews.
+Full candidate runtime/database/browser checks and release approval remain outstanding.
+
+### Deferred: portable transformations and client previews
+
+Pure, input-only transformations could later be introspected and reused for previews. Purity alone
+does not make an arbitrary JavaScript function serializable, inspectable or executable in Go/Rust
+clients. Explore explicit declarative transform expressions or known, versioned transformations if
+a concrete UI need warrants it. Preserve input/output schemas, deterministic semantics and runtime
+capability discovery rather than automatically copying closures.
+
+A preview remains optional and non-authoritative. Do not introduce double application of a transform
+by silently changing what the client submits; transformations need not be idempotent. This exploration
+is deferred and is not a prerequisite for the BookOps upgrade or this release.
+
+## TaskRun participant rehearsal — 2026-09-13
+
+After local commit `a5ea602` and host preparation commit `13e1b175`, BookOps migrated its first
+legacy input declaration: `TaskRun.getMine` accepts `{ taskRun: Ref }` in a schema-native Value.
+Authentication still precedes deferred storage resolution and ownership checks precede reconciliation.
+The wizard now submits the composite Ref rather than repeating taskId/runId as scalar inputs.
+
+This uncovered fixes required before release: selection-mode codegen must include native Ref
+input/output contracts; schema-native Ref parsing must not apply persisted foreign-key identity
+restrictions; React query-key typing must accept the same portable schema inputs as query hooks.
+The local fixes retain existing Selection-only projection behavior and single-field storage limits.
+Native refs validate complete declared locators; classified participants retain canonical identity.
+
+All 1,104 Core tests, 120 React tests and 172 codegen tests pass, plus their builds/typechecks/lint
+and codegen coverage thresholds. The installed host candidate is
+`.artifacts/npm/bookops-rehearsal-taskrun-composite/release-manifest.json` (working changes atop
+`a5ea602`). Its 12 reached packages / 13 peer contexts are audited. Actual codegen/drift and 34
+focused host tests plus 18 generator fixtures pass; full host typechecking falls from 97 to 93 remaining diagnostics, with
+none in the touched TaskRun/wizard or generated modules. Full host migration remains incomplete.
+
+The host keeps the candidate installed locally to continue, without committing tarball pins.
+Unlike the prior compatible preparations, its new source now requires this candidate. Final
+registry pins, full checks and release approval remain gates. Invitations and the other legacy
+input declarations are next; full-contract projection also needs a later pass over anonymous
+output schemas and old `valueOf` usage exposed by the rehearsal.
+
+## Invitation participant rehearsal — 2026-09-13
+
+BookOps now uses schema-native input participants for its three invitation operations. The real
+Ref shortcut regression revealed that binding still flattened the locator into legacy scalar
+inputs. Core now derives the receiver from a unique matching top-level native Ref field, including
+named Values and optional/nullable wrappers, for server and callable generated-client operations.
+Ambiguous receivers fail with explicit-invocation guidance. Legacy locator inputs, storage reference
+fields and custom input adapters retain their behavior.
+
+Core's 1,113 tests, typecheck, build and lint pass. The new candidate is
+`.artifacts/npm/bookops-rehearsal-invite-proxy-final/release-manifest.json` (working fix atop
+`1fdf574`). BookOps installed-path auditing verifies 12 reached packages / 13 peer contexts, and
+all 46 invitation/TaskRun/client tests plus 18 generator fixtures pass. Host codegen drift and lint
+pass. Its full typecheck still has 79 migration diagnostics outside this slice.
+The offline npm dry-run passes for all 15 tarballs with npm 11.19; npm 11.11's older flat JSON
+output is incompatible with the release proof script's keyed result format. Nothing was published.
+
+Remaining: 14 Book and 10 conversation operations with legacy input participants, Chapter-path
+metadata/callers, obsolete runtime/reflection tests, complete output projection, full host checks,
+one classified Chapter adoption proof and the release documentation reconciliation above. Final
+publication and exact host registry pins remain explicitly gated; no release happened in this slice.
+
+## Basic Book read outputs rehearsal — 2026-09-19
+
+BookOps migrated four more participants (`fetchTableOfContents`, `fetchBookInfo`, `fetchLabels`,
+`fetchFirstChapter`) to native Book Refs. The real generated client reproduced unresolved Value
+dependencies below anonymous output wrappers. Codegen now projects these output expressions through
+the existing schema projector, including imported aliases and shared nested Values. Requested unsafe
+anonymous outputs fail at emission with Entity/Operation context; metadata-only compatibility
+projections may still exclude those outputs. Partially discovered dependencies from a failed
+projection are not emitted. This does not make opaque callbacks or recursive lazy outputs portable.
+
+All 176 codegen tests and coverage thresholds pass, including generated-module import, strict
+TypeScript inference, shared identity and unsafe-output rejection. Package build/typecheck and lint
+pass. The candidate at `.artifacts/npm/bookops-rehearsal-book-read-outputs/release-manifest.json`
+contains the working fix atop `0ba856a`; nothing was published. BookOps audits 12 reached packages /
+13 peer contexts and passes 88 focused host tests plus 18 generator fixtures, actual generation/drift
+and web lint. Its remaining full-typecheck diagnostics fall from 79 to 72, none in generated files.
+
+Chapter path selection/participant contracts, opaque Chapter outputs, remaining legacy operations,
+full host verification and release documentation reconciliation are still gates. Final host pins and
+lockfile remain on the published version until release approval; the local candidate install is not
+a reproducible registry upgrade yet.
+
+## Completed frozen-host proof and main reconciliation — 2026-09-19
+
+The remaining Book, conversation and notification inputs are migrated in BookOps. Chapter content,
+navigation and thread reads use existing classified participants with canonical base IDs; the URL
+page entry retains scalar route inputs for access-shell-first behavior. Recursive output projection
+and configured Operation result-union inference exposed two further Core/codegen fixes, recorded
+with public Changesets. Declarative lazy Values project without executing host closures.
+
+The installed `bookops-rehearsal-book-native-final` tarballs (working fixes atop `736e9ff`) pass
+BookOps production build, zero type errors, 968 unit tests, 47 integration tests (including 18
+generator fixtures), 17 real pgTAP RLS/helper checks, 23 focused Chromium Storybook cases, lint,
+formatting and generated drift. New real Supabase cases verify root/nested Chapter reads, wrong-kind
+rejection, private-ID denial for anonymous/unrelated users and owner access. The disposable test
+stack was removed; development data was not reset. A full authenticated browser-to-database journey
+remains unverified. See `bookops://docs/research/ontahi-upgrade-rehearsal-2026-09` for host details.
+
+Ontahi's changed packages previously passed all builds, 1,115 Core tests, 184 codegen tests with
+coverage, typechecks and lint. The installed-path audit verifies 12 reached packages in 13 peer
+contexts. This proof is for the frozen tarballs, not for a moving release branch.
+
+Read-only GitHub inspection found main at `e6584dbc66fcd1f0a3e5d472c4acedaa7c767603`, including
+Devtools PRs #155, #157, #159 and #160 plus the provider merge #156. Release PR #123 proposes
+`1.0.0-alpha.12`, head `52b00fa4d13968e425fd1dd800e6fcd41b02f81e` at inspection; it does not yet
+include these local compatibility fixes. The user approved including main and repeating validation,
+instead of maintaining a separate frozen release train. Preserve local checkpoints, integrate main,
+repack and rerun the host gates before claiming the expanded candidate is ready.
+
+Publication remains gated on reviewed fixes, developer-documentation/Changeset reconciliation,
+fresh final-candidate checks and release approval. Tracked BookOps registry pins still target the
+old release; no tarball path belongs in the final committed lockfile.
+
+### Expanded main candidate verified — 2026-09-19
+
+Local checkpoints: host migration `9fa4fa58`, recursive schema/result fixes `4176196`, and the merge
+of approved main `e6584db` into the compatibility branch at `28a41a5`. Only the historical inventory
+document conflicted; the newer rehearsal checkpoints were retained. The React hook merge preserves
+both schema-native input typing and the new semantic cache-output metadata.
+
+The approved scope now also includes normalized-cache inspection, query-cache reconciliation,
+semantic output descriptions, live-query Activity, bounded local entity history, Console Observe/Stop
+for supported many-query transports, and grouped/cache-reference navigation. These are the surfaces
+from Devtools PRs #155, #157, #159 and #160, not a Commands/Operations Console or a general storage
+change-feed implementation. The original frozen inventory above is historical, not the final scope.
+
+Packed candidate: `.artifacts/npm/bookops-rehearsal-main-28a41a5/release-manifest.json`, all fifteen
+packages, source `28a41a5ab5bc55efc5d14229899ee1657d4c664d`. Package metadata remains alpha.11 only
+for this local rehearsal; these bytes are not the published alpha.11. The bot-owned release PR still
+needs these compatibility commits before versioning/publication.
+
+Verification against the merged source and installed tarballs:
+
+- All package builds, package/example typechecks and repository lint pass.
+- All fifteen package suites pass: **2,606 tests in 272 files**, combining the first ten passing
+  suites with the final five-package sequential run. Explorer's descriptor fixture needed the explicit
+  `resolution: 'portable'` expectation; `170d7a3` contains that test-only fix and an empty Changeset.
+  High parallel load caused later UI timeouts; sequential retries passed without increasing timeouts
+  or changing runtime behavior.
+- Todo: **70 tests**, including its disposable-MySQL host-restart proof. Classroom: **7 ordinary
+  tests plus all 5 PostgreSQL tests**, the latter run with a new Testcontainers database, then removed.
+- Clean-room artifact installation, exported types and runtime proofs pass. Offline npm dry-run with
+  npm 11.19 passes for all fifteen tarballs; nothing was published.
+- BookOps: **968 unit tests**, **47 integration tests**, **17 pgTAP checks**, **23 Chromium Storybook
+  cases**, typecheck, lint/guards, generation/drift and formatting pass. The production build was
+  repeated after preserving/removing the earlier Next cache; it compiles from the new installed
+  tarball paths. Existing Next/Vercel/Browserslist warnings remain non-fatal.
+- BookOps's installed-path audit confirms 12 reached packages / 13 peer contexts all from this
+  candidate. The tracked registry manifest/lockfile is unchanged; the candidate lock is saved locally
+  as `.cache/ontahi-rehearsal/main-28a41a5-pnpm-lock.yaml`. Its fresh isolated Supabase stack
+  `bookops_main_20260919` was removed after verification, without touching the developer stack.
+
+A comparison repack at `170d7a3` found identical integrity for 14 packages; Devtools differed only
+in dependency-key order in its packed package.json (parsed metadata and all other files identical).
+Keep the tested manifest and integrity set as the proof identifier; do not describe repacks as
+byte-identical merely because source behavior is unchanged.
+
+Next: review/merge the compatibility fixes and reconcile the developer book and accumulated release
+notes against this expanded scope. The existing documentation checklist still applies, especially
+classified/contextual selections, bound versus unbound factories and new codegen boundaries. Final
+publication, registry pin/lockfile updates and a full authenticated browser-to-database journey
+remain separate gates. No branch was pushed and no release/PR was mutated during this pass.
+
+### Release closure preparation — 2026-09-19
+
+The user approved closing the Ontahi version with the main-inclusive candidate. The
+[alpha.12 candidate guide](../releases/1.0.0-alpha.12.md) now connects the accumulated Changesets,
+completed Plans, current broader Plans, provider boundaries and host upgrade requirements.
+
+Developer chapters now cover classified Entities/participants, contextual navigation, wire schema
+projection and declarative recursive Values, shared language authoring and current Devtools
+Cache/History/Observe. Core's obsolete MySQL/Supabase and Console exclusions were corrected.
+Definition-owned and generated-facade `by` are still unbound, as the factory contract states;
+ordinary and classified runtime binding are distinguished. The Chapter raw-runner note now records
+PR 154's targeted guard without claiming general validation. Stage-oriented pending Changesets were
+reconciled where later slices had already delivered the previously deferred surface. Plans 150/152
+remain current; no deferred mutation, general inheritance or contextual observation scope was dropped.
+
+The generated release PR's previous Node 24 failure was a Supabase integration-fixture teardown
+race. A disposable PostgreSQL reproduction confirms `Pool.end()` resolves before the client's
+`end` event. The two sequential Supabase database fixtures now own a single Client, whose closure
+is awaited before stopping its database. This changes tests only and has an empty Changeset.
+
+These corrections still need the compatibility PR and refreshed release CI. They do not publish
+packages or change BookOps's tracked registry pins. The earlier frozen tables remain historical;
+use the candidate guide and latest checkpoints for the final scope.

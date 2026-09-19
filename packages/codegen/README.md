@@ -69,6 +69,43 @@ or emitted by codegen.
 
 ## Lower-level API
 
+The compatibility renderer mode `operationContracts: 'selection'` also includes schema-native
+`graphSchema.ref` / `existingRef` inputs and their output contracts. This keeps reference participants
+and query results typed while a host migrates older scalar-only operations. The default `'all'` mode
+remains the complete projection; existing Selection-only behavior of the compatibility mode is unchanged.
+
+### Named Value dependencies
+
+Named Operation input/output Values project their static dependency closure: local or imported
+Values (including aliases), scalar schema constants, object spreads and `.fields` reuse. The
+application's `namedDefinitions` includes the nested Values; the client renderer emits them in
+dependency order and reuses one binding per nominal name. Pass that inventory along with `entities`
+and `schemaEntities` when calling `renderGeneratedClientEntityModule` directly.
+
+Receiver-bound `self.one()`, `self.many()` and `self.view(...)` inside these Values use the generated
+Entity schema, without importing the server Entity or altering field names and string literals.
+Unresolved dependencies, cycles and duplicate nominal definitions are diagnosed. Projection follows
+static schema data, not arbitrary JavaScript. Server-only Values are inventoried without requiring
+browser-portable implementations and are not emitted unless reached by a client-visible contract.
+
+Declarative recursion is supported with `graphSchema.lazy('Node', () => value('Node', { ... }))`.
+The factory must be a zero-argument, non-async expression returning a Value with the same literal
+name. Self and mutual recursion retain runtime validation and generated model types inferred from
+the schema; host type annotations are not copied. Generated lazy handles are initialized before
+eager Values. Block bodies, arbitrary factory calls and opaque schema dependencies are rejected.
+
+For Operation inputs, `graphSchema.transform` and `refine` stay in the receiving runtime. Generated
+clients describe the pre-processing wire shape, so a string-to-number transform still accepts a string
+from the caller. Analysis records the portable `inputSchemaProjection` and its `serverProcessing`
+markers; generated input comments identify partial validation. Client parsing is not authoritative:
+post-transform refinements must not reject the unprocessed input. Defaults wrapping transformed
+schemas remain server-side, with optional wire inputs rather than defaults of the processed type.
+
+Codegen neither executes nor copies the callbacks. Transformed/refined outputs require an explicit
+portable output contract; codegen cannot infer the result schema from a callback's input. Opaque
+lazy factories outside that declarative subset and custom client-schema dependencies remain diagnosed. Client previews and portable transform
+expressions are deferred.
+
 ### Experimental classified Operation inputs
 
 `graphSchema.existingRef(Chapter)` inputs are projected when Chapter resolves to a literal

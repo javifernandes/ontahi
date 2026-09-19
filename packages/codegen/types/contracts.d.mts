@@ -22,6 +22,14 @@ export type AnalyzedOperation = {
   entityExportName?: string;
   sourcePath?: string;
   exposure?: string;
+  inputSchemaProjection?: Pick<
+    AnalyzedNamedDefinition,
+    'references' | 'variantInputs' | 'serverProcessing'
+  > & { schemaText: string };
+  outputSchemaProjection?: Pick<AnalyzedNamedDefinition, 'references' | 'variantInputs'> & {
+    schemaText: string;
+  };
+  outputSchemaProjectionError?: string;
   [key: string]: unknown;
 };
 
@@ -49,6 +57,15 @@ export type AnalyzedNamedDefinition = {
   declaration: string;
   sourcePath?: string;
   schemaText?: string;
+  lazy?: boolean;
+  sourceSchemaText?: string;
+  projection?: 'input' | 'output' | 'inventory';
+  serverProcessing?: readonly ('transform' | 'refinement')[];
+  references?: readonly {
+    placeholder: string;
+    kind: 'value' | 'entity';
+    name: string;
+  }[];
   variantInputs?: readonly {
     placeholder: string;
     descriptor: {

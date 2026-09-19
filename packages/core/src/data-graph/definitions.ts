@@ -68,7 +68,7 @@ export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEn
     target: TTarget;
     source?: AnyEntityDefinition;
     fieldName?: string;
-    referenceRequirement?: 'existing';
+    referenceRequirement?: 'portable' | 'existing';
     /** Receiver-owned classification requirement; portable Refs retain the base entityName. */
     variant?: EntityVariantDescriptor;
   };

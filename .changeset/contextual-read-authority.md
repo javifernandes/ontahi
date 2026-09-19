@@ -8,4 +8,4 @@ View/include permissions. Each source and final target uses its own policy scope
 boolean expressions. Discovery advertises advisory v2 capability and outgoing grants.
 
 Keep v1 serialization, default low-level receivers and graph observation closed to
-relation-image requests. This slice does not enable Commands or add Console syntax.
+relation-image requests. Commands remain unsupported; Console navigation uses this same authority boundary.

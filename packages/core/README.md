@@ -353,9 +353,10 @@ in `entities`. Rehydrate serialized membership with
 definitions, not definitions or join metadata supplied by the caller. The schema checks every
 source, relation and predicate, with a maximum depth of 32 and 1000 expression nodes.
 
-This is a **read-only experimental slice**. Protocol v1, Supabase, MySQL runtime and Commands
-reject relation-image selections explicitly. PostgreSQL supports trusted local reads using registered
-mappings and correlated `EXISTS` (stored filter fields and single-identity many-to-many edges).
+This is a **read-only experimental slice**. Protocol v1 and Commands reject relation-image
+selections explicitly. PostgreSQL and MySQL use registered mappings and shared SQL correlated
+`EXISTS` (stored filter fields and single-identity many-to-many edges). Supabase uses native
+PostgREST embeds and existence filters; see its [physical relationship requirements](../supabase/README.md#contextual-selection-reads).
 For unbound Selections, execute `selected.toQuery()`
 with a graph read runtime. This does not fetch IDs in the client, create a new identity, or enable
 derived-relation writes.
@@ -391,8 +392,10 @@ Selections in this slice (no recursive relation-image policy expansion). Grants 
 rechecked on every request; discovered capabilities are advisory, not authorization tokens.
 
 `ontahi(...).createGraphReadDispatcher(policies)` uses the storage's provider-owned
-`graphReadCapabilities.relationSelections` flag. In-memory and PostgreSQL storage declare this
+`graphReadCapabilities.relationSelections` flag. In-memory, PostgreSQL and MySQL storage declare this
 support; other/custom storage remains closed unless it explicitly implements and declares it.
+The low-level Supabase runtime supports membership with a complete Entity registry; hosts explicitly
+enable their dispatcher after satisfying its PostgREST schema requirements.
 This enables the protocol, not the relation grants: `selectionRelations` remains required.
 
 `createRemoteDataGraphRuntime` and React graph clients automatically discover the target's v2
@@ -404,7 +407,8 @@ v1 fallback or source-ID prefetch. Plain reads and `toGraphReadRequest` stay v1 
 Custom `RemoteGraphReadTransport` functions now accept `GraphReadFamilyRequest`, including metadata
 requests. Forward all members unchanged, or narrow `request.kind === 'graph-read'` before accessing
 `mode`/`selection`. The standard Runtime Transport and legacy HTTP adapters already handle both.
-Console navigation and both dialects remain follow-ups. Graph observation rejects contextual reads
+Console supports contextual navigation in both dialects, preserving authored source filters and
+factory invocations. Graph observation rejects contextual reads
 until source-change invalidation is supported and verified.
 
 ## Application composition

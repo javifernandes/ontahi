@@ -113,10 +113,20 @@ const looksLikeOperationOptions = (
 const issuePath = (path: string | ReadonlyArray<string | number>) =>
   Array.isArray(path) ? path.map(String).join('.') : path;
 
-export const getOperationQueryKey = <TInput, TData>(
+export function getOperationQueryKey<TInput, TData>(
+  operation: ClientSchemaOperationLike<TInput, TData>,
+  input: TInput,
+): QueryKey;
+export function getOperationQueryKey<TInput, TData>(
   operation: ClientOperationLike<TInput, TData>,
   input: TInput,
-): QueryKey => resolveOperationBridgeQueryKey(operation, input);
+): QueryKey;
+export function getOperationQueryKey(
+  operation: ClientSchemaOperationLike<any, any> | ClientOperationLike<any, any>,
+  input: unknown,
+): QueryKey {
+  return resolveOperationBridgeQueryKey(operation, input);
+}
 
 const getOperationCacheAwareQueryKey = <TInput, TData>(
   clientCache: GraphClientCache,

@@ -226,6 +226,7 @@ describe('explorer descriptor builder', () => {
             entityName: 'Book',
             receiver: false,
             optional: false,
+            resolution: 'portable',
             locators: [
               {
                 name: 'refById',
@@ -244,6 +245,7 @@ describe('explorer descriptor builder', () => {
             entityName: 'Book',
             receiver: false,
             optional: false,
+            resolution: 'portable',
             locators: [
               {
                 name: 'refById',

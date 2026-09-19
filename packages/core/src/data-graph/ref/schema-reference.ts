@@ -12,7 +12,12 @@ import type {
 } from '../entity-variant.js';
 
 import { getEntityIdentityLocator } from './identity.js';
-import type { EntityRef, EntityRefLocator } from './model.js';
+import {
+  isEntityRef,
+  isEntityRefLocatorValue,
+  type EntityRef,
+  type EntityRefLocator,
+} from './model.js';
 
 export type GraphSchemaReferenceResolver<
   TTarget extends AnyEntityDefinition = AnyEntityDefinition,
@@ -81,6 +86,7 @@ export const graphSchemaReference = <TTarget extends AnyEntityDefinition>(
     kind: 'field',
     fieldType: 'reference',
     target: target as TTarget,
+    referenceRequirement: 'portable',
   });
 
 type ExistingReferenceFactory = {
@@ -131,3 +137,23 @@ export const graphSchemaExistingReference: ExistingReferenceFactory = (
 export const getGraphSchemaReferenceResolver = (
   definition: ReferenceFieldDefinition,
 ): GraphSchemaReferenceResolver | undefined => resolvers.get(definition);
+
+export const schemaReferenceInputError = (
+  reference: ReferenceFieldDefinition,
+  value: unknown,
+): string | undefined => {
+  if (!isEntityRef(value) || value.entityName !== reference.target.name)
+    return `Expected a ${reference.target.name} Ref.`;
+  const keys = Object.keys(value.locator);
+  const matches = Object.values(reference.target.refLocators).some(
+    locator =>
+      locator.fields?.length === keys.length &&
+      keys.length > 0 &&
+      locator.fields.every(
+        key => keys.includes(key) && isEntityRefLocatorValue(value.locator[key]),
+      ),
+  );
+  return matches
+    ? undefined
+    : `Referenced ${reference.target.name} requires a declared locator with all its input fields.`;
+};
