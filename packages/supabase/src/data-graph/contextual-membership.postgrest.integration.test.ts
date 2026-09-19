@@ -10,7 +10,7 @@ import {
 import { PostgrestClient } from '@supabase/postgrest-js';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { Effect, Stream } from 'effect';
-import { Pool } from 'pg';
+import { Client } from 'pg';
 import {
   GenericContainer,
   Network,
@@ -29,7 +29,7 @@ describe('PostgREST contextual membership feasibility', () => {
   let network: StartedNetwork;
   let database: StartedPostgreSqlContainer;
   let rest: StartedTestContainer;
-  let pool: Pool;
+  let client: Client;
   let baseUrl: string;
   const graph = contextualModel();
   const runtime = (headers: Record<string, string> = {}, request: typeof fetch = fetch) =>
@@ -48,10 +48,11 @@ describe('PostgREST contextual membership feasibility', () => {
       .withNetwork(network)
       .withNetworkAliases('database')
       .start();
-    pool = new Pool({ connectionString: database.getConnectionUri() });
+    client = new Client({ connectionString: database.getConnectionUri() });
+    await client.connect();
     const password = randomUUID();
     // Password is a generated UUID, not external input. Application requests use the unprivileged role.
-    await pool.query(`
+    await client.query(`
       CREATE ROLE membership_reader NOLOGIN;
       CREATE ROLE membership_authenticator LOGIN NOINHERIT PASSWORD '${password}';
       GRANT membership_reader TO membership_authenticator;
@@ -96,7 +97,7 @@ describe('PostgREST contextual membership feasibility', () => {
 
   afterAll(async () => {
     await rest?.stop();
-    await pool?.end();
+    await client?.end();
     await database?.stop();
     await network?.stop();
   });
@@ -211,11 +212,11 @@ describe('PostgREST contextual membership feasibility', () => {
   });
 
   it('reevaluates source membership on the next HTTP request', async () => {
-    await pool.query("UPDATE books SET visible = false WHERE id = 'b1'");
+    await client.query("UPDATE books SET visible = false WHERE id = 'b1'");
     try {
       expect(ids(await read('nodes', chapters))).toEqual([]);
     } finally {
-      await pool.query("UPDATE books SET visible = true WHERE id = 'b1'");
+      await client.query("UPDATE books SET visible = true WHERE id = 'b1'");
     }
     expect(ids(await read('nodes', chapters))).toEqual(['c1', 'c2']);
   });

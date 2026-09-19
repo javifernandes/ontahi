@@ -12,7 +12,7 @@ import {
   type RelationshipCommand,
 } from '@ontahi/core/data-graph';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { Pool } from 'pg';
+import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -89,14 +89,15 @@ mapRelation(GuardedTodo, 'tags', {
 
 describe('Supabase direct Relationship RPC SQL', () => {
   let container: StartedPostgreSqlContainer;
-  let pool: Pool;
+  let client: Client;
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:17-alpine').start();
-    pool = new Pool({ connectionString: container.getConnectionUri() });
-    await pool.query(supabaseRelationshipRpcSql);
-    await pool.query(supabaseManyToManyRpcSql);
-    await pool.query(`
+    client = new Client({ connectionString: container.getConnectionUri() });
+    await client.connect();
+    await client.query(supabaseRelationshipRpcSql);
+    await client.query(supabaseManyToManyRpcSql);
+    await client.query(`
       create table rpc_courses (id text primary key, name text not null);
       create table rpc_students (
         id text primary key,
@@ -128,12 +129,12 @@ describe('Supabase direct Relationship RPC SQL', () => {
   }, 180_000);
 
   afterAll(async () => {
-    await pool?.end();
+    await client?.end();
     await container?.stop();
   });
 
   const apply = async (command: RelationshipCommand) => {
-    const result = await pool.query<{ result: Record<string, unknown> }>(
+    const result = await client.query<{ result: Record<string, unknown> }>(
       'select public.ontahi_apply_relationship($1::jsonb) as result',
       [compileSupabaseRelationshipRpcPayload(command, [Student, Course])],
     );
@@ -141,7 +142,7 @@ describe('Supabase direct Relationship RPC SQL', () => {
   };
 
   const applyGuarded = async (command: RelationshipCommand) => {
-    const result = await pool.query<{ result: Record<string, unknown> }>(
+    const result = await client.query<{ result: Record<string, unknown> }>(
       'select public.ontahi_apply_relationship($1::jsonb) as result',
       [compileSupabaseRelationshipRpcPayload(command, [GuardedStudent, GuardedCourse])],
     );
@@ -149,7 +150,7 @@ describe('Supabase direct Relationship RPC SQL', () => {
   };
 
   const applyManyToMany = async (command: ManyToManyRelationshipCommand) => {
-    const result = await pool.query<{ result: Record<string, unknown> }>(
+    const result = await client.query<{ result: Record<string, unknown> }>(
       'select public.ontahi_apply_many_to_many_relationship($1::jsonb) as result',
       [compileSupabaseManyToManyRpcPayload(command, [GuardedTodo, GuardedTag])],
     );
@@ -171,7 +172,7 @@ describe('Supabase direct Relationship RPC SQL', () => {
       constraintRejection: null,
       changed: true,
     });
-    await pool.query(`update rpc_students set course_id = 'course-3' where id = 'student-1'`);
+    await client.query(`update rpc_students set course_id = 'course-3' where id = 'student-1'`);
     await expect(
       apply(relationship(Student, 'course', student).assign(next, { ifCurrent: previous })),
     ).resolves.toEqual({
@@ -183,7 +184,7 @@ describe('Supabase direct Relationship RPC SQL', () => {
       changed: false,
     });
     await expect(
-      pool.query('select course_id from rpc_students where id = $1', ['student-1']),
+      client.query('select course_id from rpc_students where id = $1', ['student-1']),
     ).resolves.toMatchObject({ rows: [{ course_id: 'course-3' }] });
   });
 
@@ -205,10 +206,10 @@ describe('Supabase direct Relationship RPC SQL', () => {
       changed: false,
     });
     await expect(
-      pool.query('select course_id from guarded_rpc_students where id = $1', ['student-1']),
+      client.query('select course_id from guarded_rpc_students where id = $1', ['student-1']),
     ).resolves.toMatchObject({ rows: [{ course_id: null }] });
 
-    await pool.query(`update guarded_rpc_courses set is_open = true where id = 'course-1'`);
+    await client.query(`update guarded_rpc_courses set is_open = true where id = 'course-1'`);
     await expect(applyGuarded(command)).resolves.toMatchObject({
       constraintRejection: {
         version: 1,
@@ -217,7 +218,7 @@ describe('Supabase direct Relationship RPC SQL', () => {
       },
       changed: false,
     });
-    await pool.query(`update guarded_rpc_students set is_active = true where id = 'student-1'`);
+    await client.query(`update guarded_rpc_students set is_active = true where id = 'student-1'`);
     await expect(applyGuarded(command)).resolves.toMatchObject({
       constraintRejection: null,
       changed: true,
@@ -242,11 +243,11 @@ describe('Supabase direct Relationship RPC SQL', () => {
       },
       changed: [],
     });
-    await expect(pool.query('select * from guarded_rpc_todo_tags')).resolves.toMatchObject({
+    await expect(client.query('select * from guarded_rpc_todo_tags')).resolves.toMatchObject({
       rows: [],
     });
 
-    await pool.query(
+    await client.query(
       `insert into guarded_rpc_todo_tags (todo_id, tag_id) values ('todo-2', 'tag-1')`,
     );
     await expect(
@@ -259,7 +260,7 @@ describe('Supabase direct Relationship RPC SQL', () => {
       constraintRejection: null,
       changed: [{ source: 'todo-2', target: 'tag-1' }],
     });
-    await expect(pool.query('select * from guarded_rpc_todo_tags')).resolves.toMatchObject({
+    await expect(client.query('select * from guarded_rpc_todo_tags')).resolves.toMatchObject({
       rows: [],
     });
   });
