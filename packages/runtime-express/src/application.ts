@@ -13,6 +13,7 @@ import {
   type GraphReadableOntahiApplication,
   type InvocationContext,
   type OntahiApplication,
+  type ModelCommandRuntime,
 } from '@ontahi/core/runtime/server';
 import express, { type Request, type Router } from 'express';
 
@@ -27,6 +28,7 @@ import {
   type ExpressGraphReadContextFactory,
 } from './graph-read/handler.js';
 import { mountExpressHttpIngress, type OntahiExpressIngressOptions } from './http-ingress.js';
+import { createModelCommandHandler } from './model-command.js';
 import { createExpressOperationInvocationHandler } from './operation-invocation/handler.js';
 import type { ExpressInvocationContextFactory } from './request-context.js';
 import {
@@ -110,6 +112,7 @@ export type OntahiExpressOptions<
 > = {
   mountPath?: string;
   operationsPath?: string;
+  modelCommands?: { runtime: ModelCommandRuntime; path?: string };
   graphRead?: OntahiExpressGraphReadOptions<TGraphReadAuthority>;
   graphCommand?: OntahiExpressGraphCommandOptions<TGraphCommandAuthority>;
   runtimeProtocol?: OntahiExpressRuntimeProtocolOptions<TRuntimeProtocolContext>;
@@ -160,6 +163,13 @@ export const ontahiExpress = <
       reportError: options.reportError,
     }),
   );
+
+  if (options.modelCommands)
+    router.post(
+      routePath(options.modelCommands.path ?? '/model/commands'),
+      express.json({ limit: '32kb' }),
+      createModelCommandHandler(options.modelCommands.runtime, options.invocationContext),
+    );
 
   if (options.runtimeProtocol) {
     const runtimeProtocolOptions = options.runtimeProtocol;

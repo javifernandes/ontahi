@@ -45,3 +45,10 @@ mutation effects, and submission applies the validated proposal separately. A sm
 produced an in-scope but semantically wrong completion for a missing target. Runtime candidate
 limits and duplicate-title checks constrain effects, but do not certify understanding; intent
 quality needs representative evaluations and unresolved behavior, separately from authorization.
+
+The next Todo slice makes graph instruction processing a Core runtime capability with a dedicated
+transport entry, removing the example's interpreter/submission domain wrappers. Operation
+semantics and descriptions come from declarations; application bindings supply the remaining
+argument resolution and bounded data scope. Optional interaction focus can help resolve “this”,
+while explicit names work without UI selection. Focus is not authority. This graph-level entry is
+distinct from using a model to implement a particular Domain Operation.

@@ -6,9 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CommandChat } from './CommandChat.js';
 
 const execute = vi.hoisted(() => vi.fn());
-vi.mock('@ontahi/react/graph', () => ({
-  useOperation: () => ({ executeAsync: execute, isExecuting: false }),
-}));
+vi.mock('../../model-commands.js', () => ({ submitModelCommand: execute }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 let container: HTMLDivElement;
@@ -22,7 +20,7 @@ beforeEach(async () => {
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
-    root.render(<CommandChat lists={[{ id: 'list-1', name: 'Compras' }]} onExecuted={refresh} />),
+    root.render(<CommandChat lists={[{ id: 'list-1', name: 'Shopping' }]} onExecuted={refresh} />),
   );
 });
 afterEach(async () => {
@@ -39,7 +37,7 @@ const write = async () => {
     const input = container.querySelector('textarea')!;
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
       input,
-      'agregar comprar pan',
+      'add buy bread',
     );
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
@@ -66,8 +64,8 @@ it('waits for actual execution before refreshing', async () => {
   await submit();
   expect(execute).toHaveBeenCalledOnce();
   expect(execute.mock.calls[0]![0]).toMatchObject({
-    text: 'agregar comprar pan',
-    list: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-1' } },
+    text: 'add buy bread',
+    context: { focus: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-1' } } },
   });
   await act(async () =>
     finish({ ok: true, value: { status: 'executed', message: 'Item added.' } }),
@@ -99,7 +97,7 @@ it('submits with Command+Enter without requiring a current list', async () => {
     const input = container.querySelector('textarea')!;
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
       input,
-      'crear lista nueva llamada Supermercado',
+      'create list Groceries',
     );
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
@@ -109,8 +107,7 @@ it('submits with Command+Enter without requiring a current list', async () => {
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
   });
   expect(execute).toHaveBeenCalledWith({
-    text: 'crear lista nueva llamada Supermercado',
-    list: null,
+    text: 'create list Groceries',
   });
 });
 
@@ -135,7 +132,7 @@ it('keeps only the latest exchange visible until history is expanded', async () 
     ).click(),
   );
   expect(container.textContent).toContain('First reply');
-  expect(container.querySelector('.command-chat-log')!.textContent).not.toContain('Compras');
+  expect(container.querySelector('.command-chat-log')!.textContent).not.toContain('Shopping');
   await act(async () =>
     (container.querySelector('[aria-label="Show latest exchange"]') as HTMLButtonElement).click(),
   );

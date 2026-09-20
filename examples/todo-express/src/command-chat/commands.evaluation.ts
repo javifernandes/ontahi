@@ -1,7 +1,7 @@
 // Run explicitly in a disposable process; never against a persistent Todo store.
 import assert from 'node:assert/strict';
 
-import { TodoApplication } from '../graph.js';
+import { TodoApplication, todoModelRuntime } from '../graph.js';
 import { TodoItem, TodoList } from '../todo.js';
 
 if (TodoApplication.storage.kind !== 'in-memory' || process.env.TODO_AUTH_MODE !== 'disabled') {
@@ -10,6 +10,17 @@ if (TodoApplication.storage.kind !== 'in-memory' || process.env.TODO_AUTH_MODE !
 if (!process.env.TODO_LLM_MODEL)
   throw new Error('Set TODO_LLM_MODEL to an installed Ollama model.');
 
+const submit = async ({
+  text,
+  list,
+}: {
+  text: string;
+  list: ReturnType<typeof TodoList.refById> | null;
+}) =>
+  todoModelRuntime!.submit(
+    { text, ...(list ? { context: { focus: list } } : {}) },
+    new AbortController().signal,
+  );
 const dataset = TodoApplication.storage.dataset;
 dataset.TodoList = [{ id: 'evaluation-list', name: 'Shopping', color: '#f5ddd5' }];
 dataset.TodoItem = [
@@ -18,7 +29,7 @@ dataset.TodoItem = [
 const list = TodoList.refById('evaluation-list');
 for (const text of ['add item buy hamburgers', 'complete buy bread']) {
   const start = Date.now();
-  const result = await TodoList.submitCommand({ text, list });
+  const result = await submit({ text, list });
   console.info(
     JSON.stringify({
       model: process.env.TODO_LLM_MODEL,
@@ -27,8 +38,7 @@ for (const text of ['add item buy hamburgers', 'complete buy bread']) {
       result,
     }),
   );
-  assert.equal(result.ok, true);
-  if (result.ok) assert.equal(result.value.status, 'executed');
+  assert.equal(result.status, 'executed');
 }
 assert.equal(dataset.TodoItem.length, 2);
 assert.equal(dataset.TodoItem[0]!.completed, true);
@@ -38,7 +48,7 @@ await TodoItem.createItem({ id: 'duplicate-1', list, title: 'buy milk' });
 await TodoItem.createItem({ id: 'duplicate-2', list, title: 'buy milk' });
 for (const text of ['complete buy milk', 'complete buy coffee']) {
   const start = Date.now();
-  const result = await TodoList.submitCommand({ text, list });
+  const result = await submit({ text, list });
   console.info(
     JSON.stringify({
       model: process.env.TODO_LLM_MODEL,
@@ -47,8 +57,7 @@ for (const text of ['complete buy milk', 'complete buy coffee']) {
       result,
     }),
   );
-  assert.equal(result.ok, true);
-  if (result.ok) assert.equal(result.value.status, 'unresolved');
+  assert.equal(result.status, 'unresolved');
 }
 assert.equal(dataset.TodoItem.filter(item => item.completed).length, 1);
 console.info(
@@ -57,15 +66,14 @@ console.info(
 
 for (const selected of [null, list]) {
   const before: number = dataset.TodoItem.length;
-  const result = await TodoList.submitCommand({
+  const result = await submit({
     text: 'create list Holidays',
     list: selected,
   });
   console.info(
     JSON.stringify({ model: process.env.TODO_LLM_MODEL, selected: Boolean(selected), result }),
   );
-  assert.equal(result.ok, true);
-  if (result.ok) assert.equal(result.value.status, 'executed');
+  assert.equal(result.status, 'executed');
   assert.equal(dataset.TodoItem.length, before);
 }
 assert.equal(dataset.TodoList.filter(item => item.name === 'Holidays').length, 2);
@@ -77,10 +85,9 @@ await TodoItem.createItem({
   list: TodoList.refById('delete-me'),
   title: 'buy apples',
 });
-const deletion = await TodoList.submitCommand({ text: 'delete list Groceries', list });
+const deletion = await submit({ text: 'delete list Groceries', list });
 console.info(JSON.stringify({ text: 'delete list Groceries', result: deletion }));
-assert.equal(deletion.ok, true);
-if (deletion.ok) assert.equal(deletion.value.status, 'executed');
+assert.equal(deletion.status, 'executed');
 assert.equal(
   dataset.TodoList.some(row => row.id === 'delete-me'),
   false,
@@ -90,3 +97,10 @@ assert.equal(
   false,
 );
 console.info('Named list deletion passed, including its items.');
+
+const named = await submit({ text: 'add item buy apples to Shopping', list: null });
+assert.equal(named.status, 'executed');
+assert.ok(
+  dataset.TodoItem.some(item => item.title === 'buy apples' && item.list === 'evaluation-list'),
+);
+console.info('Named-list item creation without selection passed.');

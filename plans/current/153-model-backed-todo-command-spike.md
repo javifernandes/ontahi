@@ -188,3 +188,23 @@ keeps an inline equivalent output schema; this codegen limitation remains explic
 Validation of this slice: 1,126 Core tests, 102 Todo tests, package typechecks/lint/build,
 seven live Ollama cases, and clean-room tarball installation/type/runtime verification. The local
 server was restarted on port 3003 after preserving six lists, nine items, and three tags.
+
+## Runtime entry and declaration metadata
+
+The next slice removes Todo's interpret/submit domain wrappers and chat runtime capability.
+`createModelCommandRuntime` in Core owns interpretation, fresh-scope validation, and canonical
+dispatch; Express exposes it through an optional `/model/commands` route with the normal invocation
+context. The UI calls that single runtime entry. Descriptions live on the existing operation
+metadata and are reflected into the catalog. Todo supplies scoped data and argument bindings,
+not duplicate operation descriptions or an orchestration service.
+
+Interaction focus is optional. Named-list item creation/completion and list deletion work without
+selecting a list. Unique completion targets can resolve across visible lists; ambiguity stays
+unresolved. The bounded read scope is now the authorized visible graph, while selection is only a
+resolution hint, not a disclosure or permission boundary. Automatic graph scoping remains in 153b.
+The real-model test is explicitly named `commands.evaluation.ts` and passes eight cases on 0.8B.
+This slice does not add general graph questions or resumable conversations.
+
+Validation: 1,131 Core tests, 46 Express tests, 100 Todo tests, affected lint/typechecks/builds,
+and clean-room package type/runtime checks including HTTP dispatch through the new entry.
+Eight live Ollama cases passed. The local port 3003 instance retains its existing board data.

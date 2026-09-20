@@ -696,3 +696,16 @@ requirements still belong to the runtime; model scope is not an authorization bo
 Providers (such as Ollama), data reads, prompts, dispatch policy, and user interactions remain
 host-owned. The Todo example demonstrates projected title/name arguments without asking the
 model to construct references or selections. This API does not introduce an agent loop.
+
+`createModelCommandRuntime({application, provider, authorize, scope, instructions?})` composes the
+interpretation and execution lifecycle. Its single `submit({text, context?}, signal)` entry
+returns an executed or unresolved result. `scope` returns model-visible context and bindings keyed
+by canonical operation ID. Descriptions and canonical input contracts are read from the application,
+not duplicated in those bindings. `authorize` runs before disclosure and again before execution;
+the final dispatch still enforces the operation's own requirements. The runtime reloads and
+revalidates scope after inference without holding a transaction across a model call.
+
+Request context is optional host-defined interaction context, not authority. Hosts may use a focus
+Ref to resolve deictic requests while still supporting explicit targets. This API does not yet
+infer graph scope, answer arbitrary graph questions, or resume conversations. Public request/result
+types are available from the browser-safe `@ontahi/core/runtime/contracts` entrypoint.

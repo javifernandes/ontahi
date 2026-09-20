@@ -1,8 +1,8 @@
-import { useOperation } from '@ontahi/react/graph';
 import { ArrowUp, ChevronDown, History, LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { TodoList } from '../../../../src/generated/client-entities.js';
+import { submitModelCommand } from '../../model-commands.js';
 
 type Entry = {
   id: number;
@@ -18,7 +18,6 @@ export const CommandChat = ({
   lists: readonly { id: string; name: string }[];
   onExecuted: () => Promise<unknown>;
 }) => {
-  const command = useOperation(TodoList.domain.submitCommand);
   const [listId, setListId] = useState('');
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
@@ -57,9 +56,9 @@ export const CommandChat = ({
         ),
       );
     try {
-      const result = await command.executeAsync({
+      const result = await submitModelCommand({
         text: entry.request,
-        list: current ? TodoList.refById(current.id) : null,
+        ...(current ? { context: { focus: TodoList.refById(current.id) } } : {}),
       });
       if (!result.ok) {
         answer(
@@ -142,7 +141,7 @@ export const CommandChat = ({
           onChange={event => setListId(event.target.value)}
           disabled={pending}
         >
-          <option value=''>No list</option>
+          <option value=''>All lists</option>
           {lists.map(list => (
             <option key={list.id} value={list.id}>
               {list.name}

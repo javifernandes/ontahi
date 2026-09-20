@@ -227,3 +227,13 @@ response conversion.
 
 The lower-level Operation invocation, Graph Read, Graph Command, legacy Task snapshot, and Runtime
 Protocol handlers remain available for explicit compatibility or custom transport composition.
+
+### Graph instruction runtime
+
+Pass `modelCommands: {runtime}` to `ontahiExpress` to mount `POST /model/commands` (override with
+`path`). The runtime is created by Core's `createModelCommandRuntime`; the request body is
+`{text, context?}`. The adapter installs the existing `invocationContext`, propagates connection
+cancellation, and returns `{ok:true,value:{status,message}}` or a known runtime error. The route
+is absent unless explicitly configured. No application domain operation is required for chat.
+The host must configure authorization and disclosure scope on the runtime; operation requirements
+remain enforced by the canonical dispatcher.

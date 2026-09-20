@@ -4,7 +4,12 @@ import {
   graphSchema,
   withSelectionFactories,
 } from '@ontahi/core/data-graph';
-import { entity, ontahi, interpretModelOperation } from '@ontahi/core/runtime/server';
+import {
+  entity,
+  ontahi,
+  interpretModelOperation,
+  createModelCommandRuntime,
+} from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import express from 'express';
 
@@ -63,7 +68,36 @@ if (
   throw new Error('Packed Core failed the in-memory Todo smoke.');
 }
 
-const server = express().use('/runtime/ontahi', ontahiExpress(application)).listen(0, '127.0.0.1');
+const modelRuntime = createModelCommandRuntime({
+  application,
+  authorize: () => {},
+  provider: {
+    generate: async () => ({
+      status: 'resolved',
+      invocation: {
+        kind: 'invoke',
+        operationId: 'TodoList.rename',
+        input: { name: 'Model queue' },
+      },
+    }),
+  },
+  scope: async () => ({
+    context: {},
+    bindings: {
+      'TodoList.rename': {
+        arguments: graphSchema.object({ name: field.string() }),
+        prepare: args => ({
+          list: TodoListSelections.by({ identity: 'list-research' }).toJSON(),
+          name: args.name,
+        }),
+        validate: () => undefined,
+      },
+    },
+  }),
+});
+const server = express()
+  .use('/runtime/ontahi', ontahiExpress(application, { modelCommands: { runtime: modelRuntime } }))
+  .listen(0, '127.0.0.1');
 
 try {
   await new Promise((resolve, reject) => {
@@ -87,6 +121,21 @@ try {
   ) {
     throw new Error('Packed Express runtime failed its mount smoke.');
   }
+  const modelResponse = await fetch(
+    `http://127.0.0.1:${address.port}/runtime/ontahi/model/commands`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'rename to Model queue' }),
+    },
+  );
+  const modelResult = await modelResponse.json();
+  if (
+    !modelResult.ok ||
+    modelResult.value.status !== 'executed' ||
+    dataset.TodoList[0].name !== 'Model queue'
+  )
+    throw new Error('Packed model runtime failed its HTTP dispatch proof.');
 } finally {
   await new Promise((resolve, reject) =>
     server.close(error => (error ? reject(error) : resolve())),

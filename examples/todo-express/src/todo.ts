@@ -12,12 +12,6 @@ import { Effect } from 'effect';
 
 import { todoAuthenticationMode } from './authentication-mode.js';
 import {
-  CommandInterpretation,
-  CommandSubmission,
-  TodoCommandError,
-  type TodoCommandService,
-} from './command-chat/contracts.js';
-import {
   CompleteAllOutput,
   CompleteAllProgress,
   createRunCompleteAll,
@@ -31,7 +25,6 @@ const entityDefaults = {
 
 export type TodoCapabilities = OntahiCapabilities & {
   runtime: {
-    commands: TodoCommandService;
     notifications: {
       todoListCreated(input: { listId: string; name: string }): Effect.Effect<void>;
     };
@@ -97,56 +90,8 @@ export const TodoList = entity({
     );
 
     return {
-      interpretCommand: operation({
-        input: graphSchema.object({
-          text: field.nonEmptyString({ trim: true }),
-          list: graphSchema.nullable(graphSchema.ref(self)),
-        }),
-        output: CommandInterpretation,
-        requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
-        run: ({ text, list }) =>
-          Effect.tryPromise({
-            try: signal =>
-              app.runtime.commands.interpret(
-                { text, listId: list ? String(list.locator.id) : null },
-                signal,
-              ),
-            catch: error => error,
-          }).pipe(
-            Effect.catchAll(error =>
-              failOperation(
-                error instanceof TodoCommandError ? error.code : 'interpretation_failed',
-                error instanceof Error ? error.message : 'Interpretation failed.',
-              ),
-            ),
-          ),
-      }),
-      submitCommand: operation({
-        input: graphSchema.object({
-          text: field.nonEmptyString({ trim: true }),
-          list: graphSchema.nullable(graphSchema.ref(self)),
-        }),
-        output: CommandSubmission,
-        requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
-        run: ({ text, list }) =>
-          Effect.tryPromise({
-            try: signal =>
-              app.runtime.commands.submit(
-                { text, listId: list ? String(list.locator.id) : null },
-                signal,
-              ),
-            catch: error => error,
-          }).pipe(
-            Effect.catchAll(error =>
-              failOperation(
-                error instanceof TodoCommandError ? error.code : 'command_failed',
-                error instanceof Error ? error.message : 'Command failed.',
-              ),
-            ),
-          ),
-      }),
       createList: operation({
+        description: 'Create a new list.',
         input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
         output: self,
         bridge: { invalidate: [['TodoList']] },
@@ -260,6 +205,7 @@ export const TodoItem = entity({
       });
     return {
       createItem: operation({
+        description: 'Add an item to a list.',
         input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
         output: self,
         bridge: { invalidate: [['TodoList'], ['TodoItem']] },
@@ -284,6 +230,7 @@ export const TodoItem = entity({
           }),
       }),
       setCompleted: operation({
+        description: 'Mark existing items completed or incomplete.',
         input: graphSchema.object({
           todos: self.many(),
           completed: self.fields.completed,
@@ -308,6 +255,7 @@ export const TodoItem = entity({
         },
       }),
       deleteList: operation.atomic({
+        description: 'Delete a list and all its items.',
         input: graphSchema.object({
           list: graphSchema.existingRef(TodoList),
         }),

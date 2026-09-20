@@ -1,5 +1,4 @@
 import {
-  createEntityRef,
   createRecursiveEntityView,
   field,
   graphSchema,
@@ -8,12 +7,15 @@ import {
   toGraphReadRequest,
   type GraphReadDispatcher,
 } from '@ontahi/core/data-graph';
-import { getCurrentInvocationContext } from '@ontahi/core/runtime/server';
+import type { ModelCommandRequest } from '@ontahi/core/runtime/contracts';
+import {
+  getCurrentInvocationContext,
+  ModelInterpretationError as TodoCommandError,
+} from '@ontahi/core/runtime/server';
+import { isRecord } from '@ontahi/core/value/object';
 
 import type { TodoGraphReadAuthority } from '../todo-read-policies.js';
 import { TodoItem, TodoList } from '../todo.js';
-
-import { TodoCommandError, type CommandInput } from './contracts.js';
 
 const maxItems = 100;
 const ContextLists = graphSchema.array(
@@ -23,12 +25,29 @@ const ContextItems = graphSchema.array(
   graphSchema.object({
     id: field.id(),
     title: field.string(),
+    list: graphSchema.ref(TodoList),
     completed: field.boolean(),
   }),
 );
 
 export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphReadAuthority>) => {
-  return async ({ text, listId }: CommandInput) => {
+  return async ({ text, context }: ModelCommandRequest) => {
+    if (
+      context !== undefined &&
+      (!isRecord(context) ||
+        Object.keys(context).some(key => key !== 'focus') ||
+        (context.focus !== undefined &&
+          (!isRecord(context.focus) ||
+            context.focus.kind !== 'entity-ref' ||
+            context.focus.entityName !== 'TodoList' ||
+            !isRecord(context.focus.locator) ||
+            typeof context.focus.locator.id !== 'string')))
+    )
+      throw new TodoCommandError('command_invalid', 'Invalid interaction context.');
+    const listId =
+      isRecord(context) && isRecord(context.focus) && isRecord(context.focus.locator)
+        ? String(context.focus.locator.id)
+        : null;
     if (!text.trim() || text.length > 2_000) {
       throw new TodoCommandError(
         'command_invalid',
@@ -58,17 +77,15 @@ export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphRe
         'The selected list no longer exists or is unavailable.',
       );
     }
-    if (listId === null)
-      return { list: null, lists: lists.data, items: [], complete: lists.data.length <= 100 };
     const itemResponse = await read(
       toGraphReadRequest(
         query(TodoItem)
-          .where(item => item.list.eq(createEntityRef(TodoList, { id: listId })))
           .as(
             createRecursiveEntityView(TodoItem, 'CommandItems', {
               id: true,
               title: true,
               completed: true,
+              list: true,
             }),
           )
           .limit(maxItems + 1),
@@ -85,9 +102,9 @@ export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphRe
     const items = safeParseGraphSchema(ContextItems, itemResponse.value);
     if (!items.success) throw new TodoCommandError('context_unavailable', 'Invalid list context.');
     return {
-      list: lists.data.find(list => list.id === listId)!,
+      list: lists.data.find(list => list.id === listId) ?? null,
       lists: lists.data,
-      items: items.data,
+      items: items.data.filter(item => lists.data.some(list => list.id === item.list.locator.id)),
       complete: items.data.length <= maxItems && lists.data.length <= 100,
     };
   };

@@ -379,3 +379,9 @@ export {
   type ModelProvider,
   type ModelOperationExposure,
 } from './model-interpretation.js';
+export {
+  createModelCommandRuntime,
+  type ModelCommandRuntime,
+  type ModelCommandScope,
+  type ModelCommandBinding,
+} from './model-command.js';

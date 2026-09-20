@@ -230,3 +230,7 @@ export type TaskRunListItem = TaskSnapshot & {
   trigger: TaskTrigger;
   runtime?: TaskRuntimeRef;
 };
+
+/** Context is optional host-defined interaction context, never an authority credential. */
+export type ModelCommandRequest = { text: string; context?: unknown };
+export type ModelCommandResult = { status: 'executed' | 'unresolved'; message: string };

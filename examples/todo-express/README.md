@@ -400,8 +400,8 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
 
 ## Local model-backed command spike
 
-Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Choose a current list for item commands;
-creating a list also works with no list selected. Send with the arrow or Command/Ctrl+Enter.
+Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Optionally choose a list as interaction focus;
+you can also name a list directly in the message. Send with the arrow or Command/Ctrl+Enter.
 The latest exchange is visible by default, with earlier exchanges behind the history icon. Each message is independent: this is not a resumable chat or
 an autonomous agent.
 
@@ -419,48 +419,52 @@ Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports tha
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 
-`TodoList.interpretCommand({ text, list })` returns a typed resolved proposal or an unresolved reason,
-without mutating items. `TodoList.submitCommand` invokes that interpreter and applies at most one
-allowed invocation through the canonical dispatcher. A runtime capability supplies the interpreter
-implementation; a code-backed replacement preserves the same operation and callers.
+The UI sends `POST /model/commands` with `{text, context?}`. `ontahiExpress` mounts this optional
+runtime entry and propagates the authenticated invocation context. There are no chat operations
+on `TodoList`, no chat-specific application capability, and no domain service delegation loop.
 
-The boundaries are now explicit:
+The boundaries are explicit:
 
-- Core's `interpretModelOperation` builds the advertised argument schemas, calls an injected
-  `ModelProvider`, binds the result to a canonical invocation, and validates the actual operation
-  contract. It does not fetch data or execute effects. `validateModelInvocation` also validates
-  proposals from a code-backed interpreter with fresh scope before dispatch.
-- `command-chat/operations.ts` configures Todo's exposed operations, descriptions, projected
-  arguments, bindings, scope checks, and result messages. Adding an item asks the model for a title;
-  runtime code supplies the ID and selected-list Ref. Completion resolves a title to a Selection.
-- `context.ts` reads through Graph Read policies: visible list names and items in the selected list.
-  Provider context contains names and unfinished titles, not IDs or Selection syntax. Limits are
-  100 lists, 100 items, 24,000 serialized context characters, and 2,000 request characters.
-- `model-provider.ts` implements the provider-neutral Core contract using Ollama. It has no Todo
-  imports but remains example-owned, ready for a separate provider package. Ollama code is not in Core.
+- `operation.description`, input/output contracts, and requirements belong to the domain model.
+  Core's `createModelCommandRuntime` resolves these declarations, interprets the request, reloads
+  the scope, validates the canonical proposal, and dispatches the selected operation.
+- `command-chat/runtime.ts` composes that runtime with the provider, authentication policy, and
+  bounded context reader. It does not implement the orchestration itself.
+- `command-chat/bindings.ts` contains the remaining application-specific argument projections,
+  name-to-reference/selection bindings, scope validation, and result messages. It does not duplicate
+  operation descriptions. This explicit exposure configuration is not automatic graph-scope inference.
+- `context.ts` reads through Graph Read policies and passes visible list names and unfinished item
+  titles/list names to the model. Limits are 100 lists, 100 items, 24,000 serialized context
+  characters, and 2,000 request characters. IDs and Selection syntax stay in the runtime.
+- `model-provider.ts` adapts Ollama to Core's provider contract without importing Todo.
 
-Supported examples: `create list Groceries`, `add item buy hamburgers`, `complete buy bread`, and
-`delete list Groceries`. Deleting a named list uses the existing `TodoItem.deleteList` operation,
-including deletion of its items. Item commands require a selected list; list commands do not.
-Duplicate target names remain unresolved. Each request proposes at most one operation.
+The list selector is optional interaction focus (`context.focus` as a Ref). Use `All lists` to
+supply no focus. Examples: `create list Groceries`, `add buy bread to Groceries`,
+`complete buy bread in Groceries`, and `delete list Groceries`. An explicit list name takes
+precedence over the selected list. Completion can resolve a unique title across visible lists;
+creation needs a named or selected list. Missing or ambiguous targets remain unresolved.
+Focus does not grant authority or replace graph read policies and operation requirements.
+
+Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request
+still produces at most one invocation; general graph questions and conversation continuation
+remain follow-ups.
 
 The provider uses the [Ollama chat API](https://docs.ollama.com/api/chat) with
 [structured output](https://docs.ollama.com/capabilities/structured-outputs), one request and a
-60-second timeout. Both chat operations require authentication in GitHub mode. Scope validation
-is separate from authorization and does not prove that the model understood the user's intent.
+60-second timeout. GitHub authentication mode requires sign-in before context disclosure.
 
-Run the real-model evaluation in a fresh process with in-memory data:
+The real-model integration evaluation runs explicitly against disposable in-memory data:
 
 ```sh
 TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
-  pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/evaluate.ts
+  pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/commands.evaluation.ts
 ```
 
-The evaluation checks item creation/completion, duplicate and missing targets, list creation with
-and without a selected list, and named-list deletion including its items. These seven cases pass
-with qwen3.5:0.8b after reducing the model's arguments and context. Unresolved explanations still depend on the small model. This suite is not a reliability
-claim; broader evaluations and provider comparison remain open in [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
-Normal requests do not log raw prompts or list content. Unit tests use deterministic providers.
+`commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
+duplicate and missing targets, list creation with/without focus, named-list deletion, and item
+creation in a named list without focus. These eight cases pass with qwen3.5:0.8b; its explanations
+remain variable. Ordinary suites use deterministic providers. Broader reliability remains in
+[plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
 
 The runtime rechecks context before dispatch, but this is not a transaction spanning inference and
 execution or a production security guarantee. Conversation continuation, cross-surface session

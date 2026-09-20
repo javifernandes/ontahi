@@ -19,7 +19,7 @@ import {
 import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
-import { TodoApplication, todoCommandProvider } from './graph.js';
+import { TodoApplication, todoCommandProvider, todoModelRuntime } from './graph.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from './todo-read-policies.js';
 import { Tag, TodoItem, TodoList } from './todo.js';
 
@@ -101,6 +101,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   // Setup Express for Ontahi App
   server.use(
     ontahiExpress(TodoApplication, {
+      modelCommands: todoModelRuntime ? { runtime: todoModelRuntime } : undefined,
       explorer: createOntahiExpressExplorer({
         indexFile: path.join(clientDirectory, 'index.html'),
       }),
