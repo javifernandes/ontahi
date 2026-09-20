@@ -249,7 +249,7 @@ it('handles denied microphone permission and cancels recognition on unmount', as
 it('reads answers only when enabled, using the selected language, and cancels on disable', async () => {
   const speak = vi.fn();
   const cancel = vi.fn();
-  vi.stubGlobal('speechSynthesis', { speak, cancel });
+  vi.stubGlobal('speechSynthesis', { speak, cancel, getVoices: () => [] });
   vi.stubGlobal(
     'SpeechSynthesisUtterance',
     class {
@@ -294,7 +294,7 @@ it('reads answers only when enabled, using the selected language, and cancels on
 it('handles unavailable audio and cancels reading when unmounted', async () => {
   const speak = vi.fn();
   const cancel = vi.fn();
-  vi.stubGlobal('speechSynthesis', { speak, cancel });
+  vi.stubGlobal('speechSynthesis', { speak, cancel, getVoices: () => [] });
   vi.stubGlobal(
     'SpeechSynthesisUtterance',
     class {
@@ -359,4 +359,72 @@ it('sends the selected language with the message', async () => {
   await write();
   await submit();
   expect(execute).toHaveBeenCalledWith({ text: 'add buy bread', language: 'es-ES' });
+});
+
+it.each([
+  ['en-US', 'Google US English', 'en-US'],
+  ['es-ES', 'Google español', 'es-ES'],
+  ['es-ES', 'Google español de Estados Unidos', 'es-US'],
+])('prefers an available Google voice for %s', async (language, name, voiceLanguage) => {
+  const speak = vi.fn();
+  const google = { name, lang: voiceLanguage };
+  const voices = [
+    { name: 'Generic default', lang: language, default: true },
+    { name: 'Google français', lang: 'fr-FR' },
+    { name: 'Google UK English', lang: 'en-GB' },
+    google,
+  ];
+  const getVoices = vi.fn(() => [] as typeof voices);
+  vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn(), getVoices });
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      lang = '';
+      voice = null;
+      constructor(readonly text: string) {}
+    },
+  );
+  await act(async () => {
+    const select = container.querySelector('select')!;
+    select.value = language;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  execute.mockResolvedValue({ ok: true, value: { status: 'answered', message: 'Hello' } });
+  await write();
+  await submit();
+  await act(async () =>
+    (container.querySelector('[aria-label="Read responses aloud"]') as HTMLButtonElement).click(),
+  );
+  expect(speak.mock.calls[0]![0].voice).toBeNull();
+  // Voices become available after the first reply; the next read must discover them.
+  getVoices.mockReturnValue(voices);
+  await write();
+  await submit();
+  expect(speak.mock.calls[1]![0].voice).toBe(google);
+  expect(speak.mock.calls[1]![0].lang).toBe(language);
+});
+
+it('keeps the browser fallback when Google voices only cover other languages', async () => {
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', {
+    speak,
+    cancel: vi.fn(),
+    getVoices: () => [{ name: 'Google español', lang: 'es-ES' }],
+  });
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      lang = '';
+      voice = null;
+      constructor(readonly text: string) {}
+    },
+  );
+  execute.mockResolvedValue({ ok: true, value: { status: 'answered', message: 'Hello' } });
+  await write();
+  await submit();
+  await act(async () =>
+    (container.querySelector('[aria-label="Read responses aloud"]') as HTMLButtonElement).click(),
+  );
+  expect(speak.mock.calls[0]![0].voice).toBeNull();
+  expect(speak.mock.calls[0]![0].lang).toBe('en-US');
 });

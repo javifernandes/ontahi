@@ -424,7 +424,7 @@ The speaker button enables reading replies aloud, initially off for each chat mo
 reads the latest reply; subsequent replies are read automatically. EN/ES selects the speech synthesis
 language as well as dictation and response language. The selection travels with each submitted message; fixed help and success/clarification messages have English and Spanish variants, and the model is instructed to use that language for its own clarifications. Names and item titles are preserved. Changing language,
 starting dictation, sending a new request, disabling read-aloud, or leaving the chat stops playback.
-Unsupported browsers keep the speaker disabled. Voices depend on the browser and operating system.
+Unsupported browsers keep the speaker disabled. Voices depend on the browser and operating system. Read-aloud prefers an available Google voice matching the selected locale, then another Google voice in the same language; otherwise it keeps the browser default. The voice list is refreshed for every reply so voices loaded later can be selected.
 See [MDN SpeechSynthesisUtterance](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance).
 
 Ask “what things can I do?” for a concise capability explanation without executing an action.

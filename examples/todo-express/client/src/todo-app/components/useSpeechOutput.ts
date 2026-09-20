@@ -6,6 +6,8 @@ export const useSpeechOutput = (language: string) => {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
+    // Trigger asynchronous voice discovery before the first reply.
+    globalThis.speechSynthesis?.getVoices();
     return () => {
       mounted.current = false;
     };
@@ -32,6 +34,15 @@ export const useSpeechOutput = (language: string) => {
     setError(undefined);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = language;
+    // Read afresh for every reply: browsers may load voices after the chat mounts.
+    const googleVoices = globalThis.speechSynthesis
+      .getVoices()
+      .filter(voice => /\bgoogle\b/i.test(voice.name));
+    const locale = language.toLowerCase();
+    const preferred =
+      googleVoices.find(voice => voice.lang.toLowerCase() === locale) ??
+      googleVoices.find(voice => voice.lang.toLowerCase().split('-')[0] === locale.split('-')[0]);
+    if (preferred) utterance.voice = preferred;
     active.current = utterance;
     utterance.onend = () => {
       if (active.current === utterance) active.current = null;
