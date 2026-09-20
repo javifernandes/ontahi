@@ -23,7 +23,26 @@ const recognitionConstructor = () =>
     : ((globalThis as SpeechGlobal).SpeechRecognition ??
       (globalThis as SpeechGlobal).webkitSpeechRecognition);
 
+const speechLanguageKey = 'ontahi.todo.speechLanguage';
+type SpeechLanguage = 'en-US' | 'es-ES';
+const initialSpeechLanguage = (): SpeechLanguage => {
+  try {
+    return globalThis.localStorage.getItem(speechLanguageKey) === 'es-ES' ? 'es-ES' : 'en-US';
+  } catch {
+    return 'en-US';
+  }
+};
+
 export const useSpeechInput = (onText: (text: string) => void, onFinish: () => void) => {
+  const [language, updateLanguage] = useState<SpeechLanguage>(initialSpeechLanguage);
+  const setLanguage = (value: SpeechLanguage) => {
+    updateLanguage(value);
+    try {
+      globalThis.localStorage.setItem(speechLanguageKey, value);
+    } catch {
+      /* Keep the session choice when storage is unavailable. */
+    }
+  };
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string>();
   const active = useRef<BrowserSpeechRecognition | null>(null);
@@ -60,7 +79,7 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
     if (!Constructor) return;
     const recognition = new Constructor();
     active.current = recognition;
-    recognition.lang = navigator.language || 'en-US';
+    recognition.lang = language;
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
@@ -101,5 +120,13 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
       setError('Speech recognition could not start. Try again or type your message.');
     }
   };
-  return { supported: Boolean(recognitionConstructor()), listening, error, toggle, cancel };
+  return {
+    supported: Boolean(recognitionConstructor()),
+    listening,
+    error,
+    toggle,
+    cancel,
+    language,
+    setLanguage,
+  };
 };

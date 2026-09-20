@@ -415,7 +415,7 @@ TODO_LLM_MODEL=qwen3.5:0.8b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm 
 
 The microphone button uses the browser's Web Speech API to append dictation to the draft.
 Interim results replace each other; nothing is sent automatically. Stop dictation, review/edit,
-and use the send arrow or Command/Ctrl+Enter. Recognition uses the browser language. Unsupported
+and use the send arrow or Command/Ctrl+Enter. Choose EN or ES beside the microphone; the selection is saved in browser storage and defaults to EN. Unsupported
 browsers show a disabled microphone; permission and device errors leave typing available.
 Ontahi does not upload audio, but the browser may use an online recognition service; this is not
 an offline guarantee. See [MDN SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).

@@ -186,6 +186,19 @@ export const CommandChat = ({
               }
             }}
           />
+          <select
+            className='command-chat-speech-language'
+            aria-label='Dictation language'
+            title='Dictation language'
+            value={speech.language}
+            disabled={pending || speech.listening}
+            onChange={event =>
+              speech.setLanguage(event.target.value === 'es-ES' ? 'es-ES' : 'en-US')
+            }
+          >
+            <option value='en-US'>EN</option>
+            <option value='es-ES'>ES</option>
+          </select>
           <button
             type='button'
             className='command-chat-microphone'
@@ -196,7 +209,7 @@ export const CommandChat = ({
                 ? 'Speech recognition is not supported in this browser.'
                 : speech.listening
                   ? 'Stop dictation'
-                  : `Dictate (${navigator.language}). Your browser may use an online speech service.`
+                  : `Dictate (${speech.language}). Your browser may use an online speech service.`
             }
             disabled={pending || !speech.supported}
             onClick={() => speech.toggle(text)}

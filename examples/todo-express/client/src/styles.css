@@ -1484,7 +1484,7 @@ a {
   field-sizing: content;
   border: 0;
   background: transparent;
-  padding: 8px 80px 8px 2px;
+  padding: 8px 138px 8px 2px;
   color: #26372c;
   line-height: 20px;
   font: inherit;
@@ -1567,6 +1567,20 @@ a {
   padding: 6px 10px;
   border-radius: 8px;
   background: #fff;
+  color: #354e3e;
+  font-size: 12px;
+}
+
+.command-chat-prompt .command-chat-speech-language {
+  position: absolute;
+  right: 74px;
+  bottom: 2px;
+  width: 54px;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: #354e3e;
   font-size: 12px;
 }

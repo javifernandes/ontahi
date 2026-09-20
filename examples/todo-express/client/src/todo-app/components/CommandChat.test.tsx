@@ -14,6 +14,11 @@ let root: Root;
 const refresh = vi.fn().mockResolvedValue(undefined);
 
 beforeEach(async () => {
+  const stored = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value),
+  });
   execute.mockReset();
   refresh.mockClear();
   container = document.createElement('div');
@@ -165,7 +170,7 @@ it('dictates into the draft without sending and replaces interim results', async
   await act(async () =>
     (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
   );
-  expect(recognition.lang).toBe(navigator.language);
+  expect(recognition.lang).toBe('en-US');
   expect(
     container.querySelector('[aria-label="Send message"]')?.getAttribute('disabled'),
   ).not.toBeNull();
@@ -178,6 +183,26 @@ it('dictates into the draft without sending and replaces interim results', async
   );
   expect(document.activeElement).toBe(container.querySelector('textarea'));
   expect(execute).not.toHaveBeenCalled();
+  await act(async () => {
+    const language = container.querySelector(
+      '[aria-label="Dictation language"]',
+    ) as HTMLSelectElement;
+    language.value = 'es-ES';
+    language.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(globalThis.localStorage.getItem('ontahi.todo.speechLanguage')).toBe('es-ES');
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  expect(recognition.lang).toBe('es-ES');
+  expect(
+    (container.querySelector('[aria-label="Dictation language"]') as HTMLSelectElement).disabled,
+  ).toBe(true);
+  await act(async () => root.render(<div />));
+  await act(async () => root.render(<CommandChat lists={[]} onExecuted={refresh} />));
+  expect(
+    (container.querySelector('[aria-label="Dictation language"]') as HTMLSelectElement).value,
+  ).toBe('es-ES');
   vi.unstubAllGlobals();
 });
 
