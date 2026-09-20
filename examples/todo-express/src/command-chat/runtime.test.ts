@@ -218,3 +218,29 @@ it('ignores an invented list qualifier when the title is globally unique', async
   expect(await submit('complete buy tea')).toMatchObject({ status: 'executed' });
   expect(dataset().TodoItem?.map(item => item.completed)).toEqual([true, false]);
 });
+
+it('localizes help and execution messages without translating the item title', async () => {
+  bind(async () => ({ status: 'help' }));
+  const request = (text: string) =>
+    withInvocationContext({ principal }, () =>
+      runtime.submit({ text, language: 'es-ES' }, new AbortController().signal),
+    );
+  expect(await request('What can I do?')).toEqual({
+    status: 'answered',
+    message:
+      'Podés:\n• Crear una lista nueva.\n• Borrar una lista y todos sus ítems.\n• Agregar un ítem a una lista.\n• Marcar ítems como completados.',
+  });
+  bind(async () =>
+    proposal('TodoItem.createItem', { title: 'fix the door', listName: 'Shopping' }),
+  );
+  expect(await request('add fix the door to Shopping')).toEqual({
+    status: 'executed',
+    message: 'Ítem agregado.',
+  });
+  expect(dataset().TodoItem?.at(-1)?.title).toBe('fix the door');
+  bind(async () => proposal('TodoItem.createItem', { title: 'paint the fence' }));
+  expect(await request('add paint the fence')).toEqual({
+    status: 'unresolved',
+    message: '¿A qué lista querés agregar el ítem?',
+  });
+});

@@ -66,6 +66,7 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
     try {
       const result = await submitModelCommand({
         text: entry.request,
+        language: speech.language,
       });
       if (!result.ok) {
         answer(
@@ -173,6 +174,22 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
             disabled={pending}
             onKeyDown={event => {
               if (
+                event.key === 'ArrowUp' &&
+                !text &&
+                !pending &&
+                !speech.listening &&
+                !event.nativeEvent.isComposing &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.altKey &&
+                !event.shiftKey &&
+                entries.length
+              ) {
+                event.preventDefault();
+                setText(entries.at(-1)!.request);
+                return;
+              }
+              if (
                 event.key === 'Enter' &&
                 (event.metaKey || event.ctrlKey) &&
                 !event.nativeEvent.isComposing
@@ -199,8 +216,8 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
           </button>
           <select
             className='command-chat-speech-language'
-            aria-label='Dictation language'
-            title='Dictation language'
+            aria-label='Chat language'
+            title='Response and speech language'
             value={speech.language}
             disabled={pending || speech.listening}
             onChange={event =>

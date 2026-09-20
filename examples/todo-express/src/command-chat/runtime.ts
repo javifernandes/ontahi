@@ -28,6 +28,8 @@ export const createTodoModelRuntime = ({
     application,
     provider,
     instructions: todoCommandInstructions,
+    formatHelp: (descriptions, request) =>
+      `${request.language?.toLowerCase().startsWith('es') ? 'Podés:' : 'You can:'}\n${descriptions.map(description => `• ${description}`).join('\n')}`,
     authorize: () => {
       if (todoAuthenticationMode === 'github' && !getCurrentInvocationContext()?.principal)
         throw new ModelInterpretationError(
@@ -38,7 +40,11 @@ export const createTodoModelRuntime = ({
     scope: async request => {
       const current = await contextFor();
       return {
-        unresolved: current.complete ? undefined : 'The available data exceeds the command scope.',
+        unresolved: current.complete
+          ? undefined
+          : request.language?.toLowerCase().startsWith('es')
+            ? 'Los datos disponibles exceden el alcance del chat.'
+            : 'The available data exceeds the command scope.',
         context: {
           lists: current.lists.map(list => list.name),
           items: current.items
@@ -48,7 +54,7 @@ export const createTodoModelRuntime = ({
               list: current.lists.find(list => list.id === item.list.locator.id)?.name,
             })),
         },
-        bindings: todoCommandBindings(current, request.text),
+        bindings: todoCommandBindings(current, request.text, request.language),
       };
     },
   });

@@ -31,7 +31,10 @@ const words = (text: string) =>
 export const todoCommandBindings = (
   context: Context,
   request: string,
+  language = 'en-US',
 ): Record<string, ModelCommandBinding> => {
+  const spanish = language.toLowerCase().startsWith('es');
+  const say = (english: string, translated: string) => (spanish ? translated : english);
   const namedList = (name: unknown) => {
     if (name === undefined) return null;
     const targets = context.lists.filter(
@@ -46,6 +49,7 @@ export const todoCommandBindings = (
     context.lists.find(list => sameJson(ref, createEntityRef(TodoList, { id: list.id })));
   return {
     'TodoList.createList': {
+      description: spanish ? 'Crear una lista nueva.' : undefined,
       arguments: strict({ name: field.nonEmptyString() }),
       prepare: args => ({ id: randomUUID(), name: args.name, color: '#f5ddd5' }),
       validate: value => {
@@ -59,10 +63,15 @@ export const todoCommandBindings = (
           outside();
         return undefined;
       },
-      message: value => `List “${String(value.name)}” created.`,
+      message: value =>
+        say(`List “${String(value.name)}” created.`, `Lista “${String(value.name)}” creada.`),
     },
     'TodoItem.deleteList': {
-      unresolvedReason: 'Specify one list to delete per message.',
+      description: spanish ? 'Borrar una lista y todos sus ítems.' : undefined,
+      unresolvedReason: say(
+        'Specify one list to delete per message.',
+        'Indicá una sola lista para borrar por mensaje.',
+      ),
       arguments: strict({ name: field.nonEmptyString() }),
       prepare: args => {
         // Conservatively reject multiple visible list names, even if the model proposes only one.
@@ -78,13 +87,20 @@ export const todoCommandBindings = (
         if (Object.keys(value).length !== 1) outside();
         const list = listForRef(value.list);
         return !list || context.lists.filter(other => sameName(other.name, list.name)).length !== 1
-          ? 'No unique list target is available.'
+          ? say(
+              'No unique list target is available.',
+              'No pude identificar una única lista. Indicá cuál querés borrar.',
+            )
           : undefined;
       },
-      message: () => 'List deleted.',
+      message: () => say('List deleted.', 'Lista borrada.'),
     },
     'TodoItem.createItem': {
-      unresolvedReason: 'Specify which list to add the item to.',
+      description: spanish ? 'Agregar un ítem a una lista.' : undefined,
+      unresolvedReason: say(
+        'Specify which list to add the item to.',
+        '¿A qué lista querés agregar el ítem?',
+      ),
       arguments: strict({
         title: field.nonEmptyString(),
         listName: graphSchema.optional(field.nonEmptyString()),
@@ -110,12 +126,14 @@ export const todoCommandBindings = (
           outside();
         return undefined;
       },
-      message: () => 'Item added.',
+      message: () => say('Item added.', 'Ítem agregado.'),
     },
     'TodoItem.setCompleted': {
-      description: 'Mark items as completed.',
-      unresolvedReason:
+      description: say('Mark items as completed.', 'Marcar ítems como completados.'),
+      unresolvedReason: say(
         'I could not identify one unfinished item. Specify its title and which list it belongs to.',
+        'No pude identificar un único ítem pendiente. Indicá su título y a qué lista pertenece.',
+      ),
       arguments: strict({
         title: field.nonEmptyString(),
         listName: graphSchema.optional(field.nonEmptyString()),
@@ -150,12 +168,15 @@ export const todoCommandBindings = (
               sameName(item.title, target.title) &&
               sameJson(item.list, target.list),
           ).length !== 1
-          ? 'No unique unfinished item target is available.'
+          ? say(
+              'No unique unfinished item target is available.',
+              'No pude identificar un único ítem pendiente.',
+            )
           : undefined;
       },
-      message: () => 'Item completed.',
+      message: () => say('Item completed.', 'Ítem completado.'),
     },
   };
 };
 export const todoCommandInstructions =
-  'There is no selected list. Resolve unfinished items across all visible lists. If exactly one item matches, complete it without asking for a list. If multiple items match, ask the user to specify the list; never guess one. Only set listName when the user names a list in the message. Creating an item requires a list name; ask which list if it is absent. The runtime supplies IDs and references. Example: "add buy bread to Groceries" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.createItem","input":{"title":"buy bread","listName":"Groceries"}}}. "complete buy bread" uses TodoItem.setCompleted with input {"title":"buy bread"}. For deletion, copy the list name from the request into input.name. The user does not need to supply JSON or say the word "name". For example "delete list Groceries" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.deleteList","input":{"name":"Groceries"}}}. Check names against context.lists, including non-English names. A request naming ONE list is ONE action even when context.lists contains many lists. Other context lists are not requested actions. If a request names more than one deletion target, return {"status":"unresolved","reason":"Only one action per message is supported. Delete each list in a separate message."}. Never execute only part of the request. "create list Holidays" uses TodoList.createList with input {"name":"Holidays"}.';
+  'There is no selected list. Resolve unfinished items across all visible lists. If exactly one item matches, complete it without asking for a list. If multiple items match, ask the user to specify the list; never guess one. Only set listName when the user names a list in the message. Creating an item requires a list name; ask which list if it is absent. The runtime supplies IDs and references. Adding an item whose title contains verbs or "and" is ONE action. Do not perform the task itself. Leading words like "now" and "please" do not add actions. Both "in <list>" and "to <list>" specify listName. Example: "add buy bread to Groceries" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.createItem","input":{"title":"buy bread","listName":"Groceries"}}}. "complete buy bread" uses TodoItem.setCompleted with input {"title":"buy bread"}. For deletion, copy the list name from the request into input.name. The user does not need to supply JSON or say the word "name". For example "delete list Groceries" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.deleteList","input":{"name":"Groceries"}}}. Check names against context.lists, including non-English names. A request naming ONE list is ONE action even when context.lists contains many lists. Other context lists are not requested actions. If multiple graph changes are explicitly requested, ask for one change per message. Never execute only part of the request. "create list Holidays" uses TodoList.createList with input {"name":"Holidays"}. Example: "now add item paint the fence in Home" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.createItem","input":{"title":"paint the fence","listName":"Home"}}}.';

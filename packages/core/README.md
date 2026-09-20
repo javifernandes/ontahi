@@ -698,8 +698,8 @@ Providers (such as Ollama), data reads, prompts, dispatch policy, and user inter
 host-owned. The Todo example demonstrates projected title/name arguments without asking the
 model to construct references or selections. This API does not introduce an agent loop.
 
-`createModelCommandRuntime({application, provider, authorize, scope, instructions?})` composes the
-interpretation and execution lifecycle. Its single `submit({text, context?}, signal)` entry
+`createModelCommandRuntime({application, provider, authorize, scope, instructions?, formatHelp?})` composes the
+interpretation and execution lifecycle. Its single `submit({text, language?, context?}, signal)` entry
 returns an `executed`, `answered`, or `unresolved` result. The interpreter can return `{status: "help"}` for capability questions. The runtime renders that as an `answered` message directly from the exposed descriptions, without model-written prose or dispatch. `scope` returns model-visible context and bindings keyed
 by canonical operation ID. Descriptions and canonical input contracts are read from the application. A binding may override `description` when its arguments expose a narrower behavior; other bindings reuse the declaration. `authorize` runs before disclosure and again after inference;
 the final dispatch still enforces the operation's own requirements. The runtime reloads and
@@ -707,5 +707,5 @@ revalidates scope after inference without holding a transaction across a model c
 
 Request context is optional host-defined interaction context, not authority. Hosts may use a focus
 Ref to resolve deictic requests while still supporting explicit targets. This API does not yet
-infer graph scope, answer arbitrary data questions, or resume conversations. Capability help is rendered in English from authored descriptions. For unresolved reasons, concise natural-language wording is model guidance, not a guaranteed output filter. Public request/result
+infer graph scope, answer arbitrary data questions, or resume conversations. An optional validated BCP 47 `language` is passed to the interpreter as the response language. Hosts can localize bindings and use `formatHelp(descriptions, request)` for capability presentation; Core defaults to English help. Language is presentation input, not authority. For unresolved reasons, concise natural-language wording is model guidance, not a guaranteed output filter. Public request/result
 types are available from the browser-safe `@ontahi/core/runtime/contracts` entrypoint.

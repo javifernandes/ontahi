@@ -401,7 +401,7 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
 ## Local model-backed command spike
 
 Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Write the instruction directly;
-name a list in the message only when needed. Send with the arrow or Command/Ctrl+Enter.
+name a list in the message only when needed. Send with the arrow or Command/Ctrl+Enter. ArrowUp in an empty draft recalls the latest submitted message without sending it; existing drafts retain normal cursor navigation.
 The latest exchange is visible by default, with earlier exchanges behind the history icon. Each message is independent: this is not a resumable chat or
 an autonomous agent.
 
@@ -422,13 +422,13 @@ an offline guarantee. See [MDN SpeechRecognition](https://developer.mozilla.org/
 
 The speaker button enables reading replies aloud, initially off for each chat mount. Enabling it
 reads the latest reply; subsequent replies are read automatically. EN/ES selects the speech synthesis
-language as well as dictation language; it does not translate the reply text. Changing language,
+language as well as dictation and response language. The selection travels with each submitted message; fixed help and success/clarification messages have English and Spanish variants, and the model is instructed to use that language for its own clarifications. Names and item titles are preserved. Changing language,
 starting dictation, sending a new request, disabling read-aloud, or leaving the chat stops playback.
 Unsupported browsers keep the speaker disabled. Voices depend on the browser and operating system.
 See [MDN SpeechSynthesisUtterance](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance).
 
 Ask “what things can I do?” for a concise capability explanation without executing an action.
-Informational replies use `answered`, separate from `executed` and `unresolved`. Help is rendered from operation descriptions in ordinary English, rather than model-written prose. The completion binding narrows its description to match the exposed completed-only behavior. Technical identifiers stay in invocation payloads.
+Informational replies use `answered`, separate from `executed` and `unresolved`. Help is rendered from localized operation descriptions rather than model-written prose. The completion binding narrows its description to match the exposed completed-only behavior. Technical identifiers stay in invocation payloads.
 
 The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
 `TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
@@ -436,7 +436,7 @@ Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports tha
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 
-The UI sends `POST /model/commands` with `{text}`. `ontahiExpress` mounts this optional
+The UI sends `POST /model/commands` with `{text, language}`. `ontahiExpress` mounts this optional
 runtime entry and propagates the authenticated invocation context. There are no chat operations
 on `TodoList`, no chat-specific application capability, and no domain service delegation loop.
 
@@ -482,7 +482,7 @@ TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
 `commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
 duplicate and missing targets, list creation, named-list deletion, and item
 creation in a named list. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
-unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. These twelve cases pass with qwen3.5:0.8b; its explanations
+unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. The suite also covers task titles with verbs, the house-list regression, and EN/ES response selection. These seventeen cases pass with qwen3.5:0.8b; its explanations
 remain variable. Ordinary suites use deterministic providers. Broader reliability remains in
 [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
 

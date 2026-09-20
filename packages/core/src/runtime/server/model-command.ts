@@ -33,12 +33,15 @@ export const createModelCommandRuntime = ({
   authorize,
   scope,
   instructions,
+  formatHelp,
 }: {
   application: OntahiApplication;
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
   scope: (request: ModelCommandRequest, signal: AbortSignal) => Promise<ModelCommandScope>;
   instructions?: string;
+  /** Localize capability presentation without asking the model to invent descriptions. */
+  formatHelp?: (descriptions: readonly string[], request: ModelCommandRequest) => string;
 }): ModelCommandRuntime => {
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
@@ -66,12 +69,27 @@ export const createModelCommandRuntime = ({
         typeof request.text !== 'string' ||
         !request.text.trim() ||
         request.text.length > 2000 ||
-        Object.keys(request).some(key => key !== 'text' && key !== 'context')
+        Object.keys(request).some(key => key !== 'text' && key !== 'context' && key !== 'language')
       )
         throw new ModelInterpretationError(
           'command_invalid',
           'Write a request between 1 and 2,000 characters.',
         );
+      if (request.language !== undefined) {
+        try {
+          if (
+            typeof request.language !== 'string' ||
+            request.language.length > 64 ||
+            Intl.getCanonicalLocales(request.language).length !== 1
+          )
+            throw new Error('Invalid language');
+        } catch {
+          throw new ModelInterpretationError(
+            'command_invalid',
+            'Choose a valid response language.',
+          );
+        }
+      }
       const initial = await scope(request, signal);
       if (initial.unresolved) return { status: 'unresolved', message: initial.unresolved };
       const proposal = await interpretModelOperation({
@@ -81,16 +99,28 @@ export const createModelCommandRuntime = ({
         context: initial.context,
         prompt: request.text,
         signal,
-        instructions,
+        instructions: [
+          instructions,
+          request.language
+            ? `Write any user-facing reason in ${request.language}, regardless of the request's language. Never translate entity names, item titles, operation IDs, or argument keys.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
       });
       await authorize();
       signal.throwIfAborted();
       if (proposal.status === 'help')
         return {
           status: 'answered',
-          message: `You can:\n${catalog(initial)
-            .map(op => `• ${op.description}`)
-            .join('\n')}`,
+          message:
+            formatHelp?.(
+              catalog(initial).map(op => op.description),
+              request,
+            ) ??
+            `You can:\n${catalog(initial)
+              .map(op => `• ${op.description}`)
+              .join('\n')}`,
         };
       if (proposal.status === 'unresolved')
         return { status: 'unresolved', message: proposal.reason };

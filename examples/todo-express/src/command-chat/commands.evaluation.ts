@@ -10,7 +10,8 @@ if (TodoApplication.storage.kind !== 'in-memory' || process.env.TODO_AUTH_MODE !
 if (!process.env.TODO_LLM_MODEL)
   throw new Error('Set TODO_LLM_MODEL to an installed Ollama model.');
 
-const submit = (text: string) => todoModelRuntime!.submit({ text }, new AbortController().signal);
+const submit = (text: string, language = 'en-US') =>
+  todoModelRuntime!.submit({ text, language }, new AbortController().signal);
 const dataset = TodoApplication.storage.dataset;
 dataset.TodoList = [{ id: 'evaluation-list', name: 'Shopping', color: '#f5ddd5' }];
 dataset.TodoItem = [
@@ -140,3 +141,28 @@ assert.match(help.message, /delet/i);
 assert.match(help.message, /complet|done/i);
 assert.ok(help.message.length < 700, 'Help should be concise.');
 assert.equal(JSON.stringify(dataset), beforeHelp);
+
+await TodoList.createList({ id: 'house-list', name: 'house', color: '#fff' });
+const door = await submit('now add item fix the door in house');
+console.info(JSON.stringify({ text: 'now add item fix the door in house', result: door }));
+assert.equal(door.status, 'executed');
+assert.ok(
+  dataset.TodoItem.some(item => item.title === 'fix the door' && item.list === 'house-list'),
+);
+
+const spanishHelp = await submit('what things can I do?', 'es-ES');
+console.info(JSON.stringify({ text: 'help (Spanish selected)', result: spanishHelp }));
+assert.equal(spanishHelp.status, 'answered');
+assert.match(spanishHelp.message, /Podés/);
+assert.match(spanishHelp.message, /Crear una lista/);
+const spanishAdd = await submit('now add item paint the fence in house', 'es-ES');
+console.info(JSON.stringify({ text: 'add task (Spanish selected)', result: spanishAdd }));
+assert.equal(spanishAdd.status, 'executed');
+assert.equal(spanishAdd.message, 'Ítem agregado.');
+assert.ok(
+  dataset.TodoItem.some(item => item.title === 'paint the fence' && item.list === 'house-list'),
+);
+const missing = await submit('add item buy nails', 'es-ES');
+console.info(JSON.stringify({ text: 'missing destination (Spanish selected)', result: missing }));
+assert.equal(missing.status, 'unresolved');
+assert.match(missing.message, /lista/i);

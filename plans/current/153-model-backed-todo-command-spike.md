@@ -266,3 +266,21 @@ Validation: 1,137 Core tests and 108 Todo tests passed, followed by two focused 
 contract tests for the new response status. Core and Todo lint/typecheck/build passed. Thirteen
 live Ollama cases passed, including capability help without internal IDs or invented item state.
 The local server was restarted on port 3003 with six lists, ten items, and three tags preserved.
+
+## Recall and response language
+
+ArrowUp in an empty chat draft recalls the most recent request, without submitting or overwriting
+an existing draft. EN/ES now travels as `language` on each request. Core validates BCP 47 language
+tags before disclosure and instructs the model to use that response language while preserving names.
+Todo localizes fixed binding messages and exposed descriptions. An optional host `formatHelp` hook
+formats the capability introduction without model-generated prose or a second translation call.
+Technical transport/provider diagnostics are not a full localized product surface in this spike.
+
+The reported “now add item fix the door in house” failure was reproduced with the visible house
+list. Interpretation guidance distinguishes task titles from requested graph changes and treats
+“in” and “to” as destination phrasing; the canned deletion-only error example was removed.
+A complete structured example for this phrasing improved the regression without changing bindings.
+
+Validation: 1,142 Core tests, 113 Todo tests, affected lint/typecheck/build, and seventeen real
+Ollama cases passed. This includes the exact house command, English requests with Spanish selected,
+localized help and confirmations, and a missing-destination clarification.

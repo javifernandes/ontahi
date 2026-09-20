@@ -65,6 +65,7 @@ it('waits for actual execution before refreshing', async () => {
   expect(execute).toHaveBeenCalledOnce();
   expect(execute.mock.calls[0]![0]).toEqual({
     text: 'add buy bread',
+    language: 'en-US',
   });
   await act(async () =>
     finish({ ok: true, value: { status: 'executed', message: 'Item added.' } }),
@@ -107,6 +108,7 @@ it('submits with Command+Enter without requiring a current list', async () => {
   });
   expect(execute).toHaveBeenCalledWith({
     text: 'create list Groceries',
+    language: 'en-US',
   });
 });
 
@@ -177,9 +179,7 @@ it('dictates into the draft without sending and replaces interim results', async
   expect(document.activeElement).toBe(container.querySelector('textarea'));
   expect(execute).not.toHaveBeenCalled();
   await act(async () => {
-    const language = container.querySelector(
-      '[aria-label="Dictation language"]',
-    ) as HTMLSelectElement;
+    const language = container.querySelector('[aria-label="Chat language"]') as HTMLSelectElement;
     language.value = 'es-ES';
     language.dispatchEvent(new Event('change', { bubbles: true }));
   });
@@ -189,13 +189,13 @@ it('dictates into the draft without sending and replaces interim results', async
   );
   expect(recognition.lang).toBe('es-ES');
   expect(
-    (container.querySelector('[aria-label="Dictation language"]') as HTMLSelectElement).disabled,
+    (container.querySelector('[aria-label="Chat language"]') as HTMLSelectElement).disabled,
   ).toBe(true);
   await act(async () => root.render(<div />));
   await act(async () => root.render(<CommandChat onExecuted={refresh} />));
-  expect(
-    (container.querySelector('[aria-label="Dictation language"]') as HTMLSelectElement).value,
-  ).toBe('es-ES');
+  expect((container.querySelector('[aria-label="Chat language"]') as HTMLSelectElement).value).toBe(
+    'es-ES',
+  );
   vi.unstubAllGlobals();
 });
 
@@ -317,4 +317,46 @@ it('handles unavailable audio and cancels reading when unmounted', async () => {
   await submit();
   await act(async () => root.render(<div />));
   expect(cancel).toHaveBeenCalledOnce();
+});
+
+it('recalls the latest submitted message with ArrowUp in an empty draft', async () => {
+  execute.mockResolvedValue({ ok: true, value: { status: 'executed', message: 'Item added.' } });
+  await write();
+  await submit();
+  const input = container.querySelector('textarea')!;
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(input.value).toBe('add buy bread');
+  expect(execute).toHaveBeenCalledOnce();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      input,
+      'unfinished draft',
+    );
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(input.value).toBe('unfinished draft');
+});
+
+it('sends the selected language with the message', async () => {
+  execute.mockResolvedValue({
+    ok: true,
+    value: { status: 'answered', message: 'Podés crear listas.' },
+  });
+  await act(async () => {
+    const language = container.querySelector('select')!;
+    language.value = 'es-ES';
+    language.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await write();
+  await submit();
+  expect(execute).toHaveBeenCalledWith({ text: 'add buy bread', language: 'es-ES' });
 });
