@@ -45,6 +45,9 @@ pressure test for this model. Atlas preserves the durable distinctions as APIs c
 14. [`Operation Invocation`](./model/operation-invocation.md)
 15. [`Durable Operation`](./model/durable-operation.md)
 16. [`Authority`](./model/authority.md)
+17. [`Model-Backed Operation Execution`](./model/model-backed-operation-execution.md) (shaping)
+18. [`Intent Resolution`](./model/intent-resolution.md) (shaping)
+19. [`Operation Interaction`](./model/operation-interaction.md) (shaping)
 
 ## Adjacent Runtime Shapes
 

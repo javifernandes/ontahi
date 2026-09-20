@@ -1,0 +1,109 @@
+# 153. Model-Backed Todo Command Spike
+
+Status: next
+
+Canonical ID: `ontahi://plans/153-model-backed-todo-command-spike`
+
+Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-operation-execution.md),
+[Intent Resolution](../../atlas/items/model/intent-resolution.md).
+
+## Summary And Context
+
+Prove a small chat-style Todo experience: “agregar comprar pan” creates an item in the current
+list; “ya compré la yerba” completes an unambiguously identified item. A typed operation uses an
+LLM to resolve text into a proposed invocation; the existing dispatcher executes the proposal.
+This is a bounded spike alongside first-version consolidation, not a prerequisite for release or
+an autonomous-agent platform. Atlas is the later application pressure test: first questions about
+plans, then reviewed plan modifications. Atlas product implementation remains outside this plan.
+
+[Research 125](../research/125-ontahi-ai-operations.md) separates intent resolution from executor
+selection. This spike supplies its narrow effectful experiment: interpretation is non-authoritative,
+while an explicitly enabled local Todo path applies one permitted operation under the caller's
+existing authority. It does not claim production security readiness.
+
+## Scope And Proposed Form
+
+Illustrative names below are design placeholders, not a frozen public API:
+
+```text
+interpretCommand({ text, currentList })
+  -> resolved { invocation: existing Operation Invocation }
+  |  unresolved { reason }
+
+resolved proposal -> runtime validation -> canonical dispatcher -> actual result -> UI
+```
+
+1. Expose interpretation as an ordinary typed operation with a model-backed implementation.
+2. Build context in code from inputs, current-list identity, and authorized graph reads. Include
+   relevant item identities, titles, completion state, and reflected allowed-operation contracts.
+3. Limit the effect path to existing TodoItem.createItem and TodoItem.setCompleted, with at most
+   one invocation per submission. Verify their actual input schemas during implementation.
+4. Require concrete references for existing targets. Names alone require instance resolution;
+   missing, ambiguous, or incomplete context returns unresolved without effects.
+5. Define a small injectable model-provider boundary and implement an initial local Ollama adapter.
+   Keep context assembly, canonical invocation semantics, and dispatch outside the provider.
+6. Validate structured output against the interpretation result contract and the selected operation
+   input contract; enforce allowed operation and current-list scope in runtime code, not just prompts.
+7. Execute with the authenticated caller's authority. The LLM cannot supply or replace that authority.
+8. Show submission, pending, unresolved, executed, and failed states in a chat-style Todo surface.
+   Success text comes from the actual execution result. No conversation memory is required.
+
+The incoming model request contains instructions, typed input, a bounded schema projection, data,
+and an output contract. The outgoing proposal reuses operation identity and input from the existing
+invocation representation, not a parallel AI command language or Runtime Protocol family.
+
+## Execution Slices
+
+1. Inventory reflection, operation binding, provider composition, authority propagation, and Todo
+   input contracts; choose the smallest internal seam before introducing a public builder or package.
+2. Implement interpretation and explicit context assembly. Prove a code-backed replacement with
+   the same operation identity, inputs, and output contract.
+3. Add the local provider and exercise a real model request. Keep deterministic fixture-based
+   verification separate from nondeterministic model evaluations.
+4. Add bounded effect application and Todo UI; record what happened when dispatch rejected a proposal.
+5. Record evidence, unresolved questions, and reusable boundaries in Atlas and research 125.
+
+## Non-Goals And Deferred Work
+
+No tool loop, autonomous reads, batches, dependent invocations, automatic mutation retries,
+conversation resumption, general executor-routing framework, or stable public LLM API.
+Do not hold a database transaction open across model inference. Dispatch rechecks current validity;
+a stale snapshot is not permission to mutate. Do not infer retry safety from the current protocol.
+
+- [153a](../backlog/153a-model-execution-security-and-authorization.md) owns prompt-injection and
+  authorization hardening before broader or production use.
+- [153b](../backlog/153b-declarative-operation-context-scope.md) owns declarative graph context scope.
+- [153c](../backlog/153c-operation-interactions-and-resumption.md) owns implementation-neutral interactions.
+- [132](132-durable-invocation-identity-and-idempotency.md) owns invocation identity and retry semantics.
+
+Existing authorization and validation remain mandatory in the spike; comprehensive defenses are
+follow-up work, not implied by a successful demo. Use disposable local Todo data for the proof.
+Remote provider adapters, including a possible Vercel AI Gateway binding, follow evidence from the
+provider seam; this plan does not require another provider integration.
+
+## Acceptance And Verification
+
+- [ ] Both example commands work end to end against a real local model and update the Todo UI.
+- [ ] Interpretation runs through the ordinary operation surface and canonical result lifecycle.
+- [ ] A code-backed interpreter replacement preserves the public operation contract and callers.
+- [ ] A provider test double can replace Ollama without changing domain operations or dispatch.
+- [ ] Only authorized current-list context is included; an omitted/truncated candidate set cannot
+      establish uniqueness and must produce an unresolved result when relevant.
+- [ ] Missing and ambiguous targets produce no mutation; explicit resolved targets use canonical refs.
+- [ ] Invalid output, disallowed operations, out-of-scope targets, and denied authority produce no mutation.
+- [ ] Dispatch failure is displayed honestly and never represented as successful model execution.
+- [ ] Provider failure, timeout, and cancellation terminate cleanly without automatic effect retries.
+- [ ] Evidence records provider/model, context selection, proposed invocation, and dispatch outcome
+      with a deliberate local logging policy; secrets are excluded.
+- [ ] Evaluation examples and limitations are recorded without claiming a passing sample proves security.
+
+## Decisions, Open Questions, And Closure
+
+Intent resolution and model-backed execution are distinct and composed here. One model call and one
+possible invocation provide the first useful proof. Explicit context precedes declarative scoping.
+A terminal unresolved result precedes a resumable interaction protocol.
+
+Resolve during the spike: minimal executor binding, reflected descriptions sufficient for useful
+interpretation, context size limits, provider structured-output limitations, and package ownership.
+Close with evidence for each acceptance item and a recommendation about which seams should become
+public. Do not expand into Atlas editing or agent infrastructure to close this plan.

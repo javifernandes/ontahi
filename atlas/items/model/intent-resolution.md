@@ -1,0 +1,41 @@
+---
+id: ontahi.model.intent-resolution
+kind: concept
+title: Intent Resolution
+parent: ontahi.model.operation-invocation
+status: shaping
+horizon: next
+supports:
+  - ontahi.model.operation-invocation
+  - ontahi.model.model-backed-operation-execution
+  - ontahi.semantic-interaction-language
+relatedPlans:
+  - ontahi://plans/125-ontahi-ai-operations
+  - ontahi://plans/153-model-backed-todo-command-spike
+  - ontahi://plans/153a-model-execution-security-and-authorization
+  - ontahi://plans/153b-declarative-operation-context-scope
+---
+
+Intent Resolution maps a human request and its relevant context to a proposed typed
+[[ontahi.model.operation-invocation|Operation Invocation]], or reports that the request cannot be
+resolved. Text and voice are possible ingress surfaces; a model is one implementation choice.
+Resolution can itself be a typed Domain Operation without making its proposal authoritative.
+
+Schema explains entities, relationships, and operation contracts. Instance context supplies concrete
+identities and candidate targets. A current-list Ref supplied by the UI can anchor “add bread”; a
+list name in text still requires instance resolution. An incomplete candidate set cannot establish
+uniqueness. Missing or ambiguous targets must remain unresolved rather than acquire invented refs.
+
+The proposal reuses the canonical operation identity and input representation shared with code,
+CLI, and Devtools. It is distinct from an executed invocation and its result. The runtime validates
+it, enforces the permitted operation and target scope, and applies the caller's authority through
+the normal dispatcher. Structured output and successful resolution do not establish permission.
+
+The first proposed proof uses explicit authorized context assembly, one model call, and at most
+one proposed invocation. Declarative graph scoping remains a follow-up. An unresolved result is
+terminal for this proof; [[ontahi.model.operation-interaction|Operation Interaction]] investigates
+how a later design could obtain a decision and continue across host surfaces.
+
+Model-visible data and model output are untrusted. Prompt-injection defenses, provider disclosure
+policy, and execution authorization require explicit enforcement beyond the prompt; plan 153a owns
+that hardening. These are shaping semantics, not claims of an implemented secure execution mode.

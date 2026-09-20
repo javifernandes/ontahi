@@ -16,6 +16,9 @@ relatedPlans:
   - bookops://plans/99-semantic-editorial-workflows
   - ontahi://plans/100f-operation-invocation-capability
   - ontahi://plans/125-ontahi-ai-operations
+  - ontahi://plans/153-model-backed-todo-command-spike
+  - ontahi://plans/153a-model-execution-security-and-authorization
+  - ontahi://plans/153b-declarative-operation-context-scope
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---
@@ -45,3 +48,24 @@ Entity state.
 The design may support a progression from a soft semantic contract, through a prompt-backed
 implementation, toward a hardened implementation with stronger evidence or deterministic code.
 That progression describes implementation maturity, not whether the operation is durable.
+
+## First Bounded Proof
+
+Plan 153 shapes a typed interpreter operation whose model-backed implementation produces a
+proposed invocation for the Todo application. [[ontahi.model.intent-resolution|Intent Resolution]]
+is its domain behavior; model-backed execution is its implementation mode. The authoritative
+mutation remains a separate invocation of an existing Todo operation through the canonical runtime.
+
+Context assembly initially runs in code from typed inputs and authorized graph reads. It projects
+relevant schema, available operation contracts, and bounded instance data. A future declarative
+scope may describe which graph region is relevant; it cannot expand authority. Plan 153b owns that
+investigation after the manual context provides evidence.
+
+A replaceable model-provider binding handles model interaction. Context fetching, output contract
+validation, allowed-operation enforcement, and dispatch remain Ontahi/application responsibilities.
+Provider message and tool-call formats must not become a second operation language. The spike
+starts with a local Ollama adapter and leaves broader provider integrations and public API shape open.
+
+Strong authorization coupling and prompt-injection protection remain required follow-up work in
+plan 153a before broader deployment. Existing authorization is mandatory in the spike; neither
+prompt instructions nor validated output are a security boundary by themselves.
