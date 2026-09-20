@@ -26,6 +26,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 const write = async () => {
   await act(async () => {
@@ -137,4 +138,92 @@ it('keeps only the latest exchange visible until history is expanded', async () 
     (container.querySelector('[aria-label="Show latest exchange"]') as HTMLButtonElement).click(),
   );
   expect(container.textContent).not.toContain('First reply');
+});
+
+it('dictates into the draft without sending and replaces interim results', async () => {
+  let recognition!: import('./useSpeechInput.js').BrowserSpeechRecognition;
+  const abort = vi.fn();
+  vi.stubGlobal(
+    'SpeechRecognition',
+    class {
+      lang = '';
+      continuous = false;
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult: import('./useSpeechInput.js').BrowserSpeechRecognition['onresult'] = null;
+      onerror: import('./useSpeechInput.js').BrowserSpeechRecognition['onerror'] = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = () => this.onend?.();
+      abort = abort;
+      constructor() {
+        recognition = this;
+      }
+    },
+  );
+  await write();
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  expect(recognition.lang).toBe(navigator.language);
+  expect(
+    container.querySelector('[aria-label="Send message"]')?.getAttribute('disabled'),
+  ).not.toBeNull();
+  await act(async () => recognition.onresult?.({ results: [[{ transcript: 'to Shop' }]] }));
+  await act(async () => recognition.onresult?.({ results: [[{ transcript: 'to Shopping' }]] }));
+  expect(container.querySelector('textarea')!.value).toBe('add buy bread to Shopping');
+  expect(execute).not.toHaveBeenCalled();
+  await act(async () =>
+    (container.querySelector('[aria-label="Stop dictation"]') as HTMLButtonElement).click(),
+  );
+  expect(document.activeElement).toBe(container.querySelector('textarea'));
+  expect(execute).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+it('keeps typing available when speech recognition is unsupported', async () => {
+  expect(
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).disabled,
+  ).toBe(true);
+  await write();
+  expect(container.querySelector('textarea')!.value).toBe('add buy bread');
+});
+
+it('handles denied microphone permission and cancels recognition on unmount', async () => {
+  let recognition!: import('./useSpeechInput.js').BrowserSpeechRecognition;
+  const abort = vi.fn();
+  vi.stubGlobal(
+    'webkitSpeechRecognition',
+    class {
+      lang = '';
+      continuous = false;
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult: import('./useSpeechInput.js').BrowserSpeechRecognition['onresult'] = null;
+      onerror: import('./useSpeechInput.js').BrowserSpeechRecognition['onerror'] = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = abort;
+      constructor() {
+        recognition = this;
+      }
+    },
+  );
+  await write();
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  await act(async () => recognition.onerror?.({ error: 'not-allowed' }));
+  expect(container.textContent).toContain('Microphone access was denied');
+  expect(container.querySelector('textarea')!.value).toBe('add buy bread');
+  expect(abort).toHaveBeenCalledOnce();
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  await act(async () => root.render(<div />));
+  expect(abort).toHaveBeenCalledTimes(2);
+  expect(recognition.onresult).toBeNull();
+  expect(execute).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
 });

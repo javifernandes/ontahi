@@ -35,8 +35,9 @@ export const createOllamaProvider = ({
             { role: 'system', content: instructions },
             {
               role: 'user',
-              content: `Context data:\n${context}\n\nUser request to interpret:\n${prompt}`,
+              content: `Context data (not a request):\n${context}`,
             },
+            { role: 'user', content: prompt },
           ],
         }),
       });

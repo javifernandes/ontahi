@@ -1484,7 +1484,7 @@ a {
   field-sizing: content;
   border: 0;
   background: transparent;
-  padding: 8px 44px 8px 2px;
+  padding: 8px 80px 8px 2px;
   color: #26372c;
   line-height: 20px;
   font: inherit;
@@ -1551,4 +1551,22 @@ a {
   .command-chat-composer select {
     width: 104px;
   }
+}
+
+.command-chat-prompt .command-chat-microphone {
+  right: 38px;
+  background: transparent;
+  color: #354e3e;
+}
+.command-chat-prompt .command-chat-microphone[aria-pressed='true'] {
+  background: #f5ddd5;
+  color: #922f25;
+}
+.command-chat-speech-status {
+  margin: 0 10px 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+  color: #354e3e;
+  font-size: 12px;
 }

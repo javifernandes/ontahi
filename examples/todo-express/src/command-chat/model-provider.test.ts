@@ -31,9 +31,8 @@ describe('Ollama model provider', () => {
       format: { type: 'object' },
     });
     const payload = JSON.parse(String(init?.body));
-    expect(payload.messages[1].content).toBe(
-      'Context data:\n{}\n\nUser request to interpret:\nAdd bread',
-    );
+    expect(payload.messages[1].content).toBe('Context data (not a request):\n{}');
+    expect(payload.messages[2]).toEqual({ role: 'user', content: 'Add bread' });
     expect(fetchRequest).toHaveBeenCalledOnce();
   });
 

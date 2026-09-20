@@ -208,3 +208,20 @@ This slice does not add general graph questions or resumable conversations.
 Validation: 1,131 Core tests, 46 Express tests, 100 Todo tests, affected lint/typechecks/builds,
 and clean-room package type/runtime checks including HTTP dispatch through the new entry.
 Eight live Ollama cases passed. The local port 3003 instance retains its existing board data.
+
+## Browser dictation and deletion regression
+
+The composer now uses browser SpeechRecognition (including the prefixed implementation) to fill
+the editable draft, with interim results, stop/error/permission handling, and cleanup on unmount.
+It never submits automatically. The browser language is used; browser recognition may send audio
+to its own online service, while the Todo backend receives only the submitted text. Real microphone
+input requires user verification; lifecycle behavior is covered with browser API test doubles.
+
+The reported `delete list Nueva` failure was reproduced with the small local model. Separating
+context data and the actual request into distinct Ollama messages, plus argument-extraction
+guidance, passed the expanded ten-case evaluation. The two-list deletion remains unsupported and
+returns an explicit one-action limitation with no effects in the regression. Batching is not added.
+
+Validation: 103 Todo tests, typecheck, lint, server/client build, and ten live Ollama cases.
+Browser inspection confirmed the microphone control is exposed and enabled; no live recording
+was started. The local instance was restarted with its five lists, nine items, and three tags preserved.

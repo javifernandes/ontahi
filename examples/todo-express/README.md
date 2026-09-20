@@ -413,6 +413,13 @@ ollama pull qwen3.5:0.8b
 TODO_LLM_MODEL=qwen3.5:0.8b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm todo:dev:local
 ```
 
+The microphone button uses the browser's Web Speech API to append dictation to the draft.
+Interim results replace each other; nothing is sent automatically. Stop dictation, review/edit,
+and use the send arrow or Command/Ctrl+Enter. Recognition uses the browser language. Unsupported
+browsers show a disabled microphone; permission and device errors leave typing available.
+Ontahi does not upload audio, but the browser may use an online recognition service; this is not
+an offline guarantee. See [MDN SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
+
 The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
 `TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
 Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports that it is disabled.
@@ -462,7 +469,8 @@ TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
 
 `commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
 duplicate and missing targets, list creation with/without focus, named-list deletion, and item
-creation in a named list without focus. These eight cases pass with qwen3.5:0.8b; its explanations
+creation in a named list without focus. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
+unresolved without effects. These ten cases pass with qwen3.5:0.8b; its explanations
 remain variable. Ordinary suites use deterministic providers. Broader reliability remains in
 [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
 
@@ -470,3 +478,8 @@ The runtime rechecks context before dispatch, but this is not a transaction span
 execution or a production security guarantee. Conversation continuation, cross-surface session
 context, prompt-injection hardening, provider disclosure policy, and stronger authorization/effect
 binding are explicitly tracked follow-ups. See plans 153a–153c.
+
+The Ollama adapter sends context data and the actual user instruction as separate messages.
+Single-list deletion extracts `name` from natural language. Batch requests are still outside the
+one-invocation contract and should request separate messages; prompt guidance and the small-model
+evaluation do not guarantee correct intent recognition for arbitrary compound requests.

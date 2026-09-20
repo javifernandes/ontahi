@@ -104,3 +104,24 @@ assert.ok(
   dataset.TodoItem.some(item => item.title === 'buy apples' && item.list === 'evaluation-list'),
 );
 console.info('Named-list item creation without selection passed.');
+
+// User-reported regression: a natural-language name is already an argument.
+dataset.TodoList = ['Inbox', 'Later', 'Nueva', 'Sarasa', 'Supermercado', 'Other'].map(
+  (name, index) => ({ id: `regression-${index}`, name, color: '#fff' }),
+);
+dataset.TodoItem = [];
+const multiple = await submit({ text: 'delete list Nueva and "Other"', list: null });
+console.info(JSON.stringify({ text: 'delete list Nueva and "Other"', result: multiple }));
+assert.equal(multiple.status, 'unresolved');
+assert.equal(dataset.TodoList.length, 6);
+const single = await submit({ text: 'delete list Nueva', list: null });
+console.info(JSON.stringify({ text: 'delete list Nueva', result: single }));
+assert.equal(single.status, 'executed');
+assert.equal(
+  dataset.TodoList.some(row => row.name === 'Nueva'),
+  false,
+);
+assert.equal(
+  dataset.TodoList.some(row => row.name === 'Other'),
+  true,
+);

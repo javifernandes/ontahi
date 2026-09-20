@@ -1,8 +1,10 @@
-import { ArrowUp, ChevronDown, History, LoaderCircle } from 'lucide-react';
+import { ArrowUp, ChevronDown, History, LoaderCircle, Mic, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { TodoList } from '../../../../src/generated/client-entities.js';
 import { submitModelCommand } from '../../model-commands.js';
+
+import { useSpeechInput } from './useSpeechInput.js';
 
 type Entry = {
   id: number;
@@ -24,6 +26,7 @@ export const CommandChat = ({
   const [pending, setPending] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
+  const speech = useSpeechInput(setText, () => prompt.current?.focus());
   const [entries, setEntries] = useState<Entry[]>([]);
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
@@ -42,7 +45,7 @@ export const CommandChat = ({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!text.trim() || busy.current) return;
+    if (!text.trim() || busy.current || speech.listening) return;
     busy.current = true;
     setPending(true);
     const id = ++sequence.current;
@@ -134,6 +137,16 @@ export const CommandChat = ({
           </div>
         </div>
       )}
+      {speech.error && (
+        <p className='command-chat-speech-status' role='status'>
+          {speech.error}
+        </p>
+      )}
+      {speech.listening && (
+        <p className='command-chat-speech-status' role='status'>
+          Listening… Stop to review and send.
+        </p>
+      )}
       <form className='command-chat-composer' onSubmit={event => void submit(event)}>
         <select
           aria-label='Current list'
@@ -155,7 +168,10 @@ export const CommandChat = ({
             id='command-text'
             rows={1}
             value={text}
-            onChange={event => setText(event.target.value)}
+            onChange={event => {
+              speech.cancel();
+              setText(event.target.value);
+            }}
             maxLength={2000}
             placeholder='Message…'
             disabled={pending}
@@ -171,11 +187,28 @@ export const CommandChat = ({
             }}
           />
           <button
+            type='button'
+            className='command-chat-microphone'
+            aria-label={speech.listening ? 'Stop dictation' : 'Dictate message'}
+            aria-pressed={speech.listening}
+            title={
+              !speech.supported
+                ? 'Speech recognition is not supported in this browser.'
+                : speech.listening
+                  ? 'Stop dictation'
+                  : `Dictate (${navigator.language}). Your browser may use an online speech service.`
+            }
+            disabled={pending || !speech.supported}
+            onClick={() => speech.toggle(text)}
+          >
+            {speech.listening ? <Square size={14} /> : <Mic size={17} />}
+          </button>
+          <button
             type='submit'
             aria-label='Send message'
             title='Send (⌘Enter)'
             aria-keyshortcuts='Meta+Enter Control+Enter'
-            disabled={!text.trim() || pending}
+            disabled={!text.trim() || pending || speech.listening}
           >
             {pending ? (
               <LoaderCircle size={17} className='command-chat-spinner' />
