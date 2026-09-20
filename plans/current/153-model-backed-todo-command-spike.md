@@ -36,8 +36,9 @@ resolved proposal -> runtime validation -> canonical dispatcher -> actual result
 1. Expose interpretation as an ordinary typed operation with a model-backed implementation.
 2. Build context in code from inputs, current-list identity, and authorized graph reads. Include
    relevant item identities, titles, completion state, and reflected allowed-operation contracts.
-3. Limit the effect path to existing TodoItem.createItem and TodoItem.setCompleted, with at most
-   one invocation per submission. Verify their actual input schemas during implementation.
+3. Limit the effect path to existing TodoList.createList, TodoItem.createItem, and
+   TodoItem.setCompleted, with at most one invocation per submission. The current list is nullable:
+   creation of a list is global, while item commands require a selected list. Verify their actual input schemas during implementation.
 4. Require concrete references for existing targets. Names alone require instance resolution;
    missing, ambiguous, or incomplete context returns unresolved without effects.
 5. Define a small injectable model-provider boundary and implement an initial local Ollama adapter.
@@ -83,13 +84,13 @@ provider seam; this plan does not require another provider integration.
 
 ## Acceptance And Verification
 
-- [ ] Both example commands work end to end against a real local model and update the Todo UI.
+- [x] Both example commands work end to end against a real local model and update the Todo UI.
 - [x] Interpretation runs through the ordinary operation surface and canonical result lifecycle.
 - [x] A code-backed interpreter replacement preserves the public operation contract and callers.
 - [x] A provider test double can replace Ollama without changing domain operations or dispatch.
 - [x] Only authorized current-list context is included; an omitted/truncated candidate set cannot
       establish uniqueness and must produce an unresolved result when relevant.
-- [ ] Missing and ambiguous targets produce no mutation; explicit resolved targets use canonical refs.
+- [x] Missing and ambiguous targets produce no mutation; explicit resolved targets use canonical refs.
 - [x] Invalid output, disallowed operations, out-of-scope targets, and denied authority produce no mutation.
 - [x] Dispatch failure is displayed honestly and never represented as successful model execution.
 - [x] Provider failure, timeout, and cancellation terminate cleanly without automatic effect retries.
@@ -145,3 +146,26 @@ dispatch is not an atomic compare-and-mutate guarantee. Security hardening remai
 A comparison with qwen3.5:2b was attempted but its download repeatedly stalled after a registry
 connection reset; it was stopped with no evaluation result. The installed 0.8B model remains the
 local baseline. Re-run the documented evaluation after a successful stronger-model download.
+
+## UI And Scope Feedback
+
+The chat now floats at the bottom center, with a list selector, compact composer, embedded send
+arrow, and Command/Ctrl+Enter. It shows the latest exchange as chat bubbles, with an expandable
+local history and no repeated list headers. History remains presentation state, not model memory.
+List creation was missing from the original operation allowlist; user feedback expands the proof
+to TodoList.createList and a nullable current-list Ref. Context and output validation still enforce
+that item operations cannot run without a selected list.
+
+The hand-built context and example-owned `app.runtime.commands` dependency are deliberately local
+seams. They are not automatic graph-scope inference or a native Core LLM API. Separating proposal
+from execution is useful, but does not require two public operations. Revisit whether one public
+chat operation with an internal interpreter is sufficient, and whether TodoList is an appropriate
+owner for global intent resolution, before promoting these APIs beyond the spike.
+
+The revised provider contract separates the user prompt from serialized context data. Dynamic input
+schemas remain in context, while the output grammar exposes one operation-id enum and runtime
+validation enforces the chosen operation's exact contract. The final qwen3.5:0.8b evaluation passed
+six cases: add an item, complete an item, reject duplicate/missing targets without effects, and
+create a list named Vacaciones with and without a selected list. A real browser Command+Enter
+submission also created Supermercado as a list. This small evaluation is evidence of improvement,
+not a reliability or prompt-injection guarantee. Full Todo suite: 98 tests.

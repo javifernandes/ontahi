@@ -7,7 +7,11 @@ export const CommandInterpretation = graphSchema.union([
       invocation: graphSchema.object(
         {
           kind: graphSchema.literal('invoke'),
-          operationId: field.enum(['TodoItem.createItem', 'TodoItem.setCompleted'] as const),
+          operationId: field.enum([
+            'TodoList.createList',
+            'TodoItem.createItem',
+            'TodoItem.setCompleted',
+          ] as const),
           input: field.json(),
         },
         { unknownKeys: 'strict' },
@@ -32,7 +36,7 @@ export const CommandSubmission = graphSchema.object({
 });
 export type CommandSubmissionValue = InferGraphSchemaValue<typeof CommandSubmission>;
 
-export type CommandInput = { text: string; listId: string };
+export type CommandInput = { text: string; listId: string | null };
 export type TodoCommandService = {
   interpret(input: CommandInput, signal: AbortSignal): Promise<CommandInterpretationValue>;
   submit(input: CommandInput, signal: AbortSignal): Promise<CommandSubmissionValue>;

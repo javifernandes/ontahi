@@ -1,76 +1,61 @@
 import type { GraphJsonSchema } from '@ontahi/core/data-graph';
 
-// Narrow the reflected operation inputs to the exact effects this proof permits.
+// Keep operation choice explicit. Provider grammar is a hint; the runtime validates the
+// chosen operation's actual input schema and scope before any dispatch.
 export const commandProposalSchema = (
   listRef: unknown,
   newItemId: string,
+  newListId: string,
   targets: readonly { selection: unknown }[],
-): GraphJsonSchema => {
-  return {
-    anyOf: [
-      {
-        type: 'object',
-        properties: { status: { const: 'unresolved' }, reason: { type: 'string' } },
-        required: ['status', 'reason'],
-        additionalProperties: false,
-      },
-      {
-        type: 'object',
-        properties: {
-          status: { const: 'resolved' },
-          invocation: {
-            type: 'object',
-            properties: {
-              kind: { const: 'invoke' },
-              operationId: { const: 'TodoItem.createItem' },
-              input: {
-                type: 'object',
-                properties: {
-                  id: { const: newItemId },
-                  list: { const: listRef },
-                  title: { type: 'string', minLength: 1, maxLength: 500 },
-                },
-                required: ['id', 'list', 'title'],
-                additionalProperties: false,
-              },
+): GraphJsonSchema => ({
+  anyOf: [
+    {
+      type: 'object',
+      properties: { status: { const: 'unresolved' }, reason: { type: 'string' } },
+      required: ['status', 'reason'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        status: { const: 'resolved' },
+        invocation: {
+          type: 'object',
+          properties: {
+            kind: { const: 'invoke' },
+            operationId: {
+              enum: listRef
+                ? ['TodoItem.createItem', 'TodoItem.setCompleted', 'TodoList.createList']
+                : ['TodoList.createList'],
             },
-            required: ['kind', 'operationId', 'input'],
-            additionalProperties: false,
-          },
-        },
-        required: ['status', 'invocation'],
-        additionalProperties: false,
-      },
-      ...(targets.length
-        ? [
-            {
+            input: {
               type: 'object',
               properties: {
-                status: { const: 'resolved' },
-                invocation: {
-                  type: 'object',
-                  properties: {
-                    kind: { const: 'invoke' },
-                    operationId: { const: 'TodoItem.setCompleted' },
-                    input: {
-                      type: 'object',
-                      properties: {
-                        todos: { enum: targets.map(item => item.selection) },
-                        completed: { const: true },
-                      },
-                      required: ['todos', 'completed'],
-                      additionalProperties: false,
-                    },
-                  },
-                  required: ['kind', 'operationId', 'input'],
-                  additionalProperties: false,
-                },
+                id: { enum: listRef ? [newItemId, newListId] : [newListId] },
+                name: { type: 'string', minLength: 1, maxLength: 200 },
+                color: { const: '#f5ddd5' },
+                ...(listRef
+                  ? {
+                      list: { const: listRef },
+                      title: { type: 'string', minLength: 1, maxLength: 500 },
+                    }
+                  : {}),
+                ...(listRef && targets.length
+                  ? {
+                      todos: { enum: targets.map(item => item.selection) },
+                      completed: { const: true },
+                    }
+                  : {}),
               },
-              required: ['status', 'invocation'],
               additionalProperties: false,
             },
-          ]
-        : []),
-    ],
-  };
-};
+          },
+          required: ['kind', 'operationId', 'input'],
+          additionalProperties: false,
+        },
+      },
+      required: ['status', 'invocation'],
+      additionalProperties: false,
+    },
+  ],
+});

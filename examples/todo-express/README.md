@@ -400,8 +400,9 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
 
 ## Local model-backed command spike
 
-Enable the optional assistant with an installed Ollama model. It appears below the Todo board;
-choose its current list explicitly. Each message is independent: this is not a resumable chat or
+Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Choose a current list for item commands;
+creating a list also works with no list selected. Send with the arrow or Command/Ctrl+Enter.
+The latest exchange is visible by default, with earlier exchanges behind the history icon. Each message is independent: this is not a resumable chat or
 an autonomous agent.
 
 ```sh
@@ -425,8 +426,8 @@ implementation; a code-backed replacement preserves the same operation and calle
 example-local seams, not a new public Core executor-binding API.
 
 The context builder reads through the existing Graph Read policies, projects list id/name and item
-id/title/completion state, and includes reflected input schemas only for `TodoItem.createItem` and
-`TodoItem.setCompleted`. It refuses incomplete candidate sets (over 100 items), oversized context
+id/title/completion state, and includes reflected input schemas for `TodoList.createList`, `TodoItem.createItem`, and
+`TodoItem.setCompleted` (only list creation is offered when no list is selected). It refuses incomplete candidate sets (over 100 items), oversized context
 (over 24,000 characters), and requests over 2,000 characters. The provider uses the [Ollama chat API](https://docs.ollama.com/api/chat) with
 [structured output](https://docs.ollama.com/capabilities/structured-outputs), making one
 request with a 60-second timeout; it never retries a mutation. Output validation and runtime scope
@@ -440,14 +441,17 @@ TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
   pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/evaluate.ts
 ```
 
-The evaluation checks creation, completion, ambiguous duplicate titles, and a missing target. It
+The evaluation checks item creation/completion, ambiguous duplicate titles, a missing target,
+and list creation with and without a selected list. It
 prints model, request, elapsed time, and actual result for these synthetic cases. Normal requests
 are not logged with raw prompts or list content; richer redacted execution traces remain follow-up
 work. Ordinary tests use deterministic provider fixtures and do not download or require a model.
 
 On the first local evaluation, the 0.8B model confused completion with creation. Explicit bilingual
 instructions corrected the two happy-path examples, but it still chose an unrelated item for a
-missing-target request. The evaluation intentionally fails on that behavior. Schema validity and
+missing-target request. That initial evaluation failed on the behavior. The follow-up separates the actual user prompt
+from context data and adds list creation; the six current evaluation cases pass with the same
+0.8B model. Broader reliability remains unproven. Schema validity and
 in-scope execution do not prove correct intent resolution. Provider comparison and broader intent
 evaluations remain open in [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
 

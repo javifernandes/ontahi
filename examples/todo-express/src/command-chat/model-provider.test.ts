@@ -5,6 +5,7 @@ import { createOllamaProvider } from './model-provider.js';
 const request = () => ({
   instructions: 'Resolve',
   context: '{}',
+  prompt: 'Add bread',
   outputSchema: { type: 'object' },
   signal: new AbortController().signal,
 });
@@ -29,6 +30,10 @@ describe('Ollama model provider', () => {
       stream: false,
       format: { type: 'object' },
     });
+    const payload = JSON.parse(String(init?.body));
+    expect(payload.messages[1].content).toBe(
+      'Context data:\n{}\n\nUser request to interpret:\nAdd bread',
+    );
     expect(fetchRequest).toHaveBeenCalledOnce();
   });
 

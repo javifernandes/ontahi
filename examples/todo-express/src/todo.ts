@@ -100,14 +100,17 @@ export const TodoList = entity({
       interpretCommand: operation({
         input: graphSchema.object({
           text: field.nonEmptyString({ trim: true }),
-          list: graphSchema.ref(self),
+          list: graphSchema.nullable(graphSchema.ref(self)),
         }),
         output: CommandInterpretation,
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         run: ({ text, list }) =>
           Effect.tryPromise({
             try: signal =>
-              app.runtime.commands.interpret({ text, listId: String(list.locator.id) }, signal),
+              app.runtime.commands.interpret(
+                { text, listId: list ? String(list.locator.id) : null },
+                signal,
+              ),
             catch: error => error,
           }).pipe(
             Effect.catchAll(error =>
@@ -121,7 +124,7 @@ export const TodoList = entity({
       submitCommand: operation({
         input: graphSchema.object({
           text: field.nonEmptyString({ trim: true }),
-          list: graphSchema.ref(self),
+          list: graphSchema.nullable(graphSchema.ref(self)),
         }),
         output: CommandSubmission,
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
@@ -129,7 +132,10 @@ export const TodoList = entity({
         run: ({ text, list }) =>
           Effect.tryPromise({
             try: signal =>
-              app.runtime.commands.submit({ text, listId: String(list.locator.id) }, signal),
+              app.runtime.commands.submit(
+                { text, listId: list ? String(list.locator.id) : null },
+                signal,
+              ),
             catch: error => error,
           }).pipe(
             Effect.catchAll(error =>

@@ -6,6 +6,7 @@ import { TodoCommandError } from './contracts.js';
 export type ModelRequest = {
   instructions: string;
   context: string;
+  prompt: string;
   outputSchema: GraphJsonSchema;
   signal: AbortSignal;
 };
@@ -25,7 +26,7 @@ export const createOllamaProvider = ({
   timeoutMs?: number;
   fetchRequest?: typeof fetch;
 }): ModelProvider => ({
-  generate: async ({ instructions, context, outputSchema, signal }) => {
+  generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal.addEventListener('abort', abort, { once: true });
@@ -44,7 +45,10 @@ export const createOllamaProvider = ({
           format: outputSchema,
           messages: [
             { role: 'system', content: instructions },
-            { role: 'user', content: context },
+            {
+              role: 'user',
+              content: `Context data:\n${context}\n\nUser request to interpret:\n${prompt}`,
+            },
           ],
         }),
       });

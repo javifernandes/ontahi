@@ -81,7 +81,7 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       bridge: {},
       input: graphSchema.object({
         text: field.nonEmptyString({ trim: true }),
-        list: graphSchema.ref(TodoListSchema),
+        list: graphSchema.nullable(graphSchema.ref(TodoListSchema)),
       }),
       output: graphSchema.union([
         graphSchema.object(
@@ -90,7 +90,11 @@ export const TodoList = defineClientEntity(TodoListSchema, {
             invocation: graphSchema.object(
               {
                 kind: graphSchema.literal('invoke'),
-                operationId: field.enum(['TodoItem.createItem', 'TodoItem.setCompleted']),
+                operationId: field.enum([
+                  'TodoList.createList',
+                  'TodoItem.createItem',
+                  'TodoItem.setCompleted',
+                ]),
                 input: field.json(),
               },
               { unknownKeys: 'strict' },
@@ -115,7 +119,7 @@ export const TodoList = defineClientEntity(TodoListSchema, {
       },
       input: graphSchema.object({
         text: field.nonEmptyString({ trim: true }),
-        list: graphSchema.ref(TodoListSchema),
+        list: graphSchema.nullable(graphSchema.ref(TodoListSchema)),
       }),
       output: graphSchema.object({
         status: field.enum(['executed', 'unresolved']),

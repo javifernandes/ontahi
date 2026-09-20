@@ -1,12 +1,12 @@
 import { useOperation } from '@ontahi/react/graph';
-import { useRef, useState, type FormEvent } from 'react';
+import { ArrowUp, ChevronDown, History, LoaderCircle } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { TodoList } from '../../../../src/generated/client-entities.js';
 
 type Entry = {
   id: number;
   request: string;
-  list: string;
   reply?: string;
   status: 'pending' | 'executed' | 'unresolved' | 'failed';
 };
@@ -21,17 +21,33 @@ export const CommandChat = ({
   const command = useOperation(TodoList.domain.submitCommand);
   const [listId, setListId] = useState('');
   const [text, setText] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const [pending, setPending] = useState(false);
+  const log = useRef<HTMLDivElement>(null);
+  const prompt = useRef<HTMLTextAreaElement>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
+  useEffect(() => {
+    if (log.current) log.current.scrollTop = log.current.scrollHeight;
+  }, [entries, expanded]);
+  useEffect(() => {
+    if (
+      !pending &&
+      entries.length &&
+      globalThis.document.activeElement === globalThis.document.body
+    )
+      prompt.current?.focus();
+  }, [pending, entries.length]);
   const busy = useRef(false);
   const sequence = useRef(0);
   const current = lists.find(list => list.id === listId);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!text.trim() || !current || busy.current) return;
+    if (!text.trim() || busy.current) return;
     busy.current = true;
+    setPending(true);
     const id = ++sequence.current;
-    const entry: Entry = { id, request: text.trim(), list: current.name, status: 'pending' };
+    const entry: Entry = { id, request: text.trim(), status: 'pending' };
     setEntries(previous => [...previous, entry]);
     setText('');
     const answer = (status: Entry['status'], reply: string) =>
@@ -43,7 +59,7 @@ export const CommandChat = ({
     try {
       const result = await command.executeAsync({
         text: entry.request,
-        list: TodoList.refById(current.id),
+        list: current ? TodoList.refById(current.id) : null,
       });
       if (!result.ok) {
         answer(
@@ -66,61 +82,109 @@ export const CommandChat = ({
       answer('failed', 'The server response was lost. Check the list before submitting again.');
     } finally {
       busy.current = false;
+      setPending(false);
     }
   };
 
+  const visibleEntries = expanded ? entries : entries.slice(-1);
   return (
     <section className='command-chat' aria-label='List assistant'>
-      <div className='command-chat-heading'>
-        <div>
-          <h2>Talk to your list</h2>
-          <p>Add an item or mark one as done. Each message is a new request.</p>
-        </div>
-        <label>
-          Current list
-          <select
-            value={current?.id ?? ''}
-            onChange={event => setListId(event.target.value)}
-            disabled={command.isExecuting}
+      {entries.length > 0 && (
+        <div className='command-chat-conversation'>
+          {entries.length > 1 && (
+            <button
+              className='command-chat-history'
+              type='button'
+              aria-label={expanded ? 'Show latest exchange' : 'Show conversation history'}
+              title={expanded ? 'Show latest exchange' : 'Show conversation history'}
+              aria-expanded={expanded}
+              aria-controls='command-chat-log'
+              onClick={() => setExpanded(value => !value)}
+            >
+              {expanded ? <ChevronDown size={15} /> : <History size={15} />}
+            </button>
+          )}
+          <div
+            id='command-chat-log'
+            className='command-chat-log'
+            ref={log}
+            role='log'
+            aria-live='polite'
+            aria-relevant='additions text'
           >
-            <option value=''>Choose a list</option>
-            {lists.map(list => (
-              <option key={list.id} value={list.id}>
-                {list.name}
-              </option>
+            {visibleEntries.map(entry => (
+              <div key={entry.id} className={`command-chat-exchange is-${entry.status}`}>
+                <p className='command-chat-message from-user'>
+                  <span className='sr-only'>You: </span>
+                  {entry.request}
+                </p>
+                <p className='command-chat-message from-assistant'>
+                  <span className='sr-only'>Assistant: </span>
+                  {entry.status === 'pending' ? (
+                    <span className='command-chat-thinking' aria-label='Interpreting…'>
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  ) : (
+                    entry.reply
+                  )}
+                </p>
+              </div>
             ))}
-          </select>
-        </label>
-      </div>
-      <div className='command-chat-log' role='log' aria-live='polite'>
-        {entries.map(entry => (
-          <article key={entry.id} className={`command-chat-entry is-${entry.status}`}>
-            <small>{entry.list}</small>
-            <p>{entry.request}</p>
-            <p className='command-chat-reply'>
-              {entry.status === 'pending' ? 'Interpreting…' : entry.reply}
-            </p>
-          </article>
-        ))}
-      </div>
-      <form onSubmit={event => void submit(event)}>
-        <label className='sr-only' htmlFor='command-text'>
-          Request
-        </label>
-        <input
-          id='command-text'
-          value={text}
-          onChange={event => setText(event.target.value)}
-          maxLength={2000}
-          placeholder={
-            current ? '“Agregar comprar pan” or “Ya compré la yerba”' : 'Choose a list to start'
-          }
-          disabled={!current || command.isExecuting}
-          autoComplete='off'
-        />
-        <button type='submit' disabled={!current || !text.trim() || command.isExecuting}>
-          {command.isExecuting ? 'Working…' : 'Send'}
-        </button>
+          </div>
+        </div>
+      )}
+      <form className='command-chat-composer' onSubmit={event => void submit(event)}>
+        <select
+          aria-label='Current list'
+          value={current?.id ?? ''}
+          onChange={event => setListId(event.target.value)}
+          disabled={pending}
+        >
+          <option value=''>No list</option>
+          {lists.map(list => (
+            <option key={list.id} value={list.id}>
+              {list.name}
+            </option>
+          ))}
+        </select>
+        <div className='command-chat-prompt'>
+          <textarea
+            ref={prompt}
+            aria-label='Request'
+            id='command-text'
+            rows={1}
+            value={text}
+            onChange={event => setText(event.target.value)}
+            maxLength={2000}
+            placeholder='Message…'
+            disabled={pending}
+            onKeyDown={event => {
+              if (
+                event.key === 'Enter' &&
+                (event.metaKey || event.ctrlKey) &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+          />
+          <button
+            type='submit'
+            aria-label='Send message'
+            title='Send (⌘Enter)'
+            aria-keyshortcuts='Meta+Enter Control+Enter'
+            disabled={!text.trim() || pending}
+          >
+            {pending ? (
+              <LoaderCircle size={17} className='command-chat-spinner' />
+            ) : (
+              <ArrowUp size={18} />
+            )}
+          </button>
+        </div>
       </form>
     </section>
   );

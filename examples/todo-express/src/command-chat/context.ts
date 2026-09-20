@@ -35,6 +35,7 @@ export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphRe
         'Write a request between 1 and 2,000 characters.',
       );
     }
+    if (listId === null) return { list: null, items: [], complete: true };
     const authority = { principal: getCurrentInvocationContext()?.principal ?? null };
     const listResponse = await read(
       toGraphReadRequest(

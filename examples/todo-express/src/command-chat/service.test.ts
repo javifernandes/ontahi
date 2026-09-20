@@ -91,7 +91,7 @@ describe('model-backed Todo commands', () => {
     expect(context.items.map((item: { id: string }) => item.id)).toEqual(['yerba']);
     expect(
       context.operations.map((operation: { operationId: string }) => operation.operationId),
-    ).toEqual(['TodoItem.createItem', 'TodoItem.setCompleted']);
+    ).toEqual(['TodoList.createList', 'TodoItem.createItem', 'TodoItem.setCompleted']);
     expect(generate.mock.calls[0]![0].context).not.toContain('Other list content');
   });
 
@@ -206,4 +206,64 @@ describe('model-backed Todo commands', () => {
     expect(await invoke()).toMatchObject({ ok: false });
     expect(dataset().TodoItem).toHaveLength(2);
   });
+});
+
+it('creates a requested list instead of an item', async () => {
+  bind(async request => {
+    const context = JSON.parse(request.context);
+    return {
+      status: 'resolved',
+      invocation: {
+        kind: 'invoke',
+        operationId: 'TodoList.createList',
+        input: {
+          id: context.newListId,
+          name: 'Supermercado',
+          color: '#f5ddd5',
+        },
+      },
+    };
+  });
+  expect(await invoke('crear lista nueva llamada Supermercado')).toMatchObject({
+    ok: true,
+    value: { status: 'executed' },
+  });
+  expect(dataset().TodoList?.map(list => list.name)).toEqual(['Compras', 'Other', 'Supermercado']);
+  expect(dataset().TodoItem).toHaveLength(2);
+});
+
+it('can create a list without selecting an existing list', async () => {
+  bind(async request => {
+    const context = JSON.parse(request.context);
+    expect(context.list).toBeNull();
+    expect(context.operations.map((op: { operationId: string }) => op.operationId)).toEqual([
+      'TodoList.createList',
+    ]);
+    return {
+      status: 'resolved',
+      invocation: {
+        kind: 'invoke',
+        operationId: 'TodoList.createList',
+        input: {
+          id: context.newListId,
+          name: 'Supermercado',
+          color: '#f5ddd5',
+        },
+      },
+    };
+  });
+  const result = await withInvocationContext({ principal }, () =>
+    TodoList.submitCommand({ text: 'crear lista nueva llamada Supermercado', list: null }),
+  );
+  expect(result).toMatchObject({ ok: true, value: { status: 'executed' } });
+  expect(dataset().TodoItem).toHaveLength(2);
+});
+
+it('rejects an item proposal without a selected list', async () => {
+  bind(async request => addition(request));
+  const result = await withInvocationContext({ principal }, () =>
+    TodoList.submitCommand({ text: 'agregar pan', list: null }),
+  );
+  expect(result).toMatchObject({ ok: false });
+  expect(dataset().TodoItem).toHaveLength(2);
 });

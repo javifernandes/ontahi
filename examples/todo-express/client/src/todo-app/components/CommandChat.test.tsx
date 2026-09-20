@@ -36,8 +36,8 @@ const write = async () => {
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
   await act(async () => {
-    const input = container.querySelector('input')!;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+    const input = container.querySelector('textarea')!;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
       input,
       'agregar comprar pan',
     );
@@ -51,7 +51,7 @@ const submit = async () =>
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
 
-it('requires a selected list and waits for actual execution before refreshing', async () => {
+it('waits for actual execution before refreshing', async () => {
   expect(container.querySelector('button')!.disabled).toBe(true);
   let finish!: (value: unknown) => void;
   execute.mockReturnValue(
@@ -61,7 +61,7 @@ it('requires a selected list and waits for actual execution before refreshing', 
   );
   await write();
   await submit();
-  expect(container.textContent).toContain('Interpreting…');
+  expect(container.querySelector('[aria-label="Interpreting…"]')).not.toBeNull();
   expect(refresh).not.toHaveBeenCalled();
   await submit();
   expect(execute).toHaveBeenCalledOnce();
@@ -91,4 +91,53 @@ it('does not retry an unknown transport outcome', async () => {
   expect(container.textContent).toContain('Check the list before submitting again.');
   expect(execute).toHaveBeenCalledOnce();
   expect(refresh).not.toHaveBeenCalled();
+});
+
+it('submits with Command+Enter without requiring a current list', async () => {
+  execute.mockResolvedValue({ ok: true, value: { status: 'executed', message: 'List created.' } });
+  await act(async () => {
+    const input = container.querySelector('textarea')!;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+      input,
+      'crear lista nueva llamada Supermercado',
+    );
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => {
+    container
+      .querySelector('textarea')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+  });
+  expect(execute).toHaveBeenCalledWith({
+    text: 'crear lista nueva llamada Supermercado',
+    list: null,
+  });
+});
+
+it('keeps only the latest exchange visible until history is expanded', async () => {
+  execute.mockResolvedValueOnce({
+    ok: true,
+    value: { status: 'executed', message: 'First reply' },
+  });
+  await write();
+  await submit();
+  execute.mockResolvedValueOnce({
+    ok: true,
+    value: { status: 'unresolved', message: 'Second reply' },
+  });
+  await write();
+  await submit();
+  expect(container.textContent).not.toContain('First reply');
+  expect(container.textContent).toContain('Second reply');
+  await act(async () =>
+    (
+      container.querySelector('[aria-label="Show conversation history"]') as HTMLButtonElement
+    ).click(),
+  );
+  expect(container.textContent).toContain('First reply');
+  expect(container.querySelector('.command-chat-log')!.textContent).not.toContain('Compras');
+  await act(async () =>
+    (container.querySelector('[aria-label="Show latest exchange"]') as HTMLButtonElement).click(),
+  );
+  expect(container.textContent).not.toContain('First reply');
 });
