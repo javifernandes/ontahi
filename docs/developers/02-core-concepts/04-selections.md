@@ -162,11 +162,11 @@ Use `self.contentNodes.as(Part)` when the target should retain an explicitly dec
 
 The distinction is the Entity that each step selects:
 
-| Step                           | Current population                                      |
-| ------------------------------ | ------------------------------------------------------- |
-| `Book.by({ slug: 'my-book' })` | Books matching the declared `slug` factory              |
-| `.parts`                       | Related ContentNodes classified or filtered as parts    |
-| `.chapters`                    | Related ContentNodes classified or filtered as chapters |
+| Step                                                   | Current population                                      |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| `Selection.where(Book, book => book.id.eq('book-42'))` | Books matching the declared `id` Field                  |
+| `.parts`                                               | Related ContentNodes classified or filtered as parts    |
+| `.chapters`                                            | Related ContentNodes classified or filtered as chapters |
 
 Declare each factory on its owning Entity; these names are not built-in fields. A contextual
 property is navigation from a Selection, not a materialized collection on a loaded object or a

@@ -105,6 +105,7 @@ locator-based identity declaration; `by` is not its replacement.
 A \concept{Ref} is a value that references one particular instance of an Entity.
 
 ```ts
+import { createEntityRef } from '@ontahi/core/data-graph';
 import { TodoList } from './graph.js';
 
 const listA = createEntityRef(TodoList, { id: 'A' });
@@ -147,6 +148,7 @@ rename: operation({
 Call it with the Ref directly:
 
 ```ts
+import { createEntityRef } from '@ontahi/core/data-graph';
 import { TodoList } from './graph.js';
 
 const listA = createEntityRef(TodoList, { id: 'A' });
