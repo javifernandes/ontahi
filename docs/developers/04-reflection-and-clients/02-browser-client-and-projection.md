@@ -420,7 +420,8 @@ a worker, so invalidating at acceptance could refetch the old state.
 
 `useDurableOperation` observes the accepted `TaskRunRef` through Runtime Transport. The hook
 consumes one asynchronous snapshot sequence; Fetch currently produces it by polling the versioned
-`durable.operation.inspect` message, while a push transport can produce the same sequence later.
+`durable.operation.inspect` message, while the WebSocket transport receives pushed snapshots from
+an explicitly installed server observer. Neither requires the hook to choose a transport.
 The hook invalidates the Operation's declared observations only after the snapshot reaches
 `completed`; `failed` and `cancelled` runs do not pretend that the intended change happened.
 

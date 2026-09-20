@@ -1,4 +1,4 @@
-# Transport and HTTP Ingress
+# Runtime Transport, WebSocket, and HTTP Ingress
 
 A \concept{Transport} carries an operation intention across a process boundary without becoming
 a second definition of that operation. Node can invoke `TodoList.rename(...)` directly; a remote
@@ -13,8 +13,8 @@ Ontahí currently has four relevant execution shapes:
 
 ## The Runtime Protocol foundation
 
-Those execution shapes are converging on one transport-independent Ontahí Runtime Protocol. Core
-now defines its first strict envelope and a typed family registry at
+Those execution shapes share a transport-independent Ontahí Runtime Protocol. Core
+defines its strict envelope and typed family registry at
 `@ontahi/core/runtime/protocol`. This is a semantic boundary between runtimes, not an HTTP request
 type:
 
@@ -129,6 +129,17 @@ path for Operation invocation and permission, Graph Read, Graph Command, and Dur
 The legacy `/operations`, `/graph/reads`, `/graph/commands`, and raw Task GET routes remain bounded
 compatibility surfaces.
 
+## One protocol, request exchanges and observations
+
+Fetch and WebSocket carry the same semantic families. A socket is not a separate Operation API,
+and a request id is not an Entity identity, a task run id, or an observation id.
+
+| Interaction                                                | Fetch                                                        | WebSocket                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------ |
+| Operation invocation/permission, Graph Read, Graph Command | Correlated request/response                                  | The same exchanges multiplexed over a session          |
+| Durable run observation                                    | Repeated `inspect` requests                                  | A subscription pushing the same snapshot bodies        |
+| Graph Query observation                                    | No `graph.observe` capability in the current Fetch transport | Snapshots from an explicitly installed server observer |
+
 WebSocket adds a versioned `ontahi.runtime.session` frame around, rather than inside, those Runtime
 Protocol messages. `request` frames contain the complete existing request envelope; `response`
 frames contain its correlated response. `durable-observe` and `durable-unobserve` use a distinct
@@ -137,6 +148,8 @@ and add a monotonic sequence scoped to that observation identity so a client can
 and out-of-order or post-terminal delivery without claiming exactly-once semantics.
 
 ```ts
+import { createRuntimeGraphClient, createWebSocketRuntimeTransport } from '@ontahi/react/graph';
+
 const runtimeTransport = createWebSocketRuntimeTransport({ url: '/runtime' });
 const client = createRuntimeGraphClient({ runtimeTransport });
 ```
@@ -176,6 +189,41 @@ sends all supported capabilities through one socket. The hook and Entity authori
 routing is chosen before transmission, an active observation remains pinned to that transport, and
 a failure never causes an automatic replay through another transport.
 
+`graph-observe` / `graph-unobserve` similarly control Query observations. These carry authorized
+result snapshots, not a generic database change feed or Entity audit log. The host supplies an
+observer that preserves Graph Read policy and a change source appropriate to its storage. The
+current observation contract is Graph Read v1; contextual v2 navigation remains a one-shot read.
+
+## Mount the socket on the host server
+
+Creating a browser transport does not install a WebSocket endpoint. HTTP middleware alone cannot
+own the Node HTTP upgrade lifecycle. The Express host binds the same dispatcher to its server:
+
+```ts
+import { createServer } from 'node:http';
+import { createExpressRuntimeProtocolWebSocketServer } from '@ontahi/runtime-express/runtime-protocol';
+
+const httpServer = createServer(expressApp);
+const socketServer = createExpressRuntimeProtocolWebSocketServer({
+  server: httpServer,
+  path: '/runtime',
+  ownsUpgradeBoundary: true,
+  dispatcher: runtimeDispatcher,
+  authorizeUpgrade: isAllowedBrowserOrigin,
+  context: resolveSessionContext,
+  observeDurableOperation: durableObserver,
+  observeGraph: graphObserver,
+});
+```
+
+The named context, authorization and observer functions above are host bindings, not implied
+defaults. `runtimeDispatcher` is the same four-family dispatcher used for HTTP. Choose
+`ownsUpgradeBoundary: true` only when this adapter owns the server's upgrade boundary; omit it
+when another socket service also handles upgrades. Retain `socketServer` and await its `close()`
+during host shutdown. The complete [Todo host](../../../examples/todo-express/src/application.ts)
+shows cookie-backed context, origin checks and both observers; its
+[integration tests](../../../examples/todo-express/src/application.test.ts) exercise actual sockets.
+
 The WebSocket handshake is an HTTP request, so a same-origin browser automatically includes the
 same applicable session cookie used by Fetch. WebSocket does not make CORS an authorization
 boundary: credentialed hosts must validate the complete canonical `Origin`, including scheme and
@@ -185,6 +233,8 @@ store shared by all accepting instances.
 Because the current session context is resolved once per connection, immediate logout or
 permission revocation also requires closing affected sockets or a host-specific revalidation
 strategy.
+
+## Project HTTP into Next.js
 
 Next.js App Router can project that same dispatcher without an application-local protocol route:
 
@@ -335,7 +385,7 @@ checks authority, executes it, and returns the same canonical result used by oth
 Express or Next.js therefore supplies one invocation bridge, not one hand-authored endpoint per
 operation.
 
-## Three client execution paths
+## Client execution paths
 
 Not every client-side graph action is a domain Operation. Ontahí can interpret permitted Queries
 and Commands in a browser runtime backed by Supabase, transport ordinary Queries to a server-only
@@ -366,7 +416,7 @@ flowchart TB
     subgraph BridgedClient["Bridged domain Operation"]
       direction TB
       OperationHook["Operation hook"] --> Intention["Operation id + semantic input"]
-      Intention --> Bridge["Fetch bridge"]
+      Intention --> Bridge["Runtime Transport · Fetch / WebSocket"]
     end
   end
 
@@ -413,9 +463,10 @@ legitimate. Use a remote Query when storage is server-only but the read is still
 access. Use a bridged Operation when the intention, invariant, coordination, secret, Capability, or
 durable lifecycle belongs in domain behavior.
 
-Relationship Commands are the first remote write primitive. Generic insert, update, upsert, and
-delete are not remotely exposed yet; browser writes of those forms against server-only storage
-still use Operations until their write-policy algebra is defined. See
+Relationship Commands are one remote write primitive. Exact Entity create and Ref-targeted
+update/delete also have a bounded, separately authorized Graph Command contract; see
+[Commands](../02-core-concepts/06-commands.md). Arbitrary Selection mutation, bulk writes and upsert
+remain server-side or enter through Operations. A Selection factory does not widen that boundary. See
 [Data Graph Across Boundaries](../05-further-directions/11-data-graph-across-boundaries.md) for the
 current boundary and the remaining direction.
 

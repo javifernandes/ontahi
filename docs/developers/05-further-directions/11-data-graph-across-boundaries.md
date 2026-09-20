@@ -125,12 +125,18 @@ An Operation may itself define a semantic population by returning `self.one()` o
 The caller can apply a View, and the runtime composes that declarative Selection with the caller's
 shape into one final Query.
 
-## What remains directional
+## Bounded Entity writes and Query observation already exist
 
-The remote protocol currently carries Queries and Relationship Commands, not generic CRUD Commands
-or streams. Remote insert, update, upsert, and delete still need an explicit write-policy algebra for
-payload fields, affected-row bounds, authority scope, invariants, and cache reconciliation before
-they become a safe transport surface.
+The Graph Command family also supports exact Entity create and Ref-targeted update/delete, under
+explicit mutation policies. It does not accept an arbitrary `by` predicate as a remote update
+target. Bulk Selection mutation and upsert remain outside that bounded contract; use server-side
+Commands or a Domain Operation when those are needed. See [Commands](../02-core-concepts/06-commands.md).
+
+Likewise, WebSocket can carry authorized Graph Read v1 snapshots when the host installs an observer.
+That is not a general Event stream, a durable replay log, or contextual v2 observation. Transport
+capability, read authorization and the storage change source remain separate responsibilities.
+
+## What remains directional
 
 Generated client Entities author portable Queries but are not yet directly runtime-bound for
 fluent `.run()` outside the React executor. Telemetry, reflected policy diagnostics, hybrid graph

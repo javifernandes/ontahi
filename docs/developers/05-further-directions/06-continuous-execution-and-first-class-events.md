@@ -1,10 +1,13 @@
 # Continuous Execution and First-Class Events
 
-Polling task snapshots is the current portable baseline for durable work. The same `TaskRunRef`
-and snapshot contract could later be observed through WebSocket, SSE, gRPC streaming, or another
-push-capable adapter. Operations that naturally produce many values need a similarly explicit
-stream contract: identity, ordering, backpressure, completion, failure, and reconnection should not
-be guessed from a transport.
+Durable work already has two observation paths: Fetch polls, while WebSocket pushes snapshots of
+the same `TaskRunRef`. WebSocket also carries supported Graph Query observations. These are current
+contracts, described in [Runtime Transport](../03-runtimes/03-transport-and-http-ingress.md), not
+future Event APIs.
+
+The remaining direction is broader: SSE or gRPC adapters, resumable delivery, and Operations that
+naturally produce many values need explicit contracts for identity, ordering, backpressure,
+completion, failure and reconnection. None follows merely from having a socket.
 
 Events are the other half. An operation invocation requests work and expects a result. An event
 states that something happened and may fan out, persist, replay, or feed projections. Ontahí's

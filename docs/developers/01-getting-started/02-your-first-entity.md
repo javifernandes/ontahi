@@ -18,7 +18,7 @@ export const TodoList = entity({
 This guide imports the Field factory as `f`. The short alias keeps Entity declarations compact;
 the model still reflects each value as a Field.
 
-Fields describe its values. Part II opens this declaration and explains Entity identity, locators,
+Fields describe its values. Part II opens this declaration and explains Entity identity, Refs,
 Relations, Selections, Queries, Commands, and Operations individually.
 
 ## Use it from Node

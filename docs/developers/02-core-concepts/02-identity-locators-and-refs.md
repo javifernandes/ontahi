@@ -1,7 +1,18 @@
-# Identity, Locators, and Refs
+# Identity, Refs, and Named Selections
 
 \concept{Identity} says what makes one instance of an Entity the same instance across reads,
-operations, processes, and time. A \concept{Locator} names a valid way to express that identity.
+operations, processes, and time. A \concept{Ref} carries an identity without loading the record.
+A named Selection factory describes how to select instances; its inputs need not be identity
+fields, and its result need not contain exactly one instance.
+
+Keep these contracts separate:
+
+| Contract                  | Describes                                                        | Does not establish                               |
+| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------ |
+| Canonical identity        | Which instance a record represents                               | Whether the caller can see it                    |
+| Ref                       | A portable reference to an instance                              | Existence or current attributes                  |
+| `by({ factory: inputs })` | Deferred membership, built from a declared input schema          | Uniqueness, existence, or a new identity         |
+| `existingRef(Entity)`     | An authorized participant required before an Operation body runs | A reusable cache or arbitrary deferred criterion |
 
 ## Conventional identity
 
@@ -17,20 +28,46 @@ export const TodoList = entity({
 });
 ```
 
-An exact, required `id: f.id()` gives TodoList a `refById` locator and makes it the
-default identity. The Entity can be addressed immediately:
+An exact, required `id: f.id()` establishes the conventional identity. A portable Ref can be
+constructed immediately:
 
 ```ts
-const listA = TodoList.refById('A');
+import { createEntityRef } from '@ontahi/core/data-graph';
+
+const listA = createEntityRef(TodoList, { id: 'A' });
 ```
+
+The current SDK also supplies `TodoList.refById('A')`. These locator factories remain supported;
+adding `by` has not removed the Ref contract or changed canonical cache identity.
 
 The convention is deliberately narrow. A scalar field such as `legacyOwnerId` remains an ordinary
 id value unless it is declared as `f.ref(Owner)`, and an optional or nullable `id` does not
 silently become the Entity identity.
 
-## Alternate locators
+## Choose a Ref or a named Selection
 
-A domain may expose more than one stable way to locate the same Entity:
+Use a Ref when the caller already knows the identity. Use a Selection when the caller chooses
+criteria whose matching population the receiver will interpret later. For example, after declaring
+the factories in [Selections](04-selections.md#declare-a-named-selection-factory):
+
+```ts
+const knownTag = createEntityRef(Tag, { id: 'tag-work' });
+const matchingTags = Tag.by({ named: 'Work' });
+const oneKnownMember = Tag.by({ identity: 'tag-work' });
+```
+
+All three values are constructed without a read. The first is a Ref; the others are Selections.
+The `identity` factory uses canonical identity membership, while `named` expands to a Field
+predicate. A name match can yield zero, one, or many Tags. Neither factory invents another cache key
+for the same Tag, and naming a factory does not give its caller extra permission.
+
+This is why `by` is useful beyond the older locator model: an input such as `archivedSince.date`
+can describe a criterion over `archivedAt`, rather than naming a Field or identifying one record.
+The factory owns input validation and expansion; the consumer owns cardinality and execution.
+
+## Existing alternate-locator contracts
+
+Existing applications may expose more than one supported lookup for a Ref through `locators`:
 
 ```ts
 export const Book = entity({
@@ -57,6 +94,12 @@ Book.refBySlug('living-systems');
 When another locator must be canonical, declare that difference explicitly with
 `identity: 'refBySlug'`.
 
+This is still a supported declaration, not a removed API. For new reusable search criteria,
+declare a named Selection factory instead of adding a `refByX` method. Migrating a lookup to `by`
+does not require changing an Entity's canonical identity, its stored Ref Fields, or an Operation
+that genuinely requires an existing participant. Composite identity below still uses the current
+locator-based identity declaration; `by` is not its replacement.
+
 ## Identity as a value
 
 A \concept{Ref} is a value that references one particular instance of an Entity.
@@ -64,7 +107,7 @@ A \concept{Ref} is a value that references one particular instance of an Entity.
 ```ts
 import { TodoList } from './graph.js';
 
-const listA = TodoList.refById('A');
+const listA = createEntityRef(TodoList, { id: 'A' });
 ```
 
 `listA` is not a TodoList record or a snapshot of its fields. It models the semantic identity of
@@ -106,7 +149,7 @@ Call it with the Ref directly:
 ```ts
 import { TodoList } from './graph.js';
 
-const listA = TodoList.refById('A');
+const listA = createEntityRef(TodoList, { id: 'A' });
 const result = await TodoList.rename({
   list: listA,
   name: 'Research backlog',
