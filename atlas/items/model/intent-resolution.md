@@ -39,3 +39,9 @@ how a later design could obtain a decision and continue across host surfaces.
 Model-visible data and model output are untrusted. Prompt-injection defenses, provider disclosure
 policy, and execution authorization require explicit enforcement beyond the prompt; plan 153a owns
 that hardening. These are shaping semantics, not claims of an implemented secure execution mode.
+
+Initial Todo evidence retains this distinction in executable form: interpretation alone has no
+mutation effects, and submission applies the validated proposal separately. A small local model
+produced an in-scope but semantically wrong completion for a missing target. Runtime candidate
+limits and duplicate-title checks constrain effects, but do not certify understanding; intent
+quality needs representative evaluations and unresolved behavior, separately from authorization.

@@ -1,4 +1,5 @@
 import { AppHeader } from './todo-app/components/AppHeader.js';
+import { CommandChat } from './todo-app/components/CommandChat.js';
 import { TodoBoard } from './todo-app/components/TodoBoard.js';
 import { useTodoApp, type UseTodoAppOptions } from './todo-app/use-todo-app.js';
 
@@ -11,6 +12,9 @@ export const App = ({ authentication, setAuthentication }: AppProps) => {
     <main className='todo-app'>
       <AppHeader {...app.header} />
       <TodoBoard {...app.dashboard} />
+      {app.commandChat.enabled && (
+        <CommandChat lists={app.dashboard.lists} onExecuted={app.commandChat.refresh} />
+      )}
     </main>
   );
 };

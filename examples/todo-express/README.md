@@ -397,3 +397,61 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
   exposed through remote graph reads.
 - Run code generation at build time and commit or check its deterministic outputs.
 - Mount `@ontahi/explorer-react` in a React host when the full visual Explorer is useful.
+
+## Local model-backed command spike
+
+Enable the optional assistant with an installed Ollama model. It appears below the Todo board;
+choose its current list explicitly. Each message is independent: this is not a resumable chat or
+an autonomous agent.
+
+```sh
+brew install ollama
+ollama serve
+# In another terminal:
+ollama pull qwen3.5:0.8b
+TODO_LLM_MODEL=qwen3.5:0.8b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm todo:dev:local
+```
+
+The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
+`TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
+Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports that it is disabled.
+The model name and URL are server configuration, not client input. Model data stays with that
+configured provider; use local, disposable Todo data for this spike.
+
+`TodoList.interpretCommand({ text, list })` returns a typed resolved proposal or an unresolved reason,
+without mutating items. `TodoList.submitCommand` invokes that interpreter and applies at most one
+allowed invocation through the canonical dispatcher. A runtime capability supplies the interpreter
+implementation; a code-backed replacement preserves the same operation and callers. These are
+example-local seams, not a new public Core executor-binding API.
+
+The context builder reads through the existing Graph Read policies, projects list id/name and item
+id/title/completion state, and includes reflected input schemas only for `TodoItem.createItem` and
+`TodoItem.setCompleted`. It refuses incomplete candidate sets (over 100 items), oversized context
+(over 24,000 characters), and requests over 2,000 characters. The provider uses the [Ollama chat API](https://docs.ollama.com/api/chat) with
+[structured output](https://docs.ollama.com/capabilities/structured-outputs), making one
+request with a 60-second timeout; it never retries a mutation. Output validation and runtime scope
+checks remain separate from the model's instructions. Both chat operations require authentication
+when the example is in GitHub authentication mode; disabled mode retains the example's public policy.
+
+Run the real-model evaluation in a fresh process with in-memory data:
+
+```sh
+TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
+  pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/evaluate.ts
+```
+
+The evaluation checks creation, completion, ambiguous duplicate titles, and a missing target. It
+prints model, request, elapsed time, and actual result for these synthetic cases. Normal requests
+are not logged with raw prompts or list content; richer redacted execution traces remain follow-up
+work. Ordinary tests use deterministic provider fixtures and do not download or require a model.
+
+On the first local evaluation, the 0.8B model confused completion with creation. Explicit bilingual
+instructions corrected the two happy-path examples, but it still chose an unrelated item for a
+missing-target request. The evaluation intentionally fails on that behavior. Schema validity and
+in-scope execution do not prove correct intent resolution. Provider comparison and broader intent
+evaluations remain open in [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
+
+The runtime rechecks context before dispatch, but this is not a transaction spanning inference and
+execution or a production security guarantee. Conversation continuation, cross-surface session
+context, prompt-injection hardening, provider disclosure policy, and stronger authorization/effect
+binding are explicitly tracked follow-ups. See plans 153a–153c.

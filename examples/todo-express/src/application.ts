@@ -19,7 +19,7 @@ import {
 import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
-import { TodoApplication } from './graph.js';
+import { TodoApplication, todoCommandProvider } from './graph.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from './todo-read-policies.js';
 import { Tag, TodoItem, TodoList } from './todo.js';
 
@@ -124,7 +124,10 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
 
   // custom app routes
   server.get('/runtime', (_request, response) =>
-    response.json({ storage: TodoApplication.storage.kind }),
+    response.json({
+      storage: TodoApplication.storage.kind,
+      commandChat: Boolean(todoCommandProvider),
+    }),
   );
   server.get('/', (_request, response) =>
     response.sendFile(path.join(clientDirectory, 'index.html')),

@@ -254,7 +254,7 @@ BookOps product workstream; this plan owns the reusable Ontahi execution model i
 
 ## Follow-Up: Todo Command Spike
 
-[Plan 153](../next/153-model-backed-todo-command-spike.md) is the selected narrow experiment. A
+[Plan 153](../current/153-model-backed-todo-command-spike.md) is the selected narrow experiment. A
 model-backed interpreter returns a non-authoritative invocation proposal; an explicitly enabled
 local Todo path executes at most one allowed mutation through the existing dispatcher with the
 caller's authority. It supplies the narrower persistence/application semantics anticipated by

@@ -9,7 +9,7 @@ Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-
 
 ## Summary
 
-Use evidence from [spike 153](../next/153-model-backed-todo-command-spike.md) to investigate whether
+Use evidence from [spike 153](../current/153-model-backed-todo-command-spike.md) to investigate whether
 an operation can declare the relevant graph scope from its typed inputs instead of hand-authoring
 every context fetch. Schema describes the ontology; authorized instances resolve concrete targets.
 Scope describes relevance and never grants authority.

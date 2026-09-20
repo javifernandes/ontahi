@@ -69,3 +69,10 @@ starts with a local Ollama adapter and leaves broader provider integrations and 
 Strong authorization coupling and prompt-injection protection remain required follow-up work in
 plan 153a before broader deployment. Existing authorization is mandatory in the spike; neither
 prompt instructions nor validated output are a security boundary by themselves.
+
+The local Todo spike now supplies initial implementation evidence through an example-owned runtime
+capability: the caller invokes `TodoList.interpretCommand`, while composition supplies the model
+provider and context builder. A code-backed replacement is exercised under the same operation
+contract. This does not yet establish a generic Core executor-binding API. The first real-model
+trial also distinguishes contract validity from semantic quality: a valid, permitted proposal can
+still resolve the wrong human intention. Evaluation remains independent from schema validation.

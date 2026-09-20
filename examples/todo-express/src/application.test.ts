@@ -709,6 +709,7 @@ describe('Ontahi todo portability example', () => {
 
     await expect(fetch(`${origin}/runtime`).then(response => response.json())).resolves.toEqual({
       storage: 'in-memory',
+      commandChat: false,
     });
     await expect(
       fetch(`${origin}/explorer/snapshot`).then(response => response.json()),

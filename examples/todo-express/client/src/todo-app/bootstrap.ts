@@ -7,6 +7,7 @@ export type BootstrapState<Value> =
 
 export type TodoRuntime = {
   storage: 'in-memory' | 'postgres';
+  commandChat?: boolean;
 };
 
 export type AuthenticationSession = {

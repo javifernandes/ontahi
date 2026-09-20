@@ -1373,3 +1373,87 @@ a {
     padding: 15px;
   }
 }
+
+.command-chat {
+  max-width: 820px;
+  margin: 24px auto 40px;
+  padding: 24px;
+  border: 1px solid #d9d4c9;
+  border-radius: 20px;
+  background: #fffdf7;
+  box-shadow: 0 8px 24px #332a1910;
+}
+.command-chat-heading {
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: start;
+}
+.command-chat h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.command-chat-heading p {
+  color: #68645d;
+  font-size: 13px;
+}
+.command-chat label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.command-chat select,
+.command-chat input {
+  border: 1px solid #d9d4c9;
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+.command-chat-log {
+  max-height: 260px;
+  overflow: auto;
+}
+.command-chat-entry {
+  padding: 12px 0;
+  border-top: 1px solid #ebe5da;
+}
+.command-chat-entry p {
+  margin: 5px 0;
+}
+.command-chat-entry small {
+  color: #777168;
+}
+.command-chat-reply {
+  color: #516952;
+}
+.command-chat-entry.is-failed .command-chat-reply {
+  color: #9e3b30;
+}
+.command-chat-entry.is-unresolved .command-chat-reply {
+  color: #86652f;
+}
+.command-chat form {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.command-chat input {
+  flex: 1;
+  min-width: 0;
+}
+.command-chat button {
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #384f3c;
+  color: white;
+}
+.command-chat button:disabled {
+  opacity: 0.5;
+}
+@media (max-width: 700px) {
+  .command-chat-heading {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

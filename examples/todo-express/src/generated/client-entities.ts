@@ -75,6 +75,53 @@ const CompleteAllOutputValue = value('CompleteAllOutput', {
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
+    interpretCommand: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {},
+      input: graphSchema.object({
+        text: field.nonEmptyString({ trim: true }),
+        list: graphSchema.ref(TodoListSchema),
+      }),
+      output: graphSchema.union([
+        graphSchema.object(
+          {
+            status: graphSchema.literal('resolved'),
+            invocation: graphSchema.object(
+              {
+                kind: graphSchema.literal('invoke'),
+                operationId: field.enum(['TodoItem.createItem', 'TodoItem.setCompleted']),
+                input: field.json(),
+              },
+              { unknownKeys: 'strict' },
+            ),
+          },
+          { unknownKeys: 'strict' },
+        ),
+        graphSchema.object(
+          {
+            status: graphSchema.literal('unresolved'),
+            reason: field.nonEmptyString(),
+          },
+          { unknownKeys: 'strict' },
+        ),
+      ]),
+    }),
+    submitCommand: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList'], ['TodoItem']],
+      },
+      input: graphSchema.object({
+        text: field.nonEmptyString({ trim: true }),
+        list: graphSchema.ref(TodoListSchema),
+      }),
+      output: graphSchema.object({
+        status: field.enum(['executed', 'unresolved']),
+        message: field.nonEmptyString(),
+      }),
+    }),
     createList: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',

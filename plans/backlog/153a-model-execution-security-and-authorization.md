@@ -10,7 +10,7 @@ Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-
 
 ## Context And Scope
 
-Follow [spike 153](../next/153-model-backed-todo-command-spike.md) with a threat model and enforceable
+Follow [spike 153](../current/153-model-backed-todo-command-spike.md) with a threat model and enforceable
 security boundaries before general-purpose or production model-driven mutations. Prompt injection
 and strong authorization coupling are explicit required work, not solved by structured output,
 allowlisted tool names, or prompt wording alone.

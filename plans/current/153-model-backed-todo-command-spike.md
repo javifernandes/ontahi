@@ -1,6 +1,6 @@
 # 153. Model-Backed Todo Command Spike
 
-Status: next
+Status: current
 
 Canonical ID: `ontahi://plans/153-model-backed-todo-command-spike`
 
@@ -74,7 +74,7 @@ a stale snapshot is not permission to mutate. Do not infer retry safety from the
   authorization hardening before broader or production use.
 - [153b](../backlog/153b-declarative-operation-context-scope.md) owns declarative graph context scope.
 - [153c](../backlog/153c-operation-interactions-and-resumption.md) owns implementation-neutral interactions.
-- [132](132-durable-invocation-identity-and-idempotency.md) owns invocation identity and retry semantics.
+- [132](../next/132-durable-invocation-identity-and-idempotency.md) owns invocation identity and retry semantics.
 
 Existing authorization and validation remain mandatory in the spike; comprehensive defenses are
 follow-up work, not implied by a successful demo. Use disposable local Todo data for the proof.
@@ -84,15 +84,15 @@ provider seam; this plan does not require another provider integration.
 ## Acceptance And Verification
 
 - [ ] Both example commands work end to end against a real local model and update the Todo UI.
-- [ ] Interpretation runs through the ordinary operation surface and canonical result lifecycle.
-- [ ] A code-backed interpreter replacement preserves the public operation contract and callers.
-- [ ] A provider test double can replace Ollama without changing domain operations or dispatch.
-- [ ] Only authorized current-list context is included; an omitted/truncated candidate set cannot
+- [x] Interpretation runs through the ordinary operation surface and canonical result lifecycle.
+- [x] A code-backed interpreter replacement preserves the public operation contract and callers.
+- [x] A provider test double can replace Ollama without changing domain operations or dispatch.
+- [x] Only authorized current-list context is included; an omitted/truncated candidate set cannot
       establish uniqueness and must produce an unresolved result when relevant.
 - [ ] Missing and ambiguous targets produce no mutation; explicit resolved targets use canonical refs.
-- [ ] Invalid output, disallowed operations, out-of-scope targets, and denied authority produce no mutation.
-- [ ] Dispatch failure is displayed honestly and never represented as successful model execution.
-- [ ] Provider failure, timeout, and cancellation terminate cleanly without automatic effect retries.
+- [x] Invalid output, disallowed operations, out-of-scope targets, and denied authority produce no mutation.
+- [x] Dispatch failure is displayed honestly and never represented as successful model execution.
+- [x] Provider failure, timeout, and cancellation terminate cleanly without automatic effect retries.
 - [ ] Evidence records provider/model, context selection, proposed invocation, and dispatch outcome
       with a deliberate local logging policy; secrets are excluded.
 - [ ] Evaluation examples and limitations are recorded without claiming a passing sample proves security.
@@ -107,3 +107,41 @@ Resolve during the spike: minimal executor binding, reflected descriptions suffi
 interpretation, context size limits, provider structured-output limitations, and package ownership.
 Close with evidence for each acceptance item and a recommendation about which seams should become
 public. Do not expand into Atlas editing or agent infrastructure to close this plan.
+
+## Local Implementation Evidence — 2026-09-20
+
+The first implementation lives entirely in `examples/todo-express/src/command-chat` plus the Todo
+operation declarations and optional React chat panel. `TodoList.interpretCommand` and
+`TodoList.submitCommand` preserve the normal operation dispatcher, authentication requirements,
+input/output validation, and invalidation. A typed runtime capability binds the implementation;
+no new Core package, runtime protocol family, or public executor builder was necessary for this
+first proof. Model provider, context reads, schema projection, validation, and application remain
+separate responsibilities within the example.
+
+Manual context uses explicit Graph Read policies and projected fields. The example's read policy
+is intentionally public; this is evidence of policy reuse, not tenant isolation. Context limits
+reject oversized/incomplete scopes rather than assuming the visible candidates are exhaustive.
+Canonical operation input schemas are reflected dynamically; additional output restrictions narrow
+creation to the supplied list and generated id, and completion to a singleton candidate Selection.
+
+Deterministic checks cover code-backed replacement, no mutation during interpretation, two effect
+paths, duplicate titles, missing/foreign refs, wrong output, denied principal/read policy, oversized
+context, changes during inference, provider errors/timeouts/cancellation, and UI execution/failure
+states. The complete Todo suite passed 93 tests, including HTTP/WebSocket and MySQL integration;
+codegen check, server/client typecheck, lint, and example build also passed.
+
+Ollama 0.34.2 with qwen3.5:0.8b was evaluated on disposable in-memory data. The initial prompt
+misclassified “ya compré la yerba” as creation. Explicit bilingual action guidance corrected that
+case, and creation/completion then succeeded. A request to complete missing “café” still selected
+an unrelated valid candidate. The executable evaluation intentionally reports this failure.
+Duplicate-title ambiguity was rejected by runtime code even when the model chose a candidate.
+These results demonstrate why valid structure and authorized scope do not prove correct intent.
+
+Plan remains current: compare a stronger small local model, broaden intent evaluations, and decide
+the minimum useful redacted trace before closing it. Provider timeout/cancellation is verified;
+there is no user-facing cancellation or cross-channel continuation protocol. Re-reading before
+dispatch is not an atomic compare-and-mutate guarantee. Security hardening remains in 153a.
+
+A comparison with qwen3.5:2b was attempted but its download repeatedly stalled after a registry
+connection reset; it was stopped with no evaluation result. The installed 0.8B model remains the
+local baseline. Re-run the documented evaluation after a successful stronger-model download.

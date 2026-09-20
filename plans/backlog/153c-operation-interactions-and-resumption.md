@@ -10,7 +10,7 @@ Shapes: [Operation Interaction](../../atlas/items/model/operation-interaction.md
 
 An operation may need missing information, a choice, or acceptance of specific effects. This can
 arise in code-backed and model-backed implementations alike, and can be presented in chat, CLI,
-or Devtools. [Spike 153](../next/153-model-backed-todo-command-spike.md) deliberately stops at a
+or Devtools. [Spike 153](../current/153-model-backed-todo-command-spike.md) deliberately stops at a
 terminal unresolved result; it does not implement resumable conversations.
 
 ## Scope And Execution Slices

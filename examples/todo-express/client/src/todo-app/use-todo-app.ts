@@ -454,6 +454,10 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     authenticationSession?.mode === 'disabled' || authenticationSession?.authenticated === true;
 
   return {
+    commandChat: {
+      enabled: runtime.status === 'ready' && runtime.value.commandChat === true,
+      refresh: lists.refetch,
+    },
     header: {
       runtime,
       authentication,
