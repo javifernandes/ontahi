@@ -1472,10 +1472,10 @@ a {
   field-sizing: content;
   border: 0;
   background: transparent;
-  padding: 8px 138px 8px 2px;
+  padding: 9px 138px 7px 12px;
   color: #26372c;
-  line-height: 20px;
   font: inherit;
+  line-height: 20px;
 }
 .command-chat-prompt textarea:focus {
   outline: none;
