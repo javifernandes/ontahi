@@ -369,3 +369,13 @@ export type {
   RuntimeValueRefDeclarations,
   ServerRuntimeValueRef,
 } from './operation/value-ref.js';
+export {
+  ModelInterpretation,
+  ModelInterpretationError,
+  interpretModelOperation,
+  validateModelInvocation,
+  type ModelInterpretationValue,
+  type ModelRequest,
+  type ModelProvider,
+  type ModelOperationExposure,
+} from './model-interpretation.js';

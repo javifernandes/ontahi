@@ -76,3 +76,10 @@ provider and context builder. A code-backed replacement is exercised under the s
 contract. This does not yet establish a generic Core executor-binding API. The first real-model
 trial also distinguishes contract validity from semantic quality: a valid, permitted proposal can
 still resolve the wrong human intention. Evaluation remains independent from schema validation.
+
+The follow-up extracts provider-neutral interpretation and scope validation into Core. Per-operation
+exposures can project simpler model arguments and bind them to canonical inputs: a title becomes
+an existing Selection, while runtime-owned IDs and Refs never need model generation. This is an
+argument projection at the interpretation boundary, not a second executable command language.
+Todo still owns the explicit operation catalog, context reads, and binding policy; Ollama remains
+outside Core. A Document rename proof exercises the same mechanism independently of Todo.

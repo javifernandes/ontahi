@@ -11,12 +11,12 @@ if (!process.env.TODO_LLM_MODEL)
   throw new Error('Set TODO_LLM_MODEL to an installed Ollama model.');
 
 const dataset = TodoApplication.storage.dataset;
-dataset.TodoList = [{ id: 'evaluation-list', name: 'Compras', color: '#f5ddd5' }];
+dataset.TodoList = [{ id: 'evaluation-list', name: 'Shopping', color: '#f5ddd5' }];
 dataset.TodoItem = [
-  { id: 'evaluation-yerba', list: 'evaluation-list', title: 'comprar yerba', completed: false },
+  { id: 'evaluation-tea', list: 'evaluation-list', title: 'buy bread', completed: false },
 ];
 const list = TodoList.refById('evaluation-list');
-for (const text of ['agregar comprar pan', 'ya compré la yerba']) {
+for (const text of ['add item buy hamburgers', 'complete buy bread']) {
   const start = Date.now();
   const result = await TodoList.submitCommand({ text, list });
   console.info(
@@ -32,11 +32,11 @@ for (const text of ['agregar comprar pan', 'ya compré la yerba']) {
 }
 assert.equal(dataset.TodoItem.length, 2);
 assert.equal(dataset.TodoItem[0]!.completed, true);
-assert.match(String(dataset.TodoItem[1]!.title), /pan/i);
+assert.match(String(dataset.TodoItem[1]!.title), /hamburgers/i);
 
-await TodoItem.createItem({ id: 'duplicate-1', list, title: 'comprar leche' });
-await TodoItem.createItem({ id: 'duplicate-2', list, title: 'comprar leche' });
-for (const text of ['ya compré la leche', 'ya compré el café']) {
+await TodoItem.createItem({ id: 'duplicate-1', list, title: 'buy milk' });
+await TodoItem.createItem({ id: 'duplicate-2', list, title: 'buy milk' });
+for (const text of ['complete buy milk', 'complete buy coffee']) {
   const start = Date.now();
   const result = await TodoList.submitCommand({ text, list });
   console.info(
@@ -58,7 +58,7 @@ console.info(
 for (const selected of [null, list]) {
   const before: number = dataset.TodoItem.length;
   const result = await TodoList.submitCommand({
-    text: 'crear lista nueva llamada Vacaciones',
+    text: 'create list Holidays',
     list: selected,
   });
   console.info(
@@ -68,5 +68,25 @@ for (const selected of [null, list]) {
   if (result.ok) assert.equal(result.value.status, 'executed');
   assert.equal(dataset.TodoItem.length, before);
 }
-assert.equal(dataset.TodoList.filter(item => item.name === 'Vacaciones').length, 2);
+assert.equal(dataset.TodoList.filter(item => item.name === 'Holidays').length, 2);
 console.info('List creation passed with and without a current list.');
+
+await TodoList.createList({ id: 'delete-me', name: 'Groceries', color: '#fff' });
+await TodoItem.createItem({
+  id: 'delete-child',
+  list: TodoList.refById('delete-me'),
+  title: 'buy apples',
+});
+const deletion = await TodoList.submitCommand({ text: 'delete list Groceries', list });
+console.info(JSON.stringify({ text: 'delete list Groceries', result: deletion }));
+assert.equal(deletion.ok, true);
+if (deletion.ok) assert.equal(deletion.value.status, 'executed');
+assert.equal(
+  dataset.TodoList.some(row => row.id === 'delete-me'),
+  false,
+);
+assert.equal(
+  dataset.TodoItem.some(row => row.id === 'delete-child'),
+  false,
+);
+console.info('Named list deletion passed, including its items.');

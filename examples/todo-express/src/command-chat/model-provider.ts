@@ -1,20 +1,8 @@
-import type { GraphJsonSchema } from '@ontahi/core/data-graph';
+import { ModelInterpretationError, type ModelProvider } from '@ontahi/core/runtime/server';
 import { isRecord } from '@ontahi/core/value/object';
+export type { ModelRequest, ModelProvider } from '@ontahi/core/runtime/server';
 
-import { TodoCommandError } from './contracts.js';
-
-export type ModelRequest = {
-  instructions: string;
-  context: string;
-  prompt: string;
-  outputSchema: GraphJsonSchema;
-  signal: AbortSignal;
-};
-export type ModelProvider = {
-  generate(request: ModelRequest): Promise<unknown>;
-};
-
-// Example-local seam: provider envelopes never become operation or graph contracts.
+// Ollama adapter: no Todo dependencies. Kept in the example until extracted to a provider package.
 export const createOllamaProvider = ({
   model,
   baseUrl = 'http://127.0.0.1:11434',
@@ -53,7 +41,7 @@ export const createOllamaProvider = ({
         }),
       });
       if (!response.ok) {
-        throw new TodoCommandError(
+        throw new ModelInterpretationError(
           'model_unavailable',
           `Ollama returned HTTP ${response.status}. Check the configured model.`,
         );
@@ -65,7 +53,7 @@ export const createOllamaProvider = ({
         !isRecord(envelope.message) ||
         typeof envelope.message.content !== 'string'
       ) {
-        throw new TodoCommandError(
+        throw new ModelInterpretationError(
           'model_output_invalid',
           'Ollama did not return a complete structured response.',
         );
@@ -73,14 +61,14 @@ export const createOllamaProvider = ({
       try {
         return JSON.parse(envelope.message.content);
       } catch {
-        throw new TodoCommandError(
+        throw new ModelInterpretationError(
           'model_output_invalid',
           'Ollama returned invalid JSON. No action was applied.',
         );
       }
     } catch (error) {
-      if (error instanceof TodoCommandError) throw error;
-      throw new TodoCommandError(
+      if (error instanceof ModelInterpretationError) throw error;
+      throw new ModelInterpretationError(
         controller.signal.aborted ? 'model_cancelled' : 'model_unavailable',
         controller.signal.aborted
           ? 'Interpretation was cancelled or timed out. No action was applied.'

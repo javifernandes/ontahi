@@ -9,8 +9,8 @@ Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-
 
 ## Summary And Context
 
-Prove a small chat-style Todo experience: “agregar comprar pan” creates an item in the current
-list; “ya compré la yerba” completes an unambiguously identified item. A typed operation uses an
+Prove a small chat-style Todo experience: “add item buy bread” creates an item in the current
+list; “complete buy tea” completes an unambiguously identified item. A typed operation uses an
 LLM to resolve text into a proposed invocation; the existing dispatcher executes the proposal.
 This is a bounded spike alongside first-version consolidation, not a prerequisite for release or
 an autonomous-agent platform. Atlas is the later application pressure test: first questions about
@@ -132,8 +132,8 @@ states. The complete Todo suite passed 93 tests, including HTTP/WebSocket and My
 codegen check, server/client typecheck, lint, and example build also passed.
 
 Ollama 0.34.2 with qwen3.5:0.8b was evaluated on disposable in-memory data. The initial prompt
-misclassified “ya compré la yerba” as creation. Explicit bilingual action guidance corrected that
-case, and creation/completion then succeeded. A request to complete missing “café” still selected
+misclassified “complete buy tea” as creation. Explicit bilingual action guidance corrected that
+case, and creation/completion then succeeded. A request to complete missing “coffee” still selected
 an unrelated valid candidate. The executable evaluation intentionally reports this failure.
 Duplicate-title ambiguity was rejected by runtime code even when the model chose a candidate.
 These results demonstrate why valid structure and authorized scope do not prove correct intent.
@@ -166,6 +166,25 @@ The revised provider contract separates the user prompt from serialized context 
 schemas remain in context, while the output grammar exposes one operation-id enum and runtime
 validation enforces the chosen operation's exact contract. The final qwen3.5:0.8b evaluation passed
 six cases: add an item, complete an item, reject duplicate/missing targets without effects, and
-create a list named Vacaciones with and without a selected list. A real browser Command+Enter
-submission also created Supermercado as a list. This small evaluation is evidence of improvement,
+create a list named Holidays with and without a selected list. A real browser Command+Enter
+submission also created Groceries as a list. This small evaluation is evidence of improvement,
 not a reliability or prompt-injection guarantee. Full Todo suite: 98 tests.
+
+## Reusable interpretation and command regressions
+
+Core now owns the provider-neutral interpretation mechanism and invocation scope validation.
+Todo owns the per-operation argument projection, bindings, data scope, and messages; Ollama stays
+outside Core and no longer imports Todo contracts. The model supplies names/titles while runtime
+code builds IDs, Refs, and Selections. A second-domain Document rename test and packed-consumer
+proof exercise the same mechanism without Todo.
+
+Visible list names now permit `TodoItem.deleteList`, including its existing item cascade. All
+maintained examples and evaluation requests are English. The seven-case real Ollama evaluation
+passes, including `add item buy hamburgers`, `complete buy bread`, and `delete list Groceries`.
+Unresolved explanations still depend on the 0.8B model. Further reliability work remains open.
+The static client generator cannot follow the imported Core interpretation schema value, so Todo
+keeps an inline equivalent output schema; this codegen limitation remains explicit.
+
+Validation of this slice: 1,126 Core tests, 102 Todo tests, package typechecks/lint/build,
+seven live Ollama cases, and clean-room tarball installation/type/runtime verification. The local
+server was restarted on port 3003 after preserving six lists, nine items, and three tags.

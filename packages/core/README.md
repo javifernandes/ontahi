@@ -683,3 +683,16 @@ Client cache output inspection can include optional `source` metadata (`kind: 'g
 'operation'` and `name`). Pass it as the fourth argument to `clientCache.writeOutput` to identify
 the producing read or operation independently of custom cache keys. This metadata describes an
 output; it does not establish freshness or change entity reconciliation.
+
+### Model-backed interpretation
+
+`@ontahi/core/runtime/server` exports `interpretModelOperation`, `ModelProvider`,
+`ModelOperationExposure`, and `validateModelInvocation`. A host supplies scoped data and an
+explicit operation catalog. Each exposure declares model arguments, a `prepare` binding to the
+canonical operation input, and a scope validator. The helper validates arguments and the bound
+input against the resolved operation schema, returning a proposal without executing effects.
+Revalidate with fresh scope before using the canonical dispatcher. Authentication and operation
+requirements still belong to the runtime; model scope is not an authorization boundary.
+Providers (such as Ollama), data reads, prompts, dispatch policy, and user interactions remain
+host-owned. The Todo example demonstrates projected title/name arguments without asking the
+model to construct references or selections. This API does not introduce an agent loop.

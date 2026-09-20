@@ -35,14 +35,12 @@ export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphRe
         'Write a request between 1 and 2,000 characters.',
       );
     }
-    if (listId === null) return { list: null, items: [], complete: true };
     const authority = { principal: getCurrentInvocationContext()?.principal ?? null };
     const listResponse = await read(
       toGraphReadRequest(
         query(TodoList)
-          .where(list => list.id.eq(listId))
           .as(createRecursiveEntityView(TodoList, 'CommandList', { id: true, name: true }))
-          .limit(1),
+          .limit(101),
         'run',
       ),
       { authority },
@@ -54,12 +52,14 @@ export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphRe
       );
     }
     const lists = safeParseGraphSchema(ContextLists, listResponse.value);
-    if (!lists.success || lists.data.length !== 1) {
+    if (!lists.success || (listId !== null && !lists.data.some(list => list.id === listId))) {
       throw new TodoCommandError(
         'context_unavailable',
         'The selected list no longer exists or is unavailable.',
       );
     }
+    if (listId === null)
+      return { list: null, lists: lists.data, items: [], complete: lists.data.length <= 100 };
     const itemResponse = await read(
       toGraphReadRequest(
         query(TodoItem)
@@ -84,6 +84,11 @@ export const createCommandContextReader = (read: GraphReadDispatcher<TodoGraphRe
     }
     const items = safeParseGraphSchema(ContextItems, itemResponse.value);
     if (!items.success) throw new TodoCommandError('context_unavailable', 'Invalid list context.');
-    return { list: lists.data[0]!, items: items.data, complete: items.data.length <= maxItems };
+    return {
+      list: lists.data.find(list => list.id === listId)!,
+      lists: lists.data,
+      items: items.data,
+      complete: items.data.length <= maxItems && lists.data.length <= 100,
+    };
   };
 };

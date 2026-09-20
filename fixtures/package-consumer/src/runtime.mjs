@@ -4,7 +4,7 @@ import {
   graphSchema,
   withSelectionFactories,
 } from '@ontahi/core/data-graph';
-import { entity, ontahi } from '@ontahi/core/runtime/server';
+import { entity, ontahi, interpretModelOperation } from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import express from 'express';
 
@@ -92,3 +92,34 @@ try {
     server.close(error => (error ? reject(error) : resolve())),
   );
 }
+
+const interpretation = await interpretModelOperation({
+  provider: {
+    generate: async () => ({
+      status: 'resolved',
+      invocation: { kind: 'invoke', operationId: 'Document.rename', input: { name: 'Notes' } },
+    }),
+  },
+  resolveOperation: id =>
+    id === 'Document.rename'
+      ? { input: graphSchema.object({ id: field.id(), name: field.string() }) }
+      : undefined,
+  operations: [
+    {
+      operationId: 'Document.rename',
+      description: 'Rename the current document.',
+      arguments: graphSchema.object({ name: field.string() }),
+      prepare: args => ({ id: 'document-1', name: args.name }),
+      validate: () => undefined,
+    },
+  ],
+  context: { document: 'document-1' },
+  prompt: 'rename this document to Notes',
+  signal: new AbortController().signal,
+});
+if (
+  interpretation.status !== 'resolved' ||
+  interpretation.invocation.input.id !== 'document-1' ||
+  interpretation.invocation.input.name !== 'Notes'
+)
+  throw new Error('Packed model interpretation failed to bind canonical input.');

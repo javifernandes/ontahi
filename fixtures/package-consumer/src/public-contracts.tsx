@@ -191,3 +191,11 @@ export const analyzeFixture = (graphApiPath: string): OntahiApplicationAnalysis 
 export const explorer = createOntahiExpressExplorer({ path: '/explorer' });
 
 export const child: ReactNode = createElement('span', null, 'Ontahi artifact fixture');
+
+export type ModelInterpretationPublicContracts = [
+  import('@ontahi/core/runtime/server').ModelProvider,
+  import('@ontahi/core/runtime/server').ModelOperationExposure,
+  import('@ontahi/core/runtime/server').ModelInterpretationValue,
+  typeof import('@ontahi/core/runtime/server').interpretModelOperation,
+  typeof import('@ontahi/core/runtime/server').validateModelInvocation,
+];
