@@ -60,19 +60,67 @@ When `TodoItem` comes from a configured runtime, the Selection also carries that
 in memory. The binding is deliberately absent from `toJSON()`: the value stays portable even though
 the local object knows how this application executes it.
 
-## Experimental parameterized factories
+## Declare a named Selection factory
 
-The data-first `withSelectionFactories` Core helper adds a typed `by({ name: inputs })` surface
-alongside existing locators. A declared factory expands explicit inputs into an ordinary Selection,
-without reading records. For example, `Customer.by({ archivedSince: { date } })` can bind a `date`
-input to an `archivedAt >= date` predicate even though `date` is not an Entity Field.
+A \concept{Selection Factory} gives reusable membership a name and an input contract. Its output
+is a Selection, not rows or a Ref. The current authoring surface is an experimental data-first
+helper; declare both how inputs are validated and how they expand:
 
-The initial declaration, reflection, and compatibility contract is documented in the
-[Core factory example](../../../packages/core/README.md#experimental-named-selection-factories).
-It supports pure scalar-predicate and canonical-identity templates, not arbitrary callbacks or
-external resolution. Automatic runtime binding remains a follow-up.
-Definition-owned and generated-facade `by` return an unbound Selection that can cross an Operation input
-boundary or be consumed by an explicit runtime.
+```ts
+import { entity, field, graphSchema, withSelectionFactories } from '@ontahi/core/data-graph';
+
+const Tag = withSelectionFactories(
+  entity('Tag', {
+    id: field.id(),
+    name: field.nonEmptyString({ trim: true }),
+    color: field.string(),
+  }),
+  {
+    identity: {
+      version: 1,
+      input: graphSchema.object({ id: field.id() }),
+      scalarInput: 'id',
+      template: { kind: 'identity', bindings: { id: 'id' } },
+    },
+    named: {
+      version: 1,
+      input: graphSchema.object({ text: field.nonEmptyString({ trim: true }) }),
+      scalarInput: 'text',
+      template: { kind: 'predicate', fieldName: 'name', operator: 'eq', input: 'text' },
+    },
+  },
+);
+
+const work = Tag.by({ named: { text: 'Work' } });
+const sameCriterion = Tag.by({ named: 'Work' }); // explicitly enabled scalar shorthand
+const importantWork = work.and(tag => tag.color.eq('#dd6658'));
+const knownWork = work.and(Tag.by({ identity: 'tag-work' }));
+```
+
+`named` is the factory name; `text` is its input, not a Tag Field. `identity` is also explicitly
+declared: no factory names are automatically generated. Names disambiguate factories even when
+their input schemas are identical. Each `by` call chooses exactly one named factory; SDK code
+composes the resulting Selections with `and` or `or`.
+
+The bounded template forms are canonical identity bindings or scalar predicates (`eq`, `lt`,
+`lte`, `gt`, `gte`). Inputs are required scalar Fields, optionally nullable. Nested/optional inputs,
+arbitrary callbacks and external resolution are not supported. A factory such as
+`Customer.by({ archivedSince: { date } })` can bind `date` to an `archivedAt >= date` predicate;
+the date must be explicit input, not a hidden clock read. Pure expansion is deterministic, while
+the matching population can still change between executions.
+
+Definition-owned and generated-facade `by` results are unbound. Pass the Selection to a compatible
+Operation input or an explicit read runtime; do not assume `by` fetches or attaches execution:
+
+```ts
+const query = importantWork.toQuery();
+const rows = await Effect.runPromise(runtime.run(query, undefined));
+```
+
+Here `runtime` is the host's configured Data Graph runtime. The
+[Todo Tag declaration](../../../examples/todo-express/src/todo.ts) and
+[Core contract](../../../packages/core/README.md#experimental-named-selection-factories)
+provide the complete executable and reflection boundaries.
 
 Graph discovery exposes each factory's strict input schema and Selection output entity, without a
 cardinality promise. Codegen preserves portable declarations in typed browser facades. Explorer's
@@ -111,6 +159,30 @@ reachable from the selected Books; it does not select Books or attach a calculat
 each row. If ContentNode also declares `chapters`, `parts.chapters` composes another hop. Named
 same-Entity factories (`by`) and contextual navigation compose without loading intermediate records.
 Use `self.contentNodes.as(Part)` when the target should retain an explicitly declared variant.
+
+The distinction is the Entity that each step selects:
+
+| Step                                                   | Current population                                      |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| `Selection.where(Book, book => book.id.eq('book-42'))` | Books matching the declared `id` Field                  |
+| `.parts`                                               | Related ContentNodes classified or filtered as parts    |
+| `.chapters`                                            | Related ContentNodes classified or filtered as chapters |
+
+Declare each factory on its owning Entity; these names are not built-in fields. A contextual
+property is navigation from a Selection, not a materialized collection on a loaded object or a
+scalar Derived Field. Likewise, a same-Entity `archived` factory selects Books; it does not change
+the root to their content. Both forms build membership and compose without intermediate reads.
+
+In the Console, source and destination filters can be interleaved:
+
+```text
+TodoList.where(name = "Later").openItems.where(title = "Review").many()
+TodoList where name = "Later" through openItems where title = "Review" many
+```
+
+The first predicate is about TodoLists; the second is about TodoItems. No `.one()` is needed before
+the hop. Put the read terminal and its sort/limit on the final population. This yields a flat set
+of matching TodoItems, not a nested TodoList result; use Query includes/Views for nested output.
 
 The portable membership node is `relation-image`. Several source instances produce one set of
 target instances, not grouped results. Apply ordering, limit and View shaping after navigation;

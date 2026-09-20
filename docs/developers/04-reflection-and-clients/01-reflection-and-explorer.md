@@ -238,6 +238,8 @@ retaining the last snapshot. It requires `graph.observe` transport support. Scal
 contextual v2 selections cannot be observed in this slice. Changing execution identity, replacing
 the transport/cache or closing Devtools cancels the subscription; late responses are ignored.
 See [Devtools](../../../packages/devtools/README.md) for capture and lifecycle contracts.
+The [Semantic Console and Devtools chapter](03-semantic-console-and-devtools.md) walks through
+host wiring, both read dialects, named factories, table-driven source edits and observation.
 
 ## Keep the host boundary visible
 

@@ -5,6 +5,10 @@ and transports. Code is only one projection of that language.
 
 ## Shipped read authoring
 
+The [Semantic Console](../04-reflection-and-clients/03-semantic-console-and-devtools.md) is now a
+working client surface, covered in Part IV. The direction here is to extend those projections,
+not to treat the existing read editor as an unimplemented idea.
+
 The Semantic Console already offers TS-like and declarative projections over one canonical read
 model. For example, `TodoItem.where(completed = false).many()` and
 `TodoItem where completed = false many` describe the same read. These are bounded Ontahí dialects,

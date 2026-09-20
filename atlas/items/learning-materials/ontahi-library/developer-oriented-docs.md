@@ -68,3 +68,14 @@ Relationship Command boundary.
 
 The `1.0.0-alpha.8` rehearsal cross-checked that narrative against the generated changelogs, exact
 packed artifacts, tarball-only Todo consumer, and provider-backed Classroom proof before release.
+
+The alpha.12 documentation refresh expands the current book to 29 chapters. Identity remains
+separate from named Selection factories: declaration and invocation of `by`, contextual navigation,
+and fixed-enum Entity variants are taught together without claiming locator removal or general
+inheritance. A dedicated Semantic Console and Devtools chapter covers both read dialects,
+capability-driven assistance, source-backed table controls, observation and local cache/history.
+Runtime Transport includes actual WebSocket host wiring, request/observation boundaries and
+authentication duties. Further Directions no longer presents shipped push observation or bounded
+Entity writes as unimplemented work. The
+[refresh audit](../../../../docs/research/developer-guide-alpha12-audit.md) records the source
+evidence, retained experimental limits and verification.

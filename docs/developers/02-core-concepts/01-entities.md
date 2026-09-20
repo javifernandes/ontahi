@@ -110,6 +110,17 @@ const Chapter = ContentNode.variant('Chapter', { discriminator: { type: 'chapter
 const introductions = Chapter.where(node => node.title.eq('Introduction')).many();
 ```
 
+This names a domain population that previously appeared only as repeated `type = 'chapter'`
+filters. Predicate callbacks and read results narrow `type` to the literal `'chapter'`. Chapter
+inherits the base's Fields, declared Selection factories and contextual navigation; it is not a
+new table or a JavaScript subclass with another lifecycle.
+
+| Form                                 | What it adds                                           |
+| ------------------------------------ | ------------------------------------------------------ |
+| `Selection.where(ContentNode, ...)`  | An ad hoc membership criterion over ContentNodes       |
+| `Chapter = ContentNode.variant(...)` | A named classified population with narrowed read types |
+| `ContentNode.view(...)`              | A shape for materialized results, not a new population |
+
 `Chapter.all()` describes only chapters. `not()` complements within that population, never within
 all ContentNodes. The discriminator is enforced outside caller membership expressions. Use
 `Chapter.from(baseSelection)` to narrow a base Selection explicitly; no rows are fetched by doing so.
@@ -117,6 +128,82 @@ all ContentNodes. The discriminator is enforced outside caller membership expres
 A Chapter still has ContentNode identity and storage. Create Refs through `Chapter.base`, not a new
 Chapter identity namespace. Base and classified snapshots normalize to the same canonical record;
 a cached base record alone is not proof of current Chapter membership.
+
+```ts
+const otherChapters = Chapter.where(node => node.title.eq('Introduction')).not();
+const fromSelection = Chapter.from(
+  Selection.where(ContentNode, node => node.title.eq('Introduction')),
+);
+const chapterRef = createEntityRef(Chapter.base, { id: 'chapter-42' });
+```
+
+`otherChapters` never includes parts. `fromSelection` intersects the caller's criterion with the
+classifier; it does not cast an arbitrary record into a Chapter. `chapterRef` is still a
+ContentNode Ref and alone makes no promise about the record's current `type`.
+
+The terminals `many`, `one`, `first`, `count` and `exists` apply after classification. For an
+unbound variant they prepare read programs, not I/O; execute through a Data Graph runtime or
+bind explicitly with `createRuntimeBoundDataGraphApi(...).bindVariantSelection(...)`.
+If the base declares named factories, `Chapter.by(...)` reuses those contracts inside the Chapter
+population. It does not generate a fresh set of factories or locators.
+
+### Carry classification through navigation and Operation inputs
+
+A contextual declaration can select related chapters without spelling the discriminator again:
+
+```ts
+selections: ({ self }) => ({
+  chapters: self.children.as(Chapter),
+}),
+```
+
+Here `children` is an existing Relation to the same ContentNode definition from which Chapter was
+declared. `.as(Chapter)` narrows membership; unlike `.as(aView)` on a Query, it is not output
+projection. A Book's declared `parts` can then compose with `parts.chapters`, retaining each
+classification and the base identity through the path.
+
+When an Operation needs current attributes of a Chapter, put that participant in its input tree:
+
+```ts
+const ReadChapterInput = graphSchema.object({
+  chapter: graphSchema.existingRef(Chapter),
+});
+```
+
+The caller supplies a ContentNode Ref. The runtime resolves the authorized base record and checks
+classification before entering the body. The implementation receives a narrowed record with its
+canonical `.ref`, not `bookSlug`, `partSlug` and `chapterSlug` navigation inputs. Choosing a Chapter
+through a cascading Book → Part → Chapter UI is a separate interaction concern. See
+[classified participants](02-identity-locators-and-refs.md#require-a-classified-participant)
+for resolution and failure behavior.
+
+### Expose classified reads deliberately
+
+A remote client does not grant itself a new root by inventing the name `Chapter`. The receiver
+registers the variant on the **base** read policy:
+
+```ts
+const contentReadPolicy = {
+  entity: ContentNode,
+  variants: [Chapter],
+  modes: ['get', 'run', 'count'],
+  cardinalities: ['one', 'many'],
+  maxLimit: 25,
+  fields: {
+    id: { select: true },
+    type: { select: true },
+    title: { select: true, filter: ['eq'], order: true },
+  },
+  scope: 'all', // choose the host's actual authority-dependent scope
+} satisfies GraphReadPolicy;
+```
+
+`GraphReadPolicy` is exported from `@ontahi/core/data-graph`. Pass this policy to the host's
+Graph Read dispatcher. Classification and the base authority scope are applied outside caller
+`not`/`or`, and all other grants remain those of the base policy. Discovery advertises the registered
+root without fetching records. Console then accepts `Chapter.many()` or `Chapter many` and
+completes its inherited Fields and narrowed enum values; no hand-written client Chapter registry
+is required.
 
 The supported classifier is one required, stored, non-null enum Field. Remote reads require explicit
 variant registration on the base read policy, and inherit its grants and authority scope. This is
@@ -160,5 +247,5 @@ export const TodoItem = entity({
 This metadata does not render a UI. It preserves knowledge that Explorer, generated clients, or a
 future client may interpret.
 
-Identity and locators come next. Relations, selections, and operations then extend this same
+Identity, Refs and named criteria come next. Relations, selections, and operations then extend this same
 Entity rather than wrapping it in parallel models.

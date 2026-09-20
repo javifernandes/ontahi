@@ -2,7 +2,9 @@
 
 Model the domain once. Let runtimes interpret it.
 
-For the pending package train, see the [alpha.12 candidate and upgrade guide](../releases/1.0.0-alpha.12.md).
+This edition follows the `1.0.0-alpha.12` public surface. The
+[alpha.12 candidate and upgrade guide](../releases/1.0.0-alpha.12.md) records its release preparation;
+the chapters below distinguish implemented alpha contracts from further directions.
 
 This book teaches the current Ontahí application model through its public declarations, executable
 examples, and runtime contracts. It begins with a working application, then names each core
@@ -27,7 +29,7 @@ candidate release reconcile its code and documentation in the same review.
 ### Part II — Core Concepts
 
 3. [Entities](02-core-concepts/01-entities.md)
-4. [Identity, Locators, and Refs](02-core-concepts/02-identity-locators-and-refs.md)
+4. [Identity, Refs, and Named Selections](02-core-concepts/02-identity-locators-and-refs.md)
 5. [Relations](02-core-concepts/03-relations.md)
 6. [Selections](02-core-concepts/04-selections.md)
 7. [Queries](02-core-concepts/05-queries.md)
@@ -40,31 +42,48 @@ candidate release reconcile its code and documentation in the same review.
 
 12. [Runtime Composition and Capabilities](03-runtimes/01-runtime-composition-and-capabilities.md)
 13. [Storage Adapters](03-runtimes/02-storage-adapters.md)
-14. [Transport and HTTP Ingress](03-runtimes/03-transport-and-http-ingress.md)
+14. [Runtime Transport, WebSocket, and HTTP Ingress](03-runtimes/03-transport-and-http-ingress.md)
 15. [Authentication and Principals](03-runtimes/04-authentication-and-principals.md)
 
 ### Part IV — Reflection and Clients
 
 16. [Reflection and Explorer](04-reflection-and-clients/01-reflection-and-explorer.md)
 17. [Browser Client and Projection](04-reflection-and-clients/02-browser-client-and-projection.md)
+18. [Semantic Console and Devtools](04-reflection-and-clients/03-semantic-console-and-devtools.md)
 
 ### Part V — Further Directions
 
-18. [Further Directions](05-further-directions/01-further-directions.md)
-19. [AI Operations](05-further-directions/02-ai-operations.md)
-20. [Selection as an Editable Language](05-further-directions/03-selection-as-an-editable-language.md)
-21. [Runtime Data Reflection](05-further-directions/04-runtime-data-reflection.md)
-22. [Alive UI](05-further-directions/05-alive-ui.md)
-23. [Continuous Execution and First-Class Events](05-further-directions/06-continuous-execution-and-first-class-events.md)
-24. [Semantic Operational Policy](05-further-directions/07-semantic-operational-policy.md)
-25. [A Topology of Graphs](05-further-directions/08-a-topology-of-graphs.md)
-26. [More Adapters, Same Contracts](05-further-directions/09-more-adapters-same-contracts.md)
-27. [Living Entities](05-further-directions/10-living-entities.md)
-28. [Data Graph Across Boundaries](05-further-directions/11-data-graph-across-boundaries.md)
+19. [Further Directions](05-further-directions/01-further-directions.md)
+20. [AI Operations](05-further-directions/02-ai-operations.md)
+21. [Selection as an Editable Language](05-further-directions/03-selection-as-an-editable-language.md)
+22. [Runtime Data Reflection](05-further-directions/04-runtime-data-reflection.md)
+23. [Alive UI](05-further-directions/05-alive-ui.md)
+24. [Continuous Execution and First-Class Events](05-further-directions/06-continuous-execution-and-first-class-events.md)
+25. [Semantic Operational Policy](05-further-directions/07-semantic-operational-policy.md)
+26. [A Topology of Graphs](05-further-directions/08-a-topology-of-graphs.md)
+27. [More Adapters, Same Contracts](05-further-directions/09-more-adapters-same-contracts.md)
+28. [Living Entities](05-further-directions/10-living-entities.md)
+29. [Data Graph Across Boundaries](05-further-directions/11-data-graph-across-boundaries.md)
 
 Part I gets a small application running. Part II is the semantic backbone: Entity, Ref, Relation,
 Selection, Query, Command, and Operation each carry a distinct job. Part III explains where that
 model executes. Part IV explains how it reflects and projects into clients.
+
+## Reading the newer contracts
+
+- Start with [identity and named criteria](02-core-concepts/02-identity-locators-and-refs.md): `by`
+  builds a Selection; it does not replace canonical identity or remove existing Ref APIs.
+- [Selections](02-core-concepts/04-selections.md) declares both parameterized factories and
+  contextual navigation. [Entities](02-core-concepts/01-entities.md#name-a-classified-population-without-another-identity)
+  gives fixed classifications such as Chapter narrowed read types without another identity.
+- [Runtime Transport](03-runtimes/03-transport-and-http-ingress.md) connects request/response and
+  observation over Fetch or WebSocket, including the host's authorization and lifecycle duties.
+- [Semantic Console and Devtools](04-reflection-and-clients/03-semantic-console-and-devtools.md)
+  brings those contracts into both authoring dialects, reflective result controls and local inspection.
+
+Ordered Relations, exact-one semantics, schema-native Operation participants, wire-only projection
+of server transforms, and contextual provider support are covered in their owning chapters, not
+introduced as separate migration-only APIs.
 
 ## Executable spine
 
