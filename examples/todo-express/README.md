@@ -400,8 +400,8 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
 
 ## Local model-backed command spike
 
-Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Optionally choose a list as interaction focus;
-you can also name a list directly in the message. Send with the arrow or Command/Ctrl+Enter.
+Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Write the instruction directly;
+name a list in the message only when needed. Send with the arrow or Command/Ctrl+Enter.
 The latest exchange is visible by default, with earlier exchanges behind the history icon. Each message is independent: this is not a resumable chat or
 an autonomous agent.
 
@@ -426,7 +426,7 @@ Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports tha
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 
-The UI sends `POST /model/commands` with `{text, context?}`. `ontahiExpress` mounts this optional
+The UI sends `POST /model/commands` with `{text}`. `ontahiExpress` mounts this optional
 runtime entry and propagates the authenticated invocation context. There are no chat operations
 on `TodoList`, no chat-specific application capability, and no domain service delegation loop.
 
@@ -445,12 +445,14 @@ The boundaries are explicit:
   characters, and 2,000 request characters. IDs and Selection syntax stay in the runtime.
 - `model-provider.ts` adapts Ollama to Core's provider contract without importing Todo.
 
-The list selector is optional interaction focus (`context.focus` as a Ref). Use `All lists` to
-supply no focus. Examples: `create list Groceries`, `add buy bread to Groceries`,
-`complete buy bread in Groceries`, and `delete list Groceries`. An explicit list name takes
-precedence over the selected list. Completion can resolve a unique title across visible lists;
-creation needs a named or selected list. Missing or ambiguous targets remain unresolved.
-Focus does not grant authority or replace graph read policies and operation requirements.
+There is no list selector or Todo-specific focus input. `complete banana` searches all visible
+unfinished items. A unique match can be completed directly; ambiguous matches request a title and
+list, for example `complete banana in Groceries`. Creating an item requires a named list, such as
+`add banana to Groceries`. Other examples: `create list Groceries` and `delete list Groceries`.
+The binding only uses a list qualifier when that list name occurs in the user's message (matching
+whole normalized words). An invented qualifier cannot disambiguate duplicate titles; absent a
+named list, completion resolves globally. This conservative example policy is not general natural
+language reference resolution or an authorization boundary.
 
 Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request
 still produces at most one invocation; general graph questions and conversation continuation
@@ -468,9 +470,9 @@ TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
 ```
 
 `commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
-duplicate and missing targets, list creation with/without focus, named-list deletion, and item
-creation in a named list without focus. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
-unresolved without effects. These ten cases pass with qwen3.5:0.8b; its explanations
+duplicate and missing targets, list creation, named-list deletion, and item
+creation in a named list. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
+unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. These twelve cases pass with qwen3.5:0.8b; its explanations
 remain variable. Ordinary suites use deterministic providers. Broader reliability remains in
 [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
 

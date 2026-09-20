@@ -12,9 +12,7 @@ export const App = ({ authentication, setAuthentication }: AppProps) => {
     <main className='todo-app'>
       <AppHeader {...app.header} />
       <TodoBoard {...app.dashboard} />
-      {app.commandChat.enabled && (
-        <CommandChat lists={app.dashboard.lists} onExecuted={app.commandChat.refresh} />
-      )}
+      {app.commandChat.enabled && <CommandChat onExecuted={app.commandChat.refresh} />}
     </main>
   );
 };

@@ -1,4 +1,3 @@
-import { createEntityRef } from '@ontahi/core/data-graph';
 import {
   withInvocationContext,
   type ModelProvider,
@@ -8,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TodoApplication } from '../graph.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
-import { TodoList } from '../todo.js';
 
 import { createTodoModelRuntime } from './runtime.js';
 const principal = { subject: 'local-test', kind: 'user' as const };
@@ -27,12 +25,9 @@ const proposal = (operationId: string, input: unknown) => ({
   status: 'resolved',
   invocation: { kind: 'invoke', operationId, input },
 });
-const submit = (text = 'add buy bread', focus: string | null = 'list-1') =>
+const submit = (text = 'add buy bread to Shopping') =>
   withInvocationContext({ principal }, () =>
-    runtime.submit(
-      { text, ...(focus ? { context: { focus: createEntityRef(TodoList, { id: focus }) } } : {}) },
-      new AbortController().signal,
-    ),
+    runtime.submit({ text }, new AbortController().signal),
   );
 beforeEach(() => {
   dataset().TodoList = [
@@ -47,7 +42,7 @@ beforeEach(() => {
 describe('Todo graph instruction runtime', () => {
   it('uses reflected descriptions and binds creation arguments', async () => {
     const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) =>
-      proposal('TodoItem.createItem', { title: 'buy bread' }),
+      proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Shopping' }),
     );
     bind(generate);
     expect(await submit()).toEqual({ status: 'executed', message: 'Item added.' });
@@ -66,22 +61,17 @@ describe('Todo graph instruction runtime', () => {
   });
   it('adds to a named list without UI selection', async () => {
     bind(async () => proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Other' }));
-    expect(await submit('add buy bread to Other', null)).toMatchObject({ status: 'executed' });
-    expect(dataset().TodoItem?.[2]?.list).toBe('list-2');
-  });
-  it('lets an explicit list override optional focus', async () => {
-    bind(async () => proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Other' }));
-    await submit('add buy bread to Other');
+    expect(await submit('add buy bread to Other')).toMatchObject({ status: 'executed' });
     expect(dataset().TodoItem?.[2]?.list).toBe('list-2');
   });
   it('requires a target for creation when none is supplied', async () => {
     bind(async () => proposal('TodoItem.createItem', { title: 'buy bread' }));
-    expect(await submit('add buy bread', null)).toMatchObject({ status: 'unresolved' });
+    expect(await submit('add buy bread')).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoItem).toHaveLength(2);
   });
   it('completes a unique item without a selected list', async () => {
     bind(async () => proposal('TodoItem.setCompleted', { title: 'buy tea' }));
-    await submit('complete buy tea', null);
+    await submit('complete buy tea');
     expect(dataset().TodoItem?.map(item => item.completed)).toEqual([true, false]);
   });
   it('resolves a completion in a named list', async () => {
@@ -91,13 +81,13 @@ describe('Todo graph instruction runtime', () => {
   });
   it('deletes a named list and its items without selection', async () => {
     bind(async () => proposal('TodoItem.deleteList', { name: 'Other' }));
-    await submit('delete list Other', null);
+    await submit('delete list Other');
     expect(dataset().TodoList?.map(list => list.id)).toEqual(['list-1']);
     expect(dataset().TodoItem?.map(item => item.id)).toEqual(['tea']);
   });
   it('creates a list without selection', async () => {
     bind(async () => proposal('TodoList.createList', { name: 'Holidays' }));
-    await submit('create list Holidays', null);
+    await submit('create list Holidays');
     expect(dataset().TodoList?.map(list => list.name)).toEqual(['Shopping', 'Other', 'Holidays']);
   });
   it.each(['buy coffee', 'buy milk'])(
@@ -109,7 +99,10 @@ describe('Todo graph instruction runtime', () => {
         { id: 'milk-2', list: 'list-2', title: 'buy milk', completed: false },
       ];
       bind(async () => proposal('TodoItem.setCompleted', { title }));
-      expect(await submit(`complete ${title}`, null)).toMatchObject({ status: 'unresolved' });
+      expect(await submit(`complete ${title}`)).toMatchObject({
+        status: 'unresolved',
+        message: expect.stringContaining('which list'),
+      });
       expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
     },
   );
@@ -119,7 +112,7 @@ describe('Todo graph instruction runtime', () => {
       { id: 'duplicate', name: 'Other', color: '#fff' },
     ];
     bind(async () => proposal('TodoItem.deleteList', { name: 'Other' }));
-    expect(await submit('delete list Other', null)).toMatchObject({ status: 'unresolved' });
+    expect(await submit('delete list Other')).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoList).toHaveLength(3);
   });
   it.each([
@@ -173,9 +166,46 @@ describe('Todo graph instruction runtime', () => {
   it('surfaces dispatch/context failure without claiming success', async () => {
     bind(async () => {
       dataset().TodoList = [];
-      return proposal('TodoItem.createItem', { title: 'buy bread' });
+      return proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Shopping' });
     });
     await expect(submit()).rejects.toHaveProperty('code');
     expect(dataset().TodoItem).toHaveLength(2);
   });
+});
+
+it('completes banana across lists and resolves ambiguity with an explicit list', async () => {
+  dataset().TodoItem = [{ id: 'banana-1', list: 'list-1', title: 'banana', completed: false }];
+  bind(async () => proposal('TodoItem.setCompleted', { title: 'banana' }));
+  expect(await submit('complete banana')).toMatchObject({ status: 'executed' });
+  dataset().TodoItem = [
+    { id: 'banana-1', list: 'list-1', title: 'banana', completed: false },
+    { id: 'banana-2', list: 'list-2', title: 'banana', completed: false },
+  ];
+  expect(await submit('complete banana')).toMatchObject({
+    status: 'unresolved',
+    message: expect.stringContaining('which list'),
+  });
+  expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
+  bind(async () => proposal('TodoItem.setCompleted', { title: 'banana', listName: 'Other' }));
+  expect(await submit('complete banana in Other')).toMatchObject({ status: 'executed' });
+  expect(dataset().TodoItem?.map(item => item.completed)).toEqual([false, true]);
+});
+
+it('does not let the model invent a list to disambiguate an item', async () => {
+  dataset().TodoItem = [
+    { id: 'banana-1', list: 'list-1', title: 'banana', completed: false },
+    { id: 'banana-2', list: 'list-2', title: 'banana', completed: false },
+  ];
+  bind(async () => proposal('TodoItem.setCompleted', { title: 'banana', listName: 'Other' }));
+  expect(await submit('complete banana')).toMatchObject({
+    status: 'unresolved',
+    message: expect.stringContaining('which list'),
+  });
+  expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
+});
+
+it('ignores an invented list qualifier when the title is globally unique', async () => {
+  bind(async () => proposal('TodoItem.setCompleted', { title: 'buy tea', listName: 'Other' }));
+  expect(await submit('complete buy tea')).toMatchObject({ status: 'executed' });
+  expect(dataset().TodoItem?.map(item => item.completed)).toEqual([true, false]);
 });

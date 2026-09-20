@@ -1,7 +1,6 @@
 import { ArrowUp, ChevronDown, History, LoaderCircle, Mic, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { TodoList } from '../../../../src/generated/client-entities.js';
 import { submitModelCommand } from '../../model-commands.js';
 
 import { useSpeechInput } from './useSpeechInput.js';
@@ -13,14 +12,7 @@ type Entry = {
   status: 'pending' | 'executed' | 'unresolved' | 'failed';
 };
 
-export const CommandChat = ({
-  lists,
-  onExecuted,
-}: {
-  lists: readonly { id: string; name: string }[];
-  onExecuted: () => Promise<unknown>;
-}) => {
-  const [listId, setListId] = useState('');
+export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown> }) => {
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [pending, setPending] = useState(false);
@@ -41,7 +33,6 @@ export const CommandChat = ({
   }, [pending, entries.length]);
   const busy = useRef(false);
   const sequence = useRef(0);
-  const current = lists.find(list => list.id === listId);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -61,7 +52,6 @@ export const CommandChat = ({
     try {
       const result = await submitModelCommand({
         text: entry.request,
-        ...(current ? { context: { focus: TodoList.refById(current.id) } } : {}),
       });
       if (!result.ok) {
         answer(
@@ -148,19 +138,6 @@ export const CommandChat = ({
         </p>
       )}
       <form className='command-chat-composer' onSubmit={event => void submit(event)}>
-        <select
-          aria-label='Current list'
-          value={current?.id ?? ''}
-          onChange={event => setListId(event.target.value)}
-          disabled={pending}
-        >
-          <option value=''>All lists</option>
-          {lists.map(list => (
-            <option key={list.id} value={list.id}>
-              {list.name}
-            </option>
-          ))}
-        </select>
         <div className='command-chat-prompt'>
           <textarea
             ref={prompt}

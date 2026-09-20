@@ -56,6 +56,8 @@ export type ModelOperationExposure = {
   operationId: string;
   description: string;
   arguments: GraphSchemaDefinition;
+  /** Explanation used when argument binding cannot resolve a unique target. */
+  unresolvedReason?: string;
   /** Return null when arguments cannot be bound to a unique current target. */
   prepare: (args: Record<string, unknown>) => Record<string, unknown> | null;
   validate: (input: Record<string, unknown>) => string | undefined;
@@ -189,7 +191,9 @@ export const interpretModelOperation = async ({
   if (input === null)
     return {
       status: 'unresolved',
-      reason: 'No unique target matches the request in the available context.',
+      reason:
+        exposure.unresolvedReason ??
+        'No unique target matches the request in the available context.',
     };
   const invocation = { ...proposal.invocation, input };
   const reason = validateModelInvocation(invocation, operations, resolveOperation);

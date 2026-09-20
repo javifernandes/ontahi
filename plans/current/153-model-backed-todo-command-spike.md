@@ -225,3 +225,19 @@ returns an explicit one-action limitation with no effects in the regression. Bat
 Validation: 103 Todo tests, typecheck, lint, server/client build, and ten live Ollama cases.
 Browser inspection confirmed the microphone control is exposed and enabled; no live recording
 was started. The local instance was restarted with its five lists, nine items, and three tags preserved.
+
+## Text-only Todo interaction
+
+Todo removes the list selector, list prop, focus request data, and selected-list context handling.
+The UI submits only text. Completion resolves across visible unfinished items; ambiguous matches
+ask for the title and list. Creation needs a list named in the message. Core's optional generic
+interaction context remains available for other consumers but is not used by this example.
+
+The live banana regression exposed an invented model qualifier that selected one of two matches.
+Todo now accepts list qualifiers only when the corresponding name appears as whole normalized words
+in the instruction. Unmentioned model qualifiers are ignored for completion, preserving global
+uniqueness checks. This is an explicit example binding policy, not general semantic resolution.
+Bindings may supply an unresolved explanation; Todo uses it to ask for the list without executing.
+
+Validation: 1,132 Core tests, 105 Todo tests, affected typecheck/lint/build, and twelve live Ollama
+cases passed. Port 3003 now serves the simplified composer with the existing board preserved.

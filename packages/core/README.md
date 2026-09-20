@@ -689,7 +689,8 @@ output; it does not establish freshness or change entity reconciliation.
 `@ontahi/core/runtime/server` exports `interpretModelOperation`, `ModelProvider`,
 `ModelOperationExposure`, and `validateModelInvocation`. A host supplies scoped data and an
 explicit operation catalog. Each exposure declares model arguments, a `prepare` binding to the
-canonical operation input, and a scope validator. The helper validates arguments and the bound
+canonical operation input, and a scope validator. An optional `unresolvedReason` supplies the clarification message when
+`prepare` returns null. The helper validates arguments and the bound
 input against the resolved operation schema, returning a proposal without executing effects.
 Revalidate with fresh scope before using the canonical dispatcher. Authentication and operation
 requirements still belong to the runtime; model scope is not an authorization boundary.

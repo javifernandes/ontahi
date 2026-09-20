@@ -1458,18 +1458,6 @@ a {
   background: #fffefa;
   box-shadow: 0 8px 32px #24312526;
 }
-.command-chat-composer select {
-  width: 136px;
-  flex-shrink: 0;
-  border: 0;
-  border-right: 1px solid #e3e5dc;
-  border-radius: 0;
-  background: transparent;
-  color: #526152;
-  padding: 7px 9px;
-  text-overflow: ellipsis;
-  font-size: 13px;
-}
 .command-chat-prompt {
   position: relative;
   flex: 1;
@@ -1547,9 +1535,6 @@ a {
   .command-chat {
     width: calc(100vw - 28px);
     bottom: max(16px, env(safe-area-inset-bottom));
-  }
-  .command-chat-composer select {
-    width: 104px;
   }
 }
 

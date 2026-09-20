@@ -24,9 +24,7 @@ beforeEach(async () => {
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  await act(async () =>
-    root.render(<CommandChat lists={[{ id: 'list-1', name: 'Shopping' }]} onExecuted={refresh} />),
-  );
+  await act(async () => root.render(<CommandChat onExecuted={refresh} />));
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -34,11 +32,6 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 const write = async () => {
-  await act(async () => {
-    const select = container.querySelector('select')!;
-    select.value = 'list-1';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
   await act(async () => {
     const input = container.querySelector('textarea')!;
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
@@ -56,6 +49,7 @@ const submit = async () =>
   });
 
 it('waits for actual execution before refreshing', async () => {
+  expect(container.querySelector('[aria-label="Current list"]')).toBeNull();
   expect(container.querySelector('button')!.disabled).toBe(true);
   let finish!: (value: unknown) => void;
   execute.mockReturnValue(
@@ -69,9 +63,8 @@ it('waits for actual execution before refreshing', async () => {
   expect(refresh).not.toHaveBeenCalled();
   await submit();
   expect(execute).toHaveBeenCalledOnce();
-  expect(execute.mock.calls[0]![0]).toMatchObject({
+  expect(execute.mock.calls[0]![0]).toEqual({
     text: 'add buy bread',
-    context: { focus: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'list-1' } } },
   });
   await act(async () =>
     finish({ ok: true, value: { status: 'executed', message: 'Item added.' } }),
@@ -199,7 +192,7 @@ it('dictates into the draft without sending and replaces interim results', async
     (container.querySelector('[aria-label="Dictation language"]') as HTMLSelectElement).disabled,
   ).toBe(true);
   await act(async () => root.render(<div />));
-  await act(async () => root.render(<CommandChat lists={[]} onExecuted={refresh} />));
+  await act(async () => root.render(<CommandChat onExecuted={refresh} />));
   expect(
     (container.querySelector('[aria-label="Dictation language"]') as HTMLSelectElement).value,
   ).toBe('es-ES');

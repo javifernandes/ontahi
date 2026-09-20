@@ -71,6 +71,13 @@ describe('model operation interpretation', () => {
       await run(proposal(), { operations: [{ ...exposure, prepare: () => null }] }),
     ).toMatchObject({ status: 'unresolved' });
   });
+  it('uses the binding explanation when a target is unresolved', async () => {
+    expect(
+      await run(proposal(), {
+        operations: [{ ...exposure, prepare: () => null, unresolvedReason: 'Which document?' }],
+      }),
+    ).toEqual({ status: 'unresolved', reason: 'Which document?' });
+  });
   it('preserves unresolved results', async () => {
     expect(await run({ status: 'unresolved', reason: 'Which document?' })).toEqual({
       status: 'unresolved',

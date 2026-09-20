@@ -36,11 +36,10 @@ export const createTodoModelRuntime = ({
         );
     },
     scope: async request => {
-      const current = await contextFor(request);
+      const current = await contextFor();
       return {
         unresolved: current.complete ? undefined : 'The available data exceeds the command scope.',
         context: {
-          list: current.list?.name ?? null,
           lists: current.lists.map(list => list.name),
           items: current.items
             .filter(item => !item.completed)
@@ -49,7 +48,7 @@ export const createTodoModelRuntime = ({
               list: current.lists.find(list => list.id === item.list.locator.id)?.name,
             })),
         },
-        bindings: todoCommandBindings(current),
+        bindings: todoCommandBindings(current, request.text),
       };
     },
   });
