@@ -245,3 +245,76 @@ it('handles denied microphone permission and cancels recognition on unmount', as
   expect(execute).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
 });
+
+it('reads answers only when enabled, using the selected language, and cancels on disable', async () => {
+  const speak = vi.fn();
+  const cancel = vi.fn();
+  vi.stubGlobal('speechSynthesis', { speak, cancel });
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      lang = '';
+      constructor(readonly text: string) {}
+    },
+  );
+  execute.mockResolvedValue({
+    ok: true,
+    value: { status: 'answered', message: 'You can create lists.' },
+  });
+  await write();
+  await submit();
+  expect(speak).not.toHaveBeenCalled();
+  expect(refresh).not.toHaveBeenCalled();
+  await act(async () => {
+    const language = container.querySelector('select')!;
+    language.value = 'es-ES';
+    language.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () =>
+    (container.querySelector('[aria-label="Read responses aloud"]') as HTMLButtonElement).click(),
+  );
+  expect(speak).toHaveBeenLastCalledWith(
+    expect.objectContaining({ text: 'You can create lists.', lang: 'es-ES' }),
+  );
+  await write();
+  await submit();
+  expect(speak).toHaveBeenCalledTimes(2);
+  const spoken = speak.mock.calls[1]![0];
+  await act(async () =>
+    (container.querySelector('[aria-label="Turn off read aloud"]') as HTMLButtonElement).click(),
+  );
+  expect(cancel).toHaveBeenCalledTimes(2);
+  await act(async () => spoken.onerror());
+  expect(container.textContent).not.toContain('could not be read aloud');
+  await write();
+  await submit();
+  expect(speak).toHaveBeenCalledTimes(2);
+});
+
+it('handles unavailable audio and cancels reading when unmounted', async () => {
+  const speak = vi.fn();
+  const cancel = vi.fn();
+  vi.stubGlobal('speechSynthesis', { speak, cancel });
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      lang = '';
+      constructor(readonly text: string) {}
+    },
+  );
+  execute.mockResolvedValue({
+    ok: true,
+    value: { status: 'answered', message: 'You can create lists.' },
+  });
+  await write();
+  await submit();
+  await act(async () =>
+    (container.querySelector('[aria-label="Read responses aloud"]') as HTMLButtonElement).click(),
+  );
+  await act(async () => speak.mock.calls[0]![0].onerror());
+  expect(container.textContent).toContain('could not be read aloud');
+  await write();
+  await submit();
+  await act(async () => root.render(<div />));
+  expect(cancel).toHaveBeenCalledOnce();
+});

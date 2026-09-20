@@ -62,8 +62,15 @@ export const todoCommandBindings = (
       message: value => `List “${String(value.name)}” created.`,
     },
     'TodoItem.deleteList': {
+      unresolvedReason: 'Specify one list to delete per message.',
       arguments: strict({ name: field.nonEmptyString() }),
       prepare: args => {
+        // Conservatively reject multiple visible list names, even if the model proposes only one.
+        const mentioned = context.lists.filter(
+          list =>
+            words(list.name).length > 0 && ` ${words(request)} `.includes(` ${words(list.name)} `),
+        );
+        if (mentioned.length !== 1) return null;
         const list = namedList(args.name);
         return list ? { list: createEntityRef(TodoList, { id: list.id }) } : null;
       },
@@ -106,6 +113,7 @@ export const todoCommandBindings = (
       message: () => 'Item added.',
     },
     'TodoItem.setCompleted': {
+      description: 'Mark items as completed.',
       unresolvedReason:
         'I could not identify one unfinished item. Specify its title and which list it belongs to.',
       arguments: strict({

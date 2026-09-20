@@ -14,7 +14,7 @@ export const submitModelCommand = async (
     typeof result.ok !== 'boolean' ||
     (result.ok &&
       (!result.value ||
-        !['executed', 'unresolved'].includes(result.value.status) ||
+        !['executed', 'answered', 'unresolved'].includes(result.value.status) ||
         typeof result.value.message !== 'string'))
   )
     throw new Error('Invalid model command response.');

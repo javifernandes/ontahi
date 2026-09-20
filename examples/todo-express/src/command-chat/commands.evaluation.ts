@@ -126,3 +126,17 @@ assert.deepEqual(
   dataset.TodoItem.map(item => item.completed),
   [false, true],
 );
+
+const beforeHelp = JSON.stringify(dataset);
+const help = await submit('what things can I do ?');
+console.info(JSON.stringify({ text: 'what things can I do ?', result: help }));
+assert.equal(help.status, 'answered');
+assert.doesNotMatch(
+  help.message,
+  /TodoItem|TodoList|operationId|schema|unresolved|incomplete|banana|Inbox/i,
+);
+assert.match(help.message, /creat/i);
+assert.match(help.message, /delet/i);
+assert.match(help.message, /complet|done/i);
+assert.ok(help.message.length < 700, 'Help should be concise.');
+assert.equal(JSON.stringify(dataset), beforeHelp);

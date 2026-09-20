@@ -241,3 +241,28 @@ Bindings may supply an unresolved explanation; Todo uses it to ask for the list 
 
 Validation: 1,132 Core tests, 105 Todo tests, affected typecheck/lint/build, and twelve live Ollama
 cases passed. Port 3003 now serves the simplified composer with the existing board preserved.
+
+## Informational responses and browser read-aloud
+
+The reported “what things can I do?” response exposed the binary resolved/unresolved contract.
+Core now accepts a strict `{status: "help"}` interpretation without model-written prose or invocation,
+reauthorizes after inference, and renders an `answered` message from exposed descriptions without
+dispatch. Bindings may narrow a description when their arguments narrow the operation's behavior.
+An attempted free-form `answered` branch caused repeated hallucinations and action regressions with
+0.8B, so arbitrary factual answers remain deferred. Help renders authored English descriptions;
+clarification wording remains prompt guidance. No read loop or conversational state is introduced.
+
+Todo adds an opt-in speaker control using browser speech synthesis and the existing EN/ES choice.
+Enabling reads the latest response and then new replies. Dictation, new submission, language change,
+disabling, and unmount cancel playback. Speech language does not translate the textual response.
+Browser lifecycle is verified with test doubles; audible voice quality remains a manual check.
+
+The expanded real-model evaluation also exposed a partial two-list deletion under the changed
+prompt. Todo conservatively rejects deletion requests mentioning multiple visible list names in
+its binding, independently of the model choosing only one. This name-based policy may also ask for
+clarification on comparisons or overlapping list names; it is not general semantic intent validation.
+
+Validation: 1,137 Core tests and 108 Todo tests passed, followed by two focused HTTP client
+contract tests for the new response status. Core and Todo lint/typecheck/build passed. Thirteen
+live Ollama cases passed, including capability help without internal IDs or invented item state.
+The local server was restarted on port 3003 with six lists, ten items, and three tags preserved.

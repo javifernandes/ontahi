@@ -85,6 +85,15 @@ describe('Todo graph instruction runtime', () => {
     expect(dataset().TodoList?.map(list => list.id)).toEqual(['list-1']);
     expect(dataset().TodoItem?.map(item => item.id)).toEqual(['tea']);
   });
+  it('rejects a partial deletion when the request names two visible lists', async () => {
+    bind(async () => proposal('TodoItem.deleteList', { name: 'Other' }));
+    expect(await submit('delete list Shopping and Other')).toEqual({
+      status: 'unresolved',
+      message: 'Specify one list to delete per message.',
+    });
+    expect(dataset().TodoList).toHaveLength(2);
+    expect(dataset().TodoItem).toHaveLength(2);
+  });
   it('creates a list without selection', async () => {
     bind(async () => proposal('TodoList.createList', { name: 'Holidays' }));
     await submit('create list Holidays');

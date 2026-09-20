@@ -52,3 +52,10 @@ semantics and descriptions come from declarations; application bindings supply t
 argument resolution and bounded data scope. Optional interaction focus can help resolve “this”,
 while explicit names work without UI selection. Focus is not authority. This graph-level entry is
 distinct from using a model to implement a particular Domain Operation.
+
+The graph instruction entry also supports a `help` interpretation for capability questions.
+The runtime renders an `answered` message from the exposed operation descriptions without dispatch.
+A binding can narrow a description when it narrows the operation's arguments. Canonical IDs remain
+the machine protocol; authored descriptions are the natural-language presentation vocabulary.
+Free-form factual answers remain deferred. Concise clarification wording is still prompt guidance,
+not an enforcement or authorization mechanism.

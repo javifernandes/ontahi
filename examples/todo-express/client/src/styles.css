@@ -1472,7 +1472,7 @@ a {
   field-sizing: content;
   border: 0;
   background: transparent;
-  padding: 9px 138px 7px 12px;
+  padding: 9px 170px 7px 12px;
   color: #26372c;
   font: inherit;
   line-height: 20px;
@@ -1568,4 +1568,13 @@ a {
   background: transparent;
   color: #354e3e;
   font-size: 12px;
+}
+
+.command-chat-prompt .command-chat-voice {
+  right: 130px;
+  background: transparent;
+  color: #354e3e;
+}
+.command-chat-prompt .command-chat-voice[aria-pressed='true'] {
+  background: #e8eee4;
 }

@@ -420,6 +420,16 @@ browsers show a disabled microphone; permission and device errors leave typing a
 Ontahi does not upload audio, but the browser may use an online recognition service; this is not
 an offline guarantee. See [MDN SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
 
+The speaker button enables reading replies aloud, initially off for each chat mount. Enabling it
+reads the latest reply; subsequent replies are read automatically. EN/ES selects the speech synthesis
+language as well as dictation language; it does not translate the reply text. Changing language,
+starting dictation, sending a new request, disabling read-aloud, or leaving the chat stops playback.
+Unsupported browsers keep the speaker disabled. Voices depend on the browser and operating system.
+See [MDN SpeechSynthesisUtterance](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance).
+
+Ask “what things can I do?” for a concise capability explanation without executing an action.
+Informational replies use `answered`, separate from `executed` and `unresolved`. Help is rendered from operation descriptions in ordinary English, rather than model-written prose. The completion binding narrows its description to match the exposed completed-only behavior. Technical identifiers stay in invocation payloads.
+
 The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
 `TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
 Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports that it is disabled.

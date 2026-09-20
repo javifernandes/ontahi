@@ -1,15 +1,25 @@
-import { ArrowUp, ChevronDown, History, LoaderCircle, Mic, Square } from 'lucide-react';
+import {
+  ArrowUp,
+  ChevronDown,
+  History,
+  LoaderCircle,
+  Mic,
+  Square,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { submitModelCommand } from '../../model-commands.js';
 
 import { useSpeechInput } from './useSpeechInput.js';
+import { useSpeechOutput } from './useSpeechOutput.js';
 
 type Entry = {
   id: number;
   request: string;
   reply?: string;
-  status: 'pending' | 'executed' | 'unresolved' | 'failed';
+  status: 'pending' | 'executed' | 'answered' | 'unresolved' | 'failed';
 };
 
 export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown> }) => {
@@ -19,6 +29,7 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
   const log = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeechInput(setText, () => prompt.current?.focus());
+  const voice = useSpeechOutput(speech.language);
   const [entries, setEntries] = useState<Entry[]>([]);
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
@@ -37,18 +48,21 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!text.trim() || busy.current || speech.listening) return;
+    voice.cancel();
     busy.current = true;
     setPending(true);
     const id = ++sequence.current;
     const entry: Entry = { id, request: text.trim(), status: 'pending' };
     setEntries(previous => [...previous, entry]);
     setText('');
-    const answer = (status: Entry['status'], reply: string) =>
+    const answer = (status: Entry['status'], reply: string) => {
+      voice.speak(reply);
       setEntries(previous =>
         previous.map(candidate =>
           candidate.id === id ? { ...candidate, status, reply } : candidate,
         ),
       );
+    };
     try {
       const result = await submitModelCommand({
         text: entry.request,
@@ -127,6 +141,11 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
           </div>
         </div>
       )}
+      {voice.error && (
+        <p className='command-chat-speech-status' role='status'>
+          {voice.error}
+        </p>
+      )}
       {speech.error && (
         <p className='command-chat-speech-status' role='status'>
           {speech.error}
@@ -163,6 +182,21 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
               }
             }}
           />
+          <button
+            type='button'
+            className='command-chat-voice'
+            aria-label={voice.enabled ? 'Turn off read aloud' : 'Read responses aloud'}
+            title={
+              voice.supported
+                ? 'Read responses aloud in the selected language'
+                : 'Read aloud is not supported in this browser'
+            }
+            aria-pressed={voice.enabled}
+            disabled={!voice.supported || speech.listening}
+            onClick={() => voice.toggle(entries.at(-1)?.reply)}
+          >
+            {voice.enabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+          </button>
           <select
             className='command-chat-speech-language'
             aria-label='Dictation language'
@@ -189,7 +223,10 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
                   : `Dictate (${speech.language}). Your browser may use an online speech service.`
             }
             disabled={pending || !speech.supported}
-            onClick={() => speech.toggle(text)}
+            onClick={() => {
+              voice.cancel();
+              speech.toggle(text);
+            }}
           >
             {speech.listening ? <Square size={14} /> : <Mic size={17} />}
           </button>

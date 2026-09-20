@@ -12,6 +12,8 @@ import {
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
 
 export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | 'description'> & {
+  /** Override only when the exposed arguments narrow the operation's advertised behavior. */
+  description?: string;
   message?: (input: Record<string, unknown>) => string;
 };
 export type ModelCommandScope = {
@@ -48,7 +50,12 @@ export const createModelCommandRuntime = ({
           'command_unavailable',
           `Missing operation ${operationId}.`,
         );
-      return { ...binding, operationId, description: operation.description ?? operationId };
+      return {
+        ...binding,
+        operationId,
+        description:
+          binding.description ?? operation.description ?? 'Action description unavailable.',
+      };
     });
   return {
     submit: async (request, signal) => {
@@ -76,10 +83,17 @@ export const createModelCommandRuntime = ({
         signal,
         instructions,
       });
-      if (proposal.status === 'unresolved')
-        return { status: 'unresolved', message: proposal.reason };
       await authorize();
       signal.throwIfAborted();
+      if (proposal.status === 'help')
+        return {
+          status: 'answered',
+          message: `You can:\n${catalog(initial)
+            .map(op => `• ${op.description}`)
+            .join('\n')}`,
+        };
+      if (proposal.status === 'unresolved')
+        return { status: 'unresolved', message: proposal.reason };
       const current = await scope(request, signal);
       if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
       const reason = validateModelInvocation(

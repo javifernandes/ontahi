@@ -44,6 +44,8 @@ describe('model operation interpretation', () => {
     proposal({}, 'Document.erase'),
     proposal({ name: 'Notes', documentId: 'foreign' }),
     { status: 'resolved' },
+    { status: 'help', message: 'Invented capability' },
+    { status: 'help', invocation: proposal().invocation },
     proposal({ name: '' }),
   ])('rejects unknown operations and malformed arguments', async output => {
     await expect(run(output)).rejects.toHaveProperty('code');

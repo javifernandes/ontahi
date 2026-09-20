@@ -105,3 +105,51 @@ it('does not dispatch after cancellation', async () => {
   await expect(runtime.submit({ text: 'rename' }, controller.signal)).rejects.toThrow();
   expect(f.run).not.toHaveBeenCalled();
 });
+
+it('answers capability questions without dispatching or refreshing scope', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({
+    ...f,
+    provider: {
+      generate: async () => ({ status: 'help' }),
+    },
+  });
+  expect(await runtime.submit({ text: 'What can I do?' }, new AbortController().signal)).toEqual({
+    status: 'answered',
+    message: 'You can:\n• Rename a document.',
+  });
+  expect(f.run).not.toHaveBeenCalled();
+  expect(f.scope).toHaveBeenCalledOnce();
+  expect(f.authorize).toHaveBeenCalledTimes(2);
+});
+
+it('uses the narrowed exposure description when rendering help', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({
+    ...f,
+    scope: async () => ({
+      context: {},
+      bindings: {
+        'Document.rename': { ...f.binding, description: 'Rename your current document.' },
+      },
+    }),
+    provider: { generate: async () => ({ status: 'help' }) },
+  });
+  expect(await runtime.submit({ text: 'What can I do?' }, new AbortController().signal)).toEqual({
+    status: 'answered',
+    message: 'You can:\n• Rename your current document.',
+  });
+  expect(f.run).not.toHaveBeenCalled();
+});
+it('does not disclose help when authorization is revoked during inference', async () => {
+  const f = fixture();
+  f.authorize.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('revoked'));
+  const runtime = createModelCommandRuntime({
+    ...f,
+    provider: { generate: async () => ({ status: 'help' }) },
+  });
+  await expect(
+    runtime.submit({ text: 'What can I do?' }, new AbortController().signal),
+  ).rejects.toThrow('revoked');
+  expect(f.run).not.toHaveBeenCalled();
+});
