@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@ontahi/core": "workspace:*",
-    "effect": "^3.21.0"
+    "effect": "^3.22.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
