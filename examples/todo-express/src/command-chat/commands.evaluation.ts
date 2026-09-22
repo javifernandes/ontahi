@@ -166,3 +166,30 @@ const missing = await submit('add item buy nails', 'es-ES');
 console.info(JSON.stringify({ text: 'missing destination (Spanish selected)', result: missing }));
 assert.equal(missing.status, 'unresolved');
 assert.match(missing.message, /lista/i);
+
+const listRename = await submit('rename list house to Home');
+console.info(JSON.stringify({ text: 'rename list house to Home', result: listRename }));
+assert.equal(listRename.status, 'executed');
+assert.equal(dataset.TodoList.find(list => list.id === 'house-list')?.name, 'Home');
+const itemRename = await submit('rename item fix the door to fix the front door');
+console.info(
+  JSON.stringify({ text: 'rename item fix the door to fix the front door', result: itemRename }),
+);
+assert.equal(itemRename.status, 'executed');
+assert.ok(
+  dataset.TodoItem.some(item => item.title === 'fix the front door' && item.list === 'house-list'),
+);
+const beforeAmbiguous = JSON.stringify(dataset);
+const ambiguousRename = await submit('rename item banana to ripe banana');
+console.info(
+  JSON.stringify({ text: 'rename item banana to ripe banana', result: ambiguousRename }),
+);
+assert.equal(ambiguousRename.status, 'unresolved');
+assert.equal(JSON.stringify(dataset), beforeAmbiguous);
+const qualifiedRename = await submit('rename item banana in Later to ripe banana', 'es-ES');
+console.info(
+  JSON.stringify({ text: 'rename item banana in Later to ripe banana', result: qualifiedRename }),
+);
+assert.equal(qualifiedRename.status, 'executed');
+assert.equal(qualifiedRename.message, 'Ítem renombrado.');
+assert.equal(dataset.TodoItem.find(item => item.id === 'banana-2')?.title, 'ripe banana');

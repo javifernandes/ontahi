@@ -20,54 +20,13 @@ import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication, todoCommandProvider, todoModelRuntime } from './graph.js';
+import { todoGraphCommandPolicies } from './todo-command-policies.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from './todo-read-policies.js';
-import { Tag, TodoItem, TodoList } from './todo.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
   publicOrigin?: string;
 };
-
-const todoGraphCommandPolicies = [
-  { entity: TodoList, relationName: 'items', actions: ['move'] },
-  { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
-  {
-    entity: TodoItem,
-    scope: 'all',
-    actions: {
-      update: {
-        fields: ['list', 'title', 'completed'],
-        if: ['title'],
-        result: ['id', 'list', 'title', 'completed'],
-      },
-    },
-  },
-  {
-    entity: TodoList,
-    scope: 'all',
-    actions: {
-      update: {
-        fields: ['name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-    },
-  },
-  {
-    entity: Tag,
-    scope: 'all',
-    actions: {
-      create: {
-        fields: ['id', 'name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-      update: {
-        fields: ['name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-      delete: { result: ['id', 'name', 'color'] },
-    },
-  },
-] as const;
 
 const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => {
   const server = express();

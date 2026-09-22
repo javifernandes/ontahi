@@ -1,3 +1,8 @@
+import {
+  entityRefsEqual,
+  type GraphCommandDispatchResponse,
+  type UpdateEntityMutationCommand,
+} from '../../data-graph/index.js';
 import { isRecord } from '../../value/object.js';
 import type { ModelCommandRequest, ModelCommandResult } from '../contracts.js';
 
@@ -9,6 +14,11 @@ import {
   type ModelProvider,
   type ModelOperationExposure,
 } from './model-interpretation.js';
+import {
+  prepareModelUpdate,
+  validateModelUpdate,
+  type ModelUpdateBinding,
+} from './model-update.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
 
 export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | 'description'> & {
@@ -19,6 +29,7 @@ export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | '
 export type ModelCommandScope = {
   context: unknown;
   bindings: Readonly<Record<string, ModelCommandBinding>>;
+  updates?: Readonly<Record<string, ModelUpdateBinding>>;
   unresolved?: string;
 };
 export type ModelCommandRuntime = {
@@ -34,11 +45,16 @@ export const createModelCommandRuntime = ({
   scope,
   instructions,
   formatHelp,
+  dispatchUpdate,
 }: {
   application: OntahiApplication;
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
   scope: (request: ModelCommandRequest, signal: AbortSignal) => Promise<ModelCommandScope>;
+  dispatchUpdate?: (
+    command: UpdateEntityMutationCommand,
+    signal: AbortSignal,
+  ) => Promise<GraphCommandDispatchResponse>;
   instructions?: string;
   /** Localize capability presentation without asking the model to invent descriptions. */
   formatHelp?: (descriptions: readonly string[], request: ModelCommandRequest) => string;
@@ -95,6 +111,7 @@ export const createModelCommandRuntime = ({
       const proposal = await interpretModelOperation({
         provider,
         operations: catalog(initial),
+        updates: initial.updates,
         resolveOperation,
         context: initial.context,
         prompt: request.text,
@@ -115,15 +132,57 @@ export const createModelCommandRuntime = ({
           status: 'answered',
           message:
             formatHelp?.(
-              catalog(initial).map(op => op.description),
+              [
+                ...catalog(initial).map(op => op.description),
+                ...Object.values(initial.updates ?? {}).map(update => update.description),
+              ],
               request,
             ) ??
-            `You can:\n${catalog(initial)
-              .map(op => `• ${op.description}`)
+            `You can:\n${[
+              ...catalog(initial).map(op => op.description),
+              ...Object.values(initial.updates ?? {}).map(update => update.description),
+            ]
+              .map(description => `• ${description}`)
               .join('\n')}`,
         };
       if (proposal.status === 'unresolved')
         return { status: 'unresolved', message: proposal.reason };
+      if (proposal.status === 'update') {
+        if (!dispatchUpdate)
+          throw new ModelInterpretationError(
+            'command_unavailable',
+            'Entity updates are not configured.',
+          );
+        const command = prepareModelUpdate(proposal, initial.updates ?? {});
+        if (!command)
+          return {
+            status: 'unresolved',
+            message: initial.updates![proposal.entityName]!.unresolvedReason,
+          };
+        const initialReason = validateModelUpdate(command, initial.updates ?? {});
+        if (initialReason) return { status: 'unresolved', message: initialReason };
+        const fresh = await scope(request, signal);
+        if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
+        const rebound = prepareModelUpdate(proposal, fresh.updates ?? {});
+        if (!rebound || !entityRefsEqual(command.target, rebound.target))
+          return {
+            status: 'unresolved',
+            message: fresh.updates![proposal.entityName]!.unresolvedReason,
+          };
+        const reason = validateModelUpdate(command, fresh.updates ?? {});
+        if (reason) return { status: 'unresolved', message: reason };
+        signal.throwIfAborted();
+        const result = await dispatchUpdate(command, signal);
+        if (result.kind !== 'graph-command-result')
+          throw new ModelInterpretationError(
+            'command_execution_failed',
+            'The update was rejected.',
+          );
+        return {
+          status: 'executed',
+          message: fresh.updates![command.entityName]!.message?.(command) ?? 'Updated.',
+        };
+      }
       const current = await scope(request, signal);
       if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
       const reason = validateModelInvocation(

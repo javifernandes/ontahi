@@ -709,3 +709,20 @@ Request context is optional host-defined interaction context, not authority. Hos
 Ref to resolve deictic requests while still supporting explicit targets. This API does not yet
 infer graph scope, answer arbitrary data questions, or resume conversations. An optional validated BCP 47 `language` is passed to the interpreter as the response language. Hosts can localize bindings and use `formatHelp(descriptions, request)` for capability presentation; Core defaults to English help. Language is presentation input, not authority. For unresolved reasons, concise natural-language wording is model guidance, not a guaranteed output filter. Public request/result
 types are available from the browser-safe `@ontahi/core/runtime/contracts` entrypoint.
+
+
+### Model-proposed entity updates
+
+`ModelCommandScope.updates` optionally exposes entity updates keyed by entity name. Each
+`ModelUpdateBinding` supplies a description, strict `target` and `values` schemas, a `prepare`
+binding to an `UpdateEntityMutationCommand`, a fresh-context `validate`, an unresolved explanation,
+and an optional success message. Derive exposed value schemas from entity fields and expose only
+the intended writable subset. A projected target can use names while the binding supplies the Ref.
+
+The provider can return `{status: "update", entityName, target, values}` instead of an operation
+invocation. `createModelCommandRuntime` requires `dispatchUpdate(command, signal)` for this path;
+the host should route it through its policy-enforcing Graph Command dispatcher with the current
+caller's authority. The runtime validates both projections, reloads scope, rebinds to the same Ref,
+and revalidates before dispatch. Conditional `if` values preserve the original target state through
+the final write. A rejection never produces an executed result. This is not arbitrary graph write
+access or automatic editable-field discovery, and it does not introduce domain rename operations.

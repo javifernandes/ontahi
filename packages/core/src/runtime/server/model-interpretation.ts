@@ -10,6 +10,8 @@ import {
 } from '../../data-graph/index.js';
 import { isRecord } from '../../value/object.js';
 
+import type { ModelUpdateBinding } from './model-update.js';
+
 export type ModelRequest = {
   instructions: string;
   context: string;
@@ -28,6 +30,15 @@ export class ModelInterpretationError extends Error {
   }
 }
 export const ModelInterpretation = graphSchema.union([
+  graphSchema.object(
+    {
+      status: graphSchema.literal('update'),
+      entityName: field.nonEmptyString(),
+      target: field.json(),
+      values: field.json(),
+    },
+    { unknownKeys: 'strict' },
+  ),
   graphSchema.object({ status: graphSchema.literal('help') }, { unknownKeys: 'strict' }),
   graphSchema.object(
     {
@@ -92,6 +103,7 @@ export const validateModelInvocation = (
 export const interpretModelOperation = async ({
   provider,
   operations,
+  updates = {},
   resolveOperation,
   context,
   prompt,
@@ -101,6 +113,7 @@ export const interpretModelOperation = async ({
 }: {
   provider: ModelProvider;
   operations: readonly ModelOperationExposure[];
+  updates?: Readonly<Record<string, ModelUpdateBinding>>;
   resolveOperation: Resolver;
   context: unknown;
   prompt: string;
@@ -109,7 +122,7 @@ export const interpretModelOperation = async ({
   maxContextCharacters?: number;
 }): Promise<ModelInterpretationValue> => {
   signal.throwIfAborted();
-  if (!operations.length)
+  if (!operations.length && !Object.keys(updates).length)
     return { status: 'unresolved', reason: 'No operations are available in this context.' };
   const catalog = operations.map(op => {
     if (!resolveOperation(op.operationId))
@@ -123,7 +136,13 @@ export const interpretModelOperation = async ({
       arguments: toGraphJsonSchema(op.arguments),
     };
   });
-  const serialized = JSON.stringify({ context, operations: catalog });
+  const updateCatalog = Object.entries(updates).map(([entityName, binding]) => ({
+    entityName,
+    description: binding.description,
+    target: toGraphJsonSchema(binding.target),
+    values: toGraphJsonSchema(binding.values),
+  }));
+  const serialized = JSON.stringify({ context, operations: catalog, updates: updateCatalog });
   if (serialized.length > maxContextCharacters)
     return {
       status: 'unresolved',
@@ -131,24 +150,39 @@ export const interpretModelOperation = async ({
     };
   const outputSchema: GraphJsonSchema = {
     anyOf: [
-      {
+      ...updateCatalog.map(update => ({
         type: 'object' as const,
         additionalProperties: false,
-        required: ['status', 'invocation'],
+        required: ['status', 'entityName', 'target', 'values'],
         properties: {
-          status: { const: 'resolved' },
-          invocation: {
-            type: 'object' as const,
-            additionalProperties: false,
-            required: ['kind', 'operationId', 'input'],
-            properties: {
-              kind: { const: 'invoke' },
-              operationId: { enum: catalog.map(op => op.operationId) },
-              input: { anyOf: catalog.map(op => op.arguments) },
-            },
-          },
+          status: { const: 'update' },
+          entityName: { const: update.entityName },
+          target: update.target,
+          values: update.values,
         },
-      },
+      })),
+      ...(catalog.length
+        ? [
+            {
+              type: 'object' as const,
+              additionalProperties: false,
+              required: ['status', 'invocation'],
+              properties: {
+                status: { const: 'resolved' },
+                invocation: {
+                  type: 'object' as const,
+                  additionalProperties: false,
+                  required: ['kind', 'operationId', 'input'],
+                  properties: {
+                    kind: { const: 'invoke' },
+                    operationId: { enum: catalog.map(op => op.operationId) },
+                    input: { anyOf: catalog.map(op => op.arguments) },
+                  },
+                },
+              },
+            },
+          ]
+        : []),
       {
         type: 'object',
         additionalProperties: false,
@@ -165,8 +199,9 @@ export const interpretModelOperation = async ({
   };
   const raw = await provider.generate({
     instructions: [
-      'Translate the user request into ONE supplied operation. Return JSON only.',
+      'Translate the user request into ONE supplied operation or entity update. Return JSON only.',
       'Return {status:"resolved",invocation:{kind:"invoke",operationId,input}} using the advertised arguments. The runtime supplies hidden bindings.',
+      'For an editable property change, return {status:"update",entityName,target,values} using a supplied update schema. target identifies the existing entity; values contains only the new field values. Do not create an entity to rename it.',
       'For missing or ambiguous targets, unsupported requests, or multiple actions return status "unresolved" and a reason explaining the specific problem to the user. Never invent a target or substitute another action.',
       'For general capability questions such as "what things can I do?", return exactly {status:"help"}. The runtime will describe the available actions. Help needs no target and never executes anything.',
       'A command such as add, delete or complete is NOT help. Use resolved or unresolved for commands.',
@@ -187,6 +222,23 @@ export const interpretModelOperation = async ({
       'The model returned an invalid proposal. No action was applied.',
     );
   const proposal = parsed.data;
+  if (proposal.status === 'update') {
+    const binding = updates[proposal.entityName];
+    if (!binding)
+      throw new ModelInterpretationError(
+        'proposal_out_of_scope',
+        'Entity update is outside the configured scope.',
+      );
+    if (
+      !safeParseUnknownGraphSchema(binding.target, proposal.target).success ||
+      !safeParseUnknownGraphSchema(binding.values, proposal.values).success
+    )
+      throw new ModelInterpretationError(
+        'model_output_invalid',
+        'Invalid entity update arguments.',
+      );
+    return proposal;
+  }
   if (proposal.status !== 'resolved') return proposal;
   const exposure = operations.find(op => op.operationId === proposal.invocation.operationId);
   if (!exposure)

@@ -228,7 +228,7 @@ it('localizes help and execution messages without translating the item title', a
   expect(await request('What can I do?')).toEqual({
     status: 'answered',
     message:
-      'Podés:\n• Crear una lista nueva.\n• Borrar una lista y todos sus ítems.\n• Agregar un ítem a una lista.\n• Marcar ítems como completados.',
+      'Podés:\n• Crear una lista nueva.\n• Borrar una lista y todos sus ítems.\n• Agregar un ítem a una lista.\n• Marcar ítems como completados.\n• Renombrar una lista.\n• Renombrar un ítem.',
   });
   bind(async () =>
     proposal('TodoItem.createItem', { title: 'fix the door', listName: 'Shopping' }),
@@ -243,4 +243,82 @@ it('localizes help and execution messages without translating the item title', a
     status: 'unresolved',
     message: '¿A qué lista querés agregar el ítem?',
   });
+});
+
+const rename = (entityName: string, target: unknown, values: unknown) => ({
+  status: 'update',
+  entityName,
+  target,
+  values,
+});
+it('renames lists and completed items using graph updates without rename operations', async () => {
+  bind(async () => rename('TodoList', { name: 'Shopping' }, { name: 'Groceries' }));
+  expect(await submit('rename list Shopping to Groceries')).toEqual({
+    status: 'executed',
+    message: 'List renamed.',
+  });
+  expect(dataset().TodoList?.[0]?.name).toBe('Groceries');
+  dataset().TodoItem![0]!.completed = true;
+  bind(async () => rename('TodoItem', { title: 'buy tea' }, { title: 'buy green tea' }));
+  expect(await submit('rename item buy tea to buy green tea')).toMatchObject({
+    status: 'executed',
+  });
+  expect(dataset().TodoItem![0]).toMatchObject({
+    title: 'buy green tea',
+    completed: true,
+    list: 'list-1',
+  });
+});
+it('does not guess duplicate rename targets or accept invented list qualifiers', async () => {
+  dataset().TodoItem = [
+    ...dataset().TodoItem!,
+    { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
+  ];
+  for (const target of [{ title: 'buy tea' }, { title: 'buy tea', listName: 'Other' }]) {
+    bind(async () => rename('TodoItem', target, { title: 'buy green tea' }));
+    expect(await submit('rename item buy tea to buy green tea')).toMatchObject({
+      status: 'unresolved',
+    });
+  }
+  bind(async () => rename('TodoItem', { title: 'buy tea' }, { title: 'buy green tea' }));
+  expect(await submit('rename item buy tea in Other to buy green tea')).toMatchObject({
+    status: 'executed',
+  });
+  expect(dataset().TodoItem![0]!.title).toBe('buy tea');
+  expect(dataset().TodoItem!.at(-1)!.title).toBe('buy green tea');
+});
+it.each([
+  rename('TodoList', { name: 'Shopping' }, { name: 'archive' }),
+  rename('TodoList', { name: 'Shopping' }, { color: '#f00' }),
+  rename('TodoList', { name: 'Shopping' }, { name: '' }),
+  rename('TodoItem', { title: 'buy tea' }, { title: 'Renamed', completed: true }),
+  rename('Tag', { name: 'Work' }, { name: 'Renamed' }),
+])('rejects schema violations and edits outside the exposed fields', async result => {
+  bind(async () => result);
+  await expect(submit('rename something')).rejects.toHaveProperty('code');
+  expect(dataset().TodoList?.[0]?.name).toBe('Shopping');
+  expect(dataset().TodoItem?.[0]?.title).toBe('buy tea');
+});
+it('keeps missing and duplicate list names unresolved', async () => {
+  for (const name of ['Missing', 'Shopping']) {
+    if (name === 'Shopping')
+      dataset().TodoList = [
+        ...dataset().TodoList!,
+        { id: 'duplicate', name: 'Shopping', color: '#fff' },
+      ];
+    bind(async () => rename('TodoList', { name }, { name: 'New name' }));
+    expect(await submit(`rename list ${name} to New name`)).toMatchObject({ status: 'unresolved' });
+  }
+});
+
+it('does not treat a list inside the new title as a target qualifier', async () => {
+  dataset().TodoItem = [
+    ...dataset().TodoItem!,
+    { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
+  ];
+  bind(async () => rename('TodoItem', { title: 'buy tea' }, { title: 'buy tea in Other' }));
+  expect(await submit('rename item buy tea to buy tea in Other')).toMatchObject({
+    status: 'unresolved',
+  });
+  expect(dataset().TodoItem!.filter(item => item.title === 'buy tea')).toHaveLength(2);
 });

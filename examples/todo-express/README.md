@@ -495,3 +495,12 @@ The Ollama adapter sends context data and the actual user instruction as separat
 Single-list deletion extracts `name` from natural language. Batch requests are still outside the
 one-invocation contract and should request separate messages; prompt guidance and the small-model
 evaluation do not guarantee correct intent recognition for arbitrary compound requests.
+
+
+Chat also supports `rename list Groceries to Shopping` and
+`rename item buy bread to buy wholemeal bread`. Duplicate titles require a list, for example
+`rename item buy bread in Shopping to buy wholemeal bread`. Completed items can be renamed too.
+The model proposes an entity update; no rename Domain Operation is added. `command-chat/updates.ts`
+exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations.
+Updates use the same Graph Command policies as browser editing, including conditional old-name/title
+checks. The chat still does not expose color changes or general field editing.

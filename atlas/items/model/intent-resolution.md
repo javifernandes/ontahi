@@ -59,3 +59,11 @@ A binding can narrow a description when it narrows the operation's arguments. Ca
 the machine protocol; authored descriptions are the natural-language presentation vocabulary.
 Free-form factual answers remain deferred. Concise clarification wording is still prompt guidance,
 not an enforcement or authorization mechanism.
+
+
+An intent can also propose an entity field update instead of invoking a Domain Operation. The
+explicit editable projection derives value contracts from entity fields and binds a semantic target
+to a Ref. The runtime submits a canonical EntityMutationCommand through the host's Graph Command
+policy boundary after fresh-scope checks. Conditional old values protect the final write. Editing
+an exposed property therefore needs no parallel domain operation catalog. Automatic discovery of
+editable fields and semantic value conversion remain separate work.

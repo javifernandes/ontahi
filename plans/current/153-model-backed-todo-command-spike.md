@@ -284,3 +284,28 @@ A complete structured example for this phrasing improved the regression without 
 Validation: 1,142 Core tests, 113 Todo tests, affected lint/typecheck/build, and seventeen real
 Ollama cases passed. This includes the exact house command, English requests with Spanish selected,
 localized help and confirmations, and a missing-destination clarification.
+
+## Entity update outcome: rename
+
+Model interpretation now admits one explicitly scoped entity update alongside invocation/help/
+unresolved. The target is projected as a list name or item title plus optional list name; values
+are projected from the entity field schema. Todo exposes only list name and item title, including
+completed items. No domain rename operations are introduced.
+
+Core binds the proposed target to a canonical EntityMutationCommand, reloads scope and rechecks
+uniqueness and identity before calling the host's Graph Command dispatcher. Todo shares the
+existing browser-write policies, adding an old-name condition allowlist for list updates; item
+updates already allow old-title conditions. Conditional writes catch target changes at execution.
+Schema validation, missing/ambiguous targets, revoked authorization, removed exposure, and rejected
+graph commands cannot produce an executed result. Automatic editable-field discovery, colors,
+batching, and broader intent/security hardening remain follow-ups.
+
+The small model omitted an explicit list qualifier in one rename proposal. Todo's binding now
+recognizes bounded `in <list>` / `en <list>` qualifiers in the original request as a fallback,
+requiring a unique visible list and rejecting invented qualifiers. This is conservative example
+scoping, not general natural-language target resolution.
+
+Validation: 1,147 Core tests, 125 Todo tests, affected lint/typecheck/build, clean-room packed
+artifact verification, and 21 real Ollama cases passed. The local instance preserves its five lists,
+nine items, and three tags. Model-written unresolved explanations can still be inaccurate; the
+checks prove the tested mutations and non-mutations, not broad language-model reliability.

@@ -385,3 +385,5 @@ export {
   type ModelCommandScope,
   type ModelCommandBinding,
 } from './model-command.js';
+
+export type { ModelUpdateBinding } from './model-update.js';
