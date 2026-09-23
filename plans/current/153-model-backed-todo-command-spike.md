@@ -309,3 +309,51 @@ Validation: 1,147 Core tests, 125 Todo tests, affected lint/typecheck/build, cle
 artifact verification, and 21 real Ollama cases passed. The local instance preserves its five lists,
 nine items, and three tags. Model-written unresolved explanations can still be inaccurate; the
 checks prove the tested mutations and non-mutations, not broad language-model reliability.
+
+
+## Experimental checkpoint: canonical requests and next boundaries
+
+This checkpoint supersedes the earlier implementation and validation snapshots above. Core now
+interprets a request into `{status: "resolved", request}` containing an existing Graph Command or
+Operation Invoke request, or into help/unresolved. Canonical parsers, operation input declarations,
+scoped exposures, fresh context validation, and the existing dispatchers own execution. The model
+copies disclosed refs and selections; the intermediate name-based update protocol and projected
+invocation arguments have been removed. Todo exposes list/item renaming and individual item deletion
+as graph commands, without adding domain operations for these structural edits.
+
+Todo provides a floating chat with EN/ES input/response language, browser dictation and optional
+read-aloud. Successful dictation starts a three-second automatic-send countdown. A key in the input,
+an edit, the compact cancel control, new dictation, or a language change cancels that countdown.
+The timer and progress ring live in the composer without a visible explanatory banner. Errors and
+empty recognition do not schedule sends.
+
+The Ollama example now uses Qwen 3.5 4B, an explicit 32,768-token context window and reasoning disabled
+by default. This is still experimental: the full real-model evaluation fails on some false
+ambiguities and replacement capitalization. Earlier successful 0.8B evaluations do not establish
+reliability of the current canonical contract. The exact reported item-deletion request passed in
+Spanish and English on disposable data, preserving its list and sibling item.
+
+Latest validation: 137 Todo tests; Todo lint, typecheck and client build passed. The canonical Core
+migration previously passed its Core suite and clean-room packed-consumer verification. The full
+Ollama evaluation remains failing and is retained as evidence, not replaced by mocked success.
+
+The next abstraction goal is simple, explicit activation of model interpretation in any Ontahi app:
+configure a provider and authorized graph exposure/context policy, then reuse the same runtime and
+transports from the app UI, CLI, and Devtools. The current Todo context assembly, binding validators,
+and adapter composition do not yet meet that goal. Keep provider implementations outside Core and
+derive reusable schema/contracts from entity and operation declarations; do not infer authorization
+from discoverability.
+
+Next slices, not implemented by this checkpoint:
+
+- Record interpretation and correlated canonical execution in Devtools Activity, including
+  help, unresolved outcomes, errors, and timings even when no graph action executes.
+- Admit canonical Graph Read requests and return actual query results; e.g. unfinished TodoItems
+  means a read filtered by `completed = false`, not an answer inferred from prompt context.
+- Add Natural alongside TS and Declarative in the Devtools console, sharing interpretation,
+  execution, and result rendering rather than implementing another Todo-specific chat engine.
+- Reduce app-specific activation boilerplate with evidence from another host application.
+
+Declarative scoping, security hardening, and resumable interactions remain owned by plans
+153b, 153a, and 153c respectively. This checkpoint keeps plan 153 current; it is not a production
+readiness or plan-completion claim.

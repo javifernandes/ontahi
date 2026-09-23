@@ -83,3 +83,12 @@ an existing Selection, while runtime-owned IDs and Refs never need model generat
 argument projection at the interpretation boundary, not a second executable command language.
 Todo still owns the explicit operation catalog, context reads, and binding policy; Ollama remains
 outside Core. A Document rename proof exercises the same mechanism independently of Todo.
+
+
+The canonical-request checkpoint supersedes those initial argument projections. Model output now
+contains existing Graph Command or Operation Invoke requests directly, with refs and selections
+copied from disclosed context. Provider-neutral interpretation and execution orchestration live in
+Core; Todo configures authorized context, exposed contracts and validators. Ollama remains an
+example-owned adapter. Simple provider-and-scope activation across arbitrary apps remains a design
+goal, not an established public convenience API. Graph instruction interpretation remains distinct
+from choosing a model as the implementation of a particular domain operation.

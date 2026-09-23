@@ -61,9 +61,15 @@ Free-form factual answers remain deferred. Concise clarification wording is stil
 not an enforcement or authorization mechanism.
 
 
-An intent can also propose an entity field update instead of invoking a Domain Operation. The
-explicit editable projection derives value contracts from entity fields and binds a semantic target
-to a Ref. The runtime submits a canonical EntityMutationCommand through the host's Graph Command
-policy boundary after fresh-scope checks. Conditional old values protect the final write. Editing
-an exposed property therefore needs no parallel domain operation catalog. Automatic discovery of
-editable fields and semantic value conversion remain separate work.
+An intent can also propose a canonical Graph Command instead of invoking a Domain Operation.
+The resolved interpretation envelope contains the existing request directly, including disclosed
+Refs, values, and conditional old values where required. The runtime validates the advertised
+schema, reloads scope, and dispatches through the host's Graph Command policy boundary. Todo uses
+this for field updates and individual item deletion without parallel domain operations or a
+name-based intermediate mutation protocol. Automatic exposure discovery and semantic value
+conversion remain separate work.
+
+The next boundary is a reusable app capability configured with a provider and authorized graph
+scope. Interpretation and its downstream execution should be correlated in Devtools Activity;
+Natural console input should reuse that capability. Canonical reads and query-result presentation
+are planned extensions, not implemented interpretation outcomes in the current spike.
