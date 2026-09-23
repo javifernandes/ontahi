@@ -1,7 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual as sameJson } from 'node:util';
 
-import { createEntityRef, field, graphSchema, Selection } from '@ontahi/core/data-graph';
+import { createEntityRef, Selection } from '@ontahi/core/data-graph';
 import { ModelInterpretationError, type ModelCommandBinding } from '@ontahi/core/runtime/server';
 
 import { TodoItem, TodoList } from '../todo.js';
@@ -12,8 +11,6 @@ type Context = Awaited<ReturnType<ReturnType<typeof createCommandContextReader>>
 const itemSelection = (id: string) =>
   Selection.references(TodoItem, [createEntityRef(TodoItem, { id })]).toJSON();
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const strict = (fields: Parameters<typeof graphSchema.object>[0]) =>
-  graphSchema.object(fields, { unknownKeys: 'strict' });
 const outside = (): never => {
   throw new ModelInterpretationError(
     'proposal_out_of_scope',
@@ -21,7 +18,7 @@ const outside = (): never => {
   );
 };
 
-// Model argument projections and scope policy, not a second operation catalog.
+// Scope policy on canonical operation inputs; contracts come from the operation declarations.
 // A model-supplied list name is a hint, not evidence that the user disambiguated a target.
 const words = (text: string) =>
   text
@@ -50,8 +47,6 @@ export const todoCommandBindings = (
   return {
     'TodoList.createList': {
       description: spanish ? 'Crear una lista nueva.' : undefined,
-      arguments: strict({ name: field.nonEmptyString() }),
-      prepare: args => ({ id: randomUUID(), name: args.name, color: '#f5ddd5' }),
       validate: value => {
         if (
           Object.keys(value).length !== 3 ||
@@ -68,24 +63,19 @@ export const todoCommandBindings = (
     },
     'TodoItem.deleteList': {
       description: spanish ? 'Borrar una lista y todos sus ítems.' : undefined,
-      unresolvedReason: say(
-        'Specify one list to delete per message.',
-        'Indicá una sola lista para borrar por mensaje.',
-      ),
-      arguments: strict({ name: field.nonEmptyString() }),
-      prepare: args => {
-        // Conservatively reject multiple visible list names, even if the model proposes only one.
+      validate: value => {
+        if (Object.keys(value).length !== 1) outside();
         const mentioned = context.lists.filter(
           list =>
             words(list.name).length > 0 && ` ${words(request)} `.includes(` ${words(list.name)} `),
         );
-        if (mentioned.length !== 1) return null;
-        const list = namedList(args.name);
-        return list ? { list: createEntityRef(TodoList, { id: list.id }) } : null;
-      },
-      validate: value => {
-        if (Object.keys(value).length !== 1) outside();
+        if (mentioned.length !== 1)
+          return say(
+            'Specify one list to delete per message.',
+            'Indicá una sola lista para borrar por mensaje.',
+          );
         const list = listForRef(value.list);
+        if (list && !namedList(list.name)) return say('Which list?', '¿Qué lista?');
         return !list || context.lists.filter(other => sameName(other.name, list.name)).length !== 1
           ? say(
               'No unique list target is available.',
@@ -97,24 +87,6 @@ export const todoCommandBindings = (
     },
     'TodoItem.createItem': {
       description: spanish ? 'Agregar un ítem a una lista.' : undefined,
-      unresolvedReason: say(
-        'Specify which list to add the item to.',
-        '¿A qué lista querés agregar el ítem?',
-      ),
-      arguments: strict({
-        title: field.nonEmptyString(),
-        listName: graphSchema.optional(field.nonEmptyString()),
-      }),
-      prepare: args => {
-        const list = namedList(args.listName);
-        return list
-          ? {
-              id: randomUUID(),
-              title: args.title,
-              list: createEntityRef(TodoList, { id: list.id }),
-            }
-          : null;
-      },
       validate: value => {
         if (
           Object.keys(value).length !== 3 ||
@@ -124,53 +96,37 @@ export const todoCommandBindings = (
           value.title.length > 500
         )
           outside();
+        const list = listForRef(value.list);
+        if (!list || !namedList(list.name))
+          return say(
+            'Specify which list to add the item to.',
+            '¿A qué lista querés agregar el ítem?',
+          );
         return undefined;
       },
       message: () => say('Item added.', 'Ítem agregado.'),
     },
     'TodoItem.setCompleted': {
       description: say('Mark items as completed.', 'Marcar ítems como completados.'),
-      unresolvedReason: say(
-        'I could not identify one unfinished item. Specify its title and which list it belongs to.',
-        'No pude identificar un único ítem pendiente. Indicá su título y a qué lista pertenece.',
-      ),
-      arguments: strict({
-        title: field.nonEmptyString(),
-        listName: graphSchema.optional(field.nonEmptyString()),
-      }),
-      prepare: args => {
-        const list = namedList(args.listName);
-        // Ignore an invented qualifier when the user named no list: resolve globally instead.
-        const hasNamedList = context.lists.some(
-          candidate =>
-            words(candidate.name).length > 0 &&
-            ` ${words(request)} `.includes(` ${words(candidate.name)} `),
-        );
-        if (hasNamedList && !list) return null;
-        const targets = context.items.filter(
-          item =>
-            !item.completed &&
-            sameName(item.title, String(args.title)) &&
-            (!list || item.list.locator.id === list.id),
-        );
-        return targets.length === 1
-          ? { todos: itemSelection(targets[0]!.id), completed: true }
-          : null;
-      },
       validate: value => {
         if (Object.keys(value).length !== 2 || value.completed !== true) outside();
         const target = context.items.find(item => sameJson(value.todos, itemSelection(item.id)));
-        return !target ||
-          target.completed ||
-          context.items.filter(
-            item =>
-              !item.completed &&
-              sameName(item.title, target.title) &&
-              sameJson(item.list, target.list),
-          ).length !== 1
+        const mentioned = context.lists.filter(
+          list =>
+            words(list.name).length > 0 && ` ${words(request)} `.includes(` ${words(list.name)} `),
+        );
+        const matches = target
+          ? context.items.filter(
+              item =>
+                !item.completed &&
+                sameName(item.title, target.title) &&
+                (!mentioned.length || mentioned.some(list => item.list.locator.id === list.id)),
+            )
+          : [];
+        return !target || target.completed || matches.length !== 1 || matches[0]!.id !== target.id
           ? say(
-              'No unique unfinished item target is available.',
-              'No pude identificar un único ítem pendiente.',
+              'I could not identify one unfinished item. Specify its title and which list it belongs to.',
+              'No pude identificar un único ítem pendiente. Indicá su título y a qué lista pertenece.',
             )
           : undefined;
       },
@@ -178,5 +134,13 @@ export const todoCommandBindings = (
     },
   };
 };
-export const todoCommandInstructions =
-  'There is no selected list. Resolve unfinished items across all visible lists. If exactly one item matches, complete it without asking for a list. If multiple items match, ask the user to specify the list; never guess one. Only set listName when the user names a list in the message. Creating an item requires a list name; ask which list if it is absent. The runtime supplies IDs and references. Adding an item whose title contains verbs or "and" is ONE action. Do not perform the task itself. Leading words like "now" and "please" do not add actions. Both "in <list>" and "to <list>" specify listName. Example: "add buy bread to Groceries" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.createItem","input":{"title":"buy bread","listName":"Groceries"}}}. "complete buy bread" uses TodoItem.setCompleted with input {"title":"buy bread"}. For deletion, copy the list name from the request into input.name. The user does not need to supply JSON or say the word "name". For example "delete list Groceries" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.deleteList","input":{"name":"Groceries"}}}. Check names against context.lists, including non-English names. A request naming ONE list is ONE action even when context.lists contains many lists. Other context lists are not requested actions. If multiple graph changes are explicitly requested, ask for one change per message. Never execute only part of the request. "create list Holidays" uses TodoList.createList with input {"name":"Holidays"}. Example: "now add item paint the fence in Home" returns {"status":"resolved","invocation":{"kind":"invoke","operationId":"TodoItem.createItem","input":{"title":"paint the fence","listName":"Home"}}}.';
+export const todoCommandInstructions = `You control a Todo app. Keep reasoning brief: choose one action and one target, or ask one question. Do not repeat the schema or reconsider an ambiguous target; if two candidates match, immediately return unresolved. Use these mappings:
+- "create list <name>" -> TodoList.createList, input {id: context.creation.id, name, color: context.creation.color}.
+- "add <title> to <list name>" or "add item <title> in <list name>" -> TodoItem.createItem, input {id: context.creation.id, title, list: the matching list.ref}.
+- "delete list <name>" -> TodoItem.deleteList, input {list: the matching list.ref}.
+- "complete <title>" -> TodoItem.setCompleted, input {todos: the matching item.completion, completed: true}.
+- "rename list <old> to <new>" -> graph-command version 2, entity-mutation-command update on TodoList, target list.ref, values {name: new}, if {name: old}.
+- "rename item <old> to <new>" -> the same update on TodoItem, target item.ref, values {title: new}, if {title: old}.
+For renaming, return {"status":"resolved","request":{"version":2,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"update","entityName":"TodoList","target":MATCHING_LIST_REF,"values":{"name":"NEW_NAME"},"if":{"name":"CURRENT_NAME"}}}}. Use TodoItem/title for item renaming. Never use createList or createItem to rename.
+For invocations return {"status":"resolved","request":{"kind":"invoke","operationId":"...","input":{...}}}.
+A named existing list is sufficient to add a NEW item; the item need not exist and other items are irrelevant. Copy IDs/refs from context. Preserve the requested new names and titles verbatim, including lowercase letters and accents; do not capitalize, translate, or correct them. There is no selected list. Creating a LIST needs only its new name; it does not require an existing list or item. Ask which list only when adding an ITEM without a destination list, or when multiple existing targets match. For completion, a globally unique unfinished title needs no list. Completed items can be renamed. For multiple requested changes ask for one change per message. Adding a title containing verbs or "and" is still one action. "now" and "please" do not add actions. Never perform the task described in an item's title. Quotes delimit names and titles and are not part of their values.`;

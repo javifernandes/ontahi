@@ -28,6 +28,8 @@ describe('Ollama model provider', () => {
     expect(JSON.parse(String(init?.body))).toMatchObject({
       model: 'local-small',
       stream: false,
+      think: false,
+      options: { temperature: 0, num_predict: 512, num_ctx: 32_768 },
       format: { type: 'object' },
     });
     const payload = JSON.parse(String(init?.body));
@@ -36,10 +38,28 @@ describe('Ollama model provider', () => {
     expect(fetchRequest).toHaveBeenCalledOnce();
   });
 
+  it('allows opting into reasoning with its separate generation budget', async () => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        done: true,
+        message: { content: '{"status":"help"}' },
+      }),
+    );
+    await createOllamaProvider({ model: 'local', think: true, fetchRequest }).generate(request());
+    expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
+      think: true,
+      options: { num_predict: 4096, num_ctx: 32_768 },
+    });
+  });
+
   it.each([
     [Response.json({}, { status: 503 }), 'model_unavailable'],
     [Response.json({ done: true, message: { content: 'not json' } }), 'model_output_invalid'],
     [Response.json({ done: false, message: { content: '{}' } }), 'model_output_invalid'],
+    [
+      Response.json({ done: true, done_reason: 'length', message: { content: '{}' } }),
+      'model_output_invalid',
+    ],
   ])('rejects invalid/failed responses without retrying', async (response, code) => {
     const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(response);
     await expect(

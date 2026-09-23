@@ -84,11 +84,13 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     const prefix = existing.trimEnd();
+    let receivedText = false;
     recognition.onresult = event => {
       if (active.current !== recognition) return;
       const transcript = Array.from(event.results, result => result[0]?.transcript ?? '')
         .join(' ')
         .trim();
+      receivedText ||= Boolean(transcript);
       onText(`${prefix}${prefix && transcript ? ' ' : ''}${transcript}`.slice(0, 2000));
     };
     recognition.onerror = event => {
@@ -109,6 +111,10 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
       if (active.current !== recognition) return;
       active.current = null;
       setListening(false);
+      if (!receivedText)
+        setError(
+          'Dictation ended without recognizing speech. Check your microphone input and try again.',
+        );
       onFinish();
     };
     setError(undefined);

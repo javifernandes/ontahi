@@ -7,7 +7,7 @@ import {
 import {
   entity,
   ontahi,
-  interpretModelOperation,
+  interpretModelRequest,
   createModelCommandRuntime,
 } from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
@@ -74,10 +74,13 @@ const modelRuntime = createModelCommandRuntime({
   provider: {
     generate: async () => ({
       status: 'resolved',
-      invocation: {
+      request: {
         kind: 'invoke',
         operationId: 'TodoList.rename',
-        input: { name: 'Model queue' },
+        input: {
+          list: TodoListSelections.by({ identity: 'list-research' }).toJSON(),
+          name: 'Model queue',
+        },
       },
     }),
   },
@@ -85,11 +88,6 @@ const modelRuntime = createModelCommandRuntime({
     context: {},
     bindings: {
       'TodoList.rename': {
-        arguments: graphSchema.object({ name: field.string() }),
-        prepare: args => ({
-          list: TodoListSelections.by({ identity: 'list-research' }).toJSON(),
-          name: args.name,
-        }),
         validate: () => undefined,
       },
     },
@@ -142,11 +140,15 @@ try {
   );
 }
 
-const interpretation = await interpretModelOperation({
+const interpretation = await interpretModelRequest({
   provider: {
     generate: async () => ({
       status: 'resolved',
-      invocation: { kind: 'invoke', operationId: 'Document.rename', input: { name: 'Notes' } },
+      request: {
+        kind: 'invoke',
+        operationId: 'Document.rename',
+        input: { id: 'document-1', name: 'Notes' },
+      },
     }),
   },
   resolveOperation: id =>
@@ -157,8 +159,6 @@ const interpretation = await interpretModelOperation({
     {
       operationId: 'Document.rename',
       description: 'Rename the current document.',
-      arguments: graphSchema.object({ name: field.string() }),
-      prepare: args => ({ id: 'document-1', name: args.name }),
       validate: () => undefined,
     },
   ],
@@ -168,7 +168,7 @@ const interpretation = await interpretModelOperation({
 });
 if (
   interpretation.status !== 'resolved' ||
-  interpretation.invocation.input.id !== 'document-1' ||
-  interpretation.invocation.input.name !== 'Notes'
+  interpretation.request.input.id !== 'document-1' ||
+  interpretation.request.input.name !== 'Notes'
 )
-  throw new Error('Packed model interpretation failed to bind canonical input.');
+  throw new Error('Packed model interpretation failed to preserve canonical input.');

@@ -27,11 +27,9 @@ const fixture = () => {
   });
   const generate = vi.fn(async (_request: unknown) => ({
     status: 'resolved',
-    invocation: { kind: 'invoke', operationId: 'Document.rename', input: { name: 'Notes' } },
+    request: { kind: 'invoke', operationId: 'Document.rename', input: { name: 'Notes' } },
   }));
   const binding = {
-    arguments: graphSchema.object({ name: field.string() }),
-    prepare: (args: Record<string, unknown>) => args,
     validate: () => undefined,
   };
   const scope = vi.fn(async () => ({ context: {}, bindings: { 'Document.rename': binding } }));

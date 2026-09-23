@@ -409,8 +409,8 @@ an autonomous agent.
 brew install ollama
 ollama serve
 # In another terminal:
-ollama pull qwen3.5:0.8b
-TODO_LLM_MODEL=qwen3.5:0.8b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm todo:dev:local
+ollama pull qwen3.5:4b
+TODO_LLM_MODEL=qwen3.5:4b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm todo:dev:local
 ```
 
 The microphone button uses the browser's Web Speech API to append dictation to the draft.
@@ -447,12 +447,10 @@ The boundaries are explicit:
   the scope, validates the canonical proposal, and dispatches the selected operation.
 - `command-chat/runtime.ts` composes that runtime with the provider, authentication policy, and
   bounded context reader. It does not implement the orchestration itself.
-- `command-chat/bindings.ts` contains the remaining application-specific argument projections,
-  name-to-reference/selection bindings, scope validation, and result messages. It does not duplicate
+- `command-chat/bindings.ts` contains the application-specific scope validation and result messages for canonical inputs. It does not duplicate
   operation descriptions. This explicit exposure configuration is not automatic graph-scope inference.
-- `context.ts` reads through Graph Read policies and passes visible list names and unfinished item
-  titles/list names to the model. Limits are 100 lists, 100 items, 24,000 serialized context
-  characters, and 2,000 request characters. IDs and Selection syntax stay in the runtime.
+- `context.ts` reads through Graph Read policies and passes visible lists and items, including their refs and completion selections to the model. Limits are 100 lists, 100 items, 24,000 serialized context
+  characters, and 2,000 request characters. The model copies these canonical values into requests.
 - `model-provider.ts` adapts Ollama to Core's provider contract without importing Todo.
 
 There is no list selector or Todo-specific focus input. `complete banana` searches all visible
@@ -465,25 +463,34 @@ named list, completion resolves globally. This conservative example policy is no
 language reference resolution or an authorization boundary.
 
 Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request
-still produces at most one invocation; general graph questions and conversation continuation
+still produces at most one command or invocation; general graph questions and conversation continuation
 remain follow-ups.
 
 The provider uses the [Ollama chat API](https://docs.ollama.com/api/chat) with
 [structured output](https://docs.ollama.com/capabilities/structured-outputs), one request and a
-60-second timeout. GitHub authentication mode requires sign-in before context disclosure.
+60-second timeout. The local example uses `qwen3.5:4b` with reasoning disabled by default
+(`think: false`, a 512-token response budget). Reasoning can be explicitly enabled on the adapter
+with `think: true`, which uses a 4,096-token generation budget.
+The adapter explicitly sets a 32,768-token context window (`contextWindowTokens`), leaving room
+for both graph context and generation. Relying on Ollama’s 4k default caused a five-list, nine-item
+board to consume 4,087 tokens and leave only nine tokens for the response. GitHub authentication mode requires sign-in before context disclosure.
 
 The real-model integration evaluation runs explicitly against disposable in-memory data:
 
 ```sh
-TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:0.8b \
+TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:4b \
   pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/commands.evaluation.ts
 ```
 
 `commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
 duplicate and missing targets, list creation, named-list deletion, and item
 creation in a named list. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
-unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. The suite also covers task titles with verbs, the house-list regression, and EN/ES response selection. These seventeen cases pass with qwen3.5:0.8b; its explanations
-remain variable. Ordinary suites use deterministic providers. Broader reliability remains in
+unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. The suite also covers task titles with verbs, the house-list regression, and EN/ES response selection. Run this evaluation when changing the prompt or provider; small-model results and explanations
+remain variable. The evaluation includes a Spanish rename with UUID references and realistic graph context to
+catch context-window regressions. Incomplete responses are rejected without effects; isolated
+successful requests do not establish a passing full evaluation. The previous `qwen3.5:0.8b` configuration was not reliable for this canonical contract: reasoning
+could exhaust the response budget, while non-reasoning requests could choose the wrong action.
+The reported list renames, quoted item rename, and new-list creation are explicit regression cases. The full real-model suite is currently failing: 4B can still invent ambiguity for a unique item or alter capitalization in a replacement name. Do not treat the model switch as a complete reliability fix. Ordinary suites use deterministic providers. Broader reliability remains in
 [plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
 
 The runtime rechecks context before dispatch, but this is not a transaction spanning inference and
@@ -492,15 +499,15 @@ context, prompt-injection hardening, provider disclosure policy, and stronger au
 binding are explicitly tracked follow-ups. See plans 153a–153c.
 
 The Ollama adapter sends context data and the actual user instruction as separate messages.
-Single-list deletion extracts `name` from natural language. Batch requests are still outside the
+Single-list deletion identifies a visible list and copies its Ref into the operation's `list` input. Batch requests are still outside the
 one-invocation contract and should request separate messages; prompt guidance and the small-model
 evaluation do not guarantee correct intent recognition for arbitrary compound requests.
-
 
 Chat also supports `rename list Groceries to Shopping` and
 `rename item buy bread to buy wholemeal bread`. Duplicate titles require a list, for example
 `rename item buy bread in Shopping to buy wholemeal bread`. Completed items can be renamed too.
-The model proposes an entity update; no rename Domain Operation is added. `command-chat/updates.ts`
+The model returns `{status: "resolved", request}` containing the existing versioned Graph Command
+request; no rename Domain Operation or alternate update payload is added. `command-chat/updates.ts`
 exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations.
 Updates use the same Graph Command policies as browser editing, including conditional old-name/title
 checks. The chat still does not expose color changes or general field editing.

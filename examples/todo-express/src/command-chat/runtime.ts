@@ -1,4 +1,6 @@
-import { toGraphCommandRequest, type GraphReadDispatcher } from '@ontahi/core/data-graph';
+import { randomUUID } from 'node:crypto';
+
+import { createEntityRef, Selection, type GraphReadDispatcher } from '@ontahi/core/data-graph';
 import {
   createModelCommandRuntime,
   getCurrentInvocationContext,
@@ -11,6 +13,7 @@ import {
 import { todoAuthenticationMode } from '../authentication-mode.js';
 import { todoGraphCommandPolicies } from '../todo-command-policies.js';
 import type { TodoGraphReadAuthority } from '../todo-read-policies.js';
+import { TodoItem, TodoList } from '../todo.js';
 
 import { todoCommandBindings, todoCommandInstructions } from './bindings.js';
 import { createCommandContextReader } from './context.js';
@@ -33,15 +36,13 @@ export const createTodoModelRuntime = ({
   return createModelCommandRuntime({
     application,
     provider,
-    dispatchUpdate: (command, signal) => {
+    dispatchCommand: (request, signal) => {
       signal.throwIfAborted();
-      return commandDispatcher(toGraphCommandRequest(command), {
+      return commandDispatcher(request, {
         authority: { principal: getCurrentInvocationContext()?.principal ?? null },
       });
     },
-    instructions:
-      todoCommandInstructions +
-      '\nRenaming changes an existing entity, it never creates one. For "rename list Home to House", return {"status":"update","entityName":"TodoList","target":{"name":"Home"},"values":{"name":"House"}}. For "rename item buy bread to buy wholemeal bread", return {"status":"update","entityName":"TodoItem","target":{"title":"buy bread"},"values":{"title":"buy wholemeal bread"}}. For duplicate item titles ask for a list. Only put listName in target if the user explicitly names it.',
+    instructions: todoCommandInstructions,
     formatHelp: (descriptions, request) =>
       `${request.language?.toLowerCase().startsWith('es') ? 'Podés:' : 'You can:'}\n${descriptions.map(description => `• ${description}`).join('\n')}`,
     authorize: () => {
@@ -60,14 +61,22 @@ export const createTodoModelRuntime = ({
             ? 'Los datos disponibles exceden el alcance del chat.'
             : 'The available data exceeds the command scope.',
         context: {
-          lists: current.lists.map(list => list.name),
+          creation: { id: randomUUID(), color: '#f5ddd5' },
+          lists: current.lists.map(list => ({
+            name: list.name,
+            ref: createEntityRef(TodoList, { id: list.id }),
+          })),
           items: current.items.map(item => ({
             title: item.title,
+            ref: createEntityRef(TodoItem, { id: item.id }),
+            completion: Selection.references(TodoItem, [
+              createEntityRef(TodoItem, { id: item.id }),
+            ]).toJSON(),
             completed: item.completed,
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
-        updates: todoCommandUpdates(current, request.text, request.language),
+        commands: todoCommandUpdates(current, request.text, request.language),
         bindings: todoCommandBindings(current, request.text, request.language),
       };
     },

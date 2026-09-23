@@ -7,11 +7,15 @@ export const createOllamaProvider = ({
   model,
   baseUrl = 'http://127.0.0.1:11434',
   timeoutMs = 60_000,
+  think = false,
+  contextWindowTokens = 32_768,
   fetchRequest = globalThis.fetch,
 }: {
   model: string;
   baseUrl?: string;
   timeoutMs?: number;
+  think?: boolean;
+  contextWindowTokens?: number;
   fetchRequest?: typeof fetch;
 }): ModelProvider => ({
   generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
@@ -28,8 +32,14 @@ export const createOllamaProvider = ({
         body: JSON.stringify({
           model,
           stream: false,
-          think: false,
-          options: { temperature: 0, num_predict: 512 },
+          think,
+          // The context window includes the prompt AND generation. Ollama's 4k default
+          // can consume the whole window with graph context before producing JSON.
+          options: {
+            temperature: 0,
+            num_predict: think ? 4096 : 512,
+            num_ctx: contextWindowTokens,
+          },
           format: outputSchema,
           messages: [
             { role: 'system', content: instructions },
@@ -51,12 +61,13 @@ export const createOllamaProvider = ({
       if (
         !isRecord(envelope) ||
         envelope.done !== true ||
+        envelope.done_reason === 'length' ||
         !isRecord(envelope.message) ||
         typeof envelope.message.content !== 'string'
       ) {
         throw new ModelInterpretationError(
           'model_output_invalid',
-          'Ollama did not return a complete structured response.',
+          'Ollama did not finish a structured response within the generation budget. No action was applied.',
         );
       }
       try {

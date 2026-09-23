@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { field, graphSchema } from '../../data-graph/index.js';
 
 import {
-  interpretModelOperation,
+  interpretModelRequest,
   validateModelInvocation,
   type ModelOperationExposure,
 } from './model-interpretation.js';
@@ -16,17 +16,18 @@ const resolveOperation = (id: string) => (id === 'Document.rename' ? { input: sc
 const exposure: ModelOperationExposure = {
   operationId: 'Document.rename',
   description: 'Rename the current document.',
-  arguments: graphSchema.object({ name: field.nonEmptyString() }, { unknownKeys: 'strict' }),
-  prepare: args => ({ documentId: 'doc-1', name: args.name }),
   validate: input =>
     input.documentId === 'doc-1' ? undefined : 'Document is outside the current scope.',
 };
-const proposal = (input: unknown = { name: 'Notes' }, operationId = 'Document.rename') => ({
+const proposal = (
+  input: unknown = { documentId: 'doc-1', name: 'Notes' },
+  operationId = 'Document.rename',
+) => ({
   status: 'resolved',
-  invocation: { kind: 'invoke', operationId, input },
+  request: { kind: 'invoke', operationId, input },
 });
 const run = (output: unknown, overrides = {}) =>
-  interpretModelOperation({
+  interpretModelRequest({
     provider: { generate: async () => output },
     operations: [exposure],
     resolveOperation,
@@ -37,23 +38,18 @@ const run = (output: unknown, overrides = {}) =>
   });
 
 describe('model operation interpretation', () => {
-  it('binds projected arguments to a canonical invocation without dispatching', async () => {
+  it('preserves canonical invocation inputs without translation', async () => {
     expect(await run(proposal())).toEqual(proposal({ documentId: 'doc-1', name: 'Notes' }));
   });
   it.each([
     proposal({}, 'Document.erase'),
-    proposal({ name: 'Notes', documentId: 'foreign' }),
+    proposal({ name: 'Notes', documentId: 'foreign', extra: true }),
     { status: 'resolved' },
     { status: 'help', message: 'Invented capability' },
-    { status: 'help', invocation: proposal().invocation },
+    { status: 'help', invocation: proposal().request },
     proposal({ name: '' }),
   ])('rejects unknown operations and malformed arguments', async output => {
     await expect(run(output)).rejects.toHaveProperty('code');
-  });
-  it('validates the prepared input against the real operation schema', async () => {
-    await expect(
-      run(proposal(), { operations: [{ ...exposure, prepare: () => ({ name: 42 }) }] }),
-    ).rejects.toHaveProperty('code', 'model_output_invalid');
   });
   it('checks fresh scope on canonical proposals from any interpreter', () => {
     expect(
@@ -67,18 +63,6 @@ describe('model operation interpretation', () => {
         resolveOperation,
       ),
     ).toBe('Document is outside the current scope.');
-  });
-  it('keeps unbindable arguments unresolved', async () => {
-    expect(
-      await run(proposal(), { operations: [{ ...exposure, prepare: () => null }] }),
-    ).toMatchObject({ status: 'unresolved' });
-  });
-  it('uses the binding explanation when a target is unresolved', async () => {
-    expect(
-      await run(proposal(), {
-        operations: [{ ...exposure, prepare: () => null, unresolvedReason: 'Which document?' }],
-      }),
-    ).toEqual({ status: 'unresolved', reason: 'Which document?' });
   });
   it('preserves unresolved results', async () => {
     expect(await run({ status: 'unresolved', reason: 'Which document?' })).toEqual({

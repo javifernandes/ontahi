@@ -370,9 +370,9 @@ export type {
   ServerRuntimeValueRef,
 } from './operation/value-ref.js';
 export {
-  ModelInterpretation,
+  parseModelInterpretation,
   ModelInterpretationError,
-  interpretModelOperation,
+  interpretModelRequest,
   validateModelInvocation,
   type ModelInterpretationValue,
   type ModelRequest,
@@ -386,4 +386,4 @@ export {
   type ModelCommandBinding,
 } from './model-command.js';
 
-export type { ModelUpdateBinding } from './model-update.js';
+export type { ModelGraphCommandExposure } from './model-graph-command.js';

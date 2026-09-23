@@ -1517,6 +1517,25 @@ a {
   border-radius: 50%;
   background: currentColor;
   opacity: 0.55;
+  animation: command-chat-dot 1.2s ease-in-out infinite;
+}
+.command-chat-thinking i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.command-chat-thinking i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes command-chat-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
 .command-chat-spinner {
   animation: command-chat-spin 1s linear infinite;
@@ -1527,7 +1546,8 @@ a {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .command-chat-spinner {
+  .command-chat-spinner,
+  .command-chat-thinking i {
     animation: none;
   }
 }

@@ -13,6 +13,62 @@ if (!process.env.TODO_LLM_MODEL)
 const submit = (text: string, language = 'en-US') =>
   todoModelRuntime!.submit({ text, language }, new AbortController().signal);
 const dataset = TodoApplication.storage.dataset;
+// Regression: realistic references plus graph context exhausted Ollama's default 4k window.
+// Synthetic data only; retain the reported Spanish request to cover its interpretation too.
+const contextListId = (index: number) =>
+  `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+dataset.TodoList = ['Limpieza', 'Home', 'Shopping', 'Work', 'Later'].map((name, index) => ({
+  id: contextListId(index),
+  name,
+  color: '#fff',
+}));
+dataset.TodoItem = Array.from({ length: 9 }, (_, index) => ({
+  id: `10000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+  list: contextListId(index % 5),
+  title: `Task ${index + 1}`,
+  completed: false,
+}));
+const beforeContextRename = JSON.stringify(dataset.TodoItem);
+for (const language of ['es-ES', 'en-US']) {
+  for (const name of ['arte', 'otros']) {
+    dataset.TodoList = dataset.TodoList.map(row =>
+      row.id === contextListId(0) ? { ...row, name: 'Limpieza' } : row,
+    );
+    const start = Date.now();
+    const contextRename = await submit(`renombrar lista limpieza a ${name}`, language);
+    console.info(
+      JSON.stringify({
+        text: `Spanish rename to ${name} with UUID graph context`,
+        language,
+        elapsedMs: Date.now() - start,
+        result: contextRename,
+      }),
+    );
+    assert.equal(contextRename.status, 'executed');
+    assert.equal(dataset.TodoList.length, 5, 'Renaming must not create a list.');
+    assert.equal(dataset.TodoList.find(row => row.id === contextListId(0))?.name, name);
+    assert.equal(JSON.stringify(dataset.TodoItem), beforeContextRename);
+  }
+}
+
+// Reported sequence: renaming an item must remain distinct from creating a new list.
+dataset.TodoItem = dataset.TodoItem.map((row, index) =>
+  index === 0 ? { ...row, title: 'compras' } : row,
+);
+const quotedItemId = dataset.TodoItem[0]!.id;
+const quotedRename = await submit('renombrar item "compras" a "papel higienico"', 'es-ES');
+console.info(JSON.stringify({ text: 'Quoted Spanish item rename', result: quotedRename }));
+assert.equal(quotedRename.status, 'executed');
+assert.equal(dataset.TodoItem.find(row => row.id === quotedItemId)?.title, 'papel higienico');
+const beforeSpanishCreation = JSON.stringify(dataset.TodoItem);
+const beforeSpanishListCount = dataset.TodoList.length;
+const spanishListCreation = await submit('Crear lista "comedor"', 'es-ES');
+console.info(JSON.stringify({ text: 'Quoted Spanish list creation', result: spanishListCreation }));
+assert.equal(spanishListCreation.status, 'executed');
+assert.equal(dataset.TodoList.length, beforeSpanishListCount + 1);
+assert.equal(dataset.TodoList.filter(row => row.name === 'comedor').length, 1);
+assert.equal(JSON.stringify(dataset.TodoItem), beforeSpanishCreation);
+
 dataset.TodoList = [{ id: 'evaluation-list', name: 'Shopping', color: '#f5ddd5' }];
 dataset.TodoItem = [
   { id: 'evaluation-tea', list: 'evaluation-list', title: 'buy bread', completed: false },

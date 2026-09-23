@@ -686,43 +686,64 @@ output; it does not establish freshness or change entity reconciliation.
 
 ### Model-backed interpretation
 
-`@ontahi/core/runtime/server` exports `interpretModelOperation`, `ModelProvider`,
-`ModelOperationExposure`, and `validateModelInvocation`. A host supplies scoped data and an
-explicit operation catalog. Each exposure declares model arguments, a `prepare` binding to the
-canonical operation input, and a scope validator. An optional `unresolvedReason` supplies the clarification message when
-`prepare` returns null. The helper validates arguments and the bound
-input against the resolved operation schema, returning a proposal without executing effects.
-Revalidate with fresh scope before using the canonical dispatcher. Authentication and operation
-requirements still belong to the runtime; model scope is not an authorization boundary.
-Providers (such as Ollama), data reads, prompts, dispatch policy, and user interactions remain
-host-owned. The Todo example demonstrates projected title/name arguments without asking the
-model to construct references or selections. This API does not introduce an agent loop.
+`@ontahi/core/runtime/server` exports `interpretModelRequest`, `parseModelInterpretation`,
+`ModelProvider`, and `ModelInterpretationValue`. The interpreter returns one of:
 
-`createModelCommandRuntime({application, provider, authorize, scope, instructions?, formatHelp?})` composes the
-interpretation and execution lifecycle. Its single `submit({text, language?, context?}, signal)` entry
-returns an `executed`, `answered`, or `unresolved` result. The interpreter can return `{status: "help"}` for capability questions. The runtime renders that as an `answered` message directly from the exposed descriptions, without model-written prose or dispatch. `scope` returns model-visible context and bindings keyed
-by canonical operation ID. Descriptions and canonical input contracts are read from the application. A binding may override `description` when its arguments expose a narrower behavior; other bindings reuse the declaration. `authorize` runs before disclosure and again after inference;
-the final dispatch still enforces the operation's own requirements. The runtime reloads and
-revalidates scope after inference without holding a transaction across a model call.
+- `{status: "resolved", request}`: an existing `GraphCommandRequest` or `OperationInvokeRequest`.
+- `{status: "help"}`: describe the exposed capabilities without executing anything.
+- `{status: "unresolved", reason}`: explain an unsupported request or ask for missing information.
 
-Request context is optional host-defined interaction context, not authority. Hosts may use a focus
-Ref to resolve deictic requests while still supporting explicit targets. This API does not yet
-infer graph scope, answer arbitrary data questions, or resume conversations. An optional validated BCP 47 `language` is passed to the interpreter as the response language. Hosts can localize bindings and use `formatHelp(descriptions, request)` for capability presentation; Core defaults to English help. Language is presentation input, not authority. For unresolved reasons, concise natural-language wording is model guidance, not a guaranteed output filter. Public request/result
-types are available from the browser-safe `@ontahi/core/runtime/contracts` entrypoint.
+The executable payload uses the same protocol and parsers as other callers. For example:
 
+```json
+{
+  "status": "resolved",
+  "request": {
+    "version": 2,
+    "kind": "graph-command",
+    "command": {
+      "kind": "entity-mutation-command",
+      "action": "update",
+      "entityName": "TodoList",
+      "target": { "kind": "entity-ref", "entityName": "TodoList", "locator": { "id": "list-1" } },
+      "values": { "name": "Groceries" },
+      "if": { "name": "Shopping" }
+    }
+  }
+}
+```
 
-### Model-proposed entity updates
+Version 2 is used here because the existing graph protocol requires it for conditional writes.
+An invocation uses `{status: "resolved", request: {kind: "invoke", operationId, input}}`, with
+`input` matching the operation declaration. There is no intermediate name-to-ref argument language.
+The model copies references and selections from the disclosed context. Generated JSON schemas
+restrict those fields to the concrete disclosed values when available, keeping the canonical payload
+unchanged. This decoding guidance does not replace validation or authorization. Runtime errors remain
+separate from unresolved interpretation; neither is reported as successful execution.
 
-`ModelCommandScope.updates` optionally exposes entity updates keyed by entity name. Each
-`ModelUpdateBinding` supplies a description, strict `target` and `values` schemas, a `prepare`
-binding to an `UpdateEntityMutationCommand`, a fresh-context `validate`, an unresolved explanation,
-and an optional success message. Derive exposed value schemas from entity fields and expose only
-the intended writable subset. A projected target can use names while the binding supplies the Ref.
+`createModelCommandRuntime({application, provider, authorize, scope, dispatchCommand?, instructions?,
+formatHelp?})` composes interpretation and execution. `submit({text, language?, context?}, signal)`
+returns `executed`, `answered`, or `unresolved`. `scope` supplies:
 
-The provider can return `{status: "update", entityName, target, values}` instead of an operation
-invocation. `createModelCommandRuntime` requires `dispatchUpdate(command, signal)` for this path;
-the host should route it through its policy-enforcing Graph Command dispatcher with the current
-caller's authority. The runtime validates both projections, reloads scope, rebinds to the same Ref,
-and revalidates before dispatch. Conditional `if` values preserve the original target state through
-the final write. A rejection never produces an executed result. This is not arbitrary graph write
-access or automatic editable-field discovery, and it does not introduce domain rename operations.
+- `context`: explicitly bounded, model-visible data, including references needed for requests.
+- `bindings`: scope validators and optional result messages keyed by operation ID. Descriptions
+  and input schemas come from operation declarations; a description override can explain a narrower
+  exposure. Bindings no longer declare alternate arguments or translate inputs.
+- `commands`: optional `ModelGraphCommandExposure` entries, each with a description, a schema
+  restricting the canonical request, a scope validator, and an optional result message.
+
+Derive editable value schemas from entity fields. A request must match an exposed command schema
+before its validator runs. The runtime reloads scope and validates again after inference, then
+passes the same canonical request to `dispatchCommand(request, signal)`. Hosts must connect that
+callback to their policy-enforcing Graph Command dispatcher with the caller's authority. Conditional
+writes preserve the observed state through final execution. Scope validation is not authorization.
+
+`authorize` runs before disclosure and again after inference; operation requirements and graph
+policies still apply at dispatch. Help is rendered from exposed descriptions through optional
+`formatHelp`. A validated BCP 47 `language` guides user-facing reasons and host localization.
+Request `context` is host-defined interaction context, not authority.
+
+This iteration supports commands, invocations, help, and unresolved requests. Reads followed by
+natural-language answers, structured questions/continuations, automatic scope inference, and agent
+loops remain separate work. Provider adapters and domain disclosure policy remain host-owned.
+Public chat request/result types live in the browser-safe `@ontahi/core/runtime/contracts` entrypoint.

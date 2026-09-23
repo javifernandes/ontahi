@@ -1,3 +1,4 @@
+import { createEntityRef, Selection, toGraphCommandRequest } from '@ontahi/core/data-graph';
 import {
   withInvocationContext,
   type ModelProvider,
@@ -7,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TodoApplication } from '../graph.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
+import { TodoItem, TodoList } from '../todo.js';
 
 import { createTodoModelRuntime } from './runtime.js';
 const principal = { subject: 'local-test', kind: 'user' as const };
@@ -23,7 +25,7 @@ const bind = (generate: ModelProvider['generate']) =>
   }));
 const proposal = (operationId: string, input: unknown) => ({
   status: 'resolved',
-  invocation: { kind: 'invoke', operationId, input },
+  request: { kind: 'invoke', operationId, input },
 });
 const submit = (text = 'add buy bread to Shopping') =>
   withInvocationContext({ principal }, () =>
@@ -39,106 +41,126 @@ beforeEach(() => {
     { id: 'other', list: 'list-2', title: 'buy apples', completed: false },
   ];
 });
-describe('Todo graph instruction runtime', () => {
-  it('uses reflected descriptions and binds creation arguments', async () => {
-    const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) =>
-      proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Shopping' }),
-    );
+const list = (id = 'list-1') => createEntityRef(TodoList, { id });
+const complete = (id = 'tea') =>
+  proposal('TodoItem.setCompleted', {
+    todos: Selection.references(TodoItem, [createEntityRef(TodoItem, { id })]).toJSON(),
+    completed: true,
+  });
+const create = (id = 'list-1') =>
+  proposal('TodoItem.createItem', { id: 'new-item', title: 'buy bread', list: list(id) });
+const rename = (entityName: 'TodoList' | 'TodoItem', id: string, before: string, after: string) => {
+  const key = entityName === 'TodoList' ? 'name' : 'title';
+  return {
+    status: 'resolved',
+    request: toGraphCommandRequest({
+      kind: 'entity-mutation-command',
+      action: 'update',
+      entityName,
+      target: createEntityRef(entityName === 'TodoList' ? TodoList : TodoItem, { id }),
+      values: { [key]: after },
+      if: { [key]: before },
+    }),
+  };
+};
+
+describe('Todo canonical model requests', () => {
+  it('exposes real operation inputs and refs, then dispatches creation unchanged', async () => {
+    const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) => create());
     bind(generate);
     expect(await submit()).toEqual({ status: 'executed', message: 'Item added.' });
-    expect(dataset().TodoItem?.[2]).toMatchObject({
+    expect(dataset().TodoItem?.at(-1)).toMatchObject({
+      id: 'new-item',
       title: 'buy bread',
       list: 'list-1',
       completed: false,
     });
-    const catalog = JSON.parse(generate.mock.calls[0]![0].context).operations;
-    expect(
-      catalog.find((op: { operationId: string }) => op.operationId === 'TodoItem.createItem')
-        .description,
-    ).toBe(TodoApplication.resolveOperation('TodoItem.createItem')!.description);
-    expect(TodoApplication.resolveOperation('TodoList.submitCommand')).toBeUndefined();
-    expect(TodoApplication.resolveOperation('TodoList.interpretCommand')).toBeUndefined();
+    const catalog = JSON.parse(generate.mock.calls[0]![0].context);
+    const operation = catalog.operations.find(
+      (op: { operationId: string }) => op.operationId === 'TodoItem.createItem',
+    );
+    expect(operation.description).toBe(
+      TodoApplication.resolveOperation('TodoItem.createItem')!.description,
+    );
+    expect(operation.input.properties).toHaveProperty('list');
+    expect(operation.input.properties).not.toHaveProperty('listName');
+    expect(catalog.context.lists[0].ref).toEqual(list());
   });
   it('adds to a named list without UI selection', async () => {
-    bind(async () => proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Other' }));
+    bind(async () => create('list-2'));
     expect(await submit('add buy bread to Other')).toMatchObject({ status: 'executed' });
-    expect(dataset().TodoItem?.[2]?.list).toBe('list-2');
+    expect(dataset().TodoItem?.at(-1)?.list).toBe('list-2');
   });
-  it('requires a target for creation when none is supplied', async () => {
-    bind(async () => proposal('TodoItem.createItem', { title: 'buy bread' }));
+  it('does not accept a guessed list for creation', async () => {
+    bind(async () => create());
     expect(await submit('add buy bread')).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoItem).toHaveLength(2);
   });
-  it('completes a unique item without a selected list', async () => {
-    bind(async () => proposal('TodoItem.setCompleted', { title: 'buy tea' }));
-    await submit('complete buy tea');
+  it('completes a unique item across lists', async () => {
+    bind(async () => complete());
+    expect(await submit('complete buy tea')).toMatchObject({ status: 'executed' });
     expect(dataset().TodoItem?.map(item => item.completed)).toEqual([true, false]);
   });
-  it('resolves a completion in a named list', async () => {
-    bind(async () => proposal('TodoItem.setCompleted', { title: 'buy apples', listName: 'Other' }));
-    await submit('complete buy apples in Other');
-    expect(dataset().TodoItem?.map(item => item.completed)).toEqual([false, true]);
+  it('does not let a chosen ref bypass ambiguity; accepts an explicit list', async () => {
+    dataset().TodoItem = [
+      ...dataset().TodoItem!,
+      { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
+    ];
+    bind(async () => complete('duplicate'));
+    expect(await submit('complete buy tea')).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
+    expect(await submit('complete buy tea in Other')).toMatchObject({ status: 'executed' });
+    expect(dataset().TodoItem?.at(-1)?.completed).toBe(true);
   });
-  it('deletes a named list and its items without selection', async () => {
-    bind(async () => proposal('TodoItem.deleteList', { name: 'Other' }));
-    await submit('delete list Other');
-    expect(dataset().TodoList?.map(list => list.id)).toEqual(['list-1']);
-    expect(dataset().TodoItem?.map(item => item.id)).toEqual(['tea']);
+  it('deletes a named list and its items', async () => {
+    bind(async () => proposal('TodoItem.deleteList', { list: list('list-2') }));
+    expect(await submit('delete list Other')).toMatchObject({ status: 'executed' });
+    expect(dataset().TodoList?.map(row => row.id)).toEqual(['list-1']);
+    expect(dataset().TodoItem?.map(row => row.id)).toEqual(['tea']);
   });
-  it('rejects a partial deletion when the request names two visible lists', async () => {
-    bind(async () => proposal('TodoItem.deleteList', { name: 'Other' }));
-    expect(await submit('delete list Shopping and Other')).toEqual({
-      status: 'unresolved',
-      message: 'Specify one list to delete per message.',
-    });
-    expect(dataset().TodoList).toHaveLength(2);
-    expect(dataset().TodoItem).toHaveLength(2);
-  });
-  it('creates a list without selection', async () => {
-    bind(async () => proposal('TodoList.createList', { name: 'Holidays' }));
-    await submit('create list Holidays');
-    expect(dataset().TodoList?.map(list => list.name)).toEqual(['Shopping', 'Other', 'Holidays']);
-  });
-  it.each(['buy coffee', 'buy milk'])(
-    'keeps missing and ambiguous titles unresolved: %s',
-    async title => {
-      dataset().TodoItem = [
-        ...dataset().TodoItem!,
-        { id: 'milk-1', list: 'list-1', title: 'buy milk', completed: false },
-        { id: 'milk-2', list: 'list-2', title: 'buy milk', completed: false },
-      ];
-      bind(async () => proposal('TodoItem.setCompleted', { title }));
-      expect(await submit(`complete ${title}`)).toMatchObject({
-        status: 'unresolved',
-        message: expect.stringContaining('which list'),
-      });
-      expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
-    },
-  );
-  it('keeps duplicate list names unresolved', async () => {
+  it('rejects partial deletion and duplicate list names', async () => {
+    bind(async () => proposal('TodoItem.deleteList', { list: list('list-2') }));
+    expect(await submit('delete list Shopping and Other')).toMatchObject({ status: 'unresolved' });
     dataset().TodoList = [
       ...dataset().TodoList!,
       { id: 'duplicate', name: 'Other', color: '#fff' },
     ];
-    bind(async () => proposal('TodoItem.deleteList', { name: 'Other' }));
     expect(await submit('delete list Other')).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoList).toHaveLength(3);
   });
+  it('creates a list with the declared input', async () => {
+    bind(async () =>
+      proposal('TodoList.createList', { id: 'new-list', name: 'Holidays', color: '#f5ddd5' }),
+    );
+    expect(await submit('create list Holidays')).toMatchObject({ status: 'executed' });
+    expect(dataset().TodoList?.at(-1)?.name).toBe('Holidays');
+  });
   it.each([
     proposal('TodoItem.deleteAll', {}),
-    proposal('TodoItem.createItem', { itemId: 'bad' }),
-    { invocations: [] },
-  ])('rejects invalid proposals without effects', async output => {
-    bind(async () => output);
+    proposal('TodoItem.createItem', { title: 'bread', listName: 'Shopping' }),
+    {
+      status: 'update',
+      entityName: 'TodoList',
+      target: { name: 'Shopping' },
+      values: { name: 'New' },
+    },
+    {
+      status: 'resolved',
+      invocation: { kind: 'invoke', operationId: 'TodoItem.deleteList', input: { name: 'Other' } },
+    },
+    create('foreign'),
+  ])('rejects invalid or legacy payloads without effects', async result => {
+    bind(async () => result);
     await expect(submit()).rejects.toHaveProperty('code');
+    expect(dataset().TodoList).toHaveLength(2);
     expect(dataset().TodoItem).toHaveLength(2);
   });
-  it('authenticates before reading or calling the provider', async () => {
+  it('authenticates before disclosure', async () => {
     const generate = vi.fn();
     bind(generate);
     await expect(
       withInvocationContext({ principal: null }, () =>
-        runtime.submit({ text: 'add bread' }, new AbortController().signal),
+        runtime.submit({ text: 'help' }, new AbortController().signal),
       ),
     ).rejects.toHaveProperty('code', 'command_unauthorized');
     expect(generate).not.toHaveBeenCalled();
@@ -168,157 +190,105 @@ describe('Todo graph instruction runtime', () => {
   it('rechecks targets after inference', async () => {
     bind(async () => {
       dataset().TodoItem = [];
-      return proposal('TodoItem.setCompleted', { title: 'buy tea' });
+      return complete();
     });
-    expect(await submit()).toMatchObject({ status: 'unresolved' });
+    expect(await submit('complete buy tea')).toMatchObject({ status: 'unresolved' });
   });
-  it('surfaces dispatch/context failure without claiming success', async () => {
-    bind(async () => {
-      dataset().TodoList = [];
-      return proposal('TodoItem.createItem', { title: 'buy bread', listName: 'Shopping' });
+  it('localizes help and execution without translating entity data', async () => {
+    const request = (text: string) =>
+      withInvocationContext({ principal }, () =>
+        runtime.submit({ text, language: 'es-ES' }, new AbortController().signal),
+      );
+    bind(async () => ({ status: 'help' }));
+    expect(await request('What can I do?')).toMatchObject({
+      status: 'answered',
+      message: expect.stringContaining('Renombrar una lista.'),
     });
-    await expect(submit()).rejects.toHaveProperty('code');
-    expect(dataset().TodoItem).toHaveLength(2);
+    bind(async () => create());
+    expect(await request('add buy bread to Shopping')).toEqual({
+      status: 'executed',
+      message: 'Ítem agregado.',
+    });
+    expect(dataset().TodoItem?.at(-1)?.title).toBe('buy bread');
   });
-});
-
-it('completes banana across lists and resolves ambiguity with an explicit list', async () => {
-  dataset().TodoItem = [{ id: 'banana-1', list: 'list-1', title: 'banana', completed: false }];
-  bind(async () => proposal('TodoItem.setCompleted', { title: 'banana' }));
-  expect(await submit('complete banana')).toMatchObject({ status: 'executed' });
-  dataset().TodoItem = [
-    { id: 'banana-1', list: 'list-1', title: 'banana', completed: false },
-    { id: 'banana-2', list: 'list-2', title: 'banana', completed: false },
-  ];
-  expect(await submit('complete banana')).toMatchObject({
-    status: 'unresolved',
-    message: expect.stringContaining('which list'),
+  it('renames lists and completed items through canonical graph commands', async () => {
+    bind(async () => rename('TodoList', 'list-1', 'Shopping', 'Groceries'));
+    expect(await submit('rename list Shopping to Groceries')).toEqual({
+      status: 'executed',
+      message: 'List renamed.',
+    });
+    dataset().TodoItem![0]!.completed = true;
+    bind(async () => rename('TodoItem', 'tea', 'buy tea', 'buy green tea'));
+    expect(await submit('rename item buy tea to buy green tea')).toMatchObject({
+      status: 'executed',
+    });
+    expect(dataset().TodoItem![0]).toMatchObject({ title: 'buy green tea', completed: true });
   });
-  expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
-  bind(async () => proposal('TodoItem.setCompleted', { title: 'banana', listName: 'Other' }));
-  expect(await submit('complete banana in Other')).toMatchObject({ status: 'executed' });
-  expect(dataset().TodoItem?.map(item => item.completed)).toEqual([false, true]);
-});
-
-it('does not let the model invent a list to disambiguate an item', async () => {
-  dataset().TodoItem = [
-    { id: 'banana-1', list: 'list-1', title: 'banana', completed: false },
-    { id: 'banana-2', list: 'list-2', title: 'banana', completed: false },
-  ];
-  bind(async () => proposal('TodoItem.setCompleted', { title: 'banana', listName: 'Other' }));
-  expect(await submit('complete banana')).toMatchObject({
-    status: 'unresolved',
-    message: expect.stringContaining('which list'),
-  });
-  expect(dataset().TodoItem?.every(item => !item.completed)).toBe(true);
-});
-
-it('ignores an invented list qualifier when the title is globally unique', async () => {
-  bind(async () => proposal('TodoItem.setCompleted', { title: 'buy tea', listName: 'Other' }));
-  expect(await submit('complete buy tea')).toMatchObject({ status: 'executed' });
-  expect(dataset().TodoItem?.map(item => item.completed)).toEqual([true, false]);
-});
-
-it('localizes help and execution messages without translating the item title', async () => {
-  bind(async () => ({ status: 'help' }));
-  const request = (text: string) =>
-    withInvocationContext({ principal }, () =>
-      runtime.submit({ text, language: 'es-ES' }, new AbortController().signal),
-    );
-  expect(await request('What can I do?')).toEqual({
-    status: 'answered',
-    message:
-      'Podés:\n• Crear una lista nueva.\n• Borrar una lista y todos sus ítems.\n• Agregar un ítem a una lista.\n• Marcar ítems como completados.\n• Renombrar una lista.\n• Renombrar un ítem.',
-  });
-  bind(async () =>
-    proposal('TodoItem.createItem', { title: 'fix the door', listName: 'Shopping' }),
-  );
-  expect(await request('add fix the door to Shopping')).toEqual({
-    status: 'executed',
-    message: 'Ítem agregado.',
-  });
-  expect(dataset().TodoItem?.at(-1)?.title).toBe('fix the door');
-  bind(async () => proposal('TodoItem.createItem', { title: 'paint the fence' }));
-  expect(await request('add paint the fence')).toEqual({
-    status: 'unresolved',
-    message: '¿A qué lista querés agregar el ítem?',
-  });
-});
-
-const rename = (entityName: string, target: unknown, values: unknown) => ({
-  status: 'update',
-  entityName,
-  target,
-  values,
-});
-it('renames lists and completed items using graph updates without rename operations', async () => {
-  bind(async () => rename('TodoList', { name: 'Shopping' }, { name: 'Groceries' }));
-  expect(await submit('rename list Shopping to Groceries')).toEqual({
-    status: 'executed',
-    message: 'List renamed.',
-  });
-  expect(dataset().TodoList?.[0]?.name).toBe('Groceries');
-  dataset().TodoItem![0]!.completed = true;
-  bind(async () => rename('TodoItem', { title: 'buy tea' }, { title: 'buy green tea' }));
-  expect(await submit('rename item buy tea to buy green tea')).toMatchObject({
-    status: 'executed',
-  });
-  expect(dataset().TodoItem![0]).toMatchObject({
-    title: 'buy green tea',
-    completed: true,
-    list: 'list-1',
-  });
-});
-it('does not guess duplicate rename targets or accept invented list qualifiers', async () => {
-  dataset().TodoItem = [
-    ...dataset().TodoItem!,
-    { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
-  ];
-  for (const target of [{ title: 'buy tea' }, { title: 'buy tea', listName: 'Other' }]) {
-    bind(async () => rename('TodoItem', target, { title: 'buy green tea' }));
+  it('requires disambiguation even with a valid rename ref', async () => {
+    dataset().TodoItem = [
+      ...dataset().TodoItem!,
+      { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
+    ];
+    bind(async () => rename('TodoItem', 'duplicate', 'buy tea', 'buy green tea'));
     expect(await submit('rename item buy tea to buy green tea')).toMatchObject({
       status: 'unresolved',
     });
-  }
-  bind(async () => rename('TodoItem', { title: 'buy tea' }, { title: 'buy green tea' }));
-  expect(await submit('rename item buy tea in Other to buy green tea')).toMatchObject({
-    status: 'executed',
+    expect(await submit('rename item buy tea in Other to buy green tea')).toMatchObject({
+      status: 'executed',
+    });
+    expect(dataset().TodoItem![0]!.title).toBe('buy tea');
   });
-  expect(dataset().TodoItem![0]!.title).toBe('buy tea');
-  expect(dataset().TodoItem!.at(-1)!.title).toBe('buy green tea');
-});
-it.each([
-  rename('TodoList', { name: 'Shopping' }, { name: 'archive' }),
-  rename('TodoList', { name: 'Shopping' }, { color: '#f00' }),
-  rename('TodoList', { name: 'Shopping' }, { name: '' }),
-  rename('TodoItem', { title: 'buy tea' }, { title: 'Renamed', completed: true }),
-  rename('Tag', { name: 'Work' }, { name: 'Renamed' }),
-])('rejects schema violations and edits outside the exposed fields', async result => {
-  bind(async () => result);
-  await expect(submit('rename something')).rejects.toHaveProperty('code');
-  expect(dataset().TodoList?.[0]?.name).toBe('Shopping');
-  expect(dataset().TodoItem?.[0]?.title).toBe('buy tea');
-});
-it('keeps missing and duplicate list names unresolved', async () => {
-  for (const name of ['Missing', 'Shopping']) {
-    if (name === 'Shopping')
-      dataset().TodoList = [
-        ...dataset().TodoList!,
-        { id: 'duplicate', name: 'Shopping', color: '#fff' },
-      ];
-    bind(async () => rename('TodoList', { name }, { name: 'New name' }));
-    expect(await submit(`rename list ${name} to New name`)).toMatchObject({ status: 'unresolved' });
-  }
-});
-
-it('does not treat a list inside the new title as a target qualifier', async () => {
-  dataset().TodoItem = [
-    ...dataset().TodoItem!,
-    { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
-  ];
-  bind(async () => rename('TodoItem', { title: 'buy tea' }, { title: 'buy tea in Other' }));
-  expect(await submit('rename item buy tea to buy tea in Other')).toMatchObject({
-    status: 'unresolved',
+  it('does not use a list inside the replacement title to disambiguate', async () => {
+    dataset().TodoItem = [
+      ...dataset().TodoItem!,
+      { id: 'duplicate', list: 'list-2', title: 'buy tea', completed: false },
+    ];
+    bind(async () => rename('TodoItem', 'duplicate', 'buy tea', 'buy tea in Other'));
+    expect(await submit('rename item buy tea to buy tea in Other')).toMatchObject({
+      status: 'unresolved',
+    });
+    expect(dataset().TodoItem!.filter(item => item.title === 'buy tea')).toHaveLength(2);
   });
-  expect(dataset().TodoItem!.filter(item => item.title === 'buy tea')).toHaveLength(2);
+  it('rejects stale values, foreign refs and newly ambiguous rename targets', async () => {
+    for (const change of [
+      () => {
+        dataset().TodoList![0]!.name = 'Changed';
+      },
+      () => {
+        dataset().TodoList = [
+          ...dataset().TodoList!,
+          { id: 'duplicate', name: 'Shopping', color: '#fff' },
+        ];
+      },
+    ]) {
+      dataset().TodoList = [{ id: 'list-1', name: 'Shopping', color: '#fff' }];
+      bind(async () => {
+        change();
+        return rename('TodoList', 'list-1', 'Shopping', 'Groceries');
+      });
+      expect(await submit('rename list Shopping to Groceries')).toMatchObject({
+        status: 'unresolved',
+      });
+    }
+    bind(async () => rename('TodoList', 'foreign', 'Shopping', 'Groceries'));
+    expect(await submit('rename list Shopping to Groceries')).toMatchObject({
+      status: 'unresolved',
+    });
+  });
+  it.each(['', 'archive'])('rejects invalid entity values: %s', async name => {
+    bind(async () => rename('TodoList', 'list-1', 'Shopping', name));
+    await expect(submit()).rejects.toHaveProperty('code');
+    expect(dataset().TodoList![0]!.name).toBe('Shopping');
+  });
+  it('does not expose color, deletion, or missing write preconditions as graph commands', async () => {
+    for (const patch of [{ values: { color: '#f00' } }, { action: 'delete' }, { if: undefined }]) {
+      const result = rename('TodoList', 'list-1', 'Shopping', 'Groceries');
+      bind(async () => ({
+        ...result,
+        request: { ...result.request, command: { ...result.request.command, ...patch } },
+      }));
+      await expect(submit()).rejects.toHaveProperty('code');
+    }
+    expect(dataset().TodoList![0]!.name).toBe('Shopping');
+  });
 });

@@ -199,6 +199,43 @@ it('dictates into the draft without sending and replaces interim results', async
   vi.unstubAllGlobals();
 });
 
+it('reports a recognition session ending without text and allows retry', async () => {
+  let recognition!: import('./useSpeechInput.js').BrowserSpeechRecognition;
+  vi.stubGlobal(
+    'SpeechRecognition',
+    class {
+      lang = '';
+      continuous = false;
+      interimResults = true;
+      maxAlternatives = 1;
+      onresult: import('./useSpeechInput.js').BrowserSpeechRecognition['onresult'] = null;
+      onerror: import('./useSpeechInput.js').BrowserSpeechRecognition['onerror'] = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        recognition = this;
+      }
+    },
+  );
+  await write();
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  await act(async () => recognition.onend?.());
+  expect(container.textContent).toContain('Dictation ended without recognizing speech');
+  expect(container.querySelector('textarea')!.value).toBe('add buy bread');
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  await act(async () => recognition.onresult?.({ results: [[{ transcript: 'to Shopping' }]] }));
+  await act(async () => recognition.onend?.());
+  expect(container.querySelector('textarea')!.value).toBe('add buy bread to Shopping');
+  expect(container.textContent).not.toContain('Dictation ended without recognizing speech');
+  expect(execute).not.toHaveBeenCalled();
+});
+
 it('keeps typing available when speech recognition is unsupported', async () => {
   expect(
     (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).disabled,
