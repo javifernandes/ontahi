@@ -84,7 +84,6 @@ argument projection at the interpretation boundary, not a second executable comm
 Todo still owns the explicit operation catalog, context reads, and binding policy; Ollama remains
 outside Core. A Document rename proof exercises the same mechanism independently of Todo.
 
-
 The canonical-request checkpoint supersedes those initial argument projections. Model output now
 contains existing Graph Command or Operation Invoke requests directly, with refs and selections
 copied from disclosed context. Provider-neutral interpretation and execution orchestration live in

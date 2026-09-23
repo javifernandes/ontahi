@@ -60,7 +60,6 @@ the machine protocol; authored descriptions are the natural-language presentatio
 Free-form factual answers remain deferred. Concise clarification wording is still prompt guidance,
 not an enforcement or authorization mechanism.
 
-
 An intent can also propose a canonical Graph Command instead of invoking a Domain Operation.
 The resolved interpretation envelope contains the existing request directly, including disclosed
 Refs, values, and conditional old values where required. The runtime validates the advertised

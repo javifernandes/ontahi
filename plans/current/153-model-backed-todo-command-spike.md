@@ -310,7 +310,6 @@ artifact verification, and 21 real Ollama cases passed. The local instance prese
 nine items, and three tags. Model-written unresolved explanations can still be inaccurate; the
 checks prove the tested mutations and non-mutations, not broad language-model reliability.
 
-
 ## Experimental checkpoint: canonical requests and next boundaries
 
 This checkpoint supersedes the earlier implementation and validation snapshots above. Core now
