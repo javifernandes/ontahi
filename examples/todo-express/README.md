@@ -397,3 +397,121 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
   exposed through remote graph reads.
 - Run code generation at build time and commit or check its deterministic outputs.
 - Mount `@ontahi/explorer-react` in a React host when the full visual Explorer is useful.
+
+## Local model-backed command spike
+
+Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Write the instruction directly;
+name a list in the message only when needed. Send with the arrow or Command/Ctrl+Enter. ArrowUp in an empty draft recalls the latest submitted message without sending it; existing drafts retain normal cursor navigation.
+The latest exchange is visible by default, with earlier exchanges behind the history icon. Each message is independent: this is not a resumable chat or
+an autonomous agent.
+
+```sh
+brew install ollama
+ollama serve
+# In another terminal:
+ollama pull qwen3.5:4b
+TODO_LLM_MODEL=qwen3.5:4b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm todo:dev:local
+```
+
+The microphone button uses the browser's Web Speech API to append dictation to the draft.
+After successful dictation, Send displays a three-second countdown and a progress ring before
+automatically submitting. Any key in the focused draft or Cancel stops the countdown; edits,
+new dictation, and language changes also cancel it. Send submits immediately. Failed or empty
+dictation never schedules a submission.
+Interim results replace each other. After cancelling the countdown, use the send arrow or
+Command/Ctrl+Enter to submit the edited draft. Choose EN or ES beside the microphone; the selection is saved in browser storage and defaults to EN. Unsupported
+browsers show a disabled microphone; permission and device errors leave typing available.
+Ontahi does not upload audio, but the browser may use an online recognition service; this is not
+an offline guarantee. See [MDN SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
+
+The speaker button enables reading replies aloud, initially off for each chat mount. Enabling it
+reads the latest reply; subsequent replies are read automatically. EN/ES selects the speech synthesis
+language as well as dictation and response language. The selection travels with each submitted message; fixed help and success/clarification messages have English and Spanish variants, and the model is instructed to use that language for its own clarifications. Names and item titles are preserved. Changing language,
+starting dictation, sending a new request, disabling read-aloud, or leaving the chat stops playback.
+Unsupported browsers keep the speaker disabled. Voices depend on the browser and operating system. Read-aloud prefers an available Google voice matching the selected locale, then another Google voice in the same language; otherwise it keeps the browser default. The voice list is refreshed for every reply so voices loaded later can be selected.
+See [MDN SpeechSynthesisUtterance](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance).
+
+Ask “what things can I do?” for a concise capability explanation without executing an action.
+Informational replies use `answered`, separate from `executed` and `unresolved`. Help is rendered from localized operation descriptions rather than model-written prose. The completion binding narrows its description to match the exposed completed-only behavior. Technical identifiers stay in invocation payloads.
+
+The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
+`TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
+Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports that it is disabled.
+The model name and URL are server configuration, not client input. Model data stays with that
+configured provider; use local, disposable Todo data for this spike.
+
+The UI sends `POST /model/commands` with `{text, language}`. `ontahiExpress` mounts this optional
+runtime entry and propagates the authenticated invocation context. There are no chat operations
+on `TodoList`, no chat-specific application capability, and no domain service delegation loop.
+
+The boundaries are explicit:
+
+- `operation.description`, input/output contracts, and requirements belong to the domain model.
+  Core's `createModelCommandRuntime` resolves these declarations, interprets the request, reloads
+  the scope, validates the canonical proposal, and dispatches the selected operation.
+- `command-chat/runtime.ts` composes that runtime with the provider, authentication policy, and
+  bounded context reader. It does not implement the orchestration itself.
+- `command-chat/bindings.ts` contains the application-specific scope validation and result messages for canonical inputs. It does not duplicate
+  operation descriptions. This explicit exposure configuration is not automatic graph-scope inference.
+- `context.ts` reads through Graph Read policies and passes visible lists and items, including their refs and completion selections to the model. Limits are 100 lists, 100 items, 24,000 serialized context
+  characters, and 2,000 request characters. The model copies these canonical values into requests.
+- `model-provider.ts` adapts Ollama to Core's provider contract without importing Todo.
+
+There is no list selector or Todo-specific focus input. `complete banana` searches all visible
+unfinished items. A unique match can be completed directly; ambiguous matches request a title and
+list, for example `complete banana in Groceries`. Creating an item requires a named list, such as
+`add banana to Groceries`. Other examples: `create list Groceries` and `delete list Groceries`.
+The binding only uses a list qualifier when that list name occurs in the user's message (matching
+whole normalized words). An invented qualifier cannot disambiguate duplicate titles; absent a
+named list, completion resolves globally. This conservative example policy is not general natural
+language reference resolution or an authorization boundary.
+
+Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request
+still produces at most one command or invocation; general graph questions and conversation continuation
+remain follow-ups.
+
+The provider uses the [Ollama chat API](https://docs.ollama.com/api/chat) with
+[structured output](https://docs.ollama.com/capabilities/structured-outputs), one request and a
+60-second timeout. The local example uses `qwen3.5:4b` with reasoning disabled by default
+(`think: false`, a 512-token response budget). Reasoning can be explicitly enabled on the adapter
+with `think: true`, which uses a 4,096-token generation budget.
+The adapter explicitly sets a 32,768-token context window (`contextWindowTokens`), leaving room
+for both graph context and generation. Relying on Ollama’s 4k default caused a five-list, nine-item
+board to consume 4,087 tokens and leave only nine tokens for the response. GitHub authentication mode requires sign-in before context disclosure.
+
+The real-model integration evaluation runs explicitly against disposable in-memory data:
+
+```sh
+TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:4b \
+  pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/commands.evaluation.ts
+```
+
+`commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
+duplicate and missing targets, list creation, named-list deletion, and item
+creation in a named list. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
+unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. The suite also covers task titles with verbs, the house-list regression, and EN/ES response selection. Run this evaluation when changing the prompt or provider; small-model results and explanations
+remain variable. The evaluation includes a Spanish rename with UUID references and realistic graph context to
+catch context-window regressions. Incomplete responses are rejected without effects; isolated
+successful requests do not establish a passing full evaluation. The previous `qwen3.5:0.8b` configuration was not reliable for this canonical contract: reasoning
+could exhaust the response budget, while non-reasoning requests could choose the wrong action.
+The reported list renames, quoted item rename, and new-list creation are explicit regression cases. The full real-model suite is currently failing: 4B can still invent ambiguity for a unique item or alter capitalization in a replacement name. Do not treat the model switch as a complete reliability fix. Ordinary suites use deterministic providers. Broader reliability remains in
+[plan 153](../../plans/current/153-model-backed-todo-command-spike.md).
+
+The runtime rechecks context before dispatch, but this is not a transaction spanning inference and
+execution or a production security guarantee. Conversation continuation, cross-surface session
+context, prompt-injection hardening, provider disclosure policy, and stronger authorization/effect
+binding are explicitly tracked follow-ups. See plans 153a–153c.
+
+The Ollama adapter sends context data and the actual user instruction as separate messages.
+Single-list deletion identifies a visible list and copies its Ref into the operation's `list` input. Batch requests are still outside the
+one-invocation contract and should request separate messages; prompt guidance and the small-model
+evaluation do not guarantee correct intent recognition for arbitrary compound requests.
+
+Chat also supports `rename list Groceries to Shopping` and
+`rename item buy bread to buy wholemeal bread`. Duplicate titles require a list, for example
+`rename item buy bread in Shopping to buy wholemeal bread`. Completed items can be renamed too.
+The model returns `{status: "resolved", request}` containing the existing versioned Graph Command
+request; no rename Domain Operation or alternate update payload is added. `command-chat/graph-commands.ts`
+exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations. It also exposes the built-in entity delete command for TodoItem, with a conditional current title and fresh scope validation; no domain operation is needed.
+Updates use the same Graph Command policies as browser editing, including conditional old-name/title
+checks. The chat still does not expose color changes or general field editing.

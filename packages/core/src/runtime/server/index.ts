@@ -369,3 +369,21 @@ export type {
   RuntimeValueRefDeclarations,
   ServerRuntimeValueRef,
 } from './operation/value-ref.js';
+export {
+  parseModelInterpretation,
+  ModelInterpretationError,
+  interpretModelRequest,
+  validateModelInvocation,
+  type ModelInterpretationValue,
+  type ModelRequest,
+  type ModelProvider,
+  type ModelOperationExposure,
+} from './model-interpretation.js';
+export {
+  createModelCommandRuntime,
+  type ModelCommandRuntime,
+  type ModelCommandScope,
+  type ModelCommandBinding,
+} from './model-command.js';
+
+export type { ModelGraphCommandExposure } from './model-graph-command.js';

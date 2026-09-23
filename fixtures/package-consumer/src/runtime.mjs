@@ -4,7 +4,12 @@ import {
   graphSchema,
   withSelectionFactories,
 } from '@ontahi/core/data-graph';
-import { entity, ontahi } from '@ontahi/core/runtime/server';
+import {
+  entity,
+  ontahi,
+  interpretModelRequest,
+  createModelCommandRuntime,
+} from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import express from 'express';
 
@@ -63,7 +68,34 @@ if (
   throw new Error('Packed Core failed the in-memory Todo smoke.');
 }
 
-const server = express().use('/runtime/ontahi', ontahiExpress(application)).listen(0, '127.0.0.1');
+const modelRuntime = createModelCommandRuntime({
+  application,
+  authorize: () => {},
+  provider: {
+    generate: async () => ({
+      status: 'resolved',
+      request: {
+        kind: 'invoke',
+        operationId: 'TodoList.rename',
+        input: {
+          list: TodoListSelections.by({ identity: 'list-research' }).toJSON(),
+          name: 'Model queue',
+        },
+      },
+    }),
+  },
+  scope: async () => ({
+    context: {},
+    bindings: {
+      'TodoList.rename': {
+        validate: () => undefined,
+      },
+    },
+  }),
+});
+const server = express()
+  .use('/runtime/ontahi', ontahiExpress(application, { modelCommands: { runtime: modelRuntime } }))
+  .listen(0, '127.0.0.1');
 
 try {
   await new Promise((resolve, reject) => {
@@ -87,8 +119,56 @@ try {
   ) {
     throw new Error('Packed Express runtime failed its mount smoke.');
   }
+  const modelResponse = await fetch(
+    `http://127.0.0.1:${address.port}/runtime/ontahi/model/commands`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'rename to Model queue' }),
+    },
+  );
+  const modelResult = await modelResponse.json();
+  if (
+    !modelResult.ok ||
+    modelResult.value.status !== 'executed' ||
+    dataset.TodoList[0].name !== 'Model queue'
+  )
+    throw new Error('Packed model runtime failed its HTTP dispatch proof.');
 } finally {
   await new Promise((resolve, reject) =>
     server.close(error => (error ? reject(error) : resolve())),
   );
 }
+
+const interpretation = await interpretModelRequest({
+  provider: {
+    generate: async () => ({
+      status: 'resolved',
+      request: {
+        kind: 'invoke',
+        operationId: 'Document.rename',
+        input: { id: 'document-1', name: 'Notes' },
+      },
+    }),
+  },
+  resolveOperation: id =>
+    id === 'Document.rename'
+      ? { input: graphSchema.object({ id: field.id(), name: field.string() }) }
+      : undefined,
+  operations: [
+    {
+      operationId: 'Document.rename',
+      description: 'Rename the current document.',
+      validate: () => undefined,
+    },
+  ],
+  context: { document: 'document-1' },
+  prompt: 'rename this document to Notes',
+  signal: new AbortController().signal,
+});
+if (
+  interpretation.status !== 'resolved' ||
+  interpretation.request.input.id !== 'document-1' ||
+  interpretation.request.input.name !== 'Notes'
+)
+  throw new Error('Packed model interpretation failed to preserve canonical input.');

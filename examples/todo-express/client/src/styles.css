@@ -1373,3 +1373,262 @@ a {
     padding: 15px;
   }
 }
+
+/* Keep the last board controls reachable behind the fixed composer. */
+.todo-app {
+  padding-bottom: 130px;
+}
+.command-chat {
+  position: fixed;
+  z-index: 80;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 120px));
+  font-size: 14px;
+}
+.command-chat-conversation {
+  position: relative;
+  margin-bottom: 10px;
+  padding: 16px 16px 10px;
+  border: 1px solid #deded5;
+  border-radius: 22px;
+  background: #fffefaed;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px #24312512;
+}
+.command-chat-history {
+  position: absolute;
+  top: 9px;
+  left: 10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  color: #686e65;
+  background: #f0f1e9;
+  cursor: pointer;
+}
+.command-chat-log {
+  max-height: min(38vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.command-chat-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 10px;
+}
+.command-chat-message {
+  margin: 0;
+  padding: 9px 13px;
+  max-width: 85%;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.command-chat-message.from-user {
+  align-self: flex-end;
+  color: #fafff7;
+  background: #3a5242;
+  border-radius: 17px 17px 4px 17px;
+}
+.command-chat-message.from-assistant {
+  align-self: flex-start;
+  color: #37433a;
+  background: #efefe7;
+  border-radius: 17px 17px 17px 4px;
+}
+.command-chat-exchange.is-failed .from-assistant {
+  color: #873e36;
+  background: #f7e9e3;
+}
+.command-chat-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid #d4d9cf;
+  border-radius: 24px;
+  background: #fffefa;
+  box-shadow: 0 8px 32px #24312526;
+}
+.command-chat-prompt {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.command-chat-prompt textarea {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  max-height: 100px;
+  resize: none;
+  field-sizing: content;
+  border: 0;
+  background: transparent;
+  padding: 9px 170px 7px 12px;
+  color: #26372c;
+  font: inherit;
+  line-height: 20px;
+}
+.command-chat-prompt textarea:focus {
+  outline: none;
+}
+.command-chat-composer:focus-within {
+  border-color: #839c80;
+  box-shadow:
+    0 8px 32px #24312526,
+    0 0 0 2px #839c8020;
+}
+.command-chat-prompt button {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #354e3e;
+  color: white;
+  cursor: pointer;
+}
+.command-chat-prompt button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.command-chat-thinking {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+}
+.command-chat-thinking i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+  animation: command-chat-dot 1.2s ease-in-out infinite;
+}
+.command-chat-thinking i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.command-chat-thinking i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes command-chat-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+.command-chat-spinner {
+  animation: command-chat-spin 1s linear infinite;
+}
+@keyframes command-chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-chat-spinner,
+  .command-chat-thinking i {
+    animation: none;
+  }
+}
+@media (max-width: 700px) {
+  .command-chat {
+    width: calc(100vw - 28px);
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+.command-chat-prompt .command-chat-microphone {
+  right: 38px;
+  background: transparent;
+  color: #354e3e;
+}
+.command-chat-prompt .command-chat-microphone[aria-pressed='true'] {
+  background: #f5ddd5;
+  color: #922f25;
+}
+.command-chat-speech-status {
+  margin: 0 10px 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+  color: #354e3e;
+  font-size: 12px;
+}
+
+.command-chat-prompt .command-chat-speech-language {
+  position: absolute;
+  right: 86px;
+  bottom: 2px;
+  width: 42px;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #354e3e;
+  font-size: 12px;
+}
+
+.command-chat-prompt .command-chat-voice {
+  right: 130px;
+  background: transparent;
+  color: #354e3e;
+}
+.command-chat-prompt .command-chat-voice[aria-pressed='true'] {
+  background: #e8eee4;
+}
+
+.command-chat-countdown {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+.command-chat-countdown-ring {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.command-chat-countdown-ring circle {
+  fill: none;
+  stroke: #354e3e;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: command-chat-countdown-fill 3s linear forwards;
+}
+@keyframes command-chat-countdown-fill {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-chat-countdown-ring circle {
+    animation: none;
+  }
+}

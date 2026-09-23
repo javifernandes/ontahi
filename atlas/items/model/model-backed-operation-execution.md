@@ -16,6 +16,9 @@ relatedPlans:
   - bookops://plans/99-semantic-editorial-workflows
   - ontahi://plans/100f-operation-invocation-capability
   - ontahi://plans/125-ontahi-ai-operations
+  - ontahi://plans/153-model-backed-todo-command-spike
+  - ontahi://plans/153a-model-execution-security-and-authorization
+  - ontahi://plans/153b-declarative-operation-context-scope
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---
@@ -45,3 +48,46 @@ Entity state.
 The design may support a progression from a soft semantic contract, through a prompt-backed
 implementation, toward a hardened implementation with stronger evidence or deterministic code.
 That progression describes implementation maturity, not whether the operation is durable.
+
+## First Bounded Proof
+
+Plan 153 shapes a typed interpreter operation whose model-backed implementation produces a
+proposed invocation for the Todo application. [[ontahi.model.intent-resolution|Intent Resolution]]
+is its domain behavior; model-backed execution is its implementation mode. The authoritative
+mutation remains a separate invocation of an existing Todo operation through the canonical runtime.
+
+Context assembly initially runs in code from typed inputs and authorized graph reads. It projects
+relevant schema, available operation contracts, and bounded instance data. A future declarative
+scope may describe which graph region is relevant; it cannot expand authority. Plan 153b owns that
+investigation after the manual context provides evidence.
+
+A replaceable model-provider binding handles model interaction. Context fetching, output contract
+validation, allowed-operation enforcement, and dispatch remain Ontahi/application responsibilities.
+Provider message and tool-call formats must not become a second operation language. The spike
+starts with a local Ollama adapter and leaves broader provider integrations and public API shape open.
+
+Strong authorization coupling and prompt-injection protection remain required follow-up work in
+plan 153a before broader deployment. Existing authorization is mandatory in the spike; neither
+prompt instructions nor validated output are a security boundary by themselves.
+
+The local Todo spike now supplies initial implementation evidence through an example-owned runtime
+capability: the caller invokes `TodoList.interpretCommand`, while composition supplies the model
+provider and context builder. A code-backed replacement is exercised under the same operation
+contract. This does not yet establish a generic Core executor-binding API. The first real-model
+trial also distinguishes contract validity from semantic quality: a valid, permitted proposal can
+still resolve the wrong human intention. Evaluation remains independent from schema validation.
+
+The follow-up extracts provider-neutral interpretation and scope validation into Core. Per-operation
+exposures can project simpler model arguments and bind them to canonical inputs: a title becomes
+an existing Selection, while runtime-owned IDs and Refs never need model generation. This is an
+argument projection at the interpretation boundary, not a second executable command language.
+Todo still owns the explicit operation catalog, context reads, and binding policy; Ollama remains
+outside Core. A Document rename proof exercises the same mechanism independently of Todo.
+
+The canonical-request checkpoint supersedes those initial argument projections. Model output now
+contains existing Graph Command or Operation Invoke requests directly, with refs and selections
+copied from disclosed context. Provider-neutral interpretation and execution orchestration live in
+Core; Todo configures authorized context, exposed contracts and validators. Ollama remains an
+example-owned adapter. Simple provider-and-scope activation across arbitrary apps remains a design
+goal, not an established public convenience API. Graph instruction interpretation remains distinct
+from choosing a model as the implementation of a particular domain operation.

@@ -19,55 +19,14 @@ import {
 import express, { type Express } from 'express';
 
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
-import { TodoApplication } from './graph.js';
+import { TodoApplication, todoCommandProvider, todoModelRuntime } from './graph.js';
+import { todoGraphCommandPolicies } from './todo-command-policies.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from './todo-read-policies.js';
-import { Tag, TodoItem, TodoList } from './todo.js';
 
 export type CreateTodoExpressAppOptions = {
   authentication?: TodoAuthenticationAdapter;
   publicOrigin?: string;
 };
-
-const todoGraphCommandPolicies = [
-  { entity: TodoList, relationName: 'items', actions: ['move'] },
-  { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
-  {
-    entity: TodoItem,
-    scope: 'all',
-    actions: {
-      update: {
-        fields: ['list', 'title', 'completed'],
-        if: ['title'],
-        result: ['id', 'list', 'title', 'completed'],
-      },
-    },
-  },
-  {
-    entity: TodoList,
-    scope: 'all',
-    actions: {
-      update: {
-        fields: ['name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-    },
-  },
-  {
-    entity: Tag,
-    scope: 'all',
-    actions: {
-      create: {
-        fields: ['id', 'name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-      update: {
-        fields: ['name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-      delete: { result: ['id', 'name', 'color'] },
-    },
-  },
-] as const;
 
 const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => {
   const server = express();
@@ -101,6 +60,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   // Setup Express for Ontahi App
   server.use(
     ontahiExpress(TodoApplication, {
+      modelCommands: todoModelRuntime ? { runtime: todoModelRuntime } : undefined,
       explorer: createOntahiExpressExplorer({
         indexFile: path.join(clientDirectory, 'index.html'),
       }),
@@ -124,7 +84,10 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
 
   // custom app routes
   server.get('/runtime', (_request, response) =>
-    response.json({ storage: TodoApplication.storage.kind }),
+    response.json({
+      storage: TodoApplication.storage.kind,
+      commandChat: Boolean(todoCommandProvider),
+    }),
   );
   server.get('/', (_request, response) =>
     response.sendFile(path.join(clientDirectory, 'index.html')),

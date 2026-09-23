@@ -9,6 +9,7 @@ supports:
   - ontahi
   - bookops
 relatedPlans:
+  - ontahi://plans/153a-model-execution-security-and-authorization
   - bookops://plans/78-first-class-authorization-and-relationship-policies
   - bookops://plans/59-authority-scoped-domain-operations-over-the-data-graph
   - bookops://plans/92-authority-distribution-and-reconciliation-sandboxes
@@ -35,3 +36,9 @@ a safe message and structured `ordering_not_allowed` detail. This applies to rea
 it never reveals row-scope predicates, private dependency names, or executor failures. Missing
 policies and other authorization failures retain a generic rejection. Static authoring reflection
 is assistance, not evidence of effective authority.
+
+Model-mediated invocation is an emerging consumer of this authority boundary. A resolved proposal
+cannot grant permissions, replace the authenticated Principal, or turn model-visible graph scope
+into write authority. Plan 153a owns prompt-injection and authorization hardening, including the
+distinction between reading data, disclosing it to a model provider, and applying proposed effects.
+This is deferred design work, not an implemented security guarantee.

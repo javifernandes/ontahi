@@ -251,3 +251,24 @@ broader tool, graph, or persistence authority inside the executed operation.
 This research is complete when it produces an evidence-backed executor contract, a narrow
 prototype, and a decision about package and reflection boundaries. Semantic Editorial remains the
 BookOps product workstream; this plan owns the reusable Ontahi execution model it can consume.
+
+## Follow-Up: Todo Command Spike
+
+[Plan 153](../current/153-model-backed-todo-command-spike.md) is the selected narrow experiment. A
+model-backed interpreter returns a non-authoritative invocation proposal; an explicitly enabled
+local Todo path executes at most one allowed mutation through the existing dispatcher with the
+caller's authority. It supplies the narrower persistence/application semantics anticipated by
+Decision 6 without changing this research plan's default read-only boundary.
+
+The spike verifies code-backed replacement of the interpreter, explicit context assembly, a
+replaceable provider seam, and honest execution results. It does not close the wider research or
+establish production readiness. Dedicated follow-ups preserve deferred scope:
+
+- [153a: Security and authorization](../backlog/153a-model-execution-security-and-authorization.md).
+- [153b: Declarative context scope](../backlog/153b-declarative-operation-context-scope.md).
+- [153c: Interactions and resumption](../backlog/153c-operation-interactions-and-resumption.md).
+
+Atlas captures [Intent Resolution](../../atlas/items/model/intent-resolution.md) and
+[Operation Interaction](../../atlas/items/model/operation-interaction.md) as shaping concepts.
+Atlas application questions and later reviewed plan editing are downstream product use cases, not
+implementation scope for this framework spike.

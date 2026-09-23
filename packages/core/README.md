@@ -683,3 +683,67 @@ Client cache output inspection can include optional `source` metadata (`kind: 'g
 'operation'` and `name`). Pass it as the fourth argument to `clientCache.writeOutput` to identify
 the producing read or operation independently of custom cache keys. This metadata describes an
 output; it does not establish freshness or change entity reconciliation.
+
+### Model-backed interpretation
+
+`@ontahi/core/runtime/server` exports `interpretModelRequest`, `parseModelInterpretation`,
+`ModelProvider`, and `ModelInterpretationValue`. The interpreter returns one of:
+
+- `{status: "resolved", request}`: an existing `GraphCommandRequest` or `OperationInvokeRequest`.
+- `{status: "help"}`: describe the exposed capabilities without executing anything.
+- `{status: "unresolved", reason}`: explain an unsupported request or ask for missing information.
+
+The executable payload uses the same protocol and parsers as other callers. For example:
+
+```json
+{
+  "status": "resolved",
+  "request": {
+    "version": 2,
+    "kind": "graph-command",
+    "command": {
+      "kind": "entity-mutation-command",
+      "action": "update",
+      "entityName": "TodoList",
+      "target": { "kind": "entity-ref", "entityName": "TodoList", "locator": { "id": "list-1" } },
+      "values": { "name": "Groceries" },
+      "if": { "name": "Shopping" }
+    }
+  }
+}
+```
+
+Version 2 is used here because the existing graph protocol requires it for conditional writes.
+An invocation uses `{status: "resolved", request: {kind: "invoke", operationId, input}}`, with
+`input` matching the operation declaration. There is no intermediate name-to-ref argument language.
+The model copies references and selections from the disclosed context. Generated JSON schemas
+restrict those fields to the concrete disclosed values when available, keeping the canonical payload
+unchanged. This decoding guidance does not replace validation or authorization. Runtime errors remain
+separate from unresolved interpretation; neither is reported as successful execution.
+
+`createModelCommandRuntime({application, provider, authorize, scope, dispatchCommand?, instructions?,
+formatHelp?})` composes interpretation and execution. `submit({text, language?, context?}, signal)`
+returns `executed`, `answered`, or `unresolved`. `scope` supplies:
+
+- `context`: explicitly bounded, model-visible data, including references needed for requests.
+- `bindings`: scope validators and optional result messages keyed by operation ID. Descriptions
+  and input schemas come from operation declarations; a description override can explain a narrower
+  exposure. Bindings no longer declare alternate arguments or translate inputs.
+- `commands`: optional `ModelGraphCommandExposure` entries, each with a description, a schema
+  restricting the canonical request, a scope validator, and an optional result message.
+
+Derive editable value schemas from entity fields. A request must match an exposed command schema
+before its validator runs. The runtime reloads scope and validates again after inference, then
+passes the same canonical request to `dispatchCommand(request, signal)`. Hosts must connect that
+callback to their policy-enforcing Graph Command dispatcher with the caller's authority. Conditional
+writes preserve the observed state through final execution. Scope validation is not authorization.
+
+`authorize` runs before disclosure and again after inference; operation requirements and graph
+policies still apply at dispatch. Help is rendered from exposed descriptions through optional
+`formatHelp`. A validated BCP 47 `language` guides user-facing reasons and host localization.
+Request `context` is host-defined interaction context, not authority.
+
+This iteration supports commands, invocations, help, and unresolved requests. Reads followed by
+natural-language answers, structured questions/continuations, automatic scope inference, and agent
+loops remain separate work. Provider adapters and domain disclosure policy remain host-owned.
+Public chat request/result types live in the browser-safe `@ontahi/core/runtime/contracts` entrypoint.

@@ -91,6 +91,7 @@ export const TodoList = entity({
 
     return {
       createList: operation({
+        description: 'Create a new list.',
         input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
         output: self,
         bridge: { invalidate: [['TodoList']] },
@@ -204,6 +205,7 @@ export const TodoItem = entity({
       });
     return {
       createItem: operation({
+        description: 'Add an item to a list.',
         input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
         output: self,
         bridge: { invalidate: [['TodoList'], ['TodoItem']] },
@@ -228,6 +230,7 @@ export const TodoItem = entity({
           }),
       }),
       setCompleted: operation({
+        description: 'Mark existing items completed or incomplete.',
         input: graphSchema.object({
           todos: self.many(),
           completed: self.fields.completed,
@@ -252,6 +255,7 @@ export const TodoItem = entity({
         },
       }),
       deleteList: operation.atomic({
+        description: 'Delete a list and all its items.',
         input: graphSchema.object({
           list: graphSchema.existingRef(TodoList),
         }),
