@@ -17,7 +17,7 @@ import { TodoItem, TodoList } from '../todo.js';
 
 import { todoCommandBindings, todoCommandInstructions } from './bindings.js';
 import { createCommandContextReader } from './context.js';
-import { todoCommandUpdates } from './updates.js';
+import { todoGraphCommands } from './graph-commands.js';
 
 // Application composition only; orchestration lives in the Ontahi runtime.
 export const createTodoModelRuntime = ({
@@ -76,7 +76,7 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
-        commands: todoCommandUpdates(current, request.text, request.language),
+        commands: todoGraphCommands(current, request.text, request.language),
         bindings: todoCommandBindings(current, request.text, request.language),
       };
     },

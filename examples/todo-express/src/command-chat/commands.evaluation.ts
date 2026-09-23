@@ -13,6 +13,27 @@ if (!process.env.TODO_LLM_MODEL)
 const submit = (text: string, language = 'en-US') =>
   todoModelRuntime!.submit({ text, language }, new AbortController().signal);
 const dataset = TodoApplication.storage.dataset;
+// Individual deletion uses the canonical graph command, not a domain operation.
+for (const language of ['es-ES', 'en-US']) {
+  dataset.TodoList = [{ id: 'delete-list', name: 'Manuela', color: '#fff' }];
+  dataset.TodoItem = [
+    { id: 'delete-target', list: 'delete-list', title: 'comida', completed: false },
+    { id: 'delete-sibling', list: 'delete-list', title: 'water', completed: false },
+  ];
+  const text =
+    language === 'es-ES'
+      ? 'borrar ítem comida de lista Manuela'
+      : 'delete item comida from list Manuela';
+  const result = await submit(text, language);
+  console.info(JSON.stringify({ text, result }));
+  assert.equal(result.status, 'executed');
+  assert.equal(dataset.TodoList.length, 1);
+  assert.deepEqual(
+    dataset.TodoItem.map(item => item.id),
+    ['delete-sibling'],
+  );
+}
+
 // Regression: realistic references plus graph context exhausted Ollama's default 4k window.
 // Synthetic data only; retain the reported Spanish request to cover its interpretation too.
 const contextListId = (index: number) =>

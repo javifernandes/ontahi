@@ -64,7 +64,53 @@ const rename = (entityName: 'TodoList' | 'TodoItem', id: string, before: string,
   };
 };
 
+const removeItem = (id = 'tea', title = 'buy tea') => ({
+  status: 'resolved',
+  request: toGraphCommandRequest({
+    kind: 'entity-mutation-command',
+    action: 'delete',
+    entityName: 'TodoItem',
+    target: createEntityRef(TodoItem, { id }),
+    if: { title },
+  }),
+});
+
 describe('Todo canonical model requests', () => {
+  it('deletes the named item while preserving lists and siblings', async () => {
+    dataset().TodoList![0]!.name = 'Manuela';
+    dataset().TodoItem![0]!.title = 'comida';
+    const lists = structuredClone(dataset().TodoList);
+    bind(async () => removeItem('tea', 'comida'));
+    expect(await submit('borrar ítem comida de lista Manuela')).toEqual({
+      status: 'executed',
+      message: 'Item deleted.',
+    });
+    expect(dataset().TodoItem).toEqual([
+      { id: 'other', list: 'list-2', title: 'buy apples', completed: false },
+    ]);
+    expect(dataset().TodoList).toEqual(lists);
+  });
+  it('requires an explicit matching list for duplicate item deletion', async () => {
+    dataset().TodoItem![1]!.title = 'buy tea';
+    bind(async () => removeItem());
+    expect(await submit('delete item buy tea')).toMatchObject({ status: 'unresolved' });
+    expect(await submit('delete item buy tea from list Other')).toMatchObject({
+      status: 'unresolved',
+    });
+    expect(dataset().TodoItem).toHaveLength(2);
+    expect(await submit('delete item buy tea from list Shopping')).toMatchObject({
+      status: 'executed',
+    });
+    expect(dataset().TodoItem).toHaveLength(1);
+  });
+  it('rejects a stale deletion target after interpretation', async () => {
+    bind(async () => {
+      dataset().TodoItem![0]!.title = 'changed';
+      return removeItem();
+    });
+    expect(await submit('delete item buy tea')).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoItem).toHaveLength(2);
+  });
   it('exposes real operation inputs and refs, then dispatches creation unchanged', async () => {
     const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) => create());
     bind(generate);

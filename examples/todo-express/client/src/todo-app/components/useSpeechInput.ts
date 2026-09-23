@@ -33,7 +33,10 @@ const initialSpeechLanguage = (): SpeechLanguage => {
   }
 };
 
-export const useSpeechInput = (onText: (text: string) => void, onFinish: () => void) => {
+export const useSpeechInput = (
+  onText: (text: string) => void,
+  onFinish: (recognized: boolean) => void,
+) => {
   const [language, updateLanguage] = useState<SpeechLanguage>(initialSpeechLanguage);
   const setLanguage = (value: SpeechLanguage) => {
     updateLanguage(value);
@@ -90,11 +93,11 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
       const transcript = Array.from(event.results, result => result[0]?.transcript ?? '')
         .join(' ')
         .trim();
-      receivedText ||= Boolean(transcript);
+      receivedText = Boolean(transcript);
       onText(`${prefix}${prefix && transcript ? ' ' : ''}${transcript}`.slice(0, 2000));
     };
     recognition.onerror = event => {
-      if (active.current !== recognition || event.error === 'aborted') return;
+      if (active.current !== recognition) return;
       setError(
         event.error === 'not-allowed' || event.error === 'service-not-allowed'
           ? 'Microphone access was denied. Allow it in your browser settings.'
@@ -105,7 +108,7 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
               : 'Speech recognition is unavailable. Try again or type your message.',
       );
       cancel();
-      onFinish();
+      onFinish(false);
     };
     recognition.onend = () => {
       if (active.current !== recognition) return;
@@ -115,7 +118,7 @@ export const useSpeechInput = (onText: (text: string) => void, onFinish: () => v
         setError(
           'Dictation ended without recognizing speech. Check your microphone input and try again.',
         );
-      onFinish();
+      onFinish(receivedText);
     };
     setError(undefined);
     setListening(true);

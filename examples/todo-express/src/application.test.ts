@@ -741,6 +741,7 @@ describe('Ontahi todo portability example', () => {
           name: 'TodoItem',
           mutations: {
             update: { fields: ['list', 'title', 'completed'] },
+            delete: true,
           },
         }),
         expect.objectContaining({

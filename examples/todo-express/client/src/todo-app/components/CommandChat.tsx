@@ -7,11 +7,13 @@ import {
   Square,
   Volume2,
   VolumeX,
+  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { submitModelCommand } from '../../model-commands.js';
 
+import { useDictationCountdown } from './useDictationCountdown.js';
 import { useSpeechInput } from './useSpeechInput.js';
 import { useSpeechOutput } from './useSpeechOutput.js';
 
@@ -28,7 +30,11 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
   const [pending, setPending] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
-  const speech = useSpeechInput(setText, () => prompt.current?.focus());
+  const countdown = useDictationCountdown(() => prompt.current?.form?.requestSubmit());
+  const speech = useSpeechInput(setText, recognized => {
+    if (recognized) countdown.start();
+    prompt.current?.focus();
+  });
   const voice = useSpeechOutput(speech.language);
   const [entries, setEntries] = useState<Entry[]>([]);
   useEffect(() => {
@@ -47,6 +53,7 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    countdown.cancel();
     if (!text.trim() || busy.current || speech.listening) return;
     voice.cancel();
     busy.current = true;
@@ -154,7 +161,7 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
       )}
       {speech.listening && (
         <p className='command-chat-speech-status' role='status'>
-          Listening… Stop to review and send.
+          Listening… Dictation sends automatically after a 3-second review.
         </p>
       )}
       <form className='command-chat-composer' onSubmit={event => void submit(event)}>
@@ -166,13 +173,20 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
             rows={1}
             value={text}
             onChange={event => {
+              countdown.cancel();
               speech.cancel();
               setText(event.target.value);
             }}
             maxLength={2000}
             placeholder='Message…'
             disabled={pending}
+            onCompositionStart={() => countdown.cancel()}
             onKeyDown={event => {
+              if (countdown.seconds !== null) {
+                countdown.cancel();
+                if (event.key === 'Enter') event.preventDefault();
+                return;
+              }
               if (
                 event.key === 'ArrowUp' &&
                 !text &&
@@ -220,35 +234,57 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
             title='Response and speech language'
             value={speech.language}
             disabled={pending || speech.listening}
-            onChange={event =>
-              speech.setLanguage(event.target.value === 'es-ES' ? 'es-ES' : 'en-US')
-            }
+            onChange={event => {
+              countdown.cancel();
+              speech.setLanguage(event.target.value === 'es-ES' ? 'es-ES' : 'en-US');
+            }}
           >
             <option value='en-US'>EN</option>
             <option value='es-ES'>ES</option>
           </select>
           <button
             type='button'
-            className='command-chat-microphone'
-            aria-label={speech.listening ? 'Stop dictation' : 'Dictate message'}
-            aria-pressed={speech.listening}
-            title={
-              !speech.supported
-                ? 'Speech recognition is not supported in this browser.'
+            className={`command-chat-microphone${countdown.seconds !== null ? ' command-chat-cancel' : ''}`}
+            aria-label={
+              countdown.seconds !== null
+                ? 'Cancel automatic send'
                 : speech.listening
                   ? 'Stop dictation'
-                  : `Dictate (${speech.language}). Your browser may use an online speech service.`
+                  : 'Dictate message'
+            }
+            aria-pressed={speech.listening}
+            title={
+              countdown.seconds !== null
+                ? 'Cancel automatic send'
+                : !speech.supported
+                  ? 'Speech recognition is not supported in this browser.'
+                  : speech.listening
+                    ? 'Stop dictation'
+                    : `Dictate (${speech.language}). Your browser may use an online speech service.`
             }
             disabled={pending || !speech.supported}
             onClick={() => {
+              if (countdown.seconds !== null) {
+                countdown.cancel();
+                prompt.current?.focus();
+                return;
+              }
+              countdown.cancel();
               voice.cancel();
               speech.toggle(text);
             }}
           >
-            {speech.listening ? <Square size={14} /> : <Mic size={17} />}
+            {countdown.seconds !== null ? (
+              <X size={17} />
+            ) : speech.listening ? (
+              <Square size={14} />
+            ) : (
+              <Mic size={17} />
+            )}
           </button>
           <button
             type='submit'
+            className={countdown.seconds !== null ? 'command-chat-countdown' : undefined}
             aria-label='Send message'
             title='Send (⌘Enter)'
             aria-keyshortcuts='Meta+Enter Control+Enter'
@@ -256,6 +292,16 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
           >
             {pending ? (
               <LoaderCircle size={17} className='command-chat-spinner' />
+            ) : countdown.seconds !== null ? (
+              <>
+                <svg className='command-chat-countdown-ring' viewBox='0 0 36 36' aria-hidden='true'>
+                  <circle cx='18' cy='18' r='16' pathLength='1' />
+                </svg>
+                <span aria-hidden='true'>{countdown.seconds}</span>
+                <span className='sr-only' role='status'>
+                  Sending in {countdown.seconds} seconds
+                </span>
+              </>
             ) : (
               <ArrowUp size={18} />
             )}

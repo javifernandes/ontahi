@@ -138,6 +138,7 @@ export const todoCommandInstructions = `You control a Todo app. Keep reasoning b
 - "create list <name>" -> TodoList.createList, input {id: context.creation.id, name, color: context.creation.color}.
 - "add <title> to <list name>" or "add item <title> in <list name>" -> TodoItem.createItem, input {id: context.creation.id, title, list: the matching list.ref}.
 - "delete list <name>" -> TodoItem.deleteList, input {list: the matching list.ref}.
+- "delete item <title>" (optionally "from list <name>") -> graph-command version 2, entity-mutation-command delete on TodoItem, target item.ref, if {title: current title}. No values field. This deletes only the item, never its list.
 - "complete <title>" -> TodoItem.setCompleted, input {todos: the matching item.completion, completed: true}.
 - "rename list <old> to <new>" -> graph-command version 2, entity-mutation-command update on TodoList, target list.ref, values {name: new}, if {name: old}.
 - "rename item <old> to <new>" -> the same update on TodoItem, target item.ref, values {title: new}, if {title: old}.

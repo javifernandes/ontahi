@@ -7,6 +7,7 @@ export const todoGraphCommandPolicies = [
     entity: TodoItem,
     scope: 'all',
     actions: {
+      delete: { if: ['title'], result: ['id', 'list', 'title'] },
       update: {
         fields: ['list', 'title', 'completed'],
         if: ['title'],

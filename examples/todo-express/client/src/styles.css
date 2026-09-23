@@ -1598,3 +1598,37 @@ a {
 .command-chat-prompt .command-chat-voice[aria-pressed='true'] {
   background: #e8eee4;
 }
+
+.command-chat-countdown {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+.command-chat-countdown-ring {
+  position: absolute;
+  inset: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+.command-chat-countdown-ring circle {
+  fill: none;
+  stroke: #354e3e;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: command-chat-countdown-fill 3s linear forwards;
+}
+@keyframes command-chat-countdown-fill {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-chat-countdown-ring circle {
+    animation: none;
+  }
+}

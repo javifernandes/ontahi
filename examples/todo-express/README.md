@@ -414,8 +414,12 @@ TODO_LLM_MODEL=qwen3.5:4b TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled pnpm to
 ```
 
 The microphone button uses the browser's Web Speech API to append dictation to the draft.
-Interim results replace each other; nothing is sent automatically. Stop dictation, review/edit,
-and use the send arrow or Command/Ctrl+Enter. Choose EN or ES beside the microphone; the selection is saved in browser storage and defaults to EN. Unsupported
+After successful dictation, Send displays a three-second countdown and a progress ring before
+automatically submitting. Any key in the focused draft or Cancel stops the countdown; edits,
+new dictation, and language changes also cancel it. Send submits immediately. Failed or empty
+dictation never schedules a submission.
+Interim results replace each other. After cancelling the countdown, use the send arrow or
+Command/Ctrl+Enter to submit the edited draft. Choose EN or ES beside the microphone; the selection is saved in browser storage and defaults to EN. Unsupported
 browsers show a disabled microphone; permission and device errors leave typing available.
 Ontahi does not upload audio, but the browser may use an online recognition service; this is not
 an offline guarantee. See [MDN SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
@@ -507,7 +511,7 @@ Chat also supports `rename list Groceries to Shopping` and
 `rename item buy bread to buy wholemeal bread`. Duplicate titles require a list, for example
 `rename item buy bread in Shopping to buy wholemeal bread`. Completed items can be renamed too.
 The model returns `{status: "resolved", request}` containing the existing versioned Graph Command
-request; no rename Domain Operation or alternate update payload is added. `command-chat/updates.ts`
-exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations.
+request; no rename Domain Operation or alternate update payload is added. `command-chat/graph-commands.ts`
+exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations. It also exposes the built-in entity delete command for TodoItem, with a conditional current title and fresh scope validation; no domain operation is needed.
 Updates use the same Graph Command policies as browser editing, including conditional old-name/title
 checks. The chat still does not expose color changes or general field editing.

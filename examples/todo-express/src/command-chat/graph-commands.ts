@@ -15,7 +15,7 @@ const words = (text: string) =>
     .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()} `;
 
-export const todoCommandUpdates = (
+export const todoGraphCommands = (
   context: Context,
   text: string,
   language = 'en-US',
@@ -54,6 +54,55 @@ export const todoCommandUpdates = (
     message: () => message,
   });
   return [
+    {
+      description: es ? 'Borrar un ítem individual.' : 'Delete an individual item.',
+      request: strict({
+        version: graphSchema.literal(2),
+        kind: graphSchema.literal('graph-command'),
+        command: strict({
+          kind: graphSchema.literal('entity-mutation-command'),
+          action: graphSchema.literal('delete'),
+          entityName: graphSchema.literal('TodoItem'),
+          target: graphSchema.ref(TodoItem),
+          if: strict({ title: TodoItem.fields.title }),
+        }),
+      }),
+      validate: ({ command }) => {
+        if (command.kind !== 'entity-mutation-command' || command.action !== 'delete')
+          return unresolved;
+        const before = String(command.if?.title);
+        // Remove the title before looking for a list qualifier: a list name inside
+        // the item's own title cannot disambiguate duplicate items.
+        const source = words(text).replace(words(before), ' ');
+        const mentioned = context.lists.filter(list =>
+          [
+            'in',
+            'in list',
+            'from',
+            'from list',
+            'en',
+            'en lista',
+            'en la lista',
+            'de',
+            'de lista',
+            'de la lista',
+          ].some(prefix => source.includes(` ${prefix}${words(list.name)}`)),
+        );
+        const matches = context.items.filter(
+          item =>
+            same(item.title, before) &&
+            (!mentioned.length || mentioned.some(list => list.id === item.list.locator.id)),
+        );
+        return mentioned.length <= 1 &&
+          matches.length === 1 &&
+          matches[0]!.id === command.target.locator.id &&
+          matches[0]!.title === before &&
+          words(text).includes(words(before))
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Ítem borrado.' : 'Item deleted.'),
+    },
     exposure(
       TodoList,
       'name',

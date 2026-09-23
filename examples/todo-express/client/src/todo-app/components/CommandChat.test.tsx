@@ -465,3 +465,121 @@ it('keeps the browser fallback when Google voices only cover other languages', a
   expect(speak.mock.calls[0]![0].voice).toBeNull();
   expect(speak.mock.calls[0]![0].lang).toBe('en-US');
 });
+
+const finishDictation = async (outcome = 'recognized') => {
+  let recognition!: import('./useSpeechInput.js').BrowserSpeechRecognition;
+  vi.stubGlobal(
+    'SpeechRecognition',
+    class {
+      lang = '';
+      continuous = false;
+      interimResults = true;
+      maxAlternatives = 1;
+      onresult: import('./useSpeechInput.js').BrowserSpeechRecognition['onresult'] = null;
+      onerror: import('./useSpeechInput.js').BrowserSpeechRecognition['onerror'] = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        recognition = this;
+      }
+    },
+  );
+  await write();
+  await act(async () =>
+    (container.querySelector('[aria-label="Dictate message"]') as HTMLButtonElement).click(),
+  );
+  if (outcome !== 'empty')
+    await act(async () => recognition.onresult?.({ results: [[{ transcript: 'to Shopping' }]] }));
+  if (outcome === 'aborted' || outcome === 'network')
+    await act(async () => recognition.onerror?.({ error: outcome }));
+  await act(async () => recognition.onend?.());
+};
+
+it('counts down after dictation then sends the recognized draft exactly once', async () => {
+  vi.useFakeTimers();
+  try {
+    execute.mockResolvedValue({ ok: true, value: { status: 'executed', message: 'Added.' } });
+    await finishDictation();
+    expect(document.activeElement).toBe(container.querySelector('textarea'));
+    expect(
+      container.querySelector('[aria-label="Send message"] span[aria-hidden]')!.textContent,
+    ).toBe('3');
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(
+      container.querySelector('[aria-label="Send message"] span[aria-hidden]')!.textContent,
+    ).toBe('2');
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(
+      container.querySelector('[aria-label="Send message"] span[aria-hidden]')!.textContent,
+    ).toBe('1');
+    expect(execute).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(execute).toHaveBeenCalledExactlyOnceWith({
+      text: 'add buy bread to Shopping',
+      language: 'en-US',
+    });
+    await act(async () => vi.advanceTimersByTime(5000));
+    expect(execute).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it.each(['ArrowLeft', 'Escape', 'Shift', 'Enter'])(
+  'cancels automatic send on %s in the input',
+  async key => {
+    vi.useFakeTimers();
+    try {
+      await finishDictation();
+      await act(async () =>
+        container.querySelector('textarea')!.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            metaKey: key === 'Enter',
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      );
+      await act(async () => vi.advanceTimersByTime(4000));
+      expect(execute).not.toHaveBeenCalled();
+      expect(container.querySelector('textarea')!.value).toBe('add buy bread to Shopping');
+      expect(container.querySelector('.command-chat-countdown')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
+it.each(['cancel', 'edit', 'unmount', 'send'])('stops the dictation timer on %s', async action => {
+  vi.useFakeTimers();
+  try {
+    execute.mockResolvedValue({ ok: true, value: { status: 'executed', message: 'Added.' } });
+    await finishDictation();
+    if (action === 'cancel')
+      await act(async () =>
+        (container.querySelector('.command-chat-cancel') as HTMLButtonElement).click(),
+      );
+    if (action === 'edit') await write();
+    if (action === 'unmount') await act(async () => root.render(<div />));
+    if (action === 'send') await submit();
+    await act(async () => vi.advanceTimersByTime(4000));
+    expect(execute).toHaveBeenCalledTimes(action === 'send' ? 1 : 0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it.each(['empty', 'aborted', 'network'])('never auto-sends after %s recognition', async outcome => {
+  vi.useFakeTimers();
+  try {
+    await finishDictation(outcome);
+    await act(async () => vi.advanceTimersByTime(4000));
+    expect(execute).not.toHaveBeenCalled();
+    expect(container.querySelector('.command-chat-countdown')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
