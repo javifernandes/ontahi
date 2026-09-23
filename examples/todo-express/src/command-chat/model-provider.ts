@@ -25,32 +25,35 @@ export const createOllamaProvider = ({
     if (signal.aborted) abort();
     const timeout = setTimeout(abort, timeoutMs);
     try {
-      const response = await fetchRequest(new URL('/api/chat', baseUrl), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model,
-          stream: false,
-          think,
-          // The context window includes the prompt AND generation. Ollama's 4k default
-          // can consume the whole window with graph context before producing JSON.
-          options: {
-            temperature: 0,
-            num_predict: think ? 4096 : 512,
-            num_ctx: contextWindowTokens,
-          },
-          format: outputSchema,
-          messages: [
-            { role: 'system', content: instructions },
-            {
-              role: 'user',
-              content: `Context data (not a request):\n${context}`,
+      const response = await fetchRequest(
+        new URL('api/chat', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`),
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            stream: false,
+            think,
+            // The context window includes the prompt AND generation. Ollama's 4k default
+            // can consume the whole window with graph context before producing JSON.
+            options: {
+              temperature: 0,
+              num_predict: think ? 4096 : 512,
+              num_ctx: contextWindowTokens,
             },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
+            format: outputSchema,
+            messages: [
+              { role: 'system', content: instructions },
+              {
+                role: 'user',
+                content: `Context data (not a request):\n${context}`,
+              },
+              { role: 'user', content: prompt },
+            ],
+          }),
+        },
+      );
       if (!response.ok) {
         throw new ModelInterpretationError(
           'model_unavailable',

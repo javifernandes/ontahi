@@ -181,6 +181,23 @@ describe('Todo canonical model requests', () => {
     expect(await submit('create list Holidays')).toMatchObject({ status: 'executed' });
     expect(dataset().TodoList?.at(-1)?.name).toBe('Holidays');
   });
+  it('rejects invented creation values', async () => {
+    bind(async () =>
+      proposal('TodoList.createList', { id: 'new-list', name: 'Holidays', color: '#f5ddd5' }),
+    );
+    expect(await submit('create list Vacation')).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoList).toHaveLength(2);
+
+    bind(async () => create());
+    expect(await submit('add buy milk to Shopping')).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoItem).toHaveLength(2);
+  });
+  it('allows capitalization differences from speech recognition', async () => {
+    bind(async () =>
+      proposal('TodoList.createList', { id: 'new-list', name: 'Holidays', color: '#f5ddd5' }),
+    );
+    expect(await submit('create list holidays')).toMatchObject({ status: 'executed' });
+  });
   it.each([
     proposal('TodoItem.deleteAll', {}),
     proposal('TodoItem.createItem', { title: 'bread', listName: 'Shopping' }),
@@ -269,6 +286,25 @@ describe('Todo canonical model requests', () => {
       status: 'executed',
     });
     expect(dataset().TodoItem![0]).toMatchObject({ title: 'buy green tea', completed: true });
+  });
+  it('rejects invented rename values', async () => {
+    bind(async () => rename('TodoList', 'list-1', 'Shopping', 'Groceries'));
+    expect(await submit('rename list Shopping to Vacation')).toMatchObject({
+      status: 'unresolved',
+    });
+    expect(dataset().TodoList![0]!.name).toBe('Shopping');
+
+    bind(async () => rename('TodoItem', 'tea', 'buy tea', 'buy coffee'));
+    expect(await submit('rename item buy tea to buy herbal tea')).toMatchObject({
+      status: 'unresolved',
+    });
+    expect(dataset().TodoItem![0]!.title).toBe('buy tea');
+  });
+  it('allows rename capitalization differences from speech recognition', async () => {
+    bind(async () => rename('TodoList', 'list-1', 'Shopping', 'Groceries'));
+    expect(await submit('rename list Shopping to groceries')).toMatchObject({
+      status: 'executed',
+    });
   });
   it('requires disambiguation even with a valid rename ref', async () => {
     dataset().TodoItem = [

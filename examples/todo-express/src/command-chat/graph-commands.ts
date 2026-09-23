@@ -14,6 +14,9 @@ const words = (text: string) =>
     .toLowerCase()
     .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()} `;
+// Speech recognition may choose capitalization the user did not explicitly control.
+const includesRequestedValue = (text: string, value: string) =>
+  value.trim().length > 0 && text.toLowerCase().includes(value.trim().toLowerCase());
 
 export const todoGraphCommands = (
   context: Context,
@@ -106,13 +109,14 @@ export const todoGraphCommands = (
     exposure(
       TodoList,
       'name',
-      (target, before) => {
+      (target, before, after) => {
         const matches = context.lists.filter(list => same(list.name, before));
         return (
           matches.length === 1 &&
           matches[0]!.id === target.locator.id &&
           matches[0]!.name === before &&
-          words(text).includes(words(before))
+          words(text).includes(words(before)) &&
+          includesRequestedValue(text, after)
         );
       },
       es ? 'Renombrar una lista.' : 'Rename a list.',
@@ -125,7 +129,8 @@ export const todoGraphCommands = (
         // A list mentioned inside the replacement title does not disambiguate the old item.
         const normalized = words(text);
         const replacementAt = normalized.lastIndexOf(words(after));
-        const source = replacementAt >= 0 ? normalized.slice(0, replacementAt + 1) : normalized;
+        if (replacementAt < 0 || !includesRequestedValue(text, after)) return false;
+        const source = normalized.slice(0, replacementAt + 1);
         const mentioned = context.lists.filter(
           list =>
             source.includes(` in${words(list.name)}`) || source.includes(` en${words(list.name)}`),

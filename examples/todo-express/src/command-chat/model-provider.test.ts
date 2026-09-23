@@ -53,6 +53,20 @@ describe('Ollama model provider', () => {
   });
 
   it.each([
+    ['http://gateway.test/ollama', 'http://gateway.test/ollama/api/chat'],
+    ['http://gateway.test/ollama/', 'http://gateway.test/ollama/api/chat'],
+  ])('preserves a base URL path prefix: %s', async (baseUrl, expected) => {
+    const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        done: true,
+        message: { content: '{"status":"help"}' },
+      }),
+    );
+    await createOllamaProvider({ model: 'local', baseUrl, fetchRequest }).generate(request());
+    expect(String(fetchRequest.mock.calls[0]![0])).toBe(expected);
+  });
+
+  it.each([
     [Response.json({}, { status: 503 }), 'model_unavailable'],
     [Response.json({ done: true, message: { content: 'not json' } }), 'model_output_invalid'],
     [Response.json({ done: false, message: { content: '{}' } }), 'model_output_invalid'],

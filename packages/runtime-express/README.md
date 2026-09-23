@@ -232,7 +232,8 @@ Protocol handlers remain available for explicit compatibility or custom transpor
 
 Pass `modelCommands: {runtime}` to `ontahiExpress` to mount `POST /model/commands` (override with
 `path`). The runtime is created by Core's `createModelCommandRuntime`; the request body is
-`{text, context?}`. The adapter installs the existing `invocationContext`, propagates connection
+`{text, language?, context?}`. The optional BCP 47 `language` selects the response language. The
+adapter installs the existing `invocationContext`, propagates connection
 cancellation, and returns `{ok:true,value:{status,message}}` or a known runtime error. The route
 is absent unless explicitly configured. No application domain operation is required for chat.
 The host must configure authorization and disclosure scope on the runtime; operation requirements

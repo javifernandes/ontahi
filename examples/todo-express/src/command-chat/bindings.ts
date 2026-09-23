@@ -25,6 +25,9 @@ const words = (text: string) =>
     .toLowerCase()
     .replaceAll(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
+// Speech recognition may choose capitalization the user did not explicitly control.
+const includesRequestedValue = (text: string, value: string) =>
+  value.trim().length > 0 && text.toLowerCase().includes(value.trim().toLowerCase());
 export const todoCommandBindings = (
   context: Context,
   request: string,
@@ -56,6 +59,11 @@ export const todoCommandBindings = (
           value.color !== '#f5ddd5'
         )
           outside();
+        if (!includesRequestedValue(request, String(value.name)))
+          return say(
+            'Use a list name from the request.',
+            'Usá un nombre de lista que aparezca en el pedido.',
+          );
         return undefined;
       },
       message: value =>
@@ -96,6 +104,11 @@ export const todoCommandBindings = (
           value.title.length > 500
         )
           outside();
+        if (!includesRequestedValue(request, String(value.title)))
+          return say(
+            'Use an item title from the request.',
+            'Usá un título de ítem que aparezca en el pedido.',
+          );
         const list = listForRef(value.list);
         if (!list || !namedList(list.name))
           return say(

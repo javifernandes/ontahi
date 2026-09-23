@@ -2,4 +2,4 @@
 '@ontahi/core': patch
 ---
 
-Allow model argument bindings to supply a clarification message when a unique target cannot be resolved.
+Allow operation bindings and graph-command exposures to return an unresolved reason from `validate` when a proposed request cannot be resolved. Their `message` callbacks describe successful execution results.
