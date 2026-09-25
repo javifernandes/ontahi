@@ -577,9 +577,13 @@ export const createRuntimeProtocolServerSession = <TContext>({
     if (oldestId !== undefined) completedRequestIds.delete(oldestId);
   };
 
+  const cancelObservation = (active: ActiveObservation) => {
+    active.controller.abort();
+  };
+
   const finalizeObservation = (active: ActiveObservation) => {
     if (active.finalization) return active.finalization;
-    active.controller.abort();
+    cancelObservation(active);
     active.finalization = (async () => {
       try {
         await active.iterator?.return?.();
@@ -761,7 +765,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       const active = observations.get(frame.id);
       if (!active) return;
       observations.delete(frame.id);
-      await finalizeObservation(active);
+      cancelObservation(active);
       return;
     }
 
@@ -811,7 +815,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       if (closed) return;
       closed = true;
       for (const active of observations.values()) {
-        void finalizeObservation(active);
+        cancelObservation(active);
       }
       observations.clear();
     },
