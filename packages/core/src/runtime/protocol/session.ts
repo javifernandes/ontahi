@@ -509,6 +509,11 @@ export const parseRuntimeProtocolSessionServerFrame = (
 
 export type RuntimeProtocolDurableObservationOptions<TContext> = {
   readonly context: TContext;
+  /**
+   * Observers must cooperatively settle any pending `next()` call and release resources when this
+   * signal aborts. The session waits for that call before invoking the iterator's `return()` hook,
+   * avoiding concurrent iterator operations during shutdown.
+   */
   readonly signal: AbortSignal;
 };
 
@@ -577,9 +582,13 @@ export const createRuntimeProtocolServerSession = <TContext>({
     if (oldestId !== undefined) completedRequestIds.delete(oldestId);
   };
 
+  const cancelObservation = (active: ActiveObservation) => {
+    active.controller.abort();
+  };
+
   const finalizeObservation = (active: ActiveObservation) => {
     if (active.finalization) return active.finalization;
-    active.controller.abort();
+    cancelObservation(active);
     active.finalization = (async () => {
       try {
         await active.iterator?.return?.();
@@ -761,7 +770,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       const active = observations.get(frame.id);
       if (!active) return;
       observations.delete(frame.id);
-      await finalizeObservation(active);
+      cancelObservation(active);
       return;
     }
 
@@ -811,7 +820,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
       if (closed) return;
       closed = true;
       for (const active of observations.values()) {
-        void finalizeObservation(active);
+        cancelObservation(active);
       }
       observations.clear();
     },

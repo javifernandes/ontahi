@@ -772,6 +772,70 @@ describe('Runtime Protocol server session', () => {
     expect(observedSignal?.aborted).toBe(true);
     expect(sent).toHaveLength(2);
   });
+
+  it.each(['unobserve', 'close'] as const)(
+    'waits for an active observer next call to settle before returning its iterator on %s',
+    async cancellation => {
+      let observedSignal: AbortSignal | undefined;
+      let nextPending = false;
+      let returnedWhileNextPending = false;
+      let returned = false;
+      const session = createRuntimeProtocolServerSession({
+        dispatcher: nullDispatcher,
+        context: undefined,
+        send: () => undefined,
+        observeDurableOperation: (_run, { signal }) => ({
+          [Symbol.asyncIterator]() {
+            let emitted = false;
+            return {
+              next: async () => {
+                observedSignal = signal;
+                if (!emitted) {
+                  emitted = true;
+                  return {
+                    done: false as const,
+                    value: {
+                      taskId: 'Todo.completeAll',
+                      runId: 'run-1',
+                      status: 'running' as const,
+                      updatedAt: '2026-09-04T00:00:00.000Z',
+                    },
+                  };
+                }
+                nextPending = true;
+                await new Promise<void>(resolve =>
+                  signal.addEventListener('abort', () => resolve(), { once: true }),
+                );
+                nextPending = false;
+                return { done: true as const, value: undefined };
+              },
+              return: async () => {
+                returnedWhileNextPending = nextPending;
+                returned = true;
+                return { done: true as const, value: undefined };
+              },
+            };
+          },
+        }),
+      });
+
+      await session.receive(observeFrame());
+      await vi.waitFor(() => expect(nextPending).toBe(true));
+      if (cancellation === 'close') session.close();
+      else {
+        await session.receive({
+          protocol: 'ontahi.runtime.session',
+          version: 1,
+          kind: 'durable-unobserve',
+          id: 'observation-1',
+        });
+      }
+      await vi.waitFor(() => expect(returned).toBe(true));
+
+      expect(observedSignal?.aborted).toBe(true);
+      expect(returnedWhileNextPending).toBe(false);
+    },
+  );
 });
 
 describe('TaskRun Durable Operation server observer', () => {

@@ -199,7 +199,6 @@ describe('Todo canonical model requests', () => {
     expect(await submit('create list holidays')).toMatchObject({ status: 'executed' });
   });
   it.each([
-    proposal('TodoItem.deleteAll', {}),
     proposal('TodoItem.createItem', { title: 'bread', listName: 'Shopping' }),
     {
       status: 'update',
@@ -211,13 +210,21 @@ describe('Todo canonical model requests', () => {
       status: 'resolved',
       invocation: { kind: 'invoke', operationId: 'TodoItem.deleteList', input: { name: 'Other' } },
     },
-    create('foreign'),
   ])('rejects invalid or legacy payloads without effects', async result => {
     bind(async () => result);
     await expect(submit()).rejects.toHaveProperty('code');
     expect(dataset().TodoList).toHaveLength(2);
     expect(dataset().TodoItem).toHaveLength(2);
   });
+  it.each([proposal('TodoItem.deleteAll', {}), create('foreign')])(
+    'keeps out-of-scope proposals unresolved and without effects',
+    async result => {
+      bind(async () => result);
+      expect(await submit()).toMatchObject({ status: 'unresolved' });
+      expect(dataset().TodoList).toHaveLength(2);
+      expect(dataset().TodoItem).toHaveLength(2);
+    },
+  );
   it('authenticates before disclosure', async () => {
     const generate = vi.fn();
     bind(generate);
@@ -357,20 +364,33 @@ describe('Todo canonical model requests', () => {
       status: 'unresolved',
     });
   });
-  it.each(['', 'archive'])('rejects invalid entity values: %s', async name => {
+  it.each(['', 'archive'])('keeps unsupported entity values unresolved: %s', async name => {
     bind(async () => rename('TodoList', 'list-1', 'Shopping', name));
-    await expect(submit()).rejects.toHaveProperty('code');
+    expect(await submit()).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoList![0]!.name).toBe('Shopping');
   });
-  it('does not expose color, deletion, or missing write preconditions as graph commands', async () => {
-    for (const patch of [{ values: { color: '#f00' } }, { action: 'delete' }, { if: undefined }]) {
+  it.each([{ values: { color: '#f00' } }, { action: 'delete' }])(
+    'keeps unexposed graph commands unresolved and without effects',
+    async patch => {
       const result = rename('TodoList', 'list-1', 'Shopping', 'Groceries');
       bind(async () => ({
         ...result,
         request: { ...result.request, command: { ...result.request.command, ...patch } },
       }));
-      await expect(submit()).rejects.toHaveProperty('code');
-    }
+      expect(await submit()).toMatchObject({ status: 'unresolved' });
+      expect(dataset().TodoList![0]!.name).toBe('Shopping');
+    },
+  );
+  it('rejects a graph command without its write precondition', async () => {
+    const result = rename('TodoList', 'list-1', 'Shopping', 'Groceries');
+    bind(async () => ({
+      ...result,
+      request: {
+        ...result.request,
+        command: { ...result.request.command, if: undefined },
+      },
+    }));
+    await expect(submit()).rejects.toHaveProperty('code', 'model_output_invalid');
     expect(dataset().TodoList![0]!.name).toBe('Shopping');
   });
 });
