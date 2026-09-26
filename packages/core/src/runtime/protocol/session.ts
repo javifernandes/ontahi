@@ -509,6 +509,11 @@ export const parseRuntimeProtocolSessionServerFrame = (
 
 export type RuntimeProtocolDurableObservationOptions<TContext> = {
   readonly context: TContext;
+  /**
+   * Observers must cooperatively settle any pending `next()` call and release resources when this
+   * signal aborts. The session waits for that call before invoking the iterator's `return()` hook,
+   * avoiding concurrent iterator operations during shutdown.
+   */
   readonly signal: AbortSignal;
 };
 

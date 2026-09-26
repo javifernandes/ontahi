@@ -44,13 +44,12 @@ describe('model operation interpretation', () => {
     expect(await run(proposal())).toEqual(proposal({ documentId: 'doc-1', name: 'Notes' }));
   });
   it.each([
-    proposal({}, 'Document.erase'),
     proposal({ name: 'Notes', documentId: 'foreign', extra: true }),
     { status: 'resolved' },
     { status: 'help', message: 'Invented capability' },
     { status: 'help', invocation: proposal().request },
     proposal({ name: '' }),
-  ])('rejects unknown operations and malformed arguments', async output => {
+  ])('rejects malformed results and operation arguments', async output => {
     await expect(run(output)).rejects.toHaveProperty('code');
   });
   it('checks fresh scope on canonical proposals from any interpreter', () => {
@@ -101,8 +100,22 @@ describe('model operation interpretation', () => {
       'operations',
     ]);
     const alternatives = (modelRequest!.outputSchema as { anyOf: unknown[] }).anyOf;
-    expect(JSON.stringify(alternatives[0])).toContain('Document.rename');
-    expect(JSON.stringify(alternatives[1])).toContain('graph-command');
+    expect(alternatives[0]).toMatchObject({
+      properties: {
+        request: {
+          properties: {
+            kind: { const: 'invoke' },
+            operationId: { const: 'Document.rename' },
+          },
+        },
+      },
+    });
+    expect(alternatives[1]).toMatchObject({
+      properties: { request: { properties: { kind: { const: 'graph-command' } } } },
+    });
+    expect(modelRequest!.instructions).toContain(
+      'For an editable property change that no advertised operation describes',
+    );
   });
   it('gives the interpreter one chance to repair a proposal rejected by scope validation', async () => {
     const valid = proposal();
@@ -115,6 +128,19 @@ describe('model operation interpretation', () => {
     expect(generate).toHaveBeenCalledTimes(2);
     expect(generate.mock.calls[1]![0].prompt).toContain('Document is outside the current scope.');
     expect(generate.mock.calls[1]![0].prompt).toContain('rename this document to Notes');
+  });
+  it('repairs an invocation of an operation outside the advertised scope', async () => {
+    const valid = proposal();
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce(proposal({}, 'Document.erase'))
+      .mockResolvedValueOnce(valid);
+
+    await expect(run(valid, { provider: { generate } })).resolves.toEqual(valid);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1]![0].prompt).toContain(
+      'Operation is outside the configured scope.',
+    );
   });
   it('returns the validation reason after the repair proposal is also rejected', async () => {
     const invalid = proposal({ documentId: 'foreign', name: 'Notes' });

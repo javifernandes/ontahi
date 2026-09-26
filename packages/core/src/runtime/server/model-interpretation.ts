@@ -186,7 +186,7 @@ export const interpretModelRequest = async ({
     'Interpret the user request. Return JSON only.',
     'For ONE supported action return {status:"resolved",request:...}. request must be an existing Ontahi graph-command request (including version and command) or invoke request (kind, operationId, input), exactly as advertised.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
-    'For an editable property change, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',
+    'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',
     'Copy entity references and selections from the supplied context. Use the declared operation input fields directly. Never replace references with names or invent IDs.',
     'For missing or ambiguous targets, unsupported requests, or multiple actions return status "unresolved" and a reason explaining the specific problem to the user. Never guess a target or execute part of a request.',
     'For general capability questions return exactly {status:"help"}. The runtime will describe available actions without executing them.',
@@ -206,10 +206,17 @@ export const interpretModelRequest = async ({
     signal.throwIfAborted();
     const proposal = parseModelInterpretation(raw);
     if (proposal.status !== 'resolved') return proposal;
-    const reason =
-      proposal.request.kind === 'graph-command'
-        ? validateModelGraphCommand(proposal.request, commands)
-        : validateModelInvocation(proposal.request, operations, resolveOperation);
+    let reason: string | undefined;
+    try {
+      reason =
+        proposal.request.kind === 'graph-command'
+          ? validateModelGraphCommand(proposal.request, commands)
+          : validateModelInvocation(proposal.request, operations, resolveOperation);
+    } catch (error) {
+      if (!(error instanceof ModelInterpretationError) || error.code !== 'proposal_out_of_scope')
+        throw error;
+      reason = error.message;
+    }
     if (!reason) return proposal;
     if (attempt === 1) return { status: 'unresolved', reason };
     currentPrompt = [
