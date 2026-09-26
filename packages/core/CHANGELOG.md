@@ -1,5 +1,22 @@
 # @ontahi/core
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- c275332: Resolve model output into an envelope containing existing GraphCommandRequest or OperationInvokeRequest contracts. Parse with the existing protocol parsers, derive invocation inputs from operation declarations, revalidate scope before dispatch, and forward canonical requests without domain argument translation. Expose scoped graph commands through canonical request schemas and validators.
+- c275332: Add a graph instruction runtime that derives operation descriptions from declarations, interprets scoped requests, revalidates proposals, and executes through the canonical dispatcher. Expose an optional Express model-command entry point with invocation context propagation and cancellation. Applications supply data scope and argument bindings without declaring domain operations for the chat itself.
+- c275332: Allow model interpretation to propose explicitly scoped entity field updates alongside operation invocations. Bind targets to canonical conditional EntityMutationCommands, recheck exposure and target uniqueness after inference, and dispatch through a host-supplied graph command policy boundary.
+- c275332: Support a `help` model interpretation rendered as an `answered` command result from operation descriptions without dispatch. Allow bindings to narrow descriptions for restricted exposures, and reauthorize after inference for every outcome.
+- c275332: Add provider-neutral model interpretation with per-operation input-schema projections, canonical request validation, and reusable scope revalidation. Interpretation produces a proposal without executing it; providers and data fetching remain host-owned.
+- c275332: Accept a validated response language on model command requests and pass it to interpretation instructions. Hosts can format capability help using localized descriptions through the optional formatHelp callback.
+
+### Patch Changes
+
+- c275332: Allow operation bindings and graph-command exposures to return an unresolved reason from `validate` when a proposed request cannot be resolved. Their `message` callbacks describe successful execution results.
+- f552bed: Prefer declared operations over lower-level graph commands in model context and output contracts, and give interpreters one bounded repair attempt when a structurally valid proposal fails scoped runtime validation.
+- f552bed: Cancel active Runtime Protocol observations before finalizing their iterators so disconnecting a client cannot block the host runtime.
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes
