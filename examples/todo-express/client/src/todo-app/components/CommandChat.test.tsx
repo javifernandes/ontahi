@@ -82,6 +82,22 @@ it('shows an unresolved result without claiming an effect', async () => {
   expect(refresh).not.toHaveBeenCalled();
 });
 
+it('shows an executed read without refreshing mutation state', async () => {
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: '1 matching item:\n• buy bread',
+      request: { version: 1, kind: 'graph-read' },
+      response: { kind: 'graph-read-result', value: [{ title: 'buy bread' }] },
+    },
+  });
+  await write();
+  await submit();
+  expect(container.textContent).toContain('buy bread');
+  expect(refresh).not.toHaveBeenCalled();
+});
+
 it('does not retry an unknown transport outcome', async () => {
   execute.mockRejectedValue(new Error('Disconnected'));
   await write();

@@ -28,7 +28,7 @@ Illustrative names below are design placeholders, not a frozen public API:
 
 ```text
 interpretCommand({ text, context })
-  -> resolved { request: existing Graph Command or Operation Invocation }
+  -> resolved { request: existing Graph Read, Graph Command, or Operation Invocation }
   |  unresolved { reason }
 
 resolved proposal -> runtime validation -> canonical dispatcher -> actual result -> UI
@@ -38,8 +38,8 @@ resolved proposal -> runtime validation -> canonical dispatcher -> actual result
    Protocol family; it is not a Todo domain operation.
 2. Build context in code from inputs and authorized graph reads. Include
    relevant item identities, titles, completion state, and reflected allowed-operation contracts.
-3. Limit the effect path to explicitly exposed Todo Operations and Graph Commands, with at most one
-   canonical action per submission. Verify their actual input schemas during implementation.
+3. Limit execution to explicitly exposed Todo Graph Reads, Operations, and Graph Commands, with at
+   most one canonical request per submission. Verify their actual input schemas during implementation.
 4. Require concrete references for existing targets. Names alone require instance resolution;
    missing, ambiguous, or incomplete context returns unresolved without effects.
 5. Define a small injectable model-provider boundary and implement an initial local Ollama adapter.
@@ -51,8 +51,8 @@ resolved proposal -> runtime validation -> canonical dispatcher -> actual result
    Success text comes from the actual execution result. No conversation memory is required.
 
 The incoming model request contains instructions, typed input, a bounded schema projection, data,
-and an output contract. The outgoing proposal reuses the existing Graph Command and Operation
-Invocation representations. The `model.command` Runtime Protocol family carries natural-language
+and an output contract. The outgoing proposal reuses the existing Graph Read, Graph Command, and
+Operation Invocation representations. The `model.command` Runtime Protocol family carries natural-language
 interaction outcomes and embeds that canonical request on successful execution; it does not
 introduce another action language.
 
@@ -370,8 +370,8 @@ Roadmap slices:
 
 - [x] Record interpretation and correlated canonical execution in Devtools Activity, including
       help, unresolved outcomes, errors, and timings even when no graph action executes.
-- Admit canonical Graph Read requests and return actual query results; e.g. unfinished TodoItems
-  means a read filtered by `completed = false`, not an answer inferred from prompt context.
+- [x] Admit canonical Graph Read requests and return actual query results; e.g. unfinished TodoItems
+      means a read filtered by `completed = false`, not an answer inferred from prompt context.
 - Add Natural alongside TS and Declarative in the Devtools console, sharing interpretation,
   execution, and result rendering rather than implementing another Todo-specific chat engine.
 - Reduce app-specific activation boilerplate with evidence from another host application.
@@ -379,3 +379,26 @@ Roadmap slices:
 Declarative scoping, security hardening, and resumable interactions remain owned by plans
 153b, 153a, and 153c respectively. This checkpoint keeps plan 153 current; it is not a production
 readiness or plan-completion claim.
+
+## Canonical Graph Read Checkpoint — 2026-09-27
+
+The model-command contract now admits the existing canonical `GraphReadRequest` alongside Graph
+Commands and Operation invocations. Apps explicitly expose bounded read schemas and descriptions;
+the model does not gain general graph access from schema discovery. Core validates the proposal,
+reloads the current scope after inference, validates it again, and delegates execution to the
+host's normal Graph Read dispatcher and authority policies.
+
+An executed read returns both the canonical request and its actual `graph-read-result`. Todo exposes
+bounded list/count queries for TodoLists and TodoItems, including incomplete-item filters. Questions
+such as `show incomplete items` and `how many incomplete items are there?` therefore answer from
+stored, policy-authorized data rather than from the prompt snapshot. Devtools Activity renders both
+the canonical read and its semantic result; read-only chat outcomes do not refresh mutation state.
+
+This remains explicit application configuration. Automatic graph exposure, general question
+answering, batching, conversation continuation, and Natural Console authoring remain later slices.
+
+Validation: 1,180 Core tests with coverage, 151 Devtools tests with coverage, 150 Todo tests,
+affected typechecks/lint/builds, Todo production build, and clean-room package artifact verification.
+The real Qwen 3.5 4B evaluation produced the expected filtered list and count from actual Graph Read
+results without changing the dataset; the broader suite later stopped at its already documented
+replacement-capitalization failure.

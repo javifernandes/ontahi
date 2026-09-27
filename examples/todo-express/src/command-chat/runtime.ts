@@ -18,6 +18,7 @@ import { TodoItem, TodoList } from '../todo.js';
 import { todoCommandBindings, todoCommandInstructions } from './bindings.js';
 import { createCommandContextReader } from './context.js';
 import { todoGraphCommands } from './graph-commands.js';
+import { todoGraphReads } from './graph-reads.js';
 
 // Application composition only; orchestration lives in the Ontahi runtime.
 export const createTodoModelRuntime = ({
@@ -36,6 +37,12 @@ export const createTodoModelRuntime = ({
   return createModelCommandRuntime({
     application,
     provider,
+    dispatchRead: (request, signal) => {
+      signal.throwIfAborted();
+      return read(request, {
+        authority: { principal: getCurrentInvocationContext()?.principal ?? null },
+      });
+    },
     dispatchCommand: (request, signal) => {
       signal.throwIfAborted();
       return commandDispatcher(request, {
@@ -76,6 +83,7 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
+        reads: todoGraphReads(request.language),
         commands: todoGraphCommands(current, request.text, request.language),
         bindings: todoCommandBindings(current, request.text, request.language),
       };

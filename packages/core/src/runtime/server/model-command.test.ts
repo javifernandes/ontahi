@@ -1,7 +1,13 @@
 import { Effect } from 'effect';
 import { expect, it, vi } from 'vitest';
 
-import { createInMemoryDataGraphStorage, field, graphSchema } from '../../data-graph/index.js';
+import {
+  createInMemoryDataGraphStorage,
+  field,
+  graphSchema,
+  query,
+  toGraphReadRequest,
+} from '../../data-graph/index.js';
 
 import { entity } from './entity.js';
 import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
@@ -34,7 +40,7 @@ const fixture = () => {
   };
   const scope = vi.fn(async () => ({ context: {}, bindings: { 'Document.rename': binding } }));
   const authorize = vi.fn();
-  return { application, run, generate, scope, authorize, binding };
+  return { application, Document, run, generate, scope, authorize, binding };
 };
 it('derives descriptions and dispatches a canonical operation in the caller context', async () => {
   const f = fixture();
@@ -146,6 +152,107 @@ it('uses the narrowed exposure description when rendering help', async () => {
     message: 'You can:\n• Rename your current document.',
   });
   expect(f.run).not.toHaveBeenCalled();
+});
+it('dispatches a scoped graph read and returns its canonical response', async () => {
+  const f = fixture();
+  const request = toGraphReadRequest(query(f.Document), 'run');
+  const read = {
+    description: 'Read documents.',
+    request: graphSchema.object(
+      {
+        version: graphSchema.literal(1),
+        kind: graphSchema.literal('graph-read'),
+        mode: graphSchema.literal('run'),
+        selection: graphSchema.selection(f.Document),
+        orderBy: graphSchema.array(
+          graphSchema.object(
+            {
+              fieldName: graphSchema.literal('id'),
+              direction: graphSchema.union([
+                graphSchema.literal('asc'),
+                graphSchema.literal('desc'),
+              ]),
+            },
+            { unknownKeys: 'strict' },
+          ),
+        ),
+      },
+      { unknownKeys: 'strict' },
+    ),
+    validate: vi.fn(() => undefined),
+    message: vi.fn(() => 'Found one document.'),
+  };
+  const dispatchRead = vi.fn(async () => ({
+    kind: 'graph-read-result' as const,
+    value: [{ id: 'doc-1' }],
+  }));
+  const scope = vi.fn(async () => ({ context: {}, bindings: {}, reads: [read] }));
+  const runtime = createModelCommandRuntime({
+    application: f.application,
+    authorize: f.authorize,
+    scope,
+    provider: { generate: async () => ({ status: 'resolved', request }) },
+    dispatchRead,
+  });
+
+  await expect(
+    runtime.submit({ text: 'show documents' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'executed',
+    message: 'Found one document.',
+    request,
+    response: { kind: 'graph-read-result', value: [{ id: 'doc-1' }] },
+  });
+  expect(dispatchRead).toHaveBeenCalledWith(request, expect.any(AbortSignal));
+  expect(read.validate).toHaveBeenCalledWith(request);
+  expect(scope).toHaveBeenCalledTimes(2);
+});
+it('rejects graph reads removed from the fresh scope', async () => {
+  const f = fixture();
+  const request = toGraphReadRequest(query(f.Document), 'run');
+  const read = {
+    description: 'Read documents.',
+    request: graphSchema.object(
+      {
+        version: graphSchema.literal(1),
+        kind: graphSchema.literal('graph-read'),
+        mode: graphSchema.literal('run'),
+        selection: graphSchema.selection(f.Document),
+        orderBy: graphSchema.array(
+          graphSchema.object(
+            {
+              fieldName: graphSchema.literal('id'),
+              direction: graphSchema.union([
+                graphSchema.literal('asc'),
+                graphSchema.literal('desc'),
+              ]),
+            },
+            { unknownKeys: 'strict' },
+          ),
+        ),
+      },
+      { unknownKeys: 'strict' },
+    ),
+    validate: vi.fn(() => undefined),
+  };
+  const scope = vi
+    .fn()
+    .mockResolvedValueOnce({ context: {}, bindings: {}, reads: [read] })
+    .mockResolvedValueOnce({ context: {}, bindings: {}, reads: [] });
+  const dispatchRead = vi.fn();
+  const runtime = createModelCommandRuntime({
+    application: f.application,
+    authorize: f.authorize,
+    scope,
+    provider: { generate: async () => ({ status: 'resolved', request }) },
+    dispatchRead,
+  });
+
+  await expect(
+    runtime.submit({ text: 'show documents' }, new AbortController().signal),
+  ).rejects.toHaveProperty('code', 'proposal_out_of_scope');
+  expect(scope).toHaveBeenCalledTimes(2);
+  expect(dispatchRead).not.toHaveBeenCalled();
 });
 it('does not disclose help when authorization is revoked during inference', async () => {
   const f = fixture();

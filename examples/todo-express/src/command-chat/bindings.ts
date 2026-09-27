@@ -153,6 +153,10 @@ export const todoCommandInstructions = `You control a Todo app. Keep reasoning b
 - "delete list <name>" -> TodoItem.deleteList, input {list: the matching list.ref}.
 - "delete item <title>" (optionally "from list <name>") -> graph-command version 2, entity-mutation-command delete on TodoItem, target item.ref, if {title: current title}. No values field. This deletes only the item, never its list.
 - "complete <title>" -> TodoItem.setCompleted, input {todos: the matching item.completion, completed: true}.
+- "show/list incomplete/unfinished/open items" -> graph-read run for TodoItem with predicate completed eq false.
+- "how many/count incomplete/unfinished/open items" -> graph-read count for TodoItem with predicate completed eq false.
+- "show/list completed/done items" -> graph-read run for TodoItem with predicate completed eq true.
+- "how many/count completed/done items" -> graph-read count for TodoItem with predicate completed eq true.
 - "rename list <old> to <new>" -> graph-command version 2, entity-mutation-command update on TodoList, target list.ref, values {name: new}, if {name: old}.
 - "rename item <old> to <new>" -> the same update on TodoItem, target item.ref, values {title: new}, if {title: old}.
 For renaming, return {"status":"resolved","request":{"version":2,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"update","entityName":"TodoList","target":MATCHING_LIST_REF,"values":{"name":"NEW_NAME"},"if":{"name":"CURRENT_NAME"}}}}. Use TodoItem/title for item renaming. Never use createList or createItem to rename.

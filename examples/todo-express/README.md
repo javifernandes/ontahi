@@ -442,8 +442,9 @@ configured provider; use local, disposable Todo data for this spike.
 
 The UI sends the versioned `model.command` family through the shared Runtime Protocol endpoint at
 `POST /runtime`. The same instrumented Runtime Transport used by the board records the natural
-language request, its outcome, and the canonical Graph Command or Operation invocation in Devtools
-Activity. `ontahiExpress` keeps `POST /model/commands` as a temporary compatibility route; the
+language request, its outcome, and the canonical Graph Read, Graph Command, or Operation invocation
+in Devtools Activity. Read requests also record their actual result. `ontahiExpress` keeps
+`POST /model/commands` as a temporary compatibility route; the
 application UI no longer uses it. Both entries propagate the authenticated invocation context.
 There are no chat operations on `TodoList`, no chat-specific application capability, and no domain
 service delegation loop.
@@ -455,8 +456,11 @@ The boundaries are explicit:
   the scope, validates the canonical proposal, and dispatches the selected operation.
 - `command-chat/runtime.ts` composes that runtime with the provider, authentication policy, and
   bounded context reader. It does not implement the orchestration itself.
-- `command-chat/bindings.ts` contains the application-specific scope validation and result messages for canonical inputs. It does not duplicate
+- `command-chat/bindings.ts` contains the application-specific scope validation and result messages for canonical action inputs. It does not duplicate
   operation descriptions. This explicit exposure configuration is not automatic graph-scope inference.
+- `command-chat/graph-reads.ts` exposes the bounded Todo list/item read shapes the model may
+  propose. Core validates the proposal against those shapes, reloads the scope, and sends it to the
+  normal policy-aware Graph Read dispatcher.
 - `context.ts` reads through Graph Read policies and passes visible lists and items, including their refs and completion selections to the model. Limits are 100 lists, 100 items, 24,000 serialized context
   characters, and 2,000 request characters. The model copies these canonical values into requests.
 - `model-provider.ts` adapts Ollama to Core's provider contract without importing Todo.
@@ -470,9 +474,10 @@ whole normalized words). An invented qualifier cannot disambiguate duplicate tit
 named list, completion resolves globally. This conservative example policy is not general natural
 language reference resolution or an authorization boundary.
 
-Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request
-still produces at most one command or invocation; general graph questions and conversation continuation
-remain follow-ups.
+Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request still
+produces at most one read, command, or invocation. `show incomplete items` and
+`how many incomplete items are there?` execute canonical Graph Reads and return the actual
+policy-authorized rows or count. Conversation continuation remains a follow-up.
 
 The provider uses the [Ollama chat API](https://docs.ollama.com/api/chat) with
 [structured output](https://docs.ollama.com/capabilities/structured-outputs), one request and a
@@ -490,9 +495,10 @@ TODO_STORAGE=in-memory TODO_AUTH_MODE=disabled TODO_LLM_MODEL=qwen3.5:4b \
   pnpm --filter @ontahi/example-todo-express exec tsx src/command-chat/commands.evaluation.ts
 ```
 
-`commands.evaluation.ts` is a test, not application startup code. It checks item creation/completion,
-duplicate and missing targets, list creation, named-list deletion, and item
-creation in a named list. The evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
+`commands.evaluation.ts` is a test, not application startup code. It checks incomplete-item listing
+and counting against actual read results without mutations, plus item creation/completion, duplicate
+and missing targets, list creation, named-list deletion, and item creation in a named list. The
+evaluation also reproduces `delete list Nueva` and checks that a two-list deletion is
 unresolved without effects. The suite also checks unique, ambiguous, and explicitly qualified banana completion. The suite also covers task titles with verbs, the house-list regression, and EN/ES response selection. Run this evaluation when changing the prompt or provider; small-model results and explanations
 remain variable. The evaluation includes a Spanish rename with UUID references and realistic graph context to
 catch context-window regressions. Incomplete responses are rejected without effects; isolated
@@ -514,8 +520,9 @@ evaluation do not guarantee correct intent recognition for arbitrary compound re
 Chat also supports `rename list Groceries to Shopping` and
 `rename item buy bread to buy wholemeal bread`. Duplicate titles require a list, for example
 `rename item buy bread in Shopping to buy wholemeal bread`. Completed items can be renamed too.
-The model returns `{status: "resolved", request}` containing the existing versioned Graph Command
-request; no rename Domain Operation or alternate update payload is added. `command-chat/graph-commands.ts`
+For mutations, the model returns `{status: "resolved", request}` containing the existing versioned
+Graph Command request; no rename Domain Operation or alternate update payload is added.
+`command-chat/graph-commands.ts`
 exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations. It also exposes the built-in entity delete command for TodoItem, with a conditional current title and fresh scope validation; no domain operation is needed.
 Updates use the same Graph Command policies as browser editing, including conditional old-name/title
 checks. The chat still does not expose color changes or general field editing.

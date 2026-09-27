@@ -90,7 +90,7 @@ export const CommandChat = ({
       }
       const outcome = result.value;
       answer(outcome.status, outcome.message);
-      if (outcome.status === 'executed') {
+      if (outcome.status === 'executed' && outcome.response === undefined) {
         try {
           await onExecuted();
         } catch {

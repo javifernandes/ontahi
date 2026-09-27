@@ -9,8 +9,8 @@ Ontahí currently has five relevant execution shapes:
 - an **operation bridge** carries generic invocations from an Ontahí client;
 - a **graph-read bridge** carries ordinary policy-scoped Queries without inventing an Operation;
 - a **relationship-command bridge** carries explicitly permitted structural link mutations;
-- a **model-command bridge** interprets natural language into an existing canonical Graph Command
-  or Operation invocation;
+- a **model-command bridge** interprets natural language into an existing canonical Graph Read,
+  Graph Command, or Operation invocation;
 - **HTTP ingress** gives a particular operation an external route and provider channel.
 
 ## The Runtime Protocol foundation
@@ -53,10 +53,11 @@ The canonical registry tuple currently contains `operation`, `durable.operation`
 `graph.command`, and `model.command`. Graph Read and Graph Command delegate to their existing
 fail-closed parsers instead of reproducing Query or Command validation. Model Command carries the
 user's text, optional response language, and optional host-defined JSON context. A successful
-`executed` result includes the canonical Graph Command or Operation invocation that the model
-selected and the runtime executed; informational and unresolved outcomes contain only their
-natural-language message. Operation adds body version 1 while preserving its existing semantic
-request kinds:
+`executed` result includes the canonical Graph Read, Graph Command, or Operation invocation that
+the model selected and the runtime executed. A Graph Read also includes the actual
+`graph-read-result`; the model does not synthesize stored data from prompt context. Informational
+and unresolved outcomes contain only their natural-language message. Operation adds body version 1
+while preserving its existing semantic request kinds:
 
 ```ts
 const invoke = {

@@ -13,6 +13,38 @@ if (!process.env.TODO_LLM_MODEL)
 const submit = (text: string, language = 'en-US') =>
   todoModelRuntime!.submit({ text, language }, new AbortController().signal);
 const dataset = TodoApplication.storage.dataset;
+
+dataset.TodoList = [{ id: 'read-list', name: 'Reading', color: '#fff' }];
+dataset.TodoItem = [
+  { id: 'read-open', list: 'read-list', title: 'Read chapter', completed: false },
+  { id: 'read-done', list: 'read-list', title: 'Review notes', completed: true },
+];
+const beforeReads = JSON.stringify(dataset);
+const incomplete = await submit('show incomplete items');
+console.info(JSON.stringify({ text: 'show incomplete items', result: incomplete }));
+assert.equal(incomplete.status, 'executed');
+assert.equal(incomplete.request.kind, 'graph-read');
+assert.deepEqual(incomplete.response?.value, [
+  {
+    id: 'read-open',
+    list: {
+      kind: 'entity-ref',
+      entityName: 'TodoList',
+      locator: { id: 'read-list' },
+    },
+    title: 'Read chapter',
+    completed: false,
+  },
+]);
+const incompleteCount = await submit('how many incomplete items are there?');
+console.info(
+  JSON.stringify({ text: 'how many incomplete items are there?', result: incompleteCount }),
+);
+assert.equal(incompleteCount.status, 'executed');
+assert.equal(incompleteCount.request.kind, 'graph-read');
+assert.equal(incompleteCount.response?.value, 1);
+assert.equal(JSON.stringify(dataset), beforeReads, 'Reads must not mutate Todo data.');
+
 // Individual deletion uses the canonical graph command, not a domain operation.
 for (const language of ['es-ES', 'en-US']) {
   dataset.TodoList = [{ id: 'delete-list', name: 'Manuela', color: '#fff' }];

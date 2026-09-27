@@ -1,6 +1,8 @@
 import {
   parseGraphCommandRequest,
+  parseGraphReadRequest,
   type GraphCommandRequest,
+  type GraphReadRequest,
   safeParseUnknownGraphSchema,
   toGraphJsonSchema,
   type GraphJsonSchema,
@@ -17,6 +19,7 @@ import {
   validateModelGraphCommand,
   type ModelGraphCommandExposure,
 } from './model-graph-command.js';
+import { validateModelGraphRead, type ModelGraphReadExposure } from './model-graph-read.js';
 
 export type ModelRequest = {
   instructions: string;
@@ -37,7 +40,10 @@ export class ModelInterpretationError extends Error {
 }
 /** The executable payload is the existing protocol, not an LLM-specific command language. */
 export type ModelInterpretationValue =
-  | { status: 'resolved'; request: GraphCommandRequest | OperationInvokeRequest }
+  | {
+      status: 'resolved';
+      request: GraphReadRequest | GraphCommandRequest | OperationInvokeRequest;
+    }
   | { status: 'help' }
   | { status: 'unresolved'; reason: string };
 
@@ -53,7 +59,10 @@ export const parseModelInterpretation = (raw: unknown): ModelInterpretationValue
     )
       return { status: 'unresolved', reason: raw.reason };
     if (raw.status === 'resolved' && keys.length === 2 && isRecord(raw.request)) {
-      if (raw.request.kind === 'graph-command') {
+      if (raw.request.kind === 'graph-read') {
+        const parsed = parseGraphReadRequest(raw.request);
+        if (parsed.success) return { status: 'resolved', request: parsed.request };
+      } else if (raw.request.kind === 'graph-command') {
         const parsed = parseGraphCommandRequest(raw.request);
         if (parsed.success) return { status: 'resolved', request: parsed.request };
       } else {
@@ -100,10 +109,11 @@ export const validateModelInvocation = (
   return exposure.validate(invocation.input);
 };
 
-/** Interprets only: no reads, dispatch, persistence, or domain argument translation. */
+/** Interprets only: no dispatch, persistence, or domain argument translation. */
 export const interpretModelRequest = async ({
   provider,
   operations,
+  reads = [],
   commands = [],
   resolveOperation,
   context,
@@ -114,6 +124,7 @@ export const interpretModelRequest = async ({
 }: {
   provider: ModelProvider;
   operations: readonly ModelOperationExposure[];
+  reads?: readonly ModelGraphReadExposure[];
   commands?: readonly ModelGraphCommandExposure[];
   resolveOperation: Resolver;
   context: unknown;
@@ -141,7 +152,16 @@ export const interpretModelRequest = async ({
     description: command.description,
     request: project(toGraphJsonSchema(command.request)),
   }));
-  const serialized = JSON.stringify({ context, commands: commandCatalog, operations: catalog });
+  const readCatalog = reads.map(read => ({
+    description: read.description,
+    request: project(toGraphJsonSchema(read.request)),
+  }));
+  const serialized = JSON.stringify({
+    context,
+    reads: readCatalog,
+    commands: commandCatalog,
+    operations: catalog,
+  });
   if (serialized.length > maxContextCharacters)
     return {
       status: 'unresolved',
@@ -158,6 +178,7 @@ export const interpretModelRequest = async ({
         input: op.input,
       },
     })),
+    ...readCatalog.map(read => read.request),
     ...commandCatalog.map(command => command.request),
   ];
   const outputSchema: GraphJsonSchema = {
@@ -184,7 +205,8 @@ export const interpretModelRequest = async ({
   };
   const modelInstructions = [
     'Interpret the user request. Return JSON only.',
-    'For ONE supported action return {status:"resolved",request:...}. request must be an existing Ontahi graph-command request (including version and command) or invoke request (kind, operationId, input), exactly as advertised.',
+    'For ONE supported read or action return {status:"resolved",request:...}. request must be an existing Ontahi graph-read request, graph-command request (including version and command), or invoke request (kind, operationId, input), exactly as advertised.',
+    'Use an advertised graph read for questions that ask for stored data or a count. Never answer those questions from the supplied context.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
     'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',
     'Copy entity references and selections from the supplied context. Use the declared operation input fields directly. Never replace references with names or invent IDs.',
@@ -209,9 +231,11 @@ export const interpretModelRequest = async ({
     let reason: string | undefined;
     try {
       reason =
-        proposal.request.kind === 'graph-command'
-          ? validateModelGraphCommand(proposal.request, commands)
-          : validateModelInvocation(proposal.request, operations, resolveOperation);
+        proposal.request.kind === 'graph-read'
+          ? validateModelGraphRead(proposal.request, reads)
+          : proposal.request.kind === 'graph-command'
+            ? validateModelGraphCommand(proposal.request, commands)
+            : validateModelInvocation(proposal.request, operations, resolveOperation);
     } catch (error) {
       if (!(error instanceof ModelInterpretationError) || error.code !== 'proposal_out_of_scope')
         throw error;
