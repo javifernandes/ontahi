@@ -85,10 +85,25 @@ export const completeDeclarativeConsoleDocument = (
         .filter(operation => operation.entityName === operationPrefix[1])
         .map(operation => ({
           label: operation.name,
-          apply: operation.name,
+          apply: `${operation.name} `,
           kind: 'member',
-          detail: operation.description ?? 'Operation',
+          detail: operation.description ? `Operation · ${operation.description}` : 'Operation',
         })),
+    );
+  }
+  const operationInputPrefix = document
+    .slice(0, range.from)
+    .match(/^\s*invoke\s+([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s+$/);
+  if (operationInputPrefix) {
+    const operation = application.operations?.find(
+      candidate =>
+        candidate.entityName === operationInputPrefix[1] &&
+        candidate.name === operationInputPrefix[2],
+    );
+    return result(
+      operation?.input && operation.input.kind !== 'void'
+        ? [{ label: 'with', apply: 'with {}', kind: 'keyword', detail: 'Structured input' }]
+        : [],
     );
   }
   const syntax = dialect.parse(document).syntax.expression;

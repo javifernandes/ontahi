@@ -186,7 +186,17 @@ describe('Console actions', () => {
       completeConsoleDocument('invoke TodoList.cr', 18, application, {
         dialect: 'declarative',
       }).items,
-    ).toEqual([expect.objectContaining({ label: 'createList' })]);
+    ).toEqual([expect.objectContaining({ label: 'createList', apply: 'createList ' })]);
+    expect(
+      completeConsoleDocument('invoke TodoList.createList ', 27, application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'with', apply: 'with {}' })]);
+    expect(
+      completeConsoleDocument('invoke TodoList.clear ', 22, application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([]);
     expect(
       analyzeConsoleDocument('update', application, { dialect: 'declarative' }).semanticDiagnostics,
     ).toEqual([]);

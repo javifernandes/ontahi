@@ -479,6 +479,7 @@ const consoleDialectExtensions = (
       completion.detail?.startsWith('Selection factory') === true ||
       (completion.detail?.startsWith('Contextual Selection') === true &&
         options.dialect === 'declarative') ||
+      (completion.detail?.startsWith('Operation') === true && options.dialect === 'declarative') ||
       (typeof completion.apply === 'string' && completion.apply.endsWith(': ')),
     icons: false,
   }),
