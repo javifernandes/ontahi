@@ -37,8 +37,35 @@ export const completeDeclarativeConsoleDocument = (
     ...range,
     items: items.filter(item => item.label.startsWith(prefix)),
   });
+  const actionItems: readonly ConsoleLanguageCompletionItem[] = [
+    ...(['create', 'update', 'delete'] as const)
+      .filter(action => application.commands?.some(command => command.actions.includes(action)))
+      .map(action => ({
+        label: action,
+        apply: `${action} `,
+        kind: 'keyword' as const,
+        detail: 'Entity Command',
+      })),
+    ...(application.operations?.length
+      ? [{ label: 'invoke', apply: 'invoke ', kind: 'keyword' as const, detail: 'Operation' }]
+      : []),
+  ];
   if (/^\s*\w*$/.test(document.slice(0, pos))) {
-    return result(consoleEntityCompletionItems(application));
+    return result([...actionItems, ...consoleEntityCompletionItems(application)]);
+  }
+  const commandPrefix = document.slice(0, range.from).match(/^\s*(create|update|delete)\s+$/);
+  if (commandPrefix) {
+    const action = commandPrefix[1] as 'create' | 'update' | 'delete';
+    return result(
+      consoleEntityCompletionItems({
+        ...application,
+        entities: application.entities.filter(entity =>
+          application.commands
+            ?.find(command => command.entityName === entity.name)
+            ?.actions.includes(action),
+        ),
+      }),
+    );
   }
   const syntax = dialect.parse(document).syntax.expression;
   const entity = resolveConsoleContext(syntax, application, pos);

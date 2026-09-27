@@ -4,6 +4,7 @@ import { history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import {
+  isEntityMutationDelta,
   isGraphReadCapabilities,
   graphOutput,
   toGraphSchemaDescriptor,
@@ -85,6 +86,11 @@ export type OntahiDevtoolsConsoleOptions = {
   readonly limit?: number;
   /** Host cache identity, not credentials. Update principal/cacheScope on authority changes. */
   readonly identity?: ExecutionIdentity;
+  /** Reconcile host-owned read caches after a Console Command or Operation succeeds. */
+  readonly onActionExecuted?: (event: {
+    readonly execution: Exclude<ConsoleRequest, { readonly family: 'graph.read' }>;
+    readonly response: unknown;
+  }) => void | Promise<void>;
 };
 
 export type ConsolePanelProps = {
@@ -116,6 +122,31 @@ type ConsoleResultMode = 'visual' | 'json';
 
 const consoleEntityDefinition = (source: ConsoleEntitySource): AnyEntityDefinition =>
   'definition' in source ? source.definition : source;
+
+const reconcileEntityMutationResult = (
+  clientCache: GraphClientCache | undefined,
+  sources: readonly ConsoleEntitySource[],
+  response: unknown,
+) => {
+  if (!clientCache || !isRecord(response) || !isEntityMutationDelta(response.value)) return;
+  const entities = new Map(
+    sources.map(source => {
+      const definition = consoleEntityDefinition(source);
+      return [definition.name, definition] as const;
+    }),
+  );
+  for (const fact of [...response.value.created, ...response.value.updated]) {
+    const definition = entities.get(fact.entityName);
+    if (!definition) continue;
+    const previous = fact.ref
+      ? clientCache.readEntity<Record<string, unknown>>(fact.ref)
+      : undefined;
+    clientCache.writeEntity(definition, { ...previous, ...fact.values });
+  }
+  for (const fact of response.value.deleted) {
+    if (fact.ref) clientCache.invalidateEntity(fact.ref);
+  }
+};
 
 const reflectConsoleOperations = (
   sources: readonly ConsoleEntitySource[],
@@ -671,7 +702,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       return exchange(execution, { signal: controller.signal });
     };
     void execute()
-      .then(response => {
+      .then(async response => {
         if (controller.signal.aborted) return;
         if (execution.family !== 'graph.read') {
           if (isRecord(response) && response.kind === 'protocol-error') {
@@ -692,6 +723,9 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                 ? 'Operation returned an invalid result.'
                 : 'Graph Command returned an invalid result.',
             );
+          if (execution.family === 'graph.command')
+            reconcileEntityMutationResult(clientCache, options.entities, response);
+          await options.onActionExecuted?.({ execution, response });
           setResult({
             status: 'success',
             snapshot: {

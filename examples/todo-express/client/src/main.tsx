@@ -79,6 +79,7 @@ const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
   entities: [TodoList, TodoItem, Tag],
   initialDocument: 'TodoItem.where(completed = false).many()',
+  onActionExecuted: () => queryClient.invalidateQueries(),
 } satisfies OntahiDevtoolsConsoleOptions;
 
 const TodoClient = () => {

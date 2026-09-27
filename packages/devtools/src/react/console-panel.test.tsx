@@ -2,6 +2,8 @@ import { redo, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { isJsonValue, type JsonValue } from '@ontahi/core';
 import {
+  createEntityRef,
+  createGraphClientCache,
   createGraphReadDispatcher,
   createInMemoryDataGraphRuntime,
   defineClientDomainOperation,
@@ -87,17 +89,32 @@ describe('Console actions', uiTestOptions, () => {
   });
 
   it('executes an Entity update as a graph.command without read-only controls', async () => {
+    const clientCache = createGraphClientCache();
+    clientCache.writeEntity(ListSchema, { id: 'list-1', name: 'Inbox' });
+    const onActionExecuted = vi.fn();
     const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
       createRuntimeProtocolResponse(envelope, {
         kind: 'graph-command-result',
-        value: { status: 'applied' },
+        value: {
+          created: [],
+          updated: [
+            {
+              entityName: 'List',
+              ref: createEntityRef(ListSchema, { id: 'list-1' }),
+              values: { id: 'list-1', name: 'Today' },
+            },
+          ],
+          deleted: [],
+        },
       }),
     );
     render(
       <ConsolePanel
+        clientCache={clientCache}
         options={{
           entities: [List],
           initialDocument: 'List.ref({ id: "list-1" }).update({ name: "Today" })',
+          onActionExecuted,
         }}
         runtimeTransport={{ request }}
       />,
@@ -129,6 +146,11 @@ describe('Console actions', uiTestOptions, () => {
     expect((screen.getByRole('button', { name: 'Observe' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
+    await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
+      id: 'list-1',
+      name: 'Today',
+    });
   });
 });
 

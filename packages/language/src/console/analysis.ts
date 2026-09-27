@@ -161,8 +161,20 @@ export const analyzeConsoleSyntax = (
 
   if (!expression.terminal && !dialect.implicitMany) return { ...parsed, semanticDiagnostics: [] };
 
-  const root = application.entities.find(candidate => candidate.name === expression.entity?.text);
+  const entityName = expression.entity.text;
+  const root = application.entities.find(candidate => candidate.name === entityName);
   if (!root) {
+    const declarativeActionDrafts = [
+      ...(['create', 'update', 'delete'] as const).filter(action =>
+        application.commands?.some(command => command.actions.includes(action)),
+      ),
+      ...(application.operations?.length ? ['invoke'] : []),
+    ];
+    if (
+      dialect.id === 'declarative' &&
+      declarativeActionDrafts.some(action => action.startsWith(entityName))
+    )
+      return { ...parsed, semanticDiagnostics: [] };
     return {
       ...parsed,
       semanticDiagnostics: [

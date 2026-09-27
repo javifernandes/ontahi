@@ -171,4 +171,16 @@ describe('Console actions', () => {
       ]),
     );
   });
+
+  it('completes Declarative action keywords and their eligible Entities', () => {
+    expect(completeConsoleDocument('up', 2, application, { dialect: 'declarative' }).items).toEqual(
+      [expect.objectContaining({ label: 'update', apply: 'update ' })],
+    );
+    expect(
+      completeConsoleDocument('update To', 9, application, { dialect: 'declarative' }).items,
+    ).toEqual([expect.objectContaining({ label: 'TodoList' })]);
+    expect(
+      analyzeConsoleDocument('update', application, { dialect: 'declarative' }).semanticDiagnostics,
+    ).toEqual([]);
+  });
 });
