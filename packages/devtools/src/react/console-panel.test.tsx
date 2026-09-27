@@ -195,19 +195,20 @@ describe('Console actions', uiTestOptions, () => {
     const clientCache = createGraphClientCache();
     clientCache.writeEntity(ListSchema, { id: 'list-1', name: 'Inbox' });
     clientCache.writeEntity(ListSchema, { id: 'list-2', name: 'Inbox' });
-    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
-      createRuntimeProtocolResponse(
-        envelope,
+    const respond = async (
+      envelope: RuntimeProtocolRequestEnvelope,
+    ): Promise<RuntimeProtocolResponseEnvelope> => {
+      const body =
         (envelope.body as { kind?: string }).kind === 'graph-command-capabilities'
-          ? {
+          ? ({
               kind: 'graph-command-capabilities-result',
               entityName: 'List',
               capabilities: {
                 entityMutations: ['update'],
                 selectionMutations: ['update'],
               },
-            }
-          : {
+            } as const)
+          : ({
               kind: 'graph-command-result',
               value: {
                 created: [],
@@ -218,9 +219,11 @@ describe('Console actions', uiTestOptions, () => {
                 })),
                 deleted: [],
               },
-            },
-      ),
-    );
+            } as const);
+      if (!isJsonValue(body)) throw new Error('Expected a portable Graph Command response.');
+      return createRuntimeProtocolResponse(envelope, body);
+    };
+    const request = vi.fn(respond);
     render(
       <ConsolePanel
         clientCache={clientCache}
