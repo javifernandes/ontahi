@@ -53,11 +53,16 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) 
 
 export type ModelCommandCanonicalRequest = GraphCommandRequest | OperationInvokeRequest;
 
-const isModelCommandCanonicalRequest = (value: unknown): value is ModelCommandCanonicalRequest => {
-  if (!isRecord(value)) return false;
-  if (value.kind === 'graph-command') return parseGraphCommandRequest(value).success;
+const parseModelCommandCanonicalRequest = (
+  value: unknown,
+): ModelCommandCanonicalRequest | undefined => {
+  if (!isRecord(value)) return undefined;
+  if (value.kind === 'graph-command') {
+    const parsed = parseGraphCommandRequest(value);
+    return parsed.success ? parsed.request : undefined;
+  }
   const parsed = parseOperationInvocationRequest(value);
-  return parsed.success && parsed.request.kind === 'invoke';
+  return parsed.success && parsed.request.kind === 'invoke' ? parsed.request : undefined;
 };
 
 const requestError = (
@@ -145,13 +150,33 @@ export const parseModelCommandProtocolResponse = (
     isRecord(value.result) &&
     hasOnlyKeys(value.result, resultKeys) &&
     typeof value.result.message === 'string' &&
-    ((value.result.status === 'answered' && value.result.request === undefined) ||
-      (value.result.status === 'unresolved' && value.result.request === undefined) ||
-      (value.result.status === 'executed' &&
-        isModelCommandCanonicalRequest(value.result.request))) &&
     isJsonValue(value)
-  )
-    return { success: true, response: cloneJson(value) as ModelCommandProtocolResponse };
+  ) {
+    if (
+      (value.result.status === 'answered' || value.result.status === 'unresolved') &&
+      value.result.request === undefined
+    )
+      return {
+        success: true,
+        response: {
+          version: 1,
+          kind: 'model-command-result',
+          result: { status: value.result.status, message: value.result.message },
+        },
+      };
+    if (value.result.status === 'executed') {
+      const request = parseModelCommandCanonicalRequest(value.result.request);
+      if (request)
+        return {
+          success: true,
+          response: {
+            version: 1,
+            kind: 'model-command-result',
+            result: { status: 'executed', message: value.result.message, request },
+          },
+        };
+    }
+  }
   return {
     success: false,
     error: requestError('invalid_request', 'Model command response is invalid.'),

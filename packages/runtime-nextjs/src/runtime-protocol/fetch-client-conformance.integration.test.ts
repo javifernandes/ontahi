@@ -113,6 +113,9 @@ const createExpressFetch = (): typeof fetch => {
       } as unknown as Parameters<typeof handler>[0];
       let status = 200;
       const response = {
+        writableEnded: false,
+        on: () => response,
+        off: () => response,
         status: (nextStatus: number) => {
           status = nextStatus;
           return response;

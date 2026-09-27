@@ -64,7 +64,11 @@ describe('Express Runtime Protocol adapter', () => {
       return runtimeProtocolError('dispatch_unavailable', 'Cancelled.');
     };
     const handler = createExpressRuntimeProtocolHandler({ dispatcher, context: () => undefined });
-    const running = handler(
+    const runHandler = handler as unknown as (
+      request: Request,
+      response: Response,
+    ) => Promise<void>;
+    const running = runHandler(
       {
         body: createRuntimeProtocolRequest({
           id: 'cancel-1',
@@ -73,7 +77,6 @@ describe('Express Runtime Protocol adapter', () => {
         }),
       } as Request,
       response,
-      vi.fn() as NextFunction,
     );
 
     await vi.waitFor(() => expect(signal).toBeInstanceOf(AbortSignal));

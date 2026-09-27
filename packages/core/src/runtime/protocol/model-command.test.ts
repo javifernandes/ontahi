@@ -67,6 +67,40 @@ describe('Runtime Protocol model.command family', () => {
     expect(parseModelCommandProtocolResponse(error)).toEqual({ success: true, response: error });
   });
 
+  it('returns the canonical parsed invocation without unknown transport fields', () => {
+    expect(
+      parseModelCommandProtocolResponse({
+        version: 1,
+        kind: 'model-command-result',
+        result: {
+          status: 'executed',
+          message: 'List renamed.',
+          request: {
+            kind: 'invoke',
+            operationId: 'TodoList.rename',
+            input: { name: 'Today' },
+            authority: 'caller-authored',
+          },
+        },
+      }),
+    ).toEqual({
+      success: true,
+      response: {
+        version: 1,
+        kind: 'model-command-result',
+        result: {
+          status: 'executed',
+          message: 'List renamed.',
+          request: {
+            kind: 'invoke',
+            operationId: 'TodoList.rename',
+            input: { name: 'Today' },
+          },
+        },
+      },
+    });
+  });
+
   it.each([
     { version: 1, kind: 'model-command-result', result: { status: 'executed', message: 'Done' } },
     {
