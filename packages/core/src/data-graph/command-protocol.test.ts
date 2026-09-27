@@ -5,6 +5,7 @@ import {
   entity,
   field,
   mutateEntity,
+  parseGraphCommandFamilyRequest,
   parseGraphCommandRequest,
   relationship,
   resolveGraphCommandRequest,
@@ -30,6 +31,27 @@ describe('data graph Relationship Command protocol', () => {
       source: { entityName: string; locator: Record<string, unknown> };
     };
   };
+
+  it('parses Entity mutation capability discovery without a Command payload', () => {
+    expect(
+      parseGraphCommandFamilyRequest({
+        version: 1,
+        kind: 'graph-command-capabilities',
+        entityName: 'Student',
+        authority: 'ignored',
+      }),
+    ).toEqual({
+      success: true,
+      request: { version: 1, kind: 'graph-command-capabilities', entityName: 'Student' },
+    });
+    expect(
+      parseGraphCommandFamilyRequest({
+        version: 1,
+        kind: 'graph-command-capabilities',
+        entityName: '',
+      }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+  });
 
   it('round-trips a canonical command and resolves it against server-owned Entities', () => {
     const client = defineSchoolGraph();

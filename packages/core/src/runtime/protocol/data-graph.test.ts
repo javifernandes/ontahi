@@ -100,6 +100,18 @@ describe('Runtime Protocol Data Graph families', () => {
     });
   });
 
+  it('carries metadata discovery through the graph.command family without a Command', () => {
+    const request = createRuntimeProtocolRequest({
+      id: 'command-metadata',
+      family: 'graph.command',
+      body: { version: 1, kind: 'graph-command-capabilities', entityName: 'Book' },
+    });
+    expect(registry.parseRequest(JSON.parse(JSON.stringify(request)))).toEqual({
+      success: true,
+      request,
+    });
+  });
+
   it.each([
     {
       family: 'graph.read',

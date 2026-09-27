@@ -41,6 +41,44 @@ const policyFor = (
 });
 
 describe('Entity Mutation Command dispatcher', () => {
+  it('projects registered Entity mutation actions as advisory capabilities', async () => {
+    const graph = defineBookGraph();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            update: { fields: ['title'], result: ['id', 'title'] },
+            delete: { result: ['id'] },
+          },
+        },
+      ],
+      executeEntityMutation: vi.fn(),
+    });
+
+    await expect(
+      dispatch(
+        { version: 1, kind: 'graph-command-capabilities', entityName: 'Book' },
+        { authority: undefined },
+      ),
+    ).resolves.toEqual({
+      kind: 'graph-command-capabilities-result',
+      entityName: 'Book',
+      capabilities: { entityMutations: ['update', 'delete'] },
+    });
+    await expect(
+      dispatch(
+        { version: 1, kind: 'graph-command-capabilities', entityName: 'Missing' },
+        { authority: undefined },
+      ),
+    ).resolves.toEqual({
+      kind: 'graph-command-capabilities-result',
+      entityName: 'Missing',
+      capabilities: { entityMutations: [] },
+    });
+  });
+
   it('validates explicit scope and stored Field allowlists at registration', () => {
     const graph = defineBookGraph();
     const executeEntityMutation = vi.fn();

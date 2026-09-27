@@ -44,6 +44,27 @@ export type GraphCommandRequestV2 = {
 
 export type GraphCommandRequest = GraphCommandRequestV1 | GraphCommandRequestV2;
 
+export type EntityMutationCommandAction = 'create' | 'update' | 'delete';
+
+/** Advisory Entity mutation policy discovery. Execution remains independently authorized. */
+export type GraphCommandCapabilitiesRequestV1 = {
+  readonly version: 1;
+  readonly kind: 'graph-command-capabilities';
+  readonly entityName: string;
+};
+
+export type GraphCommandCapabilities = {
+  readonly entityMutations: readonly EntityMutationCommandAction[];
+};
+
+export type GraphCommandCapabilitiesResult = {
+  readonly kind: 'graph-command-capabilities-result';
+  readonly entityName: string;
+  readonly capabilities: GraphCommandCapabilities;
+};
+
+export type GraphCommandFamilyRequest = GraphCommandRequest | GraphCommandCapabilitiesRequestV1;
+
 export type GraphCommandProtocolErrorCode =
   | 'invalid_request'
   | 'unsupported_version'
@@ -101,6 +122,44 @@ export const graphCommandProtocolError = (
   code: GraphCommandProtocolErrorCode,
   message: string,
 ): GraphCommandProtocolError => ({ kind: 'protocol-error', error: { code, message } });
+
+export const isGraphCommandCapabilities = (
+  value: unknown,
+): value is GraphCommandCapabilities =>
+  isRecord(value) &&
+  Array.isArray(value.entityMutations) &&
+  value.entityMutations.every(
+    action => action === 'create' || action === 'update' || action === 'delete',
+  );
+
+export const parseGraphCommandFamilyRequest = (
+  value: unknown,
+):
+  | { readonly success: true; readonly request: GraphCommandFamilyRequest }
+  | { readonly success: false; readonly error: GraphCommandProtocolError } => {
+  if (!isRecord(value) || value.kind !== 'graph-command-capabilities')
+    return parseGraphCommandRequest(value);
+  if (value.version !== 1)
+    return {
+      success: false,
+      error: graphCommandProtocolError(
+        'unsupported_version',
+        `Unsupported data graph Command protocol version: ${String(value.version)}.`,
+      ),
+    };
+  if (typeof value.entityName !== 'string' || value.entityName.trim() === '')
+    return {
+      success: false,
+      error: graphCommandProtocolError(
+        'invalid_request',
+        'Graph Command capabilities require an Entity name.',
+      ),
+    };
+  return {
+    success: true,
+    request: { version: 1, kind: 'graph-command-capabilities', entityName: value.entityName },
+  };
+};
 
 export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandRequest => {
   const request: GraphCommandRequest =

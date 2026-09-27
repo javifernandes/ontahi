@@ -57,6 +57,7 @@ import {
   type SetStateAction,
 } from 'react';
 
+import { useConsoleCommandCapabilities } from './console-command-capabilities.js';
 import { useConsoleReadCapabilities } from './console-read-capabilities.js';
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
@@ -532,6 +533,19 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     [entityDefinitions],
   );
   const operations = useMemo(() => reflectConsoleOperations(options.entities), [options.entities]);
+  const identityKey = JSON.stringify(
+    executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
+  );
+  const commandEntityNames = useMemo(
+    () =>
+      options.entities.flatMap(entity => ('definition' in entity ? [entity.definition.name] : [])),
+    [options.entities],
+  );
+  const commandActions = useConsoleCommandCapabilities(
+    runtimeTransport,
+    identityKey,
+    commandEntityNames,
+  );
   const commands = useMemo(
     () =>
       options.entities.flatMap(entity =>
@@ -539,12 +553,14 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           ? [
               {
                 entityName: entity.definition.name,
-                actions: ['create', 'update', 'delete'] as const,
+                actions:
+                  commandActions(entity.definition.name) ??
+                  (['create', 'update', 'delete'] as const),
               },
             ]
           : [],
       ),
-    [options.entities],
+    [commandActions, options.entities],
   );
   const initialTerminal = options.initialDialect === 'declarative' ? '' : '.many()';
   const initialDocument =
@@ -553,9 +569,6 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     document: initialDocument,
     dialect: options.initialDialect ?? 'ts',
   });
-  const identityKey = JSON.stringify(
-    executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
-  );
   const [storedResult, setStoredResult] = useState<{
     readonly identityKey: string;
     readonly result: ConsoleResult;

@@ -122,12 +122,18 @@ describe('Console actions', uiTestOptions, () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() =>
-      expect(request.mock.calls.some(([envelope]) => envelope.family === 'graph.command')).toBe(
-        true,
-      ),
+      expect(
+        request.mock.calls.some(
+          ([envelope]) =>
+            envelope.family === 'graph.command' &&
+            (envelope.body as { kind?: string }).kind === 'graph-command',
+        ),
+      ).toBe(true),
     );
     const command = request.mock.calls.find(
-      ([envelope]) => envelope.family === 'graph.command',
+      ([envelope]) =>
+        envelope.family === 'graph.command' &&
+        (envelope.body as { kind?: string }).kind === 'graph-command',
     )![0];
     expect(command).toMatchObject({
       family: 'graph.command',
@@ -150,6 +156,37 @@ describe('Console actions', uiTestOptions, () => {
     expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
       id: 'list-1',
       name: 'Today',
+    });
+  });
+
+  it('authors only Entity Commands advertised by the runtime policy', async () => {
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-command-capabilities-result',
+        entityName: 'List',
+        capabilities: { entityMutations: ['update'] },
+      }),
+    );
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDialect: 'declarative',
+          initialDocument: 'delete List { id: "list-1" }',
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    await screen.findByText('Entity Command List.delete is not available.');
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+    const commandMetadata = request.mock.calls.filter(
+      ([envelope]) => envelope.family === 'graph.command',
+    );
+    expect(commandMetadata).toHaveLength(1);
+    expect(commandMetadata[0]![0]).toMatchObject({
+      family: 'graph.command',
+      body: { version: 1, kind: 'graph-command-capabilities', entityName: 'List' },
     });
   });
 });

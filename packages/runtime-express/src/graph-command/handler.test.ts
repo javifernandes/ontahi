@@ -24,6 +24,23 @@ const invokeHandler = async (handler: RequestHandler, body: unknown) => {
 };
 
 describe('Express graph Command adapter', () => {
+  it('returns Command capability discovery as a successful protocol response', async () => {
+    const capabilities = {
+      kind: 'graph-command-capabilities-result' as const,
+      entityName: 'Book',
+      capabilities: { entityMutations: ['update'] as const },
+    };
+    const response = await invokeHandler(
+      createExpressGraphCommandHandler({
+        dispatcher: vi.fn(async () => capabilities),
+        context: () => ({ authority: undefined }),
+      }),
+      { version: 1, kind: 'graph-command-capabilities', entityName: 'Book' },
+    );
+
+    expect(response).toEqual({ status: 200, payload: capabilities });
+  });
+
   it('passes the protocol request through a server-derived authority boundary', async () => {
     const dispatcher = vi.fn(async () => ({
       kind: 'graph-command-result' as const,

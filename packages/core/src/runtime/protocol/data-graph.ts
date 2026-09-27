@@ -1,6 +1,6 @@
 import {
-  parseGraphCommandRequest,
-  type GraphCommandRequest,
+  parseGraphCommandFamilyRequest,
+  type GraphCommandFamilyRequest,
   type GraphCommandProtocolError,
 } from '../../data-graph/command-protocol.js';
 import {
@@ -22,11 +22,11 @@ export const graphReadRuntimeProtocolFamily = defineRuntimeProtocolFamily<
 
 export const graphCommandRuntimeProtocolFamily = defineRuntimeProtocolFamily<
   'graph.command',
-  GraphCommandRequest,
+  GraphCommandFamilyRequest,
   GraphCommandProtocolError
 >({
   name: 'graph.command',
-  parseRequest: parseGraphCommandRequest,
+  parseRequest: parseGraphCommandFamilyRequest,
 });
 
 export const dataGraphRuntimeProtocolFamilies = [
