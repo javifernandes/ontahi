@@ -217,6 +217,7 @@ export type ConsoleLanguageApplicationReflection = {
   readonly commands?: readonly {
     readonly entityName: string;
     readonly actions: readonly ('create' | 'update' | 'delete')[];
+    readonly selectionActions?: readonly ('update' | 'delete')[];
   }[];
 };
 

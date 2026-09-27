@@ -191,6 +191,98 @@ describe('Console actions', uiTestOptions, () => {
     });
   });
 
+  it('executes a Selection update and reconciles every returned Entity', async () => {
+    const clientCache = createGraphClientCache();
+    clientCache.writeEntity(ListSchema, { id: 'list-1', name: 'Inbox' });
+    clientCache.writeEntity(ListSchema, { id: 'list-2', name: 'Inbox' });
+    const respond = async (
+      envelope: RuntimeProtocolRequestEnvelope,
+    ): Promise<RuntimeProtocolResponseEnvelope> => {
+      const body =
+        (envelope.body as { kind?: string }).kind === 'graph-command-capabilities'
+          ? ({
+              kind: 'graph-command-capabilities-result',
+              entityName: 'List',
+              capabilities: {
+                entityMutations: ['update'],
+                selectionMutations: ['update'],
+              },
+            } as const)
+          : ({
+              kind: 'graph-command-result',
+              value: {
+                created: [],
+                updated: ['list-1', 'list-2'].map(id => ({
+                  entityName: 'List',
+                  ref: createEntityRef(ListSchema, { id }),
+                  values: { id, name: 'Today' },
+                })),
+                deleted: [],
+              },
+            } as const);
+      if (!isJsonValue(body)) throw new Error('Expected a portable Graph Command response.');
+      return createRuntimeProtocolResponse(envelope, body);
+    };
+    const request = vi.fn(respond);
+    render(
+      <ConsolePanel
+        clientCache={clientCache}
+        options={{
+          entities: [List],
+          initialDialect: 'declarative',
+          initialDocument: 'update List where { name = "Inbox" } with { name: "Today" }',
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() =>
+      expect(
+        request.mock.calls.some(
+          ([envelope]) =>
+            envelope.family === 'graph.command' &&
+            (envelope.body as { kind?: string }).kind === 'graph-command',
+        ),
+      ).toBe(true),
+    );
+    const command = request.mock.calls.find(
+      ([envelope]) =>
+        envelope.family === 'graph.command' &&
+        (envelope.body as { kind?: string }).kind === 'graph-command',
+    )![0];
+    expect(command).toMatchObject({
+      family: 'graph.command',
+      body: {
+        version: 3,
+        command: {
+          action: 'update',
+          target: {
+            kind: 'selection',
+            entityName: 'List',
+            expression: { kind: 'predicate', fieldName: 'name', operator: 'eq', value: 'Inbox' },
+          },
+          values: { name: 'Today' },
+        },
+      },
+    });
+    await waitFor(() => {
+      expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
+        id: 'list-1',
+        name: 'Today',
+      });
+      expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-2' }))).toEqual({
+        id: 'list-2',
+        name: 'Today',
+      });
+    });
+  });
+
   it('authors only Entity Commands advertised by the runtime policy', async () => {
     const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
       createRuntimeProtocolResponse(envelope, {

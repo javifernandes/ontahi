@@ -1,4 +1,4 @@
-import { graphSchema, type AnyEntityRef } from '@ontahi/core/data-graph';
+import { graphSchema, isEntityRef, type AnyEntityRef } from '@ontahi/core/data-graph';
 import type { ModelGraphCommandExposure } from '@ontahi/core/runtime/server';
 
 import { TodoItem, TodoList } from '../todo.js';
@@ -48,7 +48,11 @@ export const todoGraphCommands = (
       }),
     }),
     validate: ({ command }) => {
-      if (command.kind !== 'entity-mutation-command' || command.action !== 'update')
+      if (
+        command.kind !== 'entity-mutation-command' ||
+        command.action !== 'update' ||
+        !isEntityRef(command.target)
+      )
         return unresolved;
       return validateTarget(command.target, String(command.if?.[key]), String(command.values[key]))
         ? undefined
@@ -71,7 +75,11 @@ export const todoGraphCommands = (
         }),
       }),
       validate: ({ command }) => {
-        if (command.kind !== 'entity-mutation-command' || command.action !== 'delete')
+        if (
+          command.kind !== 'entity-mutation-command' ||
+          command.action !== 'delete' ||
+          !isEntityRef(command.target)
+        )
           return unresolved;
         const before = String(command.if?.title);
         // Remove the title before looking for a list qualifier: a list name inside

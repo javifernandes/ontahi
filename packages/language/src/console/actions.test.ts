@@ -18,7 +18,13 @@ const application: ConsoleLanguageApplicationReflection = {
       relations: [],
     },
   ],
-  commands: [{ entityName: 'TodoList', actions: ['create', 'update', 'delete'] }],
+  commands: [
+    {
+      entityName: 'TodoList',
+      actions: ['create', 'update', 'delete'],
+      selectionActions: ['update', 'delete'],
+    },
+  ],
   operations: [
     {
       id: 'TodoList.createList',
@@ -123,6 +129,70 @@ describe('Console actions', () => {
     expect(convertConsoleDocument(declarative, application, 'ts', { dialect: 'declarative' })).toBe(
       'TodoList.ref({"id":"list-1"}).update({"name":"Today"})',
     );
+  });
+
+  it('lowers Selection updates and deletes to version 3 Graph Commands', () => {
+    for (const [source, dialect, action] of [
+      ['TodoList.where(name = "Inbox").update({ name: "Today" })', 'ts', 'update'],
+      ['TodoList.where(name = "Inbox").delete()', 'ts', 'delete'],
+      ['update TodoList where { name = "Inbox" } with { name: "Today" }', 'declarative', 'update'],
+      ['delete TodoList where { name = "Inbox" }', 'declarative', 'delete'],
+    ] as const) {
+      expect(analyzeConsoleDocument(source, application, { dialect }).execution).toMatchObject({
+        family: 'graph.command',
+        body: {
+          version: 3,
+          command: {
+            action,
+            entityName: 'TodoList',
+            target: {
+              kind: 'selection',
+              entityName: 'TodoList',
+              expression: {
+                kind: 'predicate',
+                fieldName: 'name',
+                operator: 'eq',
+                value: 'Inbox',
+              },
+            },
+          },
+        },
+      });
+    }
+  });
+
+  it('round trips Selection mutations between dialects', () => {
+    const declarative = 'delete TodoList where { name = "Inbox" }';
+    expect(convertConsoleDocument(declarative, application, 'ts', { dialect: 'declarative' })).toBe(
+      'TodoList.where(name = "Inbox").delete()',
+    );
+    expect(
+      convertConsoleDocument(
+        'TodoList.where(name = "Inbox").update({ name: "Today" })',
+        application,
+        'declarative',
+      ),
+    ).toBe('update TodoList where name = "Inbox" with {"name":"Today"}');
+    expect(
+      convertConsoleDocument('TodoList.where(name = "Inbox").delete()', application, 'declarative'),
+    ).toBe('delete TodoList where name = "Inbox"');
+  });
+
+  it('requires separately advertised Selection mutation capabilities', () => {
+    const withoutSelectionCommands = {
+      ...application,
+      commands: [{ entityName: 'TodoList', actions: ['create', 'update', 'delete'] as const }],
+    };
+    expect(
+      analyzeConsoleDocument('delete TodoList where { name = "Inbox" }', withoutSelectionCommands, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'console.semantic.invalid-command' })]);
+    expect(
+      analyzeConsoleDocument('delete TodoList where { missing = "Inbox" }', application, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'selection.semantic.unknown-field' })]);
   });
 
   it('parses nested structured values and normalizes wrapped Entity Ref inputs', () => {
@@ -265,7 +335,12 @@ describe('Console actions', () => {
       completeConsoleDocument('update TodoList ', 16, application, {
         dialect: 'declarative',
       }).items,
-    ).toEqual([expect.objectContaining({ label: '{ id }', apply: '{ id: "" }', cursorOffset: 7 })]);
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: '{ id }', apply: '{ id: "" }', cursorOffset: 7 }),
+        expect.objectContaining({ label: 'where' }),
+      ]),
+    );
     expect(
       completeConsoleDocument('update TodoList { id: "list-1" } ', 34, application, {
         dialect: 'declarative',
@@ -301,5 +376,51 @@ describe('Console actions', () => {
         { dialect: 'declarative' },
       ).items,
     ).toEqual([expect.objectContaining({ label: 'name', apply: 'name: ""' })]);
+  });
+
+  it('completes Selection mutation targets and terminals', () => {
+    expect(
+      completeConsoleDocument('delete TodoList ', 16, application, { dialect: 'declarative' })
+        .items,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'where' })]));
+    expect(
+      completeConsoleDocument('delete TodoList where { na', 26, application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'name' })]));
+    expect(
+      completeConsoleDocument('TodoList.where(name = "Inbox").', 32, application).items,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'update' }),
+        expect.objectContaining({ label: 'delete' }),
+      ]),
+    );
+    expect(
+      completeConsoleDocument(
+        'update TodoList where { name = "Inbox" } ',
+        'update TodoList where { name = "Inbox" } '.length,
+        application,
+        { dialect: 'declarative' },
+      ).items,
+    ).toEqual([expect.objectContaining({ label: 'with', apply: 'with { }' })]);
+
+    const selectionOnly = {
+      ...application,
+      commands: [
+        { entityName: 'TodoList', actions: [] as const, selectionActions: ['delete'] as const },
+      ],
+    };
+    expect(
+      completeConsoleDocument('de', 2, selectionOnly, { dialect: 'declarative' }).items,
+    ).toEqual([expect.objectContaining({ label: 'delete' })]);
+    expect(
+      completeConsoleDocument('delete To', 9, selectionOnly, { dialect: 'declarative' }).items,
+    ).toEqual([expect.objectContaining({ label: 'TodoList' })]);
+    expect(
+      completeConsoleDocument('delete TodoList ', 16, selectionOnly, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'where' })]);
   });
 });

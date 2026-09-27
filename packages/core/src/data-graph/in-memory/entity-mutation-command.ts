@@ -40,7 +40,7 @@ export const executeInMemoryEntityMutationCommandEffect = (
         ),
       );
     }
-    return executeInMemoryGraphCommandEffect<Record<string, unknown>>(
+    return executeInMemoryGraphCommandEffect(
       dataset,
       toEntityMutationGraphCommand(entity, command),
     ).pipe(

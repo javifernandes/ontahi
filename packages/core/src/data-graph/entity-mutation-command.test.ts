@@ -86,6 +86,16 @@ describe('Entity Mutation Command', () => {
         if: { missing: true },
       }),
     ).toThrow('Entity mutation condition cannot test Book.missing.');
+    expect(() =>
+      toEntityMutationGraphCommand(Book, {
+        ...mutation.deleteSelection({
+          kind: 'selection',
+          entityName: 'Book',
+          expression: { kind: 'all' },
+        }),
+        if: { title: 'Draft' },
+      }),
+    ).toThrow('Entity Selection mutations do not support exact mutation conditions.');
   });
 
   it('requires an update/delete delta to identify the exact command target', () => {
@@ -155,6 +165,59 @@ describe('Entity Mutation Command', () => {
       deleted: [{ entityName: 'Book', ref: book, values: { id: 'book-1', title: 'Core' } }],
     });
     expect(dataset.Book).toEqual([]);
+  });
+
+  it('returns multi-row deltas for Selection updates and deletes', async () => {
+    const Book = entity('Book', {
+      id: field.id(),
+      title: field.string(),
+      published: field.boolean(),
+    });
+    const dataset = {
+      Book: [
+        { id: 'book-1', title: 'First', published: false },
+        { id: 'book-2', title: 'Second', published: false },
+        { id: 'book-3', title: 'Third', published: true },
+      ],
+    };
+    const runtime = createInMemoryDataGraphRuntime({ dataset, entities: [Book] });
+    const mutation = mutateEntity(Book);
+    const unpublished = {
+      kind: 'selection' as const,
+      entityName: 'Book' as const,
+      expression: {
+        kind: 'predicate' as const,
+        fieldName: 'published',
+        operator: 'eq' as const,
+        value: false,
+      },
+    };
+
+    await expect(
+      Effect.runPromise(
+        runtime.runEntityMutationCommand(
+          mutation.updateSelection(unpublished, { title: 'Revised' }),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      created: [],
+      updated: [
+        { entityName: 'Book', values: { id: 'book-1', title: 'Revised', published: false } },
+        { entityName: 'Book', values: { id: 'book-2', title: 'Revised', published: false } },
+      ],
+      deleted: [],
+    });
+    await expect(
+      Effect.runPromise(runtime.runEntityMutationCommand(mutation.deleteSelection(unpublished))),
+    ).resolves.toMatchObject({
+      created: [],
+      updated: [],
+      deleted: [
+        { entityName: 'Book', values: { id: 'book-1', title: 'Revised', published: false } },
+        { entityName: 'Book', values: { id: 'book-2', title: 'Revised', published: false } },
+      ],
+    });
+    expect(dataset.Book).toEqual([{ id: 'book-3', title: 'Third', published: true }]);
   });
 
   it('tests and applies exact mutation conditions in one in-memory mutation boundary', async () => {

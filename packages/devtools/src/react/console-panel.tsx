@@ -541,7 +541,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       options.entities.flatMap(entity => ('definition' in entity ? [entity.definition.name] : [])),
     [options.entities],
   );
-  const commandActions = useConsoleCommandCapabilities(
+  const commandCapabilities = useConsoleCommandCapabilities(
     runtimeTransport,
     identityKey,
     commandEntityNames,
@@ -554,13 +554,15 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
               {
                 entityName: entity.definition.name,
                 actions:
-                  commandActions(entity.definition.name) ??
+                  commandCapabilities(entity.definition.name)?.actions ??
                   (['create', 'update', 'delete'] as const),
+                selectionActions:
+                  commandCapabilities(entity.definition.name)?.selectionActions ?? [],
               },
             ]
           : [],
       ),
-    [commandActions, options.entities],
+    [commandCapabilities, options.entities],
   );
   const initialTerminal = options.initialDialect === 'declarative' ? '' : '.many()';
   const initialDocument =

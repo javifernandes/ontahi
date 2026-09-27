@@ -101,18 +101,23 @@ export const analyzeConsoleSyntax = (
 
   if (expression.kind === 'entity-mutation') {
     const entityName = expression.entity.text;
-    if (!application.entities.some(candidate => candidate.name === entityName))
+    const entity = application.entities.find(candidate => candidate.name === entityName);
+    if (!entity)
       return diagnostic(
         parsed,
         expression,
         'console.semantic.invalid-command',
         `Unknown Entity ${entityName}.`,
       );
+    const selectionMutation = expression.action !== 'create' && expression.steps.length > 0;
+    const commandReflection = application.commands?.find(
+      candidate => candidate.entityName === entityName,
+    );
     if (
       !expression.action ||
-      !application.commands
-        ?.find(candidate => candidate.entityName === entityName)
-        ?.actions.includes(expression.action)
+      !(selectionMutation
+        ? commandReflection?.selectionActions?.includes(expression.action as 'update' | 'delete')
+        : commandReflection?.actions.includes(expression.action))
     )
       return diagnostic(
         parsed,
@@ -120,9 +125,25 @@ export const analyzeConsoleSyntax = (
         'console.semantic.invalid-command',
         `Entity Command ${entityName}.${expression.action ?? ''} is not available.`,
       );
+    let selection: SelectionExpression | undefined;
+    if (selectionMutation) {
+      const filter = expression.steps[0];
+      if (filter?.kind !== 'filter' || !filter.selection)
+        return diagnostic(
+          parsed,
+          expression,
+          'console.semantic.invalid-command',
+          'Entity Selection Command requires a complete where predicate.',
+        );
+      const resolved = resolveExpression(filter.selection, entity);
+      if (!resolved.expression || resolved.diagnostics.length)
+        return { ...parsed, semanticDiagnostics: resolved.diagnostics };
+      selection = resolved.expression;
+    }
     const target = expression.targetValue;
     if (
       expression.action !== 'create' &&
+      !selectionMutation &&
       (!target || typeof target !== 'object' || Array.isArray(target))
     )
       return diagnostic(
@@ -144,22 +165,26 @@ export const analyzeConsoleSyntax = (
               kind: 'entity-mutation-command' as const,
               action: 'update' as const,
               entityName,
-              target: {
-                kind: 'entity-ref' as const,
-                entityName,
-                locator: target as Record<string, unknown>,
-              },
+              target: selection
+                ? { kind: 'selection' as const, entityName, expression: selection }
+                : {
+                    kind: 'entity-ref' as const,
+                    entityName,
+                    locator: target as Record<string, unknown>,
+                  },
               values: expression.valuesValue as Record<string, unknown>,
             }
           : {
               kind: 'entity-mutation-command' as const,
               action: 'delete' as const,
               entityName,
-              target: {
-                kind: 'entity-ref' as const,
-                entityName,
-                locator: target as Record<string, unknown>,
-              },
+              target: selection
+                ? { kind: 'selection' as const, entityName, expression: selection }
+                : {
+                    kind: 'entity-ref' as const,
+                    entityName,
+                    locator: target as Record<string, unknown>,
+                  },
             };
     try {
       return {

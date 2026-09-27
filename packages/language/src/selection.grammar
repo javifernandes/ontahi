@@ -13,8 +13,11 @@ DeclarativeConsoleExpression {
 
 DeclarativeOperationInvocationExpression { Invoke EntityName Dot OperationName (With StructuredValue)? }
 DeclarativeEntityCreateExpression { Create EntityName StructuredObject }
-DeclarativeEntityUpdateExpression { Update EntityName StructuredObject With StructuredObject }
-DeclarativeEntityDeleteExpression { Delete EntityName StructuredObject }
+DeclarativeEntityUpdateExpression {
+  Update EntityName (StructuredObject | DeclarativeMutationWhereClause) With StructuredObject
+}
+DeclarativeEntityDeleteExpression { Delete EntityName (StructuredObject | DeclarativeMutationWhereClause) }
+DeclarativeMutationWhereClause { Where (OrExpression | OpenBrace OrExpression CloseBrace) }
 
 DeclarativeGraphReadExpression {
   EntityName
@@ -36,7 +39,9 @@ EntityCreateExpression { EntityName Dot Create OpenParen StructuredObject CloseP
 EntityUpdateExpression {
   EntityName Dot Ref OpenParen StructuredObject CloseParen Dot Update OpenParen StructuredObject CloseParen
 }
-EntityDeleteExpression { EntityName Dot Ref OpenParen StructuredObject CloseParen Dot Delete OpenParen CloseParen }
+EntityDeleteExpression {
+  EntityName Dot Ref OpenParen StructuredObject CloseParen Dot Delete OpenParen CloseParen
+}
 OperationName { Identifier }
 
 StructuredValue { StructuredObject | StructuredArray | ScalarLiteral | Null }
@@ -50,7 +55,11 @@ GraphReadExpression {
   (NavigationClause | WhereClause)*
   OrderByClause?
   LimitClause?
-  Dot ReadTerminal OpenParen CloseParen
+  (Dot ReadTerminal OpenParen CloseParen | SelectionMutationTerminal)
+}
+SelectionMutationTerminal {
+  Dot Update OpenParen StructuredObject CloseParen |
+  Dot Delete OpenParen CloseParen
 }
 FactoryClause { Dot By OpenParen OpenBrace FactoryName Colon FactoryArgument CloseBrace CloseParen }
 NavigationClause { Dot NavigationName }

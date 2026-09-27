@@ -18,9 +18,11 @@ import {
 } from './ref/index.js';
 import { isRelationConstraintRejection } from './relationship-command-result.js';
 import {
+  assertNoRelationImage,
   selectionAnd,
   selectionNone,
   selectionReferences,
+  type SelectionAst,
   type SelectionExpression,
 } from './selection-ast.js';
 
@@ -73,12 +75,34 @@ export const isExactEntityMutationDelta = (
   const targetMatches =
     command.action === 'create'
       ? exactFact?.ref === undefined || exactFact.ref.entityName === command.entityName
-      : exactFact?.ref !== undefined && entityRefsEqual(exactFact.ref, command.target);
+      : isEntityRef(command.target) &&
+        exactFact?.ref !== undefined &&
+        entityRefsEqual(exactFact.ref, command.target);
   return (
     expected.length === 1 &&
     unexpected.length === 0 &&
     exactFact?.entityName === command.entityName &&
     targetMatches
+  );
+};
+
+export const isEntityMutationDeltaForCommand = (
+  value: unknown,
+  command: EntityMutationCommand,
+): value is EntityMutationDelta => {
+  if (!isEntityMutationDelta(value)) return false;
+  if (command.action === 'create' || isEntityRef(command.target))
+    return isExactEntityMutationDelta(value, command);
+  const expected = command.action === 'update' ? value.updated : value.deleted;
+  const unexpected =
+    command.action === 'update'
+      ? [...value.created, ...value.deleted]
+      : [...value.created, ...value.updated];
+  return (
+    unexpected.length === 0 &&
+    expected.every(
+      fact => fact.entityName === command.entityName && fact.ref?.entityName === command.entityName,
+    )
   );
 };
 
@@ -181,7 +205,7 @@ export type UpdateEntityMutationCommand<TEntityName extends string = string> = {
   kind: 'entity-mutation-command';
   action: 'update';
   entityName: TEntityName;
-  target: EntityRef<TEntityName>;
+  target: EntityRef<TEntityName> | SelectionAst<TEntityName>;
   values: Record<string, unknown>;
   if?: Record<string, unknown>;
 };
@@ -190,7 +214,7 @@ export type DeleteEntityMutationCommand<TEntityName extends string = string> = {
   kind: 'entity-mutation-command';
   action: 'delete';
   entityName: TEntityName;
-  target: EntityRef<TEntityName>;
+  target: EntityRef<TEntityName> | SelectionAst<TEntityName>;
   if?: Record<string, unknown>;
 };
 
@@ -241,7 +265,7 @@ const assertEntityMutationCondition = (
 export const toEntityMutationGraphCommand = (
   entity: AnyEntityDefinition,
   command: EntityMutationCommand,
-): GraphCommandSpec<any, any, Record<string, unknown>> => {
+): GraphCommandSpec<any, any, Record<string, unknown> | readonly Record<string, unknown>[]> => {
   if (command.entityName !== entity.name) {
     throw new Error(
       `Expected Entity mutation command for ${entity.name}, got ${command.entityName}.`,
@@ -252,6 +276,11 @@ export const toEntityMutationGraphCommand = (
       `Expected Entity mutation target Ref for ${entity.name}, got ${command.target.entityName}.`,
     );
   }
+  if ('target' in command && !isEntityRef(command.target)) {
+    assertNoRelationImage(command.target.expression, 'Entity Selection mutation');
+    if (hasEntityMutationCondition(command))
+      throw new Error('Entity Selection mutations do not support exact mutation conditions.');
+  }
   assertEntityMutationCondition(entity, command);
   return {
     kind: 'command',
@@ -261,7 +290,9 @@ export const toEntityMutationGraphCommand = (
     selection:
       'target' in command
         ? selectionAnd(
-            selectionReferences([command.target]),
+            isEntityRef(command.target)
+              ? selectionReferences([command.target])
+              : command.target.expression,
             ...(hasEntityMutationCondition(command)
               ? [toEntityMutationConditionSelection(command.if)]
               : []),
@@ -269,31 +300,37 @@ export const toEntityMutationGraphCommand = (
         : selectionNone(),
     ...('values' in command ? { payload: command.values } : {}),
     returning: storedEntityFieldNames(entity),
-    cardinality: 'one',
+    cardinality:
+      command.action === 'create' || ('target' in command && isEntityRef(command.target))
+        ? 'one'
+        : undefined,
   };
 };
 
 export const materializeEntityMutationDelta = (
   entity: AnyEntityDefinition,
   command: EntityMutationCommand,
-  values: Record<string, unknown>,
+  values: Record<string, unknown> | readonly Record<string, unknown>[],
 ): EntityMutationDelta => {
-  const portableValues = Object.fromEntries(
-    Object.entries(values).filter(([, value]) => value !== undefined),
-  );
-  const ref =
-    command.action === 'create'
-      ? createEntityIdentityRef(entity, portableValues)
-      : createEntityRef(command.target.entityName, command.target.locator);
-  const fact: EntityMutationFact = {
-    entityName: entity.name,
-    ...(ref ? { ref } : {}),
-    values: portableValues,
-  };
+  const rows = Array.isArray(values) ? values : [values];
+  const facts = rows.map(row => {
+    const portableValues = Object.fromEntries(
+      Object.entries(row).filter(([, value]) => value !== undefined),
+    );
+    const ref =
+      command.action !== 'create' && isEntityRef(command.target)
+        ? createEntityRef(command.target.entityName, command.target.locator)
+        : createEntityIdentityRef(entity, portableValues);
+    return {
+      entityName: entity.name,
+      ...(ref ? { ref } : {}),
+      values: portableValues,
+    };
+  });
   const delta: EntityMutationDelta = { created: [], updated: [], deleted: [] };
-  if (command.action === 'create') delta.created.push(fact);
-  else if (command.action === 'update') delta.updated.push(fact);
-  else delta.deleted.push(fact);
+  if (command.action === 'create') delta.created.push(...facts);
+  else if (command.action === 'update') delta.updated.push(...facts);
+  else delta.deleted.push(...facts);
   return delta;
 };
 
@@ -362,4 +399,22 @@ export const mutateEntity = <TEntity extends AnyEntityDefinition>(entity: TEntit
       ...(condition ? { if: condition } : {}),
     };
   },
+  updateSelection: (
+    target: SelectionAst<TEntity['name']>,
+    values: Partial<InferEntityMutationRecord<TEntity['fields']>>,
+  ): UpdateEntityMutationCommand<TEntity['name']> => ({
+    kind: 'entity-mutation-command',
+    action: 'update',
+    entityName: entity.name,
+    target,
+    values,
+  }),
+  deleteSelection: (
+    target: SelectionAst<TEntity['name']>,
+  ): DeleteEntityMutationCommand<TEntity['name']> => ({
+    kind: 'entity-mutation-command',
+    action: 'delete',
+    entityName: entity.name,
+    target,
+  }),
 });

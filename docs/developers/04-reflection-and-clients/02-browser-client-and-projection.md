@@ -289,8 +289,9 @@ position or client-owned rank.
 The remote path is default-deny and requires an explicit server graph-command policy for that
 Relation and action. The result is `applied` with an exact delta or `not-applied` with a structured
 diagnostic. Exact Entity create and Ref-targeted update/delete use another variant of the same
-graph-command protocol. Arbitrary Selection mutations, bulk writes, and upsert remain server-side
-or enter through Operations.
+graph-command protocol. Selection update/delete can use that protocol only when a separate server
+policy allowlists the action, predicate Fields and operators, and an identity-bearing result.
+Other bulk writes and upsert remain server-side or enter through Operations.
 
 ## Partition observations by execution identity
 

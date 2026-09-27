@@ -373,7 +373,7 @@ materializing imperative reads.
 
 ## Expose structural Relation changes separately
 
-The graph-command bridge carries canonical Relationship Commands and exact Entity Mutation
+The graph-command bridge carries canonical Relationship Commands and policy-scoped Entity Mutation
 Commands. A Relationship Command contains the Relation identity, `link` or `unlink`, and Ref- or
 Selection-valued participants. The server must opt each Relation and action into a separate
 default-deny policy:
@@ -402,13 +402,20 @@ applied in the same provider mutation, never as a read followed by a write. Remo
 allowlist condition Fields independently; a zero-row result is the single authority-safe
 `entity_mutation_condition_not_met` rejection.
 
+Selection update/delete uses the same canonical Selection expression as Graph Read and returns one
+delta fact per affected Entity. It is independently default-deny: each action policy must declare
+`selection.fields` with the permitted predicate operators (or explicitly opt into `allowAll`) and
+must return the Entity identity Fields. Ref-targeted action permission never implies bulk
+Selection permission.
+
 ## Current alpha boundaries
 
 - Remote Query policies and `ExecutionIdentity` are intentionally public but still evolving
   authoring surfaces.
-- Remote Relationship Commands and exact Ref-targeted Entity Mutation Commands are supported
-  behind explicit graph-command policies. Arbitrary Selection Commands, bulk writes, and upsert
-  remain local/server surfaces; use Operations when those writes carry named domain behavior.
+- Remote Relationship Commands, exact Ref-targeted Entity Mutation Commands, and explicitly
+  allowlisted Selection update/delete Commands are supported behind graph-command policies. Other
+  bulk writes and upsert remain local/server surfaces; use Operations when those writes carry
+  named domain behavior.
 - Client Views are ordinary source declarations. Persisted or server-approved View catalogs are a
   separate future concern.
 - The conventional Fetch client removes repetitive client setup. It does not mount server routes,
