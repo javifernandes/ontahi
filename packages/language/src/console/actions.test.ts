@@ -197,6 +197,30 @@ describe('Console actions', () => {
         dialect: 'declarative',
       }).items,
     ).toEqual([]);
+    const emptyInput = 'invoke TodoList.createList with { }';
+    expect(
+      completeConsoleDocument(emptyInput, emptyInput.indexOf('}'), application, {
+        dialect: 'declarative',
+      }).items.map(item => item.label),
+    ).toEqual(['name', 'parent']);
+    const fieldInput = 'invoke TodoList.createList with { na }';
+    expect(
+      completeConsoleDocument(fieldInput, fieldInput.indexOf(' }'), application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'name', apply: 'name: ""' })]);
+    const valueInput = 'invoke TodoList.createList with { name:  }';
+    expect(
+      completeConsoleDocument(valueInput, valueInput.indexOf(' }'), application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: '""', apply: '""' })]);
+    const nextField = 'invoke TodoList.createList with { name: "Inbox",  }';
+    expect(
+      completeConsoleDocument(nextField, nextField.indexOf(' }'), application, {
+        dialect: 'declarative',
+      }).items.map(item => item.label),
+    ).toEqual(['parent']);
     expect(
       analyzeConsoleDocument('update', application, { dialect: 'declarative' }).semanticDiagnostics,
     ).toEqual([]);

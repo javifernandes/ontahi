@@ -7,6 +7,7 @@ import {
 } from '../console/completion.js';
 import { resolveConsoleContext } from '../console/context.js';
 import { completeConsoleFactory } from '../console/factories.js';
+import { completeStructuredInput } from '../console/structured-value.js';
 import type {
   SelectionLanguageEntityReflection,
   ConsoleLanguageApplicationReflection,
@@ -107,6 +108,16 @@ export const completeDeclarativeConsoleDocument = (
     );
   }
   const syntax = dialect.parse(document).syntax.expression;
+  if (syntax?.kind === 'operation' && syntax.input && syntax.entity && syntax.operation) {
+    const operation = application.operations?.find(
+      candidate =>
+        candidate.entityName === syntax.entity?.text && candidate.name === syntax.operation?.text,
+    );
+    if (operation?.input) {
+      const completion = completeStructuredInput(document, pos, syntax.input.from, operation.input);
+      if (completion) return completion;
+    }
+  }
   const entity = resolveConsoleContext(syntax, application, pos);
   if (!syntax || !entity) return result([]);
   const factoryCompletion = completeConsoleFactory(

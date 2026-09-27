@@ -1,5 +1,10 @@
 import type { GraphSchemaDescriptor } from '@ontahi/core/data-graph';
 
+import type {
+  ConsoleLanguageCompletionItem,
+  ConsoleLanguageCompletionResult,
+} from '../model/contracts.js';
+
 class Reader {
   private position = 0;
 
@@ -143,4 +148,104 @@ export const normalizeStructuredInput = (
       (descriptor as Extract<GraphSchemaDescriptor, { item: GraphSchemaDescriptor }>).item,
     );
   return value;
+};
+
+const unwrapDescriptor = (descriptor: GraphSchemaDescriptor): GraphSchemaDescriptor =>
+  ['nullable', 'optional', 'default', 'transform', 'refinement', 'named'].includes(descriptor.kind)
+    ? unwrapDescriptor(
+        (descriptor as Extract<GraphSchemaDescriptor, { item: GraphSchemaDescriptor }>).item,
+      )
+    : descriptor;
+
+const descriptorValue = (descriptor: GraphSchemaDescriptor): string => {
+  const value = unwrapDescriptor(descriptor);
+  if (value.kind === 'scalar') {
+    if (value.type === 'boolean') return 'false';
+    if (value.type === 'number') return '0';
+    if (value.type === 'enum') return JSON.stringify(value.enumValues?.[0] ?? '');
+    return '""';
+  }
+  if (value.kind === 'literal') return JSON.stringify(value.value);
+  if (value.kind === 'array') return '[]';
+  if (value.kind === 'object' || value.kind === 'entity-ref' || value.kind === 'record')
+    return '{}';
+  if (value.kind === 'union') return descriptorValue(value.options[0] ?? { kind: 'void' });
+  return 'null';
+};
+
+const descriptorDetail = (descriptor: GraphSchemaDescriptor): string => {
+  const value = unwrapDescriptor(descriptor);
+  if (value.kind === 'scalar') return value.type;
+  if (value.kind === 'entity-ref') return `${value.entityName} reference`;
+  return value.kind.replace(/^.*\./, '');
+};
+
+const rootObjectSegment = (source: string) => {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let segmentStart = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]!;
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === '{' || character === '[') depth += 1;
+    else if (character === '}' || character === ']') depth -= 1;
+    else if (character === ',' && depth === 0) segmentStart = index + 1;
+  }
+  return depth === 0 && !quoted ? { segment: source.slice(segmentStart), segmentStart } : undefined;
+};
+
+export const completeStructuredInput = (
+  document: string,
+  position: number,
+  inputFrom: number,
+  descriptor: GraphSchemaDescriptor,
+): ConsoleLanguageCompletionResult | undefined => {
+  const object = unwrapDescriptor(descriptor);
+  if (object.kind !== 'object' || document[inputFrom] !== '{' || position <= inputFrom) return;
+  const beforeCursor = document.slice(inputFrom + 1, position);
+  const current = rootObjectSegment(beforeCursor);
+  if (!current) return;
+  const segment = current.segment;
+  const fieldValue = /^\s*([A-Za-z_]\w*)\s*:\s*([^,]*)$/.exec(segment);
+  if (fieldValue) {
+    const field = object.fields[fieldValue[1]!];
+    if (!field) return;
+    const prefix = fieldValue[2]!.trimStart();
+    const from = position - prefix.length;
+    const candidate = descriptorValue(field);
+    return {
+      from,
+      to: position,
+      items: candidate.startsWith(prefix)
+        ? [{ label: candidate, apply: candidate, kind: 'value', detail: descriptorDetail(field) }]
+        : [],
+    };
+  }
+  const fieldDraft = /^\s*([A-Za-z_]\w*)?$/.exec(segment);
+  if (!fieldDraft) return;
+  const prefix = fieldDraft[1] ?? '';
+  const used = new Set(
+    [...beforeCursor.matchAll(/(?:^|,)\s*([A-Za-z_]\w*)\s*:/g)].map(match => match[1]),
+  );
+  return {
+    from: position - prefix.length,
+    to: position,
+    items: Object.entries(object.fields)
+      .filter(([name]) => !used.has(name) && name.startsWith(prefix))
+      .map(
+        ([name, field]): ConsoleLanguageCompletionItem => ({
+          label: name,
+          apply: `${name}: ${descriptorValue(field)}`,
+          kind: 'field',
+          detail: descriptorDetail(field),
+        }),
+      ),
+  };
 };

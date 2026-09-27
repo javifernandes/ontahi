@@ -100,10 +100,13 @@ export const selectionExpressionLanguageSupport = () =>
 const consoleParser = consoleDocumentParser.configure({
   props: [
     styleTags({
-      EntityName: tags.typeName,
+      'EntityName/Identifier': tags.typeName,
       'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
-      'Order By Through Ascending Descending OrderDirection': tags.keyword,
+      'OperationName/Identifier': tags.function(tags.propertyName),
+      'Order By Through Ascending Descending OrderDirection Invoke With Create Update Delete Ref':
+        tags.keyword,
       'FieldName FactoryName InputName NavigationName': tags.variableName,
+      'StructuredKey/Identifier': tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
       'All None': tags.atom,
