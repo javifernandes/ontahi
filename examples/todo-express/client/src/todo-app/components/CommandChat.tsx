@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { submitModelCommand } from '../../model-commands.js';
+import { submitModelCommand, type ModelCommandSubmitter } from '../../model-commands.js';
 
 import { useDictationCountdown } from './useDictationCountdown.js';
 import { useSpeechInput } from './useSpeechInput.js';
@@ -24,7 +24,13 @@ type Entry = {
   status: 'pending' | 'executed' | 'answered' | 'unresolved' | 'failed';
 };
 
-export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown> }) => {
+export const CommandChat = ({
+  onExecuted,
+  submit: execute = submitModelCommand,
+}: {
+  onExecuted: () => Promise<unknown>;
+  submit?: ModelCommandSubmitter;
+}) => {
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [pending, setPending] = useState(false);
@@ -71,7 +77,7 @@ export const CommandChat = ({ onExecuted }: { onExecuted: () => Promise<unknown>
       );
     };
     try {
-      const result = await submitModelCommand({
+      const result = await execute({
         text: entry.request,
         language: speech.language,
       });

@@ -47,7 +47,15 @@ it('derives descriptions and dispatches a canonical operation in the caller cont
     await withInvocationContext({ principal: { kind: 'user', subject: 'reader' } }, () =>
       runtime.submit({ text: 'rename to Notes' }, new AbortController().signal),
     ),
-  ).toEqual({ status: 'executed', message: 'Operation completed.' });
+  ).toEqual({
+    status: 'executed',
+    message: 'Operation completed.',
+    request: {
+      kind: 'invoke',
+      operationId: 'Document.rename',
+      input: { name: 'Notes' },
+    },
+  });
   expect(f.run).toHaveBeenCalledOnce();
   expect(f.scope).toHaveBeenCalledTimes(2);
   const request = f.generate.mock.calls[0]![0] as { context: string };

@@ -15,6 +15,7 @@ import { TagSchema, TodoItemSchema, TodoListSchema } from '../../src/generated/c
 
 import { App } from './App.js';
 import { Explorer } from './Explorer.js';
+import { createModelCommandSubmitter } from './model-commands.js';
 import {
   loadAuthenticationSession,
   type AuthenticationSession,
@@ -68,9 +69,11 @@ const runtimeTransport = createRuntimeTransportRouter({
     'graph.read': 'websocket',
     'graph.command': 'websocket',
     operation: 'websocket',
+    'model.command': 'http',
     'durable.operation.observe': 'websocket',
   },
 });
+const submitModelCommand = createModelCommandSubmitter(runtimeTransport);
 const graphClient = createRuntimeGraphClient({ runtimeTransport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
@@ -105,7 +108,11 @@ const TodoClient = () => {
       {isExplorer ? (
         <Explorer />
       ) : (
-        <App authentication={authentication} setAuthentication={setAuthentication} />
+        <App
+          authentication={authentication}
+          setAuthentication={setAuthentication}
+          submitModelCommand={submitModelCommand}
+        />
       )}
       {diagnostics ? (
         <OntahiDevtools

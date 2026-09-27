@@ -31,6 +31,10 @@ const capabilityCopy: Record<
     label: 'Graph commands',
     description: 'Entity and Relationship mutations.',
   },
+  'model.command': {
+    label: 'Model commands',
+    description: 'Natural-language interpretation and canonical actions.',
+  },
   'durable.operation.observe': {
     label: 'Operation progress',
     description: 'Polling or pushed updates for an active durable run.',

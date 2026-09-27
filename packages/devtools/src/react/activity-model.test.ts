@@ -293,6 +293,14 @@ describe('Devtools activity model', () => {
     );
     expect(
       semanticSummary(
+        exchangeActivity(
+          { version: 1, kind: 'model-command', text: 'create list Groceries' },
+          'model.command',
+        ),
+      ),
+    ).toBe('Ask model · "create list Groceries"');
+    expect(
+      semanticSummary(
         exchangeActivity({ kind: 'graph-command', command: { kind: 'custom-command' } }),
       ),
     ).toBe('custom-command');

@@ -5,6 +5,7 @@ import {
   runtimeProtocolError,
   toDurableOperationProtocolRequest,
   toDurableOperationSnapshotResponse,
+  type RuntimeProtocolDispatcher,
 } from '@ontahi/core/runtime/protocol';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
@@ -29,6 +30,8 @@ const invokeHandler = async (
       payload = nextPayload;
       return response;
     }),
+    on: vi.fn(),
+    off: vi.fn(),
   } as unknown as Response;
   const request = { body, ...requestOverrides } as Request;
 
@@ -38,6 +41,49 @@ const invokeHandler = async (
 };
 
 describe('Express Runtime Protocol adapter', () => {
+  it('aborts dispatch when the HTTP response closes before completion', async () => {
+    let close: (() => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const response = {
+      writableEnded: false,
+      status: vi.fn(() => response),
+      json: vi.fn(() => response),
+      on: vi.fn((event: string, listener: () => void) => {
+        if (event === 'close') close = listener;
+        return response;
+      }),
+      off: vi.fn(() => response),
+    } as unknown as Response;
+    const dispatcher: RuntimeProtocolDispatcher<undefined> = async (
+      _request,
+      _context,
+      options,
+    ) => {
+      signal = options?.signal;
+      await new Promise<void>(resolve => signal?.addEventListener('abort', () => resolve()));
+      return runtimeProtocolError('dispatch_unavailable', 'Cancelled.');
+    };
+    const handler = createExpressRuntimeProtocolHandler({ dispatcher, context: () => undefined });
+    const running = handler(
+      {
+        body: createRuntimeProtocolRequest({
+          id: 'cancel-1',
+          family: 'durable.operation',
+          body: toDurableOperationProtocolRequest(run),
+        }),
+      } as Request,
+      response,
+      vi.fn() as NextFunction,
+    );
+
+    await vi.waitFor(() => expect(signal).toBeInstanceOf(AbortSignal));
+    close?.();
+    await running;
+
+    expect(signal?.aborted).toBe(true);
+    expect(response.off).toHaveBeenCalledWith('close', close);
+  });
+
   it('dispatches a Durable inspection with receiver-derived context', async () => {
     const inspect = vi.fn(
       async (
@@ -87,7 +133,11 @@ describe('Express Runtime Protocol adapter', () => {
         },
       },
     });
-    expect(inspect).toHaveBeenCalledWith(requestBody.body, { ownerId: 'owner-1' });
+    expect(inspect).toHaveBeenCalledWith(
+      requestBody.body,
+      { ownerId: 'owner-1' },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it.each([

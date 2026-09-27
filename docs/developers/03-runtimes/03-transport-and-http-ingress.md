@@ -4,11 +4,13 @@ A \concept{Transport} carries an operation intention across a process boundary w
 a second definition of that operation. Node can invoke `TodoList.rename(...)` directly; a remote
 client needs that intention to reach the same application runtime.
 
-Ontahí currently has four relevant execution shapes:
+Ontahí currently has five relevant execution shapes:
 
 - an **operation bridge** carries generic invocations from an Ontahí client;
 - a **graph-read bridge** carries ordinary policy-scoped Queries without inventing an Operation;
 - a **relationship-command bridge** carries explicitly permitted structural link mutations;
+- a **model-command bridge** interprets natural language into an existing canonical Graph Command
+  or Operation invocation;
 - **HTTP ingress** gives a particular operation an external route and provider channel.
 
 ## The Runtime Protocol foundation
@@ -48,9 +50,13 @@ version fails before execution. Authority is supplied by the receiving runtime's
 it is never accepted from the portable message.
 
 The canonical registry tuple currently contains `operation`, `durable.operation`, `graph.read`,
-and `graph.command`. Graph Read and Graph Command delegate to their existing fail-closed parsers
-instead of reproducing Query or Command validation. Operation adds body version 1 while preserving
-its existing semantic request kinds:
+`graph.command`, and `model.command`. Graph Read and Graph Command delegate to their existing
+fail-closed parsers instead of reproducing Query or Command validation. Model Command carries the
+user's text, optional response language, and optional host-defined JSON context. A successful
+`executed` result includes the canonical Graph Command or Operation invocation that the model
+selected and the runtime executed; informational and unresolved outcomes contain only their
+natural-language message. Operation adds body version 1 while preserving its existing semantic
+request kinds:
 
 ```ts
 const invoke = {
@@ -82,16 +88,19 @@ const dispatch = createRuntimeProtocolDispatcher({
     'durable.operation': durableObservationHandler,
     'graph.read': graphReadDispatcher,
     'graph.command': graphCommandDispatcher,
+    'model.command': modelCommandDispatcher,
   },
 });
 
 const response = await dispatch(portableRequest, { authority });
 ```
 
-The receiver-owned context is not serialized. Each handler receives its canonical family body and
-that context; an Operation dispatcher can ignore the second argument, while Graph dispatchers use
-it for their existing authority policy. A host needing different read and command authority forms
-can adapt this opaque context in the corresponding handler without changing the wire contract.
+The receiver-owned context is not serialized. Each handler receives its canonical family body,
+that context, and dispatch options containing the transport cancellation signal. An Operation
+dispatcher can ignore the context, while Graph dispatchers use it for their existing authority
+policy. A host needing different read and command authority forms can adapt this opaque context in
+the corresponding handler without changing the wire contract. Fetch disconnects and WebSocket
+session closure abort the signal so a model provider can stop generation.
 
 Family response bodies remain intact. An Operation failure, Graph Command rejection, or
 family-specific protocol error is wrapped as the correlated response body rather than flattened

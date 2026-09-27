@@ -75,6 +75,7 @@ describe('Runtime Transport router', () => {
       'durable.operation': 'websocket',
       'graph.read': 'http',
       'graph.command': 'websocket',
+      'model.command': 'http',
       'durable.operation.observe': 'websocket',
       'graph.observe': 'websocket',
     });
@@ -86,6 +87,7 @@ describe('Runtime Transport router', () => {
           'durable.operation',
           'graph.read',
           'graph.command',
+          'model.command',
           'durable.operation.observe',
         ],
       },
@@ -96,6 +98,7 @@ describe('Runtime Transport router', () => {
           'durable.operation',
           'graph.read',
           'graph.command',
+          'model.command',
           'durable.operation.observe',
           'graph.observe',
         ],

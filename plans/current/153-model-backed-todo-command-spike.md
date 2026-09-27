@@ -9,9 +9,10 @@ Shapes: [Model-Backed Operation Execution](../../atlas/items/model/model-backed-
 
 ## Summary And Context
 
-Prove a small chat-style Todo experience: “add item buy bread” creates an item in the current
-list; “complete buy tea” completes an unambiguously identified item. A typed operation uses an
-LLM to resolve text into a proposed invocation; the existing dispatcher executes the proposal.
+Prove a small chat-style Todo experience: “add item buy bread to Groceries” creates an item;
+“complete buy tea” completes an unambiguously identified item. A Core model-command runtime uses
+an LLM to resolve text into a proposed canonical action; the existing dispatcher executes the
+proposal.
 This is a bounded spike alongside first-version consolidation, not a prerequisite for release or
 an autonomous-agent platform. Atlas is the later application pressure test: first questions about
 plans, then reviewed plan modifications. Atlas product implementation remains outside this plan.
@@ -26,19 +27,19 @@ existing authority. It does not claim production security readiness.
 Illustrative names below are design placeholders, not a frozen public API:
 
 ```text
-interpretCommand({ text, currentList })
-  -> resolved { invocation: existing Operation Invocation }
+interpretCommand({ text, context })
+  -> resolved { request: existing Graph Command or Operation Invocation }
   |  unresolved { reason }
 
 resolved proposal -> runtime validation -> canonical dispatcher -> actual result -> UI
 ```
 
-1. Expose interpretation as an ordinary typed operation with a model-backed implementation.
-2. Build context in code from inputs, current-list identity, and authorized graph reads. Include
+1. Expose interpretation through a reusable Core runtime and a versioned `model.command` Runtime
+   Protocol family; it is not a Todo domain operation.
+2. Build context in code from inputs and authorized graph reads. Include
    relevant item identities, titles, completion state, and reflected allowed-operation contracts.
-3. Limit the effect path to existing TodoList.createList, TodoItem.createItem, and
-   TodoItem.setCompleted, with at most one invocation per submission. The current list is nullable:
-   creation of a list is global, while item commands require a selected list. Verify their actual input schemas during implementation.
+3. Limit the effect path to explicitly exposed Todo Operations and Graph Commands, with at most one
+   canonical action per submission. Verify their actual input schemas during implementation.
 4. Require concrete references for existing targets. Names alone require instance resolution;
    missing, ambiguous, or incomplete context returns unresolved without effects.
 5. Define a small injectable model-provider boundary and implement an initial local Ollama adapter.
@@ -50,8 +51,10 @@ resolved proposal -> runtime validation -> canonical dispatcher -> actual result
    Success text comes from the actual execution result. No conversation memory is required.
 
 The incoming model request contains instructions, typed input, a bounded schema projection, data,
-and an output contract. The outgoing proposal reuses operation identity and input from the existing
-invocation representation, not a parallel AI command language or Runtime Protocol family.
+and an output contract. The outgoing proposal reuses the existing Graph Command and Operation
+Invocation representations. The `model.command` Runtime Protocol family carries natural-language
+interaction outcomes and embeds that canonical request on successful execution; it does not
+introduce another action language.
 
 ## Execution Slices
 
@@ -85,10 +88,10 @@ provider seam; this plan does not require another provider integration.
 ## Acceptance And Verification
 
 - [x] Both example commands work end to end against a real local model and update the Todo UI.
-- [x] Interpretation runs through the ordinary operation surface and canonical result lifecycle.
-- [x] A code-backed interpreter replacement preserves the public operation contract and callers.
+- [x] Interpretation runs through the model-command runtime and canonical dispatch lifecycle.
+- [x] A code-backed interpreter replacement preserves the interpretation contract and callers.
 - [x] A provider test double can replace Ollama without changing domain operations or dispatch.
-- [x] Only authorized current-list context is included; an omitted/truncated candidate set cannot
+- [x] Only authorized bounded graph context is included; an omitted/truncated candidate set cannot
       establish uniqueness and must produce an unresolved result when relevant.
 - [x] Missing and ambiguous targets produce no mutation; explicit resolved targets use canonical refs.
 - [x] Invalid output, disallowed operations, out-of-scope targets, and denied authority produce no mutation.
@@ -343,10 +346,30 @@ and adapter composition do not yet meet that goal. Keep provider implementations
 derive reusable schema/contracts from entity and operation declarations; do not infer authorization
 from discoverability.
 
-Next slices, not implemented by this checkpoint:
+## Runtime Protocol And Activity Checkpoint — 2026-09-27
 
-- Record interpretation and correlated canonical execution in Devtools Activity, including
-  help, unresolved outcomes, errors, and timings even when no graph action executes.
+Core now registers a strict, versioned `model.command` Runtime Protocol family. Its request carries
+text plus optional response language and host-defined JSON context. `executed` results include the
+validated canonical `GraphCommandRequest` or `OperationInvokeRequest` that actually ran;
+`answered` and `unresolved` remain message-only interaction outcomes. Expected interpretation and
+authorization failures remain typed family responses.
+
+Todo submits chat messages through its instrumented Runtime Transport at `POST /runtime`, so one
+Devtools Activity exchange contains the prompt, outcome, timing, and canonical action. The former
+`POST /model/commands` route remains temporarily for compatibility but is no longer used by the
+example UI. Fetch disconnects and WebSocket session closure propagate cancellation through the
+transport-neutral dispatcher to model generation; the Next.js adapter forwards its request signal
+through the same contract.
+
+Validation for this checkpoint: 1,166 Core tests, 46 Runtime Express tests, 51 Runtime Next.js
+tests, 147 Todo tests, focused Devtools Activity and transport-settings tests, affected package
+typechecks/lint/builds, and the Todo production build. Socket-owning suites were run with local
+network permission after the restricted sandbox rejected `listen(127.0.0.1)`.
+
+Roadmap slices:
+
+- [x] Record interpretation and correlated canonical execution in Devtools Activity, including
+      help, unresolved outcomes, errors, and timings even when no graph action executes.
 - Admit canonical Graph Read requests and return actual query results; e.g. unfinished TodoItems
   means a read filtered by `completed = false`, not an answer inferred from prompt context.
 - Add Natural alongside TS and Declarative in the Devtools console, sharing interpretation,

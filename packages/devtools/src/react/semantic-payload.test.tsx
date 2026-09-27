@@ -100,6 +100,43 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('Bad input')).toBeTruthy();
   });
 
+  it('shows model prompts, outcomes, and canonical executed actions', () => {
+    const ui = render(
+      <SemanticPayload
+        value={{
+          version: 1,
+          kind: 'model-command',
+          text: 'rename list Inbox to Today',
+          language: 'en-US',
+        }}
+      />,
+    );
+    expect(screen.getByText('rename list Inbox to Today')).toBeTruthy();
+    expect(screen.getByText('en-US')).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          version: 1,
+          kind: 'model-command-result',
+          result: {
+            status: 'executed',
+            message: 'List renamed.',
+            request: {
+              kind: 'invoke',
+              operationId: 'TodoList.rename',
+              input: { name: 'Today' },
+            },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('List renamed.')).toBeTruthy();
+    expect(screen.getByText('executed')).toBeTruthy();
+    expect(screen.getByText('Canonical action')).toBeTruthy();
+    expect(screen.getByText('TodoList.rename')).toBeTruthy();
+  });
+
   it('renders generic scalars, arrays, records, and graph read results', () => {
     const ui = render(<SemanticPayload value={[1, 'two', null]} />);
     expect(screen.getByText('1, two, null')).toBeTruthy();

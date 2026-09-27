@@ -22,7 +22,10 @@ type RegisteredRequestFor<TFamily extends RegisteredFamily> = Extract<
 export type RuntimeProtocolFamilyHandler<TRequest, TContext> = (
   request: TRequest,
   context: TContext,
+  options: RuntimeProtocolDispatchOptions,
 ) => unknown | PromiseLike<unknown>;
+
+export type RuntimeProtocolDispatchOptions = { readonly signal?: AbortSignal };
 
 export type RuntimeProtocolFamilyHandlers<TContext> = {
   readonly [TFamily in RegisteredFamily]?: RuntimeProtocolFamilyHandler<
@@ -36,6 +39,7 @@ export type RuntimeProtocolDispatchResult = RuntimeProtocolResponseEnvelope | Ru
 export type RuntimeProtocolDispatcher<TContext> = (
   request: unknown,
   context: TContext,
+  options?: RuntimeProtocolDispatchOptions,
 ) => Promise<RuntimeProtocolDispatchResult>;
 
 export type RuntimeProtocolDispatchContext<TDispatcher> =
@@ -91,7 +95,7 @@ export const createRuntimeProtocolDispatcher = <TContext>(
 ): RuntimeProtocolDispatcher<TContext> => {
   const handlers = createHandlerRegistry(options.handlers);
 
-  return async (input, context) => {
+  return async (input, context, dispatchOptions = {}) => {
     const parsed = registry.parseRequest(input);
     if (!parsed.success) return parsed.error;
 
@@ -101,7 +105,7 @@ export const createRuntimeProtocolDispatcher = <TContext>(
 
     let body: unknown;
     try {
-      body = await handler(request.body, context);
+      body = await handler(request.body, context, dispatchOptions);
     } catch (error) {
       options.reportError?.(error, request);
       return dispatchUnavailable(request);

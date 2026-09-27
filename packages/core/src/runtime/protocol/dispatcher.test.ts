@@ -88,9 +88,9 @@ describe('Runtime Protocol dispatcher', () => {
       dispatch(request('exchange-command', 'graph.command', graphCommandBody), context),
     ]);
 
-    expect(operation).toHaveBeenCalledWith(operationBody, context);
-    expect(graphRead).toHaveBeenCalledWith(graphReadBody, context);
-    expect(graphCommand).toHaveBeenCalledWith(graphCommandBody, context);
+    expect(operation).toHaveBeenCalledWith(operationBody, context, {});
+    expect(graphRead).toHaveBeenCalledWith(graphReadBody, context, {});
+    expect(graphCommand).toHaveBeenCalledWith(graphCommandBody, context, {});
     expect(operationResponse).toEqual({
       protocol: 'ontahi.runtime',
       version: 1,
@@ -276,6 +276,17 @@ describe('Runtime Protocol dispatcher', () => {
 
     expectTypeOf(dispatch).toEqualTypeOf<RuntimeProtocolDispatcher<Context>>();
     expectTypeOf<RuntimeProtocolDispatchContext<typeof dispatch>>().toEqualTypeOf<Context>();
+  });
+
+  it('forwards per-exchange cancellation to the family handler', async () => {
+    const signal = new AbortController().signal;
+    const handler = vi.fn(() => ({ kind: 'result' }));
+    const dispatch = createRuntimeProtocolDispatcher({ handlers: { operation: handler } });
+    const runtimeRequest = request('exchange-signal', 'operation', operationBody);
+
+    await dispatch(runtimeRequest, { authority: null }, { signal });
+
+    expect(handler).toHaveBeenCalledWith(operationBody, { authority: null }, { signal });
   });
 
   it('rejects unknown and malformed handler registrations eagerly', () => {

@@ -8,6 +8,7 @@ import {
 } from '@ontahi/core/runtime/protocol';
 import {
   createOperationInvocationDispatcher,
+  submitModelCommandProtocol,
   type GraphCommandableOntahiApplication,
 } from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
@@ -40,6 +41,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   const graphCommandDispatcher = (
     TodoApplication as unknown as GraphCommandableOntahiApplication
   ).createGraphCommandDispatcher<TodoGraphReadAuthority>(todoGraphCommandPolicies);
+  const modelCommandRuntime = todoModelRuntime;
   const runtimeProtocolDispatcher = createRuntimeProtocolDispatcher<TodoGraphReadAuthority>({
     handlers: {
       operation: (request, context) =>
@@ -50,6 +52,14 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
       'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
       'durable.operation': async request =>
         toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
+      ...(modelCommandRuntime
+        ? {
+            'model.command': (request, context, { signal }) =>
+              TodoApplication.app.runtime.withInvocationContext(context, () =>
+                submitModelCommandProtocol(modelCommandRuntime, request, signal),
+              ),
+          }
+        : {}),
     },
   });
 
@@ -60,7 +70,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   // Setup Express for Ontahi App
   server.use(
     ontahiExpress(TodoApplication, {
-      modelCommands: todoModelRuntime ? { runtime: todoModelRuntime } : undefined,
+      modelCommands: modelCommandRuntime ? { runtime: modelCommandRuntime } : undefined,
       explorer: createOntahiExpressExplorer({
         indexFile: path.join(clientDirectory, 'index.html'),
       }),

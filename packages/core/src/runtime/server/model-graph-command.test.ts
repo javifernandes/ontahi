@@ -93,7 +93,7 @@ it('dispatches a canonical graph update without domain operations', async () => 
     { principal: { kind: 'user', subject: 'reader' } },
     () => f.runtime().submit({ text: 'rename Before to After' }, new AbortController().signal),
   );
-  expect(result).toEqual({ status: 'executed', message: 'Updated.' });
+  expect(result).toEqual({ status: 'executed', message: 'Updated.', request: f.proposal.request });
   expect(f.storage.dataset.Document![0]!.title).toBe('After');
   expect(f.dispatchCommand).toHaveBeenCalledOnce();
   expect(f.dispatchCommand.mock.calls[0]![0]).toEqual(f.proposal.request);
