@@ -2,8 +2,9 @@
 
 Explorer projects the application model. Devtools inspects a running client's use of that model:
 the reads it sends, the observations it receives and the state held in its local graph cache.
-The \concept{Semantic Console} authors reads over the same reflected Entities; it is not a second
-query engine or an unrestricted JavaScript evaluator.
+The \concept{Semantic Console} authors reads, exact Entity Commands and Operation invocations over
+the same reflected application model. It is not a second runtime or an unrestricted JavaScript
+evaluator.
 
 ## Connect the actual client
 
@@ -14,7 +15,7 @@ and cache to the development-only panel:
 import { createOntahiDiagnostics, instrumentRuntimeTransport } from '@ontahi/devtools';
 import { OntahiDevtools } from '@ontahi/devtools/react';
 import { createFetchRuntimeTransport, createRuntimeGraphClient } from '@ontahi/react/graph';
-import { TodoItemSchema, TodoListSchema, TagSchema } from './generated/client-entities.js';
+import { TodoItem, TodoList, Tag } from './generated/client-entities.js';
 
 const diagnostics = createOntahiDiagnostics();
 const runtimeTransport = instrumentRuntimeTransport({
@@ -31,7 +32,7 @@ const graphClient = createRuntimeGraphClient({ runtimeTransport });
   runtimeTransport={runtimeTransport}
   clientCache={graphClient.clientCache}
   console={{
-    entities: [TodoListSchema, TodoItemSchema, TagSchema],
+    entities: [TodoList, TodoItem, Tag],
     identity,
     initialDocument: 'TodoItem.where(completed = false).many()',
   }}
@@ -39,10 +40,11 @@ const graphClient = createRuntimeGraphClient({ runtimeTransport });
 ```
 
 Here `identity` is the same execution identity given to the graph provider. Keep it synchronized
-when the session or cache scope changes. Generated Entity schemas supply reflection without
-importing server declarations into the browser. Instantiate the diagnostics/client once per
-intended client lifetime, not on every render, and mount the panel only in the development contexts
-where this inspection is appropriate.
+when the session or cache scope changes. Generated client Entities supply their schemas, portable
+Operation metadata and input Graph Schema descriptors without importing server implementations into
+the browser. Passing bare Entity schemas remains supported for a read-only Console. Instantiate the
+diagnostics/client once per intended client lifetime, not on every render, and mount the panel only
+in the development contexts where this inspection is appropriate.
 
 This Fetch example supports Run. For Observe, use a transport exposing `graph.observe`, with an
 authorized server observer; see [WebSocket transport](../03-runtimes/03-transport-and-http-ingress.md#mount-the-socket-on-the-host-server).
@@ -78,6 +80,48 @@ Submit with **Run** or **Mod-Enter**. The result offers Visual and JSON projecti
 use a limit to hide duplicates; Console rejects explicit limits with `one`. `count` does not inherit
 the row limit, and `exists` accepts neither limit nor ordering. These are explicit read consumers,
 not different kinds of Entity identity.
+
+## Commands and Operations use their existing protocol families
+
+Exact Entity mutation Commands follow the generated client surface in TS-like syntax:
+
+```text
+TodoList.create({ id: "list-1", name: "Inbox", color: "#496f5d" })
+TodoList.ref({ id: "list-1" }).update({ name: "Today" })
+TodoList.ref({ id: "list-1" }).delete()
+```
+
+The equivalent declarative forms are:
+
+```text
+create TodoList { id: "list-1", name: "Inbox", color: "#496f5d" }
+update TodoList { id: "list-1" } with { name: "Today" }
+delete TodoList { id: "list-1" }
+```
+
+These expressions lower to the ordinary versioned `graph.command` body. The object after `ref` is
+an Entity locator; it is not a previously fetched browser object. Relationship Commands, ordered
+placement and optimistic preconditions are not yet part of Console syntax.
+
+Reflected domain Operations use their declared names and structured inputs:
+
+```text
+TodoList.createList({ id: "list-1", name: "Inbox", color: "#496f5d" })
+invoke TodoList.createList with { id: "list-1", name: "Inbox", color: "#496f5d" }
+TodoItem.deleteAll()
+invoke TodoItem.deleteAll
+```
+
+The Console resolves the member against generated Operation metadata and lowers it to the ordinary
+versioned `operation` request. Entity-reference fields in structured input are normalized from a
+locator object to the canonical Entity Ref using the reflected Graph Schema descriptor. Unknown
+Operations and unavailable Entity Commands fail before transport; the receiver still performs the
+authoritative input validation, policy and permission checks.
+
+Run and **Mod-Enter** are always explicit submissions. The Console does not retry Commands or
+Operations after an ambiguous transport failure. Because it uses the configured Runtime Transport,
+instrumented requests and responses appear in Activity through the same diagnostic path as calls
+made by the application.
 
 ## Factories and navigation remain authored intent
 
@@ -151,5 +195,5 @@ enabling redacted Activity is not a security boundary for the rest of the panel.
 
 See the [Todo browser host](../../../examples/todo-express/client/src/main.tsx) for the complete
 integration and the [Devtools contract](../../../packages/devtools/README.md) for lifecycle limits.
-Console Commands and Operation invocation, data-dependent Ref completion and general live query
-composition remain further work; the current language is read-only.
+Relationship/ordered Command authoring, data-dependent Ref completion, Operation permission
+preflight and general live query composition remain further work.

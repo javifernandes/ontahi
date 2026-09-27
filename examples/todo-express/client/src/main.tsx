@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { TagSchema, TodoItemSchema, TodoListSchema } from '../../src/generated/client-entities.js';
+import { Tag, TodoItem, TodoList } from '../../src/generated/client-entities.js';
 
 import { App } from './App.js';
 import { Explorer } from './Explorer.js';
@@ -77,7 +77,7 @@ const submitModelCommand = createModelCommandSubmitter(runtimeTransport);
 const graphClient = createRuntimeGraphClient({ runtimeTransport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
-  entities: [TodoListSchema, TodoItemSchema, TagSchema],
+  entities: [TodoList, TodoItem, Tag],
   initialDocument: 'TodoItem.where(completed = false).many()',
 } satisfies OntahiDevtoolsConsoleOptions;
 

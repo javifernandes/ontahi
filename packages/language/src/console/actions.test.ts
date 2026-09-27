@@ -1,0 +1,174 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  analyzeConsoleDocument,
+  completeConsoleDocument,
+  convertConsoleDocument,
+} from '../index.js';
+import type { ConsoleLanguageApplicationReflection } from '../model/contracts.js';
+
+const application: ConsoleLanguageApplicationReflection = {
+  entities: [{ name: 'TodoList', fields: [], relations: [] }],
+  commands: [{ entityName: 'TodoList', actions: ['create', 'update', 'delete'] }],
+  operations: [
+    {
+      id: 'TodoList.createList',
+      entityName: 'TodoList',
+      name: 'createList',
+      input: {
+        kind: 'object',
+        role: 'object',
+        fields: {
+          name: { kind: 'scalar', type: 'string' },
+          parent: { kind: 'entity-ref', entityName: 'TodoList' },
+        },
+        unknownKeys: 'strip',
+      },
+    },
+    {
+      id: 'TodoList.clear',
+      entityName: 'TodoList',
+      name: 'clear',
+      input: { kind: 'void' },
+    },
+    {
+      id: 'TodoList.refresh',
+      entityName: 'TodoList',
+      name: 'refresh',
+    },
+    {
+      id: 'TodoList.batch',
+      entityName: 'TodoList',
+      name: 'batch',
+      input: {
+        kind: 'object',
+        role: 'object',
+        unknownKeys: 'strip',
+        fields: {
+          parents: {
+            kind: 'array',
+            item: {
+              kind: 'named',
+              name: 'Parent',
+              item: { kind: 'entity-ref', entityName: 'TodoList' },
+            },
+          },
+          details: {
+            kind: 'record',
+            value: { kind: 'scalar', type: 'json' },
+          },
+          labels: { kind: 'array', item: { kind: 'scalar', type: 'string' } },
+        },
+      },
+    },
+  ],
+};
+
+describe('Console actions', () => {
+  it('lowers a reflected TS Operation to the canonical operation family', () => {
+    expect(
+      analyzeConsoleDocument(
+        'TodoList.createList({ name: "Inbox", parent: { id: "parent-1" } })',
+        application,
+      ).execution,
+    ).toEqual({
+      family: 'operation',
+      body: {
+        version: 1,
+        kind: 'invoke',
+        operationId: 'TodoList.createList',
+        input: {
+          name: 'Inbox',
+          parent: {
+            kind: 'entity-ref',
+            entityName: 'TodoList',
+            locator: { id: 'parent-1' },
+          },
+        },
+      },
+    });
+  });
+
+  it('lowers create, update, and delete to canonical graph-command requests', () => {
+    const cases = [
+      ['TodoList.create({ id: "list-1", name: "Inbox" })', 'create'],
+      ['TodoList.ref({ id: "list-1" }).update({ name: "Today" })', 'update'],
+      ['TodoList.ref({ id: "list-1" }).delete()', 'delete'],
+    ] as const;
+    for (const [source, action] of cases) {
+      const execution = analyzeConsoleDocument(source, application).execution;
+      expect(execution).toMatchObject({
+        family: 'graph.command',
+        body: { kind: 'graph-command', command: { action, entityName: 'TodoList' } },
+      });
+    }
+  });
+
+  it('supports equivalent declarative action syntax and round trips dialects', () => {
+    const declarative = 'update TodoList {"id":"list-1"} with {"name":"Today"}';
+    const analysis = analyzeConsoleDocument(declarative, application, { dialect: 'declarative' });
+    expect(analysis.execution).toMatchObject({
+      family: 'graph.command',
+      body: { command: { action: 'update' } },
+    });
+    expect(convertConsoleDocument(declarative, application, 'ts', { dialect: 'declarative' })).toBe(
+      'TodoList.ref({"id":"list-1"}).update({"name":"Today"})',
+    );
+  });
+
+  it('parses nested structured values and normalizes wrapped Entity Ref inputs', () => {
+    expect(
+      analyzeConsoleDocument(
+        'TodoList.batch({ parents: [{ id: "p-1" },], details: { active: true, count: 2, note: null }, labels: ["a", "b"] })',
+        application,
+      ).execution,
+    ).toMatchObject({
+      family: 'operation',
+      body: {
+        input: {
+          parents: [{ kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'p-1' } }],
+          details: { active: true, count: 2, note: null },
+          labels: ['a', 'b'],
+        },
+      },
+    });
+  });
+
+  it('enforces reflected input presence and advertised Command availability', () => {
+    expect(
+      analyzeConsoleDocument('TodoList.createList()', application).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'console.semantic.invalid-input' })]);
+    expect(analyzeConsoleDocument('TodoList.clear({})', application).semanticDiagnostics).toEqual([
+      expect.objectContaining({ code: 'console.semantic.invalid-input' }),
+    ]);
+    expect(analyzeConsoleDocument('TodoList.clear()', application).execution).toMatchObject({
+      family: 'operation',
+      body: { operationId: 'TodoList.clear' },
+    });
+    expect(analyzeConsoleDocument('TodoList.refresh()', application).execution).toMatchObject({
+      family: 'operation',
+      body: { operationId: 'TodoList.refresh' },
+    });
+    expect(
+      analyzeConsoleDocument('TodoList.create({ id: "x" })', {
+        ...application,
+        commands: [],
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'console.semantic.invalid-command' })]);
+  });
+
+  it('rejects unknown Operations before transport', () => {
+    expect(analyzeConsoleDocument('TodoList.missing({})', application)).toMatchObject({
+      semanticDiagnostics: [{ code: 'console.semantic.unknown-operation' }],
+    });
+  });
+
+  it('completes reflected Operations and Entity Commands from the TS Entity member', () => {
+    expect(completeConsoleDocument('TodoList.cr', 11, application).items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'createList' }),
+        expect.objectContaining({ label: 'create' }),
+      ]),
+    );
+  });
+});

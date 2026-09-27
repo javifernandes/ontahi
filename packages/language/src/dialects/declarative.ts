@@ -7,6 +7,15 @@ import { completeDeclarativeConsoleDocument } from './declarative-completion.js'
 
 const print = (document: string, expression: ConsoleGraphReadSyntax): string => {
   const entity = expression.entity!.text;
+  const value = (input: unknown) => JSON.stringify(input);
+  if (expression.kind === 'operation')
+    return `invoke ${entity}.${expression.operation!.text}${expression.input ? ` with ${value(expression.inputValue)}` : ''}`;
+  if (expression.kind === 'entity-mutation') {
+    if (expression.action === 'create') return `create ${entity} ${value(expression.valuesValue)}`;
+    if (expression.action === 'update')
+      return `update ${entity} ${value(expression.targetValue)} with ${value(expression.valuesValue)}`;
+    return `delete ${entity} ${value(expression.targetValue)}`;
+  }
   const field = expression.orderBy?.field?.text;
   const descending = ['desc', 'descending'].includes(expression.orderBy?.direction?.text ?? '');
   const terminal = expression.terminal?.text ?? 'many';

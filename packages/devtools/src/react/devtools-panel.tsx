@@ -107,7 +107,9 @@ export const DevtoolsPanel = ({
         <CachePanel
           clientCache={clientCache}
           history={history}
-          entities={consoleOptions?.entities}
+          entities={consoleOptions?.entities.map(entity =>
+            'definition' in entity ? entity.definition : entity,
+          )}
         />
       );
     if (view === 'settings')
