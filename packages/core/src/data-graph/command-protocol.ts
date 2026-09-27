@@ -123,9 +123,7 @@ export const graphCommandProtocolError = (
   message: string,
 ): GraphCommandProtocolError => ({ kind: 'protocol-error', error: { code, message } });
 
-export const isGraphCommandCapabilities = (
-  value: unknown,
-): value is GraphCommandCapabilities =>
+export const isGraphCommandCapabilities = (value: unknown): value is GraphCommandCapabilities =>
   isRecord(value) &&
   Array.isArray(value.entityMutations) &&
   value.entityMutations.every(

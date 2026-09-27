@@ -88,6 +88,38 @@ describe('Console actions', uiTestOptions, () => {
     expect(await within(screen.getByLabelText('Console result')).findByText('Inbox')).toBeDefined();
   });
 
+  it('reports an unsuccessful Operation result without publishing action success', async () => {
+    const onActionExecuted = vi.fn();
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'invocation-result',
+        result: {
+          ok: false,
+          kind: 'rejected',
+          executed: false,
+          reason: 'duplicate',
+          message: 'A list with that name already exists.',
+        },
+      }),
+    );
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDocument: 'List.createList({ name: "Inbox" })',
+          onActionExecuted,
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'A list with that name already exists.',
+    );
+    expect(onActionExecuted).not.toHaveBeenCalled();
+  });
+
   it('executes an Entity update as a graph.command without read-only controls', async () => {
     const clientCache = createGraphClientCache();
     clientCache.writeEntity(ListSchema, { id: 'list-1', name: 'Inbox' });

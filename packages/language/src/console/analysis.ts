@@ -76,18 +76,27 @@ export const analyzeConsoleSyntax = (
         `${operationId} does not accept input.`,
       );
     const input = normalizeStructuredInput(expression.inputValue, operation.input);
-    return {
-      ...parsed,
-      semanticDiagnostics: [],
-      execution: {
-        family: 'operation',
-        body: toOperationProtocolRequest({
-          kind: 'invoke',
-          operationId,
-          ...(expression.input ? { input: input as never } : {}),
-        }),
-      },
-    };
+    try {
+      return {
+        ...parsed,
+        semanticDiagnostics: [],
+        execution: {
+          family: 'operation',
+          body: toOperationProtocolRequest({
+            kind: 'invoke',
+            operationId,
+            ...(expression.input ? { input: input as never } : {}),
+          }),
+        },
+      };
+    } catch {
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-input',
+        `${operationId} input cannot be represented by the Runtime Protocol.`,
+      );
+    }
   }
 
   if (expression.kind === 'entity-mutation') {
@@ -152,11 +161,20 @@ export const analyzeConsoleSyntax = (
                 locator: target as Record<string, unknown>,
               },
             };
-    return {
-      ...parsed,
-      semanticDiagnostics: [],
-      execution: { family: 'graph.command', body: toGraphCommandRequest(command as never) },
-    };
+    try {
+      return {
+        ...parsed,
+        semanticDiagnostics: [],
+        execution: { family: 'graph.command', body: toGraphCommandRequest(command as never) },
+      };
+    } catch {
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Entity Command ${entityName}.${expression.action} cannot be represented by the Runtime Protocol.`,
+      );
+    }
   }
 
   if (!expression.terminal && !dialect.implicitMany) return { ...parsed, semanticDiagnostics: [] };

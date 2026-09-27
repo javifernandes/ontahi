@@ -728,13 +728,26 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           }
           if (
             !isRecord(response) ||
-            (execution.family === 'operation' && response.kind !== 'invocation-result') ||
+            (execution.family === 'operation' &&
+              (response.kind !== 'invocation-result' ||
+                !isRecord(response.result) ||
+                typeof response.result.ok !== 'boolean')) ||
             (execution.family === 'graph.command' && response.kind !== 'graph-command-result')
           )
             throw new Error(
               execution.family === 'operation'
                 ? 'Operation returned an invalid result.'
                 : 'Graph Command returned an invalid result.',
+            );
+          if (
+            execution.family === 'operation' &&
+            isRecord(response.result) &&
+            response.result.ok !== true
+          )
+            throw new Error(
+              typeof response.result.message === 'string'
+                ? response.result.message
+                : 'Operation failed.',
             );
           if (execution.family === 'graph.command')
             reconcileEntityMutationResult(clientCache, options.entities, response);

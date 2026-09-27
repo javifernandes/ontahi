@@ -143,6 +143,34 @@ describe('Console actions', () => {
     });
   });
 
+  it('preserves __proto__ as structured data without changing object prototypes', () => {
+    const analysis = analyzeConsoleDocument(
+      'TodoList.batch({ parents: [], details: { "__proto__": { polluted: true } }, labels: [] })',
+      application,
+    );
+    const input = (analysis.execution?.body as { input?: Record<string, unknown> }).input;
+    const details = input?.details as Record<string, unknown>;
+
+    expect(Object.getPrototypeOf(details)).toBe(Object.prototype);
+    expect(Object.prototype.hasOwnProperty.call(details, '__proto__')).toBe(true);
+    expect(details.__proto__).toEqual({ polluted: true });
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+  });
+
+  it('diagnoses invalid structured values and protocol-unsafe numbers', () => {
+    expect(
+      analyzeConsoleDocument('TodoList.createList({ name: "\\x" })', application).syntaxDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'console.syntax.invalid' })]);
+    expect(
+      analyzeConsoleDocument('TodoList.createList({ name: 1e999 })', application)
+        .semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'console.semantic.invalid-input' })]);
+    expect(
+      analyzeConsoleDocument('TodoList.create({ id: "x", name: 1e999 })', application)
+        .semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'console.semantic.invalid-command' })]);
+  });
+
   it('enforces reflected input presence and advertised Command availability', () => {
     expect(
       analyzeConsoleDocument('TodoList.createList()', application).semanticDiagnostics,

@@ -33,6 +33,17 @@ const parsedStructuredValue = (document: string, node: SyntaxNode | null | undef
   }
 };
 
+const invalidStructuredValueRanges = (syntax: ConsoleDocumentSyntax): SelectionLanguageRange[] => {
+  const expression = syntax.expression;
+  if (expression?.kind === 'operation')
+    return expression.input && expression.inputValue === undefined ? [expression.input] : [];
+  if (expression?.kind !== 'entity-mutation') return [];
+  return [
+    expression.target && expression.targetValue === undefined ? expression.target : undefined,
+    expression.values && expression.valuesValue === undefined ? expression.values : undefined,
+  ].filter((range): range is SelectionLanguageRange => range !== undefined);
+};
+
 export const consoleTerminalToken = (terminal: SyntaxNode | null | undefined, document: string) => {
   for (const [nodeName, kind] of [
     ['First', 'first-member'],
@@ -325,6 +336,13 @@ export const parseConsoleSyntax = (
     message: 'String literals must use valid JSON escaping.',
     ...range,
   }));
+  for (const range of invalidStructuredValueRanges(syntax))
+    syntaxDiagnostics.push({
+      channel: 'syntax',
+      code: 'console.syntax.invalid',
+      message: 'Structured values must use valid JSON values and escaping.',
+      ...range,
+    });
   for (const factory of graphRead?.factories ?? [])
     if (factory.error)
       syntaxDiagnostics.push({

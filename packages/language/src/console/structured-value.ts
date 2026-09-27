@@ -76,7 +76,12 @@ class Reader {
       this.space();
       if (this.source[this.position++] !== ':')
         throw new Error('Expected ":" after property name.');
-      result[key] = this.value();
+      Object.defineProperty(result, key, {
+        value: this.value(),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
       this.space();
       if (this.source[this.position] !== ',') break;
       this.position += 1;
