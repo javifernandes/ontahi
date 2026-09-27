@@ -397,7 +397,7 @@ the canonical read and its semantic result; read-only chat outcomes do not refre
 This remains explicit application configuration. Automatic graph exposure, general question
 answering, batching, conversation continuation, and Natural Console authoring remain later slices.
 
-Validation: 1,180 Core tests with coverage, 151 Devtools tests with coverage, 150 Todo tests,
+Validation: 1,186 Core tests with coverage, 151 Devtools tests with coverage, 150 Todo tests,
 affected typechecks/lint/builds, Todo production build, and clean-room package artifact verification.
 The real Qwen 3.5 4B evaluation produced the expected filtered list and count from actual Graph Read
 results without changing the dataset; the broader suite later stopped at its already documented

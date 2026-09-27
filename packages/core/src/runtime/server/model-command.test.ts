@@ -42,6 +42,37 @@ const fixture = () => {
   const authorize = vi.fn();
   return { application, Document, run, generate, scope, authorize, binding };
 };
+const graphReadFixture = () => {
+  const f = fixture();
+  const request = toGraphReadRequest(query(f.Document), 'run');
+  const read = {
+    description: 'Read documents.',
+    request: graphSchema.object(
+      {
+        version: graphSchema.literal(1),
+        kind: graphSchema.literal('graph-read'),
+        mode: graphSchema.literal('run'),
+        selection: graphSchema.selection(f.Document),
+        orderBy: graphSchema.array(
+          graphSchema.object(
+            {
+              fieldName: graphSchema.literal('id'),
+              direction: graphSchema.union([
+                graphSchema.literal('asc'),
+                graphSchema.literal('desc'),
+              ]),
+            },
+            { unknownKeys: 'strict' },
+          ),
+        ),
+      },
+      { unknownKeys: 'strict' },
+    ),
+    validate: vi.fn(() => undefined as string | undefined),
+    message: vi.fn(() => 'Found one document.'),
+  };
+  return { ...f, request, read };
+};
 it('derives descriptions and dispatches a canonical operation in the caller context', async () => {
   const f = fixture();
   const runtime = createModelCommandRuntime({ ...f, provider: { generate: f.generate } });
@@ -136,11 +167,12 @@ it('answers capability questions without dispatching or refreshing scope', async
 });
 
 it('uses the narrowed exposure description when rendering help', async () => {
-  const f = fixture();
+  const f = graphReadFixture();
   const runtime = createModelCommandRuntime({
     ...f,
     scope: async () => ({
       context: {},
+      reads: [f.read],
       bindings: {
         'Document.rename': { ...f.binding, description: 'Rename your current document.' },
       },
@@ -149,39 +181,13 @@ it('uses the narrowed exposure description when rendering help', async () => {
   });
   expect(await runtime.submit({ text: 'What can I do?' }, new AbortController().signal)).toEqual({
     status: 'answered',
-    message: 'You can:\n• Rename your current document.',
+    message: 'You can:\n• Rename your current document.\n• Read documents.',
   });
   expect(f.run).not.toHaveBeenCalled();
 });
 it('dispatches a scoped graph read and returns its canonical response', async () => {
-  const f = fixture();
-  const request = toGraphReadRequest(query(f.Document), 'run');
-  const read = {
-    description: 'Read documents.',
-    request: graphSchema.object(
-      {
-        version: graphSchema.literal(1),
-        kind: graphSchema.literal('graph-read'),
-        mode: graphSchema.literal('run'),
-        selection: graphSchema.selection(f.Document),
-        orderBy: graphSchema.array(
-          graphSchema.object(
-            {
-              fieldName: graphSchema.literal('id'),
-              direction: graphSchema.union([
-                graphSchema.literal('asc'),
-                graphSchema.literal('desc'),
-              ]),
-            },
-            { unknownKeys: 'strict' },
-          ),
-        ),
-      },
-      { unknownKeys: 'strict' },
-    ),
-    validate: vi.fn(() => undefined),
-    message: vi.fn(() => 'Found one document.'),
-  };
+  const f = graphReadFixture();
+  const { read, request } = f;
   const dispatchRead = vi.fn(async () => ({
     kind: 'graph-read-result' as const,
     value: [{ id: 'doc-1' }],
@@ -208,33 +214,8 @@ it('dispatches a scoped graph read and returns its canonical response', async ()
   expect(scope).toHaveBeenCalledTimes(2);
 });
 it('rejects graph reads removed from the fresh scope', async () => {
-  const f = fixture();
-  const request = toGraphReadRequest(query(f.Document), 'run');
-  const read = {
-    description: 'Read documents.',
-    request: graphSchema.object(
-      {
-        version: graphSchema.literal(1),
-        kind: graphSchema.literal('graph-read'),
-        mode: graphSchema.literal('run'),
-        selection: graphSchema.selection(f.Document),
-        orderBy: graphSchema.array(
-          graphSchema.object(
-            {
-              fieldName: graphSchema.literal('id'),
-              direction: graphSchema.union([
-                graphSchema.literal('asc'),
-                graphSchema.literal('desc'),
-              ]),
-            },
-            { unknownKeys: 'strict' },
-          ),
-        ),
-      },
-      { unknownKeys: 'strict' },
-    ),
-    validate: vi.fn(() => undefined),
-  };
+  const f = graphReadFixture();
+  const { read, request } = f;
   const scope = vi
     .fn()
     .mockResolvedValueOnce({ context: {}, bindings: {}, reads: [read] })
@@ -254,6 +235,110 @@ it('rejects graph reads removed from the fresh scope', async () => {
   expect(scope).toHaveBeenCalledTimes(2);
   expect(dispatchRead).not.toHaveBeenCalled();
 });
+it('requires a graph-read dispatcher before execution', async () => {
+  const f = graphReadFixture();
+  await expect(
+    createModelCommandRuntime({
+      application: f.application,
+      authorize: f.authorize,
+      scope: async () => ({ context: {}, bindings: {}, reads: [f.read] }),
+      provider: { generate: async () => ({ status: 'resolved', request: f.request }) },
+    }).submit({ text: 'show documents' }, new AbortController().signal),
+  ).rejects.toHaveProperty('code', 'command_unavailable');
+});
+it('honors fresh unresolved and validation outcomes for graph reads', async () => {
+  const f = graphReadFixture();
+  const unresolvedScope = vi
+    .fn()
+    .mockResolvedValueOnce({ context: {}, bindings: {}, reads: [f.read] })
+    .mockResolvedValueOnce({ context: {}, bindings: {}, unresolved: 'Scope changed.' });
+  const provider = { generate: async () => ({ status: 'resolved' as const, request: f.request }) };
+  await expect(
+    createModelCommandRuntime({
+      application: f.application,
+      authorize: f.authorize,
+      scope: unresolvedScope,
+      provider,
+      dispatchRead: vi.fn(),
+    }).submit({ text: 'show documents' }, new AbortController().signal),
+  ).resolves.toEqual({ status: 'unresolved', message: 'Scope changed.' });
+
+  const narrowed = graphReadFixture();
+  narrowed.read.validate.mockReturnValueOnce(undefined).mockReturnValueOnce('Read narrowed.');
+  const dispatchRead = vi.fn();
+  await expect(
+    createModelCommandRuntime({
+      application: narrowed.application,
+      authorize: narrowed.authorize,
+      scope: async () => ({ context: {}, bindings: {}, reads: [narrowed.read] }),
+      provider: {
+        generate: async () => ({ status: 'resolved', request: narrowed.request }),
+      },
+      dispatchRead,
+    }).submit({ text: 'show documents' }, new AbortController().signal),
+  ).resolves.toEqual({ status: 'unresolved', message: 'Read narrowed.' });
+  expect(dispatchRead).not.toHaveBeenCalled();
+});
+it('reports rejected graph reads and preserves optional capabilities', async () => {
+  const rejected = graphReadFixture();
+  const rejectedRuntime = createModelCommandRuntime({
+    application: rejected.application,
+    authorize: rejected.authorize,
+    scope: async () => ({ context: {}, bindings: {}, reads: [rejected.read] }),
+    provider: { generate: async () => ({ status: 'resolved', request: rejected.request }) },
+    dispatchRead: async () => ({
+      kind: 'protocol-error',
+      error: { code: 'access_denied', message: 'Read denied.' },
+    }),
+  });
+  await expect(
+    rejectedRuntime.submit({ text: 'show documents' }, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'command_execution_failed', message: 'Read denied.' });
+
+  const accepted = graphReadFixture();
+  const read = { ...accepted.read, message: undefined };
+  await expect(
+    createModelCommandRuntime({
+      application: accepted.application,
+      authorize: accepted.authorize,
+      scope: async () => ({ context: {}, bindings: {}, reads: [read] }),
+      provider: { generate: async () => ({ status: 'resolved', request: accepted.request }) },
+      dispatchRead: async () => ({
+        kind: 'graph-read-result',
+        value: [],
+        capabilities: { orderBy: ['id'] },
+      }),
+    }).submit({ text: 'show documents' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'executed',
+    message: 'Read completed.',
+    request: accepted.request,
+    response: {
+      kind: 'graph-read-result',
+      value: [],
+      capabilities: { orderBy: ['id'] },
+    },
+  });
+});
+it('rejects non-result graph-read dispatcher responses', async () => {
+  const f = graphReadFixture();
+  await expect(
+    createModelCommandRuntime({
+      application: f.application,
+      authorize: f.authorize,
+      scope: async () => ({ context: {}, bindings: {}, reads: [f.read] }),
+      provider: { generate: async () => ({ status: 'resolved', request: f.request }) },
+      dispatchRead: async () => ({
+        kind: 'graph-read-capabilities-result',
+        entityName: 'Document',
+        capabilities: { orderBy: ['id'] },
+      }),
+    }).submit({ text: 'show documents' }, new AbortController().signal),
+  ).rejects.toMatchObject({
+    code: 'command_execution_failed',
+    message: 'The graph read was rejected.',
+  });
+});
 it('does not disclose help when authorization is revoked during inference', async () => {
   const f = fixture();
   f.authorize.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('revoked'));
@@ -268,10 +353,11 @@ it('does not disclose help when authorization is revoked during inference', asyn
 });
 
 it('passes the selected response language to the model and formats help through the host', async () => {
-  const f = fixture();
+  const f = graphReadFixture();
   const generate = vi.fn(async (_request: { instructions: string }) => ({ status: 'help' }));
   const runtime = createModelCommandRuntime({
     ...f,
+    scope: async () => ({ context: {}, bindings: {}, reads: [f.read] }),
     provider: { generate },
     formatHelp: (descriptions, request) => `${request.language}: ${descriptions.join(', ')}`,
   });
@@ -280,7 +366,7 @@ it('passes the selected response language to the model and formats help through 
       { text: 'What can I do?', language: 'es-AR' },
       new AbortController().signal,
     ),
-  ).toEqual({ status: 'answered', message: 'es-AR: Rename a document.' });
+  ).toEqual({ status: 'answered', message: 'es-AR: Read documents.' });
   expect(generate.mock.calls[0]![0].instructions).toContain(
     'Write any user-facing reason in es-AR',
   );

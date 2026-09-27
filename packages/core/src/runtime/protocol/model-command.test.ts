@@ -181,6 +181,7 @@ describe('Runtime Protocol model.command family', () => {
         response: {
           kind: 'graph-read-result',
           value: [{ id: 'todo-1', title: 'Buy bread', completed: false }],
+          capabilities: { orderBy: ['title'] },
         },
       },
     } as const;
@@ -230,6 +231,42 @@ describe('Runtime Protocol model.command family', () => {
         message: 'Done',
         request: { kind: 'invoke', operationId: 'Todo.help', input: {} },
         response: { kind: 'graph-read-result', value: [] },
+      },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: { kind: 'selection', entityName: 'TodoItem', expression: { kind: 'all' } },
+          orderBy: [],
+        },
+        response: {
+          kind: 'graph-read-result',
+          value: [],
+          capabilities: { orderBy: [1] },
+        },
+      },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: { kind: 'selection', entityName: 'TodoItem', expression: { kind: 'all' } },
+          orderBy: [],
+        },
+        response: { kind: 'graph-read-result', value: [], unexpected: true },
       },
     },
     {

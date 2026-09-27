@@ -177,6 +177,24 @@ describe('SemanticPayload', () => {
       <SemanticPayload
         value={{
           version: 1,
+          kind: 'model-command-result',
+          result: {
+            status: 'executed',
+            message: 'Custom result.',
+            request: { kind: 'invoke', operationId: 'Todo.inspect', input: {} },
+            response: { kind: 'custom-result', value: 'raw' },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Canonical action')).toBeTruthy();
+    expect(screen.getByText('custom-result')).toBeTruthy();
+    expect(screen.getByText('raw')).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          version: 1,
           kind: 'model-command',
           text: 'help',
         }}
