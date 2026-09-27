@@ -49,7 +49,9 @@ export const createNextRuntimeProtocolRouteHandler =
     }
 
     try {
-      const result = await dispatcher(parsed.request, await context(request));
+      const result = await dispatcher(parsed.request, await context(request), {
+        signal: request.signal,
+      });
       return Response.json(result, { status: responseStatus(result) });
     } catch (error) {
       reportError?.(error, request);

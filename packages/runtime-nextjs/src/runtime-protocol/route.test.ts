@@ -74,7 +74,13 @@ describe('Next.js Runtime Protocol adapter', () => {
         result: { ok: true, kind: 'success', value: { renamed: true } },
       },
     });
-    expect(operation).toHaveBeenCalledWith(operationBody, { source: 'next-route' });
+    expect(operation).toHaveBeenCalledWith(
+      operationBody,
+      { source: 'next-route' },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
   });
 
   it.each([
@@ -187,7 +193,11 @@ describe('Next.js Runtime Protocol adapter', () => {
       },
     });
     expect(context).toHaveBeenCalledWith(request);
-    expect(operation).toHaveBeenCalledWith(portableRequest.body, { principal: 'server-user' });
+    expect(operation).toHaveBeenCalledWith(
+      portableRequest.body,
+      { principal: 'server-user' },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it('preserves a family protocol error as a semantic response', async () => {

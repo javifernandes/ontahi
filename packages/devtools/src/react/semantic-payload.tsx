@@ -222,6 +222,37 @@ const OperationPayloadVisual = ({ body }: { readonly body: RecordValue }) => {
   return <DomainValue value={body} />;
 };
 
+const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => {
+  if (body.kind === 'model-command') {
+    return (
+      <>
+        <p style={styles.semanticHeadline}>{String(body.text ?? '')}</p>
+        <DomainProjection label='Language' value={body.language} empty='Runtime default.' />
+      </>
+    );
+  }
+  if (body.kind === 'model-command-result' && isRecord(body.result)) {
+    return (
+      <>
+        <p style={styles.semanticHeadline}>{String(body.result.message ?? '')}</p>
+        <div style={styles.semanticGrid}>
+          <div style={styles.semanticCard}>
+            <span style={styles.semanticLabel}>Outcome</span>
+            <span style={styles.semanticValue}>{String(body.result.status ?? 'unknown')}</span>
+          </div>
+          {body.result.request === undefined ? null : (
+            <div style={styles.semanticCard}>
+              <span style={styles.semanticLabel}>Canonical action</span>
+              <DomainValue value={body.result.request} />
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+  return <DomainValue value={body} />;
+};
+
 const GraphReadVisual = ({ body }: { readonly body: RecordValue }) => {
   const dialect = useContext(AuthoringDialectContext);
   const selection = isRecord(body.selection) ? body.selection : undefined;
@@ -315,6 +346,8 @@ export const SemanticPayload = ({ value }: { readonly value: unknown }) => {
   if (!isRecord(value)) return <DomainValue value={value} />;
   if (value.kind === 'graph-read') return <GraphReadVisual body={value} />;
   if (value.kind === 'graph-command') return <GraphCommandVisual body={value} />;
+  if (value.kind === 'model-command' || value.kind === 'model-command-result')
+    return <ModelCommandPayloadVisual body={value} />;
   if (
     value.kind === 'invoke' ||
     value.kind === 'check-permission' ||

@@ -440,9 +440,13 @@ Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports tha
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 
-The UI sends `POST /model/commands` with `{text, language}`. `ontahiExpress` mounts this optional
-runtime entry and propagates the authenticated invocation context. There are no chat operations
-on `TodoList`, no chat-specific application capability, and no domain service delegation loop.
+The UI sends the versioned `model.command` family through the shared Runtime Protocol endpoint at
+`POST /runtime`. The same instrumented Runtime Transport used by the board records the natural
+language request, its outcome, and the canonical Graph Command or Operation invocation in Devtools
+Activity. `ontahiExpress` keeps `POST /model/commands` as a temporary compatibility route; the
+application UI no longer uses it. Both entries propagate the authenticated invocation context.
+There are no chat operations on `TodoList`, no chat-specific application capability, and no domain
+service delegation loop.
 
 The boundaries are explicit:
 

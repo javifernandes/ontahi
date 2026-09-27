@@ -4,6 +4,7 @@ import {
 } from '../../data-graph/index.js';
 import { isRecord } from '../../value/object.js';
 import type { ModelCommandRequest, ModelCommandResult } from '../contracts.js';
+import type { OperationInvokeRequest } from '../operation-invocation.js';
 
 import type { OntahiApplication } from './application.js';
 import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './model-graph-command.js';
@@ -28,7 +29,10 @@ export type ModelCommandScope = {
   unresolved?: string;
 };
 export type ModelCommandRuntime = {
-  submit(request: ModelCommandRequest, signal: AbortSignal): Promise<ModelCommandResult>;
+  submit(
+    request: ModelCommandRequest,
+    signal: AbortSignal,
+  ): Promise<ModelCommandResult<GraphCommandRequest | OperationInvokeRequest>>;
 };
 
 /** Runtime entry point for graph instructions. The host supplies disclosure scope and bindings;
@@ -160,7 +164,11 @@ export const createModelCommandRuntime = ({
             'command_execution_failed',
             'The graph command was rejected.',
           );
-        return { status: 'executed', message: exposure.message?.(proposal.request) ?? 'Updated.' };
+        return {
+          status: 'executed',
+          message: exposure.message?.(proposal.request) ?? 'Updated.',
+          request: proposal.request,
+        };
       }
       const current = await scope(request, signal);
       if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
@@ -181,6 +189,7 @@ export const createModelCommandRuntime = ({
           current.bindings[proposal.request.operationId]?.message?.(
             proposal.request.input as Record<string, unknown>,
           ) ?? 'Operation completed.',
+        request: proposal.request,
       };
     },
   };

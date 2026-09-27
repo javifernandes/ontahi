@@ -43,14 +43,22 @@ export const createExpressRuntimeProtocolHandler = <TContext>({
   reportError,
 }: CreateExpressRuntimeProtocolHandlerOptions<TContext>): RequestHandler =>
   async function runtimeProtocolHandler(request, response) {
+    const controller = new AbortController();
+    const cancel = () => {
+      if (!response.writableEnded) controller.abort();
+    };
+    response.on('close', cancel);
     const parsed = registry.parseRequest(request.body);
     if (!parsed.success) {
       response.status(responseStatus(parsed.error)).json(parsed.error);
+      response.off('close', cancel);
       return;
     }
 
     try {
-      const result = await dispatcher(parsed.request, await context(request));
+      const result = await dispatcher(parsed.request, await context(request), {
+        signal: controller.signal,
+      });
       response.status(responseStatus(result)).json(result);
     } catch (error) {
       reportError?.(error, request);
@@ -63,5 +71,7 @@ export const createExpressRuntimeProtocolHandler = <TContext>({
             { id: parsed.request.id, family: parsed.request.family },
           ),
         );
+    } finally {
+      response.off('close', cancel);
     }
   };

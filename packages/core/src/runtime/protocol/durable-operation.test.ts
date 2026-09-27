@@ -388,7 +388,7 @@ describe('Runtime Protocol Durable Operation family', () => {
 
     const response = await dispatch(runtimeRequest, context);
 
-    expect(inspect).toHaveBeenCalledWith(body, context);
+    expect(inspect).toHaveBeenCalledWith(body, context, {});
     expect(response).toEqual({
       protocol: 'ontahi.runtime',
       version: 1,

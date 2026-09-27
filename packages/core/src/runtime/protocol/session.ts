@@ -566,6 +566,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
   reportError,
 }: CreateRuntimeProtocolServerSessionOptions<TContext>): RuntimeProtocolServerSession => {
   let closed = false;
+  const requestController = new AbortController();
   const activeRequestIds = new Set<string>();
   const completedRequestIds = new Set<string>();
   const observations = new Map<string, ActiveObservation>();
@@ -603,7 +604,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
   const runRequest = async (frame: RuntimeProtocolSessionRequestFrame) => {
     const { request } = frame;
     try {
-      const response = await dispatcher(request, context);
+      const response = await dispatcher(request, context, { signal: requestController.signal });
       await send({
         protocol: RUNTIME_PROTOCOL_SESSION_NAME,
         version: RUNTIME_PROTOCOL_SESSION_VERSION,
@@ -819,6 +820,7 @@ export const createRuntimeProtocolServerSession = <TContext>({
     close: () => {
       if (closed) return;
       closed = true;
+      requestController.abort();
       for (const active of observations.values()) {
         cancelObservation(active);
       }

@@ -289,6 +289,10 @@ export const semanticSummary = (
         ? `can ${body.operationId}()`
         : `${body.operationId}()`;
     }
+    if (event?.family === 'model.command' && typeof body.text === 'string') {
+      const text = body.text.length > 64 ? `${body.text.slice(0, 61)}…` : body.text;
+      return `Ask model · ${JSON.stringify(text)}`;
+    }
   }
   return event?.family ?? 'Runtime exchange';
 };

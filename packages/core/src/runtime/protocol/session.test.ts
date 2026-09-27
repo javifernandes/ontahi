@@ -292,6 +292,24 @@ describe('Runtime Protocol session frames', () => {
 });
 
 describe('Runtime Protocol server session', () => {
+  it('aborts active request dispatch when the session closes', async () => {
+    let signal: AbortSignal | undefined;
+    const session = createRuntimeProtocolServerSession({
+      dispatcher: (_request, _context, options) => {
+        signal = options?.signal;
+        return new Promise<RuntimeProtocolDispatchResult>(() => undefined);
+      },
+      context: undefined,
+      send: () => undefined,
+    });
+
+    await session.receive(requestFrame('request-1'));
+    await vi.waitFor(() => expect(signal).toBeInstanceOf(AbortSignal));
+    session.close();
+
+    expect(signal?.aborted).toBe(true);
+  });
+
   it('multiplexes concurrent exchanges and preserves exact request correlation', async () => {
     const pending = new Map<string, (value: object) => void>();
     const observedContexts: unknown[] = [];

@@ -293,6 +293,26 @@ describe('Devtools activity model', () => {
     );
     expect(
       semanticSummary(
+        exchangeActivity(
+          { version: 1, kind: 'model-command', text: 'create list Groceries' },
+          'model.command',
+        ),
+      ),
+    ).toBe('Ask model · "create list Groceries"');
+    expect(
+      semanticSummary(
+        exchangeActivity(
+          {
+            version: 1,
+            kind: 'model-command',
+            text: 'create a list with a deliberately long name that exceeds the activity title',
+          },
+          'model.command',
+        ),
+      ),
+    ).toBe('Ask model · "create a list with a deliberately long name that exceeds the …"');
+    expect(
+      semanticSummary(
         exchangeActivity({ kind: 'graph-command', command: { kind: 'custom-command' } }),
       ),
     ).toBe('custom-command');

@@ -385,5 +385,6 @@ export {
   type ModelCommandScope,
   type ModelCommandBinding,
 } from './model-command.js';
+export { submitModelCommandProtocol } from './model-command-protocol.js';
 
 export type { ModelGraphCommandExposure } from './model-graph-command.js';

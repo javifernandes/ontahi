@@ -30,6 +30,7 @@ const createConfigurableTransport = () =>
       'durable.operation': 'websocket',
       'graph.read': 'websocket',
       'graph.command': 'websocket',
+      'model.command': 'websocket',
       'durable.operation.observe': 'websocket',
       'graph.observe': 'websocket',
     },
@@ -42,7 +43,7 @@ describe('RuntimeTransportSettings', () => {
     const runtimeTransport = createConfigurableTransport();
     render(<RuntimeTransportSettings runtimeTransport={runtimeTransport} />);
 
-    expect(screen.getAllByRole('combobox')).toHaveLength(6);
+    expect(screen.getAllByRole('combobox')).toHaveLength(7);
     const graphRead = screen.getByRole('combobox', { name: 'Transport for graph reads' });
     fireEvent.change(graphRead, { target: { value: 'http' } });
 
@@ -68,10 +69,11 @@ describe('RuntimeTransportSettings', () => {
       'durable.operation': 'http',
       'graph.read': 'http',
       'graph.command': 'http',
+      'model.command': 'http',
       'durable.operation.observe': 'http',
       'graph.observe': 'websocket',
     });
-    expect(screen.getByText('5 HTTP · 1 WebSocket')).toBeTruthy();
+    expect(screen.getByText('6 HTTP · 1 WebSocket')).toBeTruthy();
     expect(screen.queryByText(/Todo/)).toBeNull();
   });
 

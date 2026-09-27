@@ -84,6 +84,7 @@ describe('Todo canonical model requests', () => {
     expect(await submit('borrar ítem comida de lista Manuela')).toEqual({
       status: 'executed',
       message: 'Item deleted.',
+      request: removeItem('tea', 'comida').request,
     });
     expect(dataset().TodoItem).toEqual([
       { id: 'other', list: 'list-2', title: 'buy apples', completed: false },
@@ -114,7 +115,11 @@ describe('Todo canonical model requests', () => {
   it('exposes real operation inputs and refs, then dispatches creation unchanged', async () => {
     const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) => create());
     bind(generate);
-    expect(await submit()).toEqual({ status: 'executed', message: 'Item added.' });
+    expect(await submit()).toEqual({
+      status: 'executed',
+      message: 'Item added.',
+      request: create().request,
+    });
     expect(dataset().TodoItem?.at(-1)).toMatchObject({
       id: 'new-item',
       title: 'buy bread',
@@ -278,6 +283,7 @@ describe('Todo canonical model requests', () => {
     expect(await request('add buy bread to Shopping')).toEqual({
       status: 'executed',
       message: 'Ítem agregado.',
+      request: create().request,
     });
     expect(dataset().TodoItem?.at(-1)?.title).toBe('buy bread');
   });
@@ -286,6 +292,7 @@ describe('Todo canonical model requests', () => {
     expect(await submit('rename list Shopping to Groceries')).toEqual({
       status: 'executed',
       message: 'List renamed.',
+      request: rename('TodoList', 'list-1', 'Shopping', 'Groceries').request,
     });
     dataset().TodoItem![0]!.completed = true;
     bind(async () => rename('TodoItem', 'tea', 'buy tea', 'buy green tea'));

@@ -176,6 +176,10 @@ configurable transport.
 The default Visual detail projects Operation requests to their input and successful responses to
 their returned value, flattening Entity Refs to their locator identity. Body JSON and Envelope keep
 the complete Runtime Protocol evidence available when transport-level inspection is needed.
+Model Command exchanges appear in the same Activity stream. Their Visual detail shows the natural
+language prompt and response outcome, plus the canonical Graph Command or Operation invocation for
+an executed result. This keeps model interpretation inspectable without inventing a second action
+payload for Devtools.
 
 The React surface opens as a full-width bottom drawer at a compact default height. Drag its top
 handle, or focus the handle and use the arrow keys, to resize it while the application remains
