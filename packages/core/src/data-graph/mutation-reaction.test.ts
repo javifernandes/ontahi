@@ -128,6 +128,9 @@ describe('Applied Mutation Outcomes and Reactions', () => {
       if (response.kind === 'graph-command-rejection') {
         throw new Error(response.diagnostic.rejection.code);
       }
+      if (response.kind === 'graph-command-capabilities-result') {
+        throw new Error('Expected a Relationship Command result.');
+      }
       if (!isRelationshipCommandResult(response.value)) {
         throw new Error('Expected a Relationship Command result.');
       }

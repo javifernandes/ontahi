@@ -42,7 +42,7 @@ export interface Dialect {
   renderCompletion(candidate: ConsoleCandidate): ConsoleLanguageCompletionItem;
   orderClause(order: GraphReadOrder): string;
   limitClause(limit: number): string;
-  syntaxError(syntax: ConsoleDocumentSyntax): string;
+  syntaxError(document: string, syntax: ConsoleDocumentSyntax): string;
   unsupportedOrder(terminal: string): string;
   readonly unsupportedLimit: string;
 }

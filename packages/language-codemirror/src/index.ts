@@ -100,10 +100,13 @@ export const selectionExpressionLanguageSupport = () =>
 const consoleParser = consoleDocumentParser.configure({
   props: [
     styleTags({
-      EntityName: tags.typeName,
+      'EntityName/Identifier': tags.typeName,
       'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
-      'Order By Through Ascending Descending OrderDirection': tags.keyword,
+      'OperationName/Identifier': tags.function(tags.propertyName),
+      'Order By Through Ascending Descending OrderDirection Invoke With Create Update Delete Ref':
+        tags.keyword,
       'FieldName FactoryName InputName NavigationName': tags.variableName,
+      'StructuredKey/Identifier': tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
       'All None': tags.atom,
@@ -201,7 +204,15 @@ const consoleCompletionSource =
       to: completion.to,
       options: completion.items.map(item => ({
         label: item.label,
-        apply: item.apply,
+        apply:
+          item.cursorOffset === undefined
+            ? item.apply
+            : (view: EditorView, _completion: Completion, _from: number, _to: number) => {
+                view.dispatch({
+                  changes: { from: completion.from, to: completion.to, insert: item.apply },
+                  selection: { anchor: completion.from + item.cursorOffset! },
+                });
+              },
         type: completionType(item.kind),
         detail: item.detail,
         ...(item.kind === 'entity' || item.kind === 'field' ? { boost: 10 } : {}),
@@ -465,10 +476,21 @@ const consoleDialectExtensions = (
   autocompletion({
     override: [consoleCompletionSource(application, options)],
     activateOnCompletion: completion =>
-      ['where', 'order by', 'by', 'and by', 'orderBy'].includes(completion.label) ||
+      [
+        'where',
+        'order by',
+        'by',
+        'and by',
+        'orderBy',
+        'create',
+        'update',
+        'delete',
+        'invoke',
+      ].includes(completion.label) ||
       completion.detail?.startsWith('Selection factory') === true ||
       (completion.detail?.startsWith('Contextual Selection') === true &&
         options.dialect === 'declarative') ||
+      (completion.detail?.startsWith('Operation') === true && options.dialect === 'declarative') ||
       (typeof completion.apply === 'string' && completion.apply.endsWith(': ')),
     icons: false,
   }),

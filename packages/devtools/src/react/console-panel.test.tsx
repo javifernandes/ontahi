@@ -2,8 +2,12 @@ import { redo, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { isJsonValue, type JsonValue } from '@ontahi/core';
 import {
+  createEntityRef,
+  createGraphClientCache,
   createGraphReadDispatcher,
   createInMemoryDataGraphRuntime,
+  defineClientDomainOperation,
+  defineClientEntity,
   entity,
   field,
   graphSchema,
@@ -39,6 +43,185 @@ afterEach(cleanup);
 
 // Match the mounted Devtools integration budget under parallel CI coverage.
 const uiTestOptions = { timeout: 15_000 };
+
+describe('Console actions', uiTestOptions, () => {
+  const ListSchema = entity('List', { id: field.id(), name: field.string() });
+  const List = defineClientEntity(ListSchema, {
+    domainOperations: {
+      createList: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        input: graphSchema.object({ name: field.string() }),
+      }),
+    },
+  });
+
+  it('invokes a reflected Operation through its canonical Runtime Protocol family', async () => {
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'invocation-result',
+        result: { ok: true, value: { created: 'Inbox' } },
+      }),
+    );
+    render(
+      <ConsolePanel
+        options={{ entities: [List], initialDocument: 'List.createList({ name: "Inbox" })' }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() =>
+      expect(request.mock.calls.some(([envelope]) => envelope.family === 'operation')).toBe(true),
+    );
+    const invocation = request.mock.calls.find(([envelope]) => envelope.family === 'operation')![0];
+    expect(invocation).toMatchObject({
+      family: 'operation',
+      body: {
+        version: 1,
+        kind: 'invoke',
+        operationId: 'List.createList',
+        input: { name: 'Inbox' },
+      },
+    });
+    expect(await within(screen.getByLabelText('Console result')).findByText('Inbox')).toBeDefined();
+  });
+
+  it('reports an unsuccessful Operation result without publishing action success', async () => {
+    const onActionExecuted = vi.fn();
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'invocation-result',
+        result: {
+          ok: false,
+          kind: 'rejected',
+          executed: false,
+          reason: 'duplicate',
+          message: 'A list with that name already exists.',
+        },
+      }),
+    );
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDocument: 'List.createList({ name: "Inbox" })',
+          onActionExecuted,
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'A list with that name already exists.',
+    );
+    expect(onActionExecuted).not.toHaveBeenCalled();
+  });
+
+  it('executes an Entity update as a graph.command without read-only controls', async () => {
+    const clientCache = createGraphClientCache();
+    clientCache.writeEntity(ListSchema, { id: 'list-1', name: 'Inbox' });
+    const onActionExecuted = vi.fn();
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-command-result',
+        value: {
+          created: [],
+          updated: [
+            {
+              entityName: 'List',
+              ref: createEntityRef(ListSchema, { id: 'list-1' }),
+              values: { id: 'list-1', name: 'Today' },
+            },
+          ],
+          deleted: [],
+        },
+      }),
+    );
+    render(
+      <ConsolePanel
+        clientCache={clientCache}
+        options={{
+          entities: [List],
+          initialDocument: 'List.ref({ id: "list-1" }).update({ name: "Today" })',
+          onActionExecuted,
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() =>
+      expect(
+        request.mock.calls.some(
+          ([envelope]) =>
+            envelope.family === 'graph.command' &&
+            (envelope.body as { kind?: string }).kind === 'graph-command',
+        ),
+      ).toBe(true),
+    );
+    const command = request.mock.calls.find(
+      ([envelope]) =>
+        envelope.family === 'graph.command' &&
+        (envelope.body as { kind?: string }).kind === 'graph-command',
+    )![0];
+    expect(command).toMatchObject({
+      family: 'graph.command',
+      body: {
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'update',
+          entityName: 'List',
+          target: { kind: 'entity-ref', entityName: 'List', locator: { id: 'list-1' } },
+          values: { name: 'Today' },
+        },
+      },
+    });
+    expect(screen.queryByRole('button', { name: 'Observe' })).toBeDefined();
+    expect((screen.getByRole('button', { name: 'Observe' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
+      id: 'list-1',
+      name: 'Today',
+    });
+  });
+
+  it('authors only Entity Commands advertised by the runtime policy', async () => {
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+      createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-command-capabilities-result',
+        entityName: 'List',
+        capabilities: { entityMutations: ['update'] },
+      }),
+    );
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDialect: 'declarative',
+          initialDocument: 'delete List { id: "list-1" }',
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    await screen.findByText('Entity Command List.delete is not available.');
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+    const commandMetadata = request.mock.calls.filter(
+      ([envelope]) => envelope.family === 'graph.command',
+    );
+    expect(commandMetadata).toHaveLength(1);
+    expect(commandMetadata[0]![0]).toMatchObject({
+      family: 'graph.command',
+      body: { version: 1, kind: 'graph-command-capabilities', entityName: 'List' },
+    });
+  });
+});
 
 describe('discovered variant Console roots', uiTestOptions, () => {
   it.each(['ts', 'declarative'] as const)(

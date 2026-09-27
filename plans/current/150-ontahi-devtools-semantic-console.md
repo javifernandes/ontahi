@@ -602,12 +602,12 @@ smoke or package export was added in this slice.
 
 ### D. Graph Commands
 
-Status: not started; 120a's factory/Read-language proof and 116a cardinality hardening are complete.
-Entity variants (152) are the next agreed slice before exposing Commands.
-The agreed sequence now validates deferred Selection authoring before exposing mutable syntax;
-legacy locators remain compatible until representative consumers prove a replacement.
+Status: partial. Exact Entity create, update, and delete now lower through the existing
+`graph.command` Runtime Protocol family. Relationship, ordered, and precondition authoring remain.
 
-- [ ] Add exact Entity mutation and Relationship Command discovery from the application model.
+- [x] Discover exact Entity mutation Commands from generated client Entities and lower them to the
+      canonical versioned Command body.
+- [ ] Add Relationship Command discovery from the application model.
 - [ ] Lower direct, many-to-many, and ordered forms to the existing versioned Command body.
 - [ ] Preserve typed preconditions and Command results.
 - [ ] Prove attach/detach plus ordered `move before|after|at` in Todo.
@@ -616,11 +616,12 @@ legacy locators remain compatible until representative consumers prove a replace
 
 ### E. Operation Invocation
 
-Status: not started; after Commands. Existing invocation elsewhere in Ontahí does not complete
-Console invocation.
+Status: partial. Generated client Entities project their domain Operations and input Graph Schema
+descriptors into the Console application model. Both dialects lower invocations to the existing
+versioned `operation` request and the panel preserves canonical responses.
 
 - [ ] Add Operation discovery, contract-driven input assistance, and validation diagnostics.
-- [ ] Lower to the canonical versioned Operation request.
+- [x] Lower to the canonical versioned Operation request.
 - [ ] Preserve permission preflight and invocation-time authorization as distinct outcomes.
 - [ ] Render every canonical invocation result and link Durable acceptance to Activity/run progress.
 - [ ] Require explicit confirmation according to the configured effect/destructive policy.
@@ -763,7 +764,7 @@ delivery evidence.
       round-trips, rich controls, and non-executing, non-destructive dialect switching.
 - [ ] A developer can author and execute a Graph Command, including an ordered Relationship move
       in Todo, from the Console.
-- [ ] A developer can invoke an Operation from the Console and inspect its canonical outcomes.
+- [x] A developer can invoke an Operation from the Console and inspect its canonical outcomes.
 - [ ] Command/Operation resolution remains keyword-free, lowers only to canonical family bodies,
       and preserves the same authority, policy, validation, and transport boundaries as ordinary
       application calls. Extend the no-eval/no-raw-authority guarantee to these new forms.

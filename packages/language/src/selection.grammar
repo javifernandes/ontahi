@@ -1,6 +1,20 @@
 @top SelectionDocument { OrExpression? }
 @top ConsoleDocument { ConsoleExpression? }
-@top DeclarativeConsoleDocument { DeclarativeGraphReadExpression? }
+@top TsGraphReadDocument { GraphReadExpression? }
+@top DeclarativeConsoleDocument { DeclarativeConsoleExpression? }
+
+DeclarativeConsoleExpression {
+  DeclarativeGraphReadExpression |
+  DeclarativeOperationInvocationExpression |
+  DeclarativeEntityCreateExpression |
+  DeclarativeEntityUpdateExpression |
+  DeclarativeEntityDeleteExpression
+}
+
+DeclarativeOperationInvocationExpression { Invoke EntityName Dot OperationName (With StructuredValue)? }
+DeclarativeEntityCreateExpression { Create EntityName StructuredObject }
+DeclarativeEntityUpdateExpression { Update EntityName StructuredObject With StructuredObject }
+DeclarativeEntityDeleteExpression { Delete EntityName StructuredObject }
 
 DeclarativeGraphReadExpression {
   EntityName
@@ -15,7 +29,21 @@ DeclarativeOrderByClause { Order By FieldName DeclarativeOrderDirection? }
 DeclarativeOrderDirection { Ascending | Descending }
 DeclarativeLimitClause { Limit NumberLiteral }
 
-ConsoleExpression { GraphReadExpression }
+ConsoleExpression { GraphReadExpression | OperationInvocationExpression | EntityMutationExpression }
+OperationInvocationExpression { EntityName Dot OperationName OpenParen StructuredValue? CloseParen }
+EntityMutationExpression { EntityCreateExpression | EntityUpdateExpression | EntityDeleteExpression }
+EntityCreateExpression { EntityName Dot Create OpenParen StructuredObject CloseParen }
+EntityUpdateExpression {
+  EntityName Dot Ref OpenParen StructuredObject CloseParen Dot Update OpenParen StructuredObject CloseParen
+}
+EntityDeleteExpression { EntityName Dot Ref OpenParen StructuredObject CloseParen Dot Delete OpenParen CloseParen }
+OperationName { Identifier }
+
+StructuredValue { StructuredObject | StructuredArray | ScalarLiteral | Null }
+StructuredObject { OpenBrace (StructuredProperty (Comma StructuredProperty)* Comma?)? CloseBrace }
+StructuredProperty { StructuredKey Colon StructuredValue }
+StructuredKey { Identifier | StringLiteral }
+StructuredArray { OpenBracket (StructuredValue (Comma StructuredValue)* Comma?)? CloseBracket }
 GraphReadExpression {
   EntityName
   FactoryClause*
@@ -80,6 +108,12 @@ OrderBy { @extend<Identifier, "orderBy"> }
 Order { @extend<Identifier, "order"> }
 By { @extend<Identifier, "by"> }
 Through { @extend<Identifier, "through"> }
+Invoke { @extend<Identifier, "invoke"> }
+With { @extend<Identifier, "with"> }
+Create { @extend<Identifier, "create"> }
+Update { @extend<Identifier, "update"> }
+Delete { @extend<Identifier, "delete"> }
+Ref { @extend<Identifier, "ref"> }
 Ascending { @extend<Identifier, "ascending"> }
 Descending { @extend<Identifier, "descending"> }
 

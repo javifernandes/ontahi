@@ -182,6 +182,48 @@ describe('contextual editor projections', () => {
 });
 
 describe('Console dialect editor state', () => {
+  it('places the cursor inside an inserted string placeholder', async () => {
+    const source = 'invoke TodoList.createList with { }';
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: source,
+        selection: { anchor: source.indexOf('}') },
+        extensions: consoleExpressionExtensions(
+          {
+            entities: [{ name: 'TodoList', fields: [] }],
+            operations: [
+              {
+                id: 'TodoList.createList',
+                entityName: 'TodoList',
+                name: 'createList',
+                input: {
+                  kind: 'object',
+                  role: 'object',
+                  unknownKeys: 'strict',
+                  fields: { name: { kind: 'scalar', type: 'string' } },
+                },
+              },
+            ],
+          },
+          { dialect: 'declarative' },
+        ),
+      }),
+    });
+    try {
+      view.focus();
+      startCompletion(view);
+      await vi.waitFor(() =>
+        expect(currentCompletions(view.state).map(item => item.label)).toEqual(['name']),
+      );
+      await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+      expect(view.state.doc.toString()).toBe('invoke TodoList.createList with { name: ""}');
+      expect(view.state.selection.main.head).toBe(view.state.doc.toString().indexOf('""') + 1);
+    } finally {
+      view.destroy();
+    }
+  });
+
   it.each([
     ['declarative', 'TodoItem by state true an', 'and by', 'TodoItem by state true and by '],
     ['ts', 'TodoItem.by({ state: true }).b', 'by', 'TodoItem.by({ state: true }).by({'],

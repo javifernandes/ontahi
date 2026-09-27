@@ -3,9 +3,10 @@ import { hasOwn, isRecord } from '../value/object.js';
 
 import {
   graphCommandProtocolError,
-  parseGraphCommandRequest,
+  parseGraphCommandFamilyRequest,
   resolveGraphCommandRequest,
   type GraphCommandProtocolError,
+  type GraphCommandCapabilitiesResult,
 } from './command-protocol.js';
 import {
   isDerivedFieldDefinition,
@@ -94,6 +95,7 @@ export type GraphCommandDispatchContext<TAuthority> = {
 };
 
 export type GraphCommandDispatchResponse =
+  | GraphCommandCapabilitiesResult
   | {
       readonly kind: 'graph-command-result';
       readonly value: RelationshipCommandResult | EntityMutationDelta;
@@ -527,8 +529,21 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     input: unknown,
     context: GraphCommandDispatchContext<TAuthority>,
   ): Promise<GraphCommandDispatchResponse> => {
-    const parsed = parseGraphCommandRequest(input);
+    const parsed = parseGraphCommandFamilyRequest(input);
     if (!parsed.success) return parsed.error;
+
+    if (parsed.request.kind === 'graph-command-capabilities') {
+      const policy = entityMutationPolicyByEntity.get(parsed.request.entityName);
+      return {
+        kind: 'graph-command-capabilities-result',
+        entityName: parsed.request.entityName,
+        capabilities: {
+          entityMutations: policy
+            ? (Object.keys(policy.actions) as ('create' | 'update' | 'delete')[])
+            : [],
+        },
+      };
+    }
 
     const command = parsed.request.command;
     if (command.kind === 'entity-mutation-command') {

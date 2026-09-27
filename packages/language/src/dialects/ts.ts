@@ -5,8 +5,24 @@ import type { ConsoleGraphReadSyntax } from '../model/contracts.js';
 import type { Dialect, ConsoleCandidate } from './contract.js';
 import { completeTsConsoleDocument } from './ts-completion.js';
 
+const readParser = parser.configure({ top: 'TsGraphReadDocument' });
+const startsAsGraphRead = (document: string) =>
+  /^\s*[A-Za-z_]\w*\s*\.\s*(?:by|where|orderBy|limit|first|one|many|count|exists)(?:\b|\s*\()/.test(
+    document,
+  );
+
 const print = (document: string, expression: ConsoleGraphReadSyntax): string => {
   const entity = expression.entity!.text;
+  const value = (input: unknown) => JSON.stringify(input);
+  if (expression.kind === 'operation')
+    return `${entity}.${expression.operation!.text}(${expression.input ? value(expression.inputValue) : ''})`;
+  if (expression.kind === 'entity-mutation') {
+    if (expression.action === 'create') return `${entity}.create(${value(expression.valuesValue)})`;
+    const ref = `${entity}.ref(${value(expression.targetValue)})`;
+    return expression.action === 'update'
+      ? `${ref}.update(${value(expression.valuesValue)})`
+      : `${ref}.delete()`;
+  }
   const field = expression.orderBy?.field?.text;
   const descending = ['desc', 'descending'].includes(expression.orderBy?.direction?.text ?? '');
   const terminal = expression.terminal?.text ?? 'many';
@@ -61,7 +77,11 @@ export const tsDialect: Dialect = {
   directions: ['asc', 'desc'],
   directionSeparator: ', ',
   factoryNameSeparator: ': ',
-  parse: document => parseConsoleSyntax(document, tsDialect),
+  parse: document =>
+    parseConsoleSyntax(
+      document,
+      startsAsGraphRead(document) ? { ...tsDialect, parser: readParser } : tsDialect,
+    ),
   print,
   complete: (document, position, application, options, analyzePrefix) =>
     completeTsConsoleDocument(document, position, application, options, analyzePrefix, tsDialect),
@@ -69,7 +89,7 @@ export const tsDialect: Dialect = {
   orderClause: order =>
     '.orderBy(' + order.fieldName + (order.direction === 'asc' ? '' : ', desc') + ')',
   limitClause: limit => '.limit(' + limit + ')',
-  syntaxError: consoleStructureDiagnosticMessage,
+  syntaxError: (_document, syntax) => consoleStructureDiagnosticMessage(syntax),
   unsupportedOrder: terminal => '.orderBy(...) cannot be combined with .' + terminal + '().',
   unsupportedLimit: '.limit(...) can only be combined with .many().',
 };

@@ -4,10 +4,13 @@ import { history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import {
+  isEntityMutationDelta,
   isGraphReadCapabilities,
   graphOutput,
+  toGraphSchemaDescriptor,
   type GraphClientCache,
   type AnyEntityDefinition,
+  type GraphSchemaDefinition,
   type GraphReadCapabilities,
   type GraphReadRequest,
   type GraphReadOrder,
@@ -35,6 +38,8 @@ import {
   type ConsoleLanguageApplicationReflection,
   type ConsoleDocumentAnalysis,
   type ConsoleDialect,
+  type ConsoleRequest,
+  type ConsoleLanguageOperationReflection,
 } from '@ontahi/language';
 import {
   authoringDialectPreference,
@@ -52,19 +57,41 @@ import {
   type SetStateAction,
 } from 'react';
 
+import { useConsoleCommandCapabilities } from './console-command-capabilities.js';
 import { useConsoleReadCapabilities } from './console-read-capabilities.js';
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
 import { ResultTable, SemanticPayload, type ResultTableOrdering } from './semantic-payload.js';
 
+type ConsoleOperationSource = {
+  readonly id: string;
+  readonly entityName: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly input?: GraphSchemaDefinition;
+};
+
+type ConsoleEntitySource =
+  | AnyEntityDefinition
+  | {
+      readonly definition: AnyEntityDefinition;
+      readonly domain: Readonly<Record<string, ConsoleOperationSource>>;
+    };
+
 export type OntahiDevtoolsConsoleOptions = {
-  readonly entities: readonly AnyEntityDefinition[];
+  /** Entity schemas or generated client Entities. Client Entities also expose their Operations. */
+  readonly entities: readonly ConsoleEntitySource[];
   readonly initialDocument?: string;
   readonly initialDialect?: ConsoleDialect;
   readonly limit?: number;
   /** Host cache identity, not credentials. Update principal/cacheScope on authority changes. */
   readonly identity?: ExecutionIdentity;
+  /** Reconcile host-owned read caches after a Console Command or Operation succeeds. */
+  readonly onActionExecuted?: (event: {
+    readonly execution: Exclude<ConsoleRequest, { readonly family: 'graph.read' }>;
+    readonly response: unknown;
+  }) => void | Promise<void>;
 };
 
 export type ConsolePanelProps = {
@@ -76,7 +103,8 @@ export type ConsolePanelProps = {
 type ConsoleResultSnapshot = {
   readonly document: string;
   readonly exists: boolean;
-  readonly request: GraphReadRequest;
+  readonly execution: ConsoleRequest;
+  readonly request?: GraphReadRequest;
   readonly value: unknown;
   readonly durationMs: number;
   readonly observed?: boolean;
@@ -93,6 +121,49 @@ type ConsoleResult = { readonly snapshot?: ConsoleResultSnapshot } & (
 
 type ConsoleResultMode = 'visual' | 'json';
 
+const consoleEntityDefinition = (source: ConsoleEntitySource): AnyEntityDefinition =>
+  'definition' in source ? source.definition : source;
+
+const reconcileEntityMutationResult = (
+  clientCache: GraphClientCache | undefined,
+  sources: readonly ConsoleEntitySource[],
+  response: unknown,
+) => {
+  if (!clientCache || !isRecord(response) || !isEntityMutationDelta(response.value)) return;
+  const entities = new Map(
+    sources.map(source => {
+      const definition = consoleEntityDefinition(source);
+      return [definition.name, definition] as const;
+    }),
+  );
+  for (const fact of [...response.value.created, ...response.value.updated]) {
+    const definition = entities.get(fact.entityName);
+    if (!definition) continue;
+    const previous = fact.ref
+      ? clientCache.readEntity<Record<string, unknown>>(fact.ref)
+      : undefined;
+    clientCache.writeEntity(definition, { ...previous, ...fact.values });
+  }
+  for (const fact of response.value.deleted) {
+    if (fact.ref) clientCache.invalidateEntity(fact.ref);
+  }
+};
+
+const reflectConsoleOperations = (
+  sources: readonly ConsoleEntitySource[],
+): readonly ConsoleLanguageOperationReflection[] =>
+  sources.flatMap(source =>
+    'domain' in source
+      ? Object.values(source.domain).map(operation => ({
+          id: operation.id,
+          entityName: operation.entityName,
+          name: operation.name,
+          ...(operation.description ? { description: operation.description } : {}),
+          ...(operation.input ? { input: toGraphSchemaDescriptor(operation.input) } : {}),
+        }))
+      : [],
+  );
+
 const nextConsoleOrder = (
   current: GraphReadOrder | undefined,
   fieldName: string,
@@ -103,6 +174,12 @@ const nextConsoleOrder = (
 };
 
 const consoleReadSummary = (analysis: ConsoleDocumentAnalysis, limit: number) => {
+  if (analysis.execution?.family !== 'graph.read') {
+    const expression = analysis.syntax.expression;
+    return expression?.kind === 'operation'
+      ? `invoke ${expression.operation?.text ?? ''}`
+      : (expression?.action ?? 'invalid');
+  }
   if (analysis.syntax.expression?.terminal?.kind === 'exists-member') return 'exists';
   if (analysis.request?.mode === 'count') return 'count';
   return 'limit ' + (analysis.request?.limit ?? limit);
@@ -118,8 +195,8 @@ const ConsoleAnalysisStatus = ({
   const diagnostics = [...analysis.syntaxDiagnostics, ...analysis.semanticDiagnostics];
   if (diagnostics.length === 0)
     return [
-      analysis.request?.selection.entityName ?? 'No Entity',
-      'graph.read',
+      analysis.syntax.expression?.entity?.text ?? 'No Entity',
+      analysis.execution?.family ?? 'No request',
       consoleReadSummary(analysis, limit),
     ].join(' · ');
   return diagnostics.map(diagnostic => (
@@ -154,7 +231,7 @@ const ConsoleResultContent = ({
     );
   }
   if (mode === 'json') return <JsonView value={snapshot.value} label='Console result JSON' />;
-  if (snapshot.request.mode === 'run' && Array.isArray(snapshot.value))
+  if (snapshot.request?.mode === 'run' && Array.isArray(snapshot.value))
     return <ResultTable value={snapshot.value} ordering={ordering} />;
   return <SemanticPayload value={snapshot.value} />;
 };
@@ -389,7 +466,7 @@ const ConsoleResultPanel = ({
               {Math.round(snapshot.durationMs)} ms{snapshot.observed ? ' since Observe' : ''}
             </span>
           ) : null}
-          {snapshot?.request.mode === 'run' && Array.isArray(snapshot.value) ? (
+          {snapshot?.request?.mode === 'run' && Array.isArray(snapshot.value) ? (
             <ConsoleResultLimit
               request={snapshot.request}
               defaultLimit={limit}
@@ -447,9 +524,43 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
   );
   const [preferenceNotice, setPreferenceNotice] = useState('');
   const limit = options.limit ?? 25;
-  const baseEntities = useMemo(
-    () => options.entities.map(entity => reflectSelectionLanguageEntity(entity)),
+  const entityDefinitions = useMemo(
+    () => options.entities.map(consoleEntityDefinition),
     [options.entities],
+  );
+  const baseEntities = useMemo(
+    () => entityDefinitions.map(entity => reflectSelectionLanguageEntity(entity)),
+    [entityDefinitions],
+  );
+  const operations = useMemo(() => reflectConsoleOperations(options.entities), [options.entities]);
+  const identityKey = JSON.stringify(
+    executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
+  );
+  const commandEntityNames = useMemo(
+    () =>
+      options.entities.flatMap(entity => ('definition' in entity ? [entity.definition.name] : [])),
+    [options.entities],
+  );
+  const commandActions = useConsoleCommandCapabilities(
+    runtimeTransport,
+    identityKey,
+    commandEntityNames,
+  );
+  const commands = useMemo(
+    () =>
+      options.entities.flatMap(entity =>
+        'definition' in entity
+          ? [
+              {
+                entityName: entity.definition.name,
+                actions:
+                  commandActions(entity.definition.name) ??
+                  (['create', 'update', 'delete'] as const),
+              },
+            ]
+          : [],
+      ),
+    [commandActions, options.entities],
   );
   const initialTerminal = options.initialDialect === 'declarative' ? '' : '.many()';
   const initialDocument =
@@ -458,9 +569,6 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     document: initialDocument,
     dialect: options.initialDialect ?? 'ts',
   });
-  const identityKey = JSON.stringify(
-    executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
-  );
   const [storedResult, setStoredResult] = useState<{
     readonly identityKey: string;
     readonly result: ConsoleResult;
@@ -528,8 +636,12 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     baseEntities.map(entity => entity.name),
   );
   const application = useMemo(
-    () => reflectConsoleApplicationVariants(baseEntities, discovery.variants),
-    [baseEntities, discovery.variants],
+    () => ({
+      ...reflectConsoleApplicationVariants(baseEntities, discovery.variants),
+      operations,
+      commands,
+    }),
+    [baseEntities, discovery.variants, operations, commands],
   );
   const analysis = useMemo(
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
@@ -545,8 +657,8 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       limit,
       dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
     });
-    const request = executedAnalysis.request;
-    if (!request) {
+    const execution = executedAnalysis.execution;
+    if (!execution) {
       setResult(previous => ({
         snapshot: previous.snapshot,
         status: 'error',
@@ -568,7 +680,8 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     const startedAt = performance.now();
     setResult(previous => ({ status: 'executing', snapshot: previous.snapshot }));
     const execute = async () => {
-      if (request.version === 2) {
+      const request = execution.family === 'graph.read' ? execution.body : undefined;
+      if (request?.version === 2) {
         const response = await exchange(
           {
             family: 'graph.read',
@@ -592,25 +705,77 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           throw new Error('This Graph Read provider does not support contextual Selections (v2).');
       }
       if (controller.signal.aborted) throw new Error('Console execution was cancelled.');
-      return exchange(
-        { family: 'graph.read', body: { ...request, includeCapabilities: true } },
-        { signal: controller.signal },
-      );
+      if (execution.family === 'graph.read')
+        return exchange(
+          { family: 'graph.read', body: { ...execution.body, includeCapabilities: true } },
+          { signal: controller.signal },
+        );
+      if (execution.family === 'graph.command')
+        return exchange(execution, { signal: controller.signal });
+      return exchange(execution, { signal: controller.signal });
     };
     void execute()
-      .then(graphReadResult)
-      .then(result => {
+      .then(async response => {
         if (controller.signal.aborted) return;
-        const exists = executedAnalysis.syntax.expression?.terminal?.kind === 'exists-member';
-        if (exists && result.value !== null && !isRecord(result.value)) {
-          throw new Error('Graph Read exists expected an Entity record or null.');
+        if (execution.family !== 'graph.read') {
+          if (isRecord(response) && response.kind === 'protocol-error') {
+            const error = response.error;
+            throw new Error(
+              isRecord(error) && typeof error.message === 'string'
+                ? error.message
+                : 'Console execution was rejected.',
+            );
+          }
+          if (
+            !isRecord(response) ||
+            (execution.family === 'operation' &&
+              (response.kind !== 'invocation-result' ||
+                !isRecord(response.result) ||
+                typeof response.result.ok !== 'boolean')) ||
+            (execution.family === 'graph.command' && response.kind !== 'graph-command-result')
+          )
+            throw new Error(
+              execution.family === 'operation'
+                ? 'Operation returned an invalid result.'
+                : 'Graph Command returned an invalid result.',
+            );
+          if (
+            execution.family === 'operation' &&
+            isRecord(response.result) &&
+            response.result.ok !== true
+          )
+            throw new Error(
+              typeof response.result.message === 'string'
+                ? response.result.message
+                : 'Operation failed.',
+            );
+          if (execution.family === 'graph.command')
+            reconcileEntityMutationResult(clientCache, options.entities, response);
+          await options.onActionExecuted?.({ execution, response });
+          setResult({
+            status: 'success',
+            snapshot: {
+              document: source,
+              exists: false,
+              execution,
+              value: response,
+              transport: runtimeTransport,
+              durationMs: Math.max(0, performance.now() - startedAt),
+            },
+          });
+          return;
         }
+        const result = graphReadResult(response);
+        const exists = executedAnalysis.syntax.expression?.terminal?.kind === 'exists-member';
+        if (exists && result.value !== null && !isRecord(result.value))
+          throw new Error('Graph Read exists expected an Entity record or null.');
         setResult({
           status: 'success',
           snapshot: {
             document: source,
             exists,
-            request,
+            execution,
+            request: execution.body,
             ...result,
             // Match the application Graph Read exists intent over nullable get.
             value: exists ? result.value !== null : result.value,
@@ -676,7 +841,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     const reflected = application.entities.find(
       entity => entity.name === request.selection.entityName,
     );
-    const entity = options.entities.find(
+    const entity = entityDefinitions.find(
       entity =>
         entity.name === (reflected?.variant?.baseEntityName ?? request.selection.entityName),
     );
@@ -707,6 +872,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
               document: source,
               exists: false,
               observed: true,
+              execution: { family: 'graph.read', body: request },
               request,
               ...snapshot,
               transport: runtimeTransport,
@@ -773,6 +939,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     }
   }, [preferredDialect, options.initialDialect]);
   const snapshot = result.snapshot;
+  const snapshotRequest = snapshot?.request;
   const orderingCapabilities = targetDiscovery.capabilities;
   const orderableFields = discovery.orderableFields;
   const orderingCompletionNotice = () => {
@@ -788,7 +955,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       : null;
   };
   const resultEntity = application.entities.find(
-    entity => entity.name === snapshot?.request.selection.entityName,
+    entity => entity.name === snapshotRequest?.selection.entityName,
   );
   const sortDisabledReason = (fieldName: string): string | undefined => {
     if (observation?.status === 'observing')
@@ -797,15 +964,19 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     if (!exchange) return 'Ordering requires a configured Runtime Transport.';
     if (snapshot?.transport !== runtimeTransport || snapshot?.route !== discovery.route)
       return 'Run the query to refresh ordering permissions for this transport.';
-    if (!snapshot || !orderingCapabilities || entityName !== snapshot.request.selection.entityName)
+    if (
+      !snapshotRequest ||
+      !orderingCapabilities ||
+      entityName !== snapshotRequest.selection.entityName
+    )
       return 'Ordering permissions unavailable for the current Entity.';
     if (!orderingCapabilities.orderBy.includes(fieldName))
-      return `Ordering by ${snapshot.request.selection.entityName}.${fieldName} is not allowed by the Graph Read policy.`;
+      return `Ordering by ${snapshotRequest.selection.entityName}.${fieldName} is not allowed by the Graph Read policy.`;
     if (!analysis.request) return 'Fix the Console expression before changing ordering.';
     if (
-      snapshot.request.mode !== 'run' ||
+      snapshotRequest.mode !== 'run' ||
       analysis.request.mode !== 'run' ||
-      analysis.request.selection.entityName !== snapshot.request.selection.entityName
+      analysis.request.selection.entityName !== snapshotRequest.selection.entityName
     )
       return 'Run a many query for the current Entity before changing ordering.';
     return undefined;
@@ -817,7 +988,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     const request = analyzeConsoleDocument(source, application, { limit, dialect }).request;
     if (
       request?.mode !== 'run' ||
-      request.selection.entityName !== snapshot?.request.selection.entityName
+      request.selection.entityName !== snapshotRequest?.selection.entityName
     )
       return;
     const nextOrder = nextConsoleOrder(request.orderBy[0], fieldName);
@@ -844,7 +1015,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     if (!analysis.request) return 'Fix the Console expression before changing its limit.';
     if (
       analysis.request.mode !== 'run' ||
-      analysis.request.selection.entityName !== snapshot?.request.selection.entityName
+      analysis.request.selection.entityName !== snapshotRequest?.selection.entityName
     )
       return 'Run a many query for the current Entity before changing its limit.';
     return undefined;
@@ -856,7 +1027,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     const request = analyzeConsoleDocument(source, application, { limit, dialect }).request;
     if (
       request?.mode !== 'run' ||
-      request.selection.entityName !== snapshot?.request.selection.entityName
+      request.selection.entityName !== snapshotRequest?.selection.entityName
     )
       return;
     const changes = editConsoleLimit(source, application, nextLimit, { dialect });
@@ -875,7 +1046,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
         <div style={styles.consoleHeading}>
           <span>
             <strong style={styles.consoleTitle}>Semantic Console</strong>
-            <span style={styles.consoleHint}>Graph Read · Mod-Enter to run</span>
+            <span style={styles.consoleHint}>Read · Command · Operation · Mod-Enter to run</span>
           </span>
           <span style={styles.consoleResultControls}>
             <fieldset style={{ ...styles.modes, margin: 0 }} aria-label='Console dialect'>
@@ -885,9 +1056,9 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                   type='button'
                   style={{ ...styles.mode, ...(dialect === value ? styles.activeMode : {}) }}
                   aria-pressed={dialect === value}
-                  disabled={value !== dialect && document.trim() !== '' && !analysis.request}
+                  disabled={value !== dialect && document.trim() !== '' && !analysis.execution}
                   title={
-                    !analysis.request && document.trim() !== ''
+                    !analysis.execution && document.trim() !== ''
                       ? 'Fix the expression before switching dialect. Your draft will be kept.'
                       : 'Convert syntax without running the query. Undo restores the original text and dialect.'
                   }
@@ -901,14 +1072,14 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
               type='button'
               style={{
                 ...styles.primaryButton,
-                ...(!analysis.request ||
+                ...(!analysis.execution ||
                 result.status === 'executing' ||
                 observation?.status === 'observing'
                   ? styles.disabledButton
                   : {}),
               }}
               disabled={
-                !analysis.request ||
+                !analysis.execution ||
                 result.status === 'executing' ||
                 observation?.status === 'observing'
               }
@@ -977,7 +1148,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       <ConsoleResultPanel
         result={result}
         matchesDraft={
-          JSON.stringify(result.snapshot?.request) === JSON.stringify(analysis.request) &&
+          JSON.stringify(result.snapshot?.execution) === JSON.stringify(analysis.execution) &&
           result.snapshot?.exists ===
             (analysis.syntax.expression?.terminal?.kind === 'exists-member')
         }
@@ -989,7 +1160,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
         ordering={{
           fields:
             resultEntity?.fields.filter(isConsoleOrderableField).map(field => field.name) ?? [],
-          order: snapshot?.request.orderBy[0],
+          order: snapshotRequest?.orderBy[0],
           disabledReason: sortDisabledReason,
           onSort: sortBy,
         }}

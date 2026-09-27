@@ -1,9 +1,11 @@
 import {
   selectionAll,
   selectionAnd,
+  toGraphCommandRequest,
   type GraphReadRequest,
   type SelectionExpression,
 } from '@ontahi/core/data-graph';
+import { toOperationProtocolRequest } from '@ontahi/core/runtime/protocol';
 
 import type { Dialect } from '../dialects/contract.js';
 import type {
@@ -20,6 +22,22 @@ import { resolveExpression } from '../selection/semantics.js';
 
 import { consoleNavigationTarget } from './context.js';
 import { resolveConsoleFactory } from './factories.js';
+import { normalizeStructuredInput } from './structured-value.js';
+
+const diagnostic = (
+  parsed: ConsoleDocumentParseResult,
+  expression: NonNullable<ConsoleDocumentParseResult['syntax']['expression']>,
+  code:
+    | 'console.semantic.unknown-operation'
+    | 'console.semantic.invalid-input'
+    | 'console.semantic.invalid-command',
+  message: string,
+): ConsoleDocumentAnalysis => ({
+  ...parsed,
+  semanticDiagnostics: [
+    { channel: 'semantic', code, message, from: expression.from, to: expression.to },
+  ],
+});
 
 export const analyzeConsoleSyntax = (
   parsed: ConsoleDocumentParseResult,
@@ -28,16 +46,153 @@ export const analyzeConsoleSyntax = (
   dialect: Dialect,
 ): ConsoleDocumentAnalysis => {
   const expression = parsed.syntax.expression;
-  if (
-    parsed.syntaxDiagnostics.length > 0 ||
-    !expression?.entity ||
-    (!expression.terminal && !dialect.implicitMany)
-  ) {
+  if (parsed.syntaxDiagnostics.length > 0 || !expression?.entity) {
     return { ...parsed, semanticDiagnostics: [] };
   }
 
-  const root = application.entities.find(candidate => candidate.name === expression.entity?.text);
+  if (expression.kind === 'operation') {
+    const operationId = `${expression.entity.text}.${expression.operation?.text ?? ''}`;
+    const operation = application.operations?.find(candidate => candidate.id === operationId);
+    if (!operation)
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.unknown-operation',
+        `Unknown Operation ${operationId}.`,
+      );
+    const acceptsInput = operation.input !== undefined && operation.input.kind !== 'void';
+    if (acceptsInput && !expression.input)
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-input',
+        `${operationId} requires structured input.`,
+      );
+    if (!acceptsInput && expression.input)
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-input',
+        `${operationId} does not accept input.`,
+      );
+    const input = normalizeStructuredInput(expression.inputValue, operation.input);
+    try {
+      return {
+        ...parsed,
+        semanticDiagnostics: [],
+        execution: {
+          family: 'operation',
+          body: toOperationProtocolRequest({
+            kind: 'invoke',
+            operationId,
+            ...(expression.input ? { input: input as never } : {}),
+          }),
+        },
+      };
+    } catch {
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-input',
+        `${operationId} input cannot be represented by the Runtime Protocol.`,
+      );
+    }
+  }
+
+  if (expression.kind === 'entity-mutation') {
+    const entityName = expression.entity.text;
+    if (!application.entities.some(candidate => candidate.name === entityName))
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Unknown Entity ${entityName}.`,
+      );
+    if (
+      !expression.action ||
+      !application.commands
+        ?.find(candidate => candidate.entityName === entityName)
+        ?.actions.includes(expression.action)
+    )
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Entity Command ${entityName}.${expression.action ?? ''} is not available.`,
+      );
+    const target = expression.targetValue;
+    if (
+      expression.action !== 'create' &&
+      (!target || typeof target !== 'object' || Array.isArray(target))
+    )
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        'Entity Command target must be an object locator.',
+      );
+    const command =
+      expression.action === 'create'
+        ? {
+            kind: 'entity-mutation-command' as const,
+            action: 'create' as const,
+            entityName,
+            values: expression.valuesValue as Record<string, unknown>,
+          }
+        : expression.action === 'update'
+          ? {
+              kind: 'entity-mutation-command' as const,
+              action: 'update' as const,
+              entityName,
+              target: {
+                kind: 'entity-ref' as const,
+                entityName,
+                locator: target as Record<string, unknown>,
+              },
+              values: expression.valuesValue as Record<string, unknown>,
+            }
+          : {
+              kind: 'entity-mutation-command' as const,
+              action: 'delete' as const,
+              entityName,
+              target: {
+                kind: 'entity-ref' as const,
+                entityName,
+                locator: target as Record<string, unknown>,
+              },
+            };
+    try {
+      return {
+        ...parsed,
+        semanticDiagnostics: [],
+        execution: { family: 'graph.command', body: toGraphCommandRequest(command as never) },
+      };
+    } catch {
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Entity Command ${entityName}.${expression.action} cannot be represented by the Runtime Protocol.`,
+      );
+    }
+  }
+
+  if (!expression.terminal && !dialect.implicitMany) return { ...parsed, semanticDiagnostics: [] };
+
+  const entityName = expression.entity.text;
+  const root = application.entities.find(candidate => candidate.name === entityName);
   if (!root) {
+    const declarativeActionDrafts = [
+      ...(['create', 'update', 'delete'] as const).filter(action =>
+        application.commands?.some(command => command.actions.includes(action)),
+      ),
+      ...(application.operations?.length ? ['invoke'] : []),
+    ];
+    if (
+      dialect.id === 'declarative' &&
+      declarativeActionDrafts.some(action => action.startsWith(entityName))
+    )
+      return { ...parsed, semanticDiagnostics: [] };
     return {
       ...parsed,
       semanticDiagnostics: [
@@ -120,30 +275,32 @@ export const analyzeConsoleSyntax = (
   );
   if (semanticDiagnostics.length) return { ...parsed, semanticDiagnostics };
   const order = expression.orderBy;
+  const request: GraphReadRequest = {
+    version: expression.navigations.length ? 2 : 1,
+    kind: 'graph-read',
+    ...consoleTerminalRequest(
+      expression.terminal?.kind ?? 'many-member',
+      expression.limitValue?.value ?? options.limit ?? 25,
+    ),
+    selection: {
+      kind: 'selection',
+      entityName: entity.name,
+      expression: membership,
+    },
+    orderBy: order?.field
+      ? [
+          {
+            fieldName: order.field.text,
+            direction: order.direction?.text === dialect.directions[1] ? 'desc' : 'asc',
+          },
+        ]
+      : [],
+  };
   return {
     ...parsed,
     semanticDiagnostics,
-    request: {
-      version: expression.navigations.length ? 2 : 1,
-      kind: 'graph-read',
-      ...consoleTerminalRequest(
-        expression.terminal?.kind ?? 'many-member',
-        expression.limitValue?.value ?? options.limit ?? 25,
-      ),
-      selection: {
-        kind: 'selection',
-        entityName: entity.name,
-        expression: membership,
-      },
-      orderBy: order?.field
-        ? [
-            {
-              fieldName: order.field.text,
-              direction: order.direction?.text === dialect.directions[1] ? 'desc' : 'asc',
-            },
-          ]
-        : [],
-    },
+    execution: { family: 'graph.read', body: request },
+    request,
   };
 };
 

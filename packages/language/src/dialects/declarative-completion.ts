@@ -1,3 +1,5 @@
+import type { GraphSchemaDescriptor, GraphSchemaScalarType } from '@ontahi/core/data-graph';
+
 import {
   completionWordRange,
   consoleEntityCompletionItems,
@@ -7,8 +9,10 @@ import {
 } from '../console/completion.js';
 import { resolveConsoleContext } from '../console/context.js';
 import { completeConsoleFactory } from '../console/factories.js';
+import { completeStructuredInput } from '../console/structured-value.js';
 import type {
   SelectionLanguageEntityReflection,
+  SelectionLanguageFieldReflection,
   ConsoleLanguageApplicationReflection,
   ConsoleGraphReadSyntax,
   ConsoleLanguageCompletionItem,
@@ -19,6 +23,42 @@ import { completeSelectionDocument } from '../selection/assistance.js';
 import { clampDocumentPosition } from '../selection/cursor.js';
 
 import type { Dialect, AnalyzePrefix } from './contract.js';
+
+const locatorValue = (type: string, enumValues: readonly string[] | undefined) =>
+  type === 'number'
+    ? '0'
+    : type === 'boolean'
+      ? 'false'
+      : type === 'enum'
+        ? JSON.stringify(enumValues?.[0] ?? '')
+        : '""';
+
+const reflectedFieldDescriptor = (
+  field: SelectionLanguageFieldReflection,
+): GraphSchemaDescriptor => {
+  const descriptor: GraphSchemaDescriptor = field.reference
+    ? { kind: 'entity-ref', entityName: field.reference.entityName }
+    : {
+        kind: 'scalar',
+        type: (['id', 'string', 'number', 'boolean', 'date', 'json', 'enum'].includes(field.type)
+          ? field.type
+          : 'string') as GraphSchemaScalarType,
+        ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
+        ...(field.valueType ? { valueType: field.valueType } : {}),
+      };
+  return field.nullable ? { kind: 'nullable', item: descriptor } : descriptor;
+};
+
+const reflectedObjectDescriptor = (
+  entity: SelectionLanguageEntityReflection,
+  fields: readonly SelectionLanguageFieldReflection[],
+): GraphSchemaDescriptor => ({
+  kind: 'object',
+  role: 'entity',
+  entityName: entity.name,
+  unknownKeys: 'strict',
+  fields: Object.fromEntries(fields.map(field => [field.name, reflectedFieldDescriptor(field)])),
+});
 
 export const completeDeclarativeConsoleDocument = (
   document: string,
@@ -37,10 +77,178 @@ export const completeDeclarativeConsoleDocument = (
     ...range,
     items: items.filter(item => item.label.startsWith(prefix)),
   });
+  const actionItems: readonly ConsoleLanguageCompletionItem[] = [
+    ...(['create', 'update', 'delete'] as const)
+      .filter(action => application.commands?.some(command => command.actions.includes(action)))
+      .map(action => ({
+        label: action,
+        apply: `${action} `,
+        kind: 'keyword' as const,
+        detail: 'Entity Command',
+      })),
+    ...(application.operations?.length
+      ? [{ label: 'invoke', apply: 'invoke ', kind: 'keyword' as const, detail: 'Operation' }]
+      : []),
+  ];
   if (/^\s*\w*$/.test(document.slice(0, pos))) {
-    return result(consoleEntityCompletionItems(application));
+    return result([...actionItems, ...consoleEntityCompletionItems(application)]);
+  }
+  const commandPrefix = document.slice(0, range.from).match(/^\s*(create|update|delete)\s+$/);
+  if (commandPrefix) {
+    const action = commandPrefix[1] as 'create' | 'update' | 'delete';
+    return result(
+      consoleEntityCompletionItems({
+        ...application,
+        entities: application.entities.filter(entity =>
+          application.commands
+            ?.find(command => command.entityName === entity.name)
+            ?.actions.includes(action),
+        ),
+      }),
+    );
+  }
+  const commandTargetPrefix = document
+    .slice(0, range.from)
+    .match(/^\s*(create|update|delete)\s+([A-Za-z_$][\w$]*)\s+$/);
+  if (commandTargetPrefix) {
+    const action = commandTargetPrefix[1] as 'create' | 'update' | 'delete';
+    const entity = application.entities.find(
+      candidate => candidate.name === commandTargetPrefix[2],
+    );
+    const available = application.commands
+      ?.find(command => command.entityName === entity?.name)
+      ?.actions.includes(action);
+    if (!entity || !available) return result([]);
+    if (action === 'create')
+      return result([
+        {
+          label: '{…}',
+          apply: '{ }',
+          cursorOffset: 2,
+          kind: 'punctuation',
+          detail: 'Entity values',
+        },
+      ]);
+    const locator =
+      entity.fields.find(field => field.type === 'id') ??
+      entity.fields.find(field => field.name === 'id') ??
+      entity.fields[0];
+    if (!locator) return result([]);
+    const value = locatorValue(locator.type, locator.enumValues);
+    const apply = `{ ${locator.name}: ${value} }`;
+    return result([
+      {
+        label: `{ ${locator.name} }`,
+        apply,
+        ...(value === '""' ? { cursorOffset: apply.indexOf('""') + 1 } : {}),
+        kind: 'punctuation',
+        detail: `${entity.name} locator`,
+      },
+    ]);
+  }
+  const updateTarget = document
+    .slice(0, range.from)
+    .match(/^\s*update\s+([A-Za-z_$][\w$]*)\s+\{[\s\S]*\}\s+$/);
+  if (updateTarget && !/\swith\s/.test(document.slice(0, range.from))) {
+    return result([
+      {
+        label: 'with',
+        apply: 'with { }',
+        cursorOffset: 7,
+        kind: 'keyword',
+        detail: 'Entity update values',
+      },
+    ]);
+  }
+  if (/^\s*invoke\s+$/.test(document.slice(0, range.from))) {
+    const operationEntities = new Set(
+      application.operations?.map(operation => operation.entityName) ?? [],
+    );
+    return result(
+      consoleEntityCompletionItems({
+        ...application,
+        entities: application.entities.filter(entity => operationEntities.has(entity.name)),
+      }),
+    );
+  }
+  const operationPrefix = document.slice(0, range.from).match(/^\s*invoke\s+([A-Za-z_$][\w$]*)\.$/);
+  if (operationPrefix) {
+    return result(
+      (application.operations ?? [])
+        .filter(operation => operation.entityName === operationPrefix[1])
+        .map(operation => ({
+          label: operation.name,
+          apply: `${operation.name} `,
+          kind: 'member',
+          detail: operation.description ? `Operation · ${operation.description}` : 'Operation',
+        })),
+    );
+  }
+  const operationInputPrefix = document
+    .slice(0, range.from)
+    .match(/^\s*invoke\s+([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s+$/);
+  if (operationInputPrefix) {
+    const operation = application.operations?.find(
+      candidate =>
+        candidate.entityName === operationInputPrefix[1] &&
+        candidate.name === operationInputPrefix[2],
+    );
+    return result(
+      operation?.input && operation.input.kind !== 'void'
+        ? [
+            {
+              label: 'with',
+              apply: 'with { }',
+              cursorOffset: 7,
+              kind: 'keyword',
+              detail: 'Structured input',
+            },
+          ]
+        : [],
+    );
   }
   const syntax = dialect.parse(document).syntax.expression;
+  if (syntax?.kind === 'entity-mutation' && syntax.entity) {
+    const entity = application.entities.find(candidate => candidate.name === syntax.entity?.text);
+    if (entity) {
+      const locator =
+        entity.fields.find(field => field.type === 'id') ??
+        entity.fields.find(field => field.name === 'id') ??
+        entity.fields[0];
+      if (syntax.target && locator && pos > syntax.target.from && pos < syntax.target.to) {
+        const completion = completeStructuredInput(
+          document,
+          pos,
+          syntax.target.from,
+          reflectedObjectDescriptor(entity, [locator]),
+        );
+        if (completion) return completion;
+      }
+      if (syntax.values && pos > syntax.values.from && pos < syntax.values.to) {
+        const fields =
+          syntax.action === 'update'
+            ? entity.fields.filter(field => field.type !== 'id')
+            : entity.fields;
+        const completion = completeStructuredInput(
+          document,
+          pos,
+          syntax.values.from,
+          reflectedObjectDescriptor(entity, fields),
+        );
+        if (completion) return completion;
+      }
+    }
+  }
+  if (syntax?.kind === 'operation' && syntax.input && syntax.entity && syntax.operation) {
+    const operation = application.operations?.find(
+      candidate =>
+        candidate.entityName === syntax.entity?.text && candidate.name === syntax.operation?.text,
+    );
+    if (operation?.input) {
+      const completion = completeStructuredInput(document, pos, syntax.input.from, operation.input);
+      if (completion) return completion;
+    }
+  }
   const entity = resolveConsoleContext(syntax, application, pos);
   if (!syntax || !entity) return result([]);
   const factoryCompletion = completeConsoleFactory(

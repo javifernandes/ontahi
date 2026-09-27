@@ -60,4 +60,32 @@ describe('authoring syntax contrast', () => {
       view.destroy();
     }
   });
+
+  it('highlights Declarative Operations and structured input', () => {
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: 'invoke TodoList.createList with { name: "Inbox" }',
+        extensions: consoleExpressionExtensions(
+          {
+            entities: [{ name: 'TodoList', fields: [] }],
+            operations: [{ id: 'TodoList.createList', entityName: 'TodoList', name: 'createList' }],
+          },
+          { dialect: 'declarative', colorScheme: 'dark' },
+        ),
+      }),
+    });
+    try {
+      const text = (className: string) =>
+        [...view.dom.querySelectorAll(className)].map(node => node.textContent);
+      expect(text('.cm-ontahi-syntax-keyword')).toEqual(
+        expect.arrayContaining(['invoke', 'createList', 'with']),
+      );
+      expect(text('.cm-ontahi-syntax-entity')).toContain('TodoList');
+      expect(text('.cm-ontahi-syntax-field')).toContain('name');
+      expect(text('.cm-ontahi-syntax-string')).toContain('"Inbox"');
+    } finally {
+      view.destroy();
+    }
+  });
 });

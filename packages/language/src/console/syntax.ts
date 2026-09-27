@@ -22,6 +22,27 @@ import {
 } from '../selection/syntax.js';
 
 import { parseConsoleFactory } from './factories.js';
+import { parseStructuredValue } from './structured-value.js';
+
+const parsedStructuredValue = (document: string, node: SyntaxNode | null | undefined) => {
+  if (!node) return undefined;
+  try {
+    return parseStructuredValue(document.slice(node.from, node.to));
+  } catch {
+    return undefined;
+  }
+};
+
+const invalidStructuredValueRanges = (syntax: ConsoleDocumentSyntax): SelectionLanguageRange[] => {
+  const expression = syntax.expression;
+  if (expression?.kind === 'operation')
+    return expression.input && expression.inputValue === undefined ? [expression.input] : [];
+  if (expression?.kind !== 'entity-mutation') return [];
+  return [
+    expression.target && expression.targetValue === undefined ? expression.target : undefined,
+    expression.values && expression.valuesValue === undefined ? expression.values : undefined,
+  ].filter((range): range is SelectionLanguageRange => range !== undefined);
+};
 
 export const consoleTerminalToken = (terminal: SyntaxNode | null | undefined, document: string) => {
   for (const [nodeName, kind] of [
@@ -39,9 +60,76 @@ export const consoleTerminalToken = (terminal: SyntaxNode | null | undefined, do
 
 export const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocumentSyntax => {
   const consoleExpression = tree.topNode.getChild('ConsoleExpression');
+  const declarativeExpression = tree.topNode.getChild('DeclarativeConsoleExpression');
+  const operation =
+    consoleExpression?.getChild('OperationInvocationExpression') ??
+    declarativeExpression?.getChild('DeclarativeOperationInvocationExpression');
+  if (operation) {
+    const input = operation.getChild('StructuredValue');
+    return {
+      kind: 'console-document',
+      from: 0,
+      to: document.length,
+      expression: {
+        kind: 'operation',
+        ...rangeOf(operation),
+        steps: [],
+        factories: [],
+        navigations: [],
+        entity: tokenOf('entity-name', operation.getChild('EntityName'), document),
+        operation: tokenOf(
+          'operation-name',
+          operation.getChild('OperationName')?.getChild('Identifier') ?? null,
+          document,
+        ),
+        input: input ? rangeOf(input) : undefined,
+        inputValue: parsedStructuredValue(document, input),
+      },
+    };
+  }
+  const mutation =
+    consoleExpression?.getChild('EntityMutationExpression')?.firstChild ??
+    declarativeExpression?.firstChild;
+  const mutationAction = mutation?.name.includes('EntityCreate')
+    ? 'create'
+    : mutation?.name.includes('EntityUpdate')
+      ? 'update'
+      : mutation?.name.includes('EntityDelete')
+        ? 'delete'
+        : undefined;
+  if (mutation && mutationAction) {
+    const objects = mutation.getChildren('StructuredObject');
+    return {
+      kind: 'console-document',
+      from: 0,
+      to: document.length,
+      expression: {
+        kind: 'entity-mutation',
+        action: mutationAction,
+        ...rangeOf(mutation),
+        steps: [],
+        factories: [],
+        navigations: [],
+        entity: tokenOf('entity-name', mutation.getChild('EntityName'), document),
+        target: mutationAction === 'create' ? undefined : objects[0] && rangeOf(objects[0]),
+        targetValue:
+          mutationAction === 'create' ? undefined : parsedStructuredValue(document, objects[0]),
+        values:
+          mutationAction === 'delete'
+            ? undefined
+            : objects[mutationAction === 'create' ? 0 : 1] &&
+              rangeOf(objects[mutationAction === 'create' ? 0 : 1]),
+        valuesValue:
+          mutationAction === 'delete'
+            ? undefined
+            : parsedStructuredValue(document, objects[mutationAction === 'create' ? 0 : 1]),
+      },
+    };
+  }
   const graphRead =
     consoleExpression?.getChild('GraphReadExpression') ??
-    tree.topNode.getChild('DeclarativeGraphReadExpression');
+    declarativeExpression?.getChild('DeclarativeGraphReadExpression') ??
+    tree.topNode.getChild('GraphReadExpression');
   if (!graphRead) {
     return { kind: 'console-document', from: 0, to: document.length };
   }
@@ -166,6 +254,12 @@ export const consoleTerminalStructureDiagnostic = (expression: ConsoleGraphReadS
 export const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax) => {
   const expression = syntax.expression;
   if (!expression?.entity) return 'Expected an Entity name to begin the Console expression.';
+  if (expression.kind === 'operation')
+    return expression.operation
+      ? 'Expected a complete structured input and closing delimiter.'
+      : 'Expected an Operation name.';
+  if (expression.kind === 'entity-mutation')
+    return `Expected a complete ${expression.action} Command.`;
   for (const step of expression.steps) {
     if (step.kind !== 'filter') continue;
     if (!step.whereOpen) return 'Expected "(" after .where.';
@@ -180,6 +274,16 @@ export const consoleStructureDiagnosticMessage = (syntax: ConsoleDocumentSyntax)
 
 export const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
   const expression = syntax.expression;
+  if (expression?.kind === 'operation') return Boolean(expression.entity && expression.operation);
+  if (expression?.kind === 'entity-mutation')
+    return Boolean(
+      expression.entity &&
+      (expression.action === 'create'
+        ? expression.values
+        : expression.action === 'update'
+          ? expression.target && expression.values
+          : expression.target),
+    );
   return Boolean(
     expression?.entity &&
     expression.steps.every(step => step.kind !== 'filter' || (step.whereOpen && step.whereClose)) &&
@@ -215,10 +319,9 @@ export const parseConsoleSyntax = (
   if (document.trim().length === 0) return { syntax, syntaxDiagnostics: [] };
 
   const error = firstErrorRange(tree);
+  const graphRead = syntax.expression?.kind === 'graph-read' ? syntax.expression : undefined;
   const filters =
-    syntax.expression?.steps.filter(
-      (step): step is ConsoleFilterSyntax => step.kind === 'filter',
-    ) ?? [];
+    graphRead?.steps.filter((step): step is ConsoleFilterSyntax => step.kind === 'filter') ?? [];
   const invalidStrings = filters.flatMap(filter =>
     invalidStringRanges({
       kind: 'selection-document',
@@ -233,7 +336,14 @@ export const parseConsoleSyntax = (
     message: 'String literals must use valid JSON escaping.',
     ...range,
   }));
-  for (const factory of syntax.expression?.factories ?? [])
+  for (const range of invalidStructuredValueRanges(syntax))
+    syntaxDiagnostics.push({
+      channel: 'syntax',
+      code: 'console.syntax.invalid',
+      message: 'Structured values must use valid JSON values and escaping.',
+      ...range,
+    });
+  for (const factory of graphRead?.factories ?? [])
     if (factory.error)
       syntaxDiagnostics.push({
         from: factory.from,
@@ -266,7 +376,7 @@ export const parseConsoleSyntax = (
       code: isSelectionError ? 'selection.syntax.invalid' : 'console.syntax.invalid',
       message: isSelectionError
         ? syntaxDiagnosticMessage(document, selectionSyntax)
-        : dialect.syntaxError(syntax),
+        : dialect.syntaxError(document, syntax),
       ...error,
     });
   }

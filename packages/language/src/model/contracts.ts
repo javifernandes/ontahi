@@ -3,9 +3,12 @@ import type {
   SelectionFactoryDescriptor,
   SelectionPredicate,
   SelectionAst,
+  GraphCommandRequest,
   GraphReadRequest,
+  GraphSchemaDescriptor,
   EntityVariantDescriptor,
 } from '@ontahi/core/data-graph';
+import type { OperationProtocolRequestV1 } from '@ontahi/core/runtime/protocol';
 
 export type ConsoleFactorySyntax = SelectionLanguageRange & {
   readonly conjunction?: SelectionLanguageRange;
@@ -210,7 +213,25 @@ export type SelectionLanguageHover = SelectionLanguageRange & {
 
 export type ConsoleLanguageApplicationReflection = {
   readonly entities: readonly SelectionLanguageEntityReflection[];
+  readonly operations?: readonly ConsoleLanguageOperationReflection[];
+  readonly commands?: readonly {
+    readonly entityName: string;
+    readonly actions: readonly ('create' | 'update' | 'delete')[];
+  }[];
 };
+
+export type ConsoleLanguageOperationReflection = {
+  readonly id: string;
+  readonly entityName: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly input?: GraphSchemaDescriptor;
+};
+
+export type ConsoleRequest =
+  | { readonly family: 'graph.read'; readonly body: GraphReadRequest }
+  | { readonly family: 'graph.command'; readonly body: GraphCommandRequest }
+  | { readonly family: 'operation'; readonly body: OperationProtocolRequestV1 };
 
 export type ConsoleLanguageDiagnostic =
   | SelectionLanguageDiagnostic
@@ -225,7 +246,10 @@ export type ConsoleLanguageDiagnostic =
         | 'console.semantic.unsupported-limit'
         | 'console.semantic.invalid-order-field'
         | 'console.semantic.invalid-order-direction'
-        | 'console.semantic.unsupported-order';
+        | 'console.semantic.unsupported-order'
+        | 'console.semantic.unknown-operation'
+        | 'console.semantic.invalid-input'
+        | 'console.semantic.invalid-command';
       readonly message: string;
     });
 
@@ -255,7 +279,7 @@ export type ConsoleMembershipStep =
   | ConsoleFilterSyntax;
 
 export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
-  readonly kind: 'graph-read';
+  readonly kind: 'graph-read' | 'operation' | 'entity-mutation';
   /** Authoring stages in source order, before final read shaping. */
   readonly steps: readonly ConsoleMembershipStep[];
   readonly factories: readonly ConsoleFactorySyntax[];
@@ -278,11 +302,28 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   >;
   readonly terminalOpen?: SelectionLanguageToken<'open-parenthesis'>;
   readonly terminalClose?: SelectionLanguageToken<'close-parenthesis'>;
+  readonly action?: 'create' | 'update' | 'delete';
+  readonly operation?: SelectionLanguageToken<'operation-name'>;
+  readonly input?: SelectionLanguageRange;
+  readonly inputValue?: unknown;
+  readonly target?: SelectionLanguageRange;
+  readonly targetValue?: unknown;
+  readonly values?: SelectionLanguageRange;
+  readonly valuesValue?: unknown;
 };
+
+export type ConsoleOperationInvocationSyntax = ConsoleGraphReadSyntax & {
+  readonly kind: 'operation';
+};
+export type ConsoleEntityMutationSyntax = ConsoleGraphReadSyntax & {
+  readonly kind: 'entity-mutation';
+  readonly action: 'create' | 'update' | 'delete';
+};
+export type ConsoleExpressionSyntax = ConsoleGraphReadSyntax;
 
 export type ConsoleDocumentSyntax = SelectionLanguageRange & {
   readonly kind: 'console-document';
-  readonly expression?: ConsoleGraphReadSyntax;
+  readonly expression?: ConsoleExpressionSyntax;
 };
 
 export type ConsoleDocumentParseResult = {
@@ -292,6 +333,8 @@ export type ConsoleDocumentParseResult = {
 
 export type ConsoleDocumentAnalysis = ConsoleDocumentParseResult & {
   readonly semanticDiagnostics: readonly ConsoleLanguageDiagnostic[];
+  readonly execution?: ConsoleRequest;
+  /** @deprecated Graph Read compatibility projection. */
   readonly request?: GraphReadRequest;
 };
 
@@ -305,6 +348,8 @@ export type ConsoleDocumentAnalysisOptions = {
 export type ConsoleLanguageCompletionItem = {
   readonly label: string;
   readonly apply: string;
+  /** Cursor position relative to the inserted text after accepting the completion. */
+  readonly cursorOffset?: number;
   readonly kind: SelectionLanguageCompletionItem['kind'] | 'entity' | 'member';
   readonly detail: string;
 };

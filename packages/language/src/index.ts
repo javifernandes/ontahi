@@ -31,6 +31,8 @@ export type {
   SelectionLanguageSemanticClassification,
   SelectionLanguageHover,
   ConsoleLanguageApplicationReflection,
+  ConsoleLanguageOperationReflection,
+  ConsoleRequest,
   ConsoleLanguageDiagnostic,
   ConsoleOrderBySyntax,
   ConsoleGraphReadSyntax,

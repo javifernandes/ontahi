@@ -90,16 +90,53 @@ export const completeTsConsoleDocument = (
   if (beforeMember.length < range.from) {
     const prefix = analyzePrefix(`${beforeMember}.many()`);
     const context = resolveConsoleContext(prefix.syntax.expression, application);
-    if (prefix.request && prefix.syntax.expression && context)
+    if (prefix.request && prefix.syntax.expression && context) {
+      const commandActions = application.commands?.find(
+        command => command.entityName === context.name,
+      )?.actions;
+      const actions = [
+        ...(commandActions?.includes('create')
+          ? [
+              {
+                label: 'create',
+                apply: 'create({})',
+                kind: 'member' as const,
+                detail: 'Entity create Command',
+              },
+            ]
+          : []),
+        ...(commandActions?.some(action => action === 'update' || action === 'delete')
+          ? [
+              {
+                label: 'ref',
+                apply: 'ref({ id: "" })',
+                kind: 'member' as const,
+                detail: 'Entity update or delete Command',
+              },
+            ]
+          : []),
+        ...(application.operations ?? [])
+          .filter(operation => operation.entityName === context.name)
+          .map(operation => ({
+            label: operation.name,
+            apply: `${operation.name}(${operation.input?.kind === 'void' ? '' : '{}'})`,
+            kind: 'member' as const,
+            detail: operation.description ?? 'Operation',
+          })),
+      ];
       return {
         ...range,
-        items: consoleContinuationItems(
-          { ...prefix.syntax.expression, terminal: undefined },
-          context,
-          application,
-          dialect,
-        ).filter(item => item.label.startsWith(memberPrefix)),
+        items: [
+          ...consoleContinuationItems(
+            { ...prefix.syntax.expression, terminal: undefined },
+            context,
+            application,
+            dialect,
+          ),
+          ...actions,
+        ].filter(item => item.label.startsWith(memberPrefix)),
       };
+    }
   }
 
   return { ...range, items: [] };

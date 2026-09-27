@@ -33,7 +33,7 @@ export const convertConsoleDocument = (
   options: ConsoleDocumentAnalysisOptions = {},
 ): string | undefined => {
   const analysis = analyzeConsoleDocument(document, application, options);
-  if (!analysis.request || !analysis.syntax.expression) return undefined;
+  if (!analysis.execution || !analysis.syntax.expression) return undefined;
   return targetDialect === (options.dialect ?? 'ts')
     ? document
     : getDialect(targetDialect).print(document, analysis.syntax.expression);
