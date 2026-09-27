@@ -247,5 +247,31 @@ describe('Console actions', () => {
       analyzeConsoleDocument('update TodoList', application, { dialect: 'declarative' })
         .syntaxDiagnostics,
     ).toEqual([expect.objectContaining({ message: 'Expected a complete update expression.' })]);
+    const emptyLocator = 'update TodoList {  }';
+    expect(
+      completeConsoleDocument(emptyLocator, emptyLocator.indexOf('}'), application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'id', apply: 'id: ""', cursorOffset: 5 })]);
+    const emptyUpdate = 'update TodoList { id:"list-1" } with {  }';
+    expect(
+      completeConsoleDocument(
+        emptyUpdate,
+        emptyUpdate.indexOf('}', emptyUpdate.indexOf('with')),
+        application,
+        {
+          dialect: 'declarative',
+        },
+      ).items,
+    ).toEqual([expect.objectContaining({ label: 'name', apply: 'name: ""', cursorOffset: 7 })]);
+    const partialUpdate = 'update TodoList { id:"list-1" } with { na }';
+    expect(
+      completeConsoleDocument(
+        partialUpdate,
+        partialUpdate.indexOf(' }', partialUpdate.indexOf('with')),
+        application,
+        { dialect: 'declarative' },
+      ).items,
+    ).toEqual([expect.objectContaining({ label: 'name', apply: 'name: ""' })]);
   });
 });

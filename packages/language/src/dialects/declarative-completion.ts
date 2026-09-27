@@ -1,3 +1,5 @@
+import type { GraphSchemaDescriptor, GraphSchemaScalarType } from '@ontahi/core/data-graph';
+
 import {
   completionWordRange,
   consoleEntityCompletionItems,
@@ -10,6 +12,7 @@ import { completeConsoleFactory } from '../console/factories.js';
 import { completeStructuredInput } from '../console/structured-value.js';
 import type {
   SelectionLanguageEntityReflection,
+  SelectionLanguageFieldReflection,
   ConsoleLanguageApplicationReflection,
   ConsoleGraphReadSyntax,
   ConsoleLanguageCompletionItem,
@@ -29,6 +32,33 @@ const locatorValue = (type: string, enumValues: readonly string[] | undefined) =
       : type === 'enum'
         ? JSON.stringify(enumValues?.[0] ?? '')
         : '""';
+
+const reflectedFieldDescriptor = (
+  field: SelectionLanguageFieldReflection,
+): GraphSchemaDescriptor => {
+  const descriptor: GraphSchemaDescriptor = field.reference
+    ? { kind: 'entity-ref', entityName: field.reference.entityName }
+    : {
+        kind: 'scalar',
+        type: (['id', 'string', 'number', 'boolean', 'date', 'json', 'enum'].includes(field.type)
+          ? field.type
+          : 'string') as GraphSchemaScalarType,
+        ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
+        ...(field.valueType ? { valueType: field.valueType } : {}),
+      };
+  return field.nullable ? { kind: 'nullable', item: descriptor } : descriptor;
+};
+
+const reflectedObjectDescriptor = (
+  entity: SelectionLanguageEntityReflection,
+  fields: readonly SelectionLanguageFieldReflection[],
+): GraphSchemaDescriptor => ({
+  kind: 'object',
+  role: 'entity',
+  entityName: entity.name,
+  unknownKeys: 'strict',
+  fields: Object.fromEntries(fields.map(field => [field.name, reflectedFieldDescriptor(field)])),
+});
 
 export const completeDeclarativeConsoleDocument = (
   document: string,
@@ -178,6 +208,37 @@ export const completeDeclarativeConsoleDocument = (
     );
   }
   const syntax = dialect.parse(document).syntax.expression;
+  if (syntax?.kind === 'entity-mutation' && syntax.entity) {
+    const entity = application.entities.find(candidate => candidate.name === syntax.entity?.text);
+    if (entity) {
+      const locator =
+        entity.fields.find(field => field.type === 'id') ??
+        entity.fields.find(field => field.name === 'id') ??
+        entity.fields[0];
+      if (syntax.target && locator && pos > syntax.target.from && pos < syntax.target.to) {
+        const completion = completeStructuredInput(
+          document,
+          pos,
+          syntax.target.from,
+          reflectedObjectDescriptor(entity, [locator]),
+        );
+        if (completion) return completion;
+      }
+      if (syntax.values && pos > syntax.values.from && pos < syntax.values.to) {
+        const fields =
+          syntax.action === 'update'
+            ? entity.fields.filter(field => field.type !== 'id')
+            : entity.fields;
+        const completion = completeStructuredInput(
+          document,
+          pos,
+          syntax.values.from,
+          reflectedObjectDescriptor(entity, fields),
+        );
+        if (completion) return completion;
+      }
+    }
+  }
   if (syntax?.kind === 'operation' && syntax.input && syntax.entity && syntax.operation) {
     const operation = application.operations?.find(
       candidate =>
