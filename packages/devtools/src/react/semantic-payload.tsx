@@ -242,8 +242,25 @@ const ModelCommandPayloadVisual = ({ body }: { readonly body: RecordValue }) => 
           </div>
           {body.result.request === undefined ? null : (
             <div style={styles.semanticCard}>
-              <span style={styles.semanticLabel}>Canonical action</span>
+              <span style={styles.semanticLabel}>
+                {isRecord(body.result.request) && body.result.request.kind === 'graph-read'
+                  ? 'Canonical read'
+                  : 'Canonical action'}
+              </span>
               <DomainValue value={body.result.request} />
+            </div>
+          )}
+          {body.result.response === undefined ? null : (
+            <div style={styles.semanticCard}>
+              <span style={styles.semanticLabel}>Read result</span>
+              <DomainValue
+                value={
+                  isRecord(body.result.response) &&
+                  body.result.response.kind === 'graph-read-result'
+                    ? body.result.response.value
+                    : body.result.response
+                }
+              />
             </div>
           )}
         </div>

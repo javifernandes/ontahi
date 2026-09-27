@@ -1,4 +1,10 @@
-import { createEntityRef, Selection, toGraphCommandRequest } from '@ontahi/core/data-graph';
+import {
+  createEntityRef,
+  query,
+  Selection,
+  toGraphCommandRequest,
+  toGraphReadRequest,
+} from '@ontahi/core/data-graph';
 import {
   withInvocationContext,
   type ModelProvider,
@@ -75,6 +81,16 @@ const removeItem = (id = 'tea', title = 'buy tea') => ({
   }),
 });
 
+const readIncompleteItems = (mode: 'run' | 'count' = 'run') => {
+  const read = query(TodoItem)
+    .where(item => item.completed.eq(false))
+    .orderBy(item => item.title);
+  return {
+    status: 'resolved',
+    request: toGraphReadRequest(mode === 'run' ? read.limit(100) : read, mode),
+  };
+};
+
 describe('Todo canonical model requests', () => {
   it('deletes the named item while preserving lists and siblings', async () => {
     dataset().TodoList![0]!.name = 'Manuela';
@@ -136,6 +152,36 @@ describe('Todo canonical model requests', () => {
     expect(operation.input.properties).toHaveProperty('list');
     expect(operation.input.properties).not.toHaveProperty('listName');
     expect(catalog.context.lists[0].ref).toEqual(list());
+    expect(catalog.reads.map((read: { description: string }) => read.description)).toContain(
+      'List items, optionally filtered by completion, title, or list.',
+    );
+  });
+  it('executes canonical graph reads and returns actual authorized data', async () => {
+    bind(async () => readIncompleteItems());
+
+    await expect(submit('show incomplete items')).resolves.toEqual({
+      status: 'executed',
+      message: '2 matching items:\n• buy apples\n• buy tea',
+      request: readIncompleteItems().request,
+      response: {
+        kind: 'graph-read-result',
+        value: [
+          { id: 'other', list: list('list-2'), title: 'buy apples', completed: false },
+          { id: 'tea', list: list('list-1'), title: 'buy tea', completed: false },
+        ],
+      },
+    });
+    expect(dataset().TodoItem).toHaveLength(2);
+  });
+  it('uses the graph read result for counts instead of answering from prompt context', async () => {
+    bind(async () => readIncompleteItems('count'));
+
+    await expect(submit('how many incomplete items are there?')).resolves.toEqual({
+      status: 'executed',
+      message: '2 matching items.',
+      request: readIncompleteItems('count').request,
+      response: { kind: 'graph-read-result', value: 2 },
+    });
   });
   it('adds to a named list without UI selection', async () => {
     bind(async () => create('list-2'));

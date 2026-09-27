@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { field, graphSchema } from '../../data-graph/index.js';
 
 import type { ModelGraphCommandExposure } from './model-graph-command.js';
+import type { ModelGraphReadExposure } from './model-graph-read.js';
 import {
   interpretModelRequest,
   validateModelInvocation,
@@ -96,6 +97,7 @@ describe('model operation interpretation', () => {
 
     expect(Object.keys(JSON.parse(modelRequest!.context))).toEqual([
       'context',
+      'reads',
       'commands',
       'operations',
     ]);
@@ -115,6 +117,70 @@ describe('model operation interpretation', () => {
     });
     expect(modelRequest!.instructions).toContain(
       'For an editable property change that no advertised operation describes',
+    );
+  });
+  it('accepts an advertised canonical graph read and instructs the model to use it for data', async () => {
+    let modelRequest: ModelRequest | undefined;
+    const read: ModelGraphReadExposure = {
+      description: 'Read documents.',
+      request: graphSchema.object(
+        {
+          version: graphSchema.literal(1),
+          kind: graphSchema.literal('graph-read'),
+          mode: graphSchema.literal('run'),
+          selection: graphSchema.object(
+            {
+              kind: graphSchema.literal('selection'),
+              entityName: graphSchema.literal('Document'),
+              expression: graphSchema.object(
+                { kind: graphSchema.literal('all') },
+                { unknownKeys: 'strict' },
+              ),
+            },
+            { unknownKeys: 'strict' },
+          ),
+          orderBy: graphSchema.array(
+            graphSchema.object(
+              {
+                fieldName: graphSchema.literal('name'),
+                direction: graphSchema.union([
+                  graphSchema.literal('asc'),
+                  graphSchema.literal('desc'),
+                ]),
+              },
+              { unknownKeys: 'strict' },
+            ),
+          ),
+        },
+        { unknownKeys: 'strict' },
+      ),
+      validate: () => undefined,
+    };
+    const output = {
+      status: 'resolved',
+      request: {
+        version: 1,
+        kind: 'graph-read',
+        mode: 'run',
+        selection: { kind: 'selection', entityName: 'Document', expression: { kind: 'all' } },
+        orderBy: [],
+      },
+    } as const;
+
+    await expect(
+      run(output, {
+        reads: [read],
+        provider: {
+          generate: async (request: ModelRequest) => {
+            modelRequest = request;
+            return output;
+          },
+        },
+      }),
+    ).resolves.toEqual(output);
+    expect(JSON.parse(modelRequest!.context).reads[0].description).toBe('Read documents.');
+    expect(modelRequest!.instructions).toContain(
+      'Never answer those questions from the supplied context.',
     );
   });
   it('gives the interpreter one chance to repair a proposal rejected by scope validation', async () => {

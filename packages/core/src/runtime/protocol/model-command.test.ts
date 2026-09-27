@@ -155,6 +155,43 @@ describe('Runtime Protocol model.command family', () => {
     });
   });
 
+  it('parses a canonical graph read and its real protocol response', () => {
+    const readResponse = {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Found one item.',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: {
+            kind: 'selection',
+            entityName: 'TodoItem',
+            expression: {
+              kind: 'predicate',
+              fieldName: 'completed',
+              operator: 'eq',
+              value: false,
+            },
+          },
+          orderBy: [],
+        },
+        response: {
+          kind: 'graph-read-result',
+          value: [{ id: 'todo-1', title: 'Buy bread', completed: false }],
+          capabilities: { orderBy: ['title'] },
+        },
+      },
+    } as const;
+
+    expect(parseModelCommandProtocolResponse(readResponse)).toEqual({
+      success: true,
+      response: readResponse,
+    });
+  });
+
   it('rejects malformed response envelopes before inspecting the result', () => {
     expect(parseModelCommandProtocolResponse(null)).toMatchObject({ success: false });
   });
@@ -170,6 +207,67 @@ describe('Runtime Protocol model.command family', () => {
       version: 1,
       kind: 'model-command-result',
       result: { status: 'executed', message: 'Done', request: { kind: 'graph-command' } },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: { kind: 'selection', entityName: 'TodoItem', expression: { kind: 'all' } },
+          orderBy: [],
+        },
+      },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: { kind: 'invoke', operationId: 'Todo.help', input: {} },
+        response: { kind: 'graph-read-result', value: [] },
+      },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: { kind: 'selection', entityName: 'TodoItem', expression: { kind: 'all' } },
+          orderBy: [],
+        },
+        response: {
+          kind: 'graph-read-result',
+          value: [],
+          capabilities: { orderBy: [1] },
+        },
+      },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          selection: { kind: 'selection', entityName: 'TodoItem', expression: { kind: 'all' } },
+          orderBy: [],
+        },
+        response: { kind: 'graph-read-result', value: [], unexpected: true },
+      },
     },
     {
       version: 1,

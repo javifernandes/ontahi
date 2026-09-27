@@ -140,6 +140,61 @@ describe('SemanticPayload', () => {
       <SemanticPayload
         value={{
           version: 1,
+          kind: 'model-command-result',
+          result: {
+            status: 'executed',
+            message: 'Found one item.',
+            request: {
+              version: 1,
+              kind: 'graph-read',
+              mode: 'run',
+              selection: {
+                kind: 'selection',
+                entityName: 'TodoItem',
+                expression: {
+                  kind: 'predicate',
+                  fieldName: 'completed',
+                  operator: 'eq',
+                  value: false,
+                },
+              },
+              orderBy: [],
+            },
+            response: {
+              kind: 'graph-read-result',
+              value: [{ id: 'todo-1', title: 'Buy bread', completed: false }],
+            },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Found one item.')).toBeTruthy();
+    expect(screen.getByText('Canonical read')).toBeTruthy();
+    expect(screen.getByText('Read result')).toBeTruthy();
+    expect(screen.getByText('Buy bread')).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          version: 1,
+          kind: 'model-command-result',
+          result: {
+            status: 'executed',
+            message: 'Custom result.',
+            request: { kind: 'invoke', operationId: 'Todo.inspect', input: {} },
+            response: { kind: 'custom-result', value: 'raw' },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Canonical action')).toBeTruthy();
+    expect(screen.getByText('custom-result')).toBeTruthy();
+    expect(screen.getByText('raw')).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          version: 1,
           kind: 'model-command',
           text: 'help',
         }}

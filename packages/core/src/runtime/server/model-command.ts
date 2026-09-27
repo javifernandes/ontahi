@@ -1,13 +1,21 @@
 import {
   type GraphCommandDispatchResponse,
   type GraphCommandRequest,
+  type GraphReadDispatchResponse,
+  type GraphReadRequest,
 } from '../../data-graph/index.js';
+import { isJsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
 import type { ModelCommandRequest, ModelCommandResult } from '../contracts.js';
 import type { OperationInvokeRequest } from '../operation-invocation.js';
 
 import type { OntahiApplication } from './application.js';
 import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './model-graph-command.js';
+import {
+  resolveModelGraphRead,
+  type ModelGraphReadExposure,
+  type ModelGraphReadResult,
+} from './model-graph-read.js';
 import {
   interpretModelRequest,
   validateModelInvocation,
@@ -25,6 +33,7 @@ export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | '
 export type ModelCommandScope = {
   context: unknown;
   bindings: Readonly<Record<string, ModelCommandBinding>>;
+  reads?: readonly ModelGraphReadExposure[];
   commands?: readonly ModelGraphCommandExposure[];
   unresolved?: string;
 };
@@ -32,7 +41,12 @@ export type ModelCommandRuntime = {
   submit(
     request: ModelCommandRequest,
     signal: AbortSignal,
-  ): Promise<ModelCommandResult<GraphCommandRequest | OperationInvokeRequest>>;
+  ): Promise<
+    ModelCommandResult<
+      GraphReadRequest | GraphCommandRequest | OperationInvokeRequest,
+      ModelGraphReadResult
+    >
+  >;
 };
 
 /** Runtime entry point for graph instructions. The host supplies disclosure scope and bindings;
@@ -44,12 +58,17 @@ export const createModelCommandRuntime = ({
   scope,
   instructions,
   formatHelp,
+  dispatchRead,
   dispatchCommand,
 }: {
   application: OntahiApplication;
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
   scope: (request: ModelCommandRequest, signal: AbortSignal) => Promise<ModelCommandScope>;
+  dispatchRead?: (
+    request: GraphReadRequest,
+    signal: AbortSignal,
+  ) => Promise<GraphReadDispatchResponse>;
   dispatchCommand?: (
     request: GraphCommandRequest,
     signal: AbortSignal,
@@ -110,6 +129,7 @@ export const createModelCommandRuntime = ({
       const proposal = await interpretModelRequest({
         provider,
         operations: catalog(initial),
+        reads: initial.reads,
         commands: initial.commands,
         resolveOperation,
         context: initial.context,
@@ -133,12 +153,14 @@ export const createModelCommandRuntime = ({
             formatHelp?.(
               [
                 ...catalog(initial).map(op => op.description),
+                ...(initial.reads ?? []).map(read => read.description),
                 ...(initial.commands ?? []).map(command => command.description),
               ],
               request,
             ) ??
             `You can:\n${[
               ...catalog(initial).map(op => op.description),
+              ...(initial.reads ?? []).map(read => read.description),
               ...(initial.commands ?? []).map(command => command.description),
             ]
               .map(description => `• ${description}`)
@@ -146,6 +168,38 @@ export const createModelCommandRuntime = ({
         };
       if (proposal.status === 'unresolved')
         return { status: 'unresolved', message: proposal.reason };
+      if (proposal.request.kind === 'graph-read') {
+        if (!dispatchRead)
+          throw new ModelInterpretationError(
+            'command_unavailable',
+            'Graph reads are not configured.',
+          );
+        const fresh = await scope(request, signal);
+        if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
+        const exposure = resolveModelGraphRead(proposal.request, fresh.reads ?? []);
+        const reason = exposure.validate(proposal.request);
+        if (reason) return { status: 'unresolved', message: reason };
+        signal.throwIfAborted();
+        const response = await dispatchRead(proposal.request, signal);
+        if (response.kind !== 'graph-read-result' || !isJsonValue(response.value))
+          throw new ModelInterpretationError(
+            'command_execution_failed',
+            response.kind === 'protocol-error'
+              ? response.error.message
+              : 'The graph read was rejected.',
+          );
+        const readResponse: ModelGraphReadResult = {
+          kind: 'graph-read-result',
+          value: response.value,
+          ...(response.capabilities === undefined ? {} : { capabilities: response.capabilities }),
+        };
+        return {
+          status: 'executed',
+          message: exposure.message?.(readResponse, proposal.request) ?? 'Read completed.',
+          request: proposal.request,
+          response: readResponse,
+        };
+      }
       if (proposal.request.kind === 'graph-command') {
         if (!dispatchCommand)
           throw new ModelInterpretationError(

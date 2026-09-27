@@ -1,4 +1,11 @@
-import { parseGraphCommandRequest, type GraphCommandRequest } from '../../data-graph/index.js';
+import {
+  isGraphReadCapabilities,
+  parseGraphCommandRequest,
+  parseGraphReadRequest,
+  type GraphCommandRequest,
+  type GraphReadCapabilities,
+  type GraphReadRequest,
+} from '../../data-graph/index.js';
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
 import type { ModelCommandRequest, ModelCommandResult } from '../contracts.js';
@@ -32,7 +39,7 @@ export type ModelCommandProtocolResponse =
   | {
       readonly version: 1;
       readonly kind: 'model-command-result';
-      readonly result: ModelCommandResult<ModelCommandCanonicalRequest>;
+      readonly result: ModelCommandResult<ModelCommandCanonicalRequest, ModelCommandReadResponse>;
     }
   | {
       readonly version: 1;
@@ -46,23 +53,49 @@ export type ModelCommandProtocolResponseParseResult =
 
 const requestKeys = new Set(['version', 'kind', 'text', 'language', 'context']);
 const responseKeys = new Set(['version', 'kind', 'result', 'error']);
-const resultKeys = new Set(['status', 'message', 'request']);
+const resultKeys = new Set(['status', 'message', 'request', 'response']);
 const errorKeys = new Set(['code', 'message']);
+const readResponseKeys = new Set(['kind', 'value', 'capabilities']);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
   Object.keys(value).every(key => keys.has(key));
 
-export type ModelCommandCanonicalRequest = GraphCommandRequest | OperationInvokeRequest;
+export type ModelCommandCanonicalRequest =
+  | GraphReadRequest
+  | GraphCommandRequest
+  | OperationInvokeRequest;
+export type ModelCommandReadResponse = {
+  readonly kind: 'graph-read-result';
+  readonly value: JsonValue;
+  readonly capabilities?: GraphReadCapabilities;
+};
 
 const parseModelCommandCanonicalRequest = (
   value: unknown,
 ): ModelCommandCanonicalRequest | undefined => {
   if (!isRecord(value)) return undefined;
+  if (value.kind === 'graph-read') {
+    const parsed = parseGraphReadRequest(value);
+    return parsed.success ? parsed.request : undefined;
+  }
   if (value.kind === 'graph-command') {
     const parsed = parseGraphCommandRequest(value);
     return parsed.success ? parsed.request : undefined;
   }
   const parsed = parseOperationInvocationRequest(value);
   return parsed.success && parsed.request.kind === 'invoke' ? parsed.request : undefined;
+};
+
+const parseModelCommandReadResponse = (value: unknown): ModelCommandReadResponse | undefined => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, readResponseKeys) ||
+    value.kind !== 'graph-read-result' ||
+    !isJsonValue(value.value) ||
+    (value.capabilities !== undefined && !isGraphReadCapabilities(value.capabilities)) ||
+    !isJsonValue(value)
+  )
+    return undefined;
+  return cloneJson(value) as ModelCommandReadResponse;
 };
 
 const requestError = (
@@ -114,7 +147,7 @@ export const toModelCommandProtocolRequest = (
 };
 
 export const modelCommandProtocolResult = (
-  result: ModelCommandResult<ModelCommandCanonicalRequest>,
+  result: ModelCommandResult<ModelCommandCanonicalRequest, ModelCommandReadResponse>,
 ): ModelCommandProtocolResponse => ({ version: 1, kind: 'model-command-result', result });
 
 export const modelCommandProtocolError = (
@@ -154,7 +187,8 @@ export const parseModelCommandProtocolResponse = (
   ) {
     if (
       (value.result.status === 'answered' || value.result.status === 'unresolved') &&
-      value.result.request === undefined
+      value.result.request === undefined &&
+      value.result.response === undefined
     )
       return {
         success: true,
@@ -166,13 +200,26 @@ export const parseModelCommandProtocolResponse = (
       };
     if (value.result.status === 'executed') {
       const request = parseModelCommandCanonicalRequest(value.result.request);
-      if (request)
+      const response =
+        request?.kind === 'graph-read'
+          ? parseModelCommandReadResponse(value.result.response)
+          : undefined;
+      if (
+        request &&
+        ((request.kind === 'graph-read' && response !== undefined) ||
+          (request.kind !== 'graph-read' && value.result.response === undefined))
+      )
         return {
           success: true,
           response: {
             version: 1,
             kind: 'model-command-result',
-            result: { status: 'executed', message: value.result.message, request },
+            result: {
+              status: 'executed',
+              message: value.result.message,
+              request,
+              ...(response === undefined ? {} : { response }),
+            },
           },
         };
     }

@@ -388,3 +388,4 @@ export {
 export { submitModelCommandProtocol } from './model-command-protocol.js';
 
 export type { ModelGraphCommandExposure } from './model-graph-command.js';
+export type { ModelGraphReadExposure, ModelGraphReadResult } from './model-graph-read.js';

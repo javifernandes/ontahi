@@ -233,11 +233,13 @@ export type TaskRunListItem = TaskSnapshot & {
 
 /** Context is optional host-defined interaction context, never an authority credential. */
 export type ModelCommandRequest = { text: string; language?: string; context?: unknown };
-export type ModelCommandResult<TRequest = unknown> =
+export type ModelCommandResult<TRequest = unknown, TResponse = unknown> =
   | {
       status: 'executed';
       message: string;
-      /** Canonical graph command or operation invocation selected and executed by the runtime. */
+      /** Canonical graph read, graph command, or operation invocation selected by the runtime. */
       request: TRequest;
+      /** Canonical protocol response when the selected request produces data. */
+      response?: TResponse;
     }
   | { status: 'answered' | 'unresolved'; message: string };
