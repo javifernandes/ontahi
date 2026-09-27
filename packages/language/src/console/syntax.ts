@@ -358,7 +358,7 @@ export const parseConsoleSyntax = (
       code: isSelectionError ? 'selection.syntax.invalid' : 'console.syntax.invalid',
       message: isSelectionError
         ? syntaxDiagnosticMessage(document, selectionSyntax)
-        : dialect.syntaxError(syntax),
+        : dialect.syntaxError(document, syntax),
       ...error,
     });
   }

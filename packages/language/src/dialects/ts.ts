@@ -89,7 +89,7 @@ export const tsDialect: Dialect = {
   orderClause: order =>
     '.orderBy(' + order.fieldName + (order.direction === 'asc' ? '' : ', desc') + ')',
   limitClause: limit => '.limit(' + limit + ')',
-  syntaxError: consoleStructureDiagnosticMessage,
+  syntaxError: (_document, syntax) => consoleStructureDiagnosticMessage(syntax),
   unsupportedOrder: terminal => '.orderBy(...) cannot be combined with .' + terminal + '().',
   unsupportedLimit: '.limit(...) can only be combined with .many().',
 };

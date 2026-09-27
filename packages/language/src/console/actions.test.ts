@@ -8,7 +8,16 @@ import {
 import type { ConsoleLanguageApplicationReflection } from '../model/contracts.js';
 
 const application: ConsoleLanguageApplicationReflection = {
-  entities: [{ name: 'TodoList', fields: [], relations: [] }],
+  entities: [
+    {
+      name: 'TodoList',
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'name', type: 'string', nullable: false },
+      ],
+      relations: [],
+    },
+  ],
   commands: [{ entityName: 'TodoList', actions: ['create', 'update', 'delete'] }],
   operations: [
     {
@@ -191,7 +200,7 @@ describe('Console actions', () => {
       completeConsoleDocument('invoke TodoList.createList ', 27, application, {
         dialect: 'declarative',
       }).items,
-    ).toEqual([expect.objectContaining({ label: 'with', apply: 'with {}' })]);
+    ).toEqual([expect.objectContaining({ label: 'with', apply: 'with { }', cursorOffset: 7 })]);
     expect(
       completeConsoleDocument('invoke TodoList.clear ', 22, application, {
         dialect: 'declarative',
@@ -224,5 +233,19 @@ describe('Console actions', () => {
     expect(
       analyzeConsoleDocument('update', application, { dialect: 'declarative' }).semanticDiagnostics,
     ).toEqual([]);
+    expect(
+      completeConsoleDocument('update TodoList ', 16, application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: '{ id }', apply: '{ id: "" }', cursorOffset: 7 })]);
+    expect(
+      completeConsoleDocument('update TodoList { id: "list-1" } ', 34, application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'with', apply: 'with { }', cursorOffset: 7 })]);
+    expect(
+      analyzeConsoleDocument('update TodoList', application, { dialect: 'declarative' })
+        .syntaxDiagnostics,
+    ).toEqual([expect.objectContaining({ message: 'Expected a complete update expression.' })]);
   });
 });

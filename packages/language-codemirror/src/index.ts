@@ -204,7 +204,15 @@ const consoleCompletionSource =
       to: completion.to,
       options: completion.items.map(item => ({
         label: item.label,
-        apply: item.apply,
+        apply:
+          item.cursorOffset === undefined
+            ? item.apply
+            : (view: EditorView, _completion: Completion, _from: number, _to: number) => {
+                view.dispatch({
+                  changes: { from: completion.from, to: completion.to, insert: item.apply },
+                  selection: { anchor: completion.from + item.cursorOffset! },
+                });
+              },
         type: completionType(item.kind),
         detail: item.detail,
         ...(item.kind === 'entity' || item.kind === 'field' ? { boost: 10 } : {}),

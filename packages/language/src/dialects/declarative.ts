@@ -69,6 +69,13 @@ const renderCompletion: Dialect['renderCompletion'] = (candidate: ConsoleCandida
   }
 };
 
+const syntaxError: Dialect['syntaxError'] = (document, _syntax) => {
+  const action = /^\s*(create|update|delete|invoke)\b/.exec(document)?.[1];
+  return ['create', 'update', 'delete', 'invoke'].includes(action ?? '')
+    ? `Expected a complete ${action} expression.`
+    : 'Expected Entity, optional by factory argument (and by factory argument)*, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).';
+};
+
 export const declarativeDialect: Dialect = {
   id: 'declarative',
   parser: parser.configure({ top: 'DeclarativeConsoleDocument' }),
@@ -91,8 +98,7 @@ export const declarativeDialect: Dialect = {
   orderClause: order =>
     ' order by ' + order.fieldName + (order.direction === 'asc' ? '' : ' descending'),
   limitClause: limit => ' limit ' + limit,
-  syntaxError: () =>
-    'Expected Entity, optional by factory argument (and by factory argument)*, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).',
+  syntaxError,
   unsupportedOrder: terminal => 'order by cannot be combined with ' + terminal + '.',
   unsupportedLimit: 'limit can only be combined with many (the default terminal).',
 };

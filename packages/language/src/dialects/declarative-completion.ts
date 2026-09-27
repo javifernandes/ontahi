@@ -21,6 +21,15 @@ import { clampDocumentPosition } from '../selection/cursor.js';
 
 import type { Dialect, AnalyzePrefix } from './contract.js';
 
+const locatorValue = (type: string, enumValues: readonly string[] | undefined) =>
+  type === 'number'
+    ? '0'
+    : type === 'boolean'
+      ? 'false'
+      : type === 'enum'
+        ? JSON.stringify(enumValues?.[0] ?? '')
+        : '""';
+
 export const completeDeclarativeConsoleDocument = (
   document: string,
   position: number,
@@ -68,6 +77,59 @@ export const completeDeclarativeConsoleDocument = (
       }),
     );
   }
+  const commandTargetPrefix = document
+    .slice(0, range.from)
+    .match(/^\s*(create|update|delete)\s+([A-Za-z_$][\w$]*)\s+$/);
+  if (commandTargetPrefix) {
+    const action = commandTargetPrefix[1] as 'create' | 'update' | 'delete';
+    const entity = application.entities.find(
+      candidate => candidate.name === commandTargetPrefix[2],
+    );
+    const available = application.commands
+      ?.find(command => command.entityName === entity?.name)
+      ?.actions.includes(action);
+    if (!entity || !available) return result([]);
+    if (action === 'create')
+      return result([
+        {
+          label: '{…}',
+          apply: '{ }',
+          cursorOffset: 2,
+          kind: 'punctuation',
+          detail: 'Entity values',
+        },
+      ]);
+    const locator =
+      entity.fields.find(field => field.type === 'id') ??
+      entity.fields.find(field => field.name === 'id') ??
+      entity.fields[0];
+    if (!locator) return result([]);
+    const value = locatorValue(locator.type, locator.enumValues);
+    const apply = `{ ${locator.name}: ${value} }`;
+    return result([
+      {
+        label: `{ ${locator.name} }`,
+        apply,
+        ...(value === '""' ? { cursorOffset: apply.indexOf('""') + 1 } : {}),
+        kind: 'punctuation',
+        detail: `${entity.name} locator`,
+      },
+    ]);
+  }
+  const updateTarget = document
+    .slice(0, range.from)
+    .match(/^\s*update\s+([A-Za-z_$][\w$]*)\s+\{[\s\S]*\}\s+$/);
+  if (updateTarget && !/\swith\s/.test(document.slice(0, range.from))) {
+    return result([
+      {
+        label: 'with',
+        apply: 'with { }',
+        cursorOffset: 7,
+        kind: 'keyword',
+        detail: 'Entity update values',
+      },
+    ]);
+  }
   if (/^\s*invoke\s+$/.test(document.slice(0, range.from))) {
     const operationEntities = new Set(
       application.operations?.map(operation => operation.entityName) ?? [],
@@ -103,7 +165,15 @@ export const completeDeclarativeConsoleDocument = (
     );
     return result(
       operation?.input && operation.input.kind !== 'void'
-        ? [{ label: 'with', apply: 'with {}', kind: 'keyword', detail: 'Structured input' }]
+        ? [
+            {
+              label: 'with',
+              apply: 'with { }',
+              cursorOffset: 7,
+              kind: 'keyword',
+              detail: 'Structured input',
+            },
+          ]
         : [],
     );
   }

@@ -348,6 +348,8 @@ export type ConsoleDocumentAnalysisOptions = {
 export type ConsoleLanguageCompletionItem = {
   readonly label: string;
   readonly apply: string;
+  /** Cursor position relative to the inserted text after accepting the completion. */
+  readonly cursorOffset?: number;
   readonly kind: SelectionLanguageCompletionItem['kind'] | 'entity' | 'member';
   readonly detail: string;
 };

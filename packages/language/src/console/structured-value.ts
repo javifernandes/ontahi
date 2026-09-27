@@ -180,6 +180,11 @@ const descriptorDetail = (descriptor: GraphSchemaDescriptor): string => {
   return value.kind.replace(/^.*\./, '');
 };
 
+const placeholderCursorOffset = (value: string): number | undefined => {
+  const emptyString = value.indexOf('""');
+  return emptyString < 0 ? undefined : emptyString + 1;
+};
+
 const rootObjectSegment = (source: string) => {
   let depth = 0;
   let quoted = false;
@@ -224,7 +229,17 @@ export const completeStructuredInput = (
       from,
       to: position,
       items: candidate.startsWith(prefix)
-        ? [{ label: candidate, apply: candidate, kind: 'value', detail: descriptorDetail(field) }]
+        ? [
+            {
+              label: candidate,
+              apply: candidate,
+              ...(placeholderCursorOffset(candidate) === undefined
+                ? {}
+                : { cursorOffset: placeholderCursorOffset(candidate) }),
+              kind: 'value',
+              detail: descriptorDetail(field),
+            },
+          ]
         : [],
     };
   }
@@ -243,6 +258,11 @@ export const completeStructuredInput = (
         ([name, field]): ConsoleLanguageCompletionItem => ({
           label: name,
           apply: `${name}: ${descriptorValue(field)}`,
+          ...(placeholderCursorOffset(`${name}: ${descriptorValue(field)}`) === undefined
+            ? {}
+            : {
+                cursorOffset: placeholderCursorOffset(`${name}: ${descriptorValue(field)}`),
+              }),
           kind: 'field',
           detail: descriptorDetail(field),
         }),
