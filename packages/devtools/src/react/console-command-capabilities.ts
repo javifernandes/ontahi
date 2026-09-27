@@ -10,7 +10,11 @@ import {
 } from '@ontahi/core/runtime/protocol';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
-type Entry = { actions?: readonly EntityMutationCommandAction[]; error?: string };
+type Entry = {
+  actions?: readonly EntityMutationCommandAction[];
+  selectionActions?: readonly ('update' | 'delete')[];
+  error?: string;
+};
 type Discovery = {
   transport: RuntimeTransport<any>;
   targetsKey: string;
@@ -70,7 +74,10 @@ export const useConsoleCommandCapabilities = (
             !isGraphCommandCapabilities(response.capabilities)
           )
             throw new Error('This server did not return Graph Command capabilities.');
-          publish(name, { actions: response.capabilities.entityMutations });
+          publish(name, {
+            actions: response.capabilities.entityMutations,
+            selectionActions: response.capabilities.selectionMutations,
+          });
         })
         .catch((error: unknown) =>
           publish(name, {
@@ -94,8 +101,5 @@ export const useConsoleCommandCapabilities = (
       ? current
       : undefined;
 
-  return useCallback(
-    (entityName: string) => matching?.entries.get(entityName)?.actions,
-    [matching],
-  );
+  return useCallback((entityName: string) => matching?.entries.get(entityName), [matching]);
 };

@@ -13,7 +13,7 @@ import {
 import type { GraphCommandSpec } from './command.js';
 import {
   isEntityMutationCommandDiagnostic,
-  isExactEntityMutationDelta,
+  isEntityMutationDeltaForCommand,
   type EntityMutationCommand,
   type EntityMutationCommandDiagnostic,
   type EntityMutationCommandExecutionRuntime,
@@ -194,7 +194,7 @@ const readEntityMutationResponseValue = (
   }
   if (
     response.kind !== 'graph-command-result' ||
-    !isExactEntityMutationDelta(response.value, command) ||
+    !isEntityMutationDeltaForCommand(response.value, command) ||
     !isJsonValue(response.value)
   ) {
     throw invalidResponse('Entity Mutation Command');

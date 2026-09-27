@@ -7,6 +7,7 @@ import { completeTsConsoleDocument } from './ts-completion.js';
 
 const readParser = parser.configure({ top: 'TsGraphReadDocument' });
 const startsAsGraphRead = (document: string) =>
+  !/\.(?:update|delete)\b/.test(document) &&
   /^\s*[A-Za-z_]\w*\s*\.\s*(?:by|where|orderBy|limit|first|one|many|count|exists)(?:\b|\s*\()/.test(
     document,
   );
@@ -18,7 +19,11 @@ const print = (document: string, expression: ConsoleGraphReadSyntax): string => 
     return `${entity}.${expression.operation!.text}(${expression.input ? value(expression.inputValue) : ''})`;
   if (expression.kind === 'entity-mutation') {
     if (expression.action === 'create') return `${entity}.create(${value(expression.valuesValue)})`;
-    const ref = `${entity}.ref(${value(expression.targetValue)})`;
+    const filter = expression.steps.find(step => step.kind === 'filter');
+    const ref =
+      filter?.kind === 'filter' && filter.selection
+        ? `${entity}.where(${document.slice(filter.selection.from, filter.selection.to)})`
+        : `${entity}.ref(${value(expression.targetValue)})`;
     return expression.action === 'update'
       ? `${ref}.update(${value(expression.valuesValue)})`
       : `${ref}.delete()`;

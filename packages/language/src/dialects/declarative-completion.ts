@@ -79,7 +79,13 @@ export const completeDeclarativeConsoleDocument = (
   });
   const actionItems: readonly ConsoleLanguageCompletionItem[] = [
     ...(['create', 'update', 'delete'] as const)
-      .filter(action => application.commands?.some(command => command.actions.includes(action)))
+      .filter(action =>
+        application.commands?.some(
+          command =>
+            command.actions.includes(action) ||
+            (action !== 'create' && command.selectionActions?.includes(action)),
+        ),
+      )
       .map(action => ({
         label: action,
         apply: `${action} `,
@@ -100,9 +106,12 @@ export const completeDeclarativeConsoleDocument = (
       consoleEntityCompletionItems({
         ...application,
         entities: application.entities.filter(entity =>
-          application.commands
-            ?.find(command => command.entityName === entity.name)
-            ?.actions.includes(action),
+          application.commands?.some(
+            command =>
+              command.entityName === entity.name &&
+              (command.actions.includes(action) ||
+                (action !== 'create' && command.selectionActions?.includes(action))),
+          ),
         ),
       }),
     );
@@ -115,10 +124,11 @@ export const completeDeclarativeConsoleDocument = (
     const entity = application.entities.find(
       candidate => candidate.name === commandTargetPrefix[2],
     );
-    const available = application.commands
-      ?.find(command => command.entityName === entity?.name)
-      ?.actions.includes(action);
-    if (!entity || !available) return result([]);
+    const capabilities = application.commands?.find(command => command.entityName === entity?.name);
+    const refAvailable = capabilities?.actions.includes(action);
+    const selectionAvailable =
+      action !== 'create' && capabilities?.selectionActions?.includes(action);
+    if (!entity || (!refAvailable && !selectionAvailable)) return result([]);
     if (action === 'create')
       return result([
         {
@@ -137,13 +147,28 @@ export const completeDeclarativeConsoleDocument = (
     const value = locatorValue(locator.type, locator.enumValues);
     const apply = `{ ${locator.name}: ${value} }`;
     return result([
-      {
-        label: `{ ${locator.name} }`,
-        apply,
-        ...(value === '""' ? { cursorOffset: apply.indexOf('""') + 1 } : {}),
-        kind: 'punctuation',
-        detail: `${entity.name} locator`,
-      },
+      ...(refAvailable
+        ? [
+            {
+              label: `{ ${locator.name} }`,
+              apply,
+              ...(value === '""' ? { cursorOffset: apply.indexOf('""') + 1 } : {}),
+              kind: 'punctuation' as const,
+              detail: `${entity.name} locator`,
+            },
+          ]
+        : []),
+      ...(selectionAvailable
+        ? [
+            {
+              label: 'where',
+              apply: 'where { }',
+              cursorOffset: 8,
+              kind: 'keyword' as const,
+              detail: `${entity.name} Selection`,
+            },
+          ]
+        : []),
     ]);
   }
   const updateTarget = document
@@ -236,6 +261,40 @@ export const completeDeclarativeConsoleDocument = (
           reflectedObjectDescriptor(entity, fields),
         );
         if (completion) return completion;
+      }
+      const filter = syntax.steps.find(step => step.kind === 'filter');
+      if (filter?.kind === 'filter') {
+        const from = filter.whereOpen?.to ?? filter.where?.to;
+        const to = filter.whereClose?.from ?? filter.to;
+        if (from !== undefined && pos >= from && pos <= to) {
+          const completion = completeSelectionDocument(
+            document.slice(from, to),
+            pos - from,
+            entity,
+          );
+          return {
+            from: from + completion.from,
+            to: from + completion.to,
+            items: completion.items,
+          };
+        }
+      }
+      if (
+        syntax.action === 'update' &&
+        filter?.kind === 'filter' &&
+        filter.selection &&
+        !syntax.values &&
+        pos >= filter.to
+      ) {
+        return result([
+          {
+            label: 'with',
+            apply: 'with { }',
+            cursorOffset: 7,
+            kind: 'keyword',
+            detail: 'Entity update values',
+          },
+        ]);
       }
     }
   }

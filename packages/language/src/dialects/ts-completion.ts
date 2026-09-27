@@ -94,6 +94,9 @@ export const completeTsConsoleDocument = (
       const commandActions = application.commands?.find(
         command => command.entityName === context.name,
       )?.actions;
+      const selectionActions = application.commands?.find(
+        command => command.entityName === context.name,
+      )?.selectionActions;
       const actions = [
         ...(commandActions?.includes('create')
           ? [
@@ -112,6 +115,26 @@ export const completeTsConsoleDocument = (
                 apply: 'ref({ id: "" })',
                 kind: 'member' as const,
                 detail: 'Entity update or delete Command',
+              },
+            ]
+          : []),
+        ...(selectionActions?.includes('update')
+          ? [
+              {
+                label: 'update',
+                apply: 'update({})',
+                kind: 'member' as const,
+                detail: 'Update the selected Entities',
+              },
+            ]
+          : []),
+        ...(selectionActions?.includes('delete')
+          ? [
+              {
+                label: 'delete',
+                apply: 'delete()',
+                kind: 'member' as const,
+                detail: 'Delete the selected Entities',
               },
             ]
           : []),

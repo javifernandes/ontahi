@@ -247,7 +247,30 @@ the exact added/removed delta. The result is explicitly `applied` or `not-applie
 status before reading `delta` or `diagnostic`. See [Relations](03-relations.md) for direct,
 many-to-many, conditional, and Reaction lifecycles.
 
-The remote graph bridge exposes policy-scoped Relationship Commands and exact Entity Mutation
-Commands. It does not transport arbitrary Selection Commands, bulk mutation, insert/upsert, or an
-open-ended provider Command. Writes outside the exact policy algebra remain named Operations until
-Ontahí can preserve their affected fields, row scope, invariants, and reconciliation semantics.
+The remote graph bridge exposes policy-scoped Relationship Commands, exact Entity Mutation
+Commands, and explicitly authorized Selection update/delete Commands. Selection permissions name
+the allowed predicate Fields and operators independently for each action, and their result shape
+must include the Entity identity so every affected row can be reconciled:
+
+```ts
+{
+  entity: Tag,
+  scope: 'all',
+  actions: {
+    update: {
+      fields: ['name', 'color'],
+      result: ['id', 'name', 'color'],
+      selection: { fields: { name: ['eq'] } },
+    },
+    delete: {
+      result: ['id', 'name', 'color'],
+      selection: { fields: { name: ['eq'] } },
+    },
+  },
+}
+```
+
+Exact-action permission does not imply Selection-action permission. The bridge does not transport
+insert-many, upsert, relation-image Selection mutations, or an open-ended provider Command. Writes
+outside this policy algebra remain named Operations until Ontahí can preserve their affected
+fields, row scope, invariants, and reconciliation semantics.

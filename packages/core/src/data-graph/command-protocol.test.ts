@@ -96,6 +96,55 @@ describe('data graph Relationship Command protocol', () => {
     ).toMatchObject({ success: true, command });
   });
 
+  it('round-trips a version 3 Entity Selection mutation', () => {
+    const graph = defineSchoolGraph();
+    const target = {
+      kind: 'selection' as const,
+      entityName: 'Course' as const,
+      expression: {
+        kind: 'predicate' as const,
+        fieldName: 'name',
+        operator: 'eq' as const,
+        value: 'Important',
+      },
+    };
+    const command = mutateEntity(graph.Course).deleteSelection(target);
+    const request = toGraphCommandRequest(command);
+
+    expect(request).toEqual({ version: 3, kind: 'graph-command', command });
+    expect(parseGraphCommandRequest(JSON.parse(JSON.stringify(request)))).toEqual({
+      success: true,
+      request,
+    });
+    expect(
+      resolveGraphCommandRequest(request, { entities: [graph.Course, graph.Student] }),
+    ).toEqual({ success: true, request, command });
+  });
+
+  it('rejects Selection mutation targets outside version 3 and invalid Selection Fields', () => {
+    const graph = defineSchoolGraph();
+    const command = mutateEntity(graph.Course).deleteSelection({
+      kind: 'selection',
+      entityName: 'Course',
+      expression: {
+        kind: 'predicate',
+        fieldName: 'missing',
+        operator: 'eq',
+        value: 'Important',
+      },
+    });
+    const request = toGraphCommandRequest(command);
+
+    expect(parseGraphCommandRequest({ ...request, version: 2 })).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_request' } },
+    });
+    expect(resolveGraphCommandRequest(request, { entities: [graph.Course] })).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_selection' } },
+    });
+  });
+
   it('drops unknown envelope and command keys', () => {
     const graph = defineSchoolGraph();
     const command = relationship(
@@ -144,7 +193,7 @@ describe('data graph Relationship Command protocol', () => {
     { name: 'non-object request', request: null, code: 'invalid_request' },
     {
       name: 'unsupported version',
-      request: { version: 3, kind: 'graph-command', command: {} },
+      request: { version: 4, kind: 'graph-command', command: {} },
       code: 'unsupported_version',
     },
     {

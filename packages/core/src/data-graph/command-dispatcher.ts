@@ -17,11 +17,12 @@ import {
 import {
   entityMutationCommandDiagnosticFromError,
   isEntityMutationCommandDiagnostic,
-  isExactEntityMutationDelta,
+  isEntityMutationDeltaForCommand,
   type EntityMutationCommand,
   type EntityMutationCommandDiagnostic,
   type EntityMutationDelta,
 } from './entity-mutation-command.js';
+import { getEntityIdentityLocator, isEntityRef } from './ref/index.js';
 import {
   isRelationshipCommandDiagnostic,
   isRelationshipCommandResult,
@@ -34,6 +35,7 @@ import type {
   OrderedRelationshipCommand,
   RelationshipCommand,
 } from './relationship-command.js';
+import type { SelectionExpression, SelectionPredicate } from './selection-ast.js';
 
 export type RelationshipCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
   readonly entity: TEntity;
@@ -62,6 +64,13 @@ type EntityMutationPolicyFields<TEntity extends AnyEntityDefinition> = readonly 
 > &
   string)[];
 
+type EntityMutationSelectionPolicy<TEntity extends AnyEntityDefinition> = {
+  readonly fields: Partial<
+    Record<StoredFieldName<TEntity['fields']> & string, readonly SelectionPredicate['operator'][]>
+  >;
+  readonly allowAll?: true;
+};
+
 export type EntityMutationCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> =
   {
     readonly entity: TEntity;
@@ -75,10 +84,12 @@ export type EntityMutationCommandPolicy<TEntity extends AnyEntityDefinition = An
         readonly fields: EntityMutationPolicyFields<TEntity>;
         readonly if?: EntityMutationPolicyFields<TEntity>;
         readonly result: EntityMutationPolicyFields<TEntity>;
+        readonly selection?: EntityMutationSelectionPolicy<TEntity>;
       };
       readonly delete?: {
         readonly if?: EntityMutationPolicyFields<TEntity>;
         readonly result: EntityMutationPolicyFields<TEntity>;
+        readonly selection?: EntityMutationSelectionPolicy<TEntity>;
       };
     };
   };
@@ -202,6 +213,37 @@ const validateEntityMutationActionDeclaration = (
   }
 
   const resultFields = declaration.result;
+  const selection = declaration.selection;
+  if (selection !== undefined) {
+    if (action === 'create' || !isRecord(selection) || !isRecord(selection.fields)) {
+      throw new Error(
+        `Entity Mutation Command policy ${policy.entity.name}.${action} requires Selection permissions only for update/delete.`,
+      );
+    }
+    const validOperators = new Set(['eq', 'in', 'isNull', 'lte', 'lt', 'gte', 'gt']);
+    for (const [fieldName, operators] of Object.entries(selection.fields)) {
+      const field = policy.entity.fields[fieldName];
+      if (
+        !field ||
+        isDerivedFieldDefinition(field) ||
+        !Array.isArray(operators) ||
+        operators.length === 0 ||
+        operators.some(operator => !validOperators.has(String(operator)))
+      )
+        throw new Error(
+          `Entity Mutation Command policy ${policy.entity.name}.${action} has invalid Selection permissions.`,
+        );
+    }
+    if (Object.keys(selection.fields).length === 0 && selection.allowAll !== true)
+      throw new Error(
+        `Entity Mutation Command policy ${policy.entity.name}.${action} requires a Selection Field or allowAll.`,
+      );
+    const identity = getEntityIdentityLocator(policy.entity)?.locator.fields ?? [];
+    if (identity.some(fieldName => !resultFields.includes(fieldName)))
+      throw new Error(
+        `Entity Mutation Command policy ${policy.entity.name}.${action} Selection results must include identity Fields.`,
+      );
+  }
   const effectiveConditionFields = conditionFields ?? [];
   const fields = [...mutationFields, ...effectiveConditionFields, ...resultFields];
   if (
@@ -218,6 +260,23 @@ const validateEntityMutationActionDeclaration = (
       `Entity Mutation Command policy ${policy.entity.name}.${action} must allow stored mutation and result Fields exactly once per allowlist.`,
     );
   }
+};
+
+const selectionAllowed = (
+  expression: SelectionExpression,
+  policy: { readonly fields: Record<string, readonly string[]>; readonly allowAll?: true },
+): boolean => {
+  if (expression.kind === 'none') return true;
+  if (expression.kind === 'all') return policy.allowAll === true;
+  if (expression.kind === 'relation-image') return false;
+  if (expression.kind === 'references')
+    return expression.refs.every(ref =>
+      Object.keys(ref.locator).every(fieldName => policy.fields[fieldName]?.includes('eq')),
+    );
+  if (expression.kind === 'and' || expression.kind === 'or')
+    return expression.operands.every(operand => selectionAllowed(operand, policy));
+  if (expression.kind === 'not') return selectionAllowed(expression.operand, policy);
+  return policy.fields[expression.fieldName]?.includes(expression.operator) ?? false;
 };
 
 const validateEntityMutationPolicy = (policy: AnyEntityMutationCommandPolicy) => {
@@ -368,7 +427,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
           })),
         ]),
       ) as EntityMutationDelta;
-      if (!isExactEntityMutationDelta(projected, command) || !isJsonValue(projected)) {
+      if (!isEntityMutationDeltaForCommand(projected, command) || !isJsonValue(projected)) {
         throw new Error('Entity Mutation Command delta must be exact, valid, and JSON-safe.');
       }
       return { kind: 'graph-command-result', value: cloneJson(projected) };
@@ -401,6 +460,12 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         : undefined;
     const commandConditionFields =
       command.action !== 'create' && command.if ? Object.keys(command.if) : [];
+    const selectionDeclaration =
+      isRecord(declaration) && 'selection' in declaration && isRecord(declaration.selection)
+        ? declaration.selection
+        : undefined;
+    const selectionTarget =
+      command.action !== 'create' && !isEntityRef(command.target) ? command.target : undefined;
     const allowed =
       isRecord(declaration) &&
       (command.action === 'delete' ||
@@ -408,7 +473,16 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
           Object.keys(command.values).every(fieldName => declarationFields.includes(fieldName)))) &&
       (commandConditionFields.length === 0 ||
         (conditionFields !== undefined &&
-          commandConditionFields.every(fieldName => conditionFields.includes(fieldName))));
+          commandConditionFields.every(fieldName => conditionFields.includes(fieldName)))) &&
+      (!selectionTarget ||
+        (selectionDeclaration !== undefined &&
+          selectionAllowed(
+            selectionTarget.expression,
+            selectionDeclaration as {
+              fields: Record<string, readonly string[]>;
+              allowAll?: true;
+            },
+          )));
     if (!allowed) {
       return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
     }
@@ -534,6 +608,16 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
 
     if (parsed.request.kind === 'graph-command-capabilities') {
       const policy = entityMutationPolicyByEntity.get(parsed.request.entityName);
+      const selectionMutations: ('update' | 'delete')[] = policy
+        ? Object.entries(policy.actions).flatMap(([action, declaration]) =>
+            (action === 'update' || action === 'delete') &&
+            declaration &&
+            'selection' in declaration &&
+            declaration.selection
+              ? [action]
+              : [],
+          )
+        : [];
       return {
         kind: 'graph-command-capabilities-result',
         entityName: parsed.request.entityName,
@@ -541,6 +625,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
           entityMutations: policy
             ? (Object.keys(policy.actions) as ('create' | 'update' | 'delete')[])
             : [],
+          ...(selectionMutations.length ? { selectionMutations } : {}),
         },
       };
     }

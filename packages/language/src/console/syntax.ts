@@ -87,18 +87,51 @@ export const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocu
       },
     };
   }
-  const mutation =
+  const directMutation =
     consoleExpression?.getChild('EntityMutationExpression')?.firstChild ??
     declarativeExpression?.firstChild;
-  const mutationAction = mutation?.name.includes('EntityCreate')
+  const selectionMutation = consoleExpression
+    ?.getChild('GraphReadExpression')
+    ?.getChild('SelectionMutationTerminal');
+  const mutation = selectionMutation?.parent ?? directMutation;
+  const mutationAction = directMutation?.name.includes('EntityCreate')
     ? 'create'
-    : mutation?.name.includes('EntityUpdate')
+    : directMutation?.name.includes('EntityUpdate') || selectionMutation?.getChild('Update')
       ? 'update'
-      : mutation?.name.includes('EntityDelete')
+      : directMutation?.name.includes('EntityDelete') || selectionMutation?.getChild('Delete')
         ? 'delete'
         : undefined;
   if (mutation && mutationAction) {
-    const objects = mutation.getChildren('StructuredObject');
+    const objects = directMutation
+      ? mutation.getChildren('StructuredObject')
+      : (selectionMutation?.getChildren('StructuredObject') ?? []);
+    const where =
+      mutation.getChildren('WhereClause').at(-1) ??
+      mutation.getChild('DeclarativeMutationWhereClause');
+    const selection = expressionSyntax(where?.getChild('OrExpression') ?? null, document);
+    const filter: ConsoleFilterSyntax | undefined = where
+      ? {
+          kind: 'filter',
+          ...rangeOf(where),
+          where: tokenOf('where-member', where.getChild('Where'), document),
+          whereOpen: tokenOf(
+            'open-parenthesis',
+            where.getChild('OpenParen') ?? where.getChild('OpenBrace'),
+            document,
+          ),
+          selection,
+          whereClose: tokenOf(
+            'close-parenthesis',
+            where.getChild('CloseParen') ?? where.getChild('CloseBrace'),
+            document,
+          ),
+        }
+      : undefined;
+    const targetObject = mutationAction === 'create' || where ? undefined : objects[0];
+    const valuesObject =
+      mutationAction === 'delete'
+        ? undefined
+        : objects[mutationAction === 'create' || where ? 0 : 1];
     return {
       kind: 'console-document',
       from: 0,
@@ -107,22 +140,14 @@ export const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocu
         kind: 'entity-mutation',
         action: mutationAction,
         ...rangeOf(mutation),
-        steps: [],
+        steps: filter ? [filter] : [],
         factories: [],
         navigations: [],
         entity: tokenOf('entity-name', mutation.getChild('EntityName'), document),
-        target: mutationAction === 'create' ? undefined : objects[0] && rangeOf(objects[0]),
-        targetValue:
-          mutationAction === 'create' ? undefined : parsedStructuredValue(document, objects[0]),
-        values:
-          mutationAction === 'delete'
-            ? undefined
-            : objects[mutationAction === 'create' ? 0 : 1] &&
-              rangeOf(objects[mutationAction === 'create' ? 0 : 1]),
-        valuesValue:
-          mutationAction === 'delete'
-            ? undefined
-            : parsedStructuredValue(document, objects[mutationAction === 'create' ? 0 : 1]),
+        target: targetObject && rangeOf(targetObject),
+        targetValue: parsedStructuredValue(document, targetObject),
+        values: valuesObject && rangeOf(valuesObject),
+        valuesValue: parsedStructuredValue(document, valuesObject),
       },
     };
   }
@@ -281,8 +306,11 @@ export const consoleStructureComplete = (syntax: ConsoleDocumentSyntax) => {
       (expression.action === 'create'
         ? expression.values
         : expression.action === 'update'
-          ? expression.target && expression.values
-          : expression.target),
+          ? (expression.target ||
+              expression.steps.some(step => step.kind === 'filter' && step.selection)) &&
+            expression.values
+          : expression.target ||
+            expression.steps.some(step => step.kind === 'filter' && step.selection)),
     );
   return Boolean(
     expression?.entity &&

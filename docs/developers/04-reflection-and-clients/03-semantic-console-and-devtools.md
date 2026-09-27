@@ -2,7 +2,7 @@
 
 Explorer projects the application model. Devtools inspects a running client's use of that model:
 the reads it sends, the observations it receives and the state held in its local graph cache.
-The \concept{Semantic Console} authors reads, exact Entity Commands and Operation invocations over
+The \concept{Semantic Console} authors reads, Entity Commands and Operation invocations over
 the same reflected application model. It is not a second runtime or an unrestricted JavaScript
 evaluator.
 
@@ -98,6 +98,22 @@ create TodoList { id: "list-1", name: "Inbox", color: "#496f5d" }
 update TodoList { id: "list-1" } with { name: "Today" }
 delete TodoList { id: "list-1" }
 ```
+
+When the runtime advertises an independently authorized Selection mutation, the Console also
+accepts the same predicate language used by reads:
+
+```text
+Tag.where(name = "Important").update({ color: "#dd6658" })
+Tag.where(name = "Important").delete()
+
+update Tag where { name = "Important" } with { color: "#dd6658" }
+delete Tag where { name = "Important" }
+```
+
+These Commands may affect zero, one, or many Entities. Their result contains one mutation fact per
+affected Entity, including its identity, so Devtools reconciles every returned row in the client
+cache. The server policy separately allowlists Selection actions, predicate Fields, and operators;
+permission to update or delete an exact Ref does not authorize a Selection mutation.
 
 These expressions lower to the ordinary versioned `graph.command` body. The object after `ref` is
 an Entity locator; it is not a previously fetched browser object. Relationship Commands, ordered

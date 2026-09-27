@@ -22,6 +22,7 @@ import type {
   RelationshipEndpointSelection,
 } from './relationship-command.js';
 import { safeParseGraphSchema } from './schema.js';
+import type { SelectionAst } from './selection-ast.js';
 
 type AnyGraphCommand =
   | EntityMutationCommand
@@ -42,7 +43,16 @@ export type GraphCommandRequestV2 = {
   readonly command: AnyGraphCommand;
 };
 
-export type GraphCommandRequest = GraphCommandRequestV1 | GraphCommandRequestV2;
+export type GraphCommandRequestV3 = {
+  readonly version: 3;
+  readonly kind: 'graph-command';
+  readonly command: AnyGraphCommand;
+};
+
+export type GraphCommandRequest =
+  | GraphCommandRequestV1
+  | GraphCommandRequestV2
+  | GraphCommandRequestV3;
 
 export type EntityMutationCommandAction = 'create' | 'update' | 'delete';
 
@@ -55,6 +65,7 @@ export type GraphCommandCapabilitiesRequestV1 = {
 
 export type GraphCommandCapabilities = {
   readonly entityMutations: readonly EntityMutationCommandAction[];
+  readonly selectionMutations?: readonly ('update' | 'delete')[];
 };
 
 export type GraphCommandCapabilitiesResult = {
@@ -128,7 +139,10 @@ export const isGraphCommandCapabilities = (value: unknown): value is GraphComman
   Array.isArray(value.entityMutations) &&
   value.entityMutations.every(
     action => action === 'create' || action === 'update' || action === 'delete',
-  );
+  ) &&
+  (value.selectionMutations === undefined ||
+    (Array.isArray(value.selectionMutations) &&
+      value.selectionMutations.every(action => action === 'update' || action === 'delete')));
 
 export const parseGraphCommandFamilyRequest = (
   value: unknown,
@@ -161,10 +175,14 @@ export const parseGraphCommandFamilyRequest = (
 
 export const toGraphCommandRequest = (command: AnyGraphCommand): GraphCommandRequest => {
   const request: GraphCommandRequest =
-    command.kind === 'ordered-relationship-command' ||
-    (command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command))
-      ? { version: 2, kind: 'graph-command', command }
-      : { version: 1, kind: 'graph-command', command };
+    command.kind === 'entity-mutation-command' &&
+    command.action !== 'create' &&
+    !isEntityRef(command.target)
+      ? { version: 3, kind: 'graph-command', command }
+      : command.kind === 'ordered-relationship-command' ||
+          (command.kind === 'entity-mutation-command' && hasEntityMutationCondition(command))
+        ? { version: 2, kind: 'graph-command', command }
+        : { version: 1, kind: 'graph-command', command };
   if (!isJsonValue(request)) throw new Error('Data graph Command request must be JSON-safe.');
   return cloneJson(request);
 };
@@ -179,7 +197,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
       ),
     };
   }
-  if (value.version !== 1 && value.version !== 2) {
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3) {
     return {
       success: false,
       error: graphCommandProtocolError(
@@ -200,14 +218,20 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
 
   const command = value.command;
   if (command.kind === 'entity-mutation-command') {
+    const selectionTarget =
+      command.action !== 'create' && isRecord(command.target) && command.target.kind === 'selection'
+        ? command.target
+        : undefined;
     if (
       typeof command.entityName !== 'string' ||
       (command.action !== 'create' && command.action !== 'update' && command.action !== 'delete') ||
       (command.action !== 'delete' && !isRecord(command.values)) ||
-      (command.action !== 'create' && !isEntityRef(command.target)) ||
+      (command.action !== 'create' && !isEntityRef(command.target) && !selectionTarget) ||
+      (selectionTarget !== undefined && value.version !== 3) ||
       (command.if !== undefined &&
-        (value.version !== 2 ||
+        ((value.version !== 2 && value.version !== 3) ||
           command.action === 'create' ||
+          selectionTarget !== undefined ||
           !isRecord(command.if) ||
           Object.keys(command.if).length === 0)) ||
       !isJsonValue(value)
@@ -234,7 +258,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
               kind: 'entity-mutation-command',
               action: 'update',
               entityName: command.entityName,
-              target: command.target as AnyEntityRef,
+              target: (selectionTarget ?? command.target) as AnyEntityRef | SelectionAst,
               values: command.values as Record<string, unknown>,
               ...(command.if === undefined ? {} : { if: command.if as Record<string, unknown> }),
             }
@@ -242,7 +266,7 @@ export const parseGraphCommandRequest = (value: unknown): GraphCommandRequestPar
               kind: 'entity-mutation-command',
               action: 'delete',
               entityName: command.entityName,
-              target: command.target as AnyEntityRef,
+              target: (selectionTarget ?? command.target) as AnyEntityRef | SelectionAst,
               ...(command.if === undefined ? {} : { if: command.if as Record<string, unknown> }),
             };
     return {
@@ -765,8 +789,18 @@ const resolveEntityMutationCommand = (
     return resolutionFailure('unknown_entity', `Unknown data graph Entity: ${command.entityName}.`);
   }
   if ('target' in command) {
-    const targetError = validateRef(command.target, entity, 'target');
-    if (targetError) return { success: false, error: targetError };
+    if (isEntityRef(command.target)) {
+      const targetError = validateRef(command.target, entity, 'target');
+      if (targetError) return { success: false, error: targetError };
+    } else {
+      if (command.target.entityName !== entity.name)
+        return resolutionFailure(
+          'invalid_selection',
+          `Entity mutation Selection must target ${entity.name}.`,
+        );
+      const targetError = validateGraphReadSelection(command.target.expression, entity);
+      if (targetError) return resolutionFailure('invalid_selection', targetError.error.message);
+    }
   }
   if (command.action === 'delete') {
     const condition = resolveEntityMutationCondition(command, entity);

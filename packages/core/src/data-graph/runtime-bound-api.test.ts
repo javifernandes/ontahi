@@ -163,7 +163,9 @@ describe('runtime-bound data graph api', () => {
     const mutationDelta = (command: EntityMutationCommand): EntityMutationDelta => {
       const fact = {
         entityName: command.entityName,
-        ...('target' in command ? { ref: command.target } : {}),
+        ...('target' in command && command.target.kind === 'entity-ref'
+          ? { ref: command.target }
+          : {}),
         values: 'values' in command ? command.values : {},
       };
       return {

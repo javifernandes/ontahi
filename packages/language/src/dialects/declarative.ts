@@ -12,9 +12,14 @@ const print = (document: string, expression: ConsoleGraphReadSyntax): string => 
     return `invoke ${entity}.${expression.operation!.text}${expression.input ? ` with ${value(expression.inputValue)}` : ''}`;
   if (expression.kind === 'entity-mutation') {
     if (expression.action === 'create') return `create ${entity} ${value(expression.valuesValue)}`;
+    const filter = expression.steps.find(step => step.kind === 'filter');
+    const target =
+      filter?.kind === 'filter' && filter.selection
+        ? `where ${document.slice(filter.selection.from, filter.selection.to)}`
+        : value(expression.targetValue);
     if (expression.action === 'update')
-      return `update ${entity} ${value(expression.targetValue)} with ${value(expression.valuesValue)}`;
-    return `delete ${entity} ${value(expression.targetValue)}`;
+      return `update ${entity} ${target} with ${value(expression.valuesValue)}`;
+    return `delete ${entity} ${target}`;
   }
   const field = expression.orderBy?.field?.text;
   const descending = ['desc', 'descending'].includes(expression.orderBy?.direction?.text ?? '');

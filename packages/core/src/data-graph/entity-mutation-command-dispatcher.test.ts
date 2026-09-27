@@ -79,6 +79,41 @@ describe('Entity Mutation Command dispatcher', () => {
     });
   });
 
+  it('advertises Selection mutation capabilities separately from exact mutations', async () => {
+    const graph = defineBookGraph();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            update: {
+              fields: ['title'],
+              result: ['id', 'title'],
+              selection: { fields: { title: ['eq'] } },
+            },
+            delete: { result: ['id'], selection: { fields: { published: ['eq'] } } },
+          },
+        },
+      ],
+      executeEntityMutation: vi.fn(),
+    });
+
+    await expect(
+      dispatch(
+        { version: 1, kind: 'graph-command-capabilities', entityName: 'Book' },
+        { authority: undefined },
+      ),
+    ).resolves.toEqual({
+      kind: 'graph-command-capabilities-result',
+      entityName: 'Book',
+      capabilities: {
+        entityMutations: ['update', 'delete'],
+        selectionMutations: ['update', 'delete'],
+      },
+    });
+  });
+
   it('validates explicit scope and stored Field allowlists at registration', () => {
     const graph = defineBookGraph();
     const executeEntityMutation = vi.fn();
@@ -217,6 +252,99 @@ describe('Entity Mutation Command dispatcher', () => {
         authority: undefined,
       }),
     ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    expect(executeEntityMutation).not.toHaveBeenCalled();
+  });
+
+  it('authorizes Selection mutations by Field and operator and returns every changed fact', async () => {
+    const client = defineBookGraph();
+    const server = defineBookGraph();
+    const target = {
+      kind: 'selection' as const,
+      entityName: 'Book' as const,
+      expression: {
+        kind: 'predicate' as const,
+        fieldName: 'published',
+        operator: 'eq' as const,
+        value: false,
+      },
+    };
+    const command = mutateEntity(client.Book).updateSelection(target, { title: 'Revised' });
+    const delta = {
+      created: [],
+      updated: [
+        {
+          entityName: 'Book',
+          ref: createEntityRef(server.Book, { id: 'book-1' }),
+          values: { id: 'book-1', title: 'Revised', published: false },
+        },
+        {
+          entityName: 'Book',
+          ref: createEntityRef(server.Book, { id: 'book-2' }),
+          values: { id: 'book-2', title: 'Revised', published: false },
+        },
+      ],
+      deleted: [],
+    };
+    const executeEntityMutation = vi.fn(async () => delta);
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: server.Book,
+          scope: 'all',
+          actions: {
+            update: {
+              fields: ['title'],
+              result: ['id', 'title', 'published'],
+              selection: { fields: { published: ['eq'] } },
+            },
+          },
+        },
+      ],
+      executeEntityMutation,
+    });
+
+    await expect(
+      dispatch(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toEqual({ kind: 'graph-command-result', value: delta });
+    expect(executeEntityMutation).toHaveBeenCalledWith(
+      mutateEntity(server.Book).updateSelection(target, { title: 'Revised' }),
+      { authority: undefined },
+    );
+  });
+
+  it('denies Selection mutations unless their Field and operator are explicitly allowed', async () => {
+    const graph = defineBookGraph();
+    const executeEntityMutation = vi.fn();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            delete: {
+              result: ['id'],
+              selection: { fields: { title: ['eq'] } },
+            },
+          },
+        },
+      ],
+      executeEntityMutation,
+    });
+
+    for (const expression of [
+      { kind: 'predicate' as const, fieldName: 'published', operator: 'eq' as const, value: false },
+      { kind: 'predicate' as const, fieldName: 'title', operator: 'in' as const, values: ['A'] },
+      { kind: 'all' as const },
+    ]) {
+      const command = mutateEntity(graph.Book).deleteSelection({
+        kind: 'selection',
+        entityName: 'Book',
+        expression,
+      });
+      await expect(
+        dispatch(toGraphCommandRequest(command), { authority: undefined }),
+      ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    }
     expect(executeEntityMutation).not.toHaveBeenCalled();
   });
 

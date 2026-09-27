@@ -120,7 +120,7 @@ describe('Runtime Protocol Data Graph families', () => {
     },
     {
       family: 'graph.command',
-      body: { version: 3, kind: 'graph-command', command: {} },
+      body: { version: 4, kind: 'graph-command', command: {} },
       familyCode: 'unsupported_version',
     },
   ] as const)('fails closed for an unsupported $family body version', input => {

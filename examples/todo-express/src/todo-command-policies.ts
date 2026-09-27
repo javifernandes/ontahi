@@ -37,8 +37,12 @@ export const todoGraphCommandPolicies = [
       update: {
         fields: ['name', 'color'],
         result: ['id', 'name', 'color'],
+        selection: { fields: { name: ['eq'] } },
       },
-      delete: { result: ['id', 'name', 'color'] },
+      delete: {
+        result: ['id', 'name', 'color'],
+        selection: { fields: { name: ['eq'] } },
+      },
     },
   },
 ] as const;
