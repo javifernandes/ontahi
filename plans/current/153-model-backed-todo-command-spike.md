@@ -361,7 +361,7 @@ example UI. Fetch disconnects and WebSocket session closure propagate cancellati
 transport-neutral dispatcher to model generation; the Next.js adapter forwards its request signal
 through the same contract.
 
-Validation for this checkpoint: 1,168 Core tests, 46 Runtime Express tests, 51 Runtime Next.js
+Validation for this checkpoint: 1,174 Core tests, 47 Runtime Express tests, 51 Runtime Next.js
 tests, 147 Todo tests, focused Devtools Activity and transport-settings tests, affected package
 typechecks/lint/builds, and the Todo production build. Socket-owning suites were run with local
 network permission after the restricted sandbox rejected `listen(127.0.0.1)`.

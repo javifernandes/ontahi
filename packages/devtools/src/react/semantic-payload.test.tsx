@@ -135,6 +135,36 @@ describe('SemanticPayload', () => {
     expect(screen.getByText('executed')).toBeTruthy();
     expect(screen.getByText('Canonical action')).toBeTruthy();
     expect(screen.getByText('TodoList.rename')).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          version: 1,
+          kind: 'model-command',
+          text: 'help',
+        }}
+      />,
+    );
+    expect(screen.getByText('Runtime default.')).toBeTruthy();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{
+          version: 1,
+          kind: 'model-command-result',
+          result: { status: 'answered', message: 'You can create and rename lists.' },
+        }}
+      />,
+    );
+    expect(screen.getByText('answered')).toBeTruthy();
+    expect(screen.queryByText('Canonical action')).toBeNull();
+
+    ui.rerender(
+      <SemanticPayload
+        value={{ version: 1, kind: 'model-command-result', result: 'invalid result' }}
+      />,
+    );
+    expect(screen.getByText('invalid result')).toBeTruthy();
   });
 
   it('renders generic scalars, arrays, records, and graph read results', () => {

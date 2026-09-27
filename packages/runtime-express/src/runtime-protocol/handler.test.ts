@@ -87,6 +87,50 @@ describe('Express Runtime Protocol adapter', () => {
     expect(response.off).toHaveBeenCalledWith('close', close);
   });
 
+  it('does not abort dispatch after the HTTP response has already ended', async () => {
+    let close: (() => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const response = {
+      writableEnded: true,
+      status: vi.fn(() => response),
+      json: vi.fn(() => response),
+      on: vi.fn((event: string, listener: () => void) => {
+        if (event === 'close') close = listener;
+        return response;
+      }),
+      off: vi.fn(() => response),
+    } as unknown as Response;
+    const dispatcher: RuntimeProtocolDispatcher<undefined> = async (
+      _request,
+      _context,
+      options,
+    ) => {
+      signal = options?.signal;
+      return runtimeProtocolError('dispatch_unavailable', 'Already sent.');
+    };
+    const handler = createExpressRuntimeProtocolHandler({
+      dispatcher,
+      context: () => {
+        close?.();
+        return undefined;
+      },
+    }) as unknown as (request: Request, response: Response) => Promise<void>;
+
+    await handler(
+      {
+        body: createRuntimeProtocolRequest({
+          id: 'ended-1',
+          family: 'durable.operation',
+          body: toDurableOperationProtocolRequest(run),
+        }),
+      } as Request,
+      response,
+    );
+
+    expect(signal?.aborted).toBe(false);
+    expect(response.off).toHaveBeenCalledWith('close', close);
+  });
+
   it('dispatches a Durable inspection with receiver-derived context', async () => {
     const inspect = vi.fn(
       async (

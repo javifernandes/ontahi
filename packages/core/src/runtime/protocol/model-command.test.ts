@@ -6,6 +6,7 @@ import {
   modelCommandProtocolError,
   modelCommandProtocolResult,
   modelCommandRuntimeProtocolFamily,
+  parseModelCommandProtocolRequest,
   parseModelCommandProtocolResponse,
   toModelCommandProtocolRequest,
 } from './index.js';
@@ -46,6 +47,15 @@ describe('Runtime Protocol model.command family', () => {
         }),
       ),
     ).toMatchObject({ success: false, error: { error: { code: 'invalid_family_request' } } });
+  });
+
+  it('rejects a non-object family body before reading its version', () => {
+    expect(parseModelCommandProtocolRequest(null)).toEqual({
+      success: false,
+      error: {
+        error: { code: 'invalid_request', message: 'Model command must be an object.' },
+      },
+    });
   });
 
   it('parses executed canonical actions and family errors', () => {
@@ -101,12 +111,65 @@ describe('Runtime Protocol model.command family', () => {
     });
   });
 
+  it('parses message-only outcomes and canonical graph commands', () => {
+    for (const status of ['answered', 'unresolved'] as const) {
+      const response = {
+        version: 1,
+        kind: 'model-command-result',
+        result: {
+          status,
+          message: status === 'answered' ? 'You can create lists.' : 'Which list?',
+        },
+      } as const;
+      expect(parseModelCommandProtocolResponse(response)).toEqual({
+        success: true,
+        response,
+      });
+    }
+
+    const graphResponse = {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'List deleted.',
+        request: {
+          version: 1,
+          kind: 'graph-command',
+          command: {
+            kind: 'entity-mutation-command',
+            action: 'delete',
+            entityName: 'TodoList',
+            target: {
+              kind: 'entity-ref',
+              entityName: 'TodoList',
+              locator: { id: 'list-1' },
+            },
+          },
+        },
+      },
+    } as const;
+    expect(parseModelCommandProtocolResponse(graphResponse)).toEqual({
+      success: true,
+      response: graphResponse,
+    });
+  });
+
+  it('rejects malformed response envelopes before inspecting the result', () => {
+    expect(parseModelCommandProtocolResponse(null)).toMatchObject({ success: false });
+  });
+
   it.each([
     { version: 1, kind: 'model-command-result', result: { status: 'executed', message: 'Done' } },
     {
       version: 1,
       kind: 'model-command-result',
       result: { status: 'executed', message: 'Done', request: { kind: 'invented-command' } },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: { status: 'executed', message: 'Done', request: { kind: 'graph-command' } },
     },
     {
       version: 1,
