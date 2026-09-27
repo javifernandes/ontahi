@@ -223,6 +223,44 @@ describe('Entity Mutation Command dispatcher', () => {
     ).toThrow('Duplicate Entity Mutation Command policy for Entity Book');
   });
 
+  it('validates Selection mutation policy declarations at registration', () => {
+    const graph = defineBookGraph();
+    const executeEntityMutation = vi.fn();
+    const create = (actions: unknown) =>
+      createGraphCommandDispatcher({
+        policies: [{ entity: graph.Book, scope: 'all', actions } as never],
+        executeEntityMutation,
+      });
+
+    expect(() =>
+      create({
+        create: { fields: ['id'], result: ['id'], selection: { fields: { id: ['eq'] } } },
+      }),
+    ).toThrow('requires Selection permissions only for update/delete');
+    for (const selection of [
+      { fields: { missing: ['eq'] } },
+      { fields: { label: ['eq'] } },
+      { fields: { title: [] } },
+      { fields: { title: ['matches'] } },
+    ]) {
+      expect(() => create({ update: { fields: ['title'], result: ['id'], selection } })).toThrow(
+        'has invalid Selection permissions',
+      );
+    }
+    expect(() =>
+      create({ update: { fields: ['title'], result: ['id'], selection: { fields: {} } } }),
+    ).toThrow('requires a Selection Field or allowAll');
+    expect(() =>
+      create({
+        update: {
+          fields: ['title'],
+          result: ['title'],
+          selection: { fields: { title: ['eq'] } },
+        },
+      }),
+    ).toThrow('Selection results must include identity Fields');
+  });
+
   it('denies missing policy, denied actions, and denied payload Fields before execution', async () => {
     const client = defineBookGraph();
     const server = defineBookGraph();
@@ -346,6 +384,117 @@ describe('Entity Mutation Command dispatcher', () => {
       ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
     }
     expect(executeEntityMutation).not.toHaveBeenCalled();
+  });
+
+  it('denies negated and schema-invalid Selection targets without broad permission', async () => {
+    const graph = defineBookGraph();
+    const executeEntityMutation = vi.fn();
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            delete: {
+              result: ['id'],
+              selection: { fields: { id: ['eq'], title: ['eq'] } },
+            },
+          },
+        },
+      ],
+      executeEntityMutation,
+    });
+    const deniedExpressions = [
+      {
+        kind: 'not' as const,
+        operand: {
+          kind: 'predicate' as const,
+          fieldName: 'title',
+          operator: 'eq' as const,
+          value: 'A',
+        },
+      },
+      {
+        kind: 'and' as const,
+        operands: [
+          {
+            kind: 'predicate' as const,
+            fieldName: 'title',
+            operator: 'eq' as const,
+            value: 'A',
+          },
+          {
+            kind: 'not' as const,
+            operand: {
+              kind: 'predicate' as const,
+              fieldName: 'title',
+              operator: 'eq' as const,
+              value: 'B',
+            },
+          },
+        ],
+      },
+      {
+        kind: 'references' as const,
+        refs: [{ kind: 'entity-ref' as const, entityName: 'Book' as const, locator: { id: 42 } }],
+      },
+    ];
+
+    for (const expression of deniedExpressions) {
+      const command = mutateEntity(graph.Book).deleteSelection({
+        kind: 'selection',
+        entityName: 'Book',
+        expression: expression as never,
+      });
+      await expect(
+        dispatch(toGraphCommandRequest(command), { authority: undefined }),
+      ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    }
+    expect(executeEntityMutation).not.toHaveBeenCalled();
+  });
+
+  it('requires allowAll for negation and still validates its operand', async () => {
+    const graph = defineBookGraph();
+    const executeEntityMutation = vi.fn(async () => ({ created: [], updated: [], deleted: [] }));
+    const dispatch = createGraphCommandDispatcher({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            delete: {
+              result: ['id'],
+              selection: { fields: { title: ['eq'] }, allowAll: true },
+            },
+          },
+        },
+      ],
+      executeEntityMutation,
+    });
+    const commandFor = (operand: object) =>
+      mutateEntity(graph.Book).deleteSelection({
+        kind: 'selection',
+        entityName: 'Book',
+        expression: { kind: 'not', operand } as never,
+      });
+
+    await expect(
+      dispatch(
+        toGraphCommandRequest(
+          commandFor({ kind: 'predicate', fieldName: 'title', operator: 'eq', value: 'A' }),
+        ),
+        { authority: undefined },
+      ),
+    ).resolves.toMatchObject({ kind: 'graph-command-result' });
+    await expect(
+      dispatch(
+        toGraphCommandRequest(
+          commandFor({ kind: 'predicate', fieldName: 'published', operator: 'eq', value: false }),
+        ),
+        { authority: undefined },
+      ),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
+    expect(executeEntityMutation).toHaveBeenCalledOnce();
   });
 
   it('requires an explicit condition Field allowlist before execution', async () => {

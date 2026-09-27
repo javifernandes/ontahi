@@ -173,6 +173,9 @@ describe('Console actions', () => {
         'declarative',
       ),
     ).toBe('update TodoList where name = "Inbox" with {"name":"Today"}');
+    expect(
+      convertConsoleDocument('TodoList.where(name = "Inbox").delete()', application, 'declarative'),
+    ).toBe('delete TodoList where name = "Inbox"');
   });
 
   it('requires separately advertised Selection mutation capabilities', () => {
@@ -185,6 +188,11 @@ describe('Console actions', () => {
         dialect: 'declarative',
       }).semanticDiagnostics,
     ).toEqual([expect.objectContaining({ code: 'console.semantic.invalid-command' })]);
+    expect(
+      analyzeConsoleDocument('delete TodoList where { missing = "Inbox" }', application, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ code: 'selection.semantic.unknown-field' })]);
   });
 
   it('parses nested structured values and normalizes wrapped Entity Ref inputs', () => {
@@ -388,5 +396,31 @@ describe('Console actions', () => {
         expect.objectContaining({ label: 'delete' }),
       ]),
     );
+    expect(
+      completeConsoleDocument(
+        'update TodoList where { name = "Inbox" } ',
+        'update TodoList where { name = "Inbox" } '.length,
+        application,
+        { dialect: 'declarative' },
+      ).items,
+    ).toEqual([expect.objectContaining({ label: 'with', apply: 'with { }' })]);
+
+    const selectionOnly = {
+      ...application,
+      commands: [
+        { entityName: 'TodoList', actions: [] as const, selectionActions: ['delete'] as const },
+      ],
+    };
+    expect(
+      completeConsoleDocument('de', 2, selectionOnly, { dialect: 'declarative' }).items,
+    ).toEqual([expect.objectContaining({ label: 'delete' })]);
+    expect(
+      completeConsoleDocument('delete To', 9, selectionOnly, { dialect: 'declarative' }).items,
+    ).toEqual([expect.objectContaining({ label: 'TodoList' })]);
+    expect(
+      completeConsoleDocument('delete TodoList ', 16, selectionOnly, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'where' })]);
   });
 });

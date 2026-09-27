@@ -143,6 +143,21 @@ describe('data graph Relationship Command protocol', () => {
       success: false,
       error: { error: { code: 'invalid_selection' } },
     });
+    expect(
+      resolveGraphCommandRequest(
+        {
+          ...request,
+          command: {
+            ...command,
+            target: { ...command.target, entityName: 'Student' },
+          },
+        } as never,
+        { entities: [graph.Course, graph.Student] },
+      ),
+    ).toMatchObject({
+      success: false,
+      error: { error: { code: 'invalid_selection' } },
+    });
   });
 
   it('drops unknown envelope and command keys', () => {

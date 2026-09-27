@@ -86,6 +86,16 @@ describe('Entity Mutation Command', () => {
         if: { missing: true },
       }),
     ).toThrow('Entity mutation condition cannot test Book.missing.');
+    expect(() =>
+      toEntityMutationGraphCommand(Book, {
+        ...mutation.deleteSelection({
+          kind: 'selection',
+          entityName: 'Book',
+          expression: { kind: 'all' },
+        }),
+        if: { title: 'Draft' },
+      }),
+    ).toThrow('Entity Selection mutations do not support exact mutation conditions.');
   });
 
   it('requires an update/delete delta to identify the exact command target', () => {

@@ -35,6 +35,7 @@ import type {
   OrderedRelationshipCommand,
   RelationshipCommand,
 } from './relationship-command.js';
+import { safeParseGraphSchema } from './schema.js';
 import type { SelectionExpression, SelectionPredicate } from './selection-ast.js';
 
 export type RelationshipCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> = {
@@ -264,6 +265,7 @@ const validateEntityMutationActionDeclaration = (
 
 const selectionAllowed = (
   expression: SelectionExpression,
+  entity: AnyEntityDefinition,
   policy: { readonly fields: Record<string, readonly string[]>; readonly allowAll?: true },
 ): boolean => {
   if (expression.kind === 'none') return true;
@@ -271,11 +273,19 @@ const selectionAllowed = (
   if (expression.kind === 'relation-image') return false;
   if (expression.kind === 'references')
     return expression.refs.every(ref =>
-      Object.keys(ref.locator).every(fieldName => policy.fields[fieldName]?.includes('eq')),
+      Object.entries(ref.locator).every(([fieldName, value]) => {
+        const field = entity.fields[fieldName];
+        return (
+          policy.fields[fieldName]?.includes('eq') === true &&
+          field !== undefined &&
+          safeParseGraphSchema(field, value).success
+        );
+      }),
     );
   if (expression.kind === 'and' || expression.kind === 'or')
-    return expression.operands.every(operand => selectionAllowed(operand, policy));
-  if (expression.kind === 'not') return selectionAllowed(expression.operand, policy);
+    return expression.operands.every(operand => selectionAllowed(operand, entity, policy));
+  if (expression.kind === 'not')
+    return policy.allowAll === true && selectionAllowed(expression.operand, entity, policy);
   return policy.fields[expression.fieldName]?.includes(expression.operator) ?? false;
 };
 
@@ -478,6 +488,7 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         (selectionDeclaration !== undefined &&
           selectionAllowed(
             selectionTarget.expression,
+            policy.entity,
             selectionDeclaration as {
               fields: Record<string, readonly string[]>;
               allowAll?: true;
