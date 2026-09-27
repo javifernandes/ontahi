@@ -465,7 +465,17 @@ const consoleDialectExtensions = (
   autocompletion({
     override: [consoleCompletionSource(application, options)],
     activateOnCompletion: completion =>
-      ['where', 'order by', 'by', 'and by', 'orderBy'].includes(completion.label) ||
+      [
+        'where',
+        'order by',
+        'by',
+        'and by',
+        'orderBy',
+        'create',
+        'update',
+        'delete',
+        'invoke',
+      ].includes(completion.label) ||
       completion.detail?.startsWith('Selection factory') === true ||
       (completion.detail?.startsWith('Contextual Selection') === true &&
         options.dialect === 'declarative') ||

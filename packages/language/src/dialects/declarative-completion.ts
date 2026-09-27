@@ -67,6 +67,30 @@ export const completeDeclarativeConsoleDocument = (
       }),
     );
   }
+  if (/^\s*invoke\s+$/.test(document.slice(0, range.from))) {
+    const operationEntities = new Set(
+      application.operations?.map(operation => operation.entityName) ?? [],
+    );
+    return result(
+      consoleEntityCompletionItems({
+        ...application,
+        entities: application.entities.filter(entity => operationEntities.has(entity.name)),
+      }),
+    );
+  }
+  const operationPrefix = document.slice(0, range.from).match(/^\s*invoke\s+([A-Za-z_$][\w$]*)\.$/);
+  if (operationPrefix) {
+    return result(
+      (application.operations ?? [])
+        .filter(operation => operation.entityName === operationPrefix[1])
+        .map(operation => ({
+          label: operation.name,
+          apply: operation.name,
+          kind: 'member',
+          detail: operation.description ?? 'Operation',
+        })),
+    );
+  }
   const syntax = dialect.parse(document).syntax.expression;
   const entity = resolveConsoleContext(syntax, application, pos);
   if (!syntax || !entity) return result([]);

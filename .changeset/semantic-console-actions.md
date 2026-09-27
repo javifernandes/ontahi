@@ -1,5 +1,6 @@
 ---
 '@ontahi/language': minor
+'@ontahi/language-codemirror': minor
 '@ontahi/devtools': minor
 ---
 

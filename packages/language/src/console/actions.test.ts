@@ -180,6 +180,14 @@ describe('Console actions', () => {
       completeConsoleDocument('update To', 9, application, { dialect: 'declarative' }).items,
     ).toEqual([expect.objectContaining({ label: 'TodoList' })]);
     expect(
+      completeConsoleDocument('invoke To', 9, application, { dialect: 'declarative' }).items,
+    ).toEqual([expect.objectContaining({ label: 'TodoList' })]);
+    expect(
+      completeConsoleDocument('invoke TodoList.cr', 18, application, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: 'createList' })]);
+    expect(
       analyzeConsoleDocument('update', application, { dialect: 'declarative' }).semanticDiagnostics,
     ).toEqual([]);
   });
