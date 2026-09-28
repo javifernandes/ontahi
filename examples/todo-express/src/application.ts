@@ -20,6 +20,7 @@ import {
 } from '@ontahi/runtime-express/runtime-protocol';
 import express, { type Express } from 'express';
 
+import { todoAuthenticationMode } from './authentication-mode.js';
 import { createTodoAuthentication, type TodoAuthenticationAdapter } from './authentication.js';
 import { TodoApplication, todoCommandProvider, todoModelRuntime } from './graph.js';
 import { todoGraphCommandPolicies } from './todo-command-policies.js';
@@ -65,7 +66,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
             );
           }
 
-          if (!context.principal) {
+          if (!context.principal && todoAuthenticationMode === 'github') {
             return durableOperationProtocolError(
               'access_denied',
               'Authentication is required to respond to this task interaction.',
@@ -75,10 +76,12 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
           try {
             return toDurableOperationSnapshotResponse(
               await TodoApplication.respondToTaskInteraction(request.run, request.response, {
-                actor: {
-                  kind: context.principal.kind,
-                  id: context.principal.subject,
-                },
+                actor: context.principal
+                  ? {
+                      kind: context.principal.kind,
+                      id: context.principal.subject,
+                    }
+                  : { kind: 'system' },
               }),
             );
           } catch (error) {

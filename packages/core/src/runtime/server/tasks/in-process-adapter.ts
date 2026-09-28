@@ -1,4 +1,4 @@
-import { Deferred, Effect, Stream } from 'effect';
+import { Cause, Effect, Option, Stream } from 'effect';
 
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 
@@ -57,7 +57,21 @@ type PendingInteraction = {
   resolve(
     response: TaskInteractionResponse,
   ): { readonly success: true; readonly value: unknown } | { readonly success: false };
-  deferred: Deferred.Deferred<unknown, TaskFailure>;
+  continuation: Promise<unknown>;
+  resume(value: unknown): void;
+};
+
+const createContinuation = () => {
+  let resume!: (value: unknown) => void;
+  const continuation = new Promise<unknown>(resolve => {
+    resume = resolve;
+  });
+  return { continuation, resume };
+};
+
+const taskFailureFromCause = (cause: Cause.Cause<unknown>): TaskFailure => {
+  const failure = Cause.failureOption(cause);
+  return toTaskFailure(Option.isSome(failure) ? failure.value : Cause.squash(cause));
 };
 
 const pendingInteractionsByStorage = new WeakMap<object, Map<string, PendingInteraction>>();
@@ -169,7 +183,7 @@ export const createInProcessTaskRuntime = ({
 
     return publishCurrentSnapshot(ref).pipe(
       Effect.tapError(() => Effect.sync(() => pendingInteractions.delete(key))),
-      Effect.flatMap(() => Deferred.await(pending.deferred)),
+      Effect.flatMap(() => Effect.promise(() => pending.continuation)),
       Effect.ensuring(
         Effect.sync(() => {
           if (pendingInteractions.get(key) === pending) pendingInteractions.delete(key);
@@ -212,7 +226,7 @@ export const createInProcessTaskRuntime = ({
                   );
                 }
 
-                const deferred = yield* Deferred.make<unknown, TaskFailure>();
+                const continuation = createContinuation();
                 const interaction = {
                   id: request.id ?? createInteractionId(),
                   kind: 'choice',
@@ -229,7 +243,7 @@ export const createInProcessTaskRuntime = ({
                       ? ({ success: true, value: values.get(response.optionId) } as const)
                       : ({ success: false } as const);
                   },
-                  deferred,
+                  ...continuation,
                 } satisfies PendingInteraction;
 
                 return yield* waitForInteraction<(typeof request.options)[number]['value']>(
@@ -250,7 +264,7 @@ export const createInProcessTaskRuntime = ({
                   );
                 }
 
-                const deferred = yield* Deferred.make<unknown, TaskFailure>();
+                const continuation = createContinuation();
                 const interaction = {
                   id: request.id ?? createInteractionId(),
                   kind: 'approval',
@@ -270,7 +284,7 @@ export const createInProcessTaskRuntime = ({
                           },
                         }
                       : { success: false },
-                  deferred,
+                  ...continuation,
                 } satisfies PendingInteraction;
 
                 return yield* waitForInteraction<TaskApprovalDecision>(ref, pending);
@@ -311,16 +325,17 @@ export const createInProcessTaskRuntime = ({
             result: parsedResult,
           });
         }).pipe(
-          Effect.catchAll(error =>
-            update(ref, {
+          Effect.catchAllCause(cause => {
+            const error = taskFailureFromCause(cause);
+            return update(ref, {
               status: 'failed',
               completedAt: now(),
               error: {
                 code: error.reason,
                 message: error.message,
               },
-            }),
-          ),
+            });
+          }),
         );
 
         void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
@@ -367,7 +382,7 @@ export const createInProcessTaskRuntime = ({
         const snapshot = yield* publishCurrentSnapshot(ref).pipe(
           Effect.tapError(() => Effect.sync(() => pendingInteractions.set(key, pending))),
         );
-        yield* Deferred.succeed(pending.deferred, resolution.value);
+        pending.resume(resolution.value);
         return snapshot;
       }),
     observe: ref =>

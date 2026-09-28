@@ -21,6 +21,7 @@ import {
   respondToTaskInteraction,
   startTask,
   taskTriggerActorMatches,
+  withInvocationContext,
   type TaskTrigger,
 } from './index.js';
 
@@ -828,6 +829,7 @@ describe('tasks', () => {
                 { id: 'editorial', label: 'Editorial', value: 'editorial' },
               ],
             });
+            yield* context!.sleep(0);
             const decision = yield* context!.interact.approval({
               id: 'approve-document',
               prompt: 'Apply the proposed document update?',
@@ -837,6 +839,7 @@ describe('tasks', () => {
                 requests: [{ version: 1, kind: 'graph-command', command: { action: 'update' } }],
               },
             });
+            yield* context!.sleep(0);
 
             return { success: true as const, approved: decision.decision === 'approve' };
           }),
@@ -1018,6 +1021,132 @@ describe('tasks', () => {
       ),
     ).resolves.toMatchObject({
       reason: 'task_interaction_not_pending',
+    });
+  });
+
+  it('records a terminal failure when resumed task execution defects', async () => {
+    const adapter = createInProcessTaskRuntime({
+      storage: createInMemoryTaskStorage(),
+    });
+    const task = defineTask({
+      id: 'demo.defect-after-approval',
+      run: (_input: {}, context) =>
+        Effect.gen(function* () {
+          yield* context.interact.approval({
+            id: 'approve-defect',
+            prompt: 'Continue?',
+            proposal: {
+              id: 'defect-v1',
+              summary: 'Continue into failing work.',
+              requests: [{ kind: 'probe' }],
+            },
+          });
+          return yield* Effect.dieMessage('Storage command defect.');
+        }),
+    });
+    const run = await Effect.runPromise(
+      startTask(
+        adapter,
+        task,
+        {},
+        {
+          runId: 'defect-run',
+          trigger: createUserTaskTrigger({ userId: 'user-1' }),
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        interaction: { id: 'approve-defect' },
+      });
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        adapter,
+        run,
+        { interactionId: 'approve-defect', decision: 'approve' },
+        { actor: { kind: 'user', id: 'user-1' } },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'task_failed', message: 'Task failed.' },
+      });
+    });
+  });
+
+  it('preserves the invoking Principal as the default durable Operation actor', async () => {
+    const adapter = createInProcessTaskRuntime({
+      storage: createInMemoryTaskStorage(),
+      sleep: async () => {},
+    });
+    const { app } = architecture({ task: { runtime: adapter } });
+    const operations = app.operation.defineForEntity('Document', {
+      review: app.operation.define({
+        layer: 'test.documents',
+        exposure: 'server-only',
+        durable: { runtime: 'in-process' },
+        run: (_input, context) =>
+          context!.interact.choice({
+            id: 'choose-reviewer',
+            prompt: 'Who should review this document?',
+            options: [{ id: 'legal', label: 'Legal', value: 'legal' }],
+          }),
+      }),
+      systemReview: app.operation.define({
+        layer: 'test.documents',
+        exposure: 'server-only',
+        durable: {
+          runtime: 'in-process',
+          trigger: () => ({ cause: 'system', actor: { kind: 'system' } }),
+        },
+        run: (_input, context) => Effect.succeed(context!.trigger),
+      }),
+    });
+
+    const result = await withInvocationContext(
+      { principal: { kind: 'user', subject: 'user-1', issuer: 'test' } },
+      () => app.operation.invoke(operations.review, {}),
+    );
+    expect(result).toMatchObject({ ok: true, kind: 'success' });
+    if (!result.ok) throw new Error('Expected the durable Operation to start.');
+    const run = result.value as { taskId: string; runId: string };
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(app.task.getSnapshot(run))).resolves.toMatchObject({
+        interaction: { id: 'choose-reviewer' },
+      });
+    });
+    await expect(
+      Effect.runPromise(
+        app.task.respondToInteraction(
+          run,
+          { interactionId: 'choose-reviewer', optionId: 'legal' },
+          { actor: { kind: 'user', id: 'user-1' } },
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 'running' });
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(app.task.getSnapshot(run))).resolves.toMatchObject({
+        status: 'completed',
+        result: 'legal',
+      });
+    });
+
+    const declared = await withInvocationContext(
+      { principal: { kind: 'user', subject: 'user-1', issuer: 'test' } },
+      () => app.operation.invoke(operations.systemReview, {}),
+    );
+    expect(declared).toMatchObject({ ok: true, kind: 'success' });
+    if (!declared.ok) throw new Error('Expected the system-owned durable Operation to start.');
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(app.task.getSnapshot(declared.value))).resolves.toMatchObject({
+        status: 'completed',
+        result: { cause: 'system', actor: { kind: 'system' } },
+      });
     });
   });
 

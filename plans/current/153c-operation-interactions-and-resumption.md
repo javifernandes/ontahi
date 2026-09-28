@@ -818,6 +818,34 @@ resumes with only the typed decision. This proves the transport shape needed by 
 proposal fingerprinting, stale-state verification, authority rechecks for each proposed request,
 and dispatch remain part of the next domain-level slice.
 
+The third slice applies both primitives to `TodoItem.deleteFromNamedList`, a real code-backed
+durable Operation. It reads exact-name list candidates, asks for a stable-ID choice only when names
+are ambiguous, reads the selected list's items and tag relationships, and projects the intended
+effects as canonical Graph Command requests. Approval resumes the Operation, which rebuilds the
+proposal from current graph state and rejects it as stale when the canonical requests differ.
+Matching proposals execute the same ordered unlink and delete effects and return a normal typed
+Operation result.
+
+This exposed two runtime requirements that synthetic Interaction tests did not cover. Durable
+Operation starts now inherit the current authenticated Principal as their default Task actor, while
+an explicitly declared trigger remains authoritative. The in-process adapter also uses one native
+Promise continuation per pending Interaction; an Effect `Deferred` shared between the detached Task
+runtime and the later response runtime could resume pure Effect work but stall at the next
+asynchronous boundary. Tests now cross async sleep, graph read, and graph command boundaries after
+responses. The adapter catches the full Effect cause around background execution so a defect after
+resumption also produces a terminal failed snapshot.
+
+The Todo execution is deliberately a documented sequential command sequence because Ontahí still
+has no canonical multi-command transaction envelope for an approval proposal. It detects state
+changes observed before dispatch, but a concurrent change after revalidation or a later command
+failure can still leave partial effects. The next surface slice should render the same run and reply
+protocol rather than introducing host-specific interaction state.
+
+Authentication-disabled Todo runs deliberately use the shared system actor. Any caller holding the
+run reference can therefore answer the pending Interaction. This keeps the local public example
+usable but is not an individual-consent boundary; authenticated actors or a future run-specific
+claimant are required before applying this pattern to a public multi-user surface.
+
 ## Acceptance And Research Closure
 
 - [x] Inventory the current Operation, Runtime Protocol, durable lifecycle, identity, Activity, and
@@ -832,7 +860,8 @@ and dispatch remain part of the next domain-level slice.
 - [x] Identify what an optional LangGraph adapter would and would not own.
 - [x] Recommend one bounded comparison experiment before public API design.
 - [ ] Execute the native versus LangGraph comparison and record implementation evidence.
-- [ ] Complete the two-Interaction Todo Operation and expose it through two surfaces.
+- [x] Complete the two-Interaction Todo Operation with exact proposal revalidation and execution.
+- [ ] Expose the Todo Operation through two surfaces using the same run and reply protocol.
 - [ ] Implement restart-safe native state-machine persistence for the comparison experiment.
 - [ ] Decide whether interactive execution extends Durable Operation/Task Run or introduces a more
       general execution-run lifecycle from which durable tasks are projected.
