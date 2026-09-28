@@ -40,3 +40,10 @@ Durable operations are a candidate lifecycle for a workflow that reports progres
 for participant input. A code-backed workflow could issue the same semantic request as a model-backed
 one. The continuation, correlation, and visibility rules are future framework design work rather
 than chat-provider behavior or an assertion that current durable operations support user waits.
+
+Current research favors reusing canonical Graph Read, Graph Command, and Operation Invocation
+contracts rather than wrapping them in a second universal effect language. Interaction is the
+missing typed request/reply primitive; progress is lifecycle observation, while suspension and
+resume are runtime mechanics. A workflow runtime such as LangGraph may provide checkpoint/replay
+and interrupt plumbing through an optional adapter, but its thread, node, and command concepts do
+not define Ontahí's public Operation or Interaction model.

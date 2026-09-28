@@ -266,7 +266,7 @@ establish production readiness. Dedicated follow-ups preserve deferred scope:
 
 - [153a: Security and authorization](../backlog/153a-model-execution-security-and-authorization.md).
 - [153b: Declarative context scope](../backlog/153b-declarative-operation-context-scope.md).
-- [153c: Interactions and resumption](../backlog/153c-operation-interactions-and-resumption.md).
+- [153c: Interactions and resumption](./153c-operation-interactions-and-resumption.md).
 
 Atlas captures [Intent Resolution](../../atlas/items/model/intent-resolution.md) and
 [Operation Interaction](../../atlas/items/model/operation-interaction.md) as shaping concepts.
