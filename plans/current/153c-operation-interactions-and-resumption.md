@@ -846,6 +846,14 @@ run reference can therefore answer the pending Interaction. This keeps the local
 usable but is not an individual-consent boundary; authenticated actors or a future run-specific
 claimant are required before applying this pattern to a public multi-user surface.
 
+The fourth slice projects the same run into the Devtools Console. A successful durable Operation
+invocation remains the canonical queued result; Devtools extracts its Task Run identity, observes
+that run through the existing `durable.operation` transport capability, and renders progress,
+choice, approval, failure, and completion states. Choice and approval controls send the canonical
+Interaction response through the same Runtime Protocol family. The surface owns presentation only:
+it introduces no Devtools-specific continuation state, polling endpoint, or reply contract. A
+second independent surface is still required to satisfy the cross-surface acceptance criterion.
+
 ## Acceptance And Research Closure
 
 - [x] Inventory the current Operation, Runtime Protocol, durable lifecycle, identity, Activity, and

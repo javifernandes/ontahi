@@ -61,6 +61,7 @@ import { useConsoleCommandCapabilities } from './console-command-capabilities.js
 import { useConsoleReadCapabilities } from './console-read-capabilities.js';
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
+import { DurableOperationRun, operationTaskRunIdentity } from './durable-operation-run.js';
 import { JsonView } from './json-view.js';
 import { ResultTable, SemanticPayload, type ResultTableOrdering } from './semantic-payload.js';
 
@@ -231,6 +232,9 @@ const ConsoleResultContent = ({
     );
   }
   if (mode === 'json') return <JsonView value={snapshot.value} label='Console result JSON' />;
+  const taskRun = operationTaskRunIdentity(snapshot.value);
+  if (taskRun && snapshot.transport)
+    return <DurableOperationRun run={taskRun} transport={snapshot.transport} />;
   if (snapshot.request?.mode === 'run' && Array.isArray(snapshot.value))
     return <ResultTable value={snapshot.value} ordering={ordering} />;
   return <SemanticPayload value={snapshot.value} />;

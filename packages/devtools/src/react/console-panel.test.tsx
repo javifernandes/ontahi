@@ -14,6 +14,7 @@ import {
   withSelectionFactories,
   withContextualSelections,
 } from '@ontahi/core/data-graph';
+import type { TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import type { ExecutionIdentity } from '@ontahi/core/runtime/identity';
 import {
   createRuntimeProtocolResponse,
@@ -54,6 +55,13 @@ describe('Console actions', uiTestOptions, () => {
         bridge: {},
         input: graphSchema.object({ name: field.string() }),
       }),
+      reviewList: defineClientDomainOperation({
+        authority: 'server',
+        exposure: 'bridge',
+        bridge: {},
+        input: graphSchema.object({ name: field.string() }),
+        durable: { runtime: 'in-process' },
+      }),
     },
   });
 
@@ -86,6 +94,123 @@ describe('Console actions', uiTestOptions, () => {
       },
     });
     expect(await within(screen.getByLabelText('Console result')).findByText('Inbox')).toBeDefined();
+  });
+
+  it('observes and answers durable Operation interactions through Runtime Protocol', async () => {
+    let continueChoice!: () => void;
+    let continueApproval!: () => void;
+    const choiceAnswered = new Promise<void>(resolve => {
+      continueChoice = resolve;
+    });
+    const approvalAnswered = new Promise<void>(resolve => {
+      continueApproval = resolve;
+    });
+    const run = { taskId: 'List.reviewList', runId: 'run-1' };
+    const snapshot = (
+      value: Pick<TaskSnapshot<JsonValue>, 'status'> & Partial<TaskSnapshot<JsonValue>>,
+    ): TaskSnapshot<JsonValue> => ({
+      taskId: run.taskId,
+      runId: run.runId,
+      updatedAt: '2026-09-28T20:00:00.000Z',
+      ...value,
+    });
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      if (envelope.family === 'operation')
+        return createRuntimeProtocolResponse(envelope, {
+          kind: 'invocation-result',
+          result: { ok: true, kind: 'success', value: { ...run, status: 'queued' } },
+        });
+      const body = envelope.body as {
+        kind?: string;
+        response?: { optionId?: string; decision?: string };
+      };
+      if (envelope.family === 'durable.operation' && body.kind === 'respond') {
+        if (body.response?.optionId === 'list-2') continueChoice();
+        if (body.response?.decision === 'approve') continueApproval();
+        return createRuntimeProtocolResponse(envelope, {
+          version: 1,
+          kind: 'snapshot',
+          snapshot: snapshot({ status: 'running' }),
+        });
+      }
+      return createRuntimeProtocolResponse(envelope, {
+        kind: 'protocol-error',
+        error: { code: 'invalid_request', message: 'Unexpected request.' },
+      });
+    });
+    const observe = async function* <TResult = JsonValue>() {
+      yield snapshot({
+        status: 'running',
+        interaction: {
+          id: 'choose-list',
+          kind: 'choice',
+          prompt: 'Which list?',
+          options: [
+            { id: 'list-1', label: 'Inbox' },
+            { id: 'list-2', label: 'Later' },
+          ],
+          createdAt: '2026-09-28T20:00:00.000Z',
+        },
+      }) as TaskSnapshot<TResult>;
+      await choiceAnswered;
+      yield snapshot({
+        status: 'running',
+        interaction: {
+          id: 'approve-list',
+          kind: 'approval',
+          prompt: 'Apply the proposal?',
+          proposal: {
+            id: 'proposal-1',
+            summary: 'Update Later.',
+            requests: [{ version: 1, kind: 'graph-command' }],
+          },
+          createdAt: '2026-09-28T20:00:01.000Z',
+        },
+      }) as TaskSnapshot<TResult>;
+      await approvalAnswered;
+      yield snapshot({ status: 'completed', result: { updated: 1 } }) as TaskSnapshot<TResult>;
+    };
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List],
+          initialDocument: 'List.reviewList({ name: "Inbox" })',
+        }}
+        runtimeTransport={{ request, durableOperation: { observe } }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    const result = within(screen.getByLabelText('Console result'));
+    expect(await result.findByText('Which list?')).toBeDefined();
+    fireEvent.click(result.getByRole('button', { name: 'Later' }));
+    expect(await result.findByText('Apply the proposal?')).toBeDefined();
+    expect(result.getByText('Update Later.')).toBeDefined();
+    fireEvent.click(result.getByRole('button', { name: 'Approve' }));
+    expect(await result.findByText('completed')).toBeDefined();
+    expect(result.getByText('updated')).toBeDefined();
+    expect(result.getByText('1')).toBeDefined();
+
+    const responses = request.mock.calls
+      .map(([envelope]) => envelope)
+      .filter(envelope => envelope.family === 'durable.operation');
+    expect(responses).toHaveLength(2);
+    expect(responses[0]).toMatchObject({
+      body: {
+        version: 1,
+        kind: 'respond',
+        run,
+        response: { interactionId: 'choose-list', optionId: 'list-2' },
+      },
+    });
+    expect(responses[1]).toMatchObject({
+      body: {
+        version: 1,
+        kind: 'respond',
+        run,
+        response: { interactionId: 'approve-list', decision: 'approve' },
+      },
+    });
   });
 
   it('reports an unsuccessful Operation result without publishing action success', async () => {
