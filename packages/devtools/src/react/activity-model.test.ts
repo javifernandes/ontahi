@@ -13,10 +13,12 @@ import {
   graphReadSummary,
   isRecord,
   matchesFilter,
+  operationProgressState,
   outcomeColor,
   semanticSummary,
   viewFields,
   type ExchangeActivity,
+  type OperationProgressActivity,
 } from './activity-model.js';
 
 const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity => ({
@@ -42,6 +44,52 @@ const exchangeActivity = (body: unknown, family = 'operation'): ExchangeActivity
 });
 
 describe('Devtools activity model', () => {
+  it('names pending Operation interactions instead of generic progress', () => {
+    const activity = (interaction: unknown): OperationProgressActivity => ({
+      id: 'observation-1',
+      at: 1,
+      snapshots: [
+        {
+          kind: 'observation.snapshot',
+          observationId: 'observation-1',
+          family: 'durable.operation.observe',
+          run: { taskId: 'Todo.delete', runId: 'run-1' },
+          transportId: 'websocket',
+          transportKind: 'websocket',
+          startedAt: 1,
+          at: 1,
+          sequence: 1,
+          snapshot: {
+            taskId: 'Todo.delete',
+            runId: 'run-1',
+            status: 'running',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            interaction,
+          },
+        },
+      ],
+    });
+    expect(
+      operationProgressState(
+        activity({
+          kind: 'approval',
+          proposal: { summary: 'Delete 5 items from “Inbox”.' },
+        }),
+      ),
+    ).toEqual({
+      label: 'approval requested',
+      title: 'Approval requested · Delete 5 items from “Inbox”.',
+    });
+    expect(
+      operationProgressState(
+        activity({ kind: 'choice', prompt: 'Which “Shopping” list should be emptied?' }),
+      ),
+    ).toEqual({
+      label: 'choice requested',
+      title: 'Choice requested · Which “Shopping” list should be emptied?',
+    });
+  });
+
   it('shows canonical relation membership and source predicates in both dialects', () => {
     const image = {
       kind: 'relation-image',

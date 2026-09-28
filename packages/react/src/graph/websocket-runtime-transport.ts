@@ -36,6 +36,8 @@ export type WebSocketRuntimeTransportOptions = {
   readonly createWebSocket?: (url: string, protocols?: string | string[]) => RuntimeWebSocket;
   readonly observationId?: () => string;
   readonly handshakeTimeoutMs?: number;
+  /** Delay before restoring a durable Operation observation after a lost session. */
+  readonly reconnectDelayMs?: number;
   readonly reportError?: (error: Error) => void;
 };
 
@@ -123,6 +125,9 @@ type ActiveGraphObservation = {
 const SOCKET_OPEN = 1;
 const DEFAULT_RUNTIME_PATH = '/runtime';
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000;
+const DEFAULT_RECONNECT_DELAY_MS = 250;
+const MAX_DURABLE_OBSERVATION_RECONNECT_ATTEMPTS = 5;
+const MAX_DURABLE_OBSERVATION_RECONNECT_DELAY_MS = 5_000;
 const terminalTaskStatuses = new Set(['completed', 'failed', 'cancelled']);
 
 let fallbackObservationSequence = 0;
@@ -149,6 +154,8 @@ const createDefaultWebSocket = (url: string, protocols?: string | string[]): Run
 };
 
 const abortError = (message: string) => new Error(message);
+
+class RuntimeWebSocketSessionLostError extends Error {}
 
 const awaitWithSignal = async <TValue>(
   promise: Promise<TValue>,
@@ -182,10 +189,14 @@ export const createWebSocketRuntimeTransport = ({
   createWebSocket = createDefaultWebSocket,
   observationId = defaultObservationId,
   handshakeTimeoutMs = DEFAULT_HANDSHAKE_TIMEOUT_MS,
+  reconnectDelayMs = DEFAULT_RECONNECT_DELAY_MS,
   reportError,
 }: WebSocketRuntimeTransportOptions = {}): WebSocketRuntimeTransport => {
   if (!Number.isFinite(handshakeTimeoutMs) || handshakeTimeoutMs < 0) {
     throw new TypeError('Runtime Protocol WebSocket handshake timeout must be non-negative.');
+  }
+  if (!Number.isFinite(reconnectDelayMs) || reconnectDelayMs < 0) {
+    throw new TypeError('Runtime Protocol WebSocket reconnect delay must be non-negative.');
   }
 
   let socket: RuntimeWebSocket | undefined;
@@ -368,7 +379,9 @@ export const createWebSocketRuntimeTransport = ({
     if (socket) {
       failConnection(
         socket,
-        new Error('Runtime Protocol WebSocket session was replaced; active work was not resumed.'),
+        new RuntimeWebSocketSessionLostError(
+          'Runtime Protocol WebSocket session was replaced; active work was not resumed.',
+        ),
       );
     }
 
@@ -381,7 +394,9 @@ export const createWebSocketRuntimeTransport = ({
       rejectConnection = reject;
     });
     const timeout = setTimeout(() => {
-      const error = new Error('Runtime Protocol WebSocket session handshake timed out.');
+      const error = new RuntimeWebSocketSessionLostError(
+        'Runtime Protocol WebSocket session handshake timed out.',
+      );
       failConnection(currentSocket, error);
       currentSocket.close(1002, 'Runtime Protocol handshake timeout');
     }, handshakeTimeoutMs);
@@ -402,11 +417,14 @@ export const createWebSocketRuntimeTransport = ({
       handleFrame(currentSocket, input);
     };
     const onError = () =>
-      failConnection(currentSocket, new Error('Runtime Protocol WebSocket session failed.'));
+      failConnection(
+        currentSocket,
+        new RuntimeWebSocketSessionLostError('Runtime Protocol WebSocket session failed.'),
+      );
     const onClose = (event: WebSocketEvent) =>
       failConnection(
         currentSocket,
-        new Error(
+        new RuntimeWebSocketSessionLostError(
           `Runtime Protocol WebSocket session disconnected${
             event.code === undefined
               ? ''
@@ -483,60 +501,81 @@ export const createWebSocketRuntimeTransport = ({
     options?: RuntimeTransportRequestOptions,
   ): AsyncIterable<TaskSnapshot<TResult>> {
     if (options?.signal?.aborted) return;
-    const id = observationId();
-    const queue = createAsyncQueue<TaskSnapshot>();
-    const observation: ActiveDurableObservation = {
-      run,
-      queue,
-      lastSequence: 0,
-      terminal: false,
-    };
-    let subscribed = false;
-    const abort = () => queue.end();
-    options?.signal?.addEventListener('abort', abort, { once: true });
+    let failedAttempts = 0;
+    while (!options?.signal?.aborted) {
+      const id = observationId();
+      const queue = createAsyncQueue<TaskSnapshot>();
+      const observation: ActiveDurableObservation = {
+        run,
+        queue,
+        lastSequence: 0,
+        terminal: false,
+      };
+      let subscribed = false;
+      const abort = () => queue.end();
+      options?.signal?.addEventListener('abort', abort, { once: true });
 
-    try {
-      const connectedCapabilities = await awaitWithSignal(
-        ensureConnection(),
-        options?.signal,
-        'Durable Operation WebSocket observation was aborted.',
-      );
-      if (!connectedCapabilities.has('durable-operation-push')) {
-        throw new Error('Durable Operation push is unavailable in this WebSocket session.');
-      }
-      if (durableObservations.has(id) || graphObservations.has(id)) {
-        throw new Error(`Durable observation id ${id} is already active.`);
-      }
-      durableObservations.set(id, observation);
-      send({
-        protocol: RUNTIME_PROTOCOL_SESSION_NAME,
-        version: RUNTIME_PROTOCOL_SESSION_VERSION,
-        kind: 'durable-observe',
-        id,
-        run: { taskId: run.taskId, runId: run.runId },
-      });
-      subscribed = true;
+      try {
+        const connectedCapabilities = await awaitWithSignal(
+          ensureConnection(),
+          options?.signal,
+          'Durable Operation WebSocket observation was aborted.',
+        );
+        if (!connectedCapabilities.has('durable-operation-push')) {
+          throw new Error('Durable Operation push is unavailable in this WebSocket session.');
+        }
+        if (durableObservations.has(id) || graphObservations.has(id)) {
+          throw new Error(`Durable observation id ${id} is already active.`);
+        }
+        durableObservations.set(id, observation);
+        send({
+          protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+          version: RUNTIME_PROTOCOL_SESSION_VERSION,
+          kind: 'durable-observe',
+          id,
+          run: { taskId: run.taskId, runId: run.runId },
+        });
+        subscribed = true;
 
-      while (true) {
-        const next = await queue.next();
-        if (next.done) return;
-        yield next.value as TaskSnapshot<TResult>;
-      }
-    } catch (error) {
-      if (!options?.signal?.aborted) throw error;
-    } finally {
-      options?.signal?.removeEventListener('abort', abort);
-      if (durableObservations.get(id) === observation) durableObservations.delete(id);
-      if (subscribed && !observation.terminal) {
+        while (true) {
+          const next = await queue.next();
+          if (next.done) return;
+          failedAttempts = 0;
+          yield next.value as TaskSnapshot<TResult>;
+        }
+      } catch (error) {
+        if (options?.signal?.aborted) return;
+        if (disposed || !(error instanceof RuntimeWebSocketSessionLostError)) throw error;
+        failedAttempts += 1;
+        if (failedAttempts > MAX_DURABLE_OBSERVATION_RECONNECT_ATTEMPTS) throw error;
+        const delay = Math.min(
+          reconnectDelayMs * 2 ** (failedAttempts - 1),
+          MAX_DURABLE_OBSERVATION_RECONNECT_DELAY_MS,
+        );
         try {
-          send({
-            protocol: RUNTIME_PROTOCOL_SESSION_NAME,
-            version: RUNTIME_PROTOCOL_SESSION_VERSION,
-            kind: 'durable-unobserve',
-            id,
-          });
-        } catch {
-          // Disconnect already released the server-side session resources.
+          await awaitWithSignal(
+            new Promise<void>(resolve => setTimeout(resolve, delay)),
+            options?.signal,
+            'Durable Operation WebSocket observation was aborted.',
+          );
+        } catch (delayError) {
+          if (options?.signal?.aborted) return;
+          throw delayError;
+        }
+      } finally {
+        options?.signal?.removeEventListener('abort', abort);
+        if (durableObservations.get(id) === observation) durableObservations.delete(id);
+        if (subscribed && !observation.terminal) {
+          try {
+            send({
+              protocol: RUNTIME_PROTOCOL_SESSION_NAME,
+              version: RUNTIME_PROTOCOL_SESSION_VERSION,
+              kind: 'durable-unobserve',
+              id,
+            });
+          } catch {
+            // Disconnect already released the server-side session resources.
+          }
         }
       }
     }

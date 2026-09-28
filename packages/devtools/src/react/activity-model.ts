@@ -45,6 +45,39 @@ export type OperationProgressActivity = {
   readonly at: number;
 };
 
+export type OperationProgressState = {
+  readonly label: string;
+  readonly title: string;
+};
+
+export const operationProgressState = (
+  activity: OperationProgressActivity,
+): OperationProgressState => {
+  const latest = activity.snapshots[activity.snapshots.length - 1]?.snapshot;
+  if (latest && isRecord(latest.interaction)) {
+    const interaction = latest.interaction;
+    if (
+      interaction.kind === 'approval' &&
+      isRecord(interaction.proposal) &&
+      typeof interaction.proposal.summary === 'string'
+    ) {
+      return {
+        label: 'approval requested',
+        title: `Approval requested · ${interaction.proposal.summary}`,
+      };
+    }
+    if (interaction.kind === 'choice' && typeof interaction.prompt === 'string') {
+      return { label: 'choice requested', title: `Choice requested · ${interaction.prompt}` };
+    }
+  }
+  if (latest?.progress) {
+    const detail = latest.progress.message ?? latest.progress.phase;
+    if (detail) return { label: 'progress', title: `Progress · ${detail}` };
+  }
+  if (latest) return { label: latest.status, title: latest.status };
+  return { label: 'operation progress', title: 'Progress stream opened' };
+};
+
 export type ActivityEntry =
   | {
       readonly kind: 'graph-observation';

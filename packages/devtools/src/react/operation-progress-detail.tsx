@@ -1,7 +1,18 @@
+import type { TaskInteractionResponse, TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import {
+  createRuntimeProtocolExchange,
+  isDurableOperationProtocolError,
+  parseDurableOperationProtocolResponse,
+  toDurableOperationInteractionResponseRequest,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
+import { useMemo, useState } from 'react';
+
 import type { RuntimeDiagnosticOutcome } from '../diagnostics.js';
 
 import {
   formatClock,
+  operationProgressState,
   outcomeColor,
   semanticSummary,
   type ExchangeActivity,
@@ -10,6 +21,7 @@ import {
 } from './activity-model.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
+import { OperationInteraction } from './operation-interaction.js';
 
 const snapshotOutcome = (
   status: ObservationSnapshot['snapshot']['status'],
@@ -54,15 +66,62 @@ const ActivityMessage = ({
 export const OperationProgressDetail = ({
   activity,
   exchange,
+  runtimeTransport,
 }: {
   readonly activity: OperationProgressActivity;
   readonly exchange?: ExchangeActivity;
+  readonly runtimeTransport?: RuntimeTransport<any>;
 }) => {
+  const [responding, setResponding] = useState(false);
+  const [responseError, setResponseError] = useState<string>();
+  const [answeredInteraction, setAnsweredInteraction] = useState<string>();
+  const runtimeExchange = useMemo(
+    () =>
+      runtimeTransport ? createRuntimeProtocolExchange({ transport: runtimeTransport }) : null,
+    [runtimeTransport],
+  );
   const event =
     activity.settled ?? activity.snapshots[activity.snapshots.length - 1] ?? activity.started;
   if (!event) return null;
   const outcome = activity.settled?.outcome ?? 'pending';
   const title = exchange ? semanticSummary(exchange) : `${event.run.taskId}()`;
+  const state = operationProgressState(activity);
+  const latestSnapshot = activity.snapshots[activity.snapshots.length - 1]?.snapshot;
+  let taskSnapshot: TaskSnapshot | undefined;
+  if (latestSnapshot) {
+    const parsed = parseDurableOperationProtocolResponse({
+      version: 1,
+      kind: 'snapshot',
+      snapshot: latestSnapshot,
+    });
+    if (parsed.success && !isDurableOperationProtocolError(parsed.response)) {
+      taskSnapshot = parsed.response.snapshot;
+    }
+  }
+  const interaction =
+    taskSnapshot?.interaction?.id === answeredInteraction ? undefined : taskSnapshot?.interaction;
+  const respond = async (response: TaskInteractionResponse) => {
+    if (!runtimeExchange) return;
+    setResponding(true);
+    setResponseError(undefined);
+    try {
+      const result = await runtimeExchange({
+        family: 'durable.operation',
+        body: toDurableOperationInteractionResponseRequest(event.run, response),
+      });
+      const parsed = parseDurableOperationProtocolResponse(result);
+      if (!parsed.success) throw new Error(parsed.error.error.message);
+      if (isDurableOperationProtocolError(parsed.response))
+        throw new Error(parsed.response.error.message);
+      setAnsweredInteraction(response.interactionId);
+    } catch (cause) {
+      setResponseError(
+        cause instanceof Error ? cause.message : 'Could not answer the Interaction.',
+      );
+    } finally {
+      setResponding(false);
+    }
+  };
   return (
     <section style={styles.detail} aria-label='Selected diagnostic detail'>
       <header style={styles.detailHeader}>
@@ -70,7 +129,7 @@ export const OperationProgressDetail = ({
         <span style={styles.detailHeadingGroup}>
           <h3 style={styles.detailTitle}>{title}</h3>
           <span style={styles.detailMeta}>
-            <span style={styles.family}>operation progress</span>
+            <span style={styles.family}>{state.label}</span>
             <span>{event.transportId}</span>
             <span>{activity.snapshots.length} updates</span>
             <span>{activity.settled?.durationMs ?? '…'} ms</span>
@@ -89,12 +148,28 @@ export const OperationProgressDetail = ({
             <span style={styles.semanticValue}>{event.run.runId}</span>
           </div>
           <div style={styles.semanticCard}>
-            <span style={styles.semanticLabel}>Progress</span>
-            <span style={styles.semanticValue}>
-              {activity.snapshots.length} updates · {outcome}
-            </span>
+            <span style={styles.semanticLabel}>State</span>
+            <span style={styles.semanticValue}>{state.title}</span>
           </div>
         </div>
+        {interaction ? (
+          runtimeExchange ? (
+            <OperationInteraction
+              interaction={interaction}
+              responding={responding}
+              respond={response => void respond(response)}
+            />
+          ) : (
+            <span role='alert' style={styles.consoleError}>
+              The configured Runtime Transport cannot answer this Interaction.
+            </span>
+          )
+        ) : null}
+        {responseError ? (
+          <span role='alert' style={styles.consoleError}>
+            {responseError}
+          </span>
+        ) : null}
         <ol style={styles.messageList} aria-label='Operation progress messages'>
           {exchange?.started ? (
             <ActivityMessage
@@ -119,12 +194,21 @@ export const OperationProgressDetail = ({
           {activity.snapshots.map(snapshot => {
             const progress = snapshot.snapshot.progress;
             const detail = progress?.message ?? progress?.phase;
+            const snapshotState = operationProgressState({
+              ...activity,
+              snapshots: [snapshot],
+              settled: undefined,
+            });
             return (
               <ActivityMessage
                 key={`${snapshot.observationId}:${snapshot.sequence}`}
                 direction='←'
                 outcome={snapshotOutcome(snapshot.snapshot.status)}
-                title={`${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`}
+                title={
+                  snapshot.snapshot.interaction
+                    ? snapshotState.title
+                    : `${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`
+                }
                 meta={`update #${snapshot.sequence} · ${formatClock(snapshot.at)}${
                   typeof progress?.percent === 'number' ? ` · ${progress.percent}%` : ''
                 }`}

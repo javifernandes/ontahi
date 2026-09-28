@@ -5,6 +5,7 @@ import {
   activityEntryOutcome,
   activityEntryTitle,
   formatClock,
+  operationProgressState,
   outcomeColor,
   type ActivityEntry,
 } from './activity-model.js';
@@ -37,6 +38,7 @@ export const ActivityList = ({
         if (!event) return null;
         const outcome = activityEntryOutcome(activity);
         const observation = activity.observation;
+        const operationState = observation ? operationProgressState(observation) : undefined;
         const graphObservation =
           activity.kind === 'graph-observation' ? activity.graphObservation : undefined;
         const exchange = activity.kind === 'exchange' ? activity.exchange : undefined;
@@ -60,8 +62,8 @@ export const ActivityList = ({
                     {graphObservation
                       ? 'query observation'
                       : exchange
-                        ? event.family
-                        : 'operation progress'}
+                        ? (operationState?.label ?? event.family)
+                        : (operationState?.label ?? 'operation progress')}
                   </span>
                   <span>{event.transportId}</span>
                   <span>{formatClock(activity.at)}</span>

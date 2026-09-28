@@ -597,4 +597,191 @@ describe('OntahiDevtools', () => {
     },
     uiTestTimeoutMs,
   );
+
+  it(
+    'presents and answers a pending approval from Activity',
+    async () => {
+      const diagnostics = createOntahiDiagnostics({
+        capturePayloads: true,
+        redact: value => value,
+        createId: () => 'approval-observation',
+      });
+      const run = { taskId: 'TodoItem.deleteFromNamedList', runId: 'run-approval' };
+      let finishApproval!: () => void;
+      const approvalAnswered = new Promise<void>(resolve => {
+        finishApproval = resolve;
+      });
+      const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+        if (envelope.family === 'operation')
+          return createRuntimeProtocolResponse(envelope, {
+            kind: 'invocation-result',
+            result: { ok: true, kind: 'success', value: { ...run, status: 'queued' } },
+          });
+        finishApproval();
+        return createRuntimeProtocolResponse(envelope, {
+          version: 1,
+          kind: 'snapshot',
+          snapshot: {
+            ...run,
+            status: 'running',
+            updatedAt: '2026-01-01T00:00:01.000Z',
+          },
+        });
+      });
+      const transport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'websocket',
+        kind: 'websocket',
+        transport: {
+          request,
+          durableOperation: {
+            observe: async function* <TResult>(_run: TaskRunIdentity) {
+              yield {
+                ...run,
+                status: 'running',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+                interaction: {
+                  id: 'approve-delete-items',
+                  kind: 'approval',
+                  prompt: 'Delete 5 items from “Inbox”?',
+                  proposal: {
+                    id: 'proposal-1',
+                    summary: 'Delete 5 items from “Inbox”.',
+                    requests: [{ version: 3, kind: 'graph-command' }],
+                  },
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                },
+              } as TaskSnapshot<TResult>;
+              await approvalAnswered;
+              yield {
+                ...run,
+                status: 'completed',
+                updatedAt: '2026-01-01T00:00:02.000Z',
+                completedAt: '2026-01-01T00:00:02.000Z',
+                result: { deleted: 5 },
+              } as TaskSnapshot<TResult>;
+            },
+          },
+        },
+      });
+      const invocation = createRuntimeProtocolRequest({
+        id: 'delete-items-1',
+        family: 'operation',
+        body: {
+          version: 1,
+          kind: 'invoke',
+          operationId: run.taskId,
+          input: { listName: 'Inbox' },
+        },
+      });
+      await transport.request(invocation);
+      const consume = (async () => {
+        for await (const _snapshot of transport.durableOperation.observe(run)) {
+          // Diagnostics consume the same canonical observation used by the surface.
+        }
+      })();
+      await vi.waitFor(() =>
+        expect(
+          diagnostics.inspect().events.some(event => event.kind === 'observation.snapshot'),
+        ).toBe(true),
+      );
+
+      render(
+        <OntahiDevtools diagnostics={diagnostics} initiallyOpen runtimeTransport={transport} />,
+      );
+      expect(screen.getAllByText('approval requested').length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText('Approval requested · Delete 5 items from “Inbox”.').length,
+      ).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+      await consume;
+      await vi.waitFor(() =>
+        expect(
+          request.mock.calls.some(
+            ([envelope]) =>
+              envelope.family === 'durable.operation' &&
+              (envelope.body as { response?: { decision?: string } }).response?.decision ===
+                'approve',
+          ),
+        ).toBe(true),
+      );
+      expect((await screen.findAllByText('completed')).length).toBeGreaterThan(0);
+    },
+    uiTestTimeoutMs,
+  );
+
+  it(
+    'resets Interaction response errors when selecting another Operation run',
+    async () => {
+      let observationSequence = 0;
+      const diagnostics = createOntahiDiagnostics({
+        capturePayloads: true,
+        redact: value => value,
+        createId: () => `approval-observation-${++observationSequence}`,
+      });
+      const runs = [
+        { taskId: 'Todo.firstReview', runId: 'run-first' },
+        { taskId: 'Todo.secondReview', runId: 'run-second' },
+      ] as const;
+      const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'protocol-error',
+          error: { code: 'inspection_unavailable', message: 'Approval is no longer available.' },
+        }),
+      );
+      const transport = instrumentRuntimeTransport({
+        diagnostics,
+        id: 'websocket',
+        kind: 'websocket',
+        transport: {
+          request,
+          durableOperation: {
+            observe: async function* <TResult>(run: TaskRunIdentity) {
+              yield {
+                ...run,
+                status: 'running',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+                interaction: {
+                  id: 'shared-approval-id',
+                  kind: 'approval',
+                  prompt: `Approve ${run.runId}?`,
+                  proposal: {
+                    id: `proposal-${run.runId}`,
+                    summary: `Apply ${run.runId}.`,
+                    requests: [{ version: 3, kind: 'graph-command' }],
+                  },
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                },
+              } as TaskSnapshot<TResult>;
+            },
+          },
+        },
+      });
+      for (const run of runs) {
+        const iterator = transport.durableOperation.observe(run)[Symbol.asyncIterator]();
+        await iterator.next();
+      }
+
+      const mounted = render(
+        <OntahiDevtools diagnostics={diagnostics} initiallyOpen runtimeTransport={transport} />,
+      );
+      const panel = within(mounted.container).getByRole('complementary', {
+        name: 'Ontahí Devtools',
+      });
+      const panelQueries = within(panel);
+      const traffic = within(panelQueries.getByRole('region', { name: 'Runtime traffic' }));
+      fireEvent.click(traffic.getByRole('button', { name: /Todo\.secondReview/ }));
+      fireEvent.click(panelQueries.getByRole('button', { name: 'Approve' }));
+      await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+      expect((await panelQueries.findByRole('alert')).textContent).toContain(
+        'Approval is no longer available.',
+      );
+
+      fireEvent.click(traffic.getByRole('button', { name: /Todo\.firstReview/ }));
+      expect(panelQueries.getByText('Approve run-first?')).toBeTruthy();
+      expect(panelQueries.getByRole('button', { name: 'Approve' })).toBeTruthy();
+      expect(panelQueries.queryByRole('alert')).toBeNull();
+    },
+    uiTestTimeoutMs,
+  );
 });

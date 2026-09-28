@@ -15,7 +15,7 @@ import {
   type GraphReadRequest,
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
-import type { TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   anonymousExecutionIdentity,
   executionIdentityCacheKey,
@@ -72,6 +72,7 @@ type ConsoleOperationSource = {
   readonly name: string;
   readonly description?: string;
   readonly input?: GraphSchemaDefinition;
+  readonly durable?: unknown;
 };
 
 type ConsoleEntitySource =
@@ -217,11 +218,13 @@ const ConsoleResultContent = ({
   mode,
   ordering,
   onDurableOperationCompleted,
+  onDurableObservationFinished,
 }: {
   readonly result: ConsoleResult;
   readonly mode: ConsoleResultMode;
   readonly ordering: ResultTableOrdering;
   readonly onDurableOperationCompleted?: (snapshot: TaskSnapshot) => void | Promise<void>;
+  readonly onDurableObservationFinished?: () => void;
 }) => {
   const snapshot = result.snapshot;
   if (!snapshot) {
@@ -241,6 +244,7 @@ const ConsoleResultContent = ({
         run={taskRun}
         transport={snapshot.transport}
         onCompleted={onDurableOperationCompleted}
+        onObservationFinished={onDurableObservationFinished}
         view={mode}
       />
     );
@@ -450,6 +454,7 @@ const ConsoleResultPanel = ({
   changeLimit,
   ordering,
   onDurableOperationCompleted,
+  onDurableObservationFinished,
 }: {
   readonly result: ConsoleResult;
   readonly matchesDraft: boolean;
@@ -460,6 +465,7 @@ const ConsoleResultPanel = ({
   readonly changeLimit: (limit: number) => void;
   readonly ordering: ResultTableOrdering;
   readonly onDurableOperationCompleted?: (snapshot: TaskSnapshot) => void | Promise<void>;
+  readonly onDurableObservationFinished?: () => void;
 }) => {
   const snapshot = result.snapshot;
   return (
@@ -531,6 +537,7 @@ const ConsoleResultPanel = ({
           mode={resultMode}
           ordering={ordering}
           onDurableOperationCompleted={onDurableOperationCompleted}
+          onDurableObservationFinished={onDurableObservationFinished}
         />
       </div>
     </div>
@@ -554,6 +561,19 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     [entityDefinitions],
   );
   const operations = useMemo(() => reflectConsoleOperations(options.entities), [options.entities]);
+  const durableOperationIds = useMemo(
+    () =>
+      new Set(
+        options.entities.flatMap(source =>
+          'domain' in source
+            ? Object.values(source.domain).flatMap(operation =>
+                operation.durable ? [operation.id] : [],
+              )
+            : [],
+        ),
+      ),
+    [options.entities],
+  );
   const identityKey = JSON.stringify(
     executionIdentityCacheKey(options.identity ?? anonymousExecutionIdentity),
   );
@@ -607,6 +627,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           : update,
     }));
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
+  const [activeDurableRun, setActiveDurableRun] = useState<TaskRunIdentity>();
   const viewRef = useRef<EditorView>();
   const executingRef = useRef<AbortController>();
   const observationRef = useRef<{
@@ -635,6 +656,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
   useEffect(() => {
     setStoredResult(undefined);
     setObservation(undefined);
+    setActiveDurableRun(undefined);
     return () => {
       executingRef.current?.abort();
       executingRef.current = undefined;
@@ -670,11 +692,14 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
+  const durableInvocation =
+    analysis.execution?.family === 'operation' &&
+    durableOperationIds.has(analysis.execution.body.operationId);
   const entityName = resolveConsoleContext(analysis.syntax.expression, application)?.name;
   const targetDiscovery = discovery.forEntity(entityName);
 
   const runDocument = (source: string) => {
-    if (executingRef.current) return;
+    if (executingRef.current || activeDurableRun) return;
     setObservation(undefined);
     const executedAnalysis = analyzeConsoleDocument(source, application, {
       limit,
@@ -774,8 +799,10 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
             );
           if (execution.family === 'graph.command')
             reconcileEntityMutationResult(clientCache, options.entities, response);
-          if (execution.family !== 'operation' || !operationTaskRunIdentity(response))
-            await options.onActionExecuted?.({ execution, response });
+          const taskRun =
+            execution.family === 'operation' ? operationTaskRunIdentity(response) : undefined;
+          if (taskRun) setActiveDurableRun(taskRun);
+          else await options.onActionExecuted?.({ execution, response });
           setResult({
             status: 'success',
             snapshot: {
@@ -1098,22 +1125,35 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                 ...styles.primaryButton,
                 ...(!analysis.execution ||
                 result.status === 'executing' ||
-                observation?.status === 'observing'
+                observation?.status === 'observing' ||
+                activeDurableRun
                   ? styles.disabledButton
                   : {}),
               }}
               disabled={
                 !analysis.execution ||
                 result.status === 'executing' ||
-                observation?.status === 'observing'
+                observation?.status === 'observing' ||
+                Boolean(activeDurableRun)
+              }
+              title={
+                durableInvocation
+                  ? 'Start this durable Operation and observe its run until it finishes.'
+                  : undefined
               }
               onClick={run}
             >
-              {result.status === 'executing' && observation?.status !== 'observing'
-                ? 'Running…'
-                : 'Run'}
+              {activeDurableRun
+                ? 'Observing…'
+                : result.status === 'executing' && observation?.status !== 'observing'
+                  ? durableInvocation
+                    ? 'Starting…'
+                    : 'Running…'
+                  : durableInvocation
+                    ? 'Start & observe'
+                    : 'Run'}
             </button>
-            {observation?.status === 'observing' ? (
+            {durableInvocation ? null : observation?.status === 'observing' ? (
               <button type='button' style={styles.primaryButton} onClick={stopObservation}>
                 Stop
               </button>
@@ -1193,6 +1233,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           if (execution?.family !== 'operation') return;
           return options.onActionExecuted?.({ execution, response: snapshot });
         }}
+        onDurableObservationFinished={() => setActiveDurableRun(undefined)}
       />
     </section>
   );
