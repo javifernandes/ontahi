@@ -711,7 +711,7 @@ describe('OntahiDevtools', () => {
   );
 
   it(
-    'resets Interaction response state when selecting another Operation run',
+    'resets Interaction response errors when selecting another Operation run',
     async () => {
       let observationSequence = 0;
       const diagnostics = createOntahiDiagnostics({
@@ -723,18 +723,12 @@ describe('OntahiDevtools', () => {
         { taskId: 'Todo.firstReview', runId: 'run-first' },
         { taskId: 'Todo.secondReview', runId: 'run-second' },
       ] as const;
-      const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
-        const body = envelope.body as { run?: TaskRunIdentity };
-        return createRuntimeProtocolResponse(envelope, {
-          version: 1,
-          kind: 'snapshot',
-          snapshot: {
-            ...(body.run ?? runs[0]),
-            status: 'running',
-            updatedAt: '2026-01-01T00:00:01.000Z',
-          },
-        });
-      });
+      const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
+        createRuntimeProtocolResponse(envelope, {
+          kind: 'protocol-error',
+          error: { code: 'inspection_unavailable', message: 'Approval is no longer available.' },
+        }),
+      );
       const transport = instrumentRuntimeTransport({
         diagnostics,
         id: 'websocket',
@@ -779,10 +773,14 @@ describe('OntahiDevtools', () => {
       fireEvent.click(traffic.getByRole('button', { name: /Todo\.secondReview/ }));
       fireEvent.click(panelQueries.getByRole('button', { name: 'Approve' }));
       await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+      expect((await panelQueries.findByRole('alert')).textContent).toContain(
+        'Approval is no longer available.',
+      );
 
       fireEvent.click(traffic.getByRole('button', { name: /Todo\.firstReview/ }));
       expect(panelQueries.getByText('Approve run-first?')).toBeTruthy();
       expect(panelQueries.getByRole('button', { name: 'Approve' })).toBeTruthy();
+      expect(panelQueries.queryByRole('alert')).toBeNull();
     },
     uiTestTimeoutMs,
   );
