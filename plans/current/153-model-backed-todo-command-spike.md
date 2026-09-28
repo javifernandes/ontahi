@@ -77,7 +77,7 @@ a stale snapshot is not permission to mutate. Do not infer retry safety from the
 - [153a](../backlog/153a-model-execution-security-and-authorization.md) owns prompt-injection and
   authorization hardening before broader or production use.
 - [153b](../backlog/153b-declarative-operation-context-scope.md) owns declarative graph context scope.
-- [153c](../backlog/153c-operation-interactions-and-resumption.md) owns implementation-neutral interactions.
+- [153c](../research/153c-operation-interactions-and-resumption.md) owns implementation-neutral interactions.
 - [132](../next/132-durable-invocation-identity-and-idempotency.md) owns invocation identity and retry semantics.
 
 Existing authorization and validation remain mandatory in the spike; comprehensive defenses are
