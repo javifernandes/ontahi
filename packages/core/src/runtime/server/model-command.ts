@@ -49,18 +49,7 @@ export type ModelCommandRuntime = {
   >;
 };
 
-/** Runtime entry point for graph instructions. The host supplies disclosure scope and bindings;
- * the operation declarations supply descriptions and canonical contracts. */
-export const createModelCommandRuntime = ({
-  application,
-  provider,
-  authorize,
-  scope,
-  instructions,
-  formatHelp,
-  dispatchRead,
-  dispatchCommand,
-}: {
+export type CreateModelCommandRuntimeOptions = {
   application: OntahiApplication;
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
@@ -76,7 +65,20 @@ export const createModelCommandRuntime = ({
   instructions?: string;
   /** Localize capability presentation without asking the model to invent descriptions. */
   formatHelp?: (descriptions: readonly string[], request: ModelCommandRequest) => string;
-}): ModelCommandRuntime => {
+};
+
+/** Runtime entry point for graph instructions. The host supplies disclosure scope and bindings;
+ * the operation declarations supply descriptions and canonical contracts. */
+export const createModelCommandRuntime = ({
+  application,
+  provider,
+  authorize,
+  scope,
+  instructions,
+  formatHelp,
+  dispatchRead,
+  dispatchCommand,
+}: CreateModelCommandRuntimeOptions): ModelCommandRuntime => {
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
   const catalog = (current: ModelCommandScope): ModelOperationExposure[] =>

@@ -3,9 +3,9 @@ import type { ModelGraphCommandExposure } from '@ontahi/core/runtime/server';
 
 import { TodoItem, TodoList } from '../todo.js';
 
-import type { createCommandContextReader } from './context.js';
+import type { TodoModelContext } from './context.js';
 
-type Context = Awaited<ReturnType<ReturnType<typeof createCommandContextReader>>>;
+type Context = TodoModelContext;
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const strict = (fields: Parameters<typeof graphSchema.object>[0]) =>
   graphSchema.object(fields, { unknownKeys: 'strict' });

@@ -1,10 +1,8 @@
 import { adaptEffectMethods } from '@ontahi/core/computation/effect';
-import { inProcessTasks, ontahi } from '@ontahi/core/runtime/server';
+import { createOllamaModelProvider, inProcessTasks, ontahi } from '@ontahi/core/runtime/server';
 
-import { createOllamaProvider } from './command-chat/model-provider.js';
 import { createTodoModelRuntime } from './command-chat/runtime.js';
 import { defaultStorage } from './storage.js';
-import { todoGraphReadPolicies, type TodoGraphReadAuthority } from './todo-read-policies.js';
 import { Tag, TodoItem, TodoList, type TodoCapabilities } from './todo.js';
 
 export const todoNotifications = adaptEffectMethods<TodoCapabilities['runtime']['notifications']>({
@@ -13,7 +11,7 @@ export const todoNotifications = adaptEffectMethods<TodoCapabilities['runtime'][
 
 const model = process.env.TODO_LLM_MODEL;
 export const todoCommandProvider = model
-  ? createOllamaProvider({
+  ? createOllamaModelProvider({
       model,
       baseUrl: process.env.TODO_LLM_URL,
     })
@@ -33,9 +31,6 @@ export const TodoApplication = ontahi({
 export const todoModelRuntime = todoCommandProvider
   ? createTodoModelRuntime({
       application: TodoApplication,
-      read: TodoApplication.createGraphReadDispatcher<TodoGraphReadAuthority>(
-        todoGraphReadPolicies,
-      ),
       provider: todoCommandProvider,
     })
   : undefined;

@@ -732,6 +732,19 @@ returns `executed`, `answered`, or `unresolved`. `scope` supplies:
 - `commands`: optional `ModelGraphCommandExposure` entries, each with a description, a schema
   restricting the canonical request, a scope validator, and an optional result message.
 
+When reads and commands use an `OntahiApplication`,
+`createApplicationModelCommandRuntime(...)` creates the policy-aware graph dispatchers and binds
+each call to the host-provided authority. Its `scope` receives `{read?}` as a third argument. The
+application owns the bounded model-visible projection and uses `read` to obtain it; Core owns
+dispatcher construction, cancellation checks, and canonical execution through the same policies
+used by other callers. Command dispatch remains internal to the runtime so context construction
+cannot mutate the graph.
+
+For local development, `createOllamaModelProvider({model, baseUrl?, ...})` implements
+`ModelProvider` with Ollama's structured `/api/chat` endpoint using `fetch`. Provider configuration
+stays on the server and can be replaced without changing the model command runtime or application
+scope.
+
 Derive editable value schemas from entity fields. A request must match an exposed command schema
 before its validator runs. The runtime reloads scope and validates again after inference, then
 passes the same canonical request to `dispatchCommand(request, signal)`. Hosts must connect that

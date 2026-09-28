@@ -454,16 +454,18 @@ The boundaries are explicit:
 - `operation.description`, input/output contracts, and requirements belong to the domain model.
   Core's `createModelCommandRuntime` resolves these declarations, interprets the request, reloads
   the scope, validates the canonical proposal, and dispatches the selected operation.
-- `command-chat/runtime.ts` composes that runtime with the provider, authentication policy, and
-  bounded context reader. It does not implement the orchestration itself.
+- `command-chat/runtime.ts` supplies Todo's authentication, bounded scope, messages, and
+  instructions to Core's application-bound model runtime. Core constructs the policy-aware Graph
+  Read and Graph Command dispatchers.
 - `command-chat/bindings.ts` contains the application-specific scope validation and result messages for canonical action inputs. It does not duplicate
   operation descriptions. This explicit exposure configuration is not automatic graph-scope inference.
 - `command-chat/graph-reads.ts` exposes the bounded Todo list/item read shapes the model may
   propose. Core validates the proposal against those shapes, reloads the scope, and sends it to the
   normal policy-aware Graph Read dispatcher.
-- `context.ts` reads through Graph Read policies and passes visible lists and items, including their refs and completion selections to the model. Limits are 100 lists, 100 items, 24,000 serialized context
+- `context.ts` declares Todo's model-visible Graph Read projection and passes visible lists and items, including their refs and completion selections to the model. Limits are 100 lists, 100 items, 24,000 serialized context
   characters, and 2,000 request characters. The model copies these canonical values into requests.
-- `model-provider.ts` adapts Ollama to Core's provider contract without importing Todo.
+- Core's `createOllamaModelProvider` adapts Ollama to the model provider contract without Todo
+  dependencies.
 
 There is no list selector or Todo-specific focus input. `complete banana` searches all visible
 unfinished items. A unique match can be completed directly; ambiguous matches request a title and

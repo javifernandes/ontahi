@@ -13,7 +13,6 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TodoApplication } from '../graph.js';
-import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
 import { TodoItem, TodoList } from '../todo.js';
 
 import { createTodoModelRuntime } from './runtime.js';
@@ -26,7 +25,6 @@ let runtime: ModelCommandRuntime;
 const bind = (generate: ModelProvider['generate']) =>
   (runtime = createTodoModelRuntime({
     application: TodoApplication,
-    read: TodoApplication.createGraphReadDispatcher<TodoGraphReadAuthority>(todoGraphReadPolicies),
     provider: { generate },
   }));
 const proposal = (operationId: string, input: unknown) => ({
@@ -284,16 +282,6 @@ describe('Todo canonical model requests', () => {
         runtime.submit({ text: 'help' }, new AbortController().signal),
       ),
     ).rejects.toHaveProperty('code', 'command_unauthorized');
-    expect(generate).not.toHaveBeenCalled();
-  });
-  it('honors graph read policies', async () => {
-    const generate = vi.fn();
-    runtime = createTodoModelRuntime({
-      application: TodoApplication,
-      read: TodoApplication.createGraphReadDispatcher<TodoGraphReadAuthority>([]),
-      provider: { generate },
-    });
-    await expect(submit()).rejects.toHaveProperty('code', 'context_unavailable');
     expect(generate).not.toHaveBeenCalled();
   });
   it('refuses incomplete context', async () => {

@@ -5,9 +5,9 @@ import { ModelInterpretationError, type ModelCommandBinding } from '@ontahi/core
 
 import { TodoItem, TodoList } from '../todo.js';
 
-import type { createCommandContextReader } from './context.js';
+import type { TodoModelContext } from './context.js';
 
-type Context = Awaited<ReturnType<ReturnType<typeof createCommandContextReader>>>;
+type Context = TodoModelContext;
 const itemSelection = (id: string) =>
   Selection.references(TodoItem, [createEntityRef(TodoItem, { id })]).toJSON();
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
