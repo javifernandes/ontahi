@@ -1,4 +1,5 @@
 import {
+  createEntityRef,
   field,
   graphSchema,
   mapRelation,
@@ -308,7 +309,7 @@ export const TodoItem = entity({
               Effect.gen(function* () {
                 const todos = [
                   ...(yield* todoEntities
-                    .where(todo => todo.list.eq(listCommands.refById(selected.id)))
+                    .where(todo => todo.list.eq(createEntityRef(TodoList, { id: selected.id })))
                     .run()),
                 ].sort((left, right) => left.id.localeCompare(right.id));
                 const proposedEffects: Array<{

@@ -832,7 +832,8 @@ an explicitly declared trigger remains authoritative. The in-process adapter als
 Promise continuation per pending Interaction; an Effect `Deferred` shared between the detached Task
 runtime and the later response runtime could resume pure Effect work but stall at the next
 asynchronous boundary. Tests now cross async sleep, graph read, and graph command boundaries after
-responses.
+responses. The adapter catches the full Effect cause around background execution so a defect after
+resumption also produces a terminal failed snapshot.
 
 The Todo execution is deliberately a documented sequential command sequence because Ontahí still
 has no canonical multi-command transaction envelope for an approval proposal. It detects state

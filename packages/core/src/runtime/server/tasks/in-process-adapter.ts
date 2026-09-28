@@ -1,4 +1,4 @@
-import { Effect, Stream } from 'effect';
+import { Cause, Effect, Option, Stream } from 'effect';
 
 import { cloneJson, isJsonValue } from '../../../value/json.js';
 
@@ -67,6 +67,11 @@ const createContinuation = () => {
     resume = resolve;
   });
   return { continuation, resume };
+};
+
+const taskFailureFromCause = (cause: Cause.Cause<unknown>): TaskFailure => {
+  const failure = Cause.failureOption(cause);
+  return toTaskFailure(Option.isSome(failure) ? failure.value : Cause.squash(cause));
 };
 
 const pendingInteractionsByStorage = new WeakMap<object, Map<string, PendingInteraction>>();
@@ -320,16 +325,17 @@ export const createInProcessTaskRuntime = ({
             result: parsedResult,
           });
         }).pipe(
-          Effect.catchAll(error =>
-            update(ref, {
+          Effect.catchAllCause(cause => {
+            const error = taskFailureFromCause(cause);
+            return update(ref, {
               status: 'failed',
               completedAt: now(),
               error: {
                 code: error.reason,
                 message: error.message,
               },
-            }),
-          ),
+            });
+          }),
         );
 
         void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
