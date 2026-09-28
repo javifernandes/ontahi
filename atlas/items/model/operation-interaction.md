@@ -45,6 +45,12 @@ of a run reference is sufficient to answer its Interaction. That is suitable onl
 public example; user-attributed approval requires an authenticated actor or a future run-specific
 claimant mechanism.
 
+The Devtools Console is the first generic surface projection. When an Operation invocation returns
+a Task Run identity, it observes the run through the existing durable Operation transport and
+renders progress, choice, approval, failure, and completion. Its controls answer Interactions with
+the canonical Runtime Protocol request, so Devtools adds presentation without owning a parallel
+conversation or continuation contract.
+
 The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
 It supplies evidence for this direction without implementing conversational continuation.
 

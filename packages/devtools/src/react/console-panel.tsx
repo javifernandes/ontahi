@@ -15,6 +15,7 @@ import {
   type GraphReadRequest,
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
+import type { TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   anonymousExecutionIdentity,
   executionIdentityCacheKey,
@@ -61,6 +62,7 @@ import { useConsoleCommandCapabilities } from './console-command-capabilities.js
 import { useConsoleReadCapabilities } from './console-read-capabilities.js';
 import { ConsoleResultLimit } from './console-result-limit.js';
 import { styles } from './devtools-styles.js';
+import { DurableOperationRun, operationTaskRunIdentity } from './durable-operation-run.js';
 import { JsonView } from './json-view.js';
 import { ResultTable, SemanticPayload, type ResultTableOrdering } from './semantic-payload.js';
 
@@ -214,10 +216,12 @@ const ConsoleResultContent = ({
   result,
   mode,
   ordering,
+  onDurableOperationCompleted,
 }: {
   readonly result: ConsoleResult;
   readonly mode: ConsoleResultMode;
   readonly ordering: ResultTableOrdering;
+  readonly onDurableOperationCompleted?: (snapshot: TaskSnapshot) => void | Promise<void>;
 }) => {
   const snapshot = result.snapshot;
   if (!snapshot) {
@@ -230,6 +234,16 @@ const ConsoleResultContent = ({
       </span>
     );
   }
+  const taskRun = operationTaskRunIdentity(snapshot.value);
+  if (taskRun && snapshot.transport)
+    return (
+      <DurableOperationRun
+        run={taskRun}
+        transport={snapshot.transport}
+        onCompleted={onDurableOperationCompleted}
+        view={mode}
+      />
+    );
   if (mode === 'json') return <JsonView value={snapshot.value} label='Console result JSON' />;
   if (snapshot.request?.mode === 'run' && Array.isArray(snapshot.value))
     return <ResultTable value={snapshot.value} ordering={ordering} />;
@@ -435,6 +449,7 @@ const ConsoleResultPanel = ({
   limitDisabledReason,
   changeLimit,
   ordering,
+  onDurableOperationCompleted,
 }: {
   readonly result: ConsoleResult;
   readonly matchesDraft: boolean;
@@ -444,6 +459,7 @@ const ConsoleResultPanel = ({
   readonly limitDisabledReason?: string;
   readonly changeLimit: (limit: number) => void;
   readonly ordering: ResultTableOrdering;
+  readonly onDurableOperationCompleted?: (snapshot: TaskSnapshot) => void | Promise<void>;
 }) => {
   const snapshot = result.snapshot;
   return (
@@ -510,7 +526,12 @@ const ConsoleResultPanel = ({
             {result.message}
           </span>
         ) : null}
-        <ConsoleResultContent result={result} mode={resultMode} ordering={ordering} />
+        <ConsoleResultContent
+          result={result}
+          mode={resultMode}
+          ordering={ordering}
+          onDurableOperationCompleted={onDurableOperationCompleted}
+        />
       </div>
     </div>
   );
@@ -753,7 +774,8 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
             );
           if (execution.family === 'graph.command')
             reconcileEntityMutationResult(clientCache, options.entities, response);
-          await options.onActionExecuted?.({ execution, response });
+          if (execution.family !== 'operation' || !operationTaskRunIdentity(response))
+            await options.onActionExecuted?.({ execution, response });
           setResult({
             status: 'success',
             snapshot: {
@@ -1165,6 +1187,11 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           order: snapshotRequest?.orderBy[0],
           disabledReason: sortDisabledReason,
           onSort: sortBy,
+        }}
+        onDurableOperationCompleted={snapshot => {
+          const execution = result.snapshot?.execution;
+          if (execution?.family !== 'operation') return;
+          return options.onActionExecuted?.({ execution, response: snapshot });
         }}
       />
     </section>
