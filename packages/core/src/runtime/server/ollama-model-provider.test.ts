@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createOllamaProvider } from './model-provider.js';
+import { createOllamaModelProvider } from './ollama-model-provider.js';
 
 const request = () => ({
   instructions: 'Resolve',
@@ -18,7 +18,7 @@ describe('Ollama model provider', () => {
         message: { content: '{"status":"unresolved","reason":"Missing item"}' },
       }),
     );
-    const provider = createOllamaProvider({ model: 'local-small', fetchRequest });
+    const provider = createOllamaModelProvider({ model: 'local-small', fetchRequest });
     expect(await provider.generate(request())).toEqual({
       status: 'unresolved',
       reason: 'Missing item',
@@ -45,7 +45,9 @@ describe('Ollama model provider', () => {
         message: { content: '{"status":"help"}' },
       }),
     );
-    await createOllamaProvider({ model: 'local', think: true, fetchRequest }).generate(request());
+    await createOllamaModelProvider({ model: 'local', think: true, fetchRequest }).generate(
+      request(),
+    );
     expect(JSON.parse(String(fetchRequest.mock.calls[0]![1]?.body))).toMatchObject({
       think: true,
       options: { num_predict: 4096, num_ctx: 32_768 },
@@ -62,7 +64,7 @@ describe('Ollama model provider', () => {
         message: { content: '{"status":"help"}' },
       }),
     );
-    await createOllamaProvider({ model: 'local', baseUrl, fetchRequest }).generate(request());
+    await createOllamaModelProvider({ model: 'local', baseUrl, fetchRequest }).generate(request());
     expect(String(fetchRequest.mock.calls[0]![0])).toBe(expected);
   });
 
@@ -77,7 +79,7 @@ describe('Ollama model provider', () => {
   ])('rejects invalid/failed responses without retrying', async (response, code) => {
     const fetchRequest = vi.fn<typeof fetch>().mockResolvedValue(response);
     await expect(
-      createOllamaProvider({ model: 'small', fetchRequest }).generate(request()),
+      createOllamaModelProvider({ model: 'small', fetchRequest }).generate(request()),
     ).rejects.toMatchObject({ code });
     expect(fetchRequest).toHaveBeenCalledOnce();
   });
@@ -92,7 +94,7 @@ describe('Ollama model provider', () => {
         }),
     );
     await expect(
-      createOllamaProvider({ model: 'small', timeoutMs: 5, fetchRequest }).generate(request()),
+      createOllamaModelProvider({ model: 'small', timeoutMs: 5, fetchRequest }).generate(request()),
     ).rejects.toMatchObject({ code: 'model_cancelled' });
     expect(fetchRequest.mock.calls[0]![1]!.signal!.aborted).toBe(true);
   });
@@ -107,11 +109,27 @@ describe('Ollama model provider', () => {
           });
         }),
     );
-    const result = createOllamaProvider({ model: 'small', fetchRequest }).generate({
+    const result = createOllamaModelProvider({ model: 'small', fetchRequest }).generate({
       ...request(),
       signal: controller.signal,
     });
     controller.abort();
     await expect(result).rejects.toMatchObject({ code: 'model_cancelled' });
+  });
+
+  it('propagates cancellation that happened before generation started', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchRequest = vi.fn<typeof fetch>(async (_url, init) => {
+      expect(init?.signal?.aborted).toBe(true);
+      throw new Error('aborted');
+    });
+
+    await expect(
+      createOllamaModelProvider({ model: 'small', fetchRequest }).generate({
+        ...request(),
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: 'model_cancelled' });
   });
 });

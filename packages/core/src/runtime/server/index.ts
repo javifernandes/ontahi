@@ -381,10 +381,20 @@ export {
 } from './model-interpretation.js';
 export {
   createModelCommandRuntime,
+  type CreateModelCommandRuntimeOptions,
   type ModelCommandRuntime,
   type ModelCommandScope,
   type ModelCommandBinding,
 } from './model-command.js';
+export {
+  createApplicationModelCommandRuntime,
+  type ApplicationModelScopeAccess,
+  type CreateApplicationModelCommandRuntimeOptions,
+} from './application-model-command.js';
+export {
+  createOllamaModelProvider,
+  type OllamaModelProviderOptions,
+} from './ollama-model-provider.js';
 export { submitModelCommandProtocol } from './model-command-protocol.js';
 
 export type { ModelGraphCommandExposure } from './model-graph-command.js';

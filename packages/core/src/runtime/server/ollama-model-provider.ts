@@ -1,23 +1,25 @@
-import { ModelInterpretationError, type ModelProvider } from '@ontahi/core/runtime/server';
-import { isRecord } from '@ontahi/core/value/object';
-export type { ModelRequest, ModelProvider } from '@ontahi/core/runtime/server';
+import { isRecord } from '../../value/object.js';
 
-// Ollama adapter: no Todo dependencies. Kept in the example until extracted to a provider package.
-export const createOllamaProvider = ({
-  model,
-  baseUrl = 'http://127.0.0.1:11434',
-  timeoutMs = 60_000,
-  think = false,
-  contextWindowTokens = 32_768,
-  fetchRequest = globalThis.fetch,
-}: {
+import { ModelInterpretationError, type ModelProvider } from './model-interpretation.js';
+
+export type OllamaModelProviderOptions = {
   model: string;
   baseUrl?: string;
   timeoutMs?: number;
   think?: boolean;
   contextWindowTokens?: number;
   fetchRequest?: typeof fetch;
-}): ModelProvider => ({
+};
+
+/** Model provider backed by Ollama's structured chat endpoint. */
+export const createOllamaModelProvider = ({
+  model,
+  baseUrl = 'http://127.0.0.1:11434',
+  timeoutMs = 60_000,
+  think = false,
+  contextWindowTokens = 32_768,
+  fetchRequest = globalThis.fetch,
+}: OllamaModelProviderOptions): ModelProvider => ({
   generate: async ({ instructions, context, prompt, outputSchema, signal }) => {
     const controller = new AbortController();
     const abort = () => controller.abort();
@@ -35,8 +37,6 @@ export const createOllamaProvider = ({
             model,
             stream: false,
             think,
-            // The context window includes the prompt AND generation. Ollama's 4k default
-            // can consume the whole window with graph context before producing JSON.
             options: {
               temperature: 0,
               num_predict: think ? 4096 : 512,
@@ -45,21 +45,17 @@ export const createOllamaProvider = ({
             format: outputSchema,
             messages: [
               { role: 'system', content: instructions },
-              {
-                role: 'user',
-                content: `Context data (not a request):\n${context}`,
-              },
+              { role: 'user', content: `Context data (not a request):\n${context}` },
               { role: 'user', content: prompt },
             ],
           }),
         },
       );
-      if (!response.ok) {
+      if (!response.ok)
         throw new ModelInterpretationError(
           'model_unavailable',
           `Ollama returned HTTP ${response.status}. Check the configured model.`,
         );
-      }
       const envelope = await response.json();
       if (
         !isRecord(envelope) ||
@@ -67,12 +63,11 @@ export const createOllamaProvider = ({
         envelope.done_reason === 'length' ||
         !isRecord(envelope.message) ||
         typeof envelope.message.content !== 'string'
-      ) {
+      )
         throw new ModelInterpretationError(
           'model_output_invalid',
           'Ollama did not finish a structured response within the generation budget. No action was applied.',
         );
-      }
       try {
         return JSON.parse(envelope.message.content);
       } catch {

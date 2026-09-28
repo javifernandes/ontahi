@@ -1,53 +1,42 @@
 import { randomUUID } from 'node:crypto';
 
-import { createEntityRef, Selection, type GraphReadDispatcher } from '@ontahi/core/data-graph';
+import { createEntityRef, Selection } from '@ontahi/core/data-graph';
 import {
-  createModelCommandRuntime,
+  createApplicationModelCommandRuntime,
   getCurrentInvocationContext,
   ModelInterpretationError,
-  type OntahiApplication,
   type GraphCommandableOntahiApplication,
+  type GraphReadableOntahiApplication,
   type ModelProvider,
+  type OntahiApplication,
 } from '@ontahi/core/runtime/server';
 
 import { todoAuthenticationMode } from '../authentication-mode.js';
 import { todoGraphCommandPolicies } from '../todo-command-policies.js';
-import type { TodoGraphReadAuthority } from '../todo-read-policies.js';
+import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
 import { TodoItem, TodoList } from '../todo.js';
 
 import { todoCommandBindings, todoCommandInstructions } from './bindings.js';
-import { createCommandContextReader } from './context.js';
+import { readTodoModelContext } from './context.js';
 import { todoGraphCommands } from './graph-commands.js';
 import { todoGraphReads } from './graph-reads.js';
 
 // Application composition only; orchestration lives in the Ontahi runtime.
 export const createTodoModelRuntime = ({
   application,
-  read,
   provider,
 }: {
-  application: OntahiApplication;
-  read: GraphReadDispatcher<TodoGraphReadAuthority>;
+  application: OntahiApplication &
+    Partial<GraphReadableOntahiApplication & GraphCommandableOntahiApplication>;
   provider: ModelProvider;
 }) => {
-  const contextFor = createCommandContextReader(read);
-  const commandDispatcher = (
-    application as unknown as GraphCommandableOntahiApplication
-  ).createGraphCommandDispatcher<TodoGraphReadAuthority>(todoGraphCommandPolicies);
-  return createModelCommandRuntime({
+  return createApplicationModelCommandRuntime<TodoGraphReadAuthority>({
     application,
     provider,
-    dispatchRead: (request, signal) => {
-      signal.throwIfAborted();
-      return read(request, {
-        authority: { principal: getCurrentInvocationContext()?.principal ?? null },
-      });
-    },
-    dispatchCommand: (request, signal) => {
-      signal.throwIfAborted();
-      return commandDispatcher(request, {
-        authority: { principal: getCurrentInvocationContext()?.principal ?? null },
-      });
+    graph: {
+      authority: () => ({ principal: getCurrentInvocationContext()?.principal ?? null }),
+      readPolicies: todoGraphReadPolicies,
+      commandPolicies: todoGraphCommandPolicies,
     },
     instructions: todoCommandInstructions,
     formatHelp: (descriptions, request) =>
@@ -59,8 +48,10 @@ export const createTodoModelRuntime = ({
           'Sign in before using command chat.',
         );
     },
-    scope: async request => {
-      const current = await contextFor();
+    scope: async (request, signal, graph) => {
+      if (!graph.read)
+        throw new ModelInterpretationError('context_unavailable', 'Graph reads are unavailable.');
+      const current = await readTodoModelContext(graph.read, signal);
       return {
         unresolved: current.complete
           ? undefined
