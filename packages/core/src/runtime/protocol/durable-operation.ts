@@ -63,7 +63,8 @@ export type DurableOperationProtocolResponseParseResult =
 const inspectRequestKeys = new Set(['version', 'kind', 'run']);
 const respondRequestKeys = new Set(['version', 'kind', 'run', 'response']);
 const runKeys = new Set(['taskId', 'runId']);
-const interactionResponseKeys = new Set(['interactionId', 'optionId']);
+const choiceInteractionResponseKeys = new Set(['interactionId', 'optionId']);
+const approvalInteractionResponseKeys = new Set(['interactionId', 'decision', 'reason']);
 const responseKeys = new Set(['version', 'kind', 'snapshot']);
 const snapshotKeys = new Set([
   'taskId',
@@ -81,8 +82,10 @@ const snapshotKeys = new Set([
 ]);
 const subjectKeys = new Set(['type', 'id']);
 const progressKeys = new Set(['phase', 'message', 'percent']);
-const interactionKeys = new Set(['id', 'kind', 'prompt', 'options', 'createdAt']);
+const choiceInteractionKeys = new Set(['id', 'kind', 'prompt', 'options', 'createdAt']);
+const approvalInteractionKeys = new Set(['id', 'kind', 'prompt', 'proposal', 'createdAt']);
 const interactionOptionKeys = new Set(['id', 'label']);
+const approvalProposalKeys = new Set(['id', 'summary', 'requests']);
 const taskErrorKeys = new Set(['code', 'message']);
 const protocolErrorKeys = new Set(['kind', 'error']);
 const protocolErrorDetailKeys = new Set(['code', 'message']);
@@ -112,9 +115,11 @@ const isTaskRunIdentity = (value: unknown): value is TaskRunIdentity =>
 
 const isTaskInteractionResponse = (value: unknown): value is TaskInteractionResponse =>
   isRecord(value) &&
-  hasOnlyKeys(value, interactionResponseKeys) &&
   isIdentitySegment(value.interactionId) &&
-  isIdentitySegment(value.optionId);
+  ((hasOnlyKeys(value, choiceInteractionResponseKeys) && isIdentitySegment(value.optionId)) ||
+    (hasOnlyKeys(value, approvalInteractionResponseKeys) &&
+      (value.decision === 'approve' || value.decision === 'reject') &&
+      isOptionalString(value.reason)));
 
 const isOptionalString = (value: unknown): value is string | undefined =>
   value === undefined || typeof value === 'string';
@@ -183,7 +188,7 @@ export const parseDurableOperationProtocolRequest = (
     }
     if (!isTaskInteractionResponse(value.response)) {
       return invalidRequest(
-        'Durable Operation response must contain non-empty interactionId and optionId strings.',
+        'Durable Operation response must contain a valid choice or approval response.',
       );
     }
     return {
@@ -192,10 +197,17 @@ export const parseDurableOperationProtocolRequest = (
         version: 1,
         kind: 'respond',
         run,
-        response: {
-          interactionId: value.response.interactionId,
-          optionId: value.response.optionId,
-        },
+        response:
+          'optionId' in value.response
+            ? {
+                interactionId: value.response.interactionId,
+                optionId: value.response.optionId,
+              }
+            : {
+                interactionId: value.response.interactionId,
+                decision: value.response.decision,
+                ...(value.response.reason === undefined ? {} : { reason: value.response.reason }),
+              },
       },
     };
   }
@@ -267,13 +279,45 @@ const parseInteraction = (value: unknown): TaskPendingInteraction | undefined =>
   if (value === undefined) return undefined;
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, interactionKeys) ||
     !isIdentitySegment(value.id) ||
-    value.kind !== 'choice' ||
     typeof value.prompt !== 'string' ||
-    !Array.isArray(value.options) ||
-    value.options.length === 0 ||
     !isTimestamp(value.createdAt)
+  ) {
+    return undefined;
+  }
+
+  if (value.kind === 'approval') {
+    if (
+      !hasOnlyKeys(value, approvalInteractionKeys) ||
+      !isRecord(value.proposal) ||
+      !hasOnlyKeys(value.proposal, approvalProposalKeys) ||
+      !isIdentitySegment(value.proposal.id) ||
+      typeof value.proposal.summary !== 'string' ||
+      value.proposal.summary.trim().length === 0 ||
+      !Array.isArray(value.proposal.requests) ||
+      value.proposal.requests.length === 0 ||
+      !value.proposal.requests.every(isJsonValue)
+    ) {
+      return undefined;
+    }
+    return {
+      id: value.id,
+      kind: 'approval',
+      prompt: value.prompt,
+      proposal: {
+        id: value.proposal.id,
+        summary: value.proposal.summary,
+        requests: (value.proposal.requests as JsonValue[]).map(request => cloneJson(request)),
+      },
+      createdAt: value.createdAt,
+    };
+  }
+
+  if (
+    value.kind !== 'choice' ||
+    !hasOnlyKeys(value, choiceInteractionKeys) ||
+    !Array.isArray(value.options) ||
+    value.options.length === 0
   ) {
     return undefined;
   }

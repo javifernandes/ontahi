@@ -56,12 +56,10 @@ export const invalidTaskInteractionFailure = (ref: TaskRunIdentity, message: str
 export const invalidTaskInteractionResponseFailure = (
   ref: TaskRunIdentity,
   interactionId: string,
-  optionId: string,
 ): TaskFailure =>
-  createTaskFailure('invalid_task_interaction_response', 'Unknown interaction option.', {
+  createTaskFailure('invalid_task_interaction_response', 'Invalid interaction response.', {
     ...ref,
     interactionId,
-    optionId,
   });
 
 export const missingTaskStepFailure = (taskId: string, stepName: string): TaskFailure =>

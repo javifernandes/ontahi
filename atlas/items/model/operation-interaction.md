@@ -22,10 +22,12 @@ question does not by itself grant authority. Any eventual continuation must pres
 identity and recheck authority and relevant state before applying effects.
 
 A semantic interaction request and its typed response are distinct from host rendering and provider
-message history. The first experimental contract adds a choice Interaction to a running durable
-Operation snapshot and accepts its response through the existing `durable.operation` protocol.
-Broader kinds, lifecycle, expiry, persistence, cancellation, authorization, and approval binding
-remain under investigation in plan 153c.
+message history. The experimental contract adds choice and approval Interactions to a running
+durable Operation snapshot and accepts their responses through the existing `durable.operation`
+protocol. An approval exposes a stable proposal identity, summary, and exact JSON-safe requests;
+the in-process runtime retains the response and resumes only the matching Interaction. Lifecycle,
+expiry, persistence, cancellation, richer participant authorization, stale-proposal verification,
+and command dispatch after approval remain under investigation in plan 153c.
 
 The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
 It supplies evidence for this direction without implementing conversational continuation.

@@ -1,3 +1,4 @@
+import type { JsonValue } from '../value/json.js';
 import { isRecord } from '../value/object.js';
 
 export type OperationValidationIssue = {
@@ -211,12 +212,36 @@ export type TaskPendingChoiceInteraction = {
   createdAt: string;
 };
 
-export type TaskPendingInteraction = TaskPendingChoiceInteraction;
+export type TaskApprovalProposal = {
+  id: string;
+  summary: string;
+  requests: ReadonlyArray<JsonValue>;
+};
 
-export type TaskInteractionResponse = {
+export type TaskPendingApprovalInteraction = {
+  id: string;
+  kind: 'approval';
+  prompt: string;
+  proposal: TaskApprovalProposal;
+  createdAt: string;
+};
+
+export type TaskPendingInteraction = TaskPendingChoiceInteraction | TaskPendingApprovalInteraction;
+
+export type TaskChoiceInteractionResponse = {
   interactionId: string;
   optionId: string;
 };
+
+export type TaskApprovalInteractionResponse = {
+  interactionId: string;
+  decision: 'approve' | 'reject';
+  reason?: string;
+};
+
+export type TaskInteractionResponse =
+  | TaskChoiceInteractionResponse
+  | TaskApprovalInteractionResponse;
 
 export type TaskInteractionResponseContext = {
   actor: TaskActor;

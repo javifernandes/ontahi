@@ -805,7 +805,7 @@ describe('tasks', () => {
     });
   });
 
-  it('suspends and resumes a durable operation through a typed choice interaction', async () => {
+  it('suspends and resumes a durable operation through choice and approval interactions', async () => {
     const OutputSchema = value('ReviewOutput', {
       success: field.boolean(),
       approved: field.boolean(),
@@ -820,16 +820,25 @@ describe('tasks', () => {
         },
         run: (_input, context) =>
           Effect.gen(function* () {
-            const decision = yield* context!.interact.choice({
-              id: 'approve-document',
-              prompt: 'Approve this document?',
+            yield* context!.interact.choice({
+              id: 'choose-reviewer',
+              prompt: 'Who should review this document?',
               options: [
-                { id: 'yes', label: 'Approve', value: { approved: true } },
-                { id: 'no', label: 'Reject', value: { approved: false } },
+                { id: 'legal', label: 'Legal', value: 'legal' },
+                { id: 'editorial', label: 'Editorial', value: 'editorial' },
               ],
             });
+            const decision = yield* context!.interact.approval({
+              id: 'approve-document',
+              prompt: 'Apply the proposed document update?',
+              proposal: {
+                id: 'document-update-v1',
+                summary: 'Publish the reviewed document.',
+                requests: [{ version: 1, kind: 'graph-command', command: { action: 'update' } }],
+              },
+            });
 
-            return { success: true as const, approved: decision.approved };
+            return { success: true as const, approved: decision.decision === 'approve' };
           }),
       }),
     });
@@ -856,12 +865,12 @@ describe('tasks', () => {
       await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
         status: 'running',
         interaction: {
-          id: 'approve-document',
+          id: 'choose-reviewer',
           kind: 'choice',
-          prompt: 'Approve this document?',
+          prompt: 'Who should review this document?',
           options: [
-            { id: 'yes', label: 'Approve' },
-            { id: 'no', label: 'Reject' },
+            { id: 'legal', label: 'Legal' },
+            { id: 'editorial', label: 'Editorial' },
           ],
         },
       });
@@ -873,7 +882,7 @@ describe('tasks', () => {
           respondToTaskInteraction(
             adapter,
             run,
-            { interactionId: 'approve-document', optionId: 'yes' },
+            { interactionId: 'choose-reviewer', optionId: 'legal' },
             { actor: { kind: 'user', id: 'user-2' } },
           ),
         ),
@@ -890,7 +899,7 @@ describe('tasks', () => {
             run,
             {
               interactionId: 'another-interaction',
-              optionId: 'yes',
+              optionId: 'legal',
             },
             responseContext,
           ),
@@ -907,7 +916,7 @@ describe('tasks', () => {
             adapter,
             run,
             {
-              interactionId: 'approve-document',
+              interactionId: 'choose-reviewer',
               optionId: 'missing',
             },
             responseContext,
@@ -918,12 +927,25 @@ describe('tasks', () => {
       reason: 'invalid_task_interaction_response',
     });
 
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            adapter,
+            run,
+            { interactionId: 'choose-reviewer', decision: 'approve' },
+            responseContext,
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction_response' });
+
     const resumed = await Effect.runPromise(
       app.task.respondToInteraction(
         run,
         {
-          interactionId: 'approve-document',
-          optionId: 'yes',
+          interactionId: 'choose-reviewer',
+          optionId: 'legal',
         },
         responseContext,
       ),
@@ -932,8 +954,50 @@ describe('tasks', () => {
 
     await vi.waitFor(async () => {
       await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'approve-document',
+          kind: 'approval',
+          prompt: 'Apply the proposed document update?',
+          proposal: {
+            id: 'document-update-v1',
+            summary: 'Publish the reviewed document.',
+            requests: [{ version: 1, kind: 'graph-command', command: { action: 'update' } }],
+          },
+        },
+      });
+    });
+
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            adapter,
+            run,
+            { interactionId: 'approve-document', optionId: 'yes' },
+            responseContext,
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction_response' });
+
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        adapter,
+        run,
+        {
+          interactionId: 'approve-document',
+          decision: 'reject',
+          reason: 'Needs another revision.',
+        },
+        responseContext,
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
         status: 'completed',
-        result: { success: true, approved: true },
+        result: { success: true, approved: false },
       });
     });
 
@@ -945,7 +1009,8 @@ describe('tasks', () => {
             run,
             {
               interactionId: 'approve-document',
-              optionId: 'yes',
+              decision: 'reject',
+              reason: 'Needs another revision.',
             },
             responseContext,
           ),
@@ -1030,6 +1095,100 @@ describe('tasks', () => {
     const task = defineTask({
       id: 'demo.invalid-choice-identities',
       run: (_input: {}, context) => context.interact.choice(request),
+    });
+    const run = await Effect.runPromise(startTask(adapter, task, {}));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: {
+          code: 'invalid_task_interaction',
+          message,
+        },
+      });
+    });
+  });
+
+  it.each([
+    {
+      name: 'blank prompt',
+      request: {
+        prompt: ' ',
+        proposal: { id: 'proposal-1', summary: 'Delete one item.', requests: [{}] },
+      },
+      message: 'Approval prompt cannot be empty.',
+    },
+    {
+      name: 'blank interaction ID',
+      request: {
+        id: ' ',
+        prompt: 'Apply this change?',
+        proposal: { id: 'proposal-1', summary: 'Delete one item.', requests: [{}] },
+      },
+      message: 'Approval interaction ID is invalid.',
+    },
+    {
+      name: 'oversized interaction ID',
+      request: {
+        id: 'i'.repeat(513),
+        prompt: 'Apply this change?',
+        proposal: { id: 'proposal-1', summary: 'Delete one item.', requests: [{}] },
+      },
+      message: 'Approval interaction ID is invalid.',
+    },
+    {
+      name: 'blank proposal ID',
+      request: {
+        prompt: 'Apply this change?',
+        proposal: { id: ' ', summary: 'Delete one item.', requests: [{}] },
+      },
+      message: 'Approval proposal ID is invalid.',
+    },
+    {
+      name: 'oversized proposal ID',
+      request: {
+        prompt: 'Apply this change?',
+        proposal: { id: 'p'.repeat(513), summary: 'Delete one item.', requests: [{}] },
+      },
+      message: 'Approval proposal ID is invalid.',
+    },
+    {
+      name: 'blank proposal summary',
+      request: {
+        prompt: 'Apply this change?',
+        proposal: { id: 'proposal-1', summary: ' ', requests: [{}] },
+      },
+      message: 'Approval proposal summary is required.',
+    },
+    {
+      name: 'empty proposal requests',
+      request: {
+        prompt: 'Apply this change?',
+        proposal: { id: 'proposal-1', summary: 'Delete one item.', requests: [] },
+      },
+      message: 'Approval proposal requires at least one JSON-safe request.',
+    },
+    {
+      name: 'non-JSON proposal request',
+      request: {
+        prompt: 'Apply this change?',
+        proposal: {
+          id: 'proposal-1',
+          summary: 'Delete one item.',
+          requests: [() => undefined],
+        },
+      },
+      message: 'Approval proposal requires at least one JSON-safe request.',
+    },
+  ])('rejects an approval interaction with a $name', async ({ request, message }) => {
+    const adapter = createInProcessTaskRuntime({
+      storage: createInMemoryTaskStorage(),
+      sleep: async () => {},
+    });
+    const task = defineTask({
+      id: 'demo.invalid-approval',
+      run: (_input: {}, context) =>
+        context.interact.approval(request as Parameters<typeof context.interact.approval>[0]),
     });
     const run = await Effect.runPromise(startTask(adapter, task, {}));
 

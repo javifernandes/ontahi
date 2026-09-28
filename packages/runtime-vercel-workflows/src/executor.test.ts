@@ -214,6 +214,46 @@ describe('vercel workflow task executor', () => {
     );
   });
 
+  it('fails explicitly when a workflow task requests an unsupported approval', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.approve',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.approve', {
+      id: 'fixture.approve',
+      run: (_input: unknown, context) =>
+        context.interact.approval({
+          prompt: 'Apply this change?',
+          proposal: {
+            id: 'change-1',
+            summary: 'Apply one exact change.',
+            requests: [{ version: 1, kind: 'graph-command' }],
+          },
+        }),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask(
+        {
+          taskId: 'fixture.approve',
+          runId: 'bookops-run-1',
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'task_interaction_unavailable',
+      taskId: 'fixture.approve',
+      runId: 'bookops-run-1',
+    });
+  });
+
   it('validates persisted task input before running a workflow task', async () => {
     loadSource.mockReturnValue(
       Effect.succeed({

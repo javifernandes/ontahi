@@ -1249,7 +1249,7 @@ describe('Ontahi todo portability example', () => {
     runtimeTransport.close();
   });
 
-  it('inspects and responds to one pending task interaction through Runtime Protocol', async () => {
+  it('responds to choice and approval interactions through Runtime Protocol', async () => {
     const task = defineTask({
       id: 'TodoList.chooseForProtocolTest',
       run: (_input: {}, context) =>
@@ -1259,7 +1259,16 @@ describe('Ontahi todo portability example', () => {
             prompt: 'Which list?',
             options: [{ id: 'list-1', label: 'Inbox', value: { listId: 'list-1' } }],
           });
-          return selected;
+          const approval = yield* context.interact.approval({
+            id: 'approve-list',
+            prompt: 'Apply the proposed list change?',
+            proposal: {
+              id: 'update-list-1',
+              summary: 'Update Inbox.',
+              requests: [{ version: 1, kind: 'graph-command', command: { action: 'update' } }],
+            },
+          });
+          return { ...selected, approved: approval.decision === 'approve' };
         }),
     });
     const run = await Effect.runPromise(
@@ -1331,8 +1340,32 @@ describe('Ontahi todo portability example', () => {
 
     await vi.waitFor(async () => {
       await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'approve-list',
+          kind: 'approval',
+          proposal: { id: 'update-list-1' },
+        },
+      });
+    });
+
+    await expect(
+      authenticatedExchange({
+        family: 'durable.operation',
+        body: toDurableOperationInteractionResponseRequest(run, {
+          interactionId: 'approve-list',
+          decision: 'approve',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'snapshot',
+      snapshot: { status: 'running' },
+    });
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
         status: 'completed',
-        result: { listId: 'list-1' },
+        result: { listId: 'list-1', approved: true },
       });
     });
   });
