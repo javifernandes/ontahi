@@ -73,6 +73,11 @@ const CompleteAllOutputValue = value('CompleteAllOutput', {
   completed: field.nonNegativeInteger(),
 });
 
+const DeleteListItemsOutputValue = value('DeleteListItemsOutput', {
+  deleted: field.nonNegativeInteger(),
+  rejected: field.boolean(),
+});
+
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
     createList: defineClientDomainOperation({
@@ -136,6 +141,20 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       input: graphSchema.object({
         todo: graphSchema.existingRef(TodoItemSchema),
       }),
+    }),
+    deleteFromNamedList: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList'], ['TodoItem'], ['Tag']],
+      },
+      input: graphSchema.object({
+        listName: TodoListSchema.fields.name,
+      }),
+      output: DeleteListItemsOutputValue,
+      durable: {
+        runtime: 'in-process',
+      },
     }),
     deleteList: defineClientDomainOperation({
       authority: 'server',

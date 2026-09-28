@@ -1369,4 +1369,198 @@ describe('Ontahi todo portability example', () => {
       });
     });
   });
+
+  it('resolves and approves exact item deletions in a durable Todo Operation', async () => {
+    getTodoDataset().TodoList = [
+      { id: 'shopping-home', name: 'Shopping', color: '#f5ddd5' },
+      { id: 'shopping-work', name: 'Shopping', color: '#dbe8f4' },
+    ];
+    getTodoDataset().TodoItem = [
+      {
+        id: 'keep-home-item',
+        list: 'shopping-home',
+        title: 'Keep this item',
+        completed: false,
+      },
+      {
+        id: 'delete-work-item-1',
+        list: 'shopping-work',
+        title: 'Delete this item',
+        completed: false,
+      },
+      {
+        id: 'delete-work-item-2',
+        list: 'shopping-work',
+        title: 'Delete this too',
+        completed: true,
+      },
+    ];
+    getTodoDataset().Tag = [{ id: 'tag-work', name: 'Work', color: '#527d8c' }];
+    const relation = relationshipSet(
+      TodoItem,
+      'tags',
+      createEntityRef(TodoItem, { id: 'delete-work-item-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-work' })).relation;
+    getTodoRelationships().push({
+      relation,
+      source: createEntityRef(TodoItem, { id: 'delete-work-item-1' }),
+      target: createEntityRef(Tag, { id: 'tag-work' }),
+    });
+    const client = createFetchGraphClient({
+      runtimeTransport: {
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      },
+    });
+    const start = await client.reflectedOperationInvoker!.invokeOperation({
+      operationId: 'TodoItem.deleteFromNamedList',
+      input: { listName: 'Shopping' },
+    });
+    expect(start).toMatchObject({ ok: true, kind: 'success' });
+    if (!start.ok) throw new Error('Expected the interactive delete Operation to start.');
+    const run = start.value as TaskRunIdentity;
+    const exchange = createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      }),
+    });
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'choose-list',
+          kind: 'choice',
+          options: [
+            { id: 'shopping-home', label: 'Shopping (shopping-home)' },
+            { id: 'shopping-work', label: 'Shopping (shopping-work)' },
+          ],
+        },
+      });
+    });
+    await exchange({
+      family: 'durable.operation',
+      body: toDurableOperationInteractionResponseRequest(run, {
+        interactionId: 'choose-list',
+        optionId: 'shopping-work',
+      }),
+    });
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'approve-delete-items',
+          kind: 'approval',
+          proposal: {
+            summary: 'Delete 2 items from “Shopping”.',
+            requests: [
+              {
+                version: 1,
+                kind: 'graph-command',
+                command: {
+                  kind: 'many-to-many-relationship-command',
+                  action: 'unlink',
+                },
+              },
+              {
+                version: 3,
+                kind: 'graph-command',
+                command: { action: 'delete', entityName: 'TodoItem' },
+              },
+              {
+                version: 3,
+                kind: 'graph-command',
+                command: { action: 'delete', entityName: 'TodoItem' },
+              },
+            ],
+          },
+        },
+      });
+    });
+    await exchange({
+      family: 'durable.operation',
+      body: toDurableOperationInteractionResponseRequest(run, {
+        interactionId: 'approve-delete-items',
+        decision: 'approve',
+      }),
+    });
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'completed',
+        result: { deleted: 2, rejected: false },
+      });
+    });
+    expect(getTodoDataset().TodoItem).toEqual([
+      {
+        id: 'keep-home-item',
+        list: 'shopping-home',
+        title: 'Keep this item',
+        completed: false,
+      },
+    ]);
+    expect(getTodoRelationships()).toEqual([]);
+  });
+
+  it('does not execute an approved Todo proposal after its items change', async () => {
+    getTodoDataset().TodoList = [{ id: 'shopping-home', name: 'Shopping', color: '#f5ddd5' }];
+    getTodoDataset().TodoItem = [
+      {
+        id: 'shopping-item',
+        list: 'shopping-home',
+        title: 'Original title',
+        completed: false,
+      },
+    ];
+    const client = createFetchGraphClient({
+      runtimeTransport: {
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      },
+    });
+    const start = await client.reflectedOperationInvoker!.invokeOperation({
+      operationId: 'TodoItem.deleteFromNamedList',
+      input: { listName: 'Shopping' },
+    });
+    expect(start).toMatchObject({ ok: true, kind: 'success' });
+    if (!start.ok) throw new Error('Expected the interactive delete Operation to start.');
+    const run = start.value as TaskRunIdentity;
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        interaction: { id: 'approve-delete-items', kind: 'approval' },
+      });
+    });
+    getTodoDataset().TodoItem![0]!.title = 'Changed after proposal';
+    const exchange = createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      }),
+    });
+    await exchange({
+      family: 'durable.operation',
+      body: toDurableOperationInteractionResponseRequest(run, {
+        interactionId: 'approve-delete-items',
+        decision: 'approve',
+      }),
+    });
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'todo_delete_proposal_stale' },
+      });
+    });
+    expect(getTodoDataset().TodoItem).toEqual([
+      {
+        id: 'shopping-item',
+        list: 'shopping-home',
+        title: 'Changed after proposal',
+        completed: false,
+      },
+    ]);
+  });
 });

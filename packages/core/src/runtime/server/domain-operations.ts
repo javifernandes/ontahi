@@ -788,11 +788,17 @@ const resolveDurableOperationTrigger = <TInput extends OperationInput>(
   input: TInput,
 ): TaskTrigger => {
   const durable = operation.durable;
-  const trigger =
+  const declaredTrigger =
     typeof durable?.trigger === 'function' ? durable.trigger(input) : durable?.trigger;
-  const baseTrigger: TaskTrigger = trigger ?? {
-    cause: 'system',
-  };
+  const principal = getCurrentInvocationContext()?.principal;
+  const baseTrigger: TaskTrigger =
+    declaredTrigger ??
+    (principal
+      ? {
+          cause: 'user_request',
+          actor: { kind: principal.kind, id: principal.subject },
+        }
+      : { cause: 'system' });
 
   return durable?.source
     ? {
