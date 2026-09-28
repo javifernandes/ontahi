@@ -40,6 +40,10 @@ asynchronous reads and commands resume on the original Task execution.
 The command sequence is intentionally non-atomic. A concurrent change after revalidation or a
 failure during sequential dispatch may still produce partial effects. Restart-safe continuation,
 transactional proposal execution, and UI-independent participant policy remain open design work.
+The Todo app's authentication-disabled mode owns runs with the shared system actor, so possession
+of a run reference is sufficient to answer its Interaction. That is suitable only for the local
+public example; user-attributed approval requires an authenticated actor or a future run-specific
+claimant mechanism.
 
 The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
 It supplies evidence for this direction without implementing conversational continuation.

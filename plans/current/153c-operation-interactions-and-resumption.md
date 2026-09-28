@@ -841,6 +841,11 @@ changes observed before dispatch, but a concurrent change after revalidation or 
 failure can still leave partial effects. The next surface slice should render the same run and reply
 protocol rather than introducing host-specific interaction state.
 
+Authentication-disabled Todo runs deliberately use the shared system actor. Any caller holding the
+run reference can therefore answer the pending Interaction. This keeps the local public example
+usable but is not an individual-consent boundary; authenticated actors or a future run-specific
+claimant are required before applying this pattern to a public multi-user surface.
+
 ## Acceptance And Research Closure
 
 - [x] Inventory the current Operation, Runtime Protocol, durable lifecycle, identity, Activity, and
