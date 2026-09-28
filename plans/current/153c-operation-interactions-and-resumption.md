@@ -857,6 +857,15 @@ dialect, with exact requests available as secondary detail. Host cache reconcili
 the run completes rather than when its initial queued response arrives. A second independent
 surface is still required to satisfy the cross-surface acceptance criterion.
 
+The fifth slice makes that pending Interaction legible and actionable in Devtools Activity. An
+observed approval or choice replaces the generic progress label with its semantic request and uses
+the same shared controls and canonical `durable.operation` reply as the Console. The WebSocket
+Runtime Transport also restores a durable observation by the same Task Run identity after a
+transient session loss, allowing a browser that slept or changed networks to receive the run's
+current snapshot without starting the Operation again. This is observation recovery only: an
+in-flight request is not replayed, the in-process continuation has no expiry and waits while its
+server process lives, and neither the run nor the continuation survives a process restart.
+
 ## Acceptance And Research Closure
 
 - [x] Inventory the current Operation, Runtime Protocol, durable lifecycle, identity, Activity, and

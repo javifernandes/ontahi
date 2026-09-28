@@ -150,6 +150,7 @@ export const DevtoolsPanel = ({
           <OperationProgressDetail
             activity={activeActivity.observation}
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
+            runtimeTransport={runtimeTransport}
           />
         ) : activeActivity?.kind === 'exchange' ? (
           <ExchangeDetail activity={activeActivity.exchange} />

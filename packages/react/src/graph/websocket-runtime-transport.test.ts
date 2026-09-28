@@ -228,6 +228,80 @@ describe('WebSocket Runtime Transport', () => {
     ]);
   });
 
+  it('restores a Durable observation after the WebSocket session disconnects', async () => {
+    const sockets: MemoryWebSocket[] = [];
+    let observationSequence = 0;
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      reconnectDelayMs: 0,
+      observationId: () => `observation-${++observationSequence}`,
+      createWebSocket: () => {
+        const socket = new MemoryWebSocket();
+        sockets.push(socket);
+        socket.receive = input => {
+          const frame = input as { kind?: string; id?: string };
+          if (frame.kind !== 'durable-observe' || !frame.id) return;
+          socket.sendFromServer({
+            protocol: 'ontahi.runtime.session',
+            version: 1,
+            kind: 'durable-observation',
+            id: frame.id,
+            sequence: 1,
+            body: {
+              version: 1,
+              kind: 'snapshot',
+              snapshot: {
+                taskId: 'Todo.completeAll',
+                runId: 'run-1',
+                status: sockets.length === 1 ? 'running' : 'completed',
+                updatedAt:
+                  sockets.length === 1 ? '2026-09-04T00:00:00.000Z' : '2026-09-04T00:00:01.000Z',
+                ...(sockets.length === 1
+                  ? {
+                      interaction: {
+                        id: 'approve',
+                        kind: 'approval',
+                        prompt: 'Continue?',
+                        proposal: {
+                          id: 'proposal-1',
+                          summary: 'Apply changes.',
+                          requests: [{ kind: 'graph-command' }],
+                        },
+                        createdAt: '2026-09-04T00:00:00.000Z',
+                      },
+                    }
+                  : {
+                      completedAt: '2026-09-04T00:00:01.000Z',
+                      result: { completed: 2 },
+                    }),
+              },
+            },
+          });
+        };
+        socket.sendFromServer(readyFrame());
+        return socket;
+      },
+    });
+    const iterator = transport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-1' })
+      [Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { status: 'running', interaction: { kind: 'approval' } },
+    });
+    sockets[0]?.close(1006, 'laptop slept');
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { status: 'completed', result: { completed: 2 } },
+    });
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]?.sent[0]).toMatchObject({
+      kind: 'durable-observe',
+      id: 'observation-2',
+      run: { taskId: 'Todo.completeAll', runId: 'run-1' },
+    });
+  });
+
   it('receives repeated Graph results and their explicit stream completion', async () => {
     const pair = createSessionSocketFactory({
       dispatcher: async input =>

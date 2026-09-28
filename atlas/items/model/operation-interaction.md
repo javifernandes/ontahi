@@ -51,6 +51,12 @@ renders progress, choice, approval, failure, and completion. Its controls answer
 the canonical Runtime Protocol request, so Devtools adds presentation without owning a parallel
 conversation or continuation contract.
 
+Devtools Activity projects the same pending choice or approval from observed run snapshots and can
+answer it through that same protocol. A transient WebSocket session loss now causes the client to
+observe the same Task Run identity again, rather than converting a still-live run into a terminal
+transport error. This reconnect behavior recovers observation only. The in-process continuation
+still waits without expiry only while the server process remains alive and is not restart-safe.
+
 The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
 It supplies evidence for this direction without implementing conversational continuation.
 
