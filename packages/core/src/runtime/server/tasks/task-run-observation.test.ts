@@ -5,6 +5,7 @@ import { defineTask } from './definitions.js';
 import { observeTaskRun, respondToTaskInteraction } from './facade.js';
 import { createInProcessTaskRuntime } from './in-process-adapter.js';
 import { createInMemoryTaskStorage } from './memory-store.js';
+import { createUserTaskTrigger } from './triggers.js';
 import type { TaskFailure, TaskRuntime } from './types.js';
 
 const createDeferred = () => {
@@ -131,7 +132,11 @@ describe('TaskRun observation', () => {
           return { selected };
         }),
     });
-    const run = await Effect.runPromise(executingRuntime.start(task, undefined));
+    const run = await Effect.runPromise(
+      executingRuntime.start(task, undefined, {
+        trigger: createUserTaskTrigger({ userId: 'user-1' }),
+      }),
+    );
     const observation = Effect.runPromise(
       observeTaskRun(observingRuntime, run).pipe(
         Stream.tap(snapshot =>
@@ -146,10 +151,15 @@ describe('TaskRun observation', () => {
 
     await observedInteraction.promise;
     await Effect.runPromise(
-      respondToTaskInteraction(observingRuntime, run, {
-        interactionId: 'choose-list',
-        optionId: 'inbox',
-      }),
+      respondToTaskInteraction(
+        observingRuntime,
+        run,
+        {
+          interactionId: 'choose-list',
+          optionId: 'inbox',
+        },
+        { actor: { kind: 'user', id: 'user-1' } },
+      ),
     );
 
     const snapshots = Chunk.toReadonlyArray(await observation);
@@ -195,6 +205,7 @@ describe('TaskRun observation', () => {
             runtime,
             { taskId: 'TodoItem.completeAll', runId: 'run-1' },
             { interactionId: 'choose-list', optionId: 'inbox' },
+            { actor: { kind: 'user', id: 'user-1' } },
           ),
         ),
       ),

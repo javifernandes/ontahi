@@ -314,6 +314,7 @@ export {
   type TaskFailure,
   type TaskInteractionContext,
   type TaskInteractionResponse,
+  type TaskInteractionResponseContext,
   type TaskMethod,
   type TaskMethods,
   type TaskRunCreateInput,

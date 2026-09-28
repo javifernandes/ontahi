@@ -80,9 +80,7 @@ const projectTaskSnapshot = (
     ...(snapshot.subject
       ? { subject: { type: snapshot.subject.type, id: snapshot.subject.id } }
       : {}),
-    ...(interaction === undefined
-      ? {}
-      : { interaction: interaction as DiagnosticTaskSnapshot['interaction'] }),
+    ...(interaction === undefined ? {} : { interaction }),
     ...(snapshot.createdAt ? { createdAt: snapshot.createdAt } : {}),
     ...(snapshot.startedAt ? { startedAt: snapshot.startedAt } : {}),
     updatedAt: snapshot.updatedAt,

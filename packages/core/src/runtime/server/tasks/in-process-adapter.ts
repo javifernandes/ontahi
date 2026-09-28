@@ -4,6 +4,7 @@ import {
   invalidTaskInteractionFailure,
   invalidTaskInteractionResponseFailure,
   missingTaskStepFailure,
+  taskInteractionAccessDeniedFailure,
   taskInteractionMismatchFailure,
   taskInteractionNotPendingFailure,
   toTaskFailure,
@@ -17,6 +18,7 @@ import type {
   TaskChoiceInteractionRequest,
   TaskFailure,
   TaskInteractionResponse,
+  TaskInteractionResponseContext,
   TaskPendingChoiceInteraction,
   TaskRunIdentity,
   TaskRunRef,
@@ -75,9 +77,13 @@ const validateChoiceRequest = <TValue>(
     );
   }
 
+  if (request.id !== undefined && (request.id.trim().length === 0 || request.id.length > 512)) {
+    return Effect.fail(invalidTaskInteractionFailure(ref, 'Choice interaction ID is invalid.'));
+  }
+
   const optionIds = request.options.map(option => option.id);
   if (
-    optionIds.some(id => id.trim().length === 0) ||
+    optionIds.some(id => id.trim().length === 0 || id.length > 512) ||
     new Set(optionIds).size !== optionIds.length
   ) {
     return Effect.fail(
@@ -232,8 +238,20 @@ export const createInProcessTaskRuntime = ({
         .getSnapshot(ref)
         .pipe(Effect.map(withPendingInteraction), Effect.tap(taskRuns.publish)),
     listRecent: limit => storage.listRecent(limit),
-    respondToInteraction: (ref, response: TaskInteractionResponse) =>
+    respondToInteraction: (
+      ref,
+      response: TaskInteractionResponse,
+      context: TaskInteractionResponseContext,
+    ) =>
       Effect.gen(function* () {
+        const source = yield* storage.loadSource(ref);
+        if (
+          source.trigger.actor?.kind !== context.actor.kind ||
+          source.trigger.actor.id !== context.actor.id
+        ) {
+          return yield* Effect.fail(taskInteractionAccessDeniedFailure(ref));
+        }
+
         const key = keyOf(ref);
         const pending = pendingInteractions.get(key);
 

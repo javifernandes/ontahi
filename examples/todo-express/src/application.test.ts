@@ -16,7 +16,7 @@ import {
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
 } from '@ontahi/core/runtime/protocol';
-import { defineTask } from '@ontahi/core/runtime/server';
+import { createUserTaskTrigger, defineTask } from '@ontahi/core/runtime/server';
 import {
   createFetchGraphClient,
   createFetchGraphReadExecutor,
@@ -1263,15 +1263,30 @@ describe('Ontahi todo portability example', () => {
         }),
     });
     const run = await Effect.runPromise(
-      TodoApplication.app.task.start(task, {}, { runId: 'protocol-interaction-run' }),
+      TodoApplication.app.task.start(
+        task,
+        {},
+        {
+          runId: 'protocol-interaction-run',
+          trigger: createUserTaskTrigger({ userId: testPrincipal.subject }),
+        },
+      ),
     );
-    const exchange = createRuntimeProtocolExchange({
+    const anonymousExchange = createRuntimeProtocolExchange({
       transport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
+    });
+    const authenticatedExchange = createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({
+          headers: { 'x-test-principal': testPrincipal.subject },
+        }),
+      }),
     });
 
     await vi.waitFor(async () => {
       await expect(
-        exchange({
+        anonymousExchange({
           family: 'durable.operation',
           body: toDurableOperationProtocolRequest(run),
         }),
@@ -1285,7 +1300,24 @@ describe('Ontahi todo portability example', () => {
     });
 
     await expect(
-      exchange({
+      anonymousExchange({
+        family: 'durable.operation',
+        body: toDurableOperationInteractionResponseRequest(run, {
+          interactionId: 'choose-list',
+          optionId: 'list-1',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'access_denied' },
+    });
+    await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+      status: 'running',
+      interaction: { id: 'choose-list' },
+    });
+
+    await expect(
+      authenticatedExchange({
         family: 'durable.operation',
         body: toDurableOperationInteractionResponseRequest(run, {
           interactionId: 'choose-list',

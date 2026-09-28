@@ -7,7 +7,11 @@ import type {
 } from '../../data-graph/index.js';
 import { defineGraphApi } from '../../data-graph/index.js';
 import type { RecursiveEntityViewDefinition } from '../../data-graph/view.js';
-import type { TaskInteractionResponse, TaskSnapshot } from '../contracts.js';
+import type {
+  TaskInteractionResponse,
+  TaskInteractionResponseContext,
+  TaskSnapshot,
+} from '../contracts.js';
 import type { OperationPermissionResult } from '../operation-invocation.js';
 
 import type { ArchitectureAppFacade } from './app-facade.js';
@@ -61,6 +65,7 @@ export type OntahiApplication<TGraph extends AnyGraphApi = AnyGraphApi> = {
   respondToTaskInteraction: (
     ref: TaskRunIdentity,
     response: TaskInteractionResponse,
+    context: TaskInteractionResponseContext,
   ) => Promise<TaskSnapshot>;
 };
 
@@ -97,7 +102,7 @@ export function defineOntahiApplication(
     checkPermission: (operation, input) =>
       runtime.operation.checkPermission(operation, input as never),
     getTaskSnapshot: ref => Effect.runPromise(runtime.task.getSnapshot(ref)),
-    respondToTaskInteraction: (ref, response) =>
-      Effect.runPromise(runtime.task.respondToInteraction(ref, response)),
+    respondToTaskInteraction: (ref, response, context) =>
+      Effect.runPromise(runtime.task.respondToInteraction(ref, response, context)),
   };
 }

@@ -218,6 +218,10 @@ export type TaskInteractionResponse = {
   optionId: string;
 };
 
+export type TaskInteractionResponseContext = {
+  actor: TaskActor;
+};
+
 export type TaskSnapshot<TResult = unknown> = {
   taskId: string;
   runId: string;

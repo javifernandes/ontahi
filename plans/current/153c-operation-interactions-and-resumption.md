@@ -87,11 +87,16 @@ A durable Operation projects to a `TaskDefinition`. Starting it returns a `TaskR
 cancelled state, progress, and eventual result. The Task Context supports progress, sleep, and
 declared steps.
 
-This is substantial prior structure for interactive runs, but it does not yet provide interaction:
+This is substantial prior structure for interactive runs. The first experimental slice now adds a
+narrow choice Interaction, while the broader lifecycle remains incomplete:
 
-- there is no `waiting` state or pending-interaction projection;
-- there is no reply/continue protocol;
-- neither the in-process nor Vercel Workflow executor implements a participant wait;
+- there is no `waiting` status; the in-process runtime exposes pending interactions on a `running`
+  snapshot;
+- the native response slice currently authorizes only the actor that started the run; richer
+  participant and delegation policies remain future work;
+- the in-process runtime accepts a matching reply and resumes the choice, but its continuation is
+  process-local;
+- the Vercel Workflow executor does not implement participant wait/resume;
 - the in-process executor starts a background promise and cannot survive process loss;
 - `cancelled` is observable but there is no shared cancellation command;
 - durable idempotency policies are reflected but not yet enforced;

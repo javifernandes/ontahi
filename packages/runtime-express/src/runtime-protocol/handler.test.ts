@@ -5,6 +5,7 @@ import {
   runtimeProtocolError,
   toDurableOperationProtocolRequest,
   toDurableOperationSnapshotResponse,
+  type DurableOperationProtocolRequestV1,
   type RuntimeProtocolDispatcher,
 } from '@ontahi/core/runtime/protocol';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
@@ -133,10 +134,7 @@ describe('Express Runtime Protocol adapter', () => {
 
   it('dispatches a Durable inspection with receiver-derived context', async () => {
     const inspect = vi.fn(
-      async (
-        request: ReturnType<typeof toDurableOperationProtocolRequest>,
-        context: { ownerId: string },
-      ) =>
+      async (request: DurableOperationProtocolRequestV1, context: { ownerId: string }) =>
         toDurableOperationSnapshotResponse({
           ...request.run,
           status: 'running',

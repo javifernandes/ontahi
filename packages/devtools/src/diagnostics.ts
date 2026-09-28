@@ -1,8 +1,4 @@
-import type {
-  TaskPendingInteraction,
-  TaskRunIdentity,
-  TaskStatus,
-} from '@ontahi/core/runtime/contracts';
+import type { TaskRunIdentity, TaskStatus } from '@ontahi/core/runtime/contracts';
 
 export type RuntimeDiagnosticOutcome =
   | 'success'
@@ -38,7 +34,8 @@ export type DiagnosticTaskSnapshot = {
     readonly message?: string;
     readonly percent?: number;
   };
-  readonly interaction?: TaskPendingInteraction;
+  /** Redacted diagnostic payload; it is not guaranteed to retain the runtime Interaction shape. */
+  readonly interaction?: unknown;
   readonly error?: { readonly code: string; readonly message: string };
   readonly result?: unknown;
 };

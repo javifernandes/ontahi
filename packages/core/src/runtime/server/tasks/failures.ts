@@ -33,6 +33,13 @@ export const taskInteractionUnavailableFailure = (ref: TaskRunIdentity): TaskFai
 export const taskInteractionNotPendingFailure = (ref: TaskRunIdentity): TaskFailure =>
   createTaskFailure('task_interaction_not_pending', 'Task run has no pending interaction.', ref);
 
+export const taskInteractionAccessDeniedFailure = (ref: TaskRunIdentity): TaskFailure =>
+  createTaskFailure(
+    'task_interaction_access_denied',
+    'The actor cannot respond to this task interaction.',
+    ref,
+  );
+
 export const taskInteractionMismatchFailure = (
   ref: TaskRunIdentity,
   interactionId: string,

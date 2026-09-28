@@ -4,6 +4,7 @@ import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
 import type {
   TaskActor,
   TaskInteractionResponse,
+  TaskInteractionResponseContext,
   TaskRunListItem,
   TaskRunIdentity,
   TaskRunRef,
@@ -19,6 +20,7 @@ export type {
   TaskActor,
   TaskChoiceInteractionOption,
   TaskInteractionResponse,
+  TaskInteractionResponseContext,
   TaskPendingChoiceInteraction,
   TaskPendingInteraction,
   TaskRunListItem,
@@ -161,6 +163,7 @@ export type TaskRuntime = {
   respondToInteraction?(
     ref: TaskRunIdentity,
     response: TaskInteractionResponse,
+    context: TaskInteractionResponseContext,
   ): Effect.Effect<TaskSnapshot, TaskFailure>;
   observe?(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
 };
