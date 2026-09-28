@@ -23,6 +23,47 @@ export const taskRunObservationUnavailableFailure = (ref: TaskRunIdentity): Task
     ref,
   );
 
+export const taskInteractionUnavailableFailure = (ref: TaskRunIdentity): TaskFailure =>
+  createTaskFailure(
+    'task_interaction_unavailable',
+    'Task interaction is unavailable for this runtime.',
+    ref,
+  );
+
+export const taskInteractionNotPendingFailure = (ref: TaskRunIdentity): TaskFailure =>
+  createTaskFailure('task_interaction_not_pending', 'Task run has no pending interaction.', ref);
+
+export const taskInteractionAccessDeniedFailure = (ref: TaskRunIdentity): TaskFailure =>
+  createTaskFailure(
+    'task_interaction_access_denied',
+    'The actor cannot respond to this task interaction.',
+    ref,
+  );
+
+export const taskInteractionMismatchFailure = (
+  ref: TaskRunIdentity,
+  interactionId: string,
+): TaskFailure =>
+  createTaskFailure(
+    'task_interaction_mismatch',
+    'The response does not match the pending task interaction.',
+    { ...ref, interactionId },
+  );
+
+export const invalidTaskInteractionFailure = (ref: TaskRunIdentity, message: string): TaskFailure =>
+  createTaskFailure('invalid_task_interaction', message, ref);
+
+export const invalidTaskInteractionResponseFailure = (
+  ref: TaskRunIdentity,
+  interactionId: string,
+  optionId: string,
+): TaskFailure =>
+  createTaskFailure('invalid_task_interaction_response', 'Unknown interaction option.', {
+    ...ref,
+    interactionId,
+    optionId,
+  });
+
 export const missingTaskStepFailure = (taskId: string, stepName: string): TaskFailure =>
   createTaskFailure('task_step_not_found', 'Task step is not registered.', {
     taskId,

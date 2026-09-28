@@ -11,7 +11,12 @@ import {
   toGraphCommandRequest,
 } from '@ontahi/core/data-graph';
 import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
-import { createRuntimeProtocolExchange } from '@ontahi/core/runtime/protocol';
+import {
+  createRuntimeProtocolExchange,
+  toDurableOperationInteractionResponseRequest,
+  toDurableOperationProtocolRequest,
+} from '@ontahi/core/runtime/protocol';
+import { createUserTaskTrigger, defineTask } from '@ontahi/core/runtime/server';
 import {
   createFetchGraphClient,
   createFetchGraphReadExecutor,
@@ -1242,5 +1247,93 @@ describe('Ontahi todo portability example', () => {
     expect(snapshotInspection).not.toHaveBeenCalled();
     snapshotInspection.mockRestore();
     runtimeTransport.close();
+  });
+
+  it('inspects and responds to one pending task interaction through Runtime Protocol', async () => {
+    const task = defineTask({
+      id: 'TodoList.chooseForProtocolTest',
+      run: (_input: {}, context) =>
+        Effect.gen(function* () {
+          const selected = yield* context.interact.choice({
+            id: 'choose-list',
+            prompt: 'Which list?',
+            options: [{ id: 'list-1', label: 'Inbox', value: { listId: 'list-1' } }],
+          });
+          return selected;
+        }),
+    });
+    const run = await Effect.runPromise(
+      TodoApplication.app.task.start(
+        task,
+        {},
+        {
+          runId: 'protocol-interaction-run',
+          trigger: createUserTaskTrigger({ userId: testPrincipal.subject }),
+        },
+      ),
+    );
+    const anonymousExchange = createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
+    });
+    const authenticatedExchange = createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({
+          headers: { 'x-test-principal': testPrincipal.subject },
+        }),
+      }),
+    });
+
+    await vi.waitFor(async () => {
+      await expect(
+        anonymousExchange({
+          family: 'durable.operation',
+          body: toDurableOperationProtocolRequest(run),
+        }),
+      ).resolves.toMatchObject({
+        kind: 'snapshot',
+        snapshot: {
+          status: 'running',
+          interaction: { id: 'choose-list', kind: 'choice' },
+        },
+      });
+    });
+
+    await expect(
+      anonymousExchange({
+        family: 'durable.operation',
+        body: toDurableOperationInteractionResponseRequest(run, {
+          interactionId: 'choose-list',
+          optionId: 'list-1',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'access_denied' },
+    });
+    await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+      status: 'running',
+      interaction: { id: 'choose-list' },
+    });
+
+    await expect(
+      authenticatedExchange({
+        family: 'durable.operation',
+        body: toDurableOperationInteractionResponseRequest(run, {
+          interactionId: 'choose-list',
+          optionId: 'list-1',
+        }),
+      }),
+    ).resolves.toMatchObject({
+      kind: 'snapshot',
+      snapshot: { status: 'running' },
+    });
+
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'completed',
+        result: { listId: 'list-1' },
+      });
+    });
   });
 });

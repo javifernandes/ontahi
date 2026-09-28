@@ -1,4 +1,4 @@
-import type { TaskSnapshot } from '@ontahi/core/runtime/contracts';
+import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeTransportRouter,
   createRuntimeProtocolRequest,
@@ -228,6 +228,13 @@ describe('instrumentRuntimeTransport', () => {
         status: 'running',
         updatedAt: '2026-01-01T00:00:00.000Z',
         progress: { percent: 50 },
+        interaction: {
+          id: 'choose-list',
+          kind: 'choice',
+          prompt: 'Which list?',
+          options: [{ id: 'inbox', label: 'Inbox' }],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
       },
       {
         taskId: 'task-1',
@@ -274,7 +281,107 @@ describe('instrumentRuntimeTransport', () => {
       },
       { kind: 'observation.settled', outcome: 'completed' },
     ]);
+    expect(diagnostics.inspect().events[1]).not.toHaveProperty('snapshot.interaction');
     expect(diagnostics.inspect().events[2]).not.toHaveProperty('snapshot.result');
+  });
+
+  it('captures pending Durable interactions when diagnostic payload capture is enabled', async () => {
+    const snapshot: TaskSnapshot = {
+      taskId: 'task-1',
+      runId: 'run-1',
+      status: 'running',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      interaction: {
+        id: 'choose-list',
+        kind: 'choice',
+        prompt: 'Which list?',
+        options: [{ id: 'inbox', label: 'Inbox' }],
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    };
+    const diagnostics = createOntahiDiagnostics({
+      capturePayloads: true,
+      redact: value => value,
+      createId: () => 'observation-1',
+    });
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn(),
+        durableOperation: {
+          observe: async function* <TResult>(_run: TaskRunIdentity) {
+            yield snapshot as TaskSnapshot<TResult>;
+          },
+        },
+      },
+    });
+
+    for await (const _snapshot of transport.durableOperation!.observe({
+      taskId: snapshot.taskId,
+      runId: snapshot.runId,
+    })) {
+      // Consume the observation so diagnostics receives the pending interaction.
+    }
+
+    expect(diagnostics.inspect().events[1]).toMatchObject({
+      kind: 'observation.snapshot',
+      snapshot: {
+        interaction: {
+          id: 'choose-list',
+          kind: 'choice',
+          prompt: 'Which list?',
+          options: [{ id: 'inbox', label: 'Inbox' }],
+        },
+      },
+    });
+  });
+
+  it('retains an arbitrary redacted interaction as diagnostic payload', async () => {
+    const snapshot: TaskSnapshot = {
+      taskId: 'task-1',
+      runId: 'run-1',
+      status: 'running',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      interaction: {
+        id: 'choose-list',
+        kind: 'choice',
+        prompt: 'Which list?',
+        options: [{ id: 'inbox', label: 'Inbox' }],
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    };
+    const diagnostics = createOntahiDiagnostics({
+      capturePayloads: true,
+      redact: value =>
+        typeof value === 'object' && value !== null && 'id' in value && value.id === 'choose-list'
+          ? '[redacted interaction]'
+          : value,
+      createId: () => 'observation-1',
+    });
+    const transport = instrumentRuntimeTransport({
+      diagnostics,
+      id: 'websocket',
+      kind: 'websocket',
+      transport: {
+        request: vi.fn(),
+        durableOperation: {
+          observe: async function* <TResult>(_run: TaskRunIdentity) {
+            yield snapshot as TaskSnapshot<TResult>;
+          },
+        },
+      },
+    });
+
+    for await (const _snapshot of transport.durableOperation!.observe(snapshot)) {
+      // Consume the observation so diagnostics receives the redacted interaction.
+    }
+
+    expect(diagnostics.inspect().events[1]).toMatchObject({
+      kind: 'observation.snapshot',
+      snapshot: { interaction: '[redacted interaction]' },
+    });
   });
 
   it('preserves and delegates configurable routing capabilities', () => {

@@ -18,6 +18,7 @@ import {
   getTaskSnapshot,
   inProcessTasks,
   normalizeTaskTrigger,
+  respondToTaskInteraction,
   startTask,
   taskTriggerActorMatches,
   type TaskTrigger,
@@ -799,6 +800,245 @@ describe('tasks', () => {
         progress: {
           phase: 'completed',
           message: 'Hi there',
+        },
+      });
+    });
+  });
+
+  it('suspends and resumes a durable operation through a typed choice interaction', async () => {
+    const OutputSchema = value('ReviewOutput', {
+      success: field.boolean(),
+      approved: field.boolean(),
+    });
+    const operations = defineDomainOperationsForEntity('Document', {
+      review: defineDomainOperation({
+        layer: 'test.documents',
+        exposure: 'server-only',
+        durable: {
+          runtime: 'in-process',
+          finalOutput: OutputSchema,
+        },
+        run: (_input, context) =>
+          Effect.gen(function* () {
+            const decision = yield* context!.interact.choice({
+              id: 'approve-document',
+              prompt: 'Approve this document?',
+              options: [
+                { id: 'yes', label: 'Approve', value: { approved: true } },
+                { id: 'no', label: 'Reject', value: { approved: false } },
+              ],
+            });
+
+            return { success: true as const, approved: decision.approved };
+          }),
+      }),
+    });
+    const task = createTaskDefinitionFromDurableDomainOperation(operations.review);
+    const adapter = createInProcessTaskRuntime({
+      storage: createInMemoryTaskStorage(),
+      sleep: async () => {},
+    });
+    const { app } = architecture({ task: { runtime: adapter } });
+    const responseContext = { actor: { kind: 'user' as const, id: 'user-1' } };
+    const run = await Effect.runPromise(
+      startTask(
+        adapter,
+        task,
+        {},
+        {
+          runId: 'review-run',
+          trigger: createUserTaskTrigger({ userId: 'user-1' }),
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'approve-document',
+          kind: 'choice',
+          prompt: 'Approve this document?',
+          options: [
+            { id: 'yes', label: 'Approve' },
+            { id: 'no', label: 'Reject' },
+          ],
+        },
+      });
+    });
+
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            adapter,
+            run,
+            { interactionId: 'approve-document', optionId: 'yes' },
+            { actor: { kind: 'user', id: 'user-2' } },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      reason: 'task_interaction_access_denied',
+    });
+
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            adapter,
+            run,
+            {
+              interactionId: 'another-interaction',
+              optionId: 'yes',
+            },
+            responseContext,
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      reason: 'task_interaction_mismatch',
+    });
+
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            adapter,
+            run,
+            {
+              interactionId: 'approve-document',
+              optionId: 'missing',
+            },
+            responseContext,
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      reason: 'invalid_task_interaction_response',
+    });
+
+    const resumed = await Effect.runPromise(
+      app.task.respondToInteraction(
+        run,
+        {
+          interactionId: 'approve-document',
+          optionId: 'yes',
+        },
+        responseContext,
+      ),
+    );
+    expect(resumed.interaction).toBeUndefined();
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { success: true, approved: true },
+      });
+    });
+
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            adapter,
+            run,
+            {
+              interactionId: 'approve-document',
+              optionId: 'yes',
+            },
+            responseContext,
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      reason: 'task_interaction_not_pending',
+    });
+  });
+
+  it('fails a task that declares an invalid choice interaction', async () => {
+    const adapter = createInProcessTaskRuntime({
+      storage: createInMemoryTaskStorage(),
+      sleep: async () => {},
+    });
+    const task = defineTask({
+      id: 'demo.invalid-choice',
+      run: (_input: {}, context) =>
+        context.interact.choice({
+          prompt: 'Choose one',
+          options: [
+            { id: 'same', label: 'First', value: 1 },
+            { id: 'same', label: 'Second', value: 2 },
+          ],
+        }),
+    });
+    const run = await Effect.runPromise(
+      startTask(adapter, task, {}, { runId: 'invalid-choice-run' }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: {
+          code: 'invalid_task_interaction',
+          message: 'Choice option IDs must be non-empty and unique.',
+        },
+      });
+    });
+  });
+
+  it.each([
+    {
+      name: 'blank interaction ID',
+      request: {
+        id: ' ',
+        prompt: 'Choose one',
+        options: [{ id: 'one', label: 'One', value: 1 }],
+      },
+      message: 'Choice interaction ID is invalid.',
+    },
+    {
+      name: 'oversized interaction ID',
+      request: {
+        id: 'i'.repeat(513),
+        prompt: 'Choose one',
+        options: [{ id: 'one', label: 'One', value: 1 }],
+      },
+      message: 'Choice interaction ID is invalid.',
+    },
+    {
+      name: 'blank option ID',
+      request: {
+        prompt: 'Choose one',
+        options: [{ id: ' ', label: 'One', value: 1 }],
+      },
+      message: 'Choice option IDs must be non-empty and unique.',
+    },
+    {
+      name: 'oversized option ID',
+      request: {
+        prompt: 'Choose one',
+        options: [{ id: 'o'.repeat(513), label: 'One', value: 1 }],
+      },
+      message: 'Choice option IDs must be non-empty and unique.',
+    },
+  ])('rejects a choice interaction with a $name', async ({ request, message }) => {
+    const adapter = createInProcessTaskRuntime({
+      storage: createInMemoryTaskStorage(),
+      sleep: async () => {},
+    });
+    const task = defineTask({
+      id: 'demo.invalid-choice-identities',
+      run: (_input: {}, context) => context.interact.choice(request),
+    });
+    const run = await Effect.runPromise(startTask(adapter, task, {}));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: {
+          code: 'invalid_task_interaction',
+          message,
         },
       });
     });

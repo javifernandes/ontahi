@@ -3,6 +3,8 @@ import type { Effect, Stream } from 'effect';
 import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
 import type {
   TaskActor,
+  TaskInteractionResponse,
+  TaskInteractionResponseContext,
   TaskRunListItem,
   TaskRunIdentity,
   TaskRunRef,
@@ -16,6 +18,11 @@ import type { OperationFailure } from '../operation/types.js';
 
 export type {
   TaskActor,
+  TaskChoiceInteractionOption,
+  TaskInteractionResponse,
+  TaskInteractionResponseContext,
+  TaskPendingChoiceInteraction,
+  TaskPendingInteraction,
   TaskRunListItem,
   TaskRunIdentity,
   TaskRunRef,
@@ -28,6 +35,20 @@ export type {
 } from '../../contracts.js';
 
 export type TaskFailure = OperationFailure<string, Record<string, unknown>>;
+
+export type TaskChoiceInteractionRequest<TValue> = {
+  id?: string;
+  prompt: string;
+  options: ReadonlyArray<{
+    id: string;
+    label: string;
+    value: TValue;
+  }>;
+};
+
+export type TaskInteractionContext = {
+  choice<TValue>(request: TaskChoiceInteractionRequest<TValue>): Effect.Effect<TValue, TaskFailure>;
+};
 
 export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;
 
@@ -69,6 +90,7 @@ export type TaskContext = TaskRunIdentity &
   Pick<TaskRunRef, 'subject'> & {
     trigger: TaskTrigger;
     createdAt?: string;
+    interact: TaskInteractionContext;
     progress(
       progress: NonNullable<TaskSnapshot['progress']>,
     ): Effect.Effect<TaskSnapshot, TaskFailure>;
@@ -138,6 +160,11 @@ export type TaskRuntime = {
   ): Effect.Effect<TaskRunRef, TaskFailure>;
   getSnapshot(ref: TaskRunIdentity): Effect.Effect<TaskSnapshot, TaskFailure>;
   listRecent(limit?: number): Effect.Effect<TaskRunListItem[], TaskFailure>;
+  respondToInteraction?(
+    ref: TaskRunIdentity,
+    response: TaskInteractionResponse,
+    context: TaskInteractionResponseContext,
+  ): Effect.Effect<TaskSnapshot, TaskFailure>;
   observe?(ref: TaskRunIdentity): Stream.Stream<TaskSnapshot, TaskFailure>;
 };
 

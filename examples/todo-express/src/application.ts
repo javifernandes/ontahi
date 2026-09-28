@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   createRuntimeProtocolDispatcher,
   createTaskRunDurableOperationObserver,
+  durableOperationProtocolError,
   toDurableOperationSnapshotResponse,
 } from '@ontahi/core/runtime/protocol';
 import {
@@ -29,6 +30,12 @@ export type CreateTodoExpressAppOptions = {
   publicOrigin?: string;
 };
 
+const isTaskInteractionAccessDenied = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'reason' in error &&
+  error.reason === 'task_interaction_access_denied';
+
 const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => {
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
@@ -50,8 +57,40 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
         ),
       'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
       'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
-      'durable.operation': async request =>
-        toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
+      'durable.operation': (request, context) =>
+        TodoApplication.app.runtime.withInvocationContext(context, async () => {
+          if (request.kind === 'inspect') {
+            return toDurableOperationSnapshotResponse(
+              await TodoApplication.getTaskSnapshot(request.run),
+            );
+          }
+
+          if (!context.principal) {
+            return durableOperationProtocolError(
+              'access_denied',
+              'Authentication is required to respond to this task interaction.',
+            );
+          }
+
+          try {
+            return toDurableOperationSnapshotResponse(
+              await TodoApplication.respondToTaskInteraction(request.run, request.response, {
+                actor: {
+                  kind: context.principal.kind,
+                  id: context.principal.subject,
+                },
+              }),
+            );
+          } catch (error) {
+            if (isTaskInteractionAccessDenied(error)) {
+              return durableOperationProtocolError(
+                'access_denied',
+                'The authenticated actor cannot respond to this task interaction.',
+              );
+            }
+            throw error;
+          }
+        }),
       ...(modelCommandRuntime
         ? {
             'model.command': (request, context, { signal }) =>

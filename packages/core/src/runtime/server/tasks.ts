@@ -1,7 +1,13 @@
 export { defineTask, defineTaskStep } from './tasks/definitions.js';
 export {
   duplicateTaskRunFailure,
+  invalidTaskInteractionFailure,
+  invalidTaskInteractionResponseFailure,
   missingTaskRunFailure,
+  taskInteractionMismatchFailure,
+  taskInteractionAccessDeniedFailure,
+  taskInteractionNotPendingFailure,
+  taskInteractionUnavailableFailure,
   taskRunObservationUnavailableFailure,
 } from './tasks/failures.js';
 export {
@@ -9,6 +15,7 @@ export {
   getTaskSnapshot,
   listRecentTasks,
   observeTaskRun,
+  respondToTaskInteraction,
   startTask,
 } from './tasks/facade.js';
 export {
@@ -41,6 +48,8 @@ export type {
   InProcessTaskRuntimeOptions,
   InProcessTasksOptions,
   TaskActor,
+  TaskChoiceInteractionOption,
+  TaskChoiceInteractionRequest,
   TaskConfig,
   TaskContext,
   TaskDeclarations,
@@ -48,6 +57,9 @@ export type {
   TaskDefinitionDeclaration,
   TaskExecutor,
   TaskFailure,
+  TaskInteractionContext,
+  TaskInteractionResponse,
+  TaskInteractionResponseContext,
   TaskMethod,
   TaskMethods,
   TaskRunCreateInput,
@@ -55,6 +67,8 @@ export type {
   TaskRunListItem,
   TaskRunRef,
   TaskRunSource,
+  TaskPendingChoiceInteraction,
+  TaskPendingInteraction,
   TaskRuntimeRef,
   TaskSnapshot,
   TaskStartOptions,

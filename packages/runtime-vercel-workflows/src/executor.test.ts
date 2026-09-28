@@ -165,6 +165,55 @@ describe('vercel workflow task executor', () => {
     expect(workflowSleep).toHaveBeenCalledWith(20_000);
   });
 
+  it('fails explicitly when a workflow task requests an unsupported interaction', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.choose',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.choose', {
+      id: 'fixture.choose',
+      run: (_input: unknown, context) =>
+        context.interact.choice({
+          prompt: 'Continue?',
+          options: [{ id: 'yes', label: 'Yes', value: true }],
+        }),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask(
+        {
+          taskId: 'fixture.choose',
+          runId: 'bookops-run-1',
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'task_interaction_unavailable',
+      taskId: 'fixture.choose',
+      runId: 'bookops-run-1',
+    });
+    expect(update).toHaveBeenCalledWith(
+      {
+        taskId: 'fixture.choose',
+        runId: 'bookops-run-1',
+      },
+      expect.objectContaining({
+        status: 'failed',
+        error: {
+          code: 'task_interaction_unavailable',
+          message: 'Task interaction is unavailable for this runtime.',
+        },
+      }),
+    );
+  });
+
   it('validates persisted task input before running a workflow task', async () => {
     loadSource.mockReturnValue(
       Effect.succeed({

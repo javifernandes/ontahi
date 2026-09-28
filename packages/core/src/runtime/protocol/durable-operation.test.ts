@@ -9,6 +9,7 @@ import {
   durableOperationProtocolError,
   parseDurableOperationProtocolResponse,
   runtimeProtocolFamilies,
+  toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
   toDurableOperationSnapshotResponse,
   type DurableOperationProtocolRequestV1,
@@ -45,6 +46,24 @@ describe('Runtime Protocol Durable Operation family', () => {
     }
   });
 
+  it('authors and registers a typed interaction response request', () => {
+    const body = toDurableOperationInteractionResponseRequest(run, {
+      interactionId: 'choose-list',
+      optionId: 'list-inbox',
+    });
+    const request = createRuntimeProtocolRequest({
+      id: 'exchange-respond',
+      family: 'durable.operation',
+      body,
+    });
+    const registry = createRuntimeProtocolRegistry(runtimeProtocolFamilies);
+
+    expect(registry.parseRequest(JSON.parse(JSON.stringify(request)))).toEqual({
+      success: true,
+      request,
+    });
+  });
+
   it.each([
     { name: 'non-object body', body: null, code: 'invalid_request' },
     {
@@ -55,6 +74,21 @@ describe('Runtime Protocol Durable Operation family', () => {
     {
       name: 'cancellation absent from the runtime contract',
       body: { version: 1, kind: 'cancel', run },
+      code: 'invalid_request',
+    },
+    {
+      name: 'missing interaction response',
+      body: { version: 1, kind: 'respond', run },
+      code: 'invalid_request',
+    },
+    {
+      name: 'empty interaction response identity',
+      body: {
+        version: 1,
+        kind: 'respond',
+        run,
+        response: { interactionId: '', optionId: 'list-inbox' },
+      },
       code: 'invalid_request',
     },
     {
@@ -119,6 +153,16 @@ describe('Runtime Protocol Durable Operation family', () => {
         message: undefined,
         percent: 50,
       },
+      interaction: {
+        id: 'choose-list',
+        kind: 'choice',
+        prompt: 'Which list?',
+        options: [
+          { id: 'list-inbox', label: 'Inbox' },
+          { id: 'list-later', label: 'Later' },
+        ],
+        createdAt: '2026-08-30T23:50:01.000Z',
+      },
       error: undefined,
       result: undefined,
     };
@@ -134,6 +178,16 @@ describe('Runtime Protocol Durable Operation family', () => {
         createdAt: '2026-08-30T23:50:00.000Z',
         updatedAt: '2026-08-30T23:50:01.000Z',
         progress: { phase: 'updating', percent: 50 },
+        interaction: {
+          id: 'choose-list',
+          kind: 'choice',
+          prompt: 'Which list?',
+          options: [
+            { id: 'list-inbox', label: 'Inbox' },
+            { id: 'list-later', label: 'Later' },
+          ],
+          createdAt: '2026-08-30T23:50:01.000Z',
+        },
       },
     });
     expect(JSON.parse(JSON.stringify(response))).toEqual(response);
@@ -312,6 +366,47 @@ describe('Runtime Protocol Durable Operation family', () => {
           status: 'failed',
           updatedAt: 'now',
           error: { code: 500, message: 'Failed.' },
+        },
+      },
+    },
+    {
+      name: 'interaction option value leakage',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'running',
+          updatedAt: 'now',
+          interaction: {
+            id: 'choose-list',
+            kind: 'choice',
+            prompt: 'Which list?',
+            options: [{ id: 'inbox', label: 'Inbox', value: { id: 'inbox' } }],
+            createdAt: 'now',
+          },
+        },
+      },
+    },
+    {
+      name: 'duplicate interaction option id',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'running',
+          updatedAt: 'now',
+          interaction: {
+            id: 'choose-list',
+            kind: 'choice',
+            prompt: 'Which list?',
+            options: [
+              { id: 'same', label: 'First' },
+              { id: 'same', label: 'Second' },
+            ],
+            createdAt: 'now',
+          },
         },
       },
     },

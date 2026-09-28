@@ -34,6 +34,8 @@ export type DiagnosticTaskSnapshot = {
     readonly message?: string;
     readonly percent?: number;
   };
+  /** Redacted diagnostic payload; it is not guaranteed to retain the runtime Interaction shape. */
+  readonly interaction?: unknown;
   readonly error?: { readonly code: string; readonly message: string };
   readonly result?: unknown;
 };

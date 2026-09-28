@@ -1,6 +1,6 @@
 # 153c. Interactive And Resumable Operation Execution
 
-Status: research
+Status: current
 
 Canonical ID: `ontahi://plans/153c-operation-interactions-and-resumption`
 
@@ -10,7 +10,7 @@ Shapes: [Operation Interaction](../../atlas/items/model/operation-interaction.md
 
 Related plans:
 
-1. [125. Ontahí AI Operations](./125-ontahi-ai-operations.md)
+1. [125. Ontahí AI Operations](../research/125-ontahi-ai-operations.md)
 2. [132. Durable Invocation Identity And Idempotency](../next/132-durable-invocation-identity-and-idempotency.md)
 3. [146. Ontahí Runtime Protocol](../done/146-ontahi-runtime-protocol.md)
 4. [153. Model-Backed Todo Command Spike](../current/153-model-backed-todo-command-spike.md)
@@ -87,11 +87,16 @@ A durable Operation projects to a `TaskDefinition`. Starting it returns a `TaskR
 cancelled state, progress, and eventual result. The Task Context supports progress, sleep, and
 declared steps.
 
-This is substantial prior structure for interactive runs, but it does not yet provide interaction:
+This is substantial prior structure for interactive runs. The first experimental slice now adds a
+narrow choice Interaction, while the broader lifecycle remains incomplete:
 
-- there is no `waiting` state or pending-interaction projection;
-- there is no reply/continue protocol;
-- neither the in-process nor Vercel Workflow executor implements a participant wait;
+- there is no `waiting` status; the in-process runtime exposes pending interactions on a `running`
+  snapshot;
+- the native response slice currently authorizes only the actor that started the run; richer
+  participant and delegation policies remain future work;
+- the in-process runtime accepts a matching reply and resumes the choice, but its continuation is
+  process-local;
+- the Vercel Workflow executor does not implement participant wait/resume;
 - the in-process executor starts a background promise and cannot survive process loss;
 - `cancelled` is observable but there is no shared cancellation command;
 - durable idempotency policies are reflected but not yet enforced;
@@ -783,6 +788,28 @@ This experiment falsifies the proposal if the two runtimes require materially di
 Interaction or run semantics. If they share the same protocol and surface projections, it provides
 strong evidence that Model Support can later consume the primitive without owning it.
 
+## Native Runtime Slice In Progress
+
+The first implementation slice establishes the smallest transportable choice Interaction before
+building the complete Todo experiment:
+
+1. a durable Operation requests a typed choice through its existing Task Context;
+2. the public snapshot exposes only the Interaction ID, prompt, and stable option IDs and labels;
+3. the in-process runtime retains the option values and returns the selected typed value to the
+   Operation after one matching response;
+4. inspection and response use the existing `durable.operation` Runtime Protocol family;
+5. invalid, mismatched, and duplicate responses fail without resuming the run.
+
+The slice keeps the run status as `running`; the presence of `snapshot.interaction` is the explicit
+waiting signal. This avoids adding a second source of lifecycle truth before the comparison shows
+whether waiting should become a status in persistent runtimes.
+
+This native adapter deliberately proves the semantic boundary before persistence. Its continuation
+is process-local and is lost if the process exits. It therefore does not yet satisfy restart-safe
+durability and must not be used as evidence that an arbitrary JavaScript stack can be checkpointed.
+The Vercel Workflow adapter reports Interaction as unavailable until it has corresponding durable
+wait/resume semantics.
+
 ## Acceptance And Research Closure
 
 - [x] Inventory the current Operation, Runtime Protocol, durable lifecycle, identity, Activity, and
@@ -797,6 +824,8 @@ strong evidence that Model Support can later consume the primitive without ownin
 - [x] Identify what an optional LangGraph adapter would and would not own.
 - [x] Recommend one bounded comparison experiment before public API design.
 - [ ] Execute the native versus LangGraph comparison and record implementation evidence.
+- [ ] Complete the two-Interaction Todo Operation and expose it through two surfaces.
+- [ ] Implement restart-safe native state-machine persistence for the comparison experiment.
 - [ ] Decide whether interactive execution extends Durable Operation/Task Run or introduces a more
       general execution-run lifecycle from which durable tasks are projected.
 - [ ] Decide the first Interaction storage/protocol contract only after the experiment.

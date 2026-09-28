@@ -198,6 +198,30 @@ export type TaskRunRef = {
 
 export type TaskRunIdentity = Pick<TaskRunRef, 'taskId' | 'runId'>;
 
+export type TaskChoiceInteractionOption = {
+  id: string;
+  label: string;
+};
+
+export type TaskPendingChoiceInteraction = {
+  id: string;
+  kind: 'choice';
+  prompt: string;
+  options: ReadonlyArray<TaskChoiceInteractionOption>;
+  createdAt: string;
+};
+
+export type TaskPendingInteraction = TaskPendingChoiceInteraction;
+
+export type TaskInteractionResponse = {
+  interactionId: string;
+  optionId: string;
+};
+
+export type TaskInteractionResponseContext = {
+  actor: TaskActor;
+};
+
 export type TaskSnapshot<TResult = unknown> = {
   taskId: string;
   runId: string;
@@ -212,6 +236,7 @@ export type TaskSnapshot<TResult = unknown> = {
     message?: string;
     percent?: number;
   };
+  interaction?: TaskPendingInteraction;
   error?: {
     code: string;
     message: string;

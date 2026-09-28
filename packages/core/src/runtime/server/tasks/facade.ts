@@ -1,12 +1,17 @@
 import { Effect, Stream } from 'effect';
 
-import { taskRunObservationUnavailableFailure } from './failures.js';
+import {
+  taskInteractionUnavailableFailure,
+  taskRunObservationUnavailableFailure,
+} from './failures.js';
 import type {
   TaskConfig,
   TaskDeclarations,
   TaskDefinition,
   TaskFailure,
   TaskMethods,
+  TaskInteractionResponse,
+  TaskInteractionResponseContext,
   TaskRunIdentity,
   TaskRuntime,
   TaskStartOptions,
@@ -28,6 +33,16 @@ export const getTaskSnapshot = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
   runtime.getSnapshot(ref);
 
 export const listRecentTasks = (runtime: TaskRuntime, limit?: number) => runtime.listRecent(limit);
+
+export const respondToTaskInteraction = (
+  runtime: TaskRuntime,
+  ref: TaskRunIdentity,
+  response: TaskInteractionResponse,
+  context: TaskInteractionResponseContext,
+) =>
+  runtime.respondToInteraction
+    ? runtime.respondToInteraction(ref, response, context)
+    : Effect.fail(taskInteractionUnavailableFailure(ref));
 
 export const observeTaskRun = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
   runtime.observe ? runtime.observe(ref) : Stream.fail(taskRunObservationUnavailableFailure(ref));
@@ -65,6 +80,15 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
       }),
     observe: (ref: TaskRunIdentity) =>
       Stream.unwrap(Effect.map(getRuntime(), runtime => observeTaskRun(runtime, ref))),
+    respondToInteraction: (
+      ref: TaskRunIdentity,
+      response: TaskInteractionResponse,
+      context: TaskInteractionResponseContext,
+    ) =>
+      Effect.gen(function* () {
+        const runtime = yield* getRuntime();
+        return yield* respondToTaskInteraction(runtime, ref, response, context);
+      }),
     listRecent: (limit?: number) =>
       Effect.gen(function* () {
         const runtime = yield* getRuntime();

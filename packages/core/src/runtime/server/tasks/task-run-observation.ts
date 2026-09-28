@@ -30,6 +30,7 @@ const toTaskRunEntity = (snapshot: TaskSnapshot): TaskRunMutationRecord => ({
   ...(snapshot.startedAt ? { startedAt: snapshot.startedAt } : {}),
   ...(snapshot.completedAt ? { completedAt: snapshot.completedAt } : {}),
   ...(snapshot.progress ? { progress: snapshot.progress } : {}),
+  interaction: snapshot.interaction,
   ...(snapshot.error ? { error: snapshot.error } : {}),
   ...(snapshot.result !== undefined ? { result: snapshot.result } : {}),
 });
