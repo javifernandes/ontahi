@@ -8,6 +8,7 @@ import {
   activityEntryTitle,
   buildActivityEntries,
   formatSelectionExpression,
+  graphCommandText,
   graphCommandSummary,
   graphReadSummary,
   isRecord,
@@ -323,6 +324,60 @@ describe('Devtools activity model', () => {
       'custom.family',
     );
     expect(semanticSummary({ id: 'empty', at: 0 })).toBe('Runtime exchange');
+  });
+
+  it('renders canonical graph commands as compact source-like text', () => {
+    expect(
+      graphCommandText({
+        kind: 'graph-command',
+        command: {
+          kind: 'entity-mutation-command',
+          action: 'delete',
+          entityName: 'TodoItem',
+          target: {
+            kind: 'selection',
+            expression: {
+              kind: 'and',
+              operands: [
+                { kind: 'predicate', fieldName: 'title', operator: 'eq', value: 'Bread' },
+                {
+                  kind: 'predicate',
+                  fieldName: 'list',
+                  operator: 'eq',
+                  value: {
+                    kind: 'entity-ref',
+                    entityName: 'TodoList',
+                    locator: { id: 'groceries' },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    ).toBe('delete TodoItem where title = "Bread" and list = TodoList {"id":"groceries"}');
+    expect(
+      graphCommandText({
+        kind: 'graph-command',
+        command: {
+          kind: 'many-to-many-relationship-command',
+          action: 'unlink',
+          relation: {
+            sourceEntityName: 'TodoItem',
+            relationName: 'tags',
+            targetEntityName: 'Tag',
+          },
+          sources: {
+            entityName: 'TodoItem',
+            selection: { kind: 'references', refs: [{ locator: { id: 'bread' } }] },
+          },
+          targets: {
+            entityName: 'Tag',
+            selection: { kind: 'references', refs: [{ locator: { id: 'shopping' } }] },
+          },
+        },
+      }),
+    ).toBe('unlink TodoItem.tags · TodoItem references (1) → Tag references (1)');
   });
 
   it('summarizes every ordered destination and composite identities', () => {

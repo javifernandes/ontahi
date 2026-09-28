@@ -852,7 +852,10 @@ that run through the existing `durable.operation` transport capability, and rend
 choice, approval, failure, and completion states. Choice and approval controls send the canonical
 Interaction response through the same Runtime Protocol family. The surface owns presentation only:
 it introduces no Devtools-specific continuation state, polling endpoint, or reply contract. A
-second independent surface is still required to satisfy the cross-surface acceptance criterion.
+proposal renders its canonical Graph Commands as compact source-like text in the active Console
+dialect, with exact requests available as secondary detail. Host cache reconciliation happens when
+the run completes rather than when its initial queued response arrives. A second independent
+surface is still required to satisfy the cross-surface acceptance criterion.
 
 ## Acceptance And Research Closure
 

@@ -12,8 +12,10 @@ import {
   toDurableOperationInteractionResponseRequest,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { graphCommandText } from './activity-model.js';
+import { AuthoringDialectContext } from './authoring-dialect.js';
 import { styles } from './devtools-styles.js';
 import { JsonView } from './json-view.js';
 import { SemanticPayload } from './semantic-payload.js';
@@ -63,13 +65,19 @@ const buttonStyle = (kind: 'primary' | 'secondary' | 'danger' = 'secondary') => 
 export const DurableOperationRun = ({
   run,
   transport,
+  onCompleted,
+  view = 'visual',
 }: {
   readonly run: TaskRunIdentity;
   readonly transport: RuntimeTransport<any>;
+  readonly onCompleted?: (snapshot: TaskSnapshot) => void | Promise<void>;
+  readonly view?: 'visual' | 'json';
 }) => {
   const [snapshot, setSnapshot] = useState<TaskSnapshot>();
   const [error, setError] = useState<string>();
   const [responding, setResponding] = useState(false);
+  const completedRun = useRef<string>();
+  const dialect = useContext(AuthoringDialectContext);
   const exchange = useMemo(() => createRuntimeProtocolExchange({ transport }), [transport]);
 
   useEffect(() => {
@@ -100,6 +108,16 @@ export const DurableOperationRun = ({
     return () => controller.abort();
   }, [run.taskId, run.runId, transport]);
 
+  useEffect(() => {
+    if (snapshot?.status !== 'completed') return;
+    const key = `${snapshot.taskId}:${snapshot.runId}`;
+    if (completedRun.current === key) return;
+    completedRun.current = key;
+    void Promise.resolve(onCompleted?.(snapshot)).catch(cause => {
+      setError(cause instanceof Error ? cause.message : 'Could not reconcile the completed run.');
+    });
+  }, [onCompleted, snapshot]);
+
   const respond = async (response: TaskInteractionResponse) => {
     setResponding(true);
     setError(undefined);
@@ -117,6 +135,13 @@ export const DurableOperationRun = ({
   };
 
   const interaction = snapshot?.interaction;
+  if (view === 'json')
+    return (
+      <JsonView
+        value={snapshot ?? { ...run, status: 'queued' }}
+        label='Durable Operation run JSON'
+      />
+    );
   return (
     <section aria-label='Durable Operation run' style={styles.semanticGrid}>
       <div style={styles.semanticCard}>
@@ -155,7 +180,24 @@ export const DurableOperationRun = ({
           <span style={styles.semanticLabel}>Approval required</span>
           <span style={styles.semanticValue}>{interaction.prompt}</span>
           <span style={styles.consoleHint}>{interaction.proposal.summary}</span>
-          <JsonView value={interaction.proposal.requests} label='Proposed requests' />
+          <ol
+            aria-label='Proposed commands'
+            style={{ display: 'grid', gap: 6, margin: 0, paddingInlineStart: 24 }}
+          >
+            {interaction.proposal.requests.map((request, index) => (
+              <li key={index}>
+                <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                  {isRecord(request)
+                    ? (graphCommandText(request, dialect) ?? JSON.stringify(request))
+                    : JSON.stringify(request)}
+                </code>
+              </li>
+            ))}
+          </ol>
+          <details>
+            <summary style={{ cursor: 'pointer', color: '#8eaa9a' }}>Exact requests</summary>
+            <JsonView value={interaction.proposal.requests} label='Proposed requests' />
+          </details>
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <button
               type='button'

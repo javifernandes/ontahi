@@ -97,6 +97,7 @@ describe('Console actions', uiTestOptions, () => {
   });
 
   it('observes and answers durable Operation interactions through Runtime Protocol', async () => {
+    const onActionExecuted = vi.fn();
     let continueChoice!: () => void;
     let continueApproval!: () => void;
     const choiceAnswered = new Promise<void>(resolve => {
@@ -162,7 +163,27 @@ describe('Console actions', uiTestOptions, () => {
           proposal: {
             id: 'proposal-1',
             summary: 'Update Later.',
-            requests: [{ version: 1, kind: 'graph-command' }],
+            requests: [
+              {
+                version: 3,
+                kind: 'graph-command',
+                command: {
+                  kind: 'entity-mutation-command',
+                  action: 'delete',
+                  entityName: 'List',
+                  target: {
+                    kind: 'selection',
+                    entityName: 'List',
+                    expression: {
+                      kind: 'predicate',
+                      fieldName: 'name',
+                      operator: 'eq',
+                      value: 'Later',
+                    },
+                  },
+                },
+              },
+            ],
           },
           createdAt: '2026-09-28T20:00:01.000Z',
         },
@@ -175,6 +196,7 @@ describe('Console actions', uiTestOptions, () => {
         options={{
           entities: [List],
           initialDocument: 'List.reviewList({ name: "Inbox" })',
+          onActionExecuted,
         }}
         runtimeTransport={{ request, durableOperation: { observe } }}
       />,
@@ -183,13 +205,25 @@ describe('Console actions', uiTestOptions, () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     const result = within(screen.getByLabelText('Console result'));
     expect(await result.findByText('Which list?')).toBeDefined();
+    expect(onActionExecuted).not.toHaveBeenCalled();
+    fireEvent.click(result.getByRole('button', { name: 'JSON' }));
+    expect(result.getByRole('button', { name: 'Copy Durable Operation run JSON' })).toBeDefined();
+    fireEvent.click(result.getByRole('button', { name: 'Visual' }));
+    expect(result.getByText('Which list?')).toBeDefined();
     fireEvent.click(result.getByRole('button', { name: 'Later' }));
     expect(await result.findByText('Apply the proposal?')).toBeDefined();
     expect(result.getByText('Update Later.')).toBeDefined();
+    expect(result.getByText('List.where(name eq "Later").delete()')).toBeDefined();
+    expect(result.getByText('Exact requests')).toBeDefined();
     fireEvent.click(result.getByRole('button', { name: 'Approve' }));
     expect(await result.findByText('completed')).toBeDefined();
     expect(result.getByText('updated')).toBeDefined();
     expect(result.getByText('1')).toBeDefined();
+    await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
+    expect(onActionExecuted).toHaveBeenCalledWith({
+      execution: expect.objectContaining({ family: 'operation' }),
+      response: expect.objectContaining({ ...run, status: 'completed', result: { updated: 1 } }),
+    });
 
     const responses = request.mock.calls
       .map(([envelope]) => envelope)

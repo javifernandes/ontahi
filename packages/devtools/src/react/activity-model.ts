@@ -91,7 +91,14 @@ export const matchesFilter = (values: Array<string | number | undefined>, filter
       .includes(filter),
   );
 
-const formatInlineValue = (value: unknown) => {
+const formatInlineValue = (value: unknown): string => {
+  if (
+    isRecord(value) &&
+    value.kind === 'entity-ref' &&
+    typeof value.entityName === 'string' &&
+    isRecord(value.locator)
+  )
+    return `${value.entityName} ${JSON.stringify(value.locator)}`;
   const formatted =
     typeof value === 'string' ? `"${value}"` : (JSON.stringify(value) ?? String(value));
   return formatted.length > 42 ? `${formatted.slice(0, 39)}…` : formatted;
@@ -269,6 +276,71 @@ export const graphCommandSummary = (body: RecordValue): string | undefined => {
     return `${entity}.${relation}.move(${member}, ${position})`;
   }
   return typeof command.kind === 'string' ? command.kind : 'Graph command';
+};
+
+const commandTarget = (value: unknown, entityName: string, dialect: ConsoleDialect) => {
+  if (!isRecord(value)) return entityName;
+  if (value.kind === 'entity-ref' && isRecord(value.locator)) {
+    return dialect === 'declarative'
+      ? `${entityName} ${JSON.stringify(value.locator)}`
+      : `${entityName}.ref(${JSON.stringify(value.locator)})`;
+  }
+  if (value.kind === 'selection') {
+    const selection = formatSelectionExpression(value.expression, dialect);
+    return dialect === 'declarative' ? `${entityName} ${selection}` : `${entityName}.${selection}`;
+  }
+  return entityName;
+};
+
+const relationshipSelection = (value: unknown, fallbackEntity: string, dialect: ConsoleDialect) => {
+  if (!isRecord(value)) return fallbackEntity;
+  const entityName = typeof value.entityName === 'string' ? value.entityName : fallbackEntity;
+  return commandTarget(
+    isRecord(value.selection) ? { kind: 'selection', expression: value.selection } : value,
+    entityName,
+    dialect,
+  );
+};
+
+/** Compact source-like projection of a canonical Graph Command for inspection surfaces. */
+export const graphCommandText = (
+  body: RecordValue,
+  dialect: ConsoleDialect = 'declarative',
+): string | undefined => {
+  if (body.kind !== 'graph-command' || !isRecord(body.command)) return undefined;
+  const command = body.command;
+  if (command.kind === 'entity-mutation-command') {
+    const entityName =
+      typeof command.entityName === 'string' ? command.entityName : 'UnknownEntity';
+    const action = typeof command.action === 'string' ? command.action : 'mutate';
+    if (action === 'create')
+      return dialect === 'declarative'
+        ? `create ${entityName} ${JSON.stringify(command.values ?? {})}`
+        : `${entityName}.create(${JSON.stringify(command.values ?? {})})`;
+    const target = commandTarget(command.target, entityName, dialect);
+    if (action === 'update')
+      return dialect === 'declarative'
+        ? `update ${target} with ${JSON.stringify(command.values ?? {})}`
+        : `${target}.update(${JSON.stringify(command.values ?? {})})`;
+    if (action === 'delete')
+      return dialect === 'declarative' ? `delete ${target}` : `${target}.delete()`;
+    return `${action} ${target}`;
+  }
+  if (
+    (command.kind === 'relationship-command' ||
+      command.kind === 'many-to-many-relationship-command') &&
+    isRecord(command.relation)
+  ) {
+    const sourceEntity = String(command.relation.sourceEntityName ?? 'Source');
+    const targetEntity = String(command.relation.targetEntityName ?? 'Target');
+    const relationName = String(
+      command.relation.relationName ?? command.relation.fieldName ?? 'relation',
+    );
+    const sources = relationshipSelection(command.sources, sourceEntity, dialect);
+    const targets = relationshipSelection(command.targets, targetEntity, dialect);
+    return `${String(command.action ?? 'change')} ${sourceEntity}.${relationName} · ${sources} → ${targets}`;
+  }
+  return graphCommandSummary(body);
 };
 
 export const semanticSummary = (
