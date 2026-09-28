@@ -1,14 +1,31 @@
 import { cloneJson, isJsonValue, type JsonValue } from '../../value/json.js';
 import { isRecord } from '../../value/object.js';
-import type { TaskRunIdentity, TaskSnapshot, TaskStatus } from '../contracts.js';
+import type {
+  TaskInteractionResponse,
+  TaskPendingInteraction,
+  TaskRunIdentity,
+  TaskSnapshot,
+  TaskStatus,
+} from '../contracts.js';
 
 import { defineRuntimeProtocolFamily } from './registry.js';
 
-export type DurableOperationProtocolRequestV1 = {
+export type DurableOperationInspectRequestV1 = {
   readonly version: 1;
   readonly kind: 'inspect';
   readonly run: TaskRunIdentity;
 };
+
+export type DurableOperationRespondRequestV1 = {
+  readonly version: 1;
+  readonly kind: 'respond';
+  readonly run: TaskRunIdentity;
+  readonly response: TaskInteractionResponse;
+};
+
+export type DurableOperationProtocolRequestV1 =
+  | DurableOperationInspectRequestV1
+  | DurableOperationRespondRequestV1;
 
 export type DurableOperationProtocolErrorCode =
   | 'invalid_request'
@@ -43,8 +60,10 @@ export type DurableOperationProtocolResponseParseResult =
   | { readonly success: true; readonly response: DurableOperationProtocolResponse }
   | { readonly success: false; readonly error: DurableOperationProtocolError };
 
-const requestKeys = new Set(['version', 'kind', 'run']);
+const inspectRequestKeys = new Set(['version', 'kind', 'run']);
+const respondRequestKeys = new Set(['version', 'kind', 'run', 'response']);
 const runKeys = new Set(['taskId', 'runId']);
+const interactionResponseKeys = new Set(['interactionId', 'optionId']);
 const responseKeys = new Set(['version', 'kind', 'snapshot']);
 const snapshotKeys = new Set([
   'taskId',
@@ -56,11 +75,14 @@ const snapshotKeys = new Set([
   'updatedAt',
   'completedAt',
   'progress',
+  'interaction',
   'error',
   'result',
 ]);
 const subjectKeys = new Set(['type', 'id']);
 const progressKeys = new Set(['phase', 'message', 'percent']);
+const interactionKeys = new Set(['id', 'kind', 'prompt', 'options', 'createdAt']);
+const interactionOptionKeys = new Set(['id', 'label']);
 const taskErrorKeys = new Set(['code', 'message']);
 const protocolErrorKeys = new Set(['kind', 'error']);
 const protocolErrorDetailKeys = new Set(['code', 'message']);
@@ -87,6 +109,12 @@ const isTaskRunIdentity = (value: unknown): value is TaskRunIdentity =>
   hasOnlyKeys(value, runKeys) &&
   isIdentitySegment(value.taskId) &&
   isIdentitySegment(value.runId);
+
+const isTaskInteractionResponse = (value: unknown): value is TaskInteractionResponse =>
+  isRecord(value) &&
+  hasOnlyKeys(value, interactionResponseKeys) &&
+  isIdentitySegment(value.interactionId) &&
+  isIdentitySegment(value.optionId);
 
 const isOptionalString = (value: unknown): value is string | undefined =>
   value === undefined || typeof value === 'string';
@@ -135,36 +163,71 @@ export const parseDurableOperationProtocolRequest = (
       ),
     };
   }
-  if (!hasOnlyKeys(value, requestKeys)) {
-    return invalidRequest('Durable Operation protocol request contains unknown keys.');
-  }
-  if (value.kind !== 'inspect') {
-    return invalidRequest('Durable Operation protocol request kind must be "inspect".');
-  }
   if (!isTaskRunIdentity(value.run)) {
     return invalidRequest(
-      'Durable Operation inspect run must contain only non-empty taskId and runId strings.',
+      'Durable Operation run must contain only non-empty taskId and runId strings.',
     );
   }
-  return {
-    success: true,
-    request: {
-      version: 1,
-      kind: 'inspect',
-      run: { taskId: value.run.taskId, runId: value.run.runId },
-    },
-  };
+
+  const run = { taskId: value.run.taskId, runId: value.run.runId };
+  if (value.kind === 'inspect') {
+    if (!hasOnlyKeys(value, inspectRequestKeys)) {
+      return invalidRequest('Durable Operation inspect request contains unknown keys.');
+    }
+    return { success: true, request: { version: 1, kind: 'inspect', run } };
+  }
+
+  if (value.kind === 'respond') {
+    if (!hasOnlyKeys(value, respondRequestKeys)) {
+      return invalidRequest('Durable Operation respond request contains unknown keys.');
+    }
+    if (!isTaskInteractionResponse(value.response)) {
+      return invalidRequest(
+        'Durable Operation response must contain non-empty interactionId and optionId strings.',
+      );
+    }
+    return {
+      success: true,
+      request: {
+        version: 1,
+        kind: 'respond',
+        run,
+        response: {
+          interactionId: value.response.interactionId,
+          optionId: value.response.optionId,
+        },
+      },
+    };
+  }
+
+  return invalidRequest('Durable Operation protocol request kind must be "inspect" or "respond".');
 };
 
 export const toDurableOperationProtocolRequest = (
   run: TaskRunIdentity,
-): DurableOperationProtocolRequestV1 => {
+): DurableOperationInspectRequestV1 => {
   const parsed = parseDurableOperationProtocolRequest({
     version: 1,
     kind: 'inspect',
     run: { taskId: run.taskId, runId: run.runId },
   });
   if (!parsed.success) throw new TypeError(parsed.error.error.message);
+  if (parsed.request.kind !== 'inspect') throw new TypeError('Expected an inspect request.');
+  return parsed.request;
+};
+
+export const toDurableOperationInteractionResponseRequest = (
+  run: TaskRunIdentity,
+  response: TaskInteractionResponse,
+): DurableOperationRespondRequestV1 => {
+  const parsed = parseDurableOperationProtocolRequest({
+    version: 1,
+    kind: 'respond',
+    run: { taskId: run.taskId, runId: run.runId },
+    response,
+  });
+  if (!parsed.success) throw new TypeError(parsed.error.error.message);
+  if (parsed.request.kind !== 'respond') throw new TypeError('Expected a respond request.');
   return parsed.request;
 };
 
@@ -197,6 +260,47 @@ const parseProgress = (value: unknown): TaskSnapshot['progress'] | undefined => 
     ...(value.phase === undefined ? {} : { phase: value.phase }),
     ...(value.message === undefined ? {} : { message: value.message }),
     ...(value.percent === undefined ? {} : { percent: value.percent }),
+  };
+};
+
+const parseInteraction = (value: unknown): TaskPendingInteraction | undefined => {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, interactionKeys) ||
+    !isIdentitySegment(value.id) ||
+    value.kind !== 'choice' ||
+    typeof value.prompt !== 'string' ||
+    !Array.isArray(value.options) ||
+    value.options.length === 0 ||
+    !isTimestamp(value.createdAt)
+  ) {
+    return undefined;
+  }
+
+  const options = value.options.map(option => {
+    if (
+      !isRecord(option) ||
+      !hasOnlyKeys(option, interactionOptionKeys) ||
+      !isIdentitySegment(option.id) ||
+      typeof option.label !== 'string'
+    ) {
+      return undefined;
+    }
+    return { id: option.id, label: option.label };
+  });
+  if (options.some(option => option === undefined)) return undefined;
+  const parsedOptions = options as Array<{ id: string; label: string }>;
+  if (new Set(parsedOptions.map(option => option.id)).size !== parsedOptions.length) {
+    return undefined;
+  }
+
+  return {
+    id: value.id,
+    kind: 'choice',
+    prompt: value.prompt,
+    options: parsedOptions,
+    createdAt: value.createdAt,
   };
 };
 
@@ -236,10 +340,12 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
 
   const subject = parseSubject(value.subject);
   const progress = parseProgress(value.progress);
+  const interaction = parseInteraction(value.interaction);
   const error = parseTaskError(value.error);
   if (
     (value.subject !== undefined && subject === undefined) ||
     (value.progress !== undefined && progress === undefined) ||
+    (value.interaction !== undefined && interaction === undefined) ||
     (value.error !== undefined && error === undefined)
   ) {
     return { success: false };
@@ -257,6 +363,7 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
       updatedAt: value.updatedAt,
       ...(value.completedAt === undefined ? {} : { completedAt: value.completedAt }),
       ...(progress === undefined ? {} : { progress }),
+      ...(interaction === undefined ? {} : { interaction }),
       ...(error === undefined ? {} : { error }),
       ...(value.result === undefined ? {} : { result: cloneJson(value.result) }),
     },

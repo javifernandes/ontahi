@@ -71,6 +71,8 @@ const projectTaskSnapshot = (
   projectPayload: (value: unknown) => unknown | undefined,
 ): DiagnosticTaskSnapshot => {
   const result = snapshot.result === undefined ? undefined : projectPayload(snapshot.result);
+  const interaction =
+    snapshot.interaction === undefined ? undefined : projectPayload(snapshot.interaction);
   return {
     taskId: snapshot.taskId,
     runId: snapshot.runId,
@@ -78,6 +80,9 @@ const projectTaskSnapshot = (
     ...(snapshot.subject
       ? { subject: { type: snapshot.subject.type, id: snapshot.subject.id } }
       : {}),
+    ...(interaction === undefined
+      ? {}
+      : { interaction: interaction as DiagnosticTaskSnapshot['interaction'] }),
     ...(snapshot.createdAt ? { createdAt: snapshot.createdAt } : {}),
     ...(snapshot.startedAt ? { startedAt: snapshot.startedAt } : {}),
     updatedAt: snapshot.updatedAt,

@@ -2,7 +2,7 @@ import { Chunk, Effect, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { defineTask } from './definitions.js';
-import { observeTaskRun } from './facade.js';
+import { observeTaskRun, respondToTaskInteraction } from './facade.js';
 import { createInProcessTaskRuntime } from './in-process-adapter.js';
 import { createInMemoryTaskStorage } from './memory-store.js';
 import type { TaskFailure, TaskRuntime } from './types.js';
@@ -111,6 +111,56 @@ describe('TaskRun observation', () => {
     });
   });
 
+  it('projects a pending interaction and its resumption across runtimes sharing storage', async () => {
+    const observedInteraction = createDeferred();
+    const storage = createInMemoryTaskStorage();
+    const executingRuntime = createInProcessTaskRuntime({
+      storage,
+      createRunId: () => 'run-interaction',
+    });
+    const observingRuntime = createInProcessTaskRuntime({ storage });
+    const task = defineTask({
+      id: 'TodoList.choose',
+      run: (_input: void, context) =>
+        Effect.gen(function* () {
+          const selected = yield* context.interact.choice({
+            id: 'choose-list',
+            prompt: 'Which list?',
+            options: [{ id: 'inbox', label: 'Inbox', value: 'list-inbox' }],
+          });
+          return { selected };
+        }),
+    });
+    const run = await Effect.runPromise(executingRuntime.start(task, undefined));
+    const observation = Effect.runPromise(
+      observeTaskRun(observingRuntime, run).pipe(
+        Stream.tap(snapshot =>
+          Effect.sync(() => {
+            if (snapshot.interaction?.id === 'choose-list') observedInteraction.resolve();
+          }),
+        ),
+        Stream.takeUntil(snapshot => snapshot.status === 'completed'),
+        Stream.runCollect,
+      ),
+    );
+
+    await observedInteraction.promise;
+    await Effect.runPromise(
+      respondToTaskInteraction(observingRuntime, run, {
+        interactionId: 'choose-list',
+        optionId: 'inbox',
+      }),
+    );
+
+    const snapshots = Chunk.toReadonlyArray(await observation);
+    expect(snapshots.some(snapshot => snapshot.interaction?.id === 'choose-list')).toBe(true);
+    expect(snapshots.at(-1)).toMatchObject({
+      status: 'completed',
+      result: { selected: 'list-inbox' },
+    });
+    expect(snapshots.at(-1)?.interaction).toBeUndefined();
+  });
+
   it('fails explicitly when a Task runtime has no observation capability', async () => {
     const failure = {
       reason: 'unused',
@@ -137,6 +187,21 @@ describe('TaskRun observation', () => {
         taskId: 'TodoItem.completeAll',
         runId: 'run-1',
       },
+    });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            runtime,
+            { taskId: 'TodoItem.completeAll', runId: 'run-1' },
+            { interactionId: 'choose-list', optionId: 'inbox' },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      reason: 'task_interaction_unavailable',
+      taskId: 'TodoItem.completeAll',
+      runId: 'run-1',
     });
   });
 });

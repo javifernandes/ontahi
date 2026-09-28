@@ -21,10 +21,11 @@ Clarification, choice, and acceptance of specified effects have different semant
 question does not by itself grant authority. Any eventual continuation must preserve participant
 identity and recheck authority and relevant state before applying effects.
 
-A semantic interaction request and its typed response should be distinct from host rendering and
-provider message history. Their exact contract is intentionally undecided: plan 153c investigates
-new invocation versus resumption, lifecycle, expiry, persistence, cancellation, and duplicate replies.
-No canonical result variant or durable interaction protocol is established by this item.
+A semantic interaction request and its typed response are distinct from host rendering and provider
+message history. The first experimental contract adds a choice Interaction to a running durable
+Operation snapshot and accepts its response through the existing `durable.operation` protocol.
+Broader kinds, lifecycle, expiry, persistence, cancellation, authorization, and approval binding
+remain under investigation in plan 153c.
 
 The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
 It supplies evidence for this direction without implementing conversational continuation.
@@ -36,10 +37,11 @@ conversation identity, and operation-run identity remain distinct; one user may 
 unrelated tabs and CLI sessions. Ambient selection needs surface identity and freshness, and must
 be captured as a concrete target before acceptance or execution.
 
-Durable operations are a candidate lifecycle for a workflow that reports progress and then waits
-for participant input. A code-backed workflow could issue the same semantic request as a model-backed
-one. The continuation, correlation, and visibility rules are future framework design work rather
-than chat-provider behavior or an assertion that current durable operations support user waits.
+Durable Operation runs provide the first experimental lifecycle for a workflow that reports progress
+and then waits for participant input. A code-backed workflow can issue the same semantic request as
+a future model-backed one. The initial in-process continuation is explicitly process-local; durable
+checkpointing, correlation, and visibility rules remain framework design work rather than
+chat-provider behavior.
 
 Current research favors reusing canonical Graph Read, Graph Command, and Operation Invocation
 contracts rather than wrapping them in a second universal effect language. Interaction is the

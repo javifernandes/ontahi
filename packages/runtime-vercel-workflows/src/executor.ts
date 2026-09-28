@@ -6,6 +6,7 @@ import {
   validateTaskProgress,
   validateTaskStepInput,
   validateTaskStepOutput,
+  taskInteractionUnavailableFailure,
   type TaskContext,
   type TaskDefinition,
   type TaskFailure,
@@ -176,6 +177,9 @@ export const createVercelWorkflowTaskExecutor = ({
       ...(source.subject ? { subject: source.subject } : {}),
       trigger: source.trigger,
       createdAt: source.createdAt,
+      interact: {
+        choice: () => Effect.fail(taskInteractionUnavailableFailure(ref)),
+      },
       progress: progress =>
         Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
           Effect.tryPromise({

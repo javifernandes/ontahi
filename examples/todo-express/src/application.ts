@@ -50,8 +50,14 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
         ),
       'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
       'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
-      'durable.operation': async request =>
-        toDurableOperationSnapshotResponse(await TodoApplication.getTaskSnapshot(request.run)),
+      'durable.operation': (request, context) =>
+        TodoApplication.app.runtime.withInvocationContext(context, async () =>
+          toDurableOperationSnapshotResponse(
+            request.kind === 'inspect'
+              ? await TodoApplication.getTaskSnapshot(request.run)
+              : await TodoApplication.respondToTaskInteraction(request.run, request.response),
+          ),
+        ),
       ...(modelCommandRuntime
         ? {
             'model.command': (request, context, { signal }) =>
