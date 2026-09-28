@@ -179,6 +179,7 @@ export const createVercelWorkflowTaskExecutor = ({
       createdAt: source.createdAt,
       interact: {
         choice: () => Effect.fail(taskInteractionUnavailableFailure(ref)),
+        approval: () => Effect.fail(taskInteractionUnavailableFailure(ref)),
       },
       progress: progress =>
         Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>

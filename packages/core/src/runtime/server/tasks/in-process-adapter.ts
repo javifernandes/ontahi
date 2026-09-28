@@ -1,5 +1,7 @@
 import { Deferred, Effect, Stream } from 'effect';
 
+import { cloneJson, isJsonValue } from '../../../value/json.js';
+
 import {
   invalidTaskInteractionFailure,
   invalidTaskInteractionResponseFailure,
@@ -16,10 +18,14 @@ import type {
   TaskExecutor,
   TaskContext,
   TaskChoiceInteractionRequest,
+  TaskApprovalInteractionRequest,
+  TaskApprovalDecision,
   TaskFailure,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
+  TaskPendingApprovalInteraction,
   TaskPendingChoiceInteraction,
+  TaskPendingInteraction,
   TaskRunIdentity,
   TaskRunRef,
   TaskRunSource,
@@ -46,19 +52,21 @@ let fallbackInteractionIdSequence = 0;
 const createInteractionId = () =>
   globalThis.crypto?.randomUUID() ?? `interaction-${Date.now()}-${++fallbackInteractionIdSequence}`;
 
-type PendingChoiceInteraction = {
-  interaction: TaskPendingChoiceInteraction;
-  values: ReadonlyMap<string, unknown>;
+type PendingInteraction = {
+  interaction: TaskPendingInteraction;
+  resolve(
+    response: TaskInteractionResponse,
+  ): { readonly success: true; readonly value: unknown } | { readonly success: false };
   deferred: Deferred.Deferred<unknown, TaskFailure>;
 };
 
-const pendingInteractionsByStorage = new WeakMap<object, Map<string, PendingChoiceInteraction>>();
+const pendingInteractionsByStorage = new WeakMap<object, Map<string, PendingInteraction>>();
 
 const getPendingInteractions = (storage: object) => {
   const existing = pendingInteractionsByStorage.get(storage);
   if (existing) return existing;
 
-  const interactions = new Map<string, PendingChoiceInteraction>();
+  const interactions = new Map<string, PendingInteraction>();
   pendingInteractionsByStorage.set(storage, interactions);
   return interactions;
 };
@@ -94,6 +102,39 @@ const validateChoiceRequest = <TValue>(
   return Effect.void;
 };
 
+const validateApprovalRequest = (
+  ref: TaskRunIdentity,
+  request: TaskApprovalInteractionRequest,
+): Effect.Effect<void, TaskFailure> => {
+  if (request.prompt.trim().length === 0) {
+    return Effect.fail(invalidTaskInteractionFailure(ref, 'Approval prompt cannot be empty.'));
+  }
+  if (request.id !== undefined && (request.id.trim().length === 0 || request.id.length > 512)) {
+    return Effect.fail(invalidTaskInteractionFailure(ref, 'Approval interaction ID is invalid.'));
+  }
+  if (request.proposal.id.trim().length === 0 || request.proposal.id.length > 512) {
+    return Effect.fail(invalidTaskInteractionFailure(ref, 'Approval proposal ID is invalid.'));
+  }
+  if (request.proposal.summary.trim().length === 0) {
+    return Effect.fail(
+      invalidTaskInteractionFailure(ref, 'Approval proposal summary is required.'),
+    );
+  }
+  if (
+    request.proposal.requests.length === 0 ||
+    request.proposal.requests.some(candidate => !isJsonValue(candidate))
+  ) {
+    return Effect.fail(
+      invalidTaskInteractionFailure(
+        ref,
+        'Approval proposal requires at least one JSON-safe request.',
+      ),
+    );
+  }
+
+  return Effect.void;
+};
+
 const toTaskRunRef = (snapshot: TaskSnapshot): TaskRunRef => ({
   taskId: snapshot.taskId,
   runId: snapshot.runId,
@@ -119,6 +160,24 @@ export const createInProcessTaskRuntime = ({
     storage.update(ref, {}).pipe(Effect.map(withPendingInteraction), Effect.tap(taskRuns.publish));
   const update = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     storage.update(ref, patch).pipe(Effect.tap(taskRuns.publish));
+  const waitForInteraction = <TValue>(
+    ref: TaskRunIdentity,
+    pending: PendingInteraction,
+  ): Effect.Effect<TValue, TaskFailure> => {
+    const key = keyOf(ref);
+    pendingInteractions.set(key, pending);
+
+    return publishCurrentSnapshot(ref).pipe(
+      Effect.tapError(() => Effect.sync(() => pendingInteractions.delete(key))),
+      Effect.flatMap(() => Deferred.await(pending.deferred)),
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (pendingInteractions.get(key) === pending) pendingInteractions.delete(key);
+        }),
+      ),
+      Effect.map(value => value as TValue),
+    );
+  };
 
   return {
     start: (task, input, options) =>
@@ -161,26 +220,60 @@ export const createInProcessTaskRuntime = ({
                   options: request.options.map(({ id, label }) => ({ id, label })),
                   createdAt: now(),
                 } satisfies TaskPendingChoiceInteraction;
+                const values = new Map(request.options.map(option => [option.id, option.value]));
                 const pending = {
                   interaction,
-                  values: new Map(request.options.map(option => [option.id, option.value])),
+                  resolve: (response: TaskInteractionResponse) => {
+                    if (!('optionId' in response)) return { success: false } as const;
+                    return values.has(response.optionId)
+                      ? ({ success: true, value: values.get(response.optionId) } as const)
+                      : ({ success: false } as const);
+                  },
                   deferred,
-                } satisfies PendingChoiceInteraction;
+                } satisfies PendingInteraction;
 
-                pendingInteractions.set(key, pending);
-                yield* publishCurrentSnapshot(ref).pipe(
-                  Effect.tapError(() => Effect.sync(() => pendingInteractions.delete(key))),
+                return yield* waitForInteraction<(typeof request.options)[number]['value']>(
+                  ref,
+                  pending,
                 );
+              }),
+            approval: request =>
+              Effect.gen(function* () {
+                yield* validateApprovalRequest(ref, request);
+                const key = keyOf(ref);
+                if (pendingInteractions.has(key)) {
+                  return yield* Effect.fail(
+                    invalidTaskInteractionFailure(
+                      ref,
+                      'Task run already has a pending interaction.',
+                    ),
+                  );
+                }
 
-                return (yield* Deferred.await(deferred).pipe(
-                  Effect.ensuring(
-                    Effect.sync(() => {
-                      if (pendingInteractions.get(key) === pending) {
-                        pendingInteractions.delete(key);
-                      }
-                    }),
-                  ),
-                )) as (typeof request.options)[number]['value'];
+                const deferred = yield* Deferred.make<unknown, TaskFailure>();
+                const interaction = {
+                  id: request.id ?? createInteractionId(),
+                  kind: 'approval',
+                  prompt: request.prompt,
+                  proposal: cloneJson(request.proposal),
+                  createdAt: now(),
+                } satisfies TaskPendingApprovalInteraction;
+                const pending = {
+                  interaction,
+                  resolve: (response: TaskInteractionResponse) =>
+                    'decision' in response
+                      ? {
+                          success: true,
+                          value: {
+                            decision: response.decision,
+                            ...(response.reason === undefined ? {} : { reason: response.reason }),
+                          },
+                        }
+                      : { success: false },
+                  deferred,
+                } satisfies PendingInteraction;
+
+                return yield* waitForInteraction<TaskApprovalDecision>(ref, pending);
               }),
           },
           progress: progress =>
@@ -263,9 +356,10 @@ export const createInProcessTaskRuntime = ({
           return yield* Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
         }
 
-        if (!pending.values.has(response.optionId)) {
+        const resolution = pending.resolve(response);
+        if (!resolution.success) {
           return yield* Effect.fail(
-            invalidTaskInteractionResponseFailure(ref, response.interactionId, response.optionId),
+            invalidTaskInteractionResponseFailure(ref, response.interactionId),
           );
         }
 
@@ -273,7 +367,7 @@ export const createInProcessTaskRuntime = ({
         const snapshot = yield* publishCurrentSnapshot(ref).pipe(
           Effect.tapError(() => Effect.sync(() => pendingInteractions.set(key, pending))),
         );
-        yield* Deferred.succeed(pending.deferred, pending.values.get(response.optionId));
+        yield* Deferred.succeed(pending.deferred, resolution.value);
         return snapshot;
       }),
     observe: ref =>

@@ -788,7 +788,7 @@ This experiment falsifies the proposal if the two runtimes require materially di
 Interaction or run semantics. If they share the same protocol and surface projections, it provides
 strong evidence that Model Support can later consume the primitive without owning it.
 
-## Native Runtime Slice In Progress
+## Native Runtime Slices In Progress
 
 The first implementation slice establishes the smallest transportable choice Interaction before
 building the complete Todo experiment:
@@ -809,6 +809,14 @@ is process-local and is lost if the process exits. It therefore does not yet sat
 durability and must not be used as evidence that an arbitrary JavaScript stack can be checkpointed.
 The Vercel Workflow adapter reports Interaction as unavailable until it has corresponding durable
 wait/resume semantics.
+
+The second slice adds a distinct approval Interaction rather than encoding approval as a Boolean
+choice. Its pending snapshot contains a stable proposal ID, human summary, and exact JSON-safe
+requests. Its response is `approve` or `reject` with an optional reason. The runtime clones the
+proposal before publishing it, validates the response kind against the pending Interaction, and
+resumes with only the typed decision. This proves the transport shape needed by the Todo experiment;
+proposal fingerprinting, stale-state verification, authority rechecks for each proposed request,
+and dispatch remain part of the next domain-level slice.
 
 ## Acceptance And Research Closure
 

@@ -3,6 +3,8 @@ import type { Effect, Stream } from 'effect';
 import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
 import type {
   TaskActor,
+  TaskApprovalInteractionResponse,
+  TaskApprovalProposal,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskRunListItem,
@@ -18,10 +20,14 @@ import type { OperationFailure } from '../operation/types.js';
 
 export type {
   TaskActor,
+  TaskApprovalInteractionResponse,
+  TaskApprovalProposal,
   TaskChoiceInteractionOption,
+  TaskChoiceInteractionResponse,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskPendingChoiceInteraction,
+  TaskPendingApprovalInteraction,
   TaskPendingInteraction,
   TaskRunListItem,
   TaskRunIdentity,
@@ -46,8 +52,19 @@ export type TaskChoiceInteractionRequest<TValue> = {
   }>;
 };
 
+export type TaskApprovalInteractionRequest = {
+  id?: string;
+  prompt: string;
+  proposal: TaskApprovalProposal;
+};
+
+export type TaskApprovalDecision = Omit<TaskApprovalInteractionResponse, 'interactionId'>;
+
 export type TaskInteractionContext = {
   choice<TValue>(request: TaskChoiceInteractionRequest<TValue>): Effect.Effect<TValue, TaskFailure>;
+  approval(
+    request: TaskApprovalInteractionRequest,
+  ): Effect.Effect<TaskApprovalDecision, TaskFailure>;
 };
 
 export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;

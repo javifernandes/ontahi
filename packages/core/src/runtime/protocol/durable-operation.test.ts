@@ -64,6 +64,25 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
+  it('authors and registers a typed approval response request', () => {
+    const body = toDurableOperationInteractionResponseRequest(run, {
+      interactionId: 'approve-delete',
+      decision: 'reject',
+      reason: 'Keep these items.',
+    });
+    const request = createRuntimeProtocolRequest({
+      id: 'exchange-approve',
+      family: 'durable.operation',
+      body,
+    });
+    const registry = createRuntimeProtocolRegistry(runtimeProtocolFamilies);
+
+    expect(registry.parseRequest(JSON.parse(JSON.stringify(request)))).toEqual({
+      success: true,
+      request,
+    });
+  });
+
   it.each([
     { name: 'non-object body', body: null, code: 'invalid_request' },
     {
@@ -88,6 +107,30 @@ describe('Runtime Protocol Durable Operation family', () => {
         kind: 'respond',
         run,
         response: { interactionId: '', optionId: 'list-inbox' },
+      },
+      code: 'invalid_request',
+    },
+    {
+      name: 'unknown approval decision',
+      body: {
+        version: 1,
+        kind: 'respond',
+        run,
+        response: { interactionId: 'approve-delete', decision: 'maybe' },
+      },
+      code: 'invalid_request',
+    },
+    {
+      name: 'ambiguous interaction response',
+      body: {
+        version: 1,
+        kind: 'respond',
+        run,
+        response: {
+          interactionId: 'approve-delete',
+          optionId: 'yes',
+          decision: 'approve',
+        },
       },
       code: 'invalid_request',
     },
@@ -192,6 +235,36 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
     expect(JSON.parse(JSON.stringify(response))).toEqual(response);
     expect(parseDurableOperationProtocolResponse(response)).toEqual({
+      success: true,
+      response,
+    });
+  });
+
+  it('transports an exact approval proposal without response values', () => {
+    const response = toDurableOperationSnapshotResponse({
+      ...run,
+      status: 'running',
+      updatedAt: '2026-08-30T23:50:01.000Z',
+      interaction: {
+        id: 'approve-delete',
+        kind: 'approval',
+        prompt: 'Delete these items?',
+        proposal: {
+          id: 'delete-items-v1',
+          summary: 'Delete two items from Shopping.',
+          requests: [
+            {
+              version: 1,
+              kind: 'graph-command',
+              command: { action: 'delete', entityName: 'TodoItem', id: 'todo-1' },
+            },
+          ],
+        },
+        createdAt: '2026-08-30T23:50:01.000Z',
+      },
+    });
+
+    expect(parseDurableOperationProtocolResponse(JSON.parse(JSON.stringify(response)))).toEqual({
       success: true,
       response,
     });
@@ -405,6 +478,29 @@ describe('Runtime Protocol Durable Operation family', () => {
               { id: 'same', label: 'First' },
               { id: 'same', label: 'Second' },
             ],
+            createdAt: 'now',
+          },
+        },
+      },
+    },
+    {
+      name: 'approval without exact requests',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'running',
+          updatedAt: 'now',
+          interaction: {
+            id: 'approve-delete',
+            kind: 'approval',
+            prompt: 'Delete these items?',
+            proposal: {
+              id: 'delete-items-v1',
+              summary: 'Delete matching items.',
+              requests: [],
+            },
             createdAt: 'now',
           },
         },
