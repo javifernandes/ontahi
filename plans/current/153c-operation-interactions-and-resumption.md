@@ -862,12 +862,15 @@ observed approval or choice replaces the generic progress label with its semanti
 the same shared controls and canonical `durable.operation` reply as the Console. The WebSocket
 Runtime Transport also restores a durable observation by the same Task Run identity after a
 transient session loss, allowing a browser that slept or changed networks to receive the run's
-current snapshot without starting the Operation again. This is observation recovery only: an
-in-flight request is not replayed, the in-process continuation has no expiry and waits while its
-server process lives, and neither the run nor the continuation survives a process restart. The
-Console identifies declared durable Operations before invocation, presents their action as `Start
-& observe`, observes the returned run automatically, and prevents another start while that run is
-active; its separate `Observe` action remains specific to graph queries.
+current snapshot without starting the Operation again. Recovery uses bounded exponential retries,
+resets the failure count after receiving a snapshot, and surfaces the transport error after
+repeated failures. It does not deduplicate snapshots by timestamp because distinct transitions can
+share one. This is observation recovery only: an in-flight request is not replayed, the in-process
+continuation has no expiry and waits while its server process lives, and neither the run nor the
+continuation survives a process restart. The Console identifies declared durable Operations before
+invocation, presents their action as `Start & observe`, observes the returned run automatically,
+and prevents another start while that run is active; its separate `Observe` action remains specific
+to graph queries.
 
 ## Acceptance And Research Closure
 

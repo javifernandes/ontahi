@@ -254,8 +254,7 @@ describe('WebSocket Runtime Transport', () => {
                 taskId: 'Todo.completeAll',
                 runId: 'run-1',
                 status: sockets.length === 1 ? 'running' : 'completed',
-                updatedAt:
-                  sockets.length === 1 ? '2026-09-04T00:00:00.000Z' : '2026-09-04T00:00:01.000Z',
+                updatedAt: '2026-09-04T00:00:00.000Z',
                 ...(sockets.length === 1
                   ? {
                       interaction: {
@@ -300,6 +299,57 @@ describe('WebSocket Runtime Transport', () => {
       id: 'observation-2',
       run: { taskId: 'Todo.completeAll', runId: 'run-1' },
     });
+  });
+
+  it('stops restoring a Durable observation after repeated session failures', async () => {
+    const sockets: MemoryWebSocket[] = [];
+    let observationSequence = 0;
+    const transport = createWebSocketRuntimeTransport({
+      url: 'ws://runtime.test/runtime',
+      reconnectDelayMs: 0,
+      observationId: () => `observation-${++observationSequence}`,
+      createWebSocket: () => {
+        const socket = new MemoryWebSocket();
+        sockets.push(socket);
+        socket.receive = input => {
+          const frame = input as { kind?: string; id?: string };
+          if (frame.kind !== 'durable-observe' || !frame.id) return;
+          if (sockets.length > 1) {
+            socket.close(1006, 'runtime unavailable');
+            return;
+          }
+          socket.sendFromServer({
+            protocol: 'ontahi.runtime.session',
+            version: 1,
+            kind: 'durable-observation',
+            id: frame.id,
+            sequence: 1,
+            body: {
+              version: 1,
+              kind: 'snapshot',
+              snapshot: {
+                taskId: 'Todo.completeAll',
+                runId: 'run-1',
+                status: 'running',
+                updatedAt: '2026-09-04T00:00:00.000Z',
+              },
+            },
+          });
+        };
+        socket.sendFromServer(readyFrame());
+        return socket;
+      },
+    });
+    const iterator = transport.durableOperation
+      .observe({ taskId: 'Todo.completeAll', runId: 'run-1' })
+      [Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({ value: { status: 'running' } });
+    sockets[0]?.close(1006, 'runtime unavailable');
+    await expect(iterator.next()).rejects.toThrow(
+      'Runtime Protocol WebSocket session disconnected (1006: runtime unavailable)',
+    );
+    expect(sockets).toHaveLength(6);
   });
 
   it('receives repeated Graph results and their explicit stream completion', async () => {

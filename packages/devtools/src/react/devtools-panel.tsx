@@ -148,6 +148,7 @@ export const DevtoolsPanel = ({
           />
         ) : activeActivity?.observation ? (
           <OperationProgressDetail
+            key={activeActivity.id}
             activity={activeActivity.observation}
             exchange={activeActivity.kind === 'exchange' ? activeActivity.exchange : undefined}
             runtimeTransport={runtimeTransport}

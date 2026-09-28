@@ -126,6 +126,8 @@ const SOCKET_OPEN = 1;
 const DEFAULT_RUNTIME_PATH = '/runtime';
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000;
 const DEFAULT_RECONNECT_DELAY_MS = 250;
+const MAX_DURABLE_OBSERVATION_RECONNECT_ATTEMPTS = 5;
+const MAX_DURABLE_OBSERVATION_RECONNECT_DELAY_MS = 5_000;
 const terminalTaskStatuses = new Set(['completed', 'failed', 'cancelled']);
 
 let fallbackObservationSequence = 0;
@@ -499,7 +501,7 @@ export const createWebSocketRuntimeTransport = ({
     options?: RuntimeTransportRequestOptions,
   ): AsyncIterable<TaskSnapshot<TResult>> {
     if (options?.signal?.aborted) return;
-    let lastUpdatedAt: string | undefined;
+    let failedAttempts = 0;
     while (!options?.signal?.aborted) {
       const id = observationId();
       const queue = createAsyncQueue<TaskSnapshot>();
@@ -538,16 +540,21 @@ export const createWebSocketRuntimeTransport = ({
         while (true) {
           const next = await queue.next();
           if (next.done) return;
-          if (next.value.updatedAt === lastUpdatedAt) continue;
-          lastUpdatedAt = next.value.updatedAt;
+          failedAttempts = 0;
           yield next.value as TaskSnapshot<TResult>;
         }
       } catch (error) {
         if (options?.signal?.aborted) return;
         if (disposed || !(error instanceof RuntimeWebSocketSessionLostError)) throw error;
+        failedAttempts += 1;
+        if (failedAttempts > MAX_DURABLE_OBSERVATION_RECONNECT_ATTEMPTS) throw error;
+        const delay = Math.min(
+          reconnectDelayMs * 2 ** (failedAttempts - 1),
+          MAX_DURABLE_OBSERVATION_RECONNECT_DELAY_MS,
+        );
         try {
           await awaitWithSignal(
-            new Promise<void>(resolve => setTimeout(resolve, reconnectDelayMs)),
+            new Promise<void>(resolve => setTimeout(resolve, delay)),
             options?.signal,
             'Durable Operation WebSocket observation was aborted.',
           );
