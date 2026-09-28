@@ -864,7 +864,10 @@ Runtime Transport also restores a durable observation by the same Task Run ident
 transient session loss, allowing a browser that slept or changed networks to receive the run's
 current snapshot without starting the Operation again. This is observation recovery only: an
 in-flight request is not replayed, the in-process continuation has no expiry and waits while its
-server process lives, and neither the run nor the continuation survives a process restart.
+server process lives, and neither the run nor the continuation survives a process restart. The
+Console identifies declared durable Operations before invocation, presents their action as `Start
+& observe`, observes the returned run automatically, and prevents another start while that run is
+active; its separate `Observe` action remains specific to graph queries.
 
 ## Acceptance And Research Closure
 

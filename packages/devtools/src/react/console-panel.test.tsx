@@ -202,9 +202,13 @@ describe('Console actions', uiTestOptions, () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(screen.queryByRole('button', { name: 'Observe' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Start & observe' }));
     const result = within(screen.getByLabelText('Console result'));
     expect(await result.findByText('Which list?')).toBeDefined();
+    expect((screen.getByRole('button', { name: 'Observing…' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     expect(onActionExecuted).not.toHaveBeenCalled();
     fireEvent.click(result.getByRole('button', { name: 'JSON' }));
     expect(result.getByRole('button', { name: 'Copy Durable Operation run JSON' })).toBeDefined();
@@ -219,6 +223,9 @@ describe('Console actions', uiTestOptions, () => {
     expect(await result.findByText('completed')).toBeDefined();
     expect(result.getByText('updated')).toBeDefined();
     expect(result.getByText('1')).toBeDefined();
+    expect(
+      (screen.getByRole('button', { name: 'Start & observe' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
     await waitFor(() => expect(onActionExecuted).toHaveBeenCalledOnce());
     expect(onActionExecuted).toHaveBeenCalledWith({
       execution: expect.objectContaining({ family: 'operation' }),

@@ -53,11 +53,13 @@ export const DurableOperationRun = ({
   run,
   transport,
   onCompleted,
+  onObservationFinished,
   view = 'visual',
 }: {
   readonly run: TaskRunIdentity;
   readonly transport: RuntimeTransport<any>;
   readonly onCompleted?: (snapshot: TaskSnapshot) => void | Promise<void>;
+  readonly onObservationFinished?: () => void;
   readonly view?: 'visual' | 'json';
 }) => {
   const [snapshot, setSnapshot] = useState<TaskSnapshot>();
@@ -74,6 +76,7 @@ export const DurableOperationRun = ({
     const observe = async () => {
       if (!transport.durableOperation) {
         setError('The configured Runtime Transport cannot observe durable Operations.');
+        onObservationFinished?.();
         return;
       }
       try {
@@ -82,11 +85,16 @@ export const DurableOperationRun = ({
         })) {
           if (controller.signal.aborted) break;
           setSnapshot(next);
-          if (terminal(next.status)) break;
+          if (terminal(next.status)) {
+            onObservationFinished?.();
+            break;
+          }
         }
       } catch (cause) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : 'Could not observe the Task run.');
+          onObservationFinished?.();
+        }
       }
     };
 
