@@ -872,6 +872,16 @@ invocation, presents their action as `Start & observe`, observes the returned ru
 and prevents another start while that run is active; its separate `Observe` action remains specific
 to graph queries.
 
+The sixth slice replaces the Todo experiment's suspended Operation function with an explicit
+execution machine. JSON-safe state selects one of five named steps: resolve the list, obtain a list
+choice, build the exact proposal, obtain approval, and revalidate/execute. Each step returns a
+`continue`, `interaction`, or `complete` transition. The in-process runtime drives the next step
+after accepting a matching response, while legacy Tasks may still use the existing function and
+Promise-backed Interaction path. The execution checkpoint and captured Operation runtime resources
+remain process-local: recreating the adapter over the same storage works, but process restart does
+not. This exposes the next persistence requirement directly: checkpoint state may be stored, while
+authority and runtime resources must be reconstructed on resume rather than serialized.
+
 ## Acceptance And Research Closure
 
 - [x] Inventory the current Operation, Runtime Protocol, durable lifecycle, identity, Activity, and
@@ -887,6 +897,8 @@ to graph queries.
 - [x] Recommend one bounded comparison experiment before public API design.
 - [ ] Execute the native versus LangGraph comparison and record implementation evidence.
 - [x] Complete the two-Interaction Todo Operation with exact proposal revalidation and execution.
+- [x] Express the native Todo workflow as named JSON-safe execution steps without suspending its
+      Operation function.
 - [ ] Expose the Todo Operation through two surfaces using the same run and reply protocol.
 - [ ] Implement restart-safe native state-machine persistence for the comparison experiment.
 - [ ] Decide whether interactive execution extends Durable Operation/Task Run or introduces a more

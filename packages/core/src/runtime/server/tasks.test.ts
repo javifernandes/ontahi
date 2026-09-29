@@ -14,6 +14,8 @@ import {
   defineDomainOperation,
   defineDomainOperationsForEntity,
   defineTask,
+  defineTaskExecution,
+  defineTaskExecutionStep,
   defineTaskStep,
   getTaskSnapshot,
   inProcessTasks,
@@ -35,6 +37,130 @@ const createDeferred = () => {
 };
 
 describe('tasks', () => {
+  it('drives explicit execution steps across interactions without a suspended task function', async () => {
+    type ReviewState =
+      | { readonly step: 'choose' }
+      | { readonly step: 'approve'; readonly selected: string }
+      | { readonly step: 'finish'; readonly selected: string };
+    const visited: string[] = [];
+    const execution = defineTaskExecution<{}, ReviewState, { selected: string }>({
+      initial: () => ({ step: 'choose' }),
+      steps: {
+        choose: defineTaskExecutionStep({
+          run: ({ state, response }) => {
+            visited.push(state.step);
+            return Effect.succeed(
+              response && 'optionId' in response
+                ? { kind: 'continue', state: { step: 'approve', selected: response.optionId } }
+                : {
+                    kind: 'interaction',
+                    state,
+                    interaction: {
+                      id: 'choose-item',
+                      prompt: 'Which item?',
+                      options: [
+                        { id: 'one', label: 'One', value: 'one' },
+                        { id: 'two', label: 'Two', value: 'two' },
+                      ],
+                    },
+                  },
+            );
+          },
+        }),
+        approve: defineTaskExecutionStep({
+          run: ({ state, response }) => {
+            visited.push(state.step);
+            const selected = 'selected' in state ? state.selected : 'invalid';
+            return Effect.succeed(
+              response && 'decision' in response
+                ? response.decision === 'approve'
+                  ? { kind: 'continue', state: { step: 'finish', selected } }
+                  : { kind: 'complete', result: { selected: 'rejected' } }
+                : {
+                    kind: 'interaction',
+                    state,
+                    interaction: {
+                      id: 'approve-item',
+                      prompt: `Use ${selected}?`,
+                      proposal: {
+                        id: 'proposal-1',
+                        summary: `Use ${selected}.`,
+                        requests: [{ selected }],
+                      },
+                    },
+                  },
+            );
+          },
+        }),
+        finish: defineTaskExecutionStep({
+          run: ({ state }) => {
+            visited.push(state.step);
+            return Effect.succeed({
+              kind: 'complete',
+              result: { selected: 'selected' in state ? state.selected : 'invalid' },
+            });
+          },
+        }),
+      },
+    });
+    const task = defineTask({
+      id: 'demo.explicit-review',
+      execution,
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const storage = createInMemoryTaskStorage();
+    const firstRuntime = createInProcessTaskRuntime({ storage });
+    const run = await Effect.runPromise(
+      startTask(
+        firstRuntime,
+        task,
+        {},
+        {
+          runId: 'explicit-run',
+          trigger: { cause: 'system', actor: { kind: 'system' } },
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(firstRuntime, run))).resolves.toMatchObject({
+        status: 'running',
+        interaction: { id: 'choose-item', kind: 'choice' },
+      });
+    });
+    const secondRuntime = createInProcessTaskRuntime({ storage });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        secondRuntime,
+        run,
+        { interactionId: 'choose-item', optionId: 'two' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(secondRuntime, run))).resolves.toMatchObject({
+        status: 'running',
+        interaction: { id: 'approve-item', kind: 'approval' },
+      });
+    });
+    const thirdRuntime = createInProcessTaskRuntime({ storage });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        thirdRuntime,
+        run,
+        { interactionId: 'approve-item', decision: 'approve' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(thirdRuntime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { selected: 'two' },
+      });
+    });
+    expect(visited).toEqual(['choose', 'choose', 'approve', 'approve', 'finish']);
+  });
+
   it('projects a complete durable operation lifecycle into a task definition', () => {
     const InputSchema = value('ImportInput', { source: field.string() });
     const ProgressSchema = value('ImportProgress', { percent: field.number() });

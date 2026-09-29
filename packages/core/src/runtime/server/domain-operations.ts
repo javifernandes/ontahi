@@ -21,7 +21,7 @@ import {
 } from '../../data-graph/operation-input.js';
 import {
   resolveDomainOperations,
-  type DurableOperationDeclarationMetadata,
+  type DurableOperationDeclarationMetadata as PortableDurableOperationDeclarationMetadata,
   type DomainOperationBridgeMetadata,
   type DomainOperationDefaults,
   type DomainOperationGraphOpsMetadata,
@@ -81,6 +81,8 @@ import { bindRequirements } from './requirements.js';
 import type {
   TaskContext,
   TaskDefinition,
+  TaskExecutionDefinition,
+  TaskExecutionState,
   TaskFailure,
   TaskRunRef,
   TaskStartOptions,
@@ -328,6 +330,14 @@ export type DomainOperationEffectsMetadata<
     input: TInput;
     result: SuccessResult<TResult>;
   }) => ReadonlyArray<ServerRuntimeValueRef>;
+};
+
+export type DurableOperationDeclarationMetadata<
+  TInput = unknown,
+  TResult = unknown,
+> = PortableDurableOperationDeclarationMetadata<TInput, TResult> & {
+  /** Experimental explicit execution machine. Its state remains private to the Task Runtime. */
+  execution?: TaskExecutionDefinition<TInput, TaskExecutionState, TResult>;
 };
 
 type ServerDomainOperationMetadata<
@@ -772,6 +782,7 @@ export const createTaskDefinitionFromDurableDomainOperation = <
     steps: Object.fromEntries(
       (operation.durable.steps ?? []).map(step => [step.id, step as TaskStepDefinition<any, any>]),
     ),
+    execution: operation.durable.execution,
     run: ((input, context) =>
       executeDomainOperationRunResult(
         invokeDomainOperationRun(

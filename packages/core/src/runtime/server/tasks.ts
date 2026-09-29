@@ -1,4 +1,9 @@
-export { defineTask, defineTaskStep } from './tasks/definitions.js';
+export {
+  defineTask,
+  defineTaskExecution,
+  defineTaskExecutionStep,
+  defineTaskStep,
+} from './tasks/definitions.js';
 export {
   duplicateTaskRunFailure,
   invalidTaskInteractionFailure,
@@ -61,6 +66,12 @@ export type {
   TaskDefinition,
   TaskDefinitionDeclaration,
   TaskExecutor,
+  TaskExecutionDefinition,
+  TaskExecutionInteractionRequest,
+  TaskExecutionState,
+  TaskExecutionStepContext,
+  TaskExecutionStepDefinition,
+  TaskExecutionTransition,
   TaskFailure,
   TaskInteractionContext,
   TaskInteractionResponse,
