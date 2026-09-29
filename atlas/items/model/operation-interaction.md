@@ -11,6 +11,9 @@ supports:
 relatedPlans:
   - ontahi://plans/153c-operation-interactions-and-resumption
   - ontahi://plans/153a-model-execution-security-and-authorization
+  - ontahi://plans/153d-langgraph-task-runtime-comparison
+  - ontahi://plans/153e-vercel-workflow-interaction-resumption
+  - ontahi://plans/153f-queue-backed-task-runtime
 ---
 
 Operation Interaction names the emerging need for an operation to obtain information or a decision
@@ -57,8 +60,9 @@ Devtools Activity projects the same pending choice or approval from observed run
 answer it through that same protocol. A transient WebSocket session loss now causes the client to
 observe the same Task Run identity again, rather than converting a still-live run into a terminal
 transport error. Recovery uses bounded exponential retries and surfaces the transport error after
-repeated failures. This reconnect behavior recovers observation only. The in-process continuation
-still waits without expiry only while the server process remains alive and is not restart-safe.
+repeated failures. This reconnect behavior recovers observation only. Legacy function-style Tasks
+still wait on process-local continuations, while explicit execution machines persist their current
+state and pending Interaction through Task Storage.
 
 The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
 It supplies evidence for this direction without implementing conversational continuation.
@@ -72,15 +76,15 @@ be captured as a concrete target before acceptance or execution.
 
 Durable Operation runs provide the first experimental lifecycle for a workflow that reports progress
 and then waits for participant input. A code-backed workflow can issue the same semantic request as
-a future model-backed one. The initial in-process continuation is explicitly process-local; durable
-checkpointing, correlation, and visibility rules remain framework design work rather than
-chat-provider behavior.
+a future model-backed one. Explicit execution machines now persist JSON-safe state and atomically
+claim an Interaction response before resuming. Legacy suspended functions remain process-local;
+correlation and visibility rules remain framework design work rather than chat-provider behavior.
 
-The explicit execution checkpoint and captured Operation runtime resources remain process-local.
-Recreating an adapter over the same storage can keep driving the in-memory machine, but a process
-restart loses both. A persistent runtime must store only JSON-safe execution state and reconstruct
-current authority and runtime resources when resuming; credentials and live capability objects are
-not checkpoint data.
+The explicit execution checkpoint is stored by `TaskStorage`. A recovering runtime reconstructs
+current authority and graph capabilities from application configuration and run metadata rather
+than serializing them. Credentials and live capability objects are not checkpoint data. The
+LangGraph comparison now exercises this same public contract with provider-owned replay state kept
+behind the Task Runtime adapter.
 
 Current research favors reusing canonical Graph Read, Graph Command, and Operation Invocation
 contracts rather than wrapping them in a second universal effect language. Interaction is the

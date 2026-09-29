@@ -35,9 +35,10 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 1. [`@ontahi/react`](./source-code-organization/react.md)
 2. [`@ontahi/explorer-react`](./source-code-organization/explorer-react.md)
 3. [`@ontahi/runtime-vercel-workflows`](./source-code-organization/runtime-vercel-workflows.md)
-4. [`Ontahi Application Codegen`](./source-code-organization/codegen.md)
-5. [`Independent Distribution`](./source-code-organization/independent-distribution.md)
-6. [`Ontahí Devtools`](./source-code-organization/devtools.md)
+4. [`@ontahi/runtime-langgraph`](./source-code-organization/runtime-langgraph.md)
+5. [`Ontahi Application Codegen`](./source-code-organization/codegen.md)
+6. [`Independent Distribution`](./source-code-organization/independent-distribution.md)
+7. [`Ontahí Devtools`](./source-code-organization/devtools.md)
 
 ## Package Direction
 
@@ -49,8 +50,9 @@ This is intentionally not the same thing as the extraction plan. The plan is the
 6. `@ontahi/react`: non-visual React runtime integration, action hooks, graph provider, and graph context hooks.
 7. [`@ontahi/explorer-react`](./source-code-organization/explorer-react.md): reusable Ontahi Explorer React package.
 8. [`@ontahi/runtime-vercel-workflows`](./source-code-organization/runtime-vercel-workflows.md): Vercel Workflow task adapter and durable runtime integration, extracted behind host-supplied registries and stores.
-9. [`@ontahi/codegen`](./source-code-organization/codegen.md): build-time declaration analysis and generic projections, with technology-specific static emitters exposed by runtime adapter packages.
-10. [`Ontahí Devtools`](./source-code-organization/devtools.md): planned browser-resident diagnostics component for semantic Runtime Protocol, Durable lifecycle, client-cache, and transport inspection; its package boundary remains an implementation-plan decision.
+9. [`@ontahi/runtime-langgraph`](./source-code-organization/runtime-langgraph.md): experimental adapter that runs explicit Task execution machines through private LangGraph checkpoint and interrupt mechanics.
+10. [`@ontahi/codegen`](./source-code-organization/codegen.md): build-time declaration analysis and generic projections, with technology-specific static emitters exposed by runtime adapter packages.
+11. [`Ontahí Devtools`](./source-code-organization/devtools.md): browser-resident diagnostics for semantic Runtime Protocol, Durable lifecycle, client-cache, and transport inspection.
 
 ## Repository Topology
 
@@ -58,7 +60,7 @@ Ontahi and BookOps now have separate source ownership:
 
 ```text
 ontahi/                    # public framework repository
-  packages/{core,opentelemetry,codegen,supabase,runtime-express,runtime-nextjs,runtime-vercel-workflows,react,explorer-react}
+  packages/{core,opentelemetry,codegen,supabase,runtime-express,runtime-nextjs,runtime-vercel-workflows,runtime-langgraph,react,explorer-react}
   examples/
 
 bookops/                   # private host application repository

@@ -16,6 +16,9 @@ Related plans:
 4. [153. Model-Backed Todo Command Spike](../current/153-model-backed-todo-command-spike.md)
 5. [153a. Model Execution Security And Authorization](../backlog/153a-model-execution-security-and-authorization.md)
 6. [153b. Declarative Operation Context Scope](../backlog/153b-declarative-operation-context-scope.md)
+7. [153d. LangGraph Task Runtime Comparison](./153d-langgraph-task-runtime-comparison.md)
+8. [153e. Vercel Workflow Interaction Resumption](../next/153e-vercel-workflow-interaction-resumption.md)
+9. [153f. Queue-Backed Task Runtime](../backlog/153f-queue-backed-task-runtime.md)
 
 ## Summary And Research Question
 
@@ -877,10 +880,21 @@ execution machine. JSON-safe state selects one of five named steps: resolve the 
 choice, build the exact proposal, obtain approval, and revalidate/execute. Each step returns a
 `continue`, `interaction`, or `complete` transition. The in-process runtime drives the next step
 after accepting a matching response, while legacy Tasks may still use the existing function and
-Promise-backed Interaction path. The execution checkpoint and captured Operation runtime resources
-remain process-local: recreating the adapter over the same storage works, but process restart does
-not. This exposes the next persistence requirement directly: checkpoint state may be stored, while
-authority and runtime resources must be reconstructed on resume rather than serialized.
+Promise-backed Interaction path.
+
+The seventh slice persists explicit execution checkpoints through `TaskStorage`, reconstructs
+Operation runtime resources from the host on recovery, and atomically claims each response before
+resuming. Inspection and observation can therefore wake a runnable checkpoint after runtime
+recreation. The Supabase storage adapter persists the same versioned JSON checkpoint. Legacy
+function-style Task continuations remain process-local; the restart-safe boundary applies to the
+explicit state machine.
+
+The LangGraph comparison builds on that boundary without changing the Todo execution definition or
+Runtime Protocol. Ontahí's Task Storage remains the source of public lifecycle, Interaction, and
+authority state. LangGraph owns an internal thread and provider checkpoint used for replay. This
+creates a deliberate dual-persistence boundary: the two stores are not transactionally committed
+together, so recovery must reconcile from the claimed Ontahí checkpoint. That is implementation
+evidence for the adapter contract, not a reason to expose LangGraph concepts publicly.
 
 ## Acceptance And Research Closure
 
@@ -895,15 +909,20 @@ authority and runtime resources must be reconstructed on resume rather than seri
 - [x] Describe one code-backed and one LLM-backed execution using the same Ontahí semantics.
 - [x] Identify what an optional LangGraph adapter would and would not own.
 - [x] Recommend one bounded comparison experiment before public API design.
-- [ ] Execute the native versus LangGraph comparison and record implementation evidence.
+- [x] Execute the native versus LangGraph comparison and record implementation evidence.
 - [x] Complete the two-Interaction Todo Operation with exact proposal revalidation and execution.
 - [x] Express the native Todo workflow as named JSON-safe execution steps without suspending its
       Operation function.
 - [ ] Expose the Todo Operation through two surfaces using the same run and reply protocol.
-- [ ] Implement restart-safe native state-machine persistence for the comparison experiment.
+- [x] Implement restart-safe native state-machine persistence for the comparison experiment.
 - [ ] Decide whether interactive execution extends Durable Operation/Task Run or introduces a more
       general execution-run lifecycle from which durable tasks are projected.
 - [ ] Decide the first Interaction storage/protocol contract only after the experiment.
+
+Implementation continues in three explicit subplans: 153d owns the immediate LangGraph comparison,
+153e preserves the Vercel Workflow interaction/resume gap as the next adapter milestone, and 153f
+holds the later queue-backed runtime research including leases, checkpoint revisions, and duplicate
+delivery.
 
 The research remains open until the comparison experiment resolves the lifecycle boundary. It
 already rejects two directions: making `model.command` the universal conversation protocol, and

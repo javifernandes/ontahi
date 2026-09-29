@@ -1,5 +1,6 @@
 import { adaptEffectMethods } from '@ontahi/core/computation/effect';
 import { createOllamaModelProvider, inProcessTasks, ontahi } from '@ontahi/core/runtime/server';
+import { langGraphTasks } from '@ontahi/runtime-langgraph';
 
 import { createTodoModelRuntime } from './command-chat/runtime.js';
 import { defaultStorage } from './storage.js';
@@ -17,9 +18,12 @@ export const todoCommandProvider = model
     })
   : undefined;
 
+export const todoTaskRuntime =
+  process.env.TODO_TASK_RUNTIME === 'langgraph' ? 'langgraph' : 'in-process';
+
 export const TodoApplication = ontahi({
   storage: defaultStorage,
-  tasks: inProcessTasks(),
+  tasks: todoTaskRuntime === 'langgraph' ? langGraphTasks() : inProcessTasks(),
   capabilities: {
     runtime: {
       notifications: todoNotifications,

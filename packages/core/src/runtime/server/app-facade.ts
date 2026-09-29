@@ -327,11 +327,12 @@ const authFacadeBase = {
   requirePrincipal,
 };
 
+type ConfiguredTaskFacade = ReturnType<typeof createConfiguredTaskFacade>;
+
 const createTaskFacadeBase = <TEvent, TDefinition extends ArchitectureDefinition<TEvent>>(
   definition: TDefinition,
+  configured = createConfiguredTaskFacade(definition.task),
 ) => {
-  const configured = createConfiguredTaskFacade(definition.task);
-
   return {
     ...configured,
     createInMemoryTaskStorage,
@@ -350,9 +351,8 @@ type TaskFacadeBase = ReturnType<typeof createTaskFacadeBase<unknown, Architectu
 
 const createConfiguredOperationRawRun = (
   config: Pick<ArchitectureDefinition<any>, 'task'>,
+  configuredTasks = createConfiguredTaskFacade(config.task),
 ): ConfiguredOperationRawRun => {
-  const configuredTasks = createConfiguredTaskFacade(config.task);
-
   return ((operation: AnyResolvedDomainOperation, input: object) =>
     runConfiguredServerDomainOperationRaw(operation, input as never, (task, taskInput, options) =>
       configuredTasks.start(task, taskInput, options),
@@ -361,9 +361,8 @@ const createConfiguredOperationRawRun = (
 
 const createConfiguredOperationInvoke = (
   config: Pick<ArchitectureDefinition<any>, 'task'>,
+  configuredTasks = createConfiguredTaskFacade(config.task),
 ): ConfiguredOperationInvoke => {
-  const configuredTasks = createConfiguredTaskFacade(config.task);
-
   return ((operation: AnyResolvedDomainOperation, input: object) =>
     invokeConfiguredServerDomainOperation(operation, input as never, (task, taskInput, options) =>
       configuredTasks.start(task, taskInput, options),
@@ -555,8 +554,9 @@ type TaskFacade<TDefinition> = MergedNamespace<
 
 const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TEvent>>(
   definition: TDefinition,
+  configuredTasks: ConfiguredTaskFacade,
 ): GraphFacade<TDefinition> => {
-  const invokeConfigured = createConfiguredOperationInvoke(definition);
+  const invokeConfigured = createConfiguredOperationInvoke(definition, configuredTasks);
   const configuredRelationshipCommandExecutor = (
     definition.graph as Record<PropertyKey, unknown> | undefined
   )?.[DATA_GRAPH_RELATIONSHIP_COMMAND_EXECUTOR] as
@@ -600,7 +600,6 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
     return graphFacade as unknown as GraphFacade<TDefinition>;
   }
 
-  const configuredTasks = createConfiguredTaskFacade(definition.task);
   const defineEntity = graphFacade.defineEntity as (
     entity: unknown,
     config?: Record<string, unknown> & {
@@ -656,9 +655,10 @@ const createGraphFacade = <TEvent, TDefinition extends ArchitectureDefinition<TE
 
 const createOperationFacade = <TEvent, TDefinition extends ArchitectureDefinition<TEvent>>(
   definition: TDefinition,
+  configuredTasks: ConfiguredTaskFacade,
 ): OperationFacade<TDefinition> => {
-  const runRaw = createConfiguredOperationRawRun(definition);
-  const invoke = createConfiguredOperationInvoke(definition);
+  const runRaw = createConfiguredOperationRawRun(definition, configuredTasks);
+  const invoke = createConfiguredOperationInvoke(definition, configuredTasks);
   const invokeProjected = createConfiguredProjectedOperationInvoke();
   const configuredOperationFacade = {
     ...operationFacadeBase,
@@ -728,9 +728,10 @@ const createAuthFacade = <TEvent, TDefinition extends ArchitectureDefinition<TEv
 
 const createTaskFacade = <TEvent, TDefinition extends ArchitectureDefinition<TEvent>>(
   definition: TDefinition,
+  configuredTasks: ConfiguredTaskFacade,
 ): TaskFacade<TDefinition> =>
   mergeNamespace(
-    createTaskFacadeBase<TEvent, TDefinition>(definition),
+    createTaskFacadeBase<TEvent, TDefinition>(definition, configuredTasks),
     definition.task,
   ) as unknown as TaskFacade<TDefinition>;
 
@@ -763,19 +764,22 @@ export const createArchitectureAppFacade = <
   TDefinition extends ArchitectureDefinition<TEvent> = ArchitectureDefinition<TEvent>,
 >(
   definition: TDefinition,
-): ArchitectureAppFacade<TEvent, TDefinition> => ({
-  graph: createGraphFacade<TEvent, TDefinition>(definition),
-  operation: createOperationFacade<TEvent, TDefinition>(definition),
-  ingress: createIngressFacade<TEvent, TDefinition>(definition),
-  require: createRequireFacade<TEvent, TDefinition>(definition),
-  concern: createConcernFacade<TEvent, TDefinition>(definition),
-  validation: createValidationFacade<TEvent, TDefinition>(definition),
-  cache: createCacheFacade<TEvent, TDefinition>(definition),
-  effects: createEffectsFacade<TEvent, TDefinition>(definition),
-  runtime: createRuntimeFacade<TEvent, TDefinition>(definition),
-  auth: createAuthFacade<TEvent, TDefinition>(definition),
-  task: createTaskFacade<TEvent, TDefinition>(definition),
-});
+): ArchitectureAppFacade<TEvent, TDefinition> => {
+  const configuredTasks = createConfiguredTaskFacade(definition.task);
+  return {
+    graph: createGraphFacade<TEvent, TDefinition>(definition, configuredTasks),
+    operation: createOperationFacade<TEvent, TDefinition>(definition, configuredTasks),
+    ingress: createIngressFacade<TEvent, TDefinition>(definition),
+    require: createRequireFacade<TEvent, TDefinition>(definition),
+    concern: createConcernFacade<TEvent, TDefinition>(definition),
+    validation: createValidationFacade<TEvent, TDefinition>(definition),
+    cache: createCacheFacade<TEvent, TDefinition>(definition),
+    effects: createEffectsFacade<TEvent, TDefinition>(definition),
+    runtime: createRuntimeFacade<TEvent, TDefinition>(definition),
+    auth: createAuthFacade<TEvent, TDefinition>(definition),
+    task: createTaskFacade<TEvent, TDefinition>(definition, configuredTasks),
+  };
+};
 
 export type {
   NamespaceOverride as ArchitectureNamespaceOverride,

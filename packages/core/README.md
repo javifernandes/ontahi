@@ -448,10 +448,12 @@ Operations.
 
 Durable Operations may experimentally declare an explicit `durable.execution` machine. Its
 JSON-safe state names the next step, and every named step returns `continue`, `interaction`, or
-`complete`. The in-process Task Runtime drives those transitions without retaining a suspended
-Operation function. Execution state and the Operation runtime resources are still process-local in
-this slice; a process restart cannot resume the run. This boundary exists to test checkpoint and
-workflow adapters before standardizing persistent execution semantics.
+`complete`. The Task Runtime persists that state through `TaskStorage` without retaining a
+suspended Operation function. On recovery, the application host reconstructs current Operation
+runtime resources from the stored run metadata; credentials and live capabilities are never part
+of the checkpoint. The legacy function-style Task path still uses a process-local continuation.
+This boundary supports alternate workflow adapters while keeping checkpoint and Interaction
+semantics owned by Ontahí.
 
 ## Graph Read ordering capabilities
 

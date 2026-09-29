@@ -1,9 +1,16 @@
 import { Cause, Effect, Option, Stream } from 'effect';
 
-import { cloneJson, isJsonValue } from '../../../value/json.js';
+import { cloneJson } from '../../../value/json.js';
 import type { OperationRuntimeContext } from '../context-types.js';
 import { getOperationRuntimeContext, operationRuntimeContextStorage } from '../context.js';
 
+import {
+  isTaskExecutionState,
+  materializeTaskExecutionInteraction,
+  validateTaskApprovalInteractionRequest,
+  validateTaskChoiceInteractionRequest,
+  validateTaskInteractionResponse,
+} from './execution-interactions.js';
 import {
   invalidTaskInteractionFailure,
   invalidTaskInteractionResponseFailure,
@@ -21,11 +28,9 @@ import type {
   TaskExecutor,
   TaskContext,
   TaskDefinition,
-  TaskChoiceInteractionRequest,
-  TaskApprovalInteractionRequest,
   TaskApprovalDecision,
   TaskFailure,
-  TaskExecutionState,
+  TaskExecutionInteractionRequest,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskPendingApprovalInteraction,
@@ -90,79 +95,6 @@ const getPendingInteractions = (storage: object) => {
   return interactions;
 };
 
-const isTaskExecutionState = (value: unknown): value is TaskExecutionState =>
-  isJsonValue(value) &&
-  typeof value === 'object' &&
-  value !== null &&
-  !Array.isArray(value) &&
-  'step' in value &&
-  typeof value.step === 'string' &&
-  value.step.length > 0;
-
-const validateChoiceRequest = <TValue>(
-  ref: TaskRunIdentity,
-  request: TaskChoiceInteractionRequest<TValue>,
-): Effect.Effect<void, TaskFailure> => {
-  if (request.prompt.trim().length === 0) {
-    return Effect.fail(invalidTaskInteractionFailure(ref, 'Choice prompt cannot be empty.'));
-  }
-
-  if (request.options.length === 0) {
-    return Effect.fail(
-      invalidTaskInteractionFailure(ref, 'Choice interaction requires at least one option.'),
-    );
-  }
-
-  if (request.id !== undefined && (request.id.trim().length === 0 || request.id.length > 512)) {
-    return Effect.fail(invalidTaskInteractionFailure(ref, 'Choice interaction ID is invalid.'));
-  }
-
-  const optionIds = request.options.map(option => option.id);
-  if (
-    optionIds.some(id => id.trim().length === 0 || id.length > 512) ||
-    new Set(optionIds).size !== optionIds.length
-  ) {
-    return Effect.fail(
-      invalidTaskInteractionFailure(ref, 'Choice option IDs must be non-empty and unique.'),
-    );
-  }
-
-  return Effect.void;
-};
-
-const validateApprovalRequest = (
-  ref: TaskRunIdentity,
-  request: TaskApprovalInteractionRequest,
-): Effect.Effect<void, TaskFailure> => {
-  if (request.prompt.trim().length === 0) {
-    return Effect.fail(invalidTaskInteractionFailure(ref, 'Approval prompt cannot be empty.'));
-  }
-  if (request.id !== undefined && (request.id.trim().length === 0 || request.id.length > 512)) {
-    return Effect.fail(invalidTaskInteractionFailure(ref, 'Approval interaction ID is invalid.'));
-  }
-  if (request.proposal.id.trim().length === 0 || request.proposal.id.length > 512) {
-    return Effect.fail(invalidTaskInteractionFailure(ref, 'Approval proposal ID is invalid.'));
-  }
-  if (request.proposal.summary.trim().length === 0) {
-    return Effect.fail(
-      invalidTaskInteractionFailure(ref, 'Approval proposal summary is required.'),
-    );
-  }
-  if (
-    request.proposal.requests.length === 0 ||
-    request.proposal.requests.some(candidate => !isJsonValue(candidate))
-  ) {
-    return Effect.fail(
-      invalidTaskInteractionFailure(
-        ref,
-        'Approval proposal requires at least one JSON-safe request.',
-      ),
-    );
-  }
-
-  return Effect.void;
-};
-
 const toTaskRunRef = (snapshot: TaskSnapshot): TaskRunRef => ({
   taskId: snapshot.taskId,
   runId: snapshot.runId,
@@ -212,27 +144,9 @@ export const createInProcessTaskRuntime = ({
   };
   const materializeExecutionInteraction = (
     ref: TaskRunIdentity,
-    request: TaskChoiceInteractionRequest<unknown> | TaskApprovalInteractionRequest,
+    request: TaskExecutionInteractionRequest,
   ): Effect.Effect<TaskPendingInteraction, TaskFailure> =>
-    'options' in request
-      ? validateChoiceRequest(ref, request).pipe(
-          Effect.as({
-            id: request.id ?? createInteractionId(),
-            kind: 'choice',
-            prompt: request.prompt,
-            options: request.options.map(({ id, label }) => ({ id, label })),
-            createdAt: now(),
-          } satisfies TaskPendingChoiceInteraction),
-        )
-      : validateApprovalRequest(ref, request).pipe(
-          Effect.as({
-            id: request.id ?? createInteractionId(),
-            kind: 'approval',
-            prompt: request.prompt,
-            proposal: cloneJson(request.proposal),
-            createdAt: now(),
-          } satisfies TaskPendingApprovalInteraction),
-        );
+    materializeTaskExecutionInteraction(ref, request);
   const createTaskContext = (
     task: TaskDefinition<any, any>,
     source: TaskRunSource,
@@ -246,7 +160,7 @@ export const createInProcessTaskRuntime = ({
       interact: {
         choice: request =>
           Effect.gen(function* () {
-            yield* validateChoiceRequest(ref, request);
+            yield* validateTaskChoiceInteractionRequest(ref, request);
             const key = keyOf(ref);
             if (pendingInteractions.has(key)) {
               return yield* Effect.fail(
@@ -281,7 +195,7 @@ export const createInProcessTaskRuntime = ({
           }),
         approval: request =>
           Effect.gen(function* () {
-            yield* validateApprovalRequest(ref, request);
+            yield* validateTaskApprovalInteractionRequest(ref, request);
             const key = keyOf(ref);
             if (pendingInteractions.has(key)) {
               return yield* Effect.fail(
@@ -559,16 +473,7 @@ export const createInProcessTaskRuntime = ({
           if (checkpoint.interaction.id !== response.interactionId) {
             return yield* Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
           }
-          const valid =
-            checkpoint.interaction.kind === 'choice'
-              ? 'optionId' in response &&
-                checkpoint.interaction.options.some(option => option.id === response.optionId)
-              : 'decision' in response;
-          if (!valid) {
-            return yield* Effect.fail(
-              invalidTaskInteractionResponseFailure(ref, response.interactionId),
-            );
-          }
+          yield* validateTaskInteractionResponse(ref, checkpoint.interaction, response);
 
           const task = taskDefinitions.get(ref.taskId);
           if (!task?.execution) {

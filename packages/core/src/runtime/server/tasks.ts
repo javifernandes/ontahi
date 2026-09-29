@@ -10,11 +10,13 @@ export {
   invalidTaskInteractionFailure,
   invalidTaskInteractionResponseFailure,
   missingTaskRunFailure,
+  missingTaskStepFailure,
   taskInteractionMismatchFailure,
   taskInteractionAccessDeniedFailure,
   taskInteractionNotPendingFailure,
   taskInteractionUnavailableFailure,
   taskRunObservationUnavailableFailure,
+  toTaskFailure,
 } from './tasks/failures.js';
 export {
   createConfiguredTaskFacade,
@@ -28,6 +30,14 @@ export {
   createInProcessTaskExecutor,
   createInProcessTaskRuntime,
 } from './tasks/in-process-adapter.js';
+export {
+  isTaskExecutionState,
+  materializeTaskExecutionInteraction,
+  validateTaskApprovalInteractionRequest,
+  validateTaskChoiceInteractionRequest,
+  validateTaskInteractionResponse,
+  type MaterializeTaskInteractionOptions,
+} from './tasks/execution-interactions.js';
 export { createInMemoryTaskStorage } from './tasks/memory-store.js';
 export { inProcessTasks } from './tasks/presets.js';
 export { TaskRun, TaskRunByIdentity, type TaskRunEntity } from './tasks/task-run-entity.js';
@@ -103,4 +113,5 @@ export type {
   TaskSubject,
   TaskTrigger,
   TaskRuntime,
+  TaskRuntimeHostOptions,
 } from './tasks/types.js';

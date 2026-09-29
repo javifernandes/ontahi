@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { field, value } from '../../data-graph/index.js';
 
-import { architecture, getArchitecture, type ArchitectureDefinition } from './index.js';
+import {
+  architecture,
+  createInMemoryTaskStorage,
+  createInProcessTaskExecutor,
+  getArchitecture,
+  type ArchitectureDefinition,
+} from './index.js';
 
 describe('architecture app facade', () => {
   afterEach(() => {
@@ -108,6 +114,17 @@ describe('architecture app facade', () => {
     expect(definition.app.operation.define).toEqual(expect.any(Function));
     expect(definition.app.require.customRequirement).toEqual(expect.any(Function));
     expect(definition.app.require.combine).toEqual(expect.any(Function));
+  });
+
+  it('shares one configured Task Runtime across operation, graph, and task facades', () => {
+    const storage = createInMemoryTaskStorage();
+    const executor = createInProcessTaskExecutor();
+    const createRuntime = vi.fn(executor.createRuntime);
+
+    architecture({ task: { executor: { createRuntime }, storage } });
+
+    expect(createRuntime).toHaveBeenCalledOnce();
+    expect(createRuntime).toHaveBeenCalledWith(storage, undefined);
   });
 
   it('separates raw runtime execution from semantic invocation', async () => {

@@ -37,11 +37,16 @@ The Express host adapts that native Stream to Durable protocol snapshots, so Web
 polling in either the browser or server. HTTP Durable progress remains the explicit Fetch polling
 compatibility path.
 
+Set `TODO_TASK_RUNTIME=langgraph` to run explicit durable Operations through the optional LangGraph
+adapter while keeping the same Operation declaration, Task snapshots, Runtime Protocol, and
+Devtools interaction controls. Legacy durable task functions continue through the in-process
+executor during this comparison.
+
 `TodoItem.deleteFromNamedList` is the interactive execution example. Its private JSON-safe state
 advances through named list resolution, choice, proposal, approval, and execution steps. The public
 surface remains the same durable Operation snapshots and Interaction reply protocol used by
-Devtools. Its checkpoint is process-local for now, so this example proves explicit control flow but
-not restart-safe persistence.
+Devtools. The native runtime persists its explicit checkpoint through Task storage; the LangGraph
+adapter additionally stores an opaque provider checkpoint behind its runtime boundary.
 
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.setCompleted` has no authentication requirement.

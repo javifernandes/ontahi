@@ -14,6 +14,9 @@ relatedPlans:
   - ontahi://plans/100d-ontahi-vercel-workflow-runtime-boundary
   - ontahi://plans/100e-ontahi-runtime-capabilities-and-repository-topology
   - ontahi://plans/128h-observable-query-runtime-and-durable-progress
+  - ontahi://plans/153d-langgraph-task-runtime-comparison
+  - ontahi://plans/153e-vercel-workflow-interaction-resumption
+  - ontahi://plans/153f-queue-backed-task-runtime
   - bookops://plans/90-event-driven-architecture-runtime
 migratedFrom: bookops://atlas/durable-workflows
 sourceCommit: 67713696
