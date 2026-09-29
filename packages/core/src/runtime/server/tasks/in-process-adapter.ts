@@ -68,6 +68,7 @@ type PendingInteraction = {
 
 type ExplicitExecution = {
   task: TaskDefinition<any, any>;
+  definition: NonNullable<TaskDefinition<any, any>['execution']>;
   input: unknown;
   state: TaskExecutionState;
   context: TaskContext;
@@ -260,17 +261,7 @@ export const createInProcessTaskRuntime = ({
       let currentResponse = response;
 
       while (true) {
-        const definition = execution.task.execution;
-        if (!definition) {
-          return yield* Effect.fail(
-            invalidTaskDefinitionFailure(
-              execution.task.id,
-              'Explicit execution definition is missing.',
-              {},
-            ),
-          );
-        }
-        const step = definition.steps[execution.state.step];
+        const step = execution.definition.steps[execution.state.step];
         if (!step) {
           return yield* Effect.fail(
             missingTaskStepFailure(execution.task.id, execution.state.step),
@@ -451,13 +442,14 @@ export const createInProcessTaskRuntime = ({
               : Effect.fail(missingTaskStepFailure(task.id, name));
           },
         };
-        if (task.execution) {
+        const executionDefinition = task.execution;
+        if (executionDefinition) {
           const background = Effect.gen(function* () {
             yield* update(ref, {
               status: 'running',
               startedAt: now(),
             });
-            const state = yield* Effect.sync(() => task.execution!.initial(parsedInput));
+            const state = yield* Effect.sync(() => executionDefinition.initial(parsedInput));
             if (!isTaskExecutionState(state)) {
               return yield* Effect.fail(
                 invalidTaskDefinitionFailure(
@@ -470,6 +462,7 @@ export const createInProcessTaskRuntime = ({
             const operationContext = getOperationRuntimeContext();
             const execution: ExplicitExecution = {
               task,
+              definition: executionDefinition,
               input: parsedInput,
               state,
               context,
