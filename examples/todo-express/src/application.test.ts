@@ -714,6 +714,7 @@ describe('Ontahi todo portability example', () => {
 
     await expect(fetch(`${origin}/runtime`).then(response => response.json())).resolves.toEqual({
       storage: 'in-memory',
+      taskRuntime: 'in-process',
       commandChat: false,
     });
     await expect(
