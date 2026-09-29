@@ -66,16 +66,6 @@ type PendingInteraction = {
   resume(value: unknown): void;
 };
 
-type ExplicitExecution = {
-  task: TaskDefinition<any, any>;
-  definition: NonNullable<TaskDefinition<any, any>['execution']>;
-  input: unknown;
-  state: TaskExecutionState;
-  context: TaskContext;
-  operationContext?: OperationRuntimeContext;
-  interaction?: TaskPendingInteraction;
-};
-
 const createContinuation = () => {
   let resume!: (value: unknown) => void;
   const continuation = new Promise<unknown>(resolve => {
@@ -90,7 +80,6 @@ const taskFailureFromCause = (cause: Cause.Cause<unknown>): TaskFailure => {
 };
 
 const pendingInteractionsByStorage = new WeakMap<object, Map<string, PendingInteraction>>();
-const explicitExecutionsByStorage = new WeakMap<object, Map<string, ExplicitExecution>>();
 
 const getPendingInteractions = (storage: object) => {
   const existing = pendingInteractionsByStorage.get(storage);
@@ -99,15 +88,6 @@ const getPendingInteractions = (storage: object) => {
   const interactions = new Map<string, PendingInteraction>();
   pendingInteractionsByStorage.set(storage, interactions);
   return interactions;
-};
-
-const getExplicitExecutions = (storage: object) => {
-  const existing = explicitExecutionsByStorage.get(storage);
-  if (existing) return existing;
-
-  const executions = new Map<string, ExplicitExecution>();
-  explicitExecutionsByStorage.set(storage, executions);
-  return executions;
 };
 
 const isTaskExecutionState = (value: unknown): value is TaskExecutionState =>
@@ -195,15 +175,15 @@ export const createInProcessTaskRuntime = ({
   sleep = milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
   createRunId: createConfiguredRunId = createRunId,
   onBackgroundError,
+  createExecutionContext,
 }: InProcessTaskRuntimeOptions): TaskRuntime => {
   const taskRuns = getInMemoryTaskRunProjection(storage);
   const pendingInteractions = getPendingInteractions(storage);
-  const explicitExecutions = getExplicitExecutions(storage);
+  const taskDefinitions = new Map<string, TaskDefinition<any, any>>();
   const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
   const withPendingInteraction = (snapshot: TaskSnapshot): TaskSnapshot => {
     const key = keyOf(snapshot);
-    const pending =
-      pendingInteractions.get(key)?.interaction ?? explicitExecutions.get(key)?.interaction;
+    const pending = pendingInteractions.get(key)?.interaction;
 
     return pending ? { ...snapshot, interaction: pending } : snapshot;
   };
@@ -252,63 +232,182 @@ export const createInProcessTaskRuntime = ({
             createdAt: now(),
           } satisfies TaskPendingApprovalInteraction),
         );
+  const createTaskContext = (
+    task: TaskDefinition<any, any>,
+    source: TaskRunSource,
+  ): TaskContext => {
+    const ref = { taskId: source.taskId, runId: source.runId };
+    const context: TaskContext = {
+      ...ref,
+      ...(source.subject ? { subject: source.subject } : {}),
+      trigger: source.trigger,
+      createdAt: source.createdAt,
+      interact: {
+        choice: request =>
+          Effect.gen(function* () {
+            yield* validateChoiceRequest(ref, request);
+            const key = keyOf(ref);
+            if (pendingInteractions.has(key)) {
+              return yield* Effect.fail(
+                invalidTaskInteractionFailure(ref, 'Task run already has a pending interaction.'),
+              );
+            }
+
+            const continuation = createContinuation();
+            const interaction = {
+              id: request.id ?? createInteractionId(),
+              kind: 'choice',
+              prompt: request.prompt,
+              options: request.options.map(({ id, label }) => ({ id, label })),
+              createdAt: now(),
+            } satisfies TaskPendingChoiceInteraction;
+            const values = new Map(request.options.map(option => [option.id, option.value]));
+            const pending = {
+              interaction,
+              resolve: (response: TaskInteractionResponse) => {
+                if (!('optionId' in response)) return { success: false } as const;
+                return values.has(response.optionId)
+                  ? ({ success: true, value: values.get(response.optionId) } as const)
+                  : ({ success: false } as const);
+              },
+              ...continuation,
+            } satisfies PendingInteraction;
+
+            return yield* waitForInteraction<(typeof request.options)[number]['value']>(
+              ref,
+              pending,
+            );
+          }),
+        approval: request =>
+          Effect.gen(function* () {
+            yield* validateApprovalRequest(ref, request);
+            const key = keyOf(ref);
+            if (pendingInteractions.has(key)) {
+              return yield* Effect.fail(
+                invalidTaskInteractionFailure(ref, 'Task run already has a pending interaction.'),
+              );
+            }
+
+            const continuation = createContinuation();
+            const interaction = {
+              id: request.id ?? createInteractionId(),
+              kind: 'approval',
+              prompt: request.prompt,
+              proposal: cloneJson(request.proposal),
+              createdAt: now(),
+            } satisfies TaskPendingApprovalInteraction;
+            const pending = {
+              interaction,
+              resolve: (response: TaskInteractionResponse) =>
+                'decision' in response
+                  ? {
+                      success: true,
+                      value: {
+                        decision: response.decision,
+                        ...(response.reason === undefined ? {} : { reason: response.reason }),
+                      },
+                    }
+                  : { success: false },
+              ...continuation,
+            } satisfies PendingInteraction;
+
+            return yield* waitForInteraction<TaskApprovalDecision>(ref, pending);
+          }),
+      },
+      progress: progress =>
+        Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
+          update(ref, { progress: parsedProgress }),
+        ),
+      sleep: milliseconds =>
+        Effect.tryPromise({
+          try: () => sleep(milliseconds),
+          catch: toTaskFailure,
+        }),
+      step: (stepOrName: string | { id: string }, input: unknown) => {
+        const name = typeof stepOrName === 'string' ? stepOrName : stepOrName.id;
+        const step = task.steps?.[name];
+
+        return step
+          ? Effect.flatMap(validateTaskStepInput(task.id, step, input), parsedInput =>
+              Effect.flatMap(step.run(parsedInput, context), output =>
+                validateTaskStepOutput(task.id, step, output),
+              ),
+            )
+          : Effect.fail(missingTaskStepFailure(task.id, name));
+      },
+    };
+    return context;
+  };
   const launchExplicitExecution = (
     ref: TaskRunIdentity,
-    execution: ExplicitExecution,
-    response?: TaskInteractionResponse,
+    task: TaskDefinition<any, any>,
+    source: TaskRunSource,
+    operationContext?: OperationRuntimeContext,
   ) => {
+    const definition = task.execution!;
+    const context = createTaskContext(task, source);
     const background = Effect.gen(function* () {
-      let currentResponse = response;
+      let checkpoint = source.checkpoint!;
 
       while (true) {
-        const step = execution.definition.steps[execution.state.step];
-        if (!step) {
+        if (checkpoint.version !== 1 || !isTaskExecutionState(checkpoint.state)) {
           return yield* Effect.fail(
-            missingTaskStepFailure(execution.task.id, execution.state.step),
+            invalidTaskDefinitionFailure(
+              task.id,
+              'Persisted explicit execution state is invalid.',
+              {},
+            ),
           );
         }
+        const step = definition.steps[checkpoint.state.step];
+        if (!step) {
+          return yield* Effect.fail(missingTaskStepFailure(task.id, checkpoint.state.step));
+        }
         const transition = yield* step.run({
-          input: execution.input,
-          state: execution.state,
-          ...(currentResponse ? { response: currentResponse } : {}),
-          context: execution.context,
+          input: source.input,
+          state: checkpoint.state,
+          ...(checkpoint.response ? { response: checkpoint.response } : {}),
+          context,
         });
-        currentResponse = undefined;
 
         if (transition.kind === 'complete') {
-          const result = yield* validateTaskOutput(execution.task, transition.result);
-          explicitExecutions.delete(keyOf(ref));
+          const result = yield* validateTaskOutput(task, transition.result);
           yield* update(ref, {
             status: 'completed',
             completedAt: now(),
             result,
+            checkpoint: undefined,
           });
           return;
         }
         if (!isTaskExecutionState(transition.state)) {
           return yield* Effect.fail(
             invalidTaskDefinitionFailure(
-              execution.task.id,
+              task.id,
               'Explicit execution step returned an invalid JSON-safe state.',
-              { stepId: execution.state.step },
+              { stepId: checkpoint.state.step },
             ),
           );
         }
 
-        execution.state = transition.state;
-        if (transition.kind === 'continue') continue;
+        if (transition.kind === 'continue') {
+          checkpoint = { version: 1, state: cloneJson(transition.state) };
+          yield* update(ref, { checkpoint });
+          continue;
+        }
 
-        execution.interaction = yield* materializeExecutionInteraction(ref, transition.interaction);
-        yield* publishCurrentSnapshot(ref);
+        const interaction = yield* materializeExecutionInteraction(ref, transition.interaction);
+        checkpoint = { version: 1, state: cloneJson(transition.state), interaction };
+        yield* update(ref, { checkpoint });
         return;
       }
     }).pipe(
       Effect.catchAllCause(cause => {
-        explicitExecutions.delete(keyOf(ref));
         const error = taskFailureFromCause(cause);
         return update(ref, {
           status: 'failed',
           completedAt: now(),
+          checkpoint: undefined,
           error: {
             code: error.reason,
             message: error.message,
@@ -318,14 +417,17 @@ export const createInProcessTaskRuntime = ({
     );
 
     const run = () => Effect.runPromise(background).catch(error => onBackgroundError?.(error));
-    if (execution.operationContext)
-      operationRuntimeContextStorage.run(execution.operationContext, run);
+    if (operationContext) operationRuntimeContextStorage.run(operationContext, run);
     else void run();
   };
 
   return {
+    register: task => {
+      taskDefinitions.set(task.id, task);
+    },
     start: (task, input, options) =>
       Effect.gen(function* () {
+        taskDefinitions.set(task.id, task);
         const parsedInput = yield* validateTaskInput(task, input);
         const runId = options?.runId ?? createConfiguredRunId();
         const ref = { taskId: task.id, runId };
@@ -337,118 +439,10 @@ export const createInProcessTaskRuntime = ({
         });
         yield* taskRuns.publish(snapshot);
         const source = yield* storage.loadSource(ref);
-        const context: TaskContext = {
-          ...ref,
-          ...(source.subject ? { subject: source.subject } : {}),
-          trigger: source.trigger,
-          createdAt: source.createdAt,
-          interact: {
-            choice: request =>
-              Effect.gen(function* () {
-                yield* validateChoiceRequest(ref, request);
-                const key = keyOf(ref);
-                if (pendingInteractions.has(key)) {
-                  return yield* Effect.fail(
-                    invalidTaskInteractionFailure(
-                      ref,
-                      'Task run already has a pending interaction.',
-                    ),
-                  );
-                }
-
-                const continuation = createContinuation();
-                const interaction = {
-                  id: request.id ?? createInteractionId(),
-                  kind: 'choice',
-                  prompt: request.prompt,
-                  options: request.options.map(({ id, label }) => ({ id, label })),
-                  createdAt: now(),
-                } satisfies TaskPendingChoiceInteraction;
-                const values = new Map(request.options.map(option => [option.id, option.value]));
-                const pending = {
-                  interaction,
-                  resolve: (response: TaskInteractionResponse) => {
-                    if (!('optionId' in response)) return { success: false } as const;
-                    return values.has(response.optionId)
-                      ? ({ success: true, value: values.get(response.optionId) } as const)
-                      : ({ success: false } as const);
-                  },
-                  ...continuation,
-                } satisfies PendingInteraction;
-
-                return yield* waitForInteraction<(typeof request.options)[number]['value']>(
-                  ref,
-                  pending,
-                );
-              }),
-            approval: request =>
-              Effect.gen(function* () {
-                yield* validateApprovalRequest(ref, request);
-                const key = keyOf(ref);
-                if (pendingInteractions.has(key)) {
-                  return yield* Effect.fail(
-                    invalidTaskInteractionFailure(
-                      ref,
-                      'Task run already has a pending interaction.',
-                    ),
-                  );
-                }
-
-                const continuation = createContinuation();
-                const interaction = {
-                  id: request.id ?? createInteractionId(),
-                  kind: 'approval',
-                  prompt: request.prompt,
-                  proposal: cloneJson(request.proposal),
-                  createdAt: now(),
-                } satisfies TaskPendingApprovalInteraction;
-                const pending = {
-                  interaction,
-                  resolve: (response: TaskInteractionResponse) =>
-                    'decision' in response
-                      ? {
-                          success: true,
-                          value: {
-                            decision: response.decision,
-                            ...(response.reason === undefined ? {} : { reason: response.reason }),
-                          },
-                        }
-                      : { success: false },
-                  ...continuation,
-                } satisfies PendingInteraction;
-
-                return yield* waitForInteraction<TaskApprovalDecision>(ref, pending);
-              }),
-          },
-          progress: progress =>
-            Effect.flatMap(validateTaskProgress(task, progress), parsedProgress =>
-              update(ref, { progress: parsedProgress }),
-            ),
-          sleep: milliseconds =>
-            Effect.tryPromise({
-              try: () => sleep(milliseconds),
-              catch: toTaskFailure,
-            }),
-          step: (stepOrName: string | { id: string }, input: unknown) => {
-            const name = typeof stepOrName === 'string' ? stepOrName : stepOrName.id;
-            const step = task.steps?.[name];
-
-            return step
-              ? Effect.flatMap(validateTaskStepInput(task.id, step, input), parsedInput =>
-                  Effect.flatMap(step.run(parsedInput, context), output =>
-                    validateTaskStepOutput(task.id, step, output),
-                  ),
-                )
-              : Effect.fail(missingTaskStepFailure(task.id, name));
-          },
-        };
+        const context = createTaskContext(task, source);
         const executionDefinition = task.execution;
         if (executionDefinition) {
           const background = Effect.gen(function* () {
-            yield* update(ref, {
-              status: 'running',
-              startedAt: now(),
-            });
             const state = yield* Effect.sync(() => executionDefinition.initial(parsedInput));
             if (!isTaskExecutionState(state)) {
               return yield* Effect.fail(
@@ -459,24 +453,18 @@ export const createInProcessTaskRuntime = ({
                 ),
               );
             }
-            const operationContext = getOperationRuntimeContext();
-            const execution: ExplicitExecution = {
-              task,
-              definition: executionDefinition,
-              input: parsedInput,
-              state,
-              context,
-              ...(operationContext ? { operationContext } : {}),
-            };
-            explicitExecutions.set(keyOf(ref), execution);
-            launchExplicitExecution(ref, execution);
+            const operationContext =
+              getOperationRuntimeContext() ?? createExecutionContext?.(source);
+            const checkpoint = { version: 1 as const, state: cloneJson(state) };
+            yield* update(ref, { status: 'running', startedAt: now(), checkpoint });
+            launchExplicitExecution(ref, task, { ...source, checkpoint }, operationContext);
           }).pipe(
             Effect.catchAllCause(cause => {
-              explicitExecutions.delete(keyOf(ref));
               const error = taskFailureFromCause(cause);
               return update(ref, {
                 status: 'failed',
                 completedAt: now(),
+                checkpoint: undefined,
                 error: { code: error.reason, message: error.message },
               });
             }),
@@ -534,15 +522,15 @@ export const createInProcessTaskRuntime = ({
         }
 
         const key = keyOf(ref);
-        const explicit = explicitExecutions.get(key);
-        if (explicit?.interaction) {
-          if (explicit.interaction.id !== response.interactionId) {
+        const checkpoint = source.checkpoint;
+        if (checkpoint?.interaction) {
+          if (checkpoint.interaction.id !== response.interactionId) {
             return yield* Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
           }
           const valid =
-            explicit.interaction.kind === 'choice'
+            checkpoint.interaction.kind === 'choice'
               ? 'optionId' in response &&
-                explicit.interaction.options.some(option => option.id === response.optionId)
+                checkpoint.interaction.options.some(option => option.id === response.optionId)
               : 'decision' in response;
           if (!valid) {
             return yield* Effect.fail(
@@ -550,12 +538,28 @@ export const createInProcessTaskRuntime = ({
             );
           }
 
-          const interaction = explicit.interaction;
-          delete explicit.interaction;
-          const snapshot = yield* publishCurrentSnapshot(ref).pipe(
-            Effect.tapError(() => Effect.sync(() => Object.assign(explicit, { interaction }))),
+          const task = taskDefinitions.get(ref.taskId);
+          if (!task?.execution) {
+            return yield* Effect.fail(
+              invalidTaskDefinitionFailure(
+                ref.taskId,
+                'The explicit Task definition is not registered in this runtime.',
+                {},
+              ),
+            );
+          }
+          const nextCheckpoint = {
+            version: 1 as const,
+            state: checkpoint.state,
+            response: cloneJson(response),
+          };
+          const snapshot = yield* update(ref, { checkpoint: nextCheckpoint });
+          launchExplicitExecution(
+            ref,
+            task,
+            { ...source, checkpoint: nextCheckpoint },
+            getOperationRuntimeContext() ?? createExecutionContext?.(source),
           );
-          launchExplicitExecution(ref, explicit, response);
           return snapshot;
         }
         const pending = pendingInteractions.get(key);
@@ -598,9 +602,10 @@ export const createInProcessTaskRuntime = ({
 export const createInProcessTaskExecutor = (
   options: InProcessTaskExecutorOptions = {},
 ): TaskExecutor => ({
-  createRuntime: storage =>
+  createRuntime: (storage, host) =>
     createInProcessTaskRuntime({
       ...options,
+      ...host,
       storage,
     }),
 });

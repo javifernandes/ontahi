@@ -54,6 +54,7 @@ class FakeSupabaseTable {
             subject: null,
             runtime: null,
             progress: null,
+            checkpoint: null,
             result: null,
             error: null,
             started_at: null,
@@ -204,6 +205,17 @@ describe('createSupabaseTaskStorage', () => {
           phase: 'waiting',
           message: 'Waiting',
         },
+        checkpoint: {
+          version: 1,
+          state: { step: 'approve' },
+          interaction: {
+            id: 'approve-1',
+            kind: 'approval',
+            prompt: 'Continue?',
+            proposal: { id: 'proposal-1', summary: 'Continue.', requests: [{}] },
+            createdAt: '2026-06-03T00:00:00.000Z',
+          },
+        },
       }),
     );
 
@@ -213,6 +225,7 @@ describe('createSupabaseTaskStorage', () => {
         phase: 'waiting',
         message: 'Waiting',
       },
+      interaction: { id: 'approve-1', kind: 'approval' },
     });
 
     await Effect.runPromise(
@@ -235,7 +248,22 @@ describe('createSupabaseTaskStorage', () => {
         name: 'vercel-workflow',
         runId: 'wrun_1',
       },
+      checkpoint: {
+        version: 1,
+        state: { step: 'approve' },
+        interaction: { id: 'approve-1', kind: 'approval' },
+      },
     });
+
+    await Effect.runPromise(store.update(created, { checkpoint: undefined }));
+    await expect(Effect.runPromise(store.loadSource(created))).resolves.toHaveProperty(
+      'checkpoint',
+      undefined,
+    );
+    await expect(Effect.runPromise(store.getSnapshot(created))).resolves.toHaveProperty(
+      'interaction',
+      undefined,
+    );
   });
 
   it('lists recent task run summaries without input or result payloads', async () => {

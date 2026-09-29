@@ -61,6 +61,7 @@ type TaskRunRow = {
   subject: TaskRunSource['subject'] | null;
   runtime: TaskRunSource['runtime'] | null;
   progress: TaskRunSource['progress'] | null;
+  checkpoint: TaskRunSource['checkpoint'] | null;
   result: unknown | null;
   error: TaskRunSource['error'] | null;
   created_at: string;
@@ -117,14 +118,20 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   updatedAt: source.updatedAt,
   completedAt: source.completedAt,
   progress: source.progress,
+  interaction: source.checkpoint?.interaction,
   error: source.error,
+  result: source.result,
 });
 
-const toListItem = (source: TaskRunSource): TaskRunListItem => ({
-  ...toSnapshot(source),
-  trigger: source.trigger,
-  runtime: source.runtime,
-});
+const toListItem = (source: TaskRunSource): TaskRunListItem => {
+  const { result: _result, ...snapshot } = toSnapshot(source);
+
+  return {
+    ...snapshot,
+    trigger: source.trigger,
+    runtime: source.runtime,
+  };
+};
 
 const fromRow = (row: TaskRunRow): TaskRunSource => ({
   taskId: row.task_id,
@@ -135,6 +142,7 @@ const fromRow = (row: TaskRunRow): TaskRunSource => ({
   subject: row.subject ?? undefined,
   runtime: row.runtime ?? undefined,
   progress: row.progress ?? undefined,
+  checkpoint: row.checkpoint ?? undefined,
   result: row.result ?? undefined,
   error: row.error ?? undefined,
   createdAt: row.created_at,
@@ -151,6 +159,7 @@ const toCreateRow = (input: TaskRunCreateInput, now: string): Record<string, unk
   trigger: normalizeTaskTrigger(input.trigger),
   subject: input.subject ?? null,
   runtime: input.runtime ?? null,
+  checkpoint: null,
   created_at: now,
   updated_at: now,
 });
@@ -168,6 +177,7 @@ const toPatchRow = (
   progress: patch.progress
     ? { ...current.progress, ...patch.progress }
     : (current.progress ?? null),
+  checkpoint: 'checkpoint' in patch ? (patch.checkpoint ?? null) : (current.checkpoint ?? null),
   result: patch.result === undefined ? (current.result ?? null) : patch.result,
   error: patch.error === undefined ? (current.error ?? null) : patch.error,
   started_at: patch.startedAt === undefined ? (current.startedAt ?? null) : patch.startedAt,

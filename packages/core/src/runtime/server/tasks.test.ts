@@ -18,6 +18,7 @@ import {
   defineTaskExecutionStep,
   defineTaskStep,
   getTaskSnapshot,
+  getOperationRuntimeContext,
   inProcessTasks,
   normalizeTaskTrigger,
   respondToTaskInteraction,
@@ -43,6 +44,7 @@ describe('tasks', () => {
       | { readonly step: 'approve'; readonly selected: string }
       | { readonly step: 'finish'; readonly selected: string };
     const visited: string[] = [];
+    const resumedContexts: unknown[] = [];
     const execution = defineTaskExecution<{}, ReviewState, { selected: string }>({
       initial: () => ({ step: 'choose' }),
       steps: {
@@ -95,6 +97,7 @@ describe('tasks', () => {
         finish: defineTaskExecutionStep({
           run: ({ state }) => {
             visited.push(state.step);
+            resumedContexts.push(getOperationRuntimeContext()?.resources.get('resumed'));
             return Effect.succeed({
               kind: 'complete',
               result: { selected: 'selected' in state ? state.selected : 'invalid' },
@@ -128,10 +131,30 @@ describe('tasks', () => {
         interaction: { id: 'choose-item', kind: 'choice' },
       });
     });
+    await expect(Effect.runPromise(storage.loadSource(run))).resolves.toMatchObject({
+      checkpoint: {
+        version: 1,
+        state: { step: 'choose' },
+        interaction: { id: 'choose-item', kind: 'choice' },
+      },
+    });
     const secondRuntime = createInProcessTaskRuntime({ storage });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            secondRuntime,
+            run,
+            { interactionId: 'choose-item', optionId: 'two' },
+            { actor: { kind: 'system' } },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'task_definition_invalid' });
+    const { app: secondApp } = architecture({ task: { runtime: secondRuntime } });
+    secondApp.task.defineForEntity({}, { review: task });
     await Effect.runPromise(
-      respondToTaskInteraction(
-        secondRuntime,
+      secondApp.task.respondToInteraction(
         run,
         { interactionId: 'choose-item', optionId: 'two' },
         { actor: { kind: 'system' } },
@@ -143,10 +166,18 @@ describe('tasks', () => {
         interaction: { id: 'approve-item', kind: 'approval' },
       });
     });
-    const thirdRuntime = createInProcessTaskRuntime({ storage });
+    const thirdRuntime = createInProcessTaskRuntime({
+      storage,
+      createExecutionContext: source => ({
+        scope: source.taskId,
+        telemetrySpanName: source.taskId,
+        resources: new Map([['resumed', true]]),
+      }),
+    });
+    const { app: thirdApp } = architecture({ task: { runtime: thirdRuntime } });
+    thirdApp.task.defineForEntity({}, { review: task });
     await Effect.runPromise(
-      respondToTaskInteraction(
-        thirdRuntime,
+      thirdApp.task.respondToInteraction(
         run,
         { interactionId: 'approve-item', decision: 'approve' },
         { actor: { kind: 'system' } },
@@ -158,7 +189,12 @@ describe('tasks', () => {
         result: { selected: 'two' },
       });
     });
+    await expect(Effect.runPromise(storage.loadSource(run))).resolves.toHaveProperty(
+      'checkpoint',
+      undefined,
+    );
     expect(visited).toEqual(['choose', 'choose', 'approve', 'approve', 'finish']);
+    expect(resumedContexts).toEqual([true]);
   });
 
   it('fails explicit execution when its initial state is not a valid checkpoint', async () => {

@@ -22,8 +22,14 @@ import type { OntahiApplicationBuilder } from './ontahi.js';
 import {
   entity,
   createOperationInvocationDispatcher,
+  createInMemoryTaskStorage,
+  createSystemTaskTrigger,
+  defineTaskExecution,
+  defineTaskExecutionStep,
   entityModule,
   entityModuleWithCapabilities,
+  getRequiredDataGraphRuntime,
+  inProcessTasks,
   ontahi,
   operationGroup,
   relation,
@@ -34,6 +40,85 @@ import {
 } from './index.js';
 
 describe('ontahi application composition root', () => {
+  it('registers durable Operations and resumes a persisted interaction in a new application runtime', async () => {
+    const taskStorage = createInMemoryTaskStorage();
+    const graphStorage = createInMemoryDataGraphStorage();
+    const createApplication = () => {
+      const Job = entity({
+        name: 'CheckpointJob',
+        fields: { id: field.id() },
+        operations: ({ operation }) => ({
+          review: operation({
+            durable: {
+              runtime: 'in-process',
+              trigger: createSystemTaskTrigger({ actor: { kind: 'system' } }),
+              execution: defineTaskExecution({
+                initial: () => ({ step: 'approve' }),
+                steps: {
+                  approve: defineTaskExecutionStep({
+                    run: ({ state, response }) =>
+                      Effect.sync(() => {
+                        getRequiredDataGraphRuntime();
+                        return response && 'decision' in response
+                          ? { kind: 'complete' as const, result: response.decision }
+                          : {
+                              kind: 'interaction' as const,
+                              state,
+                              interaction: {
+                                id: 'approve-job',
+                                prompt: 'Continue?',
+                                proposal: {
+                                  id: 'job-proposal',
+                                  summary: 'Continue the job.',
+                                  requests: [{}],
+                                },
+                              },
+                            };
+                      }),
+                  }),
+                },
+              }),
+            },
+            run: () => Effect.dieMessage('Explicit execution is required.'),
+          }),
+        }),
+      });
+
+      return ontahi({
+        storage: graphStorage,
+        tasks: inProcessTasks({ storage: taskStorage }),
+        entities: [Job],
+      });
+    };
+    const firstApplication = createApplication();
+    const operation = firstApplication.resolveOperation('CheckpointJob.review')!;
+    const started = await firstApplication.invokeOperation(operation, {});
+    expect(started).toMatchObject({ ok: true, kind: 'success' });
+    if (!started.ok) throw new Error('Expected the durable Operation to start.');
+    const run = started.value as { taskId: string; runId: string };
+
+    await vi.waitFor(async () => {
+      await expect(firstApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'running',
+        interaction: { id: 'approve-job', kind: 'approval' },
+      });
+    });
+
+    const resumedApplication = createApplication();
+    await resumedApplication.respondToTaskInteraction(
+      run,
+      { interactionId: 'approve-job', decision: 'approve' },
+      { actor: { kind: 'system' } },
+    );
+
+    await vi.waitFor(async () => {
+      await expect(resumedApplication.getTaskSnapshot(run)).resolves.toMatchObject({
+        status: 'completed',
+        result: 'approve',
+      });
+    });
+  });
+
   it('reflects inverse related Entity rows through the bound graph runtime', async () => {
     const Tag = entity({
       name: 'ReflectedTag',

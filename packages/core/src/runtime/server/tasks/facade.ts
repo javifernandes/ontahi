@@ -50,7 +50,9 @@ export const observeTaskRun = (runtime: TaskRuntime, ref: TaskRunIdentity) =>
 export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
   const configuredRuntime =
     config.runtime ??
-    (config.executor && config.storage ? config.executor.createRuntime(config.storage) : undefined);
+    (config.executor && config.storage
+      ? config.executor.createRuntime(config.storage, config.host)
+      : undefined);
   const getRuntime = (): Effect.Effect<TaskRuntime, TaskFailure> =>
     configuredRuntime
       ? Effect.succeed(configuredRuntime)
@@ -68,10 +70,16 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
   ) =>
     Effect.gen(function* () {
       const runtime = yield* getRuntime();
+      runtime.register?.(task);
       return yield* startTask(runtime, task, input, options);
     });
 
+  const register = <TInput, TResult>(task: TaskDefinition<TInput, TResult>) => {
+    configuredRuntime?.register?.(task);
+  };
+
   return {
+    register,
     start,
     getSnapshot: (ref: TaskRunIdentity) =>
       Effect.gen(function* () {
@@ -98,6 +106,7 @@ export const createConfiguredTaskFacade = (config: TaskConfig = {}) => {
       entity: TEntity,
       tasks: TTasks,
     ): TEntity & TaskMethods<TTasks> & { tasks: TaskMethods<TTasks>; taskDefinitions: TTasks } => {
+      Object.values(tasks).forEach(register);
       const methods = Object.fromEntries(
         Object.entries(tasks).map(([name, task]) => [
           name,

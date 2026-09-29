@@ -39,6 +39,8 @@ import { defineOntahiApplication, type OntahiApplication } from './application.j
 import { architecture } from './architecture-registry.js';
 import type { ArchitectureDefinition } from './architecture-types.js';
 import { createDataGraphArchitectureAdapter } from './data-graph-app-adapter.js';
+import { DATA_GRAPH_RUNTIME_RESOURCE_KEY } from './data-graph.js';
+import { createTaskDefinitionFromDurableDomainOperation } from './domain-operations.js';
 import {
   bindOntahiEntity,
   getOntahiSemanticEntities,
@@ -48,6 +50,7 @@ import {
   type AnyOntahiEntityDeclaration,
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
+import { getCurrentInvocationContext } from './invocation-context.js';
 import { createContextualMutationReactionExecutor } from './mutation-reaction.js';
 import type { TaskConfig } from './tasks.js';
 
@@ -291,10 +294,35 @@ export const ontahi = <
     defaultStorage: options.storage,
     relationshipCommandExecutor,
   });
+  const configuredTasks = options.tasks ?? {};
   const definition = {
     ...options.capabilities,
     graph,
-    task: options.tasks ?? {},
+    task: {
+      ...configuredTasks,
+      host: {
+        ...configuredTasks.host,
+        createExecutionContext: source => {
+          const configured = configuredTasks.host?.createExecutionContext?.(source);
+          if (configured) {
+            if (!configured.resources.has(DATA_GRAPH_RUNTIME_RESOURCE_KEY)) {
+              configured.resources.set(
+                DATA_GRAPH_RUNTIME_RESOURCE_KEY,
+                options.storage.createRuntime(),
+              );
+            }
+            return configured;
+          }
+          const resources = new Map(getCurrentInvocationContext()?.resources);
+          resources.set(DATA_GRAPH_RUNTIME_RESOURCE_KEY, options.storage.createRuntime());
+          return {
+            scope: source.taskId,
+            telemetrySpanName: source.taskId,
+            resources,
+          };
+        },
+      },
+    },
   } as OntahiRuntimeDefinition<TCapabilities, StorageRuntime<TStorage>>;
   const registered = architecture(definition);
   registeredForReactions = registered;
@@ -362,6 +390,16 @@ export const ontahi = <
     application.graph,
     createApplicationGraphReadApi(graph, registered),
   );
+  const registerDurableTasks = () =>
+    application.graph.listDurableDomainOperations().forEach(operation => {
+      const task = createTaskDefinitionFromDurableDomainOperation(
+        operation as unknown as Parameters<
+          typeof createTaskDefinitionFromDurableDomainOperation
+        >[0],
+      );
+      (registered.app.task as { register?: (definition: typeof task) => void }).register?.(task);
+    });
+  registerDurableTasks();
   applicationForReactions = application;
 
   const registerEntity = <TDeclaration extends AnyOntahiEntityDeclaration>(
@@ -396,6 +434,7 @@ export const ontahi = <
       bindingContext,
     );
     entityRegistry[declaration.name] = bound;
+    registerDurableTasks();
     return bound as unknown as BoundOntahiEntityDeclaration<
       TDeclaration,
       StorageRuntime<TStorage>,
@@ -413,6 +452,7 @@ export const ontahi = <
     semanticEntities.push(entity);
     options.storage.bindEntities?.(semanticEntities);
     entityRegistry[entity.name] = boundEntity;
+    registerDurableTasks();
     return boundEntity;
   };
   const registerBoundEntities = <TBoundEntities extends Record<string, object>>(
@@ -447,6 +487,8 @@ export const ontahi = <
       semanticEntities.push(...nextSemanticEntities);
       options.storage.bindEntities?.(semanticEntities);
     }
+
+    registerDurableTasks();
 
     return application.graph as unknown as GraphApi<
       BoundEntityRegistrationRecord<TBoundEntities, StorageRuntime<TStorage>>

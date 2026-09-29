@@ -23,6 +23,7 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   updatedAt: source.updatedAt,
   completedAt: source.completedAt,
   progress: source.progress,
+  interaction: source.checkpoint?.interaction,
   error: source.error,
   result: source.result,
 });

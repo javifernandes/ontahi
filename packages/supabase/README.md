@@ -14,6 +14,20 @@ This package depends on `@ontahi/core` and should not leak back into core. It cu
 Product-specific graph schemas, repositories, task definitions, and workflow descriptors stay in
 the host application.
 
+## Task run storage
+
+`createSupabaseTaskStorage` persists explicit execution state in a nullable `checkpoint jsonb`
+column on `task_runs`. The checkpoint is private runtime data; public snapshots expose only its
+pending interaction. Add the column when upgrading an existing host:
+
+```sql
+alter table task_runs add column if not exists checkpoint jsonb;
+```
+
+Keeping the checkpoint in the same row as task status lets a new application process reconstruct a
+named-step execution after the browser or server disconnects. Task definitions remain application
+code and are registered again at startup; functions and runtime contexts are never serialized.
+
 ## Contextual Selection reads
 
 `createSupabaseDataGraphRuntime({ entities: [...] })` supports contextual membership such as
