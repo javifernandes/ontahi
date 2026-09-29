@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  invalidTaskDefinitionFailure,
   validateTaskInput,
   validateTaskOutput,
   validateTaskProgress,
@@ -265,6 +266,13 @@ export const createVercelWorkflowTaskExecutor = ({
     });
 
     try {
+      if (task.execution) {
+        throw invalidTaskDefinitionFailure(
+          task.id,
+          'Explicit task execution is not supported by the Vercel Workflow runtime.',
+          { runtime: 'vercel-workflow' },
+        );
+      }
       const source = await loadTaskRunSource(ref);
       const context = createTaskContext(source, task, runStep);
       const parsedInput = await runTaskEffect(validateTaskInput(task, source.input));

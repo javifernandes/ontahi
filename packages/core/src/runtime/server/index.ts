@@ -292,6 +292,7 @@ export {
   createSystemTaskTrigger,
   createUserTaskTrigger,
   getTaskSnapshot,
+  invalidTaskDefinitionFailure,
   listRecentTasks,
   observeTaskRun,
   respondToTaskInteraction,

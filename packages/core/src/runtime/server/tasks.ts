@@ -6,6 +6,7 @@ export {
 } from './tasks/definitions.js';
 export {
   duplicateTaskRunFailure,
+  invalidTaskDefinitionFailure,
   invalidTaskInteractionFailure,
   invalidTaskInteractionResponseFailure,
   missingTaskRunFailure,
