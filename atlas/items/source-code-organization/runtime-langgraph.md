@@ -25,3 +25,9 @@ and Commands do not cross into Core contracts.
 The adapter delegates legacy function-style Tasks to the in-process executor. This keeps the
 comparison scoped to explicit state machines and avoids implying that an arbitrary suspended
 JavaScript function can survive restart.
+
+Recovery treats the Ontahí execution checkpoint as authoritative. When the private provider thread
+is absent or its execution state differs, the adapter clears that thread and rebuilds it from
+`TaskStorage`. A response claimed before provider persistence recreates the corresponding interrupt
+before issuing the LangGraph resume Command. Explicit step effects still require replay-safe design
+because the two stores do not share a transaction.

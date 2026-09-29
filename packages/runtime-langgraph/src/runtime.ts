@@ -278,14 +278,31 @@ const createLangGraphTaskRuntime = (
     result: undefined,
   });
 
+  const providerStateMatches = (
+    providerState: Partial<LangGraphExecutionState>,
+    source: TaskRunSource,
+  ) =>
+    providerState.taskId === source.taskId &&
+    providerState.runId === source.runId &&
+    JSON.stringify(providerState.executionState) === JSON.stringify(source.checkpoint?.state);
+
+  const rebuildProviderThread = async (graph: LangGraphRunnable, source: TaskRunSource) => {
+    await checkpointer.getTuple(graphConfig(source));
+    await checkpointer.deleteThread(threadIdOf(source));
+    return graph.invoke(initialGraphState(source), graphConfig(source));
+  };
+
   const invocationFor = async (graph: LangGraphRunnable, source: TaskRunSource, fresh: boolean) => {
     const config = graphConfig(source);
+    if (fresh) return rebuildProviderThread(graph, source);
+
+    const graphState = await graph.getState(config);
+    const providerMatches = providerStateMatches(graphState.values, source);
     if (source.checkpoint?.response) {
+      if (!providerMatches) await rebuildProviderThread(graph, source);
       return graph.invoke(new Command({ resume: cloneJson(source.checkpoint.response) }), config);
     }
-    if (fresh) return graph.invoke(initialGraphState(source), config);
-    const graphState = await graph.getState(config);
-    return graph.invoke(graphState.values.taskId ? null : initialGraphState(source), config);
+    return providerMatches ? graph.invoke(null, config) : rebuildProviderThread(graph, source);
   };
 
   const launch = (
@@ -424,7 +441,7 @@ const createLangGraphTaskRuntime = (
     respondToInteraction: (ref, response, context) =>
       Effect.gen(function* () {
         const task = tasks.get(ref.taskId);
-        if (!task?.execution || !task.execution) {
+        if (!task?.execution) {
           if (!legacyRuntime.respondToInteraction) {
             return yield* Effect.fail(taskInteractionNotPendingFailure(ref));
           }

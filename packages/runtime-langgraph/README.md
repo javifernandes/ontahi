@@ -37,6 +37,10 @@ Task storage and the LangGraph checkpointer have different responsibilities:
 - a response is authorized and atomically claimed through `TaskStorage` before LangGraph receives a
   resume Command.
 
+On recovery, the adapter compares the provider state with the authoritative Ontahí execution
+checkpoint. A missing or stale LangGraph thread is discarded and rebuilt from `TaskStorage`; a
+claimed response first recreates its interrupt and then resumes it.
+
 Explicit steps may be replayed after failure, so application effects still require appropriate
 idempotency. The adapter is an execution comparison and does not add an LLM, agent loop, LangSmith,
 or model memory.

@@ -161,6 +161,97 @@ describe('LangGraph Task Runtime', () => {
     });
   });
 
+  it('rebuilds a missing provider thread before resuming a claimed response', async () => {
+    const storage = createInMemoryTaskStorage();
+    const firstRuntime = createRuntime(storage, new MemorySaver());
+    const run = await Effect.runPromise(
+      startTask(
+        firstRuntime,
+        reviewTask,
+        {},
+        {
+          runId: 'missing-provider-thread',
+          trigger: { cause: 'system', actor: { kind: 'system' } },
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(firstRuntime, run))).resolves.toHaveProperty(
+        'interaction.id',
+        'choose-item',
+      );
+    });
+
+    const recoveredRuntime = createRuntime(storage, new MemorySaver());
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        recoveredRuntime,
+        run,
+        { interactionId: 'choose-item', optionId: 'two' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(
+        Effect.runPromise(getTaskSnapshot(recoveredRuntime, run)),
+      ).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'approve-item',
+          proposal: { summary: 'Use two.' },
+        },
+      });
+    });
+  });
+
+  it('rebuilds a stale provider thread from the authoritative Task Storage checkpoint', async () => {
+    const storage = createInMemoryTaskStorage();
+    const saver = new MemorySaver();
+    const firstRuntime = createRuntime(storage, saver);
+    const run = await Effect.runPromise(
+      startTask(
+        firstRuntime,
+        reviewTask,
+        {},
+        {
+          runId: 'stale-provider-thread',
+          trigger: { cause: 'system', actor: { kind: 'system' } },
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(firstRuntime, run))).resolves.toHaveProperty(
+        'interaction.id',
+        'choose-item',
+      );
+    });
+    await Effect.runPromise(
+      storage.update(run, {
+        checkpoint: {
+          version: 1,
+          state: { step: 'approve', selected: 'two' } satisfies ReviewState,
+        },
+      }),
+    );
+
+    const recoveredRuntime = createRuntime(storage, saver);
+    await Effect.runPromise(getTaskSnapshot(recoveredRuntime, run));
+    await vi.waitFor(async () => {
+      await expect(
+        Effect.runPromise(getTaskSnapshot(recoveredRuntime, run)),
+      ).resolves.toMatchObject({
+        status: 'running',
+        interaction: {
+          id: 'approve-item',
+          proposal: { summary: 'Use two.' },
+        },
+      });
+    });
+  });
+
   it('resumes an interaction from a SQLite checkpoint opened by a new runtime', async () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'ontahi-langgraph-'));
     const databasePath = path.join(directory, 'checkpoints.sqlite');

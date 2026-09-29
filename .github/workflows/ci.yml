@@ -117,6 +117,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Build SQLite test dependency
+        run: pnpm rebuild better-sqlite3
+
       - name: Build package dependencies
         run: pnpm build:packages
 

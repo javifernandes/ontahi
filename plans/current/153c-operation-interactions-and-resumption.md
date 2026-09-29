@@ -894,7 +894,10 @@ Runtime Protocol. Ontahí's Task Storage remains the source of public lifecycle,
 authority state. LangGraph owns an internal thread and provider checkpoint used for replay. This
 creates a deliberate dual-persistence boundary: the two stores are not transactionally committed
 together, so recovery must reconcile from the claimed Ontahí checkpoint. That is implementation
-evidence for the adapter contract, not a reason to expose LangGraph concepts publicly.
+evidence for the adapter contract, not a reason to expose LangGraph concepts publicly. The adapter
+now discards and rebuilds a missing or stale provider thread from the Ontahí checkpoint, including
+recreating an interrupt before resuming an already claimed response. Effects within replayed steps
+still need their own idempotency boundary.
 
 ## Acceptance And Research Closure
 

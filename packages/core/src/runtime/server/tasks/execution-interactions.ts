@@ -119,13 +119,16 @@ export const materializeTaskExecutionInteraction = (
         } satisfies TaskPendingChoiceInteraction),
       )
     : validateTaskApprovalInteractionRequest(ref, request).pipe(
-        Effect.as({
-          id,
-          kind: 'approval',
-          prompt: request.prompt,
-          proposal: cloneJson(request.proposal),
-          createdAt,
-        } satisfies TaskPendingApprovalInteraction),
+        Effect.map(
+          () =>
+            ({
+              id,
+              kind: 'approval',
+              prompt: request.prompt,
+              proposal: cloneJson(request.proposal),
+              createdAt,
+            }) satisfies TaskPendingApprovalInteraction,
+        ),
       );
 };
 
