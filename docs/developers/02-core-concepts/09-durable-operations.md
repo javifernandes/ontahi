@@ -179,8 +179,14 @@ migration.
 
 ## The runtime defines the guarantee
 
-`inProcessTasks()` is the smallest executable runtime. It starts background work and stores task
-state locally; it does not promise to survive a process restart.
+`inProcessTasks()` is the smallest executable runtime. Ordinary task functions still depend on the
+process that started them. Explicit step executions persist a versioned JSON checkpoint, including
+pending interactions, through the configured `TaskStorage`. With persistent storage, a freshly
+started application can register the same Task definitions and resume an interaction response from
+that checkpoint. Inspecting or observing a running execution also resumes a checkpoint that was
+persisted just before the previous process stopped. Interaction responses are claimed once through
+the task store before execution continues. A step can be evaluated again after a crash, so side
+effects still need the same idempotency care as other retryable work.
 
 A persistent executor and task store can carry the same lifecycle across retries, processes, and
 deployments. Ontahí's Vercel Workflow adapter is one such runtime. The host owns provider setup,

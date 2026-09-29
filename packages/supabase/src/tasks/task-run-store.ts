@@ -4,6 +4,7 @@ import {
   normalizeTaskTrigger,
   type TaskActor,
   type TaskFailure,
+  type TaskExecutionCheckpoint,
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunListItem,
@@ -49,6 +50,7 @@ type SupabaseTaskRunMutationQuery = {
   eq(column: string, value: unknown): SupabaseTaskRunMutationQuery;
   select(columns?: string): {
     single(): SupabaseQuery<TaskRunRow>;
+    maybeSingle(): SupabaseQuery<TaskRunRow>;
   };
 };
 
@@ -61,6 +63,7 @@ type TaskRunRow = {
   subject: TaskRunSource['subject'] | null;
   runtime: TaskRunSource['runtime'] | null;
   progress: TaskRunSource['progress'] | null;
+  checkpoint: TaskRunSource['checkpoint'] | null;
   result: unknown | null;
   error: TaskRunSource['error'] | null;
   created_at: string;
@@ -117,14 +120,20 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   updatedAt: source.updatedAt,
   completedAt: source.completedAt,
   progress: source.progress,
+  interaction: source.checkpoint?.interaction,
   error: source.error,
+  result: source.result,
 });
 
-const toListItem = (source: TaskRunSource): TaskRunListItem => ({
-  ...toSnapshot(source),
-  trigger: source.trigger,
-  runtime: source.runtime,
-});
+const toListItem = (source: TaskRunSource): TaskRunListItem => {
+  const { result: _result, ...snapshot } = toSnapshot(source);
+
+  return {
+    ...snapshot,
+    trigger: source.trigger,
+    runtime: source.runtime,
+  };
+};
 
 const fromRow = (row: TaskRunRow): TaskRunSource => ({
   taskId: row.task_id,
@@ -135,6 +144,7 @@ const fromRow = (row: TaskRunRow): TaskRunSource => ({
   subject: row.subject ?? undefined,
   runtime: row.runtime ?? undefined,
   progress: row.progress ?? undefined,
+  checkpoint: row.checkpoint ?? undefined,
   result: row.result ?? undefined,
   error: row.error ?? undefined,
   createdAt: row.created_at,
@@ -151,6 +161,7 @@ const toCreateRow = (input: TaskRunCreateInput, now: string): Record<string, unk
   trigger: normalizeTaskTrigger(input.trigger),
   subject: input.subject ?? null,
   runtime: input.runtime ?? null,
+  checkpoint: null,
   created_at: now,
   updated_at: now,
 });
@@ -168,6 +179,7 @@ const toPatchRow = (
   progress: patch.progress
     ? { ...current.progress, ...patch.progress }
     : (current.progress ?? null),
+  checkpoint: 'checkpoint' in patch ? (patch.checkpoint ?? null) : (current.checkpoint ?? null),
   result: patch.result === undefined ? (current.result ?? null) : patch.result,
   error: patch.error === undefined ? (current.error ?? null) : patch.error,
   started_at: patch.startedAt === undefined ? (current.startedAt ?? null) : patch.startedAt,
@@ -227,6 +239,27 @@ export const createSupabaseTaskStorage = ({
     return fromRow(result.data);
   };
 
+  const claimInteraction = async (
+    ref: TaskRunIdentity,
+    interactionId: string,
+    checkpoint: TaskExecutionCheckpoint,
+  ) => {
+    const current = fromRow(await loadRow(ref));
+    const result = await keyFilters(
+      client.from(tableName).update(toPatchRow(current, { checkpoint }, now())),
+      ref,
+    )
+      .eq('checkpoint->interaction->>id', interactionId)
+      .select('*')
+      .maybeSingle();
+
+    if (result.error) {
+      throw toPersistenceFailure('Failed to claim task interaction.', result.error);
+    }
+
+    return result.data ? fromRow(result.data) : undefined;
+  };
+
   return {
     create: input =>
       Effect.tryPromise({
@@ -258,6 +291,14 @@ export const createSupabaseTaskStorage = ({
     update: (ref, patch) =>
       Effect.tryPromise({
         try: async () => toSnapshot(await updateFromPatch(ref, patch)),
+        catch: toCaughtFailure,
+      }),
+    claimInteraction: (ref, interactionId, checkpoint) =>
+      Effect.tryPromise({
+        try: async () => {
+          const source = await claimInteraction(ref, interactionId, checkpoint);
+          return source ? toSnapshot(source) : undefined;
+        },
         catch: toCaughtFailure,
       }),
     attachRuntimeRef: (ref, runtime) =>

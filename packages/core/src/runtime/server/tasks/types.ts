@@ -6,6 +6,7 @@ import type {
   TaskActor,
   TaskApprovalInteractionResponse,
   TaskApprovalProposal,
+  TaskExecutionCheckpoint,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskRunListItem,
@@ -17,6 +18,7 @@ import type {
   TaskSubject,
   TaskTrigger,
 } from '../../contracts.js';
+import type { OperationRuntimeContext } from '../context-types.js';
 import type { OperationFailure } from '../operation/types.js';
 
 export type {
@@ -27,6 +29,7 @@ export type {
   TaskChoiceInteractionResponse,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
+  TaskExecutionCheckpoint,
   TaskPendingChoiceInteraction,
   TaskPendingApprovalInteraction,
   TaskPendingInteraction,
@@ -128,6 +131,11 @@ export type TaskStorageEngine = {
     ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
   ): Effect.Effect<TaskSnapshot, TaskFailure>;
+  claimInteraction(
+    ref: TaskRunIdentity,
+    interactionId: string,
+    checkpoint: TaskExecutionCheckpoint,
+  ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
 };
 
 export type TaskStorage = TaskStorageControl &
@@ -203,6 +211,7 @@ export type TaskMethods<TTasks extends TaskDeclarations> = {
 };
 
 export type TaskRuntime = {
+  register?<TInput, TResult>(task: TaskDefinition<TInput, TResult>): void;
   start<TInput, TResult>(
     task: TaskDefinition<TInput, TResult>,
     input: TInput,
@@ -219,13 +228,18 @@ export type TaskRuntime = {
 };
 
 export type TaskExecutor = {
-  createRuntime(storage: TaskStorage): TaskRuntime;
+  createRuntime(storage: TaskStorage, options?: TaskRuntimeHostOptions): TaskRuntime;
+};
+
+export type TaskRuntimeHostOptions = {
+  createExecutionContext?: (source: TaskRunSource) => OperationRuntimeContext | undefined;
 };
 
 export type TaskConfig = {
   executor?: TaskExecutor;
   storage?: TaskStorage;
   runtime?: TaskRuntime;
+  host?: TaskRuntimeHostOptions;
 };
 
 export type InProcessTaskExecutorOptions = {
@@ -234,10 +248,12 @@ export type InProcessTaskExecutorOptions = {
   onBackgroundError?: (error: unknown) => void;
 };
 
-export type InProcessTasksOptions = InProcessTaskExecutorOptions & {
-  storage?: TaskStorage;
-};
+export type InProcessTasksOptions = InProcessTaskExecutorOptions &
+  TaskRuntimeHostOptions & {
+    storage?: TaskStorage;
+  };
 
-export type InProcessTaskRuntimeOptions = InProcessTaskExecutorOptions & {
-  storage: TaskStorage;
-};
+export type InProcessTaskRuntimeOptions = InProcessTaskExecutorOptions &
+  TaskRuntimeHostOptions & {
+    storage: TaskStorage;
+  };

@@ -243,6 +243,13 @@ export type TaskInteractionResponse =
   | TaskChoiceInteractionResponse
   | TaskApprovalInteractionResponse;
 
+export type TaskExecutionCheckpoint = {
+  version: 1;
+  state: JsonValue;
+  interaction?: TaskPendingInteraction;
+  response?: TaskInteractionResponse;
+};
+
 export type TaskInteractionResponseContext = {
   actor: TaskActor;
 };
@@ -274,6 +281,8 @@ export type TaskRunSource = TaskSnapshot & {
   trigger: TaskTrigger;
   runtime?: TaskRuntimeRef;
   result?: unknown;
+  /** Private runtime state used to resume an explicit execution. */
+  checkpoint?: TaskExecutionCheckpoint;
 };
 
 export type TaskRunListItem = TaskSnapshot & {

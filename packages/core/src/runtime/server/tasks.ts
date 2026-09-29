@@ -68,6 +68,7 @@ export type {
   TaskDefinitionDeclaration,
   TaskExecutor,
   TaskExecutionDefinition,
+  TaskExecutionCheckpoint,
   TaskExecutionInteractionRequest,
   TaskExecutionState,
   TaskExecutionStepContext,
