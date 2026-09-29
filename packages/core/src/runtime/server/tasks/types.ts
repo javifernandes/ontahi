@@ -1,6 +1,7 @@
 import type { Effect, Stream } from 'effect';
 
 import type { GraphSchemaLike } from '../../../data-graph/definitions.js';
+import type { JsonValue } from '../../../value/json.js';
 import type {
   TaskActor,
   TaskApprovalInteractionResponse,
@@ -65,6 +66,37 @@ export type TaskInteractionContext = {
   approval(
     request: TaskApprovalInteractionRequest,
   ): Effect.Effect<TaskApprovalDecision, TaskFailure>;
+};
+
+export type TaskExecutionState = { readonly step: string };
+
+export type TaskExecutionInteractionRequest =
+  | TaskChoiceInteractionRequest<JsonValue>
+  | TaskApprovalInteractionRequest;
+
+export type TaskExecutionTransition<TState extends TaskExecutionState, TResult> =
+  | { readonly kind: 'continue'; readonly state: TState }
+  | {
+      readonly kind: 'interaction';
+      readonly state: TState;
+      readonly interaction: TaskExecutionInteractionRequest;
+    }
+  | { readonly kind: 'complete'; readonly result: TResult };
+
+export type TaskExecutionStepContext = Omit<TaskContext, 'interact' | 'step'>;
+
+export type TaskExecutionStepDefinition<TInput, TState extends TaskExecutionState, TResult> = {
+  run(args: {
+    readonly input: TInput;
+    readonly state: TState;
+    readonly response?: TaskInteractionResponse;
+    readonly context: TaskExecutionStepContext;
+  }): Effect.Effect<TaskExecutionTransition<TState, TResult>, TaskFailure>;
+};
+
+export type TaskExecutionDefinition<TInput, TState extends TaskExecutionState, TResult> = {
+  initial(input: TInput): TState;
+  steps: Readonly<Record<string, TaskExecutionStepDefinition<TInput, TState, TResult>>>;
 };
 
 export type TaskSchema<TValue = unknown> = GraphSchemaLike<TValue>;
@@ -142,6 +174,7 @@ export type TaskDefinition<TInput, TResult> = {
   progress?: TaskSchema<NonNullable<TaskSnapshot['progress']>>;
   output?: TaskSchema<TResult>;
   steps?: TaskStepRegistry;
+  execution?: TaskExecutionDefinition<TInput, TaskExecutionState, TResult>;
   run(input: TInput, context: TaskContext): Effect.Effect<TResult, TaskFailure>;
 };
 

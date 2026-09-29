@@ -254,6 +254,53 @@ describe('vercel workflow task executor', () => {
     });
   });
 
+  it('rejects explicit task execution before calling the legacy run function', async () => {
+    const run = vi.fn(() => Effect.succeed({ completed: true }));
+    taskDefinitions.set('fixture.explicit-execution', {
+      id: 'fixture.explicit-execution',
+      execution: {
+        initial: () => ({ step: 'complete' }),
+        steps: {
+          complete: {
+            run: () => Effect.succeed({ kind: 'complete', result: { completed: true } } as const),
+          },
+        },
+      },
+      run,
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask(
+        {
+          taskId: 'fixture.explicit-execution',
+          runId: 'bookops-run-1',
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'task_definition_invalid',
+      message: 'Explicit task execution is not supported by the Vercel Workflow runtime.',
+      taskId: 'fixture.explicit-execution',
+      runtime: 'vercel-workflow',
+    });
+    expect(run).not.toHaveBeenCalled();
+    expect(loadSource).not.toHaveBeenCalled();
+    expect(update).toHaveBeenLastCalledWith(
+      {
+        taskId: 'fixture.explicit-execution',
+        runId: 'bookops-run-1',
+      },
+      expect.objectContaining({
+        status: 'failed',
+        error: {
+          code: 'task_definition_invalid',
+          message: 'Explicit task execution is not supported by the Vercel Workflow runtime.',
+        },
+      }),
+    );
+  });
+
   it('validates persisted task input before running a workflow task', async () => {
     loadSource.mockReturnValue(
       Effect.succeed({

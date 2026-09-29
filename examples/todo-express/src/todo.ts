@@ -11,7 +11,13 @@ import {
   type RelationConstraint,
 } from '@ontahi/core/data-graph';
 import { entity, relation, relationConstraint } from '@ontahi/core/entity';
-import { failOperation, type OntahiCapabilities } from '@ontahi/core/runtime/server';
+import {
+  defineTaskExecution,
+  defineTaskExecutionStep,
+  failOperation,
+  type OntahiCapabilities,
+  type TaskExecutionState,
+} from '@ontahi/core/runtime/server';
 import type { JsonValue } from '@ontahi/core/value/json';
 import { Effect } from 'effect';
 
@@ -175,6 +181,26 @@ export const DeleteListItemsOutput = value('DeleteListItemsOutput', {
   rejected: field.boolean(),
 });
 
+type DeleteListItemsInput = { readonly listName: string };
+type DeleteListItemsResult = InferGraphSchemaValue<typeof DeleteListItemsOutput>;
+type DeleteListCandidate = { readonly id: string; readonly name: string };
+type DeleteListItemsState = TaskExecutionState &
+  (
+    | { readonly step: 'resolve-list'; readonly listName: string }
+    | {
+        readonly step: 'choose-list';
+        readonly listName: string;
+        readonly candidates: readonly DeleteListCandidate[];
+      }
+    | { readonly step: 'build-proposal'; readonly selected: DeleteListCandidate }
+    | {
+        readonly step: 'approve-proposal' | 'execute-proposal';
+        readonly selected: DeleteListCandidate;
+        readonly requests: readonly JsonValue[];
+        readonly todoCount: number;
+      }
+  );
+
 export const TodoItem = entity({
   name: 'TodoItem',
   fields: todoItemFields,
@@ -213,6 +239,179 @@ export const TodoItem = entity({
           yield* todoEntities.refById(todoId).tags.remove(tagEntities.refById(tag.id)).run();
         }
       });
+    const createDeleteProposal = (selected: DeleteListCandidate) =>
+      Effect.gen(function* () {
+        const todos = [
+          ...(yield* todoEntities
+            .where(todo => todo.list.eq(createEntityRef(TodoList, { id: selected.id })))
+            .run()),
+        ].sort((left, right) => left.id.localeCompare(right.id));
+        const effects: Array<{ request: JsonValue; run(): Effect.Effect<unknown, unknown> }> = [];
+
+        for (const todo of todos) {
+          const tags = [
+            ...(yield* tagEntities
+              .relatedTo(
+                todoEntities.selection(candidate => candidate.id.eq(todo.id)),
+                {
+                  through: 'tags',
+                },
+              )
+              .run()),
+          ].sort((left, right) => left.id.localeCompare(right.id));
+          for (const tag of tags) {
+            const command = todoEntities.refById(todo.id).tags.remove(tagEntities.refById(tag.id));
+            effects.push({
+              request: toGraphCommandRequest(command) as unknown as JsonValue,
+              run: () => command.run(),
+            });
+          }
+          const command = commands
+            .where(candidate => candidate.id.eq(todo.id))
+            .where(candidate => candidate.list.eq(todo.list))
+            .where(candidate => candidate.title.eq(todo.title))
+            .where(candidate => candidate.completed.eq(todo.completed))
+            .delete();
+          effects.push({
+            request: toGraphCommandRequest(
+              mutateEntity(self).deleteSelection({
+                kind: 'selection',
+                entityName: self.name,
+                expression: command.build().selection,
+              }),
+            ) as unknown as JsonValue,
+            run: () => command.run(),
+          });
+        }
+
+        return {
+          effects,
+          requests: effects.map(effect => effect.request),
+          todoCount: todos.length,
+        };
+      });
+    const deleteFromNamedListExecution = defineTaskExecution<
+      DeleteListItemsInput,
+      DeleteListItemsState,
+      DeleteListItemsResult
+    >({
+      initial: ({ listName }) => ({ step: 'resolve-list', listName }),
+      steps: {
+        'resolve-list': defineTaskExecutionStep({
+          run: ({ state }) =>
+            Effect.gen(function* () {
+              if (state.step !== 'resolve-list') return yield* Effect.dieMessage('Invalid state.');
+              const candidates = [
+                ...(yield* listCommands.where(list => list.name.eq(state.listName)).run()),
+              ]
+                .map(({ id, name }) => ({ id, name }))
+                .sort((left, right) => left.id.localeCompare(right.id));
+              if (candidates.length === 0) {
+                return yield* failOperation('todo_list_not_found', 'Todo list does not exist.', {
+                  listName: state.listName,
+                });
+              }
+              return {
+                kind: 'continue',
+                state:
+                  candidates.length === 1
+                    ? { step: 'build-proposal', selected: candidates[0]! }
+                    : { step: 'choose-list', listName: state.listName, candidates },
+              };
+            }),
+        }),
+        'choose-list': defineTaskExecutionStep({
+          run: ({ state, response }) => {
+            if (state.step !== 'choose-list') return Effect.dieMessage('Invalid state.');
+            if (!response) {
+              return Effect.succeed({
+                kind: 'interaction',
+                state,
+                interaction: {
+                  id: 'choose-list',
+                  prompt: `Which “${state.listName}” list should be emptied?`,
+                  options: state.candidates.map(list => ({
+                    id: list.id,
+                    label: `${list.name} (${list.id})`,
+                    value: list,
+                  })),
+                },
+              });
+            }
+            if (!('optionId' in response)) return Effect.dieMessage('Invalid choice response.');
+            const selected = state.candidates.find(candidate => candidate.id === response.optionId);
+            return selected
+              ? Effect.succeed({ kind: 'continue', state: { step: 'build-proposal', selected } })
+              : Effect.dieMessage('Unknown list choice.');
+          },
+        }),
+        'build-proposal': defineTaskExecutionStep({
+          run: ({ state }) =>
+            Effect.gen(function* () {
+              if (state.step !== 'build-proposal')
+                return yield* Effect.dieMessage('Invalid state.');
+              const proposal = yield* createDeleteProposal(state.selected);
+              return proposal.todoCount === 0
+                ? { kind: 'complete', result: { deleted: 0, rejected: false } }
+                : {
+                    kind: 'continue',
+                    state: {
+                      step: 'approve-proposal',
+                      selected: state.selected,
+                      requests: proposal.requests,
+                      todoCount: proposal.todoCount,
+                    },
+                  };
+            }),
+        }),
+        'approve-proposal': defineTaskExecutionStep({
+          run: ({ state, response, context }) => {
+            if (state.step !== 'approve-proposal') return Effect.dieMessage('Invalid state.');
+            if (!response) {
+              return Effect.succeed({
+                kind: 'interaction',
+                state,
+                interaction: {
+                  id: 'approve-delete-items',
+                  prompt: `Delete ${state.todoCount} item${state.todoCount === 1 ? '' : 's'} from “${state.selected.name}”?`,
+                  proposal: {
+                    id: `${context.runId}:delete-items:${state.selected.id}`,
+                    summary: `Delete ${state.todoCount} item${state.todoCount === 1 ? '' : 's'} from “${state.selected.name}”.`,
+                    requests: state.requests,
+                  },
+                },
+              });
+            }
+            if (!('decision' in response)) return Effect.dieMessage('Invalid approval response.');
+            return Effect.succeed(
+              response.decision === 'reject'
+                ? { kind: 'complete', result: { deleted: 0, rejected: true } }
+                : { kind: 'continue', state: { ...state, step: 'execute-proposal' } },
+            );
+          },
+        }),
+        'execute-proposal': defineTaskExecutionStep({
+          run: ({ state }) =>
+            Effect.gen(function* () {
+              if (state.step !== 'execute-proposal')
+                return yield* Effect.dieMessage('Invalid state.');
+              const current = yield* createDeleteProposal(state.selected);
+              if (JSON.stringify(current.requests) !== JSON.stringify(state.requests)) {
+                return yield* failOperation(
+                  'todo_delete_proposal_stale',
+                  'The list changed after approval was requested. No items were deleted.',
+                  { listId: state.selected.id },
+                );
+              }
+              for (const effect of current.effects) yield* effect.run().pipe(Effect.orDie);
+              return {
+                kind: 'complete',
+                result: { deleted: current.todoCount, rejected: false },
+              };
+            }),
+        }),
+      },
+    });
     return {
       createItem: operation({
         description: 'Add an item to a list.',
@@ -275,117 +474,13 @@ export const TodoItem = entity({
         requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
         durable: {
           runtime: 'in-process',
+          execution: deleteFromNamedListExecution,
           ...(todoAuthenticationMode === 'disabled'
             ? { trigger: { cause: 'system' as const, actor: { kind: 'system' as const } } }
             : {}),
         },
-        run: ({ listName }, context) =>
-          Effect.gen(function* () {
-            if (!context) return yield* Effect.dieMessage('Durable Task context is required.');
-            const candidates = [
-              ...(yield* listCommands.where(list => list.name.eq(listName)).run()),
-            ].sort((left, right) => left.id.localeCompare(right.id));
-
-            if (candidates.length === 0) {
-              return yield* failOperation('todo_list_not_found', 'Todo list does not exist.', {
-                listName,
-              });
-            }
-
-            const selected =
-              candidates.length === 1
-                ? candidates[0]!
-                : yield* context.interact.choice({
-                    id: 'choose-list',
-                    prompt: `Which “${listName}” list should be emptied?`,
-                    options: candidates.map(list => ({
-                      id: list.id,
-                      label: `${list.name} (${list.id})`,
-                      value: list,
-                    })),
-                  });
-
-            const createProposal = () =>
-              Effect.gen(function* () {
-                const todos = [
-                  ...(yield* todoEntities
-                    .where(todo => todo.list.eq(createEntityRef(TodoList, { id: selected.id })))
-                    .run()),
-                ].sort((left, right) => left.id.localeCompare(right.id));
-                const proposedEffects: Array<{
-                  request: JsonValue;
-                  run(): Effect.Effect<unknown, unknown>;
-                }> = [];
-
-                for (const todo of todos) {
-                  const tags = [
-                    ...(yield* tagEntities
-                      .relatedTo(
-                        todoEntities.selection(candidate => candidate.id.eq(todo.id)),
-                        { through: 'tags' },
-                      )
-                      .run()),
-                  ].sort((left, right) => left.id.localeCompare(right.id));
-                  for (const tag of tags) {
-                    const command = todoEntities
-                      .refById(todo.id)
-                      .tags.remove(tagEntities.refById(tag.id));
-                    proposedEffects.push({
-                      request: toGraphCommandRequest(command) as unknown as JsonValue,
-                      run: () => command.run(),
-                    });
-                  }
-                  const target = commands
-                    .where(candidate => candidate.id.eq(todo.id))
-                    .where(candidate => candidate.list.eq(todo.list))
-                    .where(candidate => candidate.title.eq(todo.title))
-                    .where(candidate => candidate.completed.eq(todo.completed));
-                  const command = target.delete();
-                  proposedEffects.push({
-                    request: toGraphCommandRequest(
-                      mutateEntity(self).deleteSelection({
-                        kind: 'selection',
-                        entityName: self.name,
-                        expression: command.build().selection,
-                      }),
-                    ) as unknown as JsonValue,
-                    run: () => command.run(),
-                  });
-                }
-
-                return {
-                  effects: proposedEffects,
-                  requests: proposedEffects.map(effect => effect.request),
-                  todoCount: todos.length,
-                };
-              });
-
-            const proposal = yield* createProposal();
-            if (proposal.todoCount === 0) return { deleted: 0, rejected: false };
-
-            const approval = yield* context.interact.approval({
-              id: 'approve-delete-items',
-              prompt: `Delete ${proposal.todoCount} item${proposal.todoCount === 1 ? '' : 's'} from “${selected.name}”?`,
-              proposal: {
-                id: `${context.runId}:delete-items:${selected.id}`,
-                summary: `Delete ${proposal.todoCount} item${proposal.todoCount === 1 ? '' : 's'} from “${selected.name}”.`,
-                requests: proposal.requests,
-              },
-            });
-            if (approval.decision === 'reject') return { deleted: 0, rejected: true };
-
-            const current = yield* createProposal();
-            if (JSON.stringify(current.requests) !== JSON.stringify(proposal.requests)) {
-              return yield* failOperation(
-                'todo_delete_proposal_stale',
-                'The list changed after approval was requested. No items were deleted.',
-                { listId: selected.id },
-              );
-            }
-
-            for (const effect of current.effects) yield* effect.run().pipe(Effect.orDie);
-            return { deleted: current.todoCount, rejected: false };
-          }),
+        run: (): Effect.Effect<DeleteListItemsResult> =>
+          Effect.dieMessage('Explicit durable execution requires a Task Runtime.'),
       }),
       deleteList: operation.atomic({
         description: 'Delete a list and all its items.',

@@ -37,6 +37,12 @@ The Express host adapts that native Stream to Durable protocol snapshots, so Web
 polling in either the browser or server. HTTP Durable progress remains the explicit Fetch polling
 compatibility path.
 
+`TodoItem.deleteFromNamedList` is the interactive execution example. Its private JSON-safe state
+advances through named list resolution, choice, proposal, approval, and execution steps. The public
+surface remains the same durable Operation snapshots and Interaction reply protocol used by
+Devtools. Its checkpoint is process-local for now, so this example proves explicit control flow but
+not restart-safe persistence.
+
 The default is an explicit public mode: the complete application works without login and
 `TodoItem.setCompleted` has no authentication requirement.
 

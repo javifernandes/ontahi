@@ -446,6 +446,13 @@ a process. Plain Queries and Views return arrays; `first`, `one`, `count`, and `
 select their corresponding result. Runtime-bound Effects remain the composition API inside
 Operations.
 
+Durable Operations may experimentally declare an explicit `durable.execution` machine. Its
+JSON-safe state names the next step, and every named step returns `continue`, `interaction`, or
+`complete`. The in-process Task Runtime drives those transitions without retaining a suspended
+Operation function. Execution state and the Operation runtime resources are still process-local in
+this slice; a process restart cannot resume the run. This boundary exists to test checkpoint and
+workflow adapters before standardizing persistent execution semantics.
+
 ## Graph Read ordering capabilities
 
 The `graph.read` Runtime Protocol family also accepts metadata-only discovery:

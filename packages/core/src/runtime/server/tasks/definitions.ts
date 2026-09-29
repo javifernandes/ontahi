@@ -2,6 +2,9 @@ import { invalidTaskDefinitionFailure } from './failures.js';
 import type {
   TaskDefinition,
   TaskDefinitionDeclaration,
+  TaskExecutionDefinition,
+  TaskExecutionState,
+  TaskExecutionStepDefinition,
   TaskStepDefinition,
   TaskStepRegistry,
 } from './types.js';
@@ -63,3 +66,11 @@ export const defineTask = <TInput, TResult>(
 export const defineTaskStep = <TInput, TResult>(
   definition: TaskStepDefinition<TInput, TResult>,
 ): TaskStepDefinition<TInput, TResult> => definition;
+
+export const defineTaskExecutionStep = <TInput, TState extends TaskExecutionState, TResult>(
+  definition: TaskExecutionStepDefinition<TInput, TState, TResult>,
+): TaskExecutionStepDefinition<TInput, TState, TResult> => definition;
+
+export const defineTaskExecution = <TInput, TState extends TaskExecutionState, TResult>(
+  definition: TaskExecutionDefinition<TInput, TState, TResult>,
+): TaskExecutionDefinition<TInput, TState, TResult> => definition;

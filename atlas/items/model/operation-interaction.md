@@ -26,16 +26,18 @@ message history. The experimental contract adds choice and approval Interactions
 durable Operation snapshot and accepts their responses through the existing `durable.operation`
 protocol. An approval exposes a stable proposal identity, summary, and exact JSON-safe requests;
 the in-process runtime retains the response and resumes only the matching Interaction. Lifecycle,
-expiry, persistence, cancellation, richer participant authorization, stale-proposal verification,
-and command dispatch after approval remain under investigation in plan 153c.
+expiry, persistence, cancellation, richer participant authorization, and transactional proposal
+dispatch remain under investigation in plan 153c.
 
 The Todo experiment now exercises both kinds in one code-backed durable Operation. Duplicate list
 names produce a choice over stable list IDs. The selected list is projected into exact canonical
 Graph Commands for relationship unlinks and item deletions, and those requests are shown in the
 approval proposal. On approval the Operation rebuilds the proposal from current graph state and
 executes only when the canonical requests still match. The in-process runtime preserves the
-invoking Principal as the default run actor and uses a process-local Promise continuation so later
-asynchronous reads and commands resume on the original Task execution.
+invoking Principal as the default run actor. The Todo workflow is now an explicit JSON-safe state
+machine with named resolution, choice, proposal, approval, and execution steps. The runtime advances
+the machine after an accepted response instead of retaining a Promise continuation for that
+Operation.
 
 The command sequence is intentionally non-atomic. A concurrent change after revalidation or a
 failure during sequential dispatch may still produce partial effects. Restart-safe continuation,
@@ -73,6 +75,12 @@ and then waits for participant input. A code-backed workflow can issue the same 
 a future model-backed one. The initial in-process continuation is explicitly process-local; durable
 checkpointing, correlation, and visibility rules remain framework design work rather than
 chat-provider behavior.
+
+The explicit execution checkpoint and captured Operation runtime resources remain process-local.
+Recreating an adapter over the same storage can keep driving the in-memory machine, but a process
+restart loses both. A persistent runtime must store only JSON-safe execution state and reconstruct
+current authority and runtime resources when resuming; credentials and live capability objects are
+not checkpoint data.
 
 Current research favors reusing canonical Graph Read, Graph Command, and Operation Invocation
 contracts rather than wrapping them in a second universal effect language. Interaction is the
