@@ -39,7 +39,14 @@ import {
   TodoListSchema as ClientTodoListSchema,
   TagSchema as ClientTagSchema,
 } from './generated/client-entities.js';
-import { Tag, TodoItem, TodoApplication, TodoList, todoNotifications } from './graph.js';
+import {
+  Tag,
+  TodoItem,
+  TodoApplication,
+  TodoList,
+  todoNotifications,
+  todoTaskRuntime,
+} from './graph.js';
 import { createTodoDataGraphRuntime } from './storage.js';
 
 const testPrincipal = {
@@ -714,6 +721,7 @@ describe('Ontahi todo portability example', () => {
 
     await expect(fetch(`${origin}/runtime`).then(response => response.json())).resolves.toEqual({
       storage: 'in-memory',
+      taskRuntime: todoTaskRuntime,
       commandChat: false,
     });
     await expect(
