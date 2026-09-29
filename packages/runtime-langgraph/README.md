@@ -34,12 +34,15 @@ Task storage and the LangGraph checkpointer have different responsibilities:
 - `TaskStorage` is the source for public lifecycle, progress, Interaction, result, and Activity;
 - the LangGraph checkpointer owns provider replay state under an internal thread ID derived from
   the Ontahí Task Run identity;
+- the private Task execution checkpoint retains claimed interaction responses needed to reconstruct
+  that provider thread when its checkpoint is missing or stale;
 - a response is authorized and atomically claimed through `TaskStorage` before LangGraph receives a
   resume Command.
 
 On recovery, the adapter compares the provider state with the authoritative Ontahí execution
 checkpoint. A missing or stale LangGraph thread is discarded and rebuilt from `TaskStorage`; a
-claimed response first recreates its interrupt and then resumes it.
+claimed response first replays earlier interactions, verifies the pending interrupt identity, and
+then resumes it.
 
 Explicit steps may be replayed after failure, so application effects still require appropriate
 idempotency. The adapter is an execution comparison and does not add an LLM, agent loop, LangSmith,

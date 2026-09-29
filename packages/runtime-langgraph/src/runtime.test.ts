@@ -252,6 +252,110 @@ describe('LangGraph Task Runtime', () => {
     });
   });
 
+  it('replays prior responses when provider and Task Storage disagree on a same-state interaction', async () => {
+    const sameStateTask = defineTask({
+      id: 'demo.langgraph-same-state-recovery',
+      execution: defineTaskExecution<{}, { step: 'review' }, { approved: boolean }>({
+        initial: () => ({ step: 'review' }),
+        steps: {
+          review: defineTaskExecutionStep({
+            run: ({ state, response }) => {
+              if (response && 'decision' in response) {
+                return Effect.succeed({
+                  kind: 'complete' as const,
+                  result: { approved: response.decision === 'approve' },
+                });
+              }
+              if (response && 'optionId' in response) {
+                return Effect.succeed({
+                  kind: 'interaction' as const,
+                  state,
+                  interaction: {
+                    id: 'same-state-approval',
+                    prompt: `Use ${response.optionId}?`,
+                    proposal: {
+                      id: 'same-state-proposal',
+                      summary: `Use ${response.optionId}.`,
+                      requests: [{ selected: response.optionId }],
+                    },
+                  },
+                });
+              }
+              return Effect.succeed({
+                kind: 'interaction' as const,
+                state,
+                interaction: {
+                  id: 'same-state-choice',
+                  prompt: 'Which item?',
+                  options: [{ id: 'one', label: 'One', value: 'one' }],
+                },
+              });
+            },
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy execution must not run.'),
+    });
+    const storage = createInMemoryTaskStorage();
+    const staleSaver = new MemorySaver();
+    const createSameStateRuntime = (saver: MemorySaver) => {
+      const runtime = createLangGraphTaskExecutor({ checkpointer: saver }).createRuntime(storage);
+      runtime.register?.(sameStateTask);
+      return runtime;
+    };
+    const staleRuntime = createSameStateRuntime(staleSaver);
+    const run = await Effect.runPromise(
+      startTask(
+        staleRuntime,
+        sameStateTask,
+        {},
+        {
+          runId: 'same-state-recovery',
+          trigger: { cause: 'system', actor: { kind: 'system' } },
+        },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(staleRuntime, run))).resolves.toHaveProperty(
+        'interaction.id',
+        'same-state-choice',
+      );
+    });
+
+    const advancingRuntime = createSameStateRuntime(new MemorySaver());
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        advancingRuntime,
+        run,
+        { interactionId: 'same-state-choice', optionId: 'one' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(
+        Effect.runPromise(getTaskSnapshot(advancingRuntime, run)),
+      ).resolves.toHaveProperty('interaction.id', 'same-state-approval');
+    });
+
+    const recoveredRuntime = createSameStateRuntime(staleSaver);
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        recoveredRuntime,
+        run,
+        { interactionId: 'same-state-approval', decision: 'approve' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(
+        Effect.runPromise(getTaskSnapshot(recoveredRuntime, run)),
+      ).resolves.toMatchObject({
+        status: 'completed',
+        result: { approved: true },
+      });
+    });
+  });
+
   it('resumes an interaction from a SQLite checkpoint opened by a new runtime', async () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'ontahi-langgraph-'));
     const databasePath = path.join(directory, 'checkpoints.sqlite');

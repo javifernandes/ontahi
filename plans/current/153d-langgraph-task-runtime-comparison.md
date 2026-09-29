@@ -65,14 +65,16 @@ LangGraph's checkpointer is private replay state addressed by an internal thread
 Task Run identity. They do not share a transaction. Resume first claims the response in
 `TaskStorage`; replay may then safely re-enter the LangGraph node without publishing or executing a
 second public continuation. Recovery compares provider execution state with the authoritative
-Ontahí checkpoint. It discards and rebuilds a missing or stale provider thread, recreating an
-interrupt before resuming an already claimed response. The stores remain non-transactional, so
-effects inside replayed steps still require idempotency.
+Ontahí checkpoint, including the pending interrupt identity. The private execution checkpoint keeps
+the claimed response trail required to discard and rebuild a missing or stale provider thread,
+recreate consecutive interrupts, and resume the current response. The stores remain
+non-transactional, so effects inside replayed steps still require idempotency.
 
 The existing Todo operation selects the adapter through `TODO_TASK_RUNTIME=langgraph`; its explicit
 steps and Devtools protocol path are unchanged. The test matrix includes choice, approval,
 rejection, stale proposal detection, concurrent responses, actor denial, runtime recreation, and a
-SQLite checkpointer reopened by a new adapter instance.
+SQLite checkpointer reopened by a new adapter instance. It also covers recovery when Task Storage
+has advanced to a second same-state interaction while the provider still exposes the first.
 
 ## Conclusion
 

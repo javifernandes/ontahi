@@ -30,6 +30,7 @@ import {
   type TaskChoiceInteractionRequest,
   type TaskConfig,
   type TaskDefinition,
+  type TaskExecutionCheckpoint,
   type TaskExecutionState,
   type TaskExecutionTransition,
   type TaskExecutor,
@@ -59,6 +60,14 @@ const LangGraphState = Annotation.Root({
 
 type LangGraphExecutionState = typeof LangGraphState.State;
 type LangGraphRunnable = ReturnType<ReturnType<typeof createGraphBuilder>['compile']>;
+type LangGraphReplayEntry = {
+  state: TaskExecutionState;
+  response: TaskInteractionResponse;
+};
+type LangGraphTaskExecutionCheckpoint = TaskExecutionCheckpoint & {
+  /** Adapter-private responses needed to reconstruct a missing provider thread deterministically. */
+  replay?: LangGraphReplayEntry[];
+};
 
 export type LangGraphTaskExecutorOptions = InProcessTaskExecutorOptions & {
   checkpointer?: BaseCheckpointSaver;
@@ -130,6 +139,16 @@ const createLangGraphTaskRuntime = (
   };
   const update = async (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     publish(await runTaskEffect(storage.update(ref, patch)));
+  const checkpointOf = (source: TaskRunSource) =>
+    source.checkpoint as LangGraphTaskExecutionCheckpoint | undefined;
+  const replayOf = (source: TaskRunSource) => checkpointOf(source)?.replay ?? [];
+  const withReplay = (
+    checkpoint: TaskExecutionCheckpoint,
+    replay: readonly LangGraphReplayEntry[],
+  ): LangGraphTaskExecutionCheckpoint => ({
+    ...checkpoint,
+    ...(replay.length > 0 ? { replay: cloneJson(replay) as LangGraphReplayEntry[] } : {}),
+  });
 
   const createStepContext = (task: TaskDefinition<any, any>, source: TaskRunSource) => ({
     taskId: source.taskId,
@@ -154,7 +173,8 @@ const createLangGraphTaskRuntime = (
   ) => {
     const persisted = await runTaskEffect(storage.loadSource(ref));
     const sameState = JSON.stringify(persisted.checkpoint?.state) === JSON.stringify(state);
-    const existing = sameState ? persisted.checkpoint?.interaction : undefined;
+    const persistedCheckpoint = checkpointOf(persisted);
+    const existing = sameState ? persistedCheckpoint?.interaction : undefined;
     const expectedKind = 'options' in request ? 'choice' : 'approval';
     const canReuse =
       existing?.kind === expectedKind && (request.id === undefined || request.id === existing.id);
@@ -164,17 +184,16 @@ const createLangGraphTaskRuntime = (
           materializeTaskExecutionInteraction(ref, request, {
             id:
               request.id ??
-              (reuseClaimedResponseId ? persisted.checkpoint?.response?.interactionId : undefined),
+              (reuseClaimedResponseId ? persistedCheckpoint?.response?.interactionId : undefined),
           }),
         );
 
-    if (persisted.checkpoint?.response?.interactionId !== interaction.id) {
+    if (persistedCheckpoint?.response?.interactionId !== interaction.id) {
       await update(ref, {
-        checkpoint: {
-          version: 1,
-          state: cloneJson(state),
-          interaction,
-        },
+        checkpoint: withReplay(
+          { version: 1, state: cloneJson(state), interaction },
+          replayOf(persisted),
+        ),
       });
     }
     return interaction;
@@ -208,7 +227,9 @@ const createLangGraphTaskRuntime = (
       await prepareInteraction(ref, executionState, transition.interaction, false);
       return { executionState, done: false };
     }
-    await update(ref, { checkpoint: { version: 1, state: executionState } });
+    await update(ref, {
+      checkpoint: withReplay({ version: 1, state: executionState }, replayOf(source)),
+    });
     return { executionState, done: false };
   };
 
@@ -237,7 +258,7 @@ const createLangGraphTaskRuntime = (
         step.run({ input: state.input, state: state.executionState, context }),
       );
 
-      if (transition.kind === 'interaction') {
+      while (transition.kind === 'interaction') {
         if (!isTaskExecutionState(transition.state)) {
           throw invalidTaskDefinitionFailure(
             task.id,
@@ -278,18 +299,62 @@ const createLangGraphTaskRuntime = (
     result: undefined,
   });
 
+  const pendingProviderInteractionId = (
+    graphState: Awaited<ReturnType<LangGraphRunnable['getState']>>,
+  ) => {
+    const ids = graphState.tasks.flatMap(task =>
+      task.interrupts.flatMap(providerInterrupt => {
+        const value = providerInterrupt.value;
+        if (!value || typeof value !== 'object' || !('id' in value)) return [];
+        return typeof value.id === 'string' ? [value.id] : [];
+      }),
+    );
+    return ids.length === 1 ? ids[0] : undefined;
+  };
+
+  const expectedProviderInteractionId = (source: TaskRunSource) =>
+    source.checkpoint?.interaction?.id ?? source.checkpoint?.response?.interactionId;
+
   const providerStateMatches = (
-    providerState: Partial<LangGraphExecutionState>,
+    graphState: Awaited<ReturnType<LangGraphRunnable['getState']>>,
     source: TaskRunSource,
-  ) =>
-    providerState.taskId === source.taskId &&
-    providerState.runId === source.runId &&
-    JSON.stringify(providerState.executionState) === JSON.stringify(source.checkpoint?.state);
+  ) => {
+    const expectedInteractionId = expectedProviderInteractionId(source);
+    const providerInteractionId = pendingProviderInteractionId(graphState);
+    return (
+      graphState.values.taskId === source.taskId &&
+      graphState.values.runId === source.runId &&
+      JSON.stringify(graphState.values.executionState) ===
+        JSON.stringify(source.checkpoint?.state) &&
+      providerInteractionId === expectedInteractionId
+    );
+  };
 
   const rebuildProviderThread = async (graph: LangGraphRunnable, source: TaskRunSource) => {
     await checkpointer.getTuple(graphConfig(source));
     await checkpointer.deleteThread(threadIdOf(source));
-    return graph.invoke(initialGraphState(source), graphConfig(source));
+    const config = graphConfig(source);
+    const replay = replayOf(source);
+    const replaySource =
+      replay.length > 0
+        ? {
+            ...source,
+            checkpoint: { version: 1 as const, state: replay[0]!.state },
+          }
+        : source;
+    let result = await graph.invoke(initialGraphState(replaySource), config);
+    for (const entry of replay) {
+      const graphState = await graph.getState(config);
+      if (pendingProviderInteractionId(graphState) !== entry.response.interactionId) {
+        throw invalidTaskDefinitionFailure(
+          source.taskId,
+          'LangGraph replay did not reproduce the expected pending interaction.',
+          { interactionId: entry.response.interactionId },
+        );
+      }
+      result = await graph.invoke(new Command({ resume: cloneJson(entry.response) }), config);
+    }
+    return result;
   };
 
   const invocationFor = async (graph: LangGraphRunnable, source: TaskRunSource, fresh: boolean) => {
@@ -297,9 +362,9 @@ const createLangGraphTaskRuntime = (
     if (fresh) return rebuildProviderThread(graph, source);
 
     const graphState = await graph.getState(config);
-    const providerMatches = providerStateMatches(graphState.values, source);
+    const providerMatches = providerStateMatches(graphState, source);
     if (source.checkpoint?.response) {
-      if (!providerMatches) await rebuildProviderThread(graph, source);
+      if (!providerMatches) return rebuildProviderThread(graph, source);
       return graph.invoke(new Command({ resume: cloneJson(source.checkpoint.response) }), config);
     }
     return providerMatches ? graph.invoke(null, config) : rebuildProviderThread(graph, source);
@@ -466,11 +531,20 @@ const createLangGraphTaskRuntime = (
           return yield* Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
         }
         yield* validateTaskInteractionResponse(ref, checkpoint.interaction, response);
-        const nextCheckpoint = {
-          version: 1 as const,
-          state: checkpoint.state,
-          response: cloneJson(response),
-        };
+        const nextCheckpoint = withReplay(
+          {
+            version: 1 as const,
+            state: checkpoint.state,
+            response: cloneJson(response),
+          },
+          [
+            ...replayOf(source),
+            {
+              state: cloneJson(checkpoint.state) as TaskExecutionState,
+              response: cloneJson(response),
+            },
+          ],
+        );
         const snapshot = yield* storage.claimInteraction(
           ref,
           response.interactionId,

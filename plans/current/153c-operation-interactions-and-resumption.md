@@ -895,9 +895,10 @@ authority state. LangGraph owns an internal thread and provider checkpoint used 
 creates a deliberate dual-persistence boundary: the two stores are not transactionally committed
 together, so recovery must reconcile from the claimed Ontahí checkpoint. That is implementation
 evidence for the adapter contract, not a reason to expose LangGraph concepts publicly. The adapter
-now discards and rebuilds a missing or stale provider thread from the Ontahí checkpoint, including
-recreating an interrupt before resuming an already claimed response. Effects within replayed steps
-still need their own idempotency boundary.
+now compares pending interrupt identity as well as execution state, and keeps the claimed response
+trail in its private execution checkpoint. It can therefore discard and rebuild a missing or stale
+provider thread through consecutive interactions before resuming the current response. Effects
+within replayed steps still need their own idempotency boundary.
 
 ## Acceptance And Research Closure
 
