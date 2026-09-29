@@ -161,6 +161,178 @@ describe('tasks', () => {
     expect(visited).toEqual(['choose', 'choose', 'approve', 'approve', 'finish']);
   });
 
+  it('fails explicit execution when its initial state is not a valid checkpoint', async () => {
+    const task = defineTask({
+      id: 'demo.invalid-initial-state',
+      execution: defineTaskExecution({
+        initial: () => ({ step: '' }),
+        steps: {},
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const run = await Effect.runPromise(
+      startTask(
+        runtime,
+        task,
+        {},
+        { trigger: createSystemTaskTrigger(), runId: 'invalid-initial' },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'task_definition_invalid' },
+      });
+    });
+  });
+
+  it('fails explicit execution when the checkpoint names an unknown step', async () => {
+    const task = defineTask({
+      id: 'demo.unknown-execution-step',
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'missing' }),
+        steps: {},
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const run = await Effect.runPromise(
+      startTask(runtime, task, {}, { trigger: createSystemTaskTrigger(), runId: 'unknown-step' }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'task_step_not_found' },
+      });
+    });
+  });
+
+  it('fails explicit execution when a step returns a non-JSON checkpoint', async () => {
+    const task = defineTask({
+      id: 'demo.invalid-transition-state',
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'start' }),
+        steps: {
+          start: defineTaskExecutionStep({
+            run: () =>
+              Effect.succeed({
+                kind: 'continue',
+                state: { step: 'finish', invalid: undefined },
+              } as never),
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const run = await Effect.runPromise(
+      startTask(runtime, task, {}, { trigger: createSystemTaskTrigger(), runId: 'invalid-state' }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'task_definition_invalid' },
+      });
+    });
+  });
+
+  it('keeps an explicit interaction pending after mismatched and invalid responses', async () => {
+    const task = defineTask({
+      id: 'demo.explicit-interaction-validation',
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'choose' }),
+        steps: {
+          choose: defineTaskExecutionStep({
+            run: ({ state, response }) =>
+              Effect.succeed(
+                response && 'optionId' in response
+                  ? { kind: 'complete', result: { selected: response.optionId } }
+                  : {
+                      kind: 'interaction',
+                      state,
+                      interaction: {
+                        id: 'choose-item',
+                        prompt: 'Which item?',
+                        options: [{ id: 'one', label: 'One', value: 'one' }],
+                      },
+                    },
+              ),
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const run = await Effect.runPromise(
+      startTask(
+        runtime,
+        task,
+        {},
+        { trigger: { cause: 'system', actor: { kind: 'system' } }, runId: 'responses' },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        interaction: { id: 'choose-item', kind: 'choice' },
+      });
+    });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            runtime,
+            run,
+            { interactionId: 'another-interaction', optionId: 'one' },
+            { actor: { kind: 'system' } },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'task_interaction_mismatch' });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            runtime,
+            run,
+            { interactionId: 'choose-item', decision: 'approve' },
+            { actor: { kind: 'system' } },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction_response' });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          respondToTaskInteraction(
+            runtime,
+            run,
+            { interactionId: 'choose-item', optionId: 'missing' },
+            { actor: { kind: 'system' } },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction_response' });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        runtime,
+        run,
+        { interactionId: 'choose-item', optionId: 'one' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { selected: 'one' },
+      });
+    });
+  });
+
   it('projects a complete durable operation lifecycle into a task definition', () => {
     const InputSchema = value('ImportInput', { source: field.string() });
     const ProgressSchema = value('ImportProgress', { percent: field.number() });
