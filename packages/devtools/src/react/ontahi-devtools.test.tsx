@@ -109,10 +109,12 @@ describe('OntahiDevtools', () => {
 
       const requestDetail = screen.getByRole('region', { name: 'Request detail' });
       fireEvent.click(within(requestDetail).getByRole('button', { name: 'Body JSON' }));
-      expect(requestDetail.querySelector('pre')?.textContent).toContain('"kind": "graph-read"');
+      expect(requestDetail.querySelector('[role="tree"]')?.textContent).toContain(
+        '"kind":"graph-read"',
+      );
       fireEvent.click(within(requestDetail).getByRole('button', { name: 'Envelope' }));
-      expect(requestDetail.querySelector('pre')?.textContent).toContain(
-        '"protocol": "ontahi.runtime"',
+      expect(requestDetail.querySelector('[role="tree"]')?.textContent).toContain(
+        '"protocol":"ontahi.runtime"',
       );
 
       const writeText = vi.fn().mockResolvedValue(undefined);
@@ -591,9 +593,11 @@ describe('OntahiDevtools', () => {
       expect(screen.getAllByText('2 updates').length).toBeGreaterThan(0);
       expect(screen.getByText('running · Updating todos')).toBeTruthy();
       expect(screen.getByText('completed · updating')).toBeTruthy();
-      expect(screen.getByText(/update #1 .* 50%/)).toBeTruthy();
+      expect(screen.getByText('update #1 · 50%')).toBeTruthy();
       expect(screen.getByText('run-1')).toBeTruthy();
-      expect(screen.getByRole('list', { name: 'Operation progress messages' })).toBeTruthy();
+      const timeline = within(screen.getByRole('list', { name: 'Operation progress messages' }));
+      expect(timeline.getAllByText('websocket')).toHaveLength(4);
+      expect(timeline.getAllByText(/^completed/)).toHaveLength(1);
     },
     uiTestTimeoutMs,
   );

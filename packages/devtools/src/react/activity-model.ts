@@ -50,25 +50,28 @@ export type OperationProgressState = {
   readonly title: string;
 };
 
+const interactionProgressState = (interaction: RecordValue): OperationProgressState | undefined => {
+  if (
+    interaction.kind === 'approval' &&
+    isRecord(interaction.proposal) &&
+    typeof interaction.proposal.summary === 'string'
+  )
+    return {
+      label: 'approval requested',
+      title: `Approval requested · ${interaction.proposal.summary}`,
+    };
+  if (interaction.kind === 'choice' && typeof interaction.prompt === 'string')
+    return { label: 'choice requested', title: `Choice requested · ${interaction.prompt}` };
+  return undefined;
+};
+
 export const operationProgressState = (
   activity: OperationProgressActivity,
 ): OperationProgressState => {
   const latest = activity.snapshots[activity.snapshots.length - 1]?.snapshot;
   if (latest && isRecord(latest.interaction)) {
-    const interaction = latest.interaction;
-    if (
-      interaction.kind === 'approval' &&
-      isRecord(interaction.proposal) &&
-      typeof interaction.proposal.summary === 'string'
-    ) {
-      return {
-        label: 'approval requested',
-        title: `Approval requested · ${interaction.proposal.summary}`,
-      };
-    }
-    if (interaction.kind === 'choice' && typeof interaction.prompt === 'string') {
-      return { label: 'choice requested', title: `Choice requested · ${interaction.prompt}` };
-    }
+    const state = interactionProgressState(latest.interaction);
+    if (state) return state;
   }
   if (latest?.progress) {
     const detail = latest.progress.message ?? latest.progress.phase;
@@ -76,6 +79,28 @@ export const operationProgressState = (
   }
   if (latest) return { label: latest.status, title: latest.status };
   return { label: 'operation progress', title: 'Progress stream opened' };
+};
+
+export const exchangeInteractionState = (
+  activity: ExchangeActivity,
+): (OperationProgressState & { readonly optionCount?: number }) | undefined => {
+  const body = activity.settled?.response?.body;
+  if (
+    !isRecord(body) ||
+    body.kind !== 'model-command-result' ||
+    !isRecord(body.result) ||
+    body.result.status !== 'pending' ||
+    !isRecord(body.result.interaction)
+  )
+    return undefined;
+  const state = interactionProgressState(body.result.interaction);
+  if (!state) return undefined;
+  return {
+    ...state,
+    ...(body.result.interaction.kind === 'choice' && Array.isArray(body.result.interaction.options)
+      ? { optionCount: body.result.interaction.options.length }
+      : {}),
+  };
 };
 
 export type ActivityEntry =
@@ -460,14 +485,24 @@ const exchangeTaskRun = (
   activity: ExchangeActivity,
 ): { readonly taskId: string; readonly runId: string } | undefined => {
   const body = activity.settled?.response?.body;
-  if (!isRecord(body) || body.kind !== 'invocation-result' || !isRecord(body.result)) {
-    return undefined;
+  if (!isRecord(body) || !isRecord(body.result)) return undefined;
+  if (body.kind === 'model-command-result' && body.result.status === 'pending') {
+    const run = body.result.run;
+    return isRecord(run) && typeof run.taskId === 'string' && typeof run.runId === 'string'
+      ? { taskId: run.taskId, runId: run.runId }
+      : undefined;
   }
+  if (body.kind !== 'invocation-result') return undefined;
   const value =
     body.result.ok === true && isRecord(body.result.value) ? body.result.value : undefined;
   return value && typeof value.taskId === 'string' && typeof value.runId === 'string'
     ? { taskId: value.taskId, runId: value.runId }
     : undefined;
+};
+
+const isSuccessfulDurableControlExchange = (activity: ExchangeActivity) => {
+  const event = activity.started ?? activity.settled;
+  return event?.family === 'durable.operation' && activity.settled?.outcome === 'success';
 };
 
 const correlateActivity = (
@@ -514,7 +549,7 @@ export const buildActivityEntries = (events: readonly OntahiDiagnosticEvent[]): 
         events.filter((event): event is ExchangeDiagnosticEvent =>
           event.kind.startsWith('exchange.'),
         ),
-      ),
+      ).filter(activity => !isSuccessfulDurableControlExchange(activity)),
       buildOperationProgressActivities(
         events.filter((event): event is ObservationDiagnosticEvent =>
           event.kind.startsWith('observation.'),

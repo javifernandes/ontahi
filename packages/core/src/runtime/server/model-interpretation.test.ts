@@ -72,6 +72,46 @@ describe('model operation interpretation', () => {
       reason: 'Which document?',
     });
   });
+  it('accepts validated choices for one canonical action', async () => {
+    const choice = {
+      status: 'choice',
+      prompt: 'Which document?',
+      options: [
+        {
+          id: 'doc-1',
+          label: 'Notes',
+          request: proposal({ documentId: 'doc-1', name: 'Notes' }).request,
+        },
+        {
+          id: 'doc-2',
+          label: 'Archive',
+          request: proposal({ documentId: 'doc-2', name: 'Notes' }).request,
+        },
+      ],
+    };
+    const choiceExposure: ModelOperationExposure = {
+      ...exposure,
+      validate: (_input, context) =>
+        context?.kind === 'choice-option' ? undefined : 'Choose a document.',
+    };
+
+    await expect(run(choice, { operations: [choiceExposure] })).resolves.toEqual(choice);
+  });
+  it('rejects a choice that mixes different actions', async () => {
+    const mixed = {
+      status: 'choice',
+      prompt: 'What next?',
+      options: [
+        { id: 'one', label: 'Rename', request: proposal().request },
+        {
+          id: 'two',
+          label: 'Read',
+          request: { version: 1, kind: 'graph-read', mode: 'count' },
+        },
+      ],
+    };
+    await expect(run(mixed)).rejects.toHaveProperty('code', 'model_output_invalid');
+  });
   it('presents operations before lower-level graph commands to the model', async () => {
     let modelRequest: ModelRequest | undefined;
     const command: ModelGraphCommandExposure = {

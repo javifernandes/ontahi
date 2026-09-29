@@ -1,7 +1,14 @@
-import { createRuntimeProtocolResponse } from '@ontahi/core/runtime/protocol';
+import {
+  createRuntimeProtocolResponse,
+  type RuntimeTransport,
+} from '@ontahi/core/runtime/protocol';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { createModelCommandSubmitter, submitModelCommand } from './model-commands.js';
+import {
+  createModelCommandResponder,
+  createModelCommandSubmitter,
+  submitModelCommand,
+} from './model-commands.js';
 
 afterEach(() => vi.unstubAllGlobals());
 it('accepts an informational answer from the HTTP runtime', async () => {
@@ -63,5 +70,141 @@ it('preserves an expected model command failure from the protocol family', async
   await expect(submit({ text: 'delete everything' })).resolves.toEqual({
     ok: false,
     message: 'Sign in first.',
+  });
+});
+
+it('responds through durable.operation and observes the model Task to completion', async () => {
+  const run = { taskId: 'ontahi.model-command', runId: 'run-1' };
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(envelope, {
+      version: 1,
+      kind: 'snapshot',
+      snapshot: {
+        ...run,
+        status: 'running',
+        updatedAt: '2026-09-29T00:00:00.000Z',
+      },
+    }),
+  );
+  const observe = vi.fn(async function* () {
+    yield {
+      ...run,
+      status: 'completed' as const,
+      updatedAt: '2026-09-29T00:00:01.000Z',
+      result: {
+        status: 'executed',
+        message: 'List renamed.',
+        request: { kind: 'invoke', operationId: 'TodoList.rename', input: { name: 'Today' } },
+      },
+    };
+  });
+  const respond = createModelCommandResponder({
+    request,
+    durableOperation: { observe },
+  } as unknown as RuntimeTransport);
+
+  await expect(
+    respond(run, { interactionId: 'approve-model-command', decision: 'approve' }),
+  ).resolves.toEqual({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: 'List renamed.',
+      request: { kind: 'invoke', operationId: 'TodoList.rename', input: { name: 'Today' } },
+    },
+  });
+  expect(request.mock.calls[0]![0]).toMatchObject({
+    family: 'durable.operation',
+    body: {
+      kind: 'respond',
+      run,
+      response: { interactionId: 'approve-model-command', decision: 'approve' },
+    },
+  });
+  expect(observe).toHaveBeenCalledWith(run);
+});
+
+it('returns a pending follow-up interaction directly from the durable response', async () => {
+  const run = { taskId: 'ontahi.model-command', runId: 'run-2' };
+  const interaction = {
+    id: 'approve-again',
+    kind: 'approval' as const,
+    prompt: 'Approve the revised proposal?',
+    proposal: { id: 'proposal-2', summary: 'Apply revision.', requests: [{ kind: 'revision' }] },
+    createdAt: '2026-09-29T00:00:00.000Z',
+  };
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(envelope, {
+      version: 1,
+      kind: 'snapshot',
+      snapshot: {
+        ...run,
+        status: 'running',
+        updatedAt: '2026-09-29T00:00:00.000Z',
+        interaction,
+      },
+    }),
+  );
+
+  await expect(
+    createModelCommandResponder({ request })(run, {
+      interactionId: 'approve-model-command',
+      decision: 'approve',
+    }),
+  ).resolves.toEqual({
+    ok: true,
+    value: { status: 'pending', message: interaction.prompt, run, interaction },
+  });
+});
+
+it('reports unavailable or exhausted durable observation', async () => {
+  const run = { taskId: 'ontahi.model-command', runId: 'run-3' };
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(envelope, {
+      version: 1,
+      kind: 'snapshot',
+      snapshot: {
+        ...run,
+        status: 'running',
+        updatedAt: '2026-09-29T00:00:00.000Z',
+      },
+    }),
+  );
+  const response = { interactionId: 'approve-model-command', decision: 'reject' as const };
+
+  await expect(createModelCommandResponder({ request })(run, response)).resolves.toMatchObject({
+    ok: false,
+    message: expect.stringContaining('cannot observe'),
+  });
+  await expect(
+    createModelCommandResponder({
+      request,
+      durableOperation: { observe: async function* () {} },
+    })(run, response),
+  ).resolves.toMatchObject({ ok: false, message: expect.stringContaining('ended') });
+});
+
+it('preserves expected durable protocol errors and legacy HTTP failures', async () => {
+  const run = { taskId: 'ontahi.model-command', runId: 'run-4' };
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(envelope, {
+      kind: 'protocol-error',
+      error: { code: 'access_denied', message: 'Approval denied.' },
+    }),
+  );
+  await expect(
+    createModelCommandResponder({ request })(run, {
+      interactionId: 'approve-model-command',
+      decision: 'approve',
+    }),
+  ).resolves.toEqual({ ok: false, message: 'Approval denied.' });
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ json: async () => ({ ok: false, message: 'Model unavailable.' }) })),
+  );
+  await expect(submitModelCommand({ text: 'rename list' })).resolves.toEqual({
+    ok: false,
+    message: 'Model unavailable.',
   });
 });

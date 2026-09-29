@@ -366,7 +366,7 @@ export const styles: Record<string, CSSProperties> = {
   },
   messageSummary: {
     display: 'grid',
-    gridTemplateColumns: '24px 8px minmax(0, 1fr) auto',
+    gridTemplateColumns: '24px 8px minmax(0, 1fr) 224px',
     gap: 9,
     alignItems: 'center',
     padding: '10px 11px',
@@ -379,7 +379,6 @@ export const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     fontWeight: 800,
   },
-  messageMain: { display: 'grid', minWidth: 0, gap: 3 },
   messageTitle: {
     overflow: 'hidden',
     color: '#d8e9e0',
@@ -389,8 +388,29 @@ export const styles: Record<string, CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  messageMeta: { color: '#6f897c', fontSize: 9 },
+  messageMeta: {
+    display: 'grid',
+    gridTemplateColumns: '52px 72px minmax(0, 1fr)',
+    gap: 8,
+    alignItems: 'center',
+    color: '#6f897c',
+    fontSize: 9,
+    whiteSpace: 'nowrap',
+  },
   messagePayload: { padding: 12, borderTop: '1px solid #1f3128', background: '#09110d' },
+  exchangePayload: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gap: 12,
+  },
+  exchangePayloadColumn: {
+    minWidth: 0,
+    overflow: 'auto',
+    padding: 12,
+    border: '1px solid #1f3128',
+    borderRadius: 8,
+    background: '#0b1510',
+  },
   pre: {
     margin: 0,
     color: '#bcd4c7',

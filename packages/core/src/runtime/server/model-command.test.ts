@@ -98,6 +98,35 @@ it('derives descriptions and dispatches a canonical operation in the caller cont
   const request = f.generate.mock.calls[0]![0] as { context: string };
   expect(JSON.parse(request.context).operations[0].description).toBe('Rename a document.');
 });
+it('prepares a canonical proposal without dispatch and executes it against fresh scope', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({ ...f, provider: { generate: f.generate } });
+  const request = { text: 'rename to Notes' };
+  const signal = new AbortController().signal;
+
+  const prepared = await runtime.prepare(request, signal);
+  expect(prepared).toEqual({
+    status: 'proposed',
+    request: {
+      kind: 'invoke',
+      operationId: 'Document.rename',
+      input: { name: 'Notes' },
+    },
+  });
+  expect(f.run).not.toHaveBeenCalled();
+  expect(f.scope).toHaveBeenCalledOnce();
+  expect(f.authorize).toHaveBeenCalledOnce();
+  if (prepared.status !== 'proposed') throw new Error('Expected a proposal.');
+
+  await expect(runtime.execute(request, prepared.request, signal)).resolves.toEqual({
+    status: 'executed',
+    message: 'Operation completed.',
+    request: prepared.request,
+  });
+  expect(f.run).toHaveBeenCalledOnce();
+  expect(f.scope).toHaveBeenCalledTimes(2);
+  expect(f.authorize).toHaveBeenCalledTimes(2);
+});
 it('authorizes before disclosure and again before execution', async () => {
   const f = fixture();
   f.authorize.mockRejectedValueOnce(new Error('denied'));

@@ -294,6 +294,12 @@ export type TaskRunListItem = TaskSnapshot & {
 export type ModelCommandRequest = { text: string; language?: string; context?: unknown };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> =
   | {
+      status: 'pending';
+      message: string;
+      run: TaskRunIdentity;
+      interaction: TaskPendingInteraction;
+    }
+  | {
       status: 'executed';
       message: string;
       /** Canonical graph read, graph command, or operation invocation selected by the runtime. */

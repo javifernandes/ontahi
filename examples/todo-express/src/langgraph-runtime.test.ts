@@ -1,10 +1,16 @@
+import { createEntityRef, toGraphCommandRequest } from '@ontahi/core/data-graph';
+import {
+  createTaskBackedModelCommandRuntime,
+  withInvocationContext,
+} from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 process.env.TODO_AUTH_MODE = 'disabled';
 process.env.TODO_TASK_RUNTIME = 'langgraph';
 
-const { TodoApplication, TodoItem, todoTaskRuntime } = await import('./graph.js');
+const { TodoApplication, TodoItem, TodoList, todoTaskRuntime } = await import('./graph.js');
+const { createTodoModelRuntime } = await import('./command-chat/runtime.js');
 
 const getTodoDataset = () => {
   if (TodoApplication.storage.kind !== 'in-memory') {
@@ -140,5 +146,122 @@ describe('Todo LangGraph runtime', () => {
         completed: false,
       },
     ]);
+  });
+
+  it('resumes a model-produced choice through LangGraph without another model call', async () => {
+    getTodoDataset().TodoList = [
+      { id: 'list-1', name: 'Garage', color: '#f5ddd5' },
+      { id: 'list-2', name: 'Later', color: '#dbe8f4' },
+    ];
+    const invocation = (listId: string) => ({
+      kind: 'invoke' as const,
+      operationId: 'TodoItem.createItem',
+      input: {
+        id: 'buy-milk',
+        title: 'buy milk',
+        list: createEntityRef(TodoList, { id: listId }),
+      },
+    });
+    const generate = vi.fn(async () => ({
+      status: 'choice' as const,
+      prompt: 'Which list?',
+      options: [
+        { id: 'list-1', label: 'Garage', request: invocation('list-1') },
+        { id: 'list-2', label: 'Later', request: invocation('list-2') },
+      ],
+    }));
+    const prepared = createTodoModelRuntime({
+      application: TodoApplication,
+      provider: { generate },
+    });
+    const runtime = createTaskBackedModelCommandRuntime({
+      id: 'ontahi.model-command.choice-test',
+      runtime: prepared,
+      tasks: TodoApplication.app.task,
+    });
+
+    const pending = await withInvocationContext(
+      { principal: { kind: 'user', subject: 'local-test' } },
+      () => runtime.submit({ text: 'add item buy milk' }, new AbortController().signal),
+    );
+    expect(pending).toMatchObject({
+      status: 'pending',
+      interaction: { id: 'choose-model-command', kind: 'choice' },
+    });
+    if (pending.status !== 'pending') throw new Error('Expected model choice.');
+
+    await Effect.runPromise(
+      TodoApplication.app.task.respondToInteraction(
+        pending.run,
+        { interactionId: pending.interaction.id, optionId: 'list-2' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(pending.run)).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'executed', message: 'Item added.' },
+      });
+    });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(getTodoDataset().TodoItem?.at(-1)).toMatchObject({
+      id: 'buy-milk',
+      list: 'list-2',
+      title: 'buy milk',
+    });
+  });
+
+  it('applies an explicit model approval policy through LangGraph', async () => {
+    const generate = vi.fn(async () => ({
+      status: 'resolved' as const,
+      request: toGraphCommandRequest({
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'TodoList',
+        target: createEntityRef(TodoList, { id: 'list-1' }),
+        values: { name: 'Workshop' },
+        if: { name: 'Garage' },
+      }),
+    }));
+    const prepared = createTodoModelRuntime({
+      application: TodoApplication,
+      provider: { generate },
+    });
+    const runtime = createTaskBackedModelCommandRuntime({
+      id: 'ontahi.model-command.approval-test',
+      runtime: prepared,
+      tasks: TodoApplication.app.task,
+      approval: () => ({
+        prompt: 'Rename this list?',
+        summary: 'Rename Garage to Workshop.',
+      }),
+    });
+
+    const pending = await withInvocationContext(
+      { principal: { kind: 'user', subject: 'local-test' } },
+      () => runtime.submit({ text: 'rename Garage to Workshop' }, new AbortController().signal),
+    );
+    expect(pending).toMatchObject({
+      status: 'pending',
+      interaction: { id: 'approve-model-command', kind: 'approval' },
+    });
+    if (pending.status !== 'pending') throw new Error('Expected model approval.');
+    expect(getTodoDataset().TodoList![0]!.name).toBe('Garage');
+
+    await Effect.runPromise(
+      TodoApplication.app.task.respondToInteraction(
+        pending.run,
+        { interactionId: pending.interaction.id, decision: 'approve' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(TodoApplication.getTaskSnapshot(pending.run)).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'executed', message: 'List renamed.' },
+      });
+    });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(getTodoDataset().TodoList![0]!.name).toBe('Workshop');
   });
 });

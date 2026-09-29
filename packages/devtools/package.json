@@ -51,7 +51,8 @@
     "@codemirror/view": "^6.0.0",
     "@ontahi/core": "workspace:*",
     "@ontahi/language": "workspace:*",
-    "@ontahi/language-codemirror": "workspace:*"
+    "@ontahi/language-codemirror": "workspace:*",
+    "react-json-view-lite": "^2.5.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

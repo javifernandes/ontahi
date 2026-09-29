@@ -923,10 +923,11 @@ within replayed steps still need their own idempotency boundary.
       general execution-run lifecycle from which durable tasks are projected.
 - [ ] Decide the first Interaction storage/protocol contract only after the experiment.
 
-Implementation continues in three explicit subplans: 153d owns the immediate LangGraph comparison,
-153e preserves the Vercel Workflow interaction/resume gap as the next adapter milestone, and 153f
-holds the later queue-backed runtime research including leases, checkpoint revisions, and duplicate
-delivery.
+Implementation continues in three explicit subplans. The completed 153d LangGraph comparison now
+feeds a Model Support consumer checkpoint in plan 153: model interpretation must pause a canonical
+effect proposal and resume it through the same Task and Interaction contracts. After that path is
+validated locally, 153e resumes the Vercel Workflow interaction gap. Plan 153f holds later
+queue-backed runtime research including leases, checkpoint revisions, and duplicate delivery.
 
 The research remains open until the comparison experiment resolves the lifecycle boundary. It
 already rejects two directions: making `model.command` the universal conversation protocol, and

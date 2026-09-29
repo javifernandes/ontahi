@@ -14,6 +14,7 @@ import {
   type OperationInvokeRequest,
 } from '../operation-invocation.js';
 
+import { isTaskRunIdentity, parseTaskPendingInteraction } from './durable-operation.js';
 import { defineRuntimeProtocolFamily } from './registry.js';
 
 export type ModelCommandProtocolRequestV1 = {
@@ -53,7 +54,7 @@ export type ModelCommandProtocolResponseParseResult =
 
 const requestKeys = new Set(['version', 'kind', 'text', 'language', 'context']);
 const responseKeys = new Set(['version', 'kind', 'result', 'error']);
-const resultKeys = new Set(['status', 'message', 'request', 'response']);
+const resultKeys = new Set(['status', 'message', 'request', 'response', 'run', 'interaction']);
 const errorKeys = new Set(['code', 'message']);
 const readResponseKeys = new Set(['kind', 'value', 'capabilities']);
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) =>
@@ -188,7 +189,9 @@ export const parseModelCommandProtocolResponse = (
     if (
       (value.result.status === 'answered' || value.result.status === 'unresolved') &&
       value.result.request === undefined &&
-      value.result.response === undefined
+      value.result.response === undefined &&
+      value.result.run === undefined &&
+      value.result.interaction === undefined
     )
       return {
         success: true,
@@ -198,7 +201,11 @@ export const parseModelCommandProtocolResponse = (
           result: { status: value.result.status, message: value.result.message },
         },
       };
-    if (value.result.status === 'executed') {
+    if (
+      value.result.status === 'executed' &&
+      value.result.run === undefined &&
+      value.result.interaction === undefined
+    ) {
       const request = parseModelCommandCanonicalRequest(value.result.request);
       const response =
         request?.kind === 'graph-read'
@@ -219,6 +226,28 @@ export const parseModelCommandProtocolResponse = (
               message: value.result.message,
               request,
               ...(response === undefined ? {} : { response }),
+            },
+          },
+        };
+    }
+    if (
+      value.result.status === 'pending' &&
+      value.result.request === undefined &&
+      value.result.response === undefined &&
+      isTaskRunIdentity(value.result.run)
+    ) {
+      const interaction = parseTaskPendingInteraction(value.result.interaction);
+      if (interaction)
+        return {
+          success: true,
+          response: {
+            version: 1,
+            kind: 'model-command-result',
+            result: {
+              status: 'pending',
+              message: value.result.message,
+              run: { taskId: value.result.run.taskId, runId: value.result.run.runId },
+              interaction,
             },
           },
         };

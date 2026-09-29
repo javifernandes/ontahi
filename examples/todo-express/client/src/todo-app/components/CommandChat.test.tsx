@@ -82,6 +82,99 @@ it('shows an unresolved result without claiming an effect', async () => {
   expect(refresh).not.toHaveBeenCalled();
 });
 
+it('shows and resolves a durable model approval in the conversation', async () => {
+  const respond = vi.fn().mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: 'List renamed.',
+      request: { kind: 'invoke', operationId: 'TodoList.rename', input: { name: 'Today' } },
+    },
+  });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'Approve this operation?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-1' },
+      interaction: {
+        id: 'approve-model-command',
+        kind: 'approval',
+        prompt: 'Approve this operation?',
+        proposal: {
+          id: 'run-1:model-command',
+          summary: 'Rename Inbox to Today.',
+          requests: [{ kind: 'invoke', operationId: 'TodoList.rename', input: { name: 'Today' } }],
+        },
+        createdAt: '2026-09-29T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+  expect(container.textContent).toContain('Approve this operation?');
+  expect(container.textContent).toContain('Rename Inbox to Today.');
+  expect(refresh).not.toHaveBeenCalled();
+
+  await act(async () =>
+    (
+      container.querySelector('.command-chat-approval button:last-child') as HTMLButtonElement
+    ).click(),
+  );
+  expect(respond).toHaveBeenCalledWith(
+    { taskId: 'ontahi.model-command', runId: 'run-1' },
+    { interactionId: 'approve-model-command', decision: 'approve' },
+  );
+  expect(container.textContent).toContain('List renamed.');
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
+it('shows a model choice and continues with the selected option', async () => {
+  const respond = vi.fn().mockResolvedValue({
+    ok: true,
+    value: { status: 'executed', message: 'Item added.' },
+  });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'Which list?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-choice' },
+      interaction: {
+        id: 'choose-model-command',
+        kind: 'choice',
+        prompt: 'Which list?',
+        options: [
+          { id: 'inbox', label: 'Inbox' },
+          { id: 'later', label: 'Later' },
+        ],
+        createdAt: '2026-09-29T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+  expect(container.textContent).toContain('Which list?');
+  expect(container.querySelector('[aria-label="Choice required"]')).not.toBeNull();
+
+  const later = [...container.querySelectorAll('.command-chat-approval button')].find(
+    button => button.textContent === 'Later',
+  ) as HTMLButtonElement;
+  await act(async () => later.click());
+  expect(respond).toHaveBeenCalledWith(
+    { taskId: 'ontahi.model-command', runId: 'run-choice' },
+    { interactionId: 'choose-model-command', optionId: 'later' },
+  );
+  expect(container.textContent).toContain('Item added.');
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it('shows an executed read without refreshing mutation state', async () => {
   execute.mockResolvedValue({
     ok: true,

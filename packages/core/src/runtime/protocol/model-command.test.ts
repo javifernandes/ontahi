@@ -77,6 +77,49 @@ describe('Runtime Protocol model.command family', () => {
     expect(parseModelCommandProtocolResponse(error)).toEqual({ success: true, response: error });
   });
 
+  it('parses a pending durable interaction without weakening its canonical shape', () => {
+    const pending = {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'pending',
+        message: 'Approve this graph change?',
+        run: { taskId: 'ontahi.model-command', runId: 'run-1' },
+        interaction: {
+          id: 'approve-model-command',
+          kind: 'approval',
+          prompt: 'Approve this graph change?',
+          proposal: {
+            id: 'run-1:model-command',
+            summary: 'Execute the proposed graph change.',
+            requests: [
+              {
+                version: 1,
+                kind: 'graph-command',
+                command: {
+                  kind: 'entity-mutation-command',
+                  action: 'delete',
+                  entityName: 'TodoItem',
+                  target: {
+                    kind: 'entity-ref',
+                    entityName: 'TodoItem',
+                    locator: { id: 'todo-1' },
+                  },
+                },
+              },
+            ],
+          },
+          createdAt: '2026-09-29T00:00:00.000Z',
+        },
+      },
+    } as const;
+
+    expect(parseModelCommandProtocolResponse(pending)).toEqual({
+      success: true,
+      response: pending,
+    });
+  });
+
   it('returns the canonical parsed invocation without unknown transport fields', () => {
     expect(
       parseModelCommandProtocolResponse({
@@ -277,10 +320,30 @@ describe('Runtime Protocol model.command family', () => {
     {
       version: 1,
       kind: 'model-command-result',
+      result: {
+        status: 'executed',
+        message: 'Done',
+        request: { kind: 'invoke', operationId: 'Todo.help', input: {} },
+        run: { taskId: 'unexpected', runId: 'unexpected' },
+      },
+    },
+    {
+      version: 1,
+      kind: 'model-command-result',
       result: { status: 'answered', message: 'Done' },
       error: { code: 'unexpected', message: 'Extra variant payload' },
     },
     { version: 1, kind: 'model-command-result', result: { status: 'unknown', message: 'Done' } },
+    {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'pending',
+        message: 'Approve?',
+        run: { taskId: 'model-command', runId: 'run-1' },
+        interaction: { id: 'approve', kind: 'approval', prompt: 'Approve?' },
+      },
+    },
     { version: 1, kind: 'protocol-error', error: { message: 'Missing code' } },
   ])('rejects invalid family responses', response => {
     expect(parseModelCommandProtocolResponse(response)).toMatchObject({ success: false });

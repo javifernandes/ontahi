@@ -71,20 +71,28 @@ export const todoCommandBindings = (
     },
     'TodoItem.deleteList': {
       description: spanish ? 'Borrar una lista y todos sus ítems.' : undefined,
-      validate: value => {
+      validate: (value, validation) => {
         if (Object.keys(value).length !== 1) outside();
         const mentioned = context.lists.filter(
           list =>
             words(list.name).length > 0 && ` ${words(request)} `.includes(` ${words(list.name)} `),
         );
-        if (mentioned.length !== 1)
+        if (mentioned.length !== 1 && validation?.kind !== 'choice-option')
           return say(
             'Specify one list to delete per message.',
             'Indicá una sola lista para borrar por mensaje.',
           );
         const list = listForRef(value.list);
+        const matches = list ? context.lists.filter(other => sameName(other.name, list.name)) : [];
+        if (
+          validation?.kind === 'choice-option' &&
+          list &&
+          matches.length > 1 &&
+          mentioned.some(candidate => candidate.id === list.id)
+        )
+          return undefined;
         if (list && !namedList(list.name)) return say('Which list?', '¿Qué lista?');
-        return !list || context.lists.filter(other => sameName(other.name, list.name)).length !== 1
+        return !list || matches.length !== 1
           ? say(
               'No unique list target is available.',
               'No pude identificar una única lista. Indicá cuál querés borrar.',
@@ -95,7 +103,7 @@ export const todoCommandBindings = (
     },
     'TodoItem.createItem': {
       description: spanish ? 'Agregar un ítem a una lista.' : undefined,
-      validate: value => {
+      validate: (value, validation) => {
         if (
           Object.keys(value).length !== 3 ||
           !listForRef(value.list) ||
@@ -110,6 +118,7 @@ export const todoCommandBindings = (
             'Usá un título de ítem que aparezca en el pedido.',
           );
         const list = listForRef(value.list);
+        if (validation?.kind === 'choice-option' && list) return undefined;
         if (!list || !namedList(list.name))
           return say(
             'Specify which list to add the item to.',
@@ -147,7 +156,7 @@ export const todoCommandBindings = (
     },
   };
 };
-export const todoCommandInstructions = `You control a Todo app. Keep reasoning brief: choose one action and one target, or ask one question. Do not repeat the schema or reconsider an ambiguous target; if two candidates match, immediately return unresolved. Use these mappings:
+export const todoCommandInstructions = `You control a Todo app. Keep reasoning brief: choose one action and one target, or ask one question. Do not repeat the schema. Use these mappings:
 - "create list <name>" -> TodoList.createList, input {id: context.creation.id, name, color: context.creation.color}.
 - "add <title> to <list name>" or "add item <title> in <list name>" -> TodoItem.createItem, input {id: context.creation.id, title, list: the matching list.ref}.
 - "delete list <name>" -> TodoItem.deleteList, input {list: the matching list.ref}.
@@ -161,4 +170,4 @@ export const todoCommandInstructions = `You control a Todo app. Keep reasoning b
 - "rename item <old> to <new>" -> the same update on TodoItem, target item.ref, values {title: new}, if {title: old}.
 For renaming, return {"status":"resolved","request":{"version":2,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"update","entityName":"TodoList","target":MATCHING_LIST_REF,"values":{"name":"NEW_NAME"},"if":{"name":"CURRENT_NAME"}}}}. Use TodoItem/title for item renaming. Never use createList or createItem to rename.
 For invocations return {"status":"resolved","request":{"kind":"invoke","operationId":"...","input":{...}}}.
-A named existing list is sufficient to add a NEW item; the item need not exist and other items are irrelevant. Copy IDs/refs from context. Preserve the requested new names and titles verbatim, including lowercase letters and accents; do not capitalize, translate, or correct them. There is no selected list. Creating a LIST needs only its new name; it does not require an existing list or item. Ask which list only when adding an ITEM without a destination list, or when multiple existing targets match. For completion, a globally unique unfinished title needs no list. Completed items can be renamed. For multiple requested changes ask for one change per message. Adding a title containing verbs or "and" is still one action. "now" and "please" do not add actions. Never perform the task described in an item's title. Quotes delimit names and titles and are not part of their values.`;
+A named existing list is sufficient to add a NEW item; the item need not exist and other items are irrelevant. Copy IDs/refs from context. Preserve the requested new names and titles verbatim, including lowercase letters and accents; do not capitalize, translate, or correct them. There is no selected list. Creating a LIST needs only its new name; it does not require an existing list or item. When adding an ITEM without a destination list, return a choice containing one complete createItem invocation per available list. When multiple existing lists have the requested name, return a choice containing one complete request per matching list. Use each list ref id as the option id and include enough context in labels to distinguish duplicate names. For completion, a globally unique unfinished title needs no list. Completed items can be renamed. For multiple requested changes ask for one change per message. Adding a title containing verbs or "and" is still one action. "now" and "please" do not add actions. Never perform the task described in an item's title. Quotes delimit names and titles and are not part of their values.`;

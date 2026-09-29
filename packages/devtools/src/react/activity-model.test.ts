@@ -7,6 +7,7 @@ import {
   activityEntryOutcome,
   activityEntryTitle,
   buildActivityEntries,
+  exchangeInteractionState,
   formatSelectionExpression,
   graphCommandText,
   graphCommandSummary,
@@ -87,6 +88,55 @@ describe('Devtools activity model', () => {
     ).toEqual({
       label: 'choice requested',
       title: 'Choice requested · Which “Shopping” list should be emptied?',
+    });
+  });
+
+  it('projects a pending model response as its semantic interaction', () => {
+    const exchange = exchangeActivity(
+      { version: 1, kind: 'model-command', text: 'add item buy milk' },
+      'model.command',
+    );
+    const settled: ExchangeActivity = {
+      ...exchange,
+      settled: {
+        kind: 'exchange.settled',
+        exchangeId: 'exchange-1',
+        requestId: 'request-1',
+        family: 'model.command',
+        transportId: 'http',
+        transportKind: 'fetch',
+        startedAt: 1,
+        at: 2,
+        durationMs: 1,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'model.command',
+          body: {
+            kind: 'model-command-result',
+            result: {
+              status: 'pending',
+              message: 'Which list?',
+              interaction: {
+                kind: 'choice',
+                prompt: 'Which list?',
+                options: [
+                  { id: 'inbox', label: 'Inbox' },
+                  { id: 'later', label: 'Later' },
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    expect(exchangeInteractionState(settled)).toEqual({
+      label: 'choice requested',
+      title: 'Choice requested · Which list?',
+      optionCount: 2,
     });
   });
 
@@ -601,6 +651,121 @@ describe('Devtools activity model', () => {
     expect(activityEntryEvent(standaloneEntry)?.kind).toBe('observation.snapshot');
     expect(activityEntryOutcome(standaloneEntry)).toBe('pending');
     expect(activityEntryTitle(standaloneEntry)).toBe('Todo.other()');
+  });
+
+  it('projects a model approval lifecycle as one evolving semantic activity', () => {
+    const modelIdentity = {
+      exchangeId: 'ask-model',
+      requestId: 'ask-model',
+      family: 'model.command',
+      transportId: 'http',
+      transportKind: 'fetch',
+      startedAt: 10,
+    } as const;
+    const controlIdentity = {
+      exchangeId: 'approve-model',
+      requestId: 'approve-model',
+      family: 'durable.operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 30,
+    } as const;
+    const observationIdentity = {
+      observationId: 'model-run',
+      family: 'durable.operation.observe',
+      run: { taskId: 'ontahi.model-command', runId: 'run-1' },
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 21,
+    } as const;
+    const entries = buildActivityEntries([
+      {
+        ...modelIdentity,
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'model.command',
+          body: { kind: 'model-command', text: 'rename list Inbox to Today' },
+        },
+      },
+      {
+        ...modelIdentity,
+        kind: 'exchange.settled',
+        at: 20,
+        durationMs: 10,
+        outcome: 'success',
+        response: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'response',
+          family: 'model.command',
+          body: {
+            kind: 'model-command-result',
+            result: {
+              status: 'pending',
+              run: { taskId: 'ontahi.model-command', runId: 'run-1' },
+            },
+          },
+        },
+      },
+      {
+        ...controlIdentity,
+        kind: 'exchange.started',
+        at: 30,
+      },
+      {
+        ...controlIdentity,
+        kind: 'exchange.settled',
+        at: 31,
+        durationMs: 1,
+        outcome: 'success',
+      },
+      {
+        ...observationIdentity,
+        kind: 'observation.started',
+        at: 21,
+      },
+      {
+        ...observationIdentity,
+        kind: 'observation.snapshot',
+        at: 22,
+        sequence: 1,
+        snapshot: {
+          ...observationIdentity.run,
+          status: 'running',
+          updatedAt: '2026-09-29T00:00:00.000Z',
+        },
+      },
+      {
+        ...observationIdentity,
+        kind: 'observation.snapshot',
+        at: 32,
+        sequence: 2,
+        snapshot: {
+          ...observationIdentity.run,
+          status: 'completed',
+          updatedAt: '2026-09-29T00:00:01.000Z',
+        },
+      },
+      {
+        ...observationIdentity,
+        kind: 'observation.settled',
+        at: 33,
+        durationMs: 12,
+        outcome: 'completed',
+      },
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: 'exchange',
+      observation: { snapshots: [{ sequence: 1 }, { sequence: 2 }] },
+    });
+    expect(activityEntryTitle(entries[0]!)).toBe('Ask model · "rename list Inbox to Today"');
+    expect(activityEntryOutcome(entries[0]!)).toBe('completed');
   });
 
   it('maps outcomes and filters secondary metadata', () => {

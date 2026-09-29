@@ -81,8 +81,11 @@ has advanced to a second same-state interaction while the provider still exposes
 LangGraph is compatible as an implementation of Ontahí's Task Runtime boundary. It does not replace
 that boundary or define a second public Operation kind. The explicit step machine is the stable
 semantic contract; the native runtime and LangGraph are alternate execution adapters. This result
-supports implementing the same contract in Vercel Workflow next and evaluating a queue-backed
-adapter later.
+first supports consuming the same contract from Model Support: a model-produced choice checkpoints
+complete canonical alternatives and resumes the selected request without another model call;
+applications may separately require approval by policy. Once that consumer path is validated, the
+same evidence supports implementing the contract in Vercel Workflow. A queue-backed adapter remains
+later work.
 
 LangGraph provides useful checkpoint and interrupt machinery, but it does not remove Ontahí's need
 for Task Storage, authority, response claiming, Runtime Protocol, or application context

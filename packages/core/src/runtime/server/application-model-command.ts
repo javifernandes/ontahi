@@ -14,8 +14,8 @@ import type { OntahiApplication } from './application.js';
 import {
   createModelCommandRuntime,
   type CreateModelCommandRuntimeOptions,
-  type ModelCommandRuntime,
   type ModelCommandScope,
+  type PreparedModelCommandRuntime,
 } from './model-command.js';
 import type {
   GraphCommandableOntahiApplication,
@@ -56,7 +56,7 @@ export const createApplicationModelCommandRuntime = <TAuthority>({
   graph,
   scope,
   ...options
-}: CreateApplicationModelCommandRuntimeOptions<TAuthority>): ModelCommandRuntime => {
+}: CreateApplicationModelCommandRuntimeOptions<TAuthority>): PreparedModelCommandRuntime => {
   if (graph.readPolicies && !application.createGraphReadDispatcher)
     throw new Error('Model graph reads require a graph-readable Ontahi application.');
   if (graph.commandPolicies && !application.createGraphCommandDispatcher)

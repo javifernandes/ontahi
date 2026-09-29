@@ -12,6 +12,7 @@ import type { RuntimeDiagnosticOutcome } from '../diagnostics.js';
 
 import {
   formatClock,
+  exchangeInteractionState,
   operationProgressState,
   outcomeColor,
   semanticSummary,
@@ -34,30 +35,50 @@ const ActivityMessage = ({
   direction,
   outcome,
   title,
-  meta,
+  time,
+  transport,
+  detail,
   value,
   label,
+  response,
 }: {
   readonly direction: string;
   readonly outcome: RuntimeDiagnosticOutcome | 'pending';
   readonly title: string;
-  readonly meta: string;
+  readonly time: string;
+  readonly transport: string;
+  readonly detail?: string;
   readonly value: unknown;
   readonly label: string;
+  readonly response?: { readonly value: unknown; readonly label: string };
 }) => (
   <li style={styles.message}>
     <details>
       <summary style={styles.messageSummary}>
         <span style={styles.messageDirection}>{direction}</span>
         <span style={{ ...styles.dot, background: outcomeColor(outcome) }} aria-hidden='true' />
-        <span style={styles.messageMain}>
-          <span style={styles.messageTitle}>{title}</span>
-          <span style={styles.messageMeta}>{meta}</span>
+        <span style={styles.messageTitle}>{title}</span>
+        <span style={styles.messageMeta}>
+          <span>{time}</span>
+          <span>{transport}</span>
+          <span>{detail}</span>
         </span>
-        <span style={styles.family}>JSON</span>
       </summary>
       <div style={styles.messagePayload}>
-        <JsonView value={value} label={label} />
+        {response ? (
+          <div style={styles.exchangePayload}>
+            <section style={styles.exchangePayloadColumn} aria-label='Invocation request'>
+              <span style={styles.semanticLabel}>Request</span>
+              <JsonView value={value} label={label} />
+            </section>
+            <section style={styles.exchangePayloadColumn} aria-label='Invocation response'>
+              <span style={styles.semanticLabel}>Response</span>
+              <JsonView value={response.value} label={response.label} />
+            </section>
+          </div>
+        ) : (
+          <JsonView value={value} label={label} />
+        )}
       </div>
     </details>
   </li>
@@ -85,8 +106,12 @@ export const OperationProgressDetail = ({
   if (!event) return null;
   const outcome = activity.settled?.outcome ?? 'pending';
   const title = exchange ? semanticSummary(exchange) : `${event.run.taskId}()`;
+  const isModelCommand = (exchange?.started ?? exchange?.settled)?.family === 'model.command';
   const state = operationProgressState(activity);
+  const initialInteraction = exchange ? exchangeInteractionState(exchange) : undefined;
   const latestSnapshot = activity.snapshots[activity.snapshots.length - 1]?.snapshot;
+  const settlementDuplicatesLatestSnapshot =
+    activity.settled !== undefined && latestSnapshot?.status === activity.settled.outcome;
   let taskSnapshot: TaskSnapshot | undefined;
   if (latestSnapshot) {
     const parsed = parseDurableOperationProtocolResponse({
@@ -140,8 +165,10 @@ export const OperationProgressDetail = ({
       <div style={styles.runBody}>
         <div style={styles.runSummary}>
           <div style={styles.semanticCard}>
-            <span style={styles.semanticLabel}>Operation</span>
-            <span style={styles.semanticValue}>{event.run.taskId}()</span>
+            <span style={styles.semanticLabel}>{isModelCommand ? 'Execution' : 'Operation'}</span>
+            <span style={styles.semanticValue}>
+              {isModelCommand ? 'Model command' : `${event.run.taskId}()`}
+            </span>
           </div>
           <div style={styles.semanticCard}>
             <span style={styles.semanticLabel}>Run</span>
@@ -174,11 +201,22 @@ export const OperationProgressDetail = ({
           {exchange?.started ? (
             <ActivityMessage
               direction='→'
-              outcome={exchange.settled?.outcome ?? 'pending'}
-              title='invoke'
-              meta={`${formatClock(exchange.started.at)} · ${exchange.started.transportId}`}
-              value={{ request: exchange.started.request, response: exchange.settled?.response }}
-              label='Invocation JSON'
+              outcome={initialInteraction ? 'pending' : (exchange.settled?.outcome ?? 'pending')}
+              title={initialInteraction?.title ?? 'invoke'}
+              time={formatClock(exchange.started.at)}
+              transport={exchange.started.transportId}
+              detail={
+                initialInteraction?.optionCount === undefined
+                  ? undefined
+                  : `${initialInteraction.optionCount} options`
+              }
+              value={exchange.started.request}
+              label='Invocation request JSON'
+              response={
+                exchange.started.transportKind === 'fetch' && exchange.settled?.response
+                  ? { value: exchange.settled.response, label: 'Invocation response JSON' }
+                  : undefined
+              }
             />
           ) : null}
           {activity.started ? (
@@ -186,7 +224,8 @@ export const OperationProgressDetail = ({
               direction='←'
               outcome='pending'
               title='progress stream opened'
-              meta={`${formatClock(activity.started.at)} · ${activity.started.transportId}`}
+              time={formatClock(activity.started.at)}
+              transport={activity.started.transportId}
               value={activity.started}
               label='Progress start JSON'
             />
@@ -209,7 +248,9 @@ export const OperationProgressDetail = ({
                     ? snapshotState.title
                     : `${snapshot.snapshot.status}${detail ? ` · ${detail}` : ''}`
                 }
-                meta={`update #${snapshot.sequence} · ${formatClock(snapshot.at)}${
+                time={formatClock(snapshot.at)}
+                transport={snapshot.transportId}
+                detail={`update #${snapshot.sequence}${
                   typeof progress?.percent === 'number' ? ` · ${progress.percent}%` : ''
                 }`}
                 value={snapshot.snapshot}
@@ -217,12 +258,14 @@ export const OperationProgressDetail = ({
               />
             );
           })}
-          {activity.settled ? (
+          {activity.settled && !settlementDuplicatesLatestSnapshot ? (
             <ActivityMessage
               direction='—'
               outcome={activity.settled.outcome}
               title={activity.settled.outcome}
-              meta={`${formatClock(activity.settled.at)} · ${activity.settled.durationMs} ms`}
+              time={formatClock(activity.settled.at)}
+              transport={activity.settled.transportId}
+              detail={`${activity.settled.durationMs} ms`}
               value={activity.settled}
               label='Progress settlement JSON'
             />

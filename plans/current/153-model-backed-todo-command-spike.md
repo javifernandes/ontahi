@@ -85,6 +85,13 @@ follow-up work, not implied by a successful demo. Use disposable local Todo data
 Remote provider adapters, including a possible Vercel AI Gateway binding, follow evidence from the
 provider seam; this plan does not require another provider integration.
 
+Interactive effect review is now the next bounded slice. Interpretation may finish with a canonical
+Graph Command or Operation Invocation proposal that is checkpointed in an explicit Task execution
+before an approval Interaction. Graph Reads continue directly. The approved path reloads authorized
+scope, validates the saved proposal again, and dispatches it; rejection completes without effects.
+`model.command` only starts the natural-language request and returns the pending run, while the
+existing `durable.operation` family owns inspection, observation, and replies.
+
 ## Acceptance And Verification
 
 - [x] Both example commands work end to end against a real local model and update the Todo UI.
@@ -244,6 +251,24 @@ Bindings may supply an unresolved explanation; Todo uses it to ask for the list 
 
 Validation: 1,132 Core tests, 105 Todo tests, affected typecheck/lint/build, and twelve live Ollama
 cases passed. Port 3003 now serves the simplified composer with the existing board preserved.
+
+## Durable Model Choice And Optional Review
+
+Core separates model preparation from canonical execution and projects that boundary as an explicit
+Task state machine: interpret, optionally choose or review, and execute. Unambiguous Reads, Graph
+Commands, and Operation Invocations execute directly. When one argument is missing or ambiguous,
+the model may return a bounded typed choice whose options are complete canonical requests for the
+same action. The selected request is stored and resumption does not reinterpret the original text.
+Execution reauthorizes, reloads scope, and validates the request with the participant's selection as
+evidence. Approval remains available as an explicit host policy rather than a default for effects.
+
+The Todo chat renders choice or configured approval interactions and replies through
+`durable.operation`, then observes the same run until completion. The first natural choice proof is
+`add item <title>`: the model presents the visible lists and the selected list's canonical
+`createItem` invocation resumes the run. The Task definition is runtime-neutral and passes through
+both the native and LangGraph runtimes. This Model Support validation intentionally precedes the
+deferred Vercel Workflow interaction work in plan 153e; the queue-backed runtime remains later work
+in 153f.
 
 ## Informational responses and browser read-aloud
 

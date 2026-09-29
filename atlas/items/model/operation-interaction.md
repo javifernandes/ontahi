@@ -64,8 +64,13 @@ repeated failures. This reconnect behavior recovers observation only. Legacy fun
 still wait on process-local continuations, while explicit execution machines persist their current
 state and pending Interaction through Task Storage.
 
-The first Todo LLM spike returns a terminal unresolved result and requires a new explicit request.
-It supplies evidence for this direction without implementing conversational continuation.
+The Todo model-command path now consumes the same primitive for resumable clarification. Model
+interpretation may produce a typed choice only when every option is backed by disclosed context and
+contains a complete canonical request for the same action. The chat answers through
+`durable.operation`; the selected request is reauthorized and revalidated as a choice before
+dispatch, without another model call. Unambiguous effects execute directly. Approval is an optional
+host policy for effects that require explicit acceptance rather than a blanket consequence of using
+a model. This is a bounded clarification continuation, not conversational memory.
 
 A potential continuation can cross surfaces: a CLI asks for a list and the participant answers
 “this list” from the browser. The host's selected Entity Ref can inform resolution only through an

@@ -91,3 +91,13 @@ Core; Todo configures authorized context, exposed contracts and validators. Olla
 example-owned adapter. Simple provider-and-scope activation across arbitrary apps remains a design
 goal, not an established public convenience API. Graph instruction interpretation remains distinct
 from choosing a model as the implementation of a particular domain operation.
+
+The next checkpoint composes interpretation with [[ontahi.model.operation-interaction|Operation
+Interaction]]. Core prepares a canonical Read, Command, or Invocation. An unambiguous request
+executes directly. When one missing or ambiguous argument can be enumerated from disclosed context,
+the interpreter may return a typed choice whose options contain complete canonical requests. The
+selected request is checkpointed, reauthorized, revalidated with the participant's choice as
+evidence, and dispatched without another model call. Approval remains a separate opt-in host policy
+for effects that require review; it is not the default for every model-produced mutation.
+`model.command` starts this path, while `durable.operation` remains the shared inspection,
+observation, and response contract across chat and Devtools.

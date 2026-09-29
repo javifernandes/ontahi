@@ -50,4 +50,19 @@ describe('JsonView', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
     expect(screen.getByRole('button', { name: 'Copy diagnostic' }).textContent).toBe('Copy');
   });
+
+  it('collapses and expands nested JSON nodes', () => {
+    render(
+      <JsonView label='diagnostic' value={{ request: { body: { text: 'add item buy milk' } } }} />,
+    );
+
+    const collapseButtons = screen.getAllByRole('button', { name: 'Collapse JSON node' });
+    expect(screen.getByText('"add item buy milk"')).toBeTruthy();
+
+    fireEvent.click(collapseButtons[1]!);
+    expect(screen.queryByText('"add item buy milk"')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand JSON node' }));
+    expect(screen.getByText('"add item buy milk"')).toBeTruthy();
+  });
 });
