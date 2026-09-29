@@ -99,6 +99,24 @@ export const createInMemoryTaskStorage = (): TaskStorage => {
         runs.set(keyOf(ref), next);
         return toSnapshot(next);
       }),
+    claimInteraction: (ref, interactionId, checkpoint) =>
+      Effect.gen(function* () {
+        const key = keyOf(ref);
+        const current = runs.get(key);
+
+        if (!current) {
+          return yield* Effect.fail(missingTaskRunFailure(ref));
+        }
+        if (current.checkpoint?.interaction?.id !== interactionId) return undefined;
+
+        const next = {
+          ...current,
+          checkpoint,
+          updatedAt: now(),
+        } satisfies TaskRunSource;
+        runs.set(key, next);
+        return toSnapshot(next);
+      }),
     attachRuntimeRef: (ref, runtime) =>
       Effect.gen(function* () {
         const key = keyOf(ref);

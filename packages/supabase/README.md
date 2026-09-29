@@ -26,7 +26,9 @@ alter table task_runs add column if not exists checkpoint jsonb;
 
 Keeping the checkpoint in the same row as task status lets a new application process reconstruct a
 named-step execution after the browser or server disconnects. Task definitions remain application
-code and are registered again at startup; functions and runtime contexts are never serialized.
+code and are registered again at startup; functions and runtime contexts are never serialized. The
+adapter claims a pending interaction with a conditional row update, so concurrent responses cannot
+continue the same checkpoint twice.
 
 ## Contextual Selection reads
 

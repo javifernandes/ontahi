@@ -183,8 +183,10 @@ migration.
 process that started them. Explicit step executions persist a versioned JSON checkpoint, including
 pending interactions, through the configured `TaskStorage`. With persistent storage, a freshly
 started application can register the same Task definitions and resume an interaction response from
-that checkpoint. A step can be evaluated again after a crash, so side effects still need the same
-idempotency care as other retryable work.
+that checkpoint. Inspecting or observing a running execution also resumes a checkpoint that was
+persisted just before the previous process stopped. Interaction responses are claimed once through
+the task store before execution continues. A step can be evaluated again after a crash, so side
+effects still need the same idempotency care as other retryable work.
 
 A persistent executor and task store can carry the same lifecycle across retries, processes, and
 deployments. Ontahí's Vercel Workflow adapter is one such runtime. The host owns provider setup,

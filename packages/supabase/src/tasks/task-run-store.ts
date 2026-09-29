@@ -4,6 +4,7 @@ import {
   normalizeTaskTrigger,
   type TaskActor,
   type TaskFailure,
+  type TaskExecutionCheckpoint,
   type TaskRunCreateInput,
   type TaskRunIdentity,
   type TaskRunListItem,
@@ -49,6 +50,7 @@ type SupabaseTaskRunMutationQuery = {
   eq(column: string, value: unknown): SupabaseTaskRunMutationQuery;
   select(columns?: string): {
     single(): SupabaseQuery<TaskRunRow>;
+    maybeSingle(): SupabaseQuery<TaskRunRow>;
   };
 };
 
@@ -237,6 +239,27 @@ export const createSupabaseTaskStorage = ({
     return fromRow(result.data);
   };
 
+  const claimInteraction = async (
+    ref: TaskRunIdentity,
+    interactionId: string,
+    checkpoint: TaskExecutionCheckpoint,
+  ) => {
+    const current = fromRow(await loadRow(ref));
+    const result = await keyFilters(
+      client.from(tableName).update(toPatchRow(current, { checkpoint }, now())),
+      ref,
+    )
+      .eq('checkpoint->interaction->>id', interactionId)
+      .select('*')
+      .maybeSingle();
+
+    if (result.error) {
+      throw toPersistenceFailure('Failed to claim task interaction.', result.error);
+    }
+
+    return result.data ? fromRow(result.data) : undefined;
+  };
+
   return {
     create: input =>
       Effect.tryPromise({
@@ -268,6 +291,14 @@ export const createSupabaseTaskStorage = ({
     update: (ref, patch) =>
       Effect.tryPromise({
         try: async () => toSnapshot(await updateFromPatch(ref, patch)),
+        catch: toCaughtFailure,
+      }),
+    claimInteraction: (ref, interactionId, checkpoint) =>
+      Effect.tryPromise({
+        try: async () => {
+          const source = await claimInteraction(ref, interactionId, checkpoint);
+          return source ? toSnapshot(source) : undefined;
+        },
         catch: toCaughtFailure,
       }),
     attachRuntimeRef: (ref, runtime) =>

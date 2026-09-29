@@ -180,6 +180,7 @@ export const createInProcessTaskRuntime = ({
   const taskRuns = getInMemoryTaskRunProjection(storage);
   const pendingInteractions = getPendingInteractions(storage);
   const taskDefinitions = new Map<string, TaskDefinition<any, any>>();
+  const activeExplicitExecutions = new Set<string>();
   const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
   const withPendingInteraction = (snapshot: TaskSnapshot): TaskSnapshot => {
     const key = keyOf(snapshot);
@@ -344,6 +345,10 @@ export const createInProcessTaskRuntime = ({
     source: TaskRunSource,
     operationContext?: OperationRuntimeContext,
   ) => {
+    const executionKey = keyOf(ref);
+    if (activeExplicitExecutions.has(executionKey)) return false;
+    activeExplicitExecutions.add(executionKey);
+
     const definition = task.execution!;
     const context = createTaskContext(task, source);
     const background = Effect.gen(function* () {
@@ -414,11 +419,27 @@ export const createInProcessTaskRuntime = ({
           },
         });
       }),
+      Effect.ensuring(Effect.sync(() => activeExplicitExecutions.delete(executionKey))),
     );
 
     const run = () => Effect.runPromise(background).catch(error => onBackgroundError?.(error));
     if (operationContext) operationRuntimeContextStorage.run(operationContext, run);
     else void run();
+    return true;
+  };
+  const recoverExplicitExecution = (source: TaskRunSource) => {
+    const checkpoint = source.checkpoint;
+    const task = taskDefinitions.get(source.taskId);
+    if (source.status !== 'running' || !checkpoint || checkpoint.interaction || !task?.execution) {
+      return false;
+    }
+
+    return launchExplicitExecution(
+      source,
+      task,
+      source,
+      getOperationRuntimeContext() ?? createExecutionContext?.(source),
+    );
   };
 
   return {
@@ -503,9 +524,14 @@ export const createInProcessTaskRuntime = ({
         return toTaskRunRef(snapshot);
       }),
     getSnapshot: ref =>
-      storage
-        .getSnapshot(ref)
-        .pipe(Effect.map(withPendingInteraction), Effect.tap(taskRuns.publish)),
+      Effect.gen(function* () {
+        const source = yield* storage.loadSource(ref);
+        recoverExplicitExecution(source);
+        const snapshot = yield* storage.getSnapshot(ref);
+        const projected = withPendingInteraction(snapshot);
+        yield* taskRuns.publish(projected);
+        return projected;
+      }),
     listRecent: limit => storage.listRecent(limit),
     respondToInteraction: (
       ref,
@@ -523,6 +549,12 @@ export const createInProcessTaskRuntime = ({
 
         const key = keyOf(ref);
         const checkpoint = source.checkpoint;
+        if (checkpoint?.response?.interactionId === response.interactionId) {
+          recoverExplicitExecution(source);
+          const snapshot = yield* storage.getSnapshot(ref);
+          yield* taskRuns.publish(snapshot);
+          return snapshot;
+        }
         if (checkpoint?.interaction) {
           if (checkpoint.interaction.id !== response.interactionId) {
             return yield* Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
@@ -553,7 +585,17 @@ export const createInProcessTaskRuntime = ({
             state: checkpoint.state,
             response: cloneJson(response),
           };
-          const snapshot = yield* update(ref, { checkpoint: nextCheckpoint });
+          const snapshot = yield* storage.claimInteraction(
+            ref,
+            response.interactionId,
+            nextCheckpoint,
+          );
+          if (!snapshot) {
+            const latest = yield* storage.loadSource(ref);
+            recoverExplicitExecution(latest);
+            return yield* Effect.fail(taskInteractionNotPendingFailure(ref));
+          }
+          yield* taskRuns.publish(snapshot);
           launchExplicitExecution(
             ref,
             task,
@@ -588,13 +630,13 @@ export const createInProcessTaskRuntime = ({
       }),
     observe: ref =>
       Stream.unwrap(
-        storage
-          .getSnapshot(ref)
-          .pipe(
-            Effect.map(withPendingInteraction),
-            Effect.tap(taskRuns.publish),
-            Effect.as(taskRuns.observe(ref)),
-          ),
+        Effect.gen(function* () {
+          const source = yield* storage.loadSource(ref);
+          recoverExplicitExecution(source);
+          const snapshot = withPendingInteraction(yield* storage.getSnapshot(ref));
+          yield* taskRuns.publish(snapshot);
+          return taskRuns.observe(ref);
+        }),
       ),
   };
 };

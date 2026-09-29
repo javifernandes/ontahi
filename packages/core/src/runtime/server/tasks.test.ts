@@ -197,6 +197,164 @@ describe('tasks', () => {
     expect(resumedContexts).toEqual([true]);
   });
 
+  it('recovers a persisted runnable checkpoint when the run is inspected', async () => {
+    const storage = createInMemoryTaskStorage();
+    const ref = { taskId: 'demo.recover-checkpoint', runId: 'recover-run' };
+    await Effect.runPromise(
+      storage.create({ ...ref, input: {}, trigger: createSystemTaskTrigger() }),
+    );
+    await Effect.runPromise(
+      storage.update(ref, {
+        status: 'running',
+        checkpoint: {
+          version: 1,
+          state: { step: 'finish' },
+        },
+      }),
+    );
+    const task = defineTask({
+      id: ref.taskId,
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'finish' }),
+        steps: {
+          finish: defineTaskExecutionStep({
+            run: () => Effect.succeed({ kind: 'complete', result: 'recovered' }),
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage });
+    const { app } = architecture({ task: { runtime } });
+    app.task.defineForEntity({}, { recover: task });
+
+    await Effect.runPromise(getTaskSnapshot(runtime, ref));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, ref))).resolves.toMatchObject({
+        status: 'completed',
+        result: 'recovered',
+      });
+    });
+  });
+
+  it('recovers a claimed response when the client retries after a restart', async () => {
+    const storage = createInMemoryTaskStorage();
+    const ref = { taskId: 'demo.recover-response', runId: 'recover-response' };
+    const response = { interactionId: 'approve-recovery', decision: 'approve' as const };
+    await Effect.runPromise(
+      storage.create({
+        ...ref,
+        input: {},
+        trigger: { cause: 'system', actor: { kind: 'system' } },
+      }),
+    );
+    await Effect.runPromise(
+      storage.update(ref, {
+        status: 'running',
+        checkpoint: { version: 1, state: { step: 'finish' }, response },
+      }),
+    );
+    const task = defineTask({
+      id: ref.taskId,
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'finish' }),
+        steps: {
+          finish: defineTaskExecutionStep({
+            run: ({ response: persistedResponse }) =>
+              Effect.succeed({
+                kind: 'complete',
+                result:
+                  persistedResponse && 'decision' in persistedResponse
+                    ? persistedResponse.decision
+                    : 'missing',
+              }),
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage });
+    const { app } = architecture({ task: { runtime } });
+    app.task.defineForEntity({}, { recover: task });
+
+    const resumed = await Effect.runPromise(
+      respondToTaskInteraction(runtime, ref, response, { actor: { kind: 'system' } }),
+    );
+    expect(['running', 'completed']).toContain(resumed.status);
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, ref))).resolves.toMatchObject({
+        status: 'completed',
+        result: 'approve',
+      });
+    });
+  });
+
+  it('allows only one concurrent response to claim an explicit interaction', async () => {
+    let completions = 0;
+    const task = defineTask({
+      id: 'demo.single-use-interaction',
+      execution: defineTaskExecution({
+        initial: () => ({ step: 'approve' }),
+        steps: {
+          approve: defineTaskExecutionStep({
+            run: ({ state, response }) => {
+              if (response && 'decision' in response) {
+                completions += 1;
+                return Effect.succeed({ kind: 'complete', result: response.decision });
+              }
+              return Effect.succeed({
+                kind: 'interaction',
+                state,
+                interaction: {
+                  id: 'approve-once',
+                  prompt: 'Continue?',
+                  proposal: { id: 'once', summary: 'Continue.', requests: [{}] },
+                },
+              });
+            },
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy task run must not execute.'),
+    });
+    const runtime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const run = await Effect.runPromise(
+      startTask(
+        runtime,
+        task,
+        {},
+        {
+          runId: 'claim-once',
+          trigger: { cause: 'system', actor: { kind: 'system' } },
+        },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toHaveProperty(
+        'interaction.id',
+        'approve-once',
+      );
+    });
+
+    const response = { interactionId: 'approve-once', decision: 'approve' as const };
+    const context = { actor: { kind: 'system' as const } };
+    const results = await Promise.allSettled([
+      Effect.runPromise(respondToTaskInteraction(runtime, run, response, context)),
+      Effect.runPromise(respondToTaskInteraction(runtime, run, response, context)),
+    ]);
+
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: 'approve',
+      });
+    });
+    expect(completions).toBe(1);
+  });
+
   it('fails explicit execution when its initial state is not a valid checkpoint', async () => {
     const task = defineTask({
       id: 'demo.invalid-initial-state',

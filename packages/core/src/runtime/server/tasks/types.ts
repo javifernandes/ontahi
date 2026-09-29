@@ -6,6 +6,7 @@ import type {
   TaskActor,
   TaskApprovalInteractionResponse,
   TaskApprovalProposal,
+  TaskExecutionCheckpoint,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskRunListItem,
@@ -130,6 +131,11 @@ export type TaskStorageEngine = {
     ref: TaskRunIdentity,
     patch: Partial<TaskRunSource>,
   ): Effect.Effect<TaskSnapshot, TaskFailure>;
+  claimInteraction(
+    ref: TaskRunIdentity,
+    interactionId: string,
+    checkpoint: TaskExecutionCheckpoint,
+  ): Effect.Effect<TaskSnapshot | undefined, TaskFailure>;
 };
 
 export type TaskStorage = TaskStorageControl &

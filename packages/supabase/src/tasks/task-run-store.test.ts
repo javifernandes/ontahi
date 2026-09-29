@@ -95,8 +95,10 @@ class FakeSupabaseTable {
   }
 
   async maybeSingle() {
+    const current = this.findRow();
+    if (current && this.updateRow) Object.assign(current, this.updateRow);
     return {
-      data: this.findRow() ?? null,
+      data: current ?? null,
       error: null,
     };
   }
@@ -153,6 +155,43 @@ const createFakeSupabaseClient = (rows: FakeRow[] = []): SupabaseTaskStorageClie
 });
 
 describe('createSupabaseTaskStorage', () => {
+  it('atomically claims a pending interaction once', async () => {
+    const store = createSupabaseTaskStorage({ client: createFakeSupabaseClient() });
+    const ref = { taskId: 'demo.approve', runId: 'claim-once' };
+    await Effect.runPromise(store.create({ ...ref, trigger: { cause: 'system' } }));
+    await Effect.runPromise(
+      store.update(ref, {
+        status: 'running',
+        checkpoint: {
+          version: 1,
+          state: { step: 'approve' },
+          interaction: {
+            id: 'approval-1',
+            kind: 'approval',
+            prompt: 'Continue?',
+            proposal: { id: 'proposal-1', summary: 'Continue.', requests: [{}] },
+            createdAt: '2026-06-03T00:00:00.000Z',
+          },
+        },
+      }),
+    );
+    const resumed = {
+      version: 1 as const,
+      state: { step: 'approve' },
+      response: { interactionId: 'approval-1', decision: 'approve' as const },
+    };
+
+    await expect(
+      Effect.runPromise(store.claimInteraction(ref, 'approval-1', resumed)),
+    ).resolves.toMatchObject({ status: 'running', interaction: undefined });
+    await expect(
+      Effect.runPromise(store.claimInteraction(ref, 'approval-1', resumed)),
+    ).resolves.toBeUndefined();
+    await expect(Effect.runPromise(store.loadSource(ref))).resolves.toMatchObject({
+      checkpoint: resumed,
+    });
+  });
+
   it('creates, reads, updates, and loads task run sources', async () => {
     const store = createSupabaseTaskStorage({
       client: createFakeSupabaseClient(),
