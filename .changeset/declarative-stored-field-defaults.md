@@ -8,4 +8,6 @@ contracts through graph schemas, materialize receiver-owned values in Entity cre
 enforce required references across application mutation paths. Model graph-command validation now
 also distinguishes direct proposals from explicit choice options. Entity create, update, and delete
 outcomes can now drive declared post-commit Reactions, allowing structural mutations to retain
-external effects without boilerplate Domain Operations.
+external effects without boilerplate Domain Operations. Intrinsic Entity Reactions may be
+colocated in `entity({ reactions })`, while application-level declarations remain available for
+cross-Entity behavior.

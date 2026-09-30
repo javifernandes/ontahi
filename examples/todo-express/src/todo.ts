@@ -33,6 +33,12 @@ const entityDefaults = {
   layer: 'todos',
 } as const;
 
+export type TodoEvent = {
+  type: 'TodoListCreated';
+  listId: string;
+  name: string;
+};
+
 const todoListFields = {
   id: field.generated(field.id(), 'uuid'),
   name: field.nonEmptyString({
@@ -69,6 +75,16 @@ export const TodoList = entity({
     openItems: self.items.where(item => item.completed.eq(false)),
   }),
   display: { primary: 'name', search: ['name'] },
+  reactions: ({ created }) => [
+    created({ id: 'notify-todo-list-created', delivery: 'best-effort' }).emit(
+      outcome =>
+        ({
+          type: 'TodoListCreated',
+          listId: String(outcome.command.values.id),
+          name: String(outcome.command.values.name),
+        }) satisfies TodoEvent,
+    ),
+  ],
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commandsFor, operation, ingress }) => {
     const todoCommands = commandsFor(TodoItemCommandRef);

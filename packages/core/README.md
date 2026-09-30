@@ -606,10 +606,32 @@ callbacks or authority-dependent metadata. If the active runtime does not advert
 transactions, the effect fails with `DataGraphTransactionUnavailableError` before evaluating its
 work.
 
-## Applied Relationship outcomes and Reactions
+## Applied Mutation outcomes and Reactions
 
-An application may register declarative Reactions separately from Relation metadata. The factories
-derive the canonical relation identity from either endpoint and keep delivery policy visible:
+An Entity can colocate intrinsic lifecycle Reactions with its declaration. The authoring context is
+already scoped to that Entity, so the trigger does not repeat its identity:
+
+```ts
+const Book = entity({
+  name: 'Book',
+  fields: { id: field.id(), title: field.string() },
+  reactions: ({ created }) => [
+    created({ id: 'book.created', delivery: 'best-effort' }).emit(outcome => ({
+      type: 'BookCreated',
+      id: outcome.command.values.id,
+      title: outcome.command.values.title,
+    })),
+  ],
+});
+```
+
+Ontahí collects these declarations when the Entity is registered and evaluates them after the
+authoritative mutation succeeds. The composition root still binds the `emit-event` effector, so
+the model describes the event while the host chooses how to deliver it.
+
+Cross-Entity and application-level Reactions can remain in `ontahi({ reactions })`. Relationship
+factories derive the canonical relation identity from either endpoint and keep delivery policy
+visible:
 
 ```ts
 import { reaction } from '@ontahi/core/data-graph';

@@ -155,8 +155,9 @@ the caller.
 Core now authors Entity lifecycle reactions with
 `reaction.entity(Entity).created|updated|deleted(...)` and interprets them after the authoritative
 mutation succeeds, including transaction-aware post-commit deferral. Todo declares its list-created
-notification as a best-effort Entity reaction, preserving the external effect without a wrapper
-Operation.
+notification as a best-effort Reaction colocated in the `TodoList` declaration, preserving the
+external effect without a wrapper Operation. Application-level Reactions remain available for
+cross-Entity and host composition rules, and both forms share id validation and runtime execution.
 
 ## Acceptance
 

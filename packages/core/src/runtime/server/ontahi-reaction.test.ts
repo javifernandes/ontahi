@@ -16,7 +16,7 @@ import {
 
 import type { GraphCommandableOntahiApplication } from './ontahi.js';
 
-import { entity, layer, ontahi, relation } from './index.js';
+import { entity, entityModule, layer, ontahi, relation } from './index.js';
 
 const defineClassroom = () => {
   const CourseFields = {
@@ -58,11 +58,17 @@ const assertApplied: (
 
 describe('Ontahi Reaction registration', () => {
   it('runs an Entity create Reaction after the mutation is applied', async () => {
+    const events: unknown[] = [];
     const Book = entity({
       name: 'ReactionBook',
       fields: { id: field.id(), title: field.string() },
+      reactions: ({ created }) => [
+        created({ id: 'book-created', delivery: 'inline' }).emit(outcome => ({
+          type: 'BookCreated',
+          title: outcome.delta.created[0]?.values.title,
+        })),
+      ],
     });
-    const events: unknown[] = [];
     const application = ontahi({
       storage: createInMemoryDataGraphStorage({ dataset: { ReactionBook: [] } }),
       capabilities: {
@@ -77,9 +83,9 @@ describe('Ontahi Reaction registration', () => {
       reactions: () => [
         reaction
           .entity(Book)
-          .created({ id: 'book-created', delivery: 'inline' })
+          .created({ id: 'audit-book-created', delivery: 'inline' })
           .emit(outcome => ({
-            type: 'BookCreated',
+            type: 'BookCreatedAudit',
             title: outcome.delta.created[0]?.values.title,
           })),
       ],
@@ -109,8 +115,59 @@ describe('Ontahi Reaction registration', () => {
         deleted: [],
       },
     });
-    expect(events).toEqual([{ type: 'BookCreated', title: 'Ontahi' }]);
+    expect(events).toEqual([
+      { type: 'BookCreated', title: 'Ontahi' },
+      { type: 'BookCreatedAudit', title: 'Ontahi' },
+    ]);
     expect(application.storage.dataset.ReactionBook).toEqual([{ id: 'book-1', title: 'Ontahi' }]);
+  });
+
+  it('registers colocated Entity Reactions with a deferred Entity', async () => {
+    const events: unknown[] = [];
+    const Note = entity({
+      name: 'DeferredReactionNote',
+      fields: { id: field.id(), text: field.string() },
+      reactions: ({ created }) => [
+        created({ id: 'deferred-note-created', delivery: 'inline' }).emit(outcome => ({
+          type: 'NoteCreated',
+          text: outcome.command.values.text,
+        })),
+      ],
+    });
+    const DeferredNote = entityModule({
+      entity: Note,
+      bind: app => app.graph.defineEntity(Note),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [],
+    });
+
+    application.registerEntity(DeferredNote);
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      {
+        entity: Note,
+        scope: 'all',
+        actions: { create: { fields: ['id', 'text'], result: ['id', 'text'] } },
+      },
+    ]);
+
+    await dispatch(
+      toGraphCommandRequest(mutateEntity(Note).create({ id: 'note-1', text: 'Registered later' })),
+      { authority: undefined },
+    );
+
+    expect(events).toEqual([{ type: 'NoteCreated', text: 'Registered later' }]);
   });
 
   it('runs an ordered move Reaction and an ordered follow-up through the contextual runtime', async () => {

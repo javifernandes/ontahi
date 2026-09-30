@@ -38,7 +38,7 @@ type EntityReactionBuilder<TAction extends EntityMutationAction> = {
   ) => MutationReaction;
   emit: EntityEventAuthoring<TAction>;
 };
-type EntityReactionAuthoring = {
+export type EntityReactionAuthoring = {
   created: (config: ReactionConfig) => EntityReactionBuilder<'create'>;
   updated: (config: ReactionConfig) => EntityReactionBuilder<'update'>;
   deleted: (config: ReactionConfig) => EntityReactionBuilder<'delete'>;

@@ -36,6 +36,9 @@ import {
   type RuntimeBoundSelectionEntity,
   type RuntimeBoundEntityRefRelationshipCommands,
   type RelationshipDelta,
+  reaction,
+  type EntityReactionAuthoring,
+  type MutationReaction,
   selection,
   type SelectionBuilder,
   withContextualSelections,
@@ -571,6 +574,7 @@ export type OntahiEntityConfig<
   selections?: (context: {
     self: EntitySelectionContext<EntitySchemaFromConfig<TName, TFields, TLocators, TRelations>>;
   }) => TSelections;
+  reactions?: (context: EntityReactionAuthoring) => readonly MutationReaction[];
   domainOperationDefaults?: DomainOperationDefaults;
   values?: TValues;
   uses?: OntahiEntityUses<TCapabilities, TEntities>;
@@ -737,6 +741,7 @@ type OntahiBindableDeclaration<
   readonly [ONTAHI_ENTITY_DECLARATION]: {
     prepare(): void;
     semanticEntities(): readonly AnyEntityDefinition[];
+    reactions(): readonly MutationReaction[];
     resolveReferences(entities: ReadonlyMap<string, AnyEntityDefinition>): void;
     bind(app: OntahiApplicationBuilder<TCapabilities>, context: OntahiEntityBindingContext): object;
   };
@@ -755,6 +760,7 @@ export type OntahiEntityModule<
   readonly [ONTAHI_ENTITY_DECLARATION]: {
     prepare(): void;
     semanticEntities(): readonly AnyEntityDefinition[];
+    reactions(): readonly MutationReaction[];
     resolveReferences(entities: ReadonlyMap<string, AnyEntityDefinition>): void;
     bind(
       app: OntahiApplicationBuilder<TCapabilities>,
@@ -835,6 +841,9 @@ export const resolveOntahiEntityReferences = (
 export const getOntahiSemanticEntities = (declaration: AnyOntahiEntityDeclaration) =>
   declaration[ONTAHI_ENTITY_DECLARATION].semanticEntities();
 
+export const getOntahiEntityReactions = (declaration: AnyOntahiEntityDeclaration) =>
+  declaration[ONTAHI_ENTITY_DECLARATION].reactions();
+
 export const entityModule = <
   TEntity extends AnyEntityDefinition,
   TBoundEntity extends object,
@@ -860,6 +869,7 @@ export const entityModule = <
         options.prepare?.();
       },
       semanticEntities: () => [options.entity],
+      reactions: () => existingDeclaration?.reactions() ?? [],
       resolveReferences: (entities: ReadonlyMap<string, AnyEntityDefinition>) =>
         existingDeclaration?.resolveReferences(entities),
       bind: options.bind as (
@@ -916,6 +926,7 @@ export const relationModule = <
     value: {
       prepare: options.prepare ?? (() => undefined),
       semanticEntities: () => [],
+      reactions: () => [],
       resolveReferences: () => undefined,
       bind: options.bind as (
         app: OntahiApplicationBuilder,
@@ -1111,6 +1122,7 @@ const defineOntahiEntity = <
     value: {
       prepare: () => undefined,
       semanticEntities: () => [schema],
+      reactions: () => config.reactions?.(reaction.entity(schema)) ?? [],
       resolveReferences,
       bind(app: OntahiApplicationBuilder, context: OntahiEntityBindingContext) {
         if (!referencesResolved) {

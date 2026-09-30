@@ -48,6 +48,7 @@ import { DATA_GRAPH_RUNTIME_RESOURCE_KEY } from './data-graph.js';
 import { createTaskDefinitionFromDurableDomainOperation } from './domain-operations.js';
 import {
   bindOntahiEntity,
+  getOntahiEntityReactions,
   getOntahiSemanticEntities,
   isOntahiEntityDeclaration,
   prepareOntahiEntity,
@@ -480,8 +481,12 @@ export const ontahi = <
     materializeDerivedFieldDefinitions(semanticDeclarations, options.derivedFields);
     options.storage.bindEntities?.(semanticDeclarations);
   }
-  const declaredReactions =
+  const applicationReactions =
     typeof options.reactions === 'function' ? options.reactions() : (options.reactions ?? []);
+  const declaredReactions = [
+    ...(Array.isArray(declaredEntities) ? declaredEntities.flatMap(getOntahiEntityReactions) : []),
+    ...applicationReactions,
+  ];
   assertMutationReactionConfiguration(declaredReactions);
   registeredReactions = declaredReactions.map(declaration => ({
     id: declaration.id,
@@ -543,6 +548,8 @@ export const ontahi = <
       throw new Error(`Entity ${declaration.name} is already registered.`);
     }
     prepareOntahiEntity(declaration);
+    const nextReactions = getOntahiEntityReactions(declaration);
+    assertMutationReactionConfiguration([...registeredReactions, ...nextReactions]);
     const nextSemanticEntities = getOntahiSemanticEntities(declaration);
     nextSemanticEntities.forEach(entity => {
       const existing = semanticEntitiesByName.get(entity.name);
@@ -552,6 +559,7 @@ export const ontahi = <
       semanticEntitiesByName.set(entity.name, entity);
     });
     resolveOntahiEntityReferences(declaration, semanticEntitiesByName);
+    registeredReactions = [...registeredReactions, ...nextReactions];
     materializeDerivedFieldDefinitions(nextSemanticEntities);
     semanticEntities.push(...nextSemanticEntities);
     options.storage.bindEntities?.(semanticEntities);
