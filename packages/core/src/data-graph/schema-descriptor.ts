@@ -312,22 +312,26 @@ const describeReferenceField = (
   };
 };
 
-const describeField = (
-  field: AnyFieldDefinition,
-): GraphSchemaScalarDescriptor | GraphSchemaReferenceDescriptor =>
-  isReferenceFieldDefinition(field)
-    ? describeReferenceField(field)
-    : {
-        kind: 'scalar',
-        type: field.fieldType as GraphSchemaScalarType,
-        ...(field.valueType ? { valueType: field.valueType } : {}),
-        ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
-        ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
-        ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
-        ...(field.description ? { description: field.description } : {}),
-        ...(field.presentation ? { presentation: field.presentation } : {}),
-        ...(field.derived ? { readOnly: true, derived: field.derived } : {}),
-      };
+const describeField = (field: AnyFieldDefinition): GraphSchemaDescriptor => {
+  const descriptor: GraphSchemaScalarDescriptor | GraphSchemaReferenceDescriptor =
+    isReferenceFieldDefinition(field)
+      ? describeReferenceField(field)
+      : {
+          kind: 'scalar',
+          type: field.fieldType as GraphSchemaScalarType,
+          ...(field.valueType ? { valueType: field.valueType } : {}),
+          ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
+          ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
+          ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
+          ...(field.description ? { description: field.description } : {}),
+          ...(field.presentation ? { presentation: field.presentation } : {}),
+          ...(field.derived ? { readOnly: true, derived: field.derived } : {}),
+        };
+
+  return Object.prototype.hasOwnProperty.call(field, 'defaultValue')
+    ? { kind: 'default', item: descriptor, defaultValue: field.defaultValue }
+    : descriptor;
+};
 
 const describeEntity = (
   entity: AnyEntityDefinition,

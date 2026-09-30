@@ -356,6 +356,29 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
+  it('creates a TodoItem through the generic mutation capability with its model default', async () => {
+    const remoteClient = createFetchGraphClient({
+      runtimeTransport: { endpoint: `${origin}/runtime` },
+    });
+
+    await remoteClient.graphExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTodoItemSchema).create({
+        id: 'todo-defaulted',
+        list: createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
+        title: 'Use entity defaults',
+      }),
+    );
+
+    expect(getTodoDataset().TodoItem).toEqual([
+      {
+        id: 'todo-defaulted',
+        list: 'list-1',
+        title: 'Use entity defaults',
+        completed: false,
+      },
+    ]);
+  });
+
   it('atomically deletes a TodoList with its items and tag associations', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
@@ -753,6 +776,7 @@ describe('Ontahi todo portability example', () => {
         expect.objectContaining({
           name: 'TodoItem',
           mutations: {
+            create: { fields: ['id', 'list', 'title', 'completed'] },
             update: { fields: ['list', 'title', 'completed'] },
             delete: true,
           },

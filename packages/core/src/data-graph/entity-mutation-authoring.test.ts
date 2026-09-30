@@ -16,7 +16,7 @@ const EnrollmentSchema = entity('Enrollment', {
   id: field.id(),
   student: field.ref(Student),
   course: field.ref(Course),
-  status: field.enum(['active', 'ended'] as const),
+  status: field.default(field.enum(['active', 'ended'] as const), 'active'),
   note: field.optional(field.string()),
   displayLabel: field.derived(field.string(), () => ''),
 });
@@ -28,12 +28,7 @@ describe('client Entity mutation authoring', () => {
     const course = createEntityRef(Course, { id: 'course-1' });
     const enrollment = Enrollment.refById('enrollment-1');
 
-    const create = Enrollment.create({
-      id: 'enrollment-1',
-      student,
-      course,
-      status: 'active',
-    });
+    const create = Enrollment.create({ id: 'enrollment-1', student, course });
     const update = enrollment.update(
       { status: 'ended', note: 'Transferred' },
       { if: { status: 'active' } },
@@ -133,6 +128,7 @@ describe('client Entity mutation authoring', () => {
     type IncludesForeignUpdateField = 'title' extends keyof UpdateInput ? true : false;
 
     Enrollment.create({ id: 'enrollment-1', student, course, status: 'active' });
+    Enrollment.create({ id: 'enrollment-1', student, course });
     Enrollment.create({ id: 'enrollment-1', student, course, status: 'active', note: 'Optional' });
     expectTypeOf<CreateInput>().toMatchTypeOf<{
       student: EntityRef<'Student'>;

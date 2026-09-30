@@ -485,8 +485,11 @@ const toZodFieldSchema = (field: AnyFieldDefinition): ZodType => {
   }
 
   const nullableSchema = field.nullable ? schema.nullable() : schema;
+  const defaultedSchema = Object.prototype.hasOwnProperty.call(field, 'defaultValue')
+    ? nullableSchema.default(field.defaultValue)
+    : nullableSchema;
 
-  return field.optional ? nullableSchema.optional() : nullableSchema;
+  return field.optional ? defaultedSchema.optional() : defaultedSchema;
 };
 
 const toZodObjectShape = (fields: GraphSchemaFields): Record<string, ZodType> =>

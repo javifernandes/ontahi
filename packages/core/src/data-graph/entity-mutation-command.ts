@@ -367,7 +367,16 @@ export const mutateEntity = <TEntity extends AnyEntityDefinition>(entity: TEntit
     kind: 'entity-mutation-command',
     action: 'create',
     entityName: entity.name,
-    values,
+    values: {
+      ...Object.fromEntries(
+        Object.entries(entity.fields).flatMap(([fieldName, field]) =>
+          Object.prototype.hasOwnProperty.call(field, 'defaultValue')
+            ? [[fieldName, field.defaultValue]]
+            : [],
+        ),
+      ),
+      ...values,
+    },
   }),
   update: (
     target: EntityRef<TEntity['name']>,

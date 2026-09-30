@@ -173,7 +173,7 @@ const todoItemFields = {
   id: field.id(),
   list: field.ref(TodoList),
   title: field.nonEmptyString({ trim: true }),
-  completed: field.boolean(),
+  completed: field.default(field.boolean(), false),
 };
 
 export const DeleteListItemsOutput = value('DeleteListItemsOutput', {

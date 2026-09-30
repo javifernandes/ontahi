@@ -43,8 +43,18 @@ export type FieldDefinition<TValue> = {
   optional?: true;
   description?: string;
   presentation?: GraphSchemaPresentation;
+  defaultValue?: TValue;
   derived?: DerivedFieldMetadata;
   __value?: TValue;
+};
+
+export type DefaultedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
+  TField,
+  'defaultValue' | 'optional' | '__value'
+> & {
+  defaultValue: InferFieldValue<TField>;
+  optional?: never;
+  __value?: InferFieldValue<TField>;
 };
 
 export type DerivedFieldDefinition<TValue> = FieldDefinition<TValue> & {
@@ -148,7 +158,11 @@ export type StoredFieldName<TFields extends FieldDefinitions> = {
 }[keyof TFields];
 
 type OptionalStoredFieldName<TFields extends FieldDefinitions> = {
-  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends { optional: true } ? TKey : never;
+  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends
+    | { optional: true }
+    | { defaultValue: unknown }
+    ? TKey
+    : never;
 }[StoredFieldName<TFields>];
 
 type RequiredStoredFieldName<TFields extends FieldDefinitions> = Exclude<
@@ -975,6 +989,26 @@ export const field = {
       optional: true;
       __value?: InferFieldValue<TDefinition> | undefined;
     },
+  default: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+    defaultValue: InferFieldValue<TDefinition>,
+  ): DefaultedFieldDefinition<TDefinition> => {
+    if (
+      definition.optional ||
+      definition.derived ||
+      definition.fieldType === 'id' ||
+      definition.fieldType === 'reference'
+    ) {
+      throw new TypeError(
+        'Stored Field defaults require a non-optional, non-derived scalar Field other than id.',
+      );
+    }
+    if (defaultValue === undefined) {
+      throw new TypeError('Stored Field defaults cannot be undefined.');
+    }
+
+    return { ...definition, defaultValue } as DefaultedFieldDefinition<TDefinition>;
+  },
 };
 
 const normalizeEntityLocatorDeclaration = <TFields extends FieldDefinitions>(

@@ -53,7 +53,7 @@ export const TodoItemSchema = withContextualSelections(
     id: field.id(),
     list: field.ref(TodoListSchemaBase),
     title: field.nonEmptyString({ trim: true }),
-    completed: field.boolean(),
+    completed: field.default(field.boolean(), false),
   })
     .display({ primary: 'title', search: ['title'] })
     .manyToMany('tags', TagSchema),

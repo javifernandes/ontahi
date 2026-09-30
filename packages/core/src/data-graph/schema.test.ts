@@ -127,6 +127,39 @@ describe('data-graph schema DSL', () => {
     });
   });
 
+  it('declares stored Field defaults once for parsing and reflection', () => {
+    const Todo = entity('DefaultedTodo', {
+      id: field.id(),
+      title: field.nonEmptyString({ trim: true }),
+      completed: field.default(field.boolean(), false),
+    });
+
+    expect(
+      safeParseGraphSchema(Todo, {
+        id: 'todo-1',
+        title: '  Write tests  ',
+      }),
+    ).toEqual({
+      success: true,
+      data: { id: 'todo-1', title: 'Write tests', completed: false },
+    });
+    expect(toGraphSchemaDescriptor(Todo)).toMatchObject({
+      fields: {
+        completed: {
+          kind: 'default',
+          defaultValue: false,
+          item: { kind: 'scalar', type: 'boolean' },
+        },
+      },
+    });
+    expect(toGraphJsonSchema(Todo)).toMatchObject({
+      required: ['id', 'title'],
+      properties: {
+        completed: { type: 'boolean', default: false },
+      },
+    });
+  });
+
   it('expresses entity cardinality for inputs and materialized outputs', () => {
     const Todo = entity('Todo', {
       id: field.id(),

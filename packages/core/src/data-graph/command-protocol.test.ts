@@ -402,7 +402,7 @@ describe('data graph Entity Mutation Command protocol', () => {
     entity('Book', {
       id: field.id(),
       title: field.nonEmptyString({ trim: true }),
-      published: field.boolean(),
+      published: field.default(field.boolean(), false),
       label: field.derived(field.string(), () => ''),
     });
 
@@ -412,7 +412,7 @@ describe('data graph Entity Mutation Command protocol', () => {
     const mutation = mutateEntity(client);
     const book = createEntityRef(client, { id: 'book-1' });
     const commands = [
-      mutation.create({ id: 'book-1', title: '  Ontahi  ', published: false }),
+      mutation.create({ id: 'book-1', title: '  Ontahi  ' }),
       mutation.update(book, { title: '  Revised  ' }),
       mutation.delete(book),
     ];
@@ -442,6 +442,22 @@ describe('data graph Entity Mutation Command protocol', () => {
         command: mutation.delete(book),
       },
     ]);
+  });
+
+  it('materializes declared Field defaults while resolving a transported create', () => {
+    const server = defineBookGraph();
+    const request = toGraphCommandRequest({
+      kind: 'entity-mutation-command',
+      action: 'create',
+      entityName: 'Book',
+      values: { id: 'book-1', title: '  Ontahi  ' },
+    });
+
+    expect(resolveGraphCommandRequest(request, { entities: [server] })).toEqual({
+      success: true,
+      request,
+      command: mutateEntity(server).create({ id: 'book-1', title: 'Ontahi' }),
+    });
   });
 
   it('uses a fail-closed protocol version for conditional exact mutations', () => {
