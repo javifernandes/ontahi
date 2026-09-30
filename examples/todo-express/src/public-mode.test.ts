@@ -1,9 +1,12 @@
+import { createEntityRef, mutateEntity, toGraphCommandRequest } from '@ontahi/core/data-graph';
+import type { GraphCommandableOntahiApplication } from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 process.env.TODO_AUTH_MODE = 'disabled';
 
 const { TodoApplication, TodoItem } = await import('./graph.js');
+const { todoGraphCommandPolicies } = await import('./todo-command-policies.js');
 
 const getTodoDataset = () => {
   if (TodoApplication.storage.kind !== 'in-memory') {
@@ -48,12 +51,21 @@ describe('Todo public mode', () => {
     expect(getTodoDataset().TodoItem).toHaveLength(1);
   });
 
-  it('keeps the complete operation public when authentication is disabled', async () => {
+  it('keeps completion mutations public when authentication is disabled', async () => {
+    const dispatch = (
+      TodoApplication as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher(todoGraphCommandPolicies);
     await expect(
-      TodoItem.setCompleted({ todos: ['todo-public'], completed: true }),
+      dispatch(
+        toGraphCommandRequest(
+          mutateEntity(TodoItem).update(createEntityRef(TodoItem, { id: 'todo-public' }), {
+            completed: true,
+          }),
+        ),
+        { authority: { principal: null } },
+      ),
     ).resolves.toMatchObject({
-      ok: true,
-      kind: 'success',
+      kind: 'graph-command-result',
     });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
   });

@@ -78,6 +78,7 @@ export type OntahiRelationDeclaration<
   targetField?: string;
   inverseTarget?: OntahiSemanticEntityTarget<AnyEntityDefinition>;
   ordered?: true;
+  onDelete?: import('../../data-graph/definitions.js').RelationDeletePolicy;
   constraints?: OntahiRelationConstraints;
 };
 
@@ -88,6 +89,13 @@ type OntahiRelationConstraints =
 type OntahiRelationOptions = Omit<RelationOptions, 'constraints'> & {
   constraints?: OntahiRelationConstraints;
 };
+type OntahiHasManyRelationOptions = Omit<OntahiRelationOptions, 'onDelete'> & {
+  onDelete?: 'cascade';
+};
+type OntahiManyToManyRelationOptions = Omit<
+  OntahiRelationOptions,
+  'via' | 'ordered' | 'onDelete'
+> & { onDelete?: 'detach' };
 
 const assertDeclaredRelationConstraints = (constraints: OntahiRelationConstraints | undefined) => {
   if (typeof constraints !== 'function') assertPortableRelationConstraints(constraints);
@@ -219,11 +227,11 @@ function belongsTo<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
 ): OntahiRelationDeclaration<'belongsTo', TTarget, TTyped>;
 function belongsTo<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: Omit<OntahiRelationOptions, 'ordered'>,
+  options?: Omit<OntahiRelationOptions, 'ordered' | 'onDelete'>,
 ): OntahiRelationDeclaration<'belongsTo', TTarget, true>;
 function belongsTo(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
-  options?: Omit<OntahiRelationOptions, 'ordered'>,
+  options?: Omit<OntahiRelationOptions, 'ordered' | 'onDelete'>,
 ) {
   assertDeclaredRelationConstraints(options?.constraints);
   return {
@@ -236,24 +244,27 @@ function belongsTo(
 }
 function hasMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options: OntahiRelationOptions & { ordered: true },
+  options: OntahiHasManyRelationOptions & { ordered: true },
 ): OntahiRelationDeclaration<'hasMany', TTarget, TTyped> & { ordered: true };
 function hasMany<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options: OntahiRelationOptions & { ordered: true },
+  options: OntahiHasManyRelationOptions & { ordered: true },
 ): OntahiRelationDeclaration<'hasMany', TTarget, true> & { ordered: true };
 function hasMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options?: OntahiRelationOptions,
+  options?: OntahiHasManyRelationOptions,
 ): OntahiRelationDeclaration<'hasMany', TTarget, TTyped>;
 function hasMany<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: OntahiRelationOptions,
+  options?: OntahiHasManyRelationOptions,
 ): OntahiRelationDeclaration<'hasMany', TTarget, true>;
 function hasMany(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
   options?: OntahiRelationOptions,
 ) {
+  if (options?.onDelete && options.onDelete !== 'cascade') {
+    throw new Error('hasMany Relations only support onDelete: cascade.');
+  }
   assertDeclaredRelationConstraints(options?.constraints);
   return {
     relationKind: 'hasMany',
@@ -261,27 +272,32 @@ function hasMany(
     typed: !isSemanticEntityRef(target) || target.typed,
     ...(options?.via ? { targetField: options.via } : {}),
     ...(options?.ordered ? { ordered: true as const } : {}),
+    ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
     ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
 
 function manyToMany<TTarget extends AnyEntityDefinition, TTyped extends boolean>(
   target: OntahiSemanticEntityRef<TTarget, TTyped>,
-  options?: Omit<OntahiRelationOptions, 'via' | 'ordered'>,
+  options?: OntahiManyToManyRelationOptions,
 ): OntahiRelationDeclaration<'manyToMany', TTarget, TTyped>;
 function manyToMany<TTarget extends AnyEntityDefinition>(
   target: TTarget,
-  options?: Omit<OntahiRelationOptions, 'via' | 'ordered'>,
+  options?: OntahiManyToManyRelationOptions,
 ): OntahiRelationDeclaration<'manyToMany', TTarget, true>;
 function manyToMany(
   target: OntahiSemanticEntityTarget<AnyEntityDefinition>,
   options?: Omit<OntahiRelationOptions, 'via' | 'ordered'>,
 ) {
+  if (options?.onDelete && options.onDelete !== 'detach') {
+    throw new Error('manyToMany Relations only support onDelete: detach.');
+  }
   assertDeclaredRelationConstraints(options?.constraints);
   return {
     relationKind: 'manyToMany' as const,
     target,
     typed: !isSemanticEntityRef(target) || target.typed,
+    ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
     ...(options?.constraints ? { constraints: options.constraints } : {}),
   };
 }
@@ -1060,6 +1076,7 @@ const defineOntahiEntity = <
         ...(declaration.sourceField ? { sourceField: declaration.sourceField } : {}),
         ...(declaration.targetField ? { targetField: declaration.targetField } : {}),
         ...(declaration.ordered ? { ordered: true } : {}),
+        ...(declaration.onDelete ? { onDelete: declaration.onDelete } : {}),
         ...(constraints ? { constraints } : {}),
         ...(mapping ? { mapping } : {}),
       };

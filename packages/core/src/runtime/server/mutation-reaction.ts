@@ -15,10 +15,8 @@ import type { RelationshipCommandResult } from '../../data-graph/relationship-co
 import type {
   ManyToManyRelationshipCommand,
   OrderedRelationshipCommand,
-  OrderedRelationshipDelta,
   RelationshipCommand,
   RelationshipCommandExecutor,
-  RelationshipDelta,
 } from '../../data-graph/relationship-command.js';
 
 import { deferDataGraphPostCommitWork, getRequiredDataGraphRuntime } from './data-graph.js';
@@ -104,6 +102,34 @@ export const applyContextualEntityMutationReactions = <TError = unknown, TOption
     : Effect.promise(process).pipe(Effect.as(delta));
 };
 
+export const applyContextualRelationshipMutationReactions = <
+  TError = unknown,
+  TOptions = undefined,
+>(
+  command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+  result: RelationshipCommandResult,
+  options: TOptions | undefined,
+  configuration: ContextualMutationReactionExecutorOptions,
+): Effect.Effect<RelationshipMutationResult> => {
+  if (result.status === 'not-applied') return Effect.succeed(result);
+  const runner = createContextualRunner<TError, TOptions>(configuration, options);
+  const outcome = runner.createAppliedOutcome(command, result.delta);
+  const reactions: AppliedRelationshipMutationResult['reactions'] = [];
+  const applied: AppliedRelationshipMutationResult = {
+    status: 'applied',
+    outcome,
+    reactions,
+  };
+  const process = async () => {
+    const processed = await runner.react(outcome);
+    reactions.push(...processed.reactions);
+  };
+
+  return deferDataGraphPostCommitWork(process)
+    ? Effect.succeed(applied)
+    : Effect.promise(process).pipe(Effect.as(applied));
+};
+
 export const createContextualMutationReactionExecutor = <TError = unknown, TOptions = undefined>({
   getReactions,
   invokeOperation,
@@ -115,31 +141,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
   TOptions,
   RelationshipMutationResult
 > => {
-  const applyReactions = (
-    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
-    delta: RelationshipDelta | OrderedRelationshipDelta,
-    options?: TOptions,
-  ) => {
-    const runner = createContextualRunner<TError, TOptions>(
-      { getReactions, invokeOperation, emitEvent, createOutcomeId, maxDepth },
-      options,
-    );
-    const outcome = runner.createAppliedOutcome(command, delta);
-    const reactions: AppliedRelationshipMutationResult['reactions'] = [];
-    const result: AppliedRelationshipMutationResult = {
-      status: 'applied',
-      outcome,
-      reactions,
-    };
-    const process = async () => {
-      const processed = await runner.react(outcome);
-      reactions.push(...processed.reactions);
-    };
-
-    return deferDataGraphPostCommitWork(process)
-      ? Effect.succeed(result)
-      : Effect.promise(process).pipe(Effect.as(result));
-  };
+  const configuration = { getReactions, invokeOperation, emitEvent, createOutcomeId, maxDepth };
 
   return {
     runRelationshipCommand: (command, options) =>
@@ -157,11 +159,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           .runRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
-              result.status === 'not-applied'
-                ? Effect.succeed<RelationshipMutationResult>(result)
-                : applyReactions(command, result.delta, options).pipe(
-                    Effect.map(applied => applied as RelationshipMutationResult),
-                  ),
+              applyContextualRelationshipMutationReactions(command, result, options, configuration),
             ),
           );
       }),
@@ -180,11 +178,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           .runManyToManyRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
-              result.status === 'not-applied'
-                ? Effect.succeed<RelationshipMutationResult>(result)
-                : applyReactions(command, result.delta, options).pipe(
-                    Effect.map(applied => applied as RelationshipMutationResult),
-                  ),
+              applyContextualRelationshipMutationReactions(command, result, options, configuration),
             ),
           );
       }),
@@ -203,11 +197,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           .runOrderedRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
-              result.status === 'not-applied'
-                ? Effect.succeed<RelationshipMutationResult>(result)
-                : applyReactions(command, result.delta, options).pipe(
-                    Effect.map(applied => applied as RelationshipMutationResult),
-                  ),
+              applyContextualRelationshipMutationReactions(command, result, options, configuration),
             ),
           );
       }),

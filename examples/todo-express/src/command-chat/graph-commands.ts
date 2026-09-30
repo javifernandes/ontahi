@@ -187,6 +187,82 @@ export const todoGraphCommands = (
       },
       message: () => (es ? 'Ítem borrado.' : 'Item deleted.'),
     },
+    {
+      description: es ? 'Borrar una lista y sus ítems.' : 'Delete a list and its items.',
+      request: strict({
+        version: graphSchema.literal(2),
+        kind: graphSchema.literal('graph-command'),
+        command: strict({
+          kind: graphSchema.literal('entity-mutation-command'),
+          action: graphSchema.literal('delete'),
+          entityName: graphSchema.literal('TodoList'),
+          target: graphSchema.ref(TodoList),
+          if: strict({ name: TodoList.fields.name }),
+        }),
+      }),
+      validate: ({ command }, validation) => {
+        if (
+          command.kind !== 'entity-mutation-command' ||
+          command.action !== 'delete' ||
+          !isEntityRef(command.target)
+        )
+          return unresolved;
+        const targetRef = command.target;
+        const name = String(command.if?.name);
+        const matches = context.lists.filter(list => same(list.name, name));
+        const target = matches.find(list => list.id === targetRef.locator.id);
+        const mentioned = context.lists.filter(list => words(text).includes(words(list.name)));
+        return target &&
+          words(text).includes(words(name)) &&
+          (mentioned.length === 1 || validation?.kind === 'choice-option') &&
+          (matches.length === 1 || validation?.kind === 'choice-option')
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Lista borrada.' : 'List deleted.'),
+    },
+    {
+      description: es ? 'Marcar un ítem como completado.' : 'Mark an item as completed.',
+      request: strict({
+        version: graphSchema.literal(2),
+        kind: graphSchema.literal('graph-command'),
+        command: strict({
+          kind: graphSchema.literal('entity-mutation-command'),
+          action: graphSchema.literal('update'),
+          entityName: graphSchema.literal('TodoItem'),
+          target: graphSchema.ref(TodoItem),
+          values: strict({ completed: graphSchema.literal(true) }),
+          if: strict({ completed: graphSchema.literal(false) }),
+        }),
+      }),
+      validate: ({ command }, validation) => {
+        if (
+          command.kind !== 'entity-mutation-command' ||
+          command.action !== 'update' ||
+          !isEntityRef(command.target) ||
+          command.values.completed !== true ||
+          command.if?.completed !== false
+        )
+          return unresolved;
+        const targetRef = command.target;
+        const target = context.items.find(item => item.id === targetRef.locator.id);
+        if (!target || target.completed || !words(text).includes(words(target.title))) {
+          return unresolved;
+        }
+        const mentionedLists = context.lists.filter(list => words(text).includes(words(list.name)));
+        const matches = context.items.filter(
+          item =>
+            !item.completed &&
+            same(item.title, target.title) &&
+            (!mentionedLists.length ||
+              mentionedLists.some(list => list.id === item.list.locator.id)),
+        );
+        return matches.length === 1 || validation?.kind === 'choice-option'
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Ítem completado.' : 'Item completed.'),
+    },
     exposure(
       TodoList,
       'name',

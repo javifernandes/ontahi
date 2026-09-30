@@ -7,6 +7,7 @@ import {
   toGraphCommandRequest,
   value,
   withSelectionFactories,
+  type EntityMutationCommandExecutionRuntime,
   type InferGraphSchemaValue,
   type RelationConstraint,
 } from '@ontahi/core/data-graph';
@@ -15,6 +16,7 @@ import {
   defineTaskExecution,
   defineTaskExecutionStep,
   failOperation,
+  getRequiredDataGraphRuntime,
   type TaskExecutionState,
 } from '@ontahi/core/runtime/server';
 import type { JsonValue } from '@ontahi/core/value/json';
@@ -69,6 +71,7 @@ export const TodoList = entity({
     items: relation.hasMany(entity.ref('TodoItem', { fields: { completed: field.boolean() } }), {
       via: 'list',
       ordered: true,
+      onDelete: 'cascade',
     }),
   },
   selections: ({ self }) => ({
@@ -194,6 +197,7 @@ export const TodoItem = entity({
   display: { primary: 'title', search: ['title'] },
   relations: {
     tags: relation.manyToMany(Tag, {
+      onDelete: 'detach',
       constraints: (): readonly RelationConstraint[] => [
         relationConstraint.source(TodoItem, todo => todo.completed.eq(false), {
           code: 'completed_todo_cannot_be_tagged',
@@ -209,23 +213,7 @@ export const TodoItem = entity({
   domainOperationDefaults: entityDefaults,
   operations: ({ self, commands, commandsFor, operation, app }) => {
     const todoEntities = app.graph.defineEntity(self);
-    const tagEntities = app.graph.defineEntity(Tag);
-    const tagCommands = commandsFor(Tag);
     const listCommands = commandsFor(TodoList);
-    const unlinkTodoTags = (todoId: string) =>
-      Effect.gen(function* () {
-        const tags = yield* tagEntities
-          .relatedTo(
-            todoEntities.selection(candidate => candidate.id.eq(todoId)),
-            {
-              through: 'tags',
-            },
-          )
-          .run();
-        for (const tag of tags) {
-          yield* todoEntities.refById(todoId).tags.remove(tagEntities.refById(tag.id)).run();
-        }
-      });
     const createDeleteProposal = (selected: DeleteListCandidate) =>
       Effect.gen(function* () {
         const todos = [
@@ -236,38 +224,23 @@ export const TodoItem = entity({
         const effects: Array<{ request: JsonValue; run(): Effect.Effect<unknown, unknown> }> = [];
 
         for (const todo of todos) {
-          const tags = [
-            ...(yield* tagEntities
-              .relatedTo(
-                todoEntities.selection(candidate => candidate.id.eq(todo.id)),
-                {
-                  through: 'tags',
-                },
-              )
-              .run()),
-          ].sort((left, right) => left.id.localeCompare(right.id));
-          for (const tag of tags) {
-            const command = todoEntities.refById(todo.id).tags.remove(tagEntities.refById(tag.id));
-            effects.push({
-              request: toGraphCommandRequest(command) as unknown as JsonValue,
-              run: () => command.run(),
-            });
-          }
-          const command = commands
+          const selection = commands
             .where(candidate => candidate.id.eq(todo.id))
             .where(candidate => candidate.list.eq(todo.list))
             .where(candidate => candidate.title.eq(todo.title))
             .where(candidate => candidate.completed.eq(todo.completed))
             .delete();
+          const command = mutateEntity(self).deleteSelection({
+            kind: 'selection',
+            entityName: self.name,
+            expression: selection.build().selection,
+          });
           effects.push({
-            request: toGraphCommandRequest(
-              mutateEntity(self).deleteSelection({
-                kind: 'selection',
-                entityName: self.name,
-                expression: command.build().selection,
-              }),
-            ) as unknown as JsonValue,
-            run: () => command.run(),
+            request: toGraphCommandRequest(command) as unknown as JsonValue,
+            run: () =>
+              getRequiredDataGraphRuntime<
+                EntityMutationCommandExecutionRuntime<unknown>
+              >().runEntityMutationCommand(command),
           });
         }
 
@@ -400,31 +373,6 @@ export const TodoItem = entity({
       },
     });
     return {
-      setCompleted: operation({
-        description: 'Mark existing items completed or incomplete.',
-        input: graphSchema.object({
-          todos: self.many(),
-          completed: self.fields.completed,
-        }),
-        graphOps: { receiver: 'todos' },
-        requires: todoAuthenticationMode === 'github' ? [app.require.authenticated()] : [],
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
-        run: ({ todos, completed }) => todos.update({ completed }),
-      }),
-      delete: operation({
-        input: graphSchema.object({
-          todo: graphSchema.existingRef(self),
-        }),
-        graphOps: { receiver: 'todo' },
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
-        *run({ todo }) {
-          yield* unlinkTodoTags(todo.id);
-          yield* commands
-            .where(candidate => candidate.id.eq(todo.id))
-            .delete()
-            .run();
-        },
-      }),
       deleteFromNamedList: operation({
         description:
           'Delete every item from one named list after resolving ambiguity and approval.',
@@ -443,54 +391,6 @@ export const TodoItem = entity({
         },
         run: (): Effect.Effect<DeleteListItemsResult> =>
           Effect.dieMessage('Explicit durable execution requires a Task Runtime.'),
-      }),
-      deleteList: operation.atomic({
-        description: 'Delete a list and all its items.',
-        input: graphSchema.object({
-          list: graphSchema.existingRef(TodoList),
-        }),
-        graphOps: { receiver: 'list' },
-        bridge: { invalidate: [['TodoList'], ['TodoItem'], ['Tag']] },
-        *run({ list }) {
-          const todos = yield* todoEntities.where(todo => todo.list.eq(list.ref)).run();
-          for (const todo of todos) yield* unlinkTodoTags(todo.id);
-          yield* commands
-            .where(todo => todo.list.eq(list.ref))
-            .delete()
-            .run();
-          yield* listCommands
-            .where(candidate => candidate.id.eq(list.id))
-            .delete()
-            .run();
-        },
-      }),
-      deleteTag: operation({
-        input: graphSchema.object({
-          tag: graphSchema.existingRef(Tag),
-        }),
-        graphOps: { receiver: 'tag' },
-        bridge: { invalidate: [['TodoList'], ['Tag'], ['TodoItem']] },
-        *run({ tag }) {
-          const todos = yield* todoEntities
-            .relatedTo(
-              tagEntities.selection(candidate => candidate.id.eq(tag.id)),
-              {
-                through: 'tags',
-              },
-            )
-            .run();
-          for (const todo of todos) {
-            yield* todoEntities.refById(todo.id).tags.remove(tag.ref).run();
-          }
-          yield* tagCommands
-            .where(candidate => candidate.id.eq(tag.id))
-            .delete()
-            .run();
-        },
-      }),
-      deleteAll: operation({
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
-        run: () => commands.all().delete(),
       }),
     };
   },

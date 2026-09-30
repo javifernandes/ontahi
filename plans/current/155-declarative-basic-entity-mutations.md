@@ -159,12 +159,28 @@ notification as a best-effort Reaction colocated in the `TodoList` declaration, 
 external effect without a wrapper Operation. Application-level Reactions remain available for
 cross-Entity and host composition rules, and both forms share id validation and runtime execution.
 
+## Structural Lifecycle Migration
+
+Core now declares `onDelete: 'cascade'` on owned `hasMany` relations and
+`onDelete: 'detach'` on attribute-free `manyToMany` relations. The application mutation receiver
+resolves the affected identities and executes the complete delete tree in one provider transaction
+when available. Entity and Relationship Reactions are interpreted only after that transaction
+commits. Runtime Protocol commands and commands resumed inside an already-atomic durable Operation
+use the same decorated runtime path.
+
+Todo declares list/item ownership and item/tag cleanup in its Entity relations. The React UI and
+Model Support now use canonical Entity Mutation Commands for completion and structural deletes.
+The boilerplate `setCompleted`, item delete, list delete, tag delete, and delete-all Operations have
+been removed. Per-action command authorization preserves GitHub-mode protection for completion
+updates without turning every TodoItem update into a named Operation. `completeAll` remains a named
+business action and `deleteFromNamedList` remains the interactive durable example.
+
 ## Acceptance
 
-- [ ] Every removed Todo Operation has an equivalent canonical command path with the same model,
+- [x] Every removed Todo Operation has an equivalent canonical command path with the same model,
       authority, lifecycle, reaction, cache, and result semantics.
 - [ ] Default, generated, caller-required, optional, nullable, and derived Fields remain distinct in
       types and reflection.
-- [ ] Remote command payloads cannot bypass defaults, reference requirements, or lifecycle rules.
+- [x] Remote command payloads cannot bypass defaults, reference requirements, or lifecycle rules.
 - [ ] Devtools and Model Support consume reflected mutation contracts rather than Todo-owned copies.
 - [ ] A second application enables the same capabilities with materially less setup.

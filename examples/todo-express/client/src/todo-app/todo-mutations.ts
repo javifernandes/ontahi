@@ -5,13 +5,34 @@ import {
   type EntityMutationCommand,
 } from '@ontahi/core/data-graph';
 
-import { TodoItemSchema, TodoListSchema } from '../../../src/generated/client-entities.js';
+import {
+  TagSchema,
+  TodoItemSchema,
+  TodoListSchema,
+} from '../../../src/generated/client-entities.js';
 
 type TodoMutationExecutor = {
   runEntityMutationCommand?: (command: EntityMutationCommand) => Promise<unknown>;
 };
 
 export type TodoMutationResult = { ok: true } | { ok: false; message: string };
+
+const runTodoMutation = async (
+  executor: TodoMutationExecutor | undefined,
+  refetch: () => Promise<unknown>,
+  command: EntityMutationCommand,
+  unsupported: string,
+  failed: string,
+): Promise<TodoMutationResult> => {
+  if (!executor?.runEntityMutationCommand) return { ok: false, message: unsupported };
+  try {
+    await executor.runEntityMutationCommand(command);
+    await refetch();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : failed };
+  }
+};
 
 export const createTodoList = async (
   executor: TodoMutationExecutor | undefined,
@@ -98,3 +119,58 @@ export const renameTodoItem = async (
     };
   }
 };
+
+export const setTodoItemCompleted = (
+  executor: TodoMutationExecutor | undefined,
+  refetch: () => Promise<unknown>,
+  todoId: string,
+  completed: boolean,
+) =>
+  runTodoMutation(
+    executor,
+    refetch,
+    mutateEntity(TodoItemSchema).update(createEntityRef(TodoItemSchema, { id: todoId }), {
+      completed,
+    }),
+    'This runtime cannot update todos.',
+    'The todo completion could not be changed.',
+  );
+
+export const deleteTodoItem = (
+  executor: TodoMutationExecutor | undefined,
+  refetch: () => Promise<unknown>,
+  todoId: string,
+) =>
+  runTodoMutation(
+    executor,
+    refetch,
+    mutateEntity(TodoItemSchema).delete(createEntityRef(TodoItemSchema, { id: todoId })),
+    'This runtime cannot delete todos.',
+    'The todo could not be deleted.',
+  );
+
+export const deleteTodoList = (
+  executor: TodoMutationExecutor | undefined,
+  refetch: () => Promise<unknown>,
+  listId: string,
+) =>
+  runTodoMutation(
+    executor,
+    refetch,
+    mutateEntity(TodoListSchema).delete(createEntityRef(TodoListSchema, { id: listId })),
+    'This runtime cannot delete lists.',
+    'The list could not be deleted.',
+  );
+
+export const deleteTodoTag = (
+  executor: TodoMutationExecutor | undefined,
+  refetch: () => Promise<unknown>,
+  tagId: string,
+) =>
+  runTodoMutation(
+    executor,
+    refetch,
+    mutateEntity(TagSchema).delete(createEntityRef(TagSchema, { id: tagId })),
+    'This runtime cannot delete tags.',
+    'The tag could not be deleted.',
+  );

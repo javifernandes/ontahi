@@ -11,3 +11,9 @@ outcomes can now drive declared post-commit Reactions, allowing structural mutat
 external effects without boilerplate Domain Operations. Intrinsic Entity Reactions may be
 colocated in `entity({ reactions })`, while application-level declarations remain available for
 cross-Entity behavior.
+
+Relations can now declare structural delete lifecycle with `onDelete: 'cascade'` on `hasMany` and
+`onDelete: 'detach'` on `manyToMany`. The application receiver applies those effects atomically
+when the storage supports transactions and routes their outcomes through the same post-commit
+Reaction machinery. Entity Mutation Command policies may also authorize individual actions after
+canonical request resolution.

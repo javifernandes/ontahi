@@ -12,7 +12,6 @@ import {
   useManyToManyRelationshipCommand,
   useOrderedRelationshipCommand,
   useDurableOperation,
-  useOperation,
 } from '@ontahi/react/graph';
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -20,7 +19,6 @@ import type { Dispatch, SetStateAction } from 'react';
 import {
   Tag,
   TagSchema,
-  TodoItem,
   TodoItemSchema,
   TodoList,
   TodoListSchema,
@@ -30,7 +28,15 @@ import { tagsQuery, todoListsQuery } from '../todo-queries.js';
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
 import { moveTodoItem } from './todo-list-state.js';
-import { createTodoItem, createTodoList, renameTodoItem } from './todo-mutations.js';
+import {
+  createTodoItem,
+  createTodoList,
+  deleteTodoItem,
+  deleteTodoList,
+  deleteTodoTag,
+  renameTodoItem,
+  setTodoItemCompleted,
+} from './todo-mutations.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
@@ -100,10 +106,6 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
   const graphExecutor = useGraphExecutorCapability();
-  const deleteListOperation = useOperation(TodoItem.domain.deleteList);
-  const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
-  const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
-  const deleteTodoOperation = useOperation(TodoItem.domain.delete);
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
   const reorderTodo = useOrderedRelationshipCommand(createTodoOrderCommand);
   const linkTags = useManyToManyRelationshipCommand(
@@ -209,10 +211,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setDeletingListId(listId);
     try {
-      const result = await deleteListOperation.executeAsync({ list: TodoList.refById(listId) });
-      const message = operationMessage(result, 'The list could not be deleted.');
-      setActionError(message);
-      return !message;
+      const result = await deleteTodoList(graphExecutor, lists.refetch, listId);
+      setActionError(result.ok ? undefined : result.message);
+      return result.ok;
     } catch (error) {
       setActionError(thrownMessage(error, 'The list could not be deleted.'));
       return false;
@@ -243,11 +244,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setCompletingTodoId(todoId);
     try {
-      const result = await setTodoCompletedOperation.executeAsync({ todos: [todoId], completed });
-      const message = operationMessage(result, 'The todo completion could not be changed.');
-      setActionError(message);
-      if (!message) await lists.refetch();
-      return !message;
+      const result = await setTodoItemCompleted(graphExecutor, lists.refetch, todoId, completed);
+      setActionError(result.ok ? undefined : result.message);
+      return result.ok;
     } catch (error) {
       setActionError(thrownMessage(error, 'The todo completion could not be changed.'));
       return false;
@@ -272,11 +271,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setDeletingTodoId(todoId);
     try {
-      const result = await deleteTodoOperation.executeAsync({ todo: TodoItem.refById(todoId) });
-      const message = operationMessage(result, 'The todo could not be deleted.');
-      setActionError(message);
-      if (!message) await lists.refetch();
-      return !message;
+      const result = await deleteTodoItem(graphExecutor, lists.refetch, todoId);
+      setActionError(result.ok ? undefined : result.message);
+      return result.ok;
     } catch (error) {
       setActionError(thrownMessage(error, 'The todo could not be deleted.'));
       return false;
@@ -335,10 +332,10 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setDeletingTagId(tagId);
     try {
-      const result = await deleteTagOperation.executeAsync({ tag: Tag.refById(tagId) });
-      const message = operationMessage(result, 'The tag could not be deleted.');
-      setActionError(message);
-      return !message;
+      const result = await deleteTodoTag(graphExecutor, tags.refetch, tagId);
+      setActionError(result.ok ? undefined : result.message);
+      if (result.ok) await lists.refetch();
+      return result.ok;
     } catch (error) {
       setActionError(thrownMessage(error, 'The tag could not be deleted.'));
       return false;

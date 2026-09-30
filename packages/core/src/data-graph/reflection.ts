@@ -28,6 +28,7 @@ export type ReflectedSchemaRelation = {
   direction: 'forward' | 'inverse';
   cardinality: 'one' | 'many';
   ordered?: true;
+  onDelete?: import('./definitions.js').RelationDeletePolicy;
   nullable?: boolean;
   required?: boolean;
   structuralVerbs: Array<'assign' | 'clear' | 'add' | 'remove' | 'move'>;
@@ -73,6 +74,7 @@ const reflectedDeclaredRelation = (
     direction: relation.relationKind === 'hasMany' ? 'inverse' : 'forward',
     cardinality: relation.relationKind === 'belongsTo' ? 'one' : 'many',
     ...(relation.ordered ? { ordered: true as const } : {}),
+    ...(relation.onDelete ? { onDelete: relation.onDelete } : {}),
     ...(relation.relationKind === 'belongsTo' ? { nullable, required: !nullable } : {}),
     structuralVerbs:
       relation.relationKind === 'belongsTo'
@@ -109,6 +111,7 @@ const reflectedInverseRelation = (
   direction: relation.relationKind === 'hasMany' ? 'forward' : 'inverse',
   cardinality: relation.relationKind === 'hasMany' ? 'one' : 'many',
   structuralVerbs: [],
+  ...(relation.onDelete ? { onDelete: relation.onDelete } : {}),
   ...(relation.sourceField ? { targetField: relation.sourceField } : {}),
   ...(relation.targetField ? { sourceField: relation.targetField } : {}),
 });

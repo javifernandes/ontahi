@@ -657,6 +657,35 @@ const application = ontahi({
 });
 ```
 
+Structural delete behavior belongs to the relation declaration when every mutation path must obey
+it. A required `hasMany` ownership edge can cascade, while an attribute-free many-to-many edge can
+detach its relation facts:
+
+```ts
+const TodoList = entity({
+  name: 'TodoList',
+  fields: { id: field.id() },
+  relations: {
+    items: relation.hasMany(TodoItem, { via: 'list', onDelete: 'cascade' }),
+  },
+});
+
+const TodoItem = entity({
+  name: 'TodoItem',
+  fields: { id: field.id(), list: field.existingRef(TodoList) },
+  relations: {
+    tags: relation.manyToMany(Tag, { onDelete: 'detach' }),
+  },
+});
+```
+
+The application mutation receiver resolves the exact affected rows, applies cascades and detachments
+in one storage transaction when available, then publishes Entity and Relationship Reactions after
+commit. The policy therefore applies equally to UI commands, Runtime Protocol requests, Model
+Support, and canonical commands resumed by a durable Operation. `hasMany` currently supports
+`cascade`; `manyToMany` currently supports `detach`. Restrict and nullification remain future
+policies rather than implicit storage behavior.
+
 The thunk form is useful when circular Entity declarations defer Relation resolution. Ontahi
 evaluates it once after resolving the application Entity registry, validates unique non-empty
 Reaction ids, and stores the canonical matchers. A static array is also accepted.

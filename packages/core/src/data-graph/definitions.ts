@@ -616,10 +616,13 @@ export const assertPortableRelationConstraints = (
   }
 };
 
+export type RelationDeletePolicy = 'cascade' | 'detach';
+
 export type RelationOptions = {
   via?: string;
   constraints?: readonly RelationConstraint[];
   ordered?: true;
+  onDelete?: RelationDeletePolicy;
 };
 
 export type RelationDefinition<
@@ -634,6 +637,7 @@ export type RelationDefinition<
   targetField?: string;
   nullable?: TNullable;
   ordered?: true;
+  onDelete?: RelationDeletePolicy;
   mapping?: ParsedRelationMapping;
   constraints?: readonly RelationConstraint[];
 };
@@ -758,8 +762,9 @@ export type EntityDefinition<
   hasMany: <
     TRelationName extends string,
     TTarget extends AnyEntityDefinition,
-    const TOptions extends Omit<RelationOptions, 'via'> & {
+    const TOptions extends Omit<RelationOptions, 'via' | 'onDelete'> & {
       via?: keyof TTarget['fields'] & string;
+      onDelete?: 'cascade';
     } = {},
   >(
     relationName: TRelationName,
@@ -777,7 +782,9 @@ export type EntityDefinition<
   belongsTo: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via' | 'ordered'> & { via?: keyof TFields & string },
+    options?: Omit<RelationOptions, 'via' | 'ordered' | 'onDelete'> & {
+      via?: keyof TFields & string;
+    },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -787,7 +794,7 @@ export type EntityDefinition<
   manyToMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via' | 'ordered'>,
+    options?: Omit<RelationOptions, 'via' | 'ordered' | 'onDelete'> & { onDelete?: 'detach' },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -1205,6 +1212,9 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       return viewDefinition;
     },
     hasMany(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
+      if (options?.onDelete && options.onDelete !== 'cascade') {
+        throw new Error('hasMany Relations only support onDelete: cascade.');
+      }
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
@@ -1212,6 +1222,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
         target,
         ...(options?.via ? { targetField: options.via } : {}),
         ...(options?.ordered ? { ordered: true as const } : {}),
+        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
         ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
@@ -1219,7 +1230,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     belongsTo(
       relationName: string,
       target: AnyEntityDefinition,
-      options?: Omit<RelationOptions, 'ordered'>,
+      options?: Omit<RelationOptions, 'ordered' | 'onDelete'>,
     ) {
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
@@ -1234,13 +1245,19 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     manyToMany(
       relationName: string,
       target: AnyEntityDefinition,
-      options?: Omit<RelationOptions, 'via' | 'ordered'>,
+      options?: Omit<RelationOptions, 'via' | 'ordered' | 'onDelete'> & {
+        onDelete?: 'detach';
+      },
     ) {
+      if (options?.onDelete && options.onDelete !== 'detach') {
+        throw new Error('manyToMany Relations only support onDelete: detach.');
+      }
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'manyToMany',
         target,
+        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
         ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;

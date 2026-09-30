@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
   createInMemoryDataGraphStorage,
+  createEntityRef,
   field,
   graphSchema,
   mutateEntity,
@@ -168,6 +169,100 @@ describe('Ontahi Reaction registration', () => {
     );
 
     expect(events).toEqual([{ type: 'NoteCreated', text: 'Registered later' }]);
+  });
+
+  it('cascades owned Entities and detaches many-to-many links before publishing delete Reactions', async () => {
+    const events: unknown[] = [];
+    const ListRef = entity.ref('LifecycleList', { fields: { id: field.id() } });
+    const Tag = entity({
+      name: 'LifecycleTag',
+      fields: { id: field.id() },
+    });
+    const Item = entity({
+      name: 'LifecycleItem',
+      fields: { id: field.id(), list: field.existingRef(ListRef) },
+      relations: () => ({ tags: relation.manyToMany(Tag, { onDelete: 'detach' }) }),
+      reactions: ({ deleted }) => [
+        deleted({ id: 'lifecycle-item-deleted', delivery: 'inline' }).emit(outcome => ({
+          type: 'ItemDeleted',
+          id: outcome.command.target,
+        })),
+      ],
+    });
+    const List = entity({
+      name: 'LifecycleList',
+      fields: { id: field.id() },
+      relations: { items: relation.hasMany(Item, { via: 'list', onDelete: 'cascade' }) },
+      reactions: ({ deleted }) => [
+        deleted({ id: 'lifecycle-list-deleted', delivery: 'inline' }).emit(() => ({
+          type: 'ListDeleted',
+        })),
+      ],
+    });
+    const relationships: NonNullable<
+      Parameters<typeof createInMemoryDataGraphStorage>[0]
+    >['relationships'] = [
+      {
+        relation: {
+          sourceEntityName: 'LifecycleItem',
+          relationName: 'tags',
+          targetEntityName: 'LifecycleTag',
+          cardinality: 'many-to-many',
+        },
+        source: createEntityRef(Item, { id: 'item-1' }),
+        target: createEntityRef(Tag, { id: 'tag-1' }),
+      },
+    ];
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: {
+          LifecycleList: [{ id: 'list-1' }],
+          LifecycleItem: [
+            { id: 'item-1', list: 'list-1' },
+            { id: 'item-2', list: 'list-1' },
+          ],
+          LifecycleTag: [{ id: 'tag-1' }],
+        },
+        relationships,
+      }),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [List, Item, Tag],
+      reactions: [
+        reaction
+          .relationship(Item, 'tags')
+          .removed({ id: 'lifecycle-tag-detached', delivery: 'inline' })
+          .emit(() => ({ type: 'TagDetached' })),
+      ],
+    });
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      { entity: List, scope: 'all', actions: { delete: { result: ['id'] } } },
+    ]);
+
+    await dispatch(
+      toGraphCommandRequest(mutateEntity(List).delete(createEntityRef(List, { id: 'list-1' }))),
+      { authority: undefined },
+    );
+
+    expect(application.storage.dataset).toMatchObject({
+      LifecycleList: [],
+      LifecycleItem: [],
+      LifecycleTag: [{ id: 'tag-1' }],
+    });
+    expect(relationships).toEqual([]);
+    expect(events.map(event => (event as { type: string }).type)).toEqual([
+      'TagDetached',
+      'ItemDeleted',
+      'ListDeleted',
+    ]);
   });
 
   it('runs an ordered move Reaction and an ordered follow-up through the contextual runtime', async () => {

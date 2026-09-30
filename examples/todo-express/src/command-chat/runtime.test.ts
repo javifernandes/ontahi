@@ -2,7 +2,6 @@ import {
   createEntityRef,
   mutateEntity,
   query,
-  Selection,
   toGraphCommandRequest,
   toGraphReadRequest,
 } from '@ontahi/core/data-graph';
@@ -47,11 +46,22 @@ beforeEach(() => {
   ];
 });
 const list = (id = 'list-1') => createEntityRef(TodoList, { id });
-const complete = (id = 'tea') =>
-  proposal('TodoItem.setCompleted', {
-    todos: Selection.references(TodoItem, [createEntityRef(TodoItem, { id })]).toJSON(),
-    completed: true,
-  });
+const complete = (id = 'tea') => ({
+  status: 'resolved' as const,
+  request: toGraphCommandRequest(
+    mutateEntity(TodoItem).update(
+      createEntityRef(TodoItem, { id }),
+      { completed: true },
+      { if: { completed: false } },
+    ),
+  ),
+});
+const deleteList = (id = 'list-2', name = 'Other') => ({
+  status: 'resolved' as const,
+  request: toGraphCommandRequest(
+    mutateEntity(TodoList).delete(createEntityRef(TodoList, { id }), { if: { name } }),
+  ),
+});
 const create = (id = 'list-1') => ({
   status: 'resolved' as const,
   request: toGraphCommandRequest(
@@ -234,13 +244,13 @@ describe('Todo canonical model requests', () => {
     expect(dataset().TodoItem?.at(-1)?.completed).toBe(true);
   });
   it('deletes a named list and its items', async () => {
-    bind(async () => proposal('TodoItem.deleteList', { list: list('list-2') }));
+    bind(async () => deleteList());
     expect(await submit('delete list Other')).toMatchObject({ status: 'executed' });
     expect(dataset().TodoList?.map(row => row.id)).toEqual(['list-1']);
     expect(dataset().TodoItem?.map(row => row.id)).toEqual(['tea']);
   });
   it('rejects partial deletion and duplicate list names', async () => {
-    bind(async () => proposal('TodoItem.deleteList', { list: list('list-2') }));
+    bind(async () => deleteList());
     expect(await submit('delete list Shopping and Other')).toMatchObject({ status: 'unresolved' });
     dataset().TodoList = [
       ...dataset().TodoList!,
@@ -431,18 +441,18 @@ describe('Todo canonical model requests', () => {
     expect(await submit()).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoList![0]!.name).toBe('Shopping');
   });
-  it.each([{ values: { color: '#f00' } }, { action: 'delete' }])(
-    'keeps unexposed graph commands unresolved and without effects',
-    async patch => {
-      const result = rename('TodoList', 'list-1', 'Shopping', 'Groceries');
-      bind(async () => ({
-        ...result,
-        request: { ...result.request, command: { ...result.request.command, ...patch } },
-      }));
-      expect(await submit()).toMatchObject({ status: 'unresolved' });
-      expect(dataset().TodoList![0]!.name).toBe('Shopping');
-    },
-  );
+  it('keeps unexposed graph commands unresolved and without effects', async () => {
+    const result = rename('TodoList', 'list-1', 'Shopping', 'Groceries');
+    bind(async () => ({
+      ...result,
+      request: {
+        ...result.request,
+        command: { ...result.request.command, values: { color: '#f00' } },
+      },
+    }));
+    expect(await submit()).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoList![0]!.name).toBe('Shopping');
+  });
   it('rejects a graph command without its write precondition', async () => {
     const result = rename('TodoList', 'list-1', 'Shopping', 'Groceries');
     bind(async () => ({

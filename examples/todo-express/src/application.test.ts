@@ -16,7 +16,11 @@ import {
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
 } from '@ontahi/core/runtime/protocol';
-import { createUserTaskTrigger, defineTask } from '@ontahi/core/runtime/server';
+import {
+  createUserTaskTrigger,
+  defineTask,
+  type GraphCommandableOntahiApplication,
+} from '@ontahi/core/runtime/server';
 import {
   createFetchGraphClient,
   createFetchGraphReadExecutor,
@@ -48,6 +52,7 @@ import {
   todoTaskRuntime,
 } from './graph.js';
 import { createTodoDataGraphRuntime } from './storage.js';
+import { todoGraphCommandPolicies } from './todo-command-policies.js';
 
 const testPrincipal = {
   subject: 'github-user-123',
@@ -362,13 +367,14 @@ describe('Ontahi todo portability example', () => {
       target: createEntityRef(Tag, { id: 'tag-1' }),
     });
 
-    const response = await invoke('TodoItem.deleteList', { list: entityRef('TodoList', 'list-1') });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: { ok: true, kind: 'success' },
+    const remoteExecutor = createFetchGraphReadExecutor({
+      commandEndpoint: `${origin}/graph/commands`,
     });
+    await remoteExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTodoListSchema).delete(
+        createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
+      ),
+    );
     expect(getTodoDataset().TodoList).toEqual([]);
     expect(getTodoDataset().TodoItem).toEqual([]);
     expect(getTodoDataset().Tag).toEqual([{ id: 'tag-1', name: 'Shared', color: '#dd6658' }]);
@@ -417,15 +423,14 @@ describe('Ontahi todo portability example', () => {
       },
     );
 
-    const response = await invoke('TodoItem.delete', {
-      todo: entityRef('TodoItem', 'todo-1'),
+    const remoteExecutor = createFetchGraphReadExecutor({
+      commandEndpoint: `${origin}/graph/commands`,
     });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: { ok: true, kind: 'success' },
-    });
+    await remoteExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTodoItemSchema).delete(
+        createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+      ),
+    );
     expect(getTodoDataset().TodoItem).toEqual([
       { id: 'todo-2', list: 'list-1', title: 'Keep me', completed: false },
     ]);
@@ -465,13 +470,12 @@ describe('Ontahi todo portability example', () => {
       },
     );
 
-    const response = await invoke('TodoItem.deleteTag', { tag: entityRef('Tag', 'tag-1') });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: { ok: true, kind: 'success' },
+    const remoteExecutor = createFetchGraphReadExecutor({
+      commandEndpoint: `${origin}/graph/commands`,
     });
+    await remoteExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTagSchema).delete(createEntityRef(ClientTagSchema, { id: 'tag-1' })),
+    );
     expect(getTodoDataset().Tag).toEqual([{ id: 'tag-2', name: 'Persistent', color: '#6f8d72' }]);
     expect(getTodoRelationships()).toEqual([
       {
@@ -482,63 +486,49 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
-  it('requires one explicit Principal for a protected operation from Node', async () => {
+  it('requires one explicit Principal for a protected mutation from Node', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
     ];
 
+    const dispatch = (
+      TodoApplication as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher(todoGraphCommandPolicies);
+    const complete = (completed: boolean) =>
+      toGraphCommandRequest(
+        mutateEntity(TodoItem).update(createEntityRef(TodoItem, { id: 'todo-1' }), { completed }),
+      );
+
     await expect(
-      TodoItem.setCompleted({ todos: ['todo-1'], completed: true }),
-    ).resolves.toMatchObject({
-      ok: false,
-      kind: 'failed',
-      failure: { reason: 'not_authenticated' },
-    });
+      dispatch(complete(true), { authority: { principal: null } }),
+    ).resolves.toMatchObject({ kind: 'protocol-error', error: { code: 'access_denied' } });
     await expect(
-      TodoApplication.app.runtime.withInvocationContext({ principal: testPrincipal }, () =>
-        TodoItem.setCompleted({ todos: ['todo-1'], completed: true }),
-      ),
-    ).resolves.toMatchObject({ ok: true, kind: 'success' });
+      dispatch(complete(true), { authority: { principal: testPrincipal } }),
+    ).resolves.toMatchObject({ kind: 'graph-command-result' });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
 
     await expect(
-      TodoApplication.app.runtime.withInvocationContext({ principal: testPrincipal }, () =>
-        TodoItem.setCompleted({ todos: ['todo-1'], completed: false }),
-      ),
-    ).resolves.toMatchObject({ ok: true, kind: 'success' });
+      dispatch(complete(false), { authority: { principal: testPrincipal } }),
+    ).resolves.toMatchObject({ kind: 'graph-command-result' });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
   });
 
-  it('derives protected Operation authority on the Express Runtime Protocol receiver', async () => {
+  it('derives protected mutation authority on the Express Runtime Protocol receiver', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
     ];
 
-    const input = {
-      todos: {
-        kind: 'selection',
-        entityName: 'TodoItem',
-        expression: {
-          kind: 'references',
-          refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
-        },
-      },
-      completed: true,
-    };
+    const command = mutateEntity(ClientTodoItemSchema).update(
+      createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+      { completed: true },
+    );
     const anonymousClient = createFetchGraphClient({
       runtimeTransport: { endpoint: `${origin}/runtime` },
     });
 
     await expect(
-      anonymousClient.reflectedOperationInvoker!.invokeOperation({
-        operationId: 'TodoItem.setCompleted',
-        input,
-      }),
-    ).resolves.toMatchObject({
-      ok: false,
-      kind: 'failed',
-      failure: { reason: 'not_authenticated' },
-    });
+      anonymousClient.graphExecutor.runEntityMutationCommand!(command),
+    ).rejects.toMatchObject({ code: 'access_denied' });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
 
     const authenticatedClient = createFetchGraphClient({
@@ -547,30 +537,20 @@ describe('Ontahi todo portability example', () => {
         requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
       },
     });
-    const authenticatedResult =
-      await authenticatedClient.reflectedOperationInvoker!.invokeOperation({
-        operationId: 'TodoItem.setCompleted',
-        input,
-      });
-    expect(authenticatedResult).toMatchObject({ ok: true, kind: 'success' });
+    await expect(
+      authenticatedClient.graphExecutor.runEntityMutationCommand!(command),
+    ).resolves.toMatchObject({ updated: [expect.objectContaining({ entityName: 'TodoItem' })] });
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
   });
 
-  it('derives protected Operation authority from the WebSocket upgrade session', async () => {
+  it('derives protected mutation authority from the WebSocket upgrade session', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the socket', completed: false },
     ];
-    const input = {
-      todos: {
-        kind: 'selection',
-        entityName: 'TodoItem',
-        expression: {
-          kind: 'references',
-          refs: [{ kind: 'entity-ref', entityName: 'TodoItem', locator: { id: 'todo-1' } }],
-        },
-      },
-      completed: true,
-    };
+    const command = mutateEntity(ClientTodoItemSchema).update(
+      createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
+      { completed: true },
+    );
     const createClient = (authenticated: boolean) => {
       const runtimeTransport = createWebSocketRuntimeTransport({
         url: `${origin.replace(/^http/, 'ws')}/runtime`,
@@ -585,25 +565,15 @@ describe('Ontahi todo portability example', () => {
     const anonymous = createClient(false);
 
     await expect(
-      anonymous.client.reflectedOperationInvoker!.invokeOperation({
-        operationId: 'TodoItem.setCompleted',
-        input,
-      }),
-    ).resolves.toMatchObject({
-      ok: false,
-      kind: 'failed',
-      failure: { reason: 'not_authenticated' },
-    });
+      anonymous.client.graphExecutor.runEntityMutationCommand!(command),
+    ).rejects.toMatchObject({ code: 'access_denied' });
     anonymous.runtimeTransport.close();
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
 
     const authenticated = createClient(true);
     await expect(
-      authenticated.client.reflectedOperationInvoker!.invokeOperation({
-        operationId: 'TodoItem.setCompleted',
-        input,
-      }),
-    ).resolves.toMatchObject({ ok: true, kind: 'success' });
+      authenticated.client.graphExecutor.runEntityMutationCommand!(command),
+    ).resolves.toMatchObject({ updated: [expect.objectContaining({ entityName: 'TodoItem' })] });
     authenticated.runtimeTransport.close();
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(true);
   });
@@ -628,23 +598,20 @@ describe('Ontahi todo portability example', () => {
     }
   });
 
-  it('deletes every TodoItem through a void-input operation', async () => {
+  it('deletes every TodoItem through a Selection mutation', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: true },
     ];
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'invoke', operationId: 'TodoItem.deleteAll' }),
+    const remoteExecutor = createFetchGraphReadExecutor({
+      commandEndpoint: `${origin}/graph/commands`,
     });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: { ok: true, kind: 'success' },
-    });
+    await remoteExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTodoItemSchema).deleteSelection(
+        Selection.all(ClientTodoItemSchema).toJSON(),
+      ),
+    );
     expect(getTodoDataset().TodoItem).toEqual([]);
   });
 
@@ -680,14 +647,8 @@ describe('Ontahi todo portability example', () => {
           expect.objectContaining({ name: 'Tag' }),
         ]),
         operations: expect.arrayContaining([
-          expect.objectContaining({
-            id: 'TodoItem.deleteList',
-            receiverPath: 'list',
-            inputRefs: [expect.objectContaining({ path: 'list', receiver: true })],
-          }),
-          expect.objectContaining({ id: 'TodoItem.setCompleted', receiverPath: 'todos' }),
           expect.objectContaining({ id: 'TodoList.completeAll', receiverPath: 'list' }),
-          expect.objectContaining({ id: 'TodoItem.deleteAll' }),
+          expect.objectContaining({ id: 'TodoItem.deleteFromNamedList' }),
         ]),
       },
       entityDetails: expect.arrayContaining([
@@ -704,6 +665,7 @@ describe('Ontahi todo portability example', () => {
           mutations: {
             create: { fields: ['name', 'color'] },
             update: { fields: ['name', 'color'] },
+            delete: true,
           },
         }),
         expect.objectContaining({
@@ -772,20 +734,16 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-2', list: 'list-1', title: 'Second', completed: false },
     ];
 
-    const response = await invoke(
-      'TodoItem.setCompleted',
-      {
-        todos: { kind: 'selection', entityName: 'TodoItem', expression },
-        completed: true,
-      },
-      true,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: { ok: true, kind: 'success' },
+    const remoteExecutor = createFetchGraphReadExecutor({
+      commandEndpoint: `${origin}/graph/commands`,
+      requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
     });
+    await remoteExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTodoItemSchema).updateSelection(
+        { kind: 'selection', entityName: 'TodoItem', expression } as never,
+        { completed: true },
+      ),
+    );
     expect(
       getTodoDataset()
         .TodoItem?.filter(todo => todo.completed)
@@ -956,6 +914,7 @@ describe('Ontahi todo portability example', () => {
     const remoteExecutor = createFetchGraphReadExecutor({
       endpoint: `${origin}/graph/reads`,
       commandEndpoint: `${origin}/graph/commands`,
+      requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
     });
     const command = mutateEntity(ClientTodoItemSchema).update(
       createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
@@ -1074,7 +1033,11 @@ describe('Ontahi todo portability example', () => {
 
     const runtimeTransport = createWebSocketRuntimeTransport({
       url: `${origin.replace(/^http/, 'ws')}/runtime`,
-      createWebSocket: url => new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
+      createWebSocket: url =>
+        new WebSocket(url, {
+          origin,
+          headers: { 'x-test-principal': testPrincipal.subject },
+        }) as unknown as RuntimeWebSocket,
     });
     const client = createRuntimeGraphClient({ runtimeTransport });
     const TodoObservationRow = ClientTodoItem.view('TodoObservationRow', {
@@ -1407,14 +1370,6 @@ describe('Ontahi todo portability example', () => {
           proposal: {
             summary: 'Delete 2 items from “Shopping”.',
             requests: [
-              {
-                version: 1,
-                kind: 'graph-command',
-                command: {
-                  kind: 'many-to-many-relationship-command',
-                  action: 'unlink',
-                },
-              },
               {
                 version: 3,
                 kind: 'graph-command',

@@ -46,6 +46,7 @@ import type { ArchitectureDefinition } from './architecture-types.js';
 import { createDataGraphArchitectureAdapter } from './data-graph-app-adapter.js';
 import { DATA_GRAPH_RUNTIME_RESOURCE_KEY } from './data-graph.js';
 import { createTaskDefinitionFromDurableDomainOperation } from './domain-operations.js';
+import { executeEntityMutationLifecycle } from './entity-mutation-lifecycle.js';
 import {
   bindOntahiEntity,
   getOntahiEntityReactions,
@@ -59,6 +60,7 @@ import {
 import { getCurrentInvocationContext } from './invocation-context.js';
 import {
   applyContextualEntityMutationReactions,
+  applyContextualRelationshipMutationReactions,
   createContextualMutationReactionExecutor,
   type ContextualMutationReactionExecutorOptions,
 } from './mutation-reaction.js';
@@ -302,13 +304,32 @@ export const ontahi = <
       return Effect.runPromise(effector({ kind: 'emit-event', event }));
     },
   };
-  const createDataGraphRuntime = (): StorageRuntime<TStorage> => {
-    const runtime = options.storage.createRuntime();
+  const decorateDataGraphRuntime = (
+    runtime: StorageRuntime<TStorage>,
+    insideTransaction = false,
+  ): StorageRuntime<TStorage> => {
     if (!('runEntityMutationCommand' in runtime)) return runtime as StorageRuntime<TStorage>;
 
     const mutationRuntime = runtime as unknown as EntityMutationCommandExecutionRuntime<unknown>;
     return new Proxy(runtime, {
       get(target, property, receiver) {
+        if (property === 'transaction') {
+          if (insideTransaction) return undefined;
+          const transaction = Reflect.get(target, property, receiver) as
+            | ((
+                work: (
+                  transactionRuntime: StorageRuntime<TStorage>,
+                ) => Effect.Effect<unknown, unknown>,
+              ) => Effect.Effect<unknown, unknown>)
+            | undefined;
+          if (!transaction) return undefined;
+          return (
+            work: (transactionRuntime: StorageRuntime<TStorage>) => Effect.Effect<unknown, unknown>,
+          ) =>
+            transaction.call(target, transactionRuntime =>
+              work(decorateDataGraphRuntime(transactionRuntime, true)),
+            );
+        }
         if (property !== 'runEntityMutationCommand') {
           const value = Reflect.get(target, property, receiver) as unknown;
           return typeof value === 'function' ? value.bind(target) : value;
@@ -376,7 +397,7 @@ export const ontahi = <
                 ) {
                   continue;
                 }
-                const count = yield* runtime.count(query(field.target).where(value), undefined);
+                const count = yield* target.count(query(field.target).where(value), undefined);
                 if (count === 1) continue;
 
                 const error = new Error(
@@ -393,20 +414,36 @@ export const ontahi = <
               }
             }
 
-            const delta = yield* mutationRuntime.runEntityMutationCommand(
+            const execution = yield* executeEntityMutationLifecycle(
+              target as never,
+              semanticEntities,
               executableCommand,
               commandOptions,
             );
-            return yield* applyContextualEntityMutationReactions(
-              executableCommand,
-              delta,
-              commandOptions,
-              mutationReactionConfiguration,
-            );
+            for (const outcome of execution.outcomes) {
+              if (outcome.kind === 'entity') {
+                yield* applyContextualEntityMutationReactions(
+                  outcome.command,
+                  outcome.delta,
+                  commandOptions,
+                  mutationReactionConfiguration,
+                );
+              } else {
+                yield* applyContextualRelationshipMutationReactions(
+                  outcome.command,
+                  outcome.result,
+                  commandOptions,
+                  mutationReactionConfiguration,
+                );
+              }
+            }
+            return execution.delta;
           });
       },
     }) as unknown as StorageRuntime<TStorage>;
   };
+  const createDataGraphRuntime = (): StorageRuntime<TStorage> =>
+    decorateDataGraphRuntime(options.storage.createRuntime() as StorageRuntime<TStorage>);
   const applicationStorage = new Proxy(options.storage, {
     get(target, property, receiver) {
       if (property === 'createRuntime') return createDataGraphRuntime;
