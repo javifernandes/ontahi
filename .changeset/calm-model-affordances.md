@@ -7,4 +7,5 @@ derive authorization dispatchers and the model catalog from one registration bou
 catalog data receiver-local, infer full Model exposures from directly registered policies, and allow
 static graph-only activation without exposure factories or an empty scope callback. Read affordances
 can narrow inferred limits and modes or customize their presentation without rebuilding the canonical
-request schema.
+request schema. Generic interpretation guidance owns canonical protocol shaping and preservation of
+user-supplied string values, leaving application instructions focused on domain semantics.

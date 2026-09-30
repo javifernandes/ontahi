@@ -158,6 +158,9 @@ describe('model operation interpretation', () => {
     expect(modelRequest!.instructions).toContain(
       'For an editable property change that no advertised operation describes',
     );
+    expect(modelRequest!.instructions).toContain(
+      'Preserve user-supplied entity names and string field values exactly',
+    );
   });
   it('accepts an advertised canonical graph read and instructs the model to use it for data', async () => {
     let modelRequest: ModelRequest | undefined;
