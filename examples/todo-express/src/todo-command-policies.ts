@@ -13,11 +13,11 @@ const authorizeCompletion = (
   { authority }: GraphCommandDispatchContext<unknown>,
 ) => {
   const { principal } = authority as TodoGraphReadAuthority;
+  if (todoAuthenticationMode === 'disabled' || principal !== null) return true;
+  if (command.action === 'create') return command.values.completed !== true;
   return (
     command.action !== 'update' ||
-    !Object.prototype.hasOwnProperty.call(command.values, 'completed') ||
-    todoAuthenticationMode === 'disabled' ||
-    principal !== null
+    !Object.prototype.hasOwnProperty.call(command.values, 'completed')
   );
 };
 
@@ -28,6 +28,7 @@ export const todoItemMutationPolicy = {
     create: {
       fields: ['list', 'title', 'completed'],
       result: ['id', 'list', 'title', 'completed'],
+      authorize: authorizeCompletion,
     },
     delete: {
       if: ['title'],

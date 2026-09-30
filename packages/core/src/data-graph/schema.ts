@@ -549,7 +549,10 @@ const toBareZodSchema = (schema: GraphSchemaDefinition): ZodType => {
   }
 
   if (isGraphArrayDefinition(schema)) {
-    return z.array(toZodSchemaInternal(schema.item));
+    let array = z.array(toZodSchemaInternal(schema.item));
+    if (schema.minItems !== undefined) array = array.min(schema.minItems);
+    if (schema.maxItems !== undefined) array = array.max(schema.maxItems);
+    return array;
   }
 
   if (isGraphNullableDefinition(schema)) {

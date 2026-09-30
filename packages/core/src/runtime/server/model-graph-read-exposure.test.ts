@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   field,
   safeParseUnknownGraphSchema,
+  toGraphJsonSchema,
   type GraphReadPolicy,
 } from '../../data-graph/index.js';
 
@@ -82,6 +83,30 @@ describe('Model graph-read exposure', () => {
   });
 
   it('does not admit filters or ordering omitted from the exposure', () => {
+    const exposure = createModelGraphReadExposure(policy, {
+      mode: 'count',
+      description: 'Count documents.',
+    });
+    const emptyOrderingRequest = {
+      version: 1,
+      kind: 'graph-read',
+      mode: 'count',
+      selection: { kind: 'selection', entityName: 'Document', expression: { kind: 'all' } },
+      orderBy: [],
+    };
+    expect(safeParseUnknownGraphSchema(exposure.request, emptyOrderingRequest).success).toBe(true);
+    expect(
+      safeParseUnknownGraphSchema(exposure.request, {
+        ...emptyOrderingRequest,
+        orderBy: [{ fieldName: 'title', direction: 'asc' }],
+      }).success,
+    ).toBe(false);
+    const jsonSchema = toGraphJsonSchema(exposure.request);
+    expect(jsonSchema).toMatchObject({
+      properties: { orderBy: { type: 'array', maxItems: 0 } },
+    });
+    expect(JSON.stringify(jsonSchema)).not.toContain('"anyOf":[]');
+
     expect(() =>
       createModelGraphReadExposure(policy, {
         mode: 'count',

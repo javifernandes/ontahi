@@ -16,6 +16,7 @@ import {
   toGraphCommandRequest,
   toGraphReadRequest,
   type GraphReadPolicy,
+  type EntityMutationCommandExecutionRuntime,
   type InMemoryDataset,
   type RelationshipFact,
 } from '../../data-graph/index.js';
@@ -51,6 +52,24 @@ describe('ontahi application composition root', () => {
         id: field.generated(field.id(), 'test-child-id'),
         parent: field.existingRef(Parent),
       },
+      operations: ({ app }) => ({
+        overwriteGeneratedId: app.operation.define({
+          run: () =>
+            getRequiredDataGraphRuntime<EntityMutationCommandExecutionRuntime<unknown>>()
+              .runEntityMutationCommand({
+                kind: 'entity-mutation-command',
+                action: 'update',
+                entityName: 'ExistingChild',
+                target: {
+                  kind: 'entity-ref',
+                  entityName: 'ExistingChild',
+                  locator: { id: 'child-1' },
+                },
+                values: { id: 'replacement-child' },
+              })
+              .pipe(Effect.orDie),
+        }),
+      }),
     });
     const storage = createInMemoryDataGraphStorage({
       dataset: { ExistingParent: [], ExistingChild: [] },
@@ -100,6 +119,14 @@ describe('ontahi application composition root', () => {
         authority: undefined,
       }),
     ).resolves.toMatchObject({ kind: 'graph-command-result' });
+    expect(storage.dataset.ExistingChild).toEqual([{ id: 'child-1', parent: 'parent-1' }]);
+
+    await expect(
+      application.invokeOperation(
+        application.graph.entities.ExistingChild.domain.overwriteGeneratedId,
+        undefined,
+      ),
+    ).resolves.toMatchObject({ ok: false, kind: 'failed' });
     expect(storage.dataset.ExistingChild).toEqual([{ id: 'child-1', parent: 'parent-1' }]);
 
     await expect(

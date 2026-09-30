@@ -513,6 +513,34 @@ describe('Ontahi todo portability example', () => {
     expect(getTodoDataset().TodoItem?.[0]?.completed).toBe(false);
   });
 
+  it('requires one explicit Principal to create an already-completed TodoItem', async () => {
+    const dispatch = (
+      TodoApplication as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher(todoGraphCommandPolicies);
+    const create = (completed: boolean) =>
+      toGraphCommandRequest(
+        mutateEntity(TodoItem).create({
+          list: TodoList.refById('list-1'),
+          title: completed ? 'Already done' : 'Still open',
+          completed,
+        }),
+      );
+
+    await expect(dispatch(create(true), { authority: { principal: null } })).resolves.toMatchObject(
+      { kind: 'protocol-error', error: { code: 'access_denied' } },
+    );
+    await expect(
+      dispatch(create(false), { authority: { principal: null } }),
+    ).resolves.toMatchObject({ kind: 'graph-command-result' });
+    await expect(
+      dispatch(create(true), { authority: { principal: testPrincipal } }),
+    ).resolves.toMatchObject({ kind: 'graph-command-result' });
+    expect(getTodoDataset().TodoItem).toEqual([
+      expect.objectContaining({ title: 'Still open', completed: false }),
+      expect.objectContaining({ title: 'Already done', completed: true }),
+    ]);
+  });
+
   it('derives protected mutation authority on the Express Runtime Protocol receiver', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },

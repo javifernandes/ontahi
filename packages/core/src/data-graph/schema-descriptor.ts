@@ -122,6 +122,8 @@ export type GraphSchemaObjectDescriptor = {
 export type GraphSchemaArrayDescriptor = {
   kind: 'array';
   item: GraphSchemaDescriptor;
+  minItems?: number;
+  maxItems?: number;
 };
 
 export type GraphSchemaNullableDescriptor = {
@@ -423,9 +425,12 @@ export const toGraphSchemaDescriptor = (
   }
 
   if (schema.kind === 'schema.array') {
+    const array = schema as GraphArrayDefinition;
     return {
       kind: 'array',
-      item: toGraphSchemaDescriptor((schema as GraphArrayDefinition).item, resolvingLazyNames),
+      item: toGraphSchemaDescriptor(array.item, resolvingLazyNames),
+      ...(array.minItems === undefined ? {} : { minItems: array.minItems }),
+      ...(array.maxItems === undefined ? {} : { maxItems: array.maxItems }),
     };
   }
 
@@ -661,7 +666,12 @@ const descriptorToJsonSchema = (
   }
 
   if (descriptor.kind === 'array') {
-    return { type: 'array', items: descriptorToJsonSchema(descriptor.item, context) };
+    return {
+      type: 'array',
+      items: descriptorToJsonSchema(descriptor.item, context),
+      ...(descriptor.minItems === undefined ? {} : { minItems: descriptor.minItems }),
+      ...(descriptor.maxItems === undefined ? {} : { maxItems: descriptor.maxItems }),
+    };
   }
 
   if (descriptor.kind === 'nullable') {

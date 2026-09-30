@@ -314,6 +314,8 @@ export type AnyGraphObjectDefinition = GraphObjectDefinition<
 export interface GraphArrayDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
   kind: 'schema.array';
   item: TItem;
+  minItems?: number;
+  maxItems?: number;
   __value?: InferGraphSchemaValue<TItem>[];
 }
 
@@ -1366,9 +1368,12 @@ export const graphObject = <
 
 export const graphArray = <TItem extends GraphSchemaLike>(
   item: TItem,
+  options?: { minItems?: number; maxItems?: number },
 ): GraphArrayDefinition<TItem> => ({
   kind: 'schema.array',
   item,
+  ...(options?.minItems === undefined ? {} : { minItems: options.minItems }),
+  ...(options?.maxItems === undefined ? {} : { maxItems: options.maxItems }),
 });
 
 export const graphNullable = <TItem extends GraphSchemaLike>(

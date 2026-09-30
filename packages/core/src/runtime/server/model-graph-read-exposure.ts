@@ -82,6 +82,17 @@ export const createModelGraphReadExposure = <TEntity extends AnyEntityDefinition
     ]),
   });
   const direction = union([graphSchema.literal('asc'), graphSchema.literal('desc')]);
+  const orderByItem = strict({
+    fieldName:
+      orderBy.length === 0
+        ? graphSchema.literal('')
+        : union(orderBy.map(fieldName => graphSchema.literal(fieldName))),
+    direction,
+  });
+  const orderBySchema = graphSchema.array(
+    orderByItem,
+    orderBy.length === 0 ? { maxItems: 0 } : undefined,
+  );
 
   return {
     description: options.description,
@@ -90,12 +101,7 @@ export const createModelGraphReadExposure = <TEntity extends AnyEntityDefinition
       kind: graphSchema.literal('graph-read'),
       mode: graphSchema.literal(options.mode),
       selection,
-      orderBy: graphSchema.array(
-        strict({
-          fieldName: union(orderBy.map(fieldName => graphSchema.literal(fieldName))),
-          direction,
-        }),
-      ),
+      orderBy: orderBySchema,
       ...(options.limit === undefined ? {} : { limit: graphSchema.literal(options.limit) }),
     }),
     validate: options.validate ?? (() => undefined),

@@ -341,6 +341,19 @@ export const ontahi = <
         ) =>
           Effect.gen(function* () {
             let executableCommand: EntityMutationCommand = command;
+            if (command.action === 'update') {
+              const entityDefinition = semanticEntities.find(
+                entity => entity.name === command.entityName,
+              );
+              const generatedFieldName = Object.keys(command.values).find(
+                fieldName => entityDefinition?.fields[fieldName]?.generatedBy !== undefined,
+              );
+              if (generatedFieldName) {
+                throw new Error(
+                  `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${generatedFieldName}.`,
+                );
+              }
+            }
             if (command.action === 'create') {
               const entityDefinition = semanticEntities.find(
                 entity => entity.name === command.entityName,

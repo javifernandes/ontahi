@@ -207,6 +207,24 @@ describe('data-graph schema DSL', () => {
     expect(() => field.generated(field.string(), ' ')).toThrow('require a generator name');
   });
 
+  it('reflects and validates array cardinality constraints', () => {
+    const EmptyStrings = graphSchema.array(field.string(), { minItems: 0, maxItems: 0 });
+
+    expect(toGraphSchemaDescriptor(EmptyStrings)).toEqual({
+      kind: 'array',
+      item: expect.objectContaining({ kind: 'scalar', type: 'string' }),
+      minItems: 0,
+      maxItems: 0,
+    });
+    expect(toGraphJsonSchema(EmptyStrings)).toMatchObject({
+      type: 'array',
+      minItems: 0,
+      maxItems: 0,
+    });
+    expect(safeParseGraphSchema(EmptyStrings, [])).toMatchObject({ success: true, data: [] });
+    expect(safeParseGraphSchema(EmptyStrings, ['unexpected']).success).toBe(false);
+  });
+
   it('reflects an existing-reference mutation requirement without changing input resolution', () => {
     const Parent = entity('RequiredParent', { id: field.id() });
     const Child = entity('RequiredChild', {
