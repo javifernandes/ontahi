@@ -1,6 +1,7 @@
 import type { AnyEntityDefinition } from './definitions.js';
 import type { EntityMutationCommand } from './entity-mutation-command.js';
 import type {
+  AppliedEntityMutationOutcome,
   AppliedMutationOutcome,
   AppliedRelationshipMutationOutcome,
   EmitEventReactionIntent,
@@ -17,6 +18,31 @@ import {
 } from './relationship-command.js';
 
 type ReactionConfig = Pick<MutationReaction, 'id' | 'delivery'>;
+type EntityMutationAction = EntityMutationCommand['action'];
+type EntityOutcomeFor<TAction extends EntityMutationAction> = Omit<
+  AppliedEntityMutationOutcome,
+  'command'
+> & {
+  command: Extract<EntityMutationCommand, { action: TAction }>;
+};
+type EntityOutcomeProjector<TAction extends EntityMutationAction, TValue> = (
+  outcome: EntityOutcomeFor<TAction>,
+) => TValue;
+type EntityEventAuthoring<TAction extends EntityMutationAction> = {
+  (project: EntityOutcomeProjector<TAction, unknown>): MutationReaction;
+  (event: unknown): MutationReaction;
+};
+type EntityReactionBuilder<TAction extends EntityMutationAction> = {
+  react: (
+    project: EntityOutcomeProjector<TAction, readonly MutationReactionIntent[]>,
+  ) => MutationReaction;
+  emit: EntityEventAuthoring<TAction>;
+};
+type EntityReactionAuthoring = {
+  created: (config: ReactionConfig) => EntityReactionBuilder<'create'>;
+  updated: (config: ReactionConfig) => EntityReactionBuilder<'update'>;
+  deleted: (config: ReactionConfig) => EntityReactionBuilder<'delete'>;
+};
 type AppliedDirectRelationshipMutationOutcome = Omit<
   AppliedRelationshipMutationOutcome,
   'command'
@@ -160,7 +186,38 @@ const relationship = <
       : {}),
   }) as RelationshipReactionAuthoring<TEntity, TRelationName>;
 
+const defineEntityReaction = <TAction extends EntityMutationAction>(
+  entity: AnyEntityDefinition,
+  action: TAction,
+  config: ReactionConfig,
+): EntityReactionBuilder<TAction> => {
+  const react = (
+    project: EntityOutcomeProjector<TAction, readonly MutationReactionIntent[]>,
+  ): MutationReaction => ({
+    ...config,
+    when: {
+      mutationKind: 'entity-mutation-command',
+      action,
+      entityName: entity.name,
+    },
+    react: (outcome: AppliedMutationOutcome) => project(outcome as EntityOutcomeFor<TAction>),
+  });
+  const emitReaction = ((event: unknown) =>
+    react(outcome => [
+      emit(typeof event === 'function' ? event(outcome) : event),
+    ])) as EntityEventAuthoring<TAction>;
+
+  return { react, emit: emitReaction };
+};
+
+const entity = (definition: AnyEntityDefinition): EntityReactionAuthoring => ({
+  created: config => defineEntityReaction(definition, 'create', config),
+  updated: config => defineEntityReaction(definition, 'update', config),
+  deleted: config => defineEntityReaction(definition, 'delete', config),
+});
+
 export const reaction = {
+  entity,
   relationship,
   intent: {
     emit,

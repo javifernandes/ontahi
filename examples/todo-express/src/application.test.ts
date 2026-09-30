@@ -272,19 +272,21 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
-  it('runs a TodoList operation with the capability supplied by its application', async () => {
+  it('emits the TodoList creation Reaction after a generic remote mutation', async () => {
     const notified = vi
       .spyOn(todoNotifications, 'todoListCreated')
       .mockImplementation(() => Effect.succeed(undefined));
-
-    await expect(
-      TodoList.createList({ id: 'list-2', name: 'Reading queue', color: '#dcebdc' }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: { id: 'list-2', name: 'Reading queue', color: '#dcebdc' },
+    const remoteClient = createFetchGraphClient({
+      runtimeTransport: { endpoint: `${origin}/runtime` },
     });
+
+    await remoteClient.graphExecutor.runEntityMutationCommand!(
+      mutateEntity(ClientTodoListSchema).create({ name: 'Reading queue', color: '#dcebdc' }),
+    );
+    const created = getTodoDataset().TodoList?.find(list => list.name === 'Reading queue');
+    expect(created).toMatchObject({ name: 'Reading queue', color: '#dcebdc' });
     expect(notified).toHaveBeenCalledWith({
-      listId: 'list-2',
+      listId: created?.id,
       name: 'Reading queue',
     });
   });
@@ -700,6 +702,7 @@ describe('Ontahi todo portability example', () => {
         expect.objectContaining({
           name: 'TodoList',
           mutations: {
+            create: { fields: ['name', 'color'] },
             update: { fields: ['name', 'color'] },
           },
         }),

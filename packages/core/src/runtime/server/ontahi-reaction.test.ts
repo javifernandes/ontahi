@@ -5,12 +5,16 @@ import {
   createInMemoryDataGraphStorage,
   field,
   graphSchema,
+  mutateEntity,
   reaction,
+  toGraphCommandRequest,
   type AppliedRelationshipMutationResult,
   type InMemoryDataGraphError,
   type InMemoryDataset,
   type RelationshipMutationResult,
 } from '../../data-graph/index.js';
+
+import type { GraphCommandableOntahiApplication } from './ontahi.js';
 
 import { entity, layer, ontahi, relation } from './index.js';
 
@@ -53,6 +57,62 @@ const assertApplied: (
 };
 
 describe('Ontahi Reaction registration', () => {
+  it('runs an Entity create Reaction after the mutation is applied', async () => {
+    const Book = entity({
+      name: 'ReactionBook',
+      fields: { id: field.id(), title: field.string() },
+    });
+    const events: unknown[] = [];
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { ReactionBook: [] } }),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [Book],
+      reactions: () => [
+        reaction
+          .entity(Book)
+          .created({ id: 'book-created', delivery: 'inline' })
+          .emit(outcome => ({
+            type: 'BookCreated',
+            title: outcome.delta.created[0]?.values.title,
+          })),
+      ],
+    });
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      {
+        entity: Book,
+        scope: 'all',
+        actions: { create: { fields: ['id', 'title'], result: ['id', 'title'] } },
+      },
+    ]);
+
+    await expect(
+      dispatch(
+        toGraphCommandRequest(mutateEntity(Book).create({ id: 'book-1', title: 'Ontahi' })),
+        {
+          authority: undefined,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'graph-command-result',
+      value: {
+        created: [{ entityName: 'ReactionBook', values: { id: 'book-1', title: 'Ontahi' } }],
+        updated: [],
+        deleted: [],
+      },
+    });
+    expect(events).toEqual([{ type: 'BookCreated', title: 'Ontahi' }]);
+    expect(application.storage.dataset.ReactionBook).toEqual([{ id: 'book-1', title: 'Ontahi' }]);
+  });
+
   it('runs an ordered move Reaction and an ordered follow-up through the contextual runtime', async () => {
     const ListFields = { id: field.id() };
     const Item = entity({

@@ -145,6 +145,19 @@ validation. Todo uses it to keep an unspecified list as an interaction: a direct
 rejected, while each explicit option in “Which list?” is valid and resumes through both in-process
 and LangGraph Task Runtimes.
 
+## Second Todo Migration
+
+`TodoList.createList` has been removed. `TodoList.id` is receiver-generated and `color` defaults in
+the Entity model, so React, Runtime Protocol, and Model Support now create lists through the same
+canonical Entity Mutation Command. The applied mutation delta returns the generated identity to
+the caller.
+
+Core now authors Entity lifecycle reactions with
+`reaction.entity(Entity).created|updated|deleted(...)` and interprets them after the authoritative
+mutation succeeds, including transaction-aware post-commit deferral. Todo declares its list-created
+notification as a best-effort Entity reaction, preserving the external effect without a wrapper
+Operation.
+
 ## Acceptance
 
 - [ ] Every removed Todo Operation has an equivalent canonical command path with the same model,

@@ -172,7 +172,10 @@ assert.equal(createdList.status, 'executed');
 assert.equal(dataset.TodoList.filter(item => item.name === 'Holidays').length, 1);
 console.info('List creation passed.');
 
-await TodoList.createList({ id: 'delete-me', name: 'Groceries', color: '#fff' });
+dataset.TodoList = [
+  ...(dataset.TodoList ?? []),
+  { id: 'delete-me', name: 'Groceries', color: '#fff' },
+];
 dataset.TodoItem = [
   ...dataset.TodoItem,
   { id: 'delete-child', list: 'delete-me', title: 'buy apples', completed: false },
@@ -253,7 +256,10 @@ assert.match(help.message, /complet|done/i);
 assert.ok(help.message.length < 700, 'Help should be concise.');
 assert.equal(JSON.stringify(dataset), beforeHelp);
 
-await TodoList.createList({ id: 'house-list', name: 'house', color: '#fff' });
+dataset.TodoList = [
+  ...(dataset.TodoList ?? []),
+  { id: 'house-list', name: 'house', color: '#fff' },
+];
 const door = await submit('now add item fix the door in house');
 console.info(JSON.stringify({ text: 'now add item fix the door in house', result: door }));
 assert.equal(door.status, 'executed');

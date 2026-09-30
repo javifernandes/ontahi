@@ -14,7 +14,7 @@ import {
 } from '@ontahi/core/data-graph';
 
 const TodoListSchemaBase = defineEntitySchema('TodoList', {
-  id: field.id(),
+  id: field.generated(field.id(), 'uuid'),
   name: field.nonEmptyString({
     trim: true,
     exclude: {
@@ -25,13 +25,13 @@ const TodoListSchemaBase = defineEntitySchema('TodoList', {
       exclude: 'Archive is reserved for system use.',
     },
   }),
-  color: field.named('Color', field.nonEmptyString({ trim: true })),
+  color: field.default(field.named('Color', field.nonEmptyString({ trim: true })), '#f5ddd5'),
 }).display({ primary: 'name', search: ['name'] });
 export const TagSchema = withSelectionFactories(
   defineEntitySchema('Tag', {
     id: field.id(),
     name: field.nonEmptyString({ trim: true }),
-    color: TodoListSchemaBase.fields.color,
+    color: field.named('Color', field.nonEmptyString({ trim: true })),
   }).display({ primary: 'name', search: ['name'] }),
   {
     identity: {
@@ -80,15 +80,6 @@ const DeleteListItemsOutputValue = value('DeleteListItemsOutput', {
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
-    createList: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList']],
-      },
-      input: graphSchema.pick(TodoListSchema, ['id', 'name', 'color']).named('CreateTodoListInput'),
-      output: TodoListSchema,
-    }),
     completeAll: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',

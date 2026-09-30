@@ -179,14 +179,14 @@ Fetch remains the portable fallback for hosts without WebSocket support. Configu
 `createFetchGraphClient({ runtimeTransport: { endpoint: '/runtime' } })` preserves the same
 application authoring and implements Durable observation with transport-owned polling.
 
-The family-specific routes remain available for explicit compatibility during migration. List
-creation still uses the legacy Operation route, while item creation uses the canonical Entity
-Mutation Command and receiver-owned identity/defaults:
+The family-specific routes remain available for explicit compatibility during migration. Basic
+list and item creation use canonical Entity Mutation Commands with receiver-owned identities and
+model defaults:
 
 ```sh
-curl -X POST http://localhost:3001/operations \
+curl -X POST http://localhost:3001/graph/commands \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoList.createList","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
+  -d '{"version":1,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"create","entityName":"TodoList","values":{"name":"Inbox"}}}'
 
 curl -X POST http://localhost:3001/graph/commands \
   -H 'content-type: application/json' \

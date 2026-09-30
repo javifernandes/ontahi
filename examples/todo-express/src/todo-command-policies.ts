@@ -23,6 +23,10 @@ export const todoGraphCommandPolicies = [
     entity: TodoList,
     scope: 'all',
     actions: {
+      create: {
+        fields: ['name', 'color'],
+        result: ['id', 'name', 'color'],
+      },
       update: {
         fields: ['name', 'color'],
         if: ['name'],

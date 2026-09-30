@@ -48,27 +48,6 @@ export const todoCommandBindings = (
   const listForRef = (ref: unknown) =>
     context.lists.find(list => sameJson(ref, createEntityRef(TodoList, { id: list.id })));
   return {
-    'TodoList.createList': {
-      description: spanish ? 'Crear una lista nueva.' : undefined,
-      validate: value => {
-        if (
-          Object.keys(value).length !== 3 ||
-          typeof value.name !== 'string' ||
-          !value.name.trim() ||
-          value.name.length > 200 ||
-          value.color !== '#f5ddd5'
-        )
-          outside();
-        if (!includesRequestedValue(request, String(value.name)))
-          return say(
-            'Use a list name from the request.',
-            'Usá un nombre de lista que aparezca en el pedido.',
-          );
-        return undefined;
-      },
-      message: value =>
-        say(`List “${String(value.name)}” created.`, `Lista “${String(value.name)}” creada.`),
-    },
     'TodoItem.deleteList': {
       description: spanish ? 'Borrar una lista y todos sus ítems.' : undefined,
       validate: (value, validation) => {
@@ -130,7 +109,7 @@ export const todoCommandBindings = (
   };
 };
 export const todoCommandInstructions = `You control a Todo app. Keep reasoning brief: choose one action and one target, or ask one question. Do not repeat the schema. Use these mappings:
-- "create list <name>" -> TodoList.createList, input {id: context.creation.id, name, color: context.creation.color}.
+- "create list <name>" -> graph-command version 1, entity-mutation-command create on TodoList, values {name}. Identity is receiver-owned and color defaults from the model.
 - "add <title> to <list name>" or "add item <title> in <list name>" -> graph-command version 1, entity-mutation-command create on TodoItem, values {title, list: the matching list.ref}. Identity and completed are receiver-owned.
 - "delete list <name>" -> TodoItem.deleteList, input {list: the matching list.ref}.
 - "delete item <title>" (optionally "from list <name>") -> graph-command version 2, entity-mutation-command delete on TodoItem, target item.ref, if {title: current title}. No values field. This deletes only the item, never its list.

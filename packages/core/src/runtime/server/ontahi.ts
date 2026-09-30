@@ -56,7 +56,11 @@ import {
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
-import { createContextualMutationReactionExecutor } from './mutation-reaction.js';
+import {
+  applyContextualEntityMutationReactions,
+  createContextualMutationReactionExecutor,
+  type ContextualMutationReactionExecutorOptions,
+} from './mutation-reaction.js';
 import type { TaskConfig } from './tasks.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
@@ -274,6 +278,29 @@ export const ontahi = <
   let applicationForReactions: OntahiApplication | undefined;
   let registeredReactions: readonly MutationReaction[] = [];
   const semanticEntities: AnyEntityDefinition[] = [];
+  const mutationReactionConfiguration: ContextualMutationReactionExecutorOptions = {
+    getReactions: () => registeredReactions,
+    invokeOperation: request => {
+      const operation = applicationForReactions?.resolveOperation(request.operationId);
+      if (!operation || !applicationForReactions) {
+        throw new Error(`Unknown Operation ${request.operationId}.`);
+      }
+      return applicationForReactions.invokeOperation(operation, request.input);
+    },
+    emitEvent: event => {
+      const effectors = registeredForReactions?.app.effects.effectors as
+        | {
+            'emit-event'?: (intent: {
+              kind: 'emit-event';
+              event: unknown;
+            }) => Effect.Effect<void, unknown>;
+          }
+        | undefined;
+      const effector = effectors?.['emit-event'];
+      if (!effector) throw new Error('No effector registered for emit-event intents');
+      return Effect.runPromise(effector({ kind: 'emit-event', event }));
+    },
+  };
   const createDataGraphRuntime = (): StorageRuntime<TStorage> => {
     const runtime = options.storage.createRuntime();
     if (!('runEntityMutationCommand' in runtime)) return runtime as StorageRuntime<TStorage>;
@@ -365,9 +392,15 @@ export const ontahi = <
               }
             }
 
-            return yield* mutationRuntime.runEntityMutationCommand(
+            const delta = yield* mutationRuntime.runEntityMutationCommand(
               executableCommand,
               commandOptions,
+            );
+            return yield* applyContextualEntityMutationReactions(
+              executableCommand,
+              delta,
+              commandOptions,
+              mutationReactionConfiguration,
             );
           });
       },
@@ -380,29 +413,9 @@ export const ontahi = <
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
-  const relationshipCommandExecutor = createContextualMutationReactionExecutor<any, any>({
-    getReactions: () => registeredReactions,
-    invokeOperation: request => {
-      const operation = applicationForReactions?.resolveOperation(request.operationId);
-      if (!operation || !applicationForReactions) {
-        throw new Error(`Unknown Operation ${request.operationId}.`);
-      }
-      return applicationForReactions.invokeOperation(operation, request.input);
-    },
-    emitEvent: event => {
-      const effectors = registeredForReactions?.app.effects.effectors as
-        | {
-            'emit-event'?: (intent: {
-              kind: 'emit-event';
-              event: unknown;
-            }) => Effect.Effect<void, unknown>;
-          }
-        | undefined;
-      const effector = effectors?.['emit-event'];
-      if (!effector) throw new Error('No effector registered for emit-event intents');
-      return Effect.runPromise(effector({ kind: 'emit-event', event }));
-    },
-  });
+  const relationshipCommandExecutor = createContextualMutationReactionExecutor<any, any>(
+    mutationReactionConfiguration,
+  );
   const graph = createDataGraphArchitectureAdapter<
     unknown,
     any,

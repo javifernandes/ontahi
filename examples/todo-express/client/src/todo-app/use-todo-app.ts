@@ -30,7 +30,7 @@ import { tagsQuery, todoListsQuery } from '../todo-queries.js';
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
 import { moveTodoItem } from './todo-list-state.js';
-import { createTodoItem, renameTodoItem } from './todo-mutations.js';
+import { createTodoItem, createTodoList, renameTodoItem } from './todo-mutations.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
@@ -83,6 +83,7 @@ export type UseTodoAppOptions = {
 export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOptions) => {
   const [runtime, setRuntime] = useState<BootstrapState<TodoRuntime>>({ status: 'loading' });
   const [actionError, setActionError] = useState<string>();
+  const [isCreatingList, setIsCreatingList] = useState(false);
   const [creatingTodoFor, setCreatingTodoFor] = useState<string>();
   const [renamingListId, setRenamingListId] = useState<string>();
   const [recoloringListId, setRecoloringListId] = useState<string>();
@@ -99,7 +100,6 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
   const graphExecutor = useGraphExecutorCapability();
-  const createListOperation = useOperation(TodoList.domain.createList);
   const deleteListOperation = useOperation(TodoItem.domain.deleteList);
   const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
   const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
@@ -140,23 +140,19 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   }, [lists.data, optimisticOrder]);
 
   const createList = async (rawName: string) => {
-    const name = rawName.trim();
-    if (!name) return undefined;
-
     setActionError(undefined);
+    setIsCreatingList(true);
     try {
-      const listId = globalThis.crypto.randomUUID();
-      const result = await createListOperation.executeAsync({
-        id: listId,
-        name,
-        color: listPastelColors[(lists.data?.length ?? 0) % listPastelColors.length]!,
-      });
-      const message = operationMessage(result, 'The list could not be created.');
-      setActionError(message);
-      return message ? undefined : listId;
-    } catch (error) {
-      setActionError(thrownMessage(error, 'The list could not be created.'));
-      return undefined;
+      const result = await createTodoList(
+        graphExecutor,
+        lists.refetch,
+        rawName,
+        listPastelColors[(lists.data?.length ?? 0) % listPastelColors.length]!,
+      );
+      if (!result.ok) setActionError(result.message);
+      return result.ok ? result.id : undefined;
+    } finally {
+      setIsCreatingList(false);
     }
   };
 
@@ -445,7 +441,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
       isError: lists.isError || tags.isError,
       actionError,
       canComplete,
-      isCreatingList: createListOperation.isExecuting,
+      isCreatingList,
       creatingTodoFor,
       renamingListId,
       recoloringListId,

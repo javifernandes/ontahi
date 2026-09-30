@@ -18,10 +18,13 @@ try {
   if (defaultStorage.kind !== 'mysql') throw new Error('Expected MySQL storage.');
   const runtime = defaultStorage.createRuntime();
   if (process.argv[2] === 'write') {
-    assert.equal(
-      (await TodoList.createList({ id: 'persist-list', name: 'Persistent list', color: 'blue' }))
-        .ok,
-      true,
+    await Effect.runPromise(
+      runtime.runEntityMutationCommand({
+        kind: 'entity-mutation-command',
+        action: 'create',
+        entityName: 'TodoList',
+        values: { id: 'persist-list', name: 'Persistent list', color: 'blue' },
+      }),
     );
     for (const id of ['persist-one', 'persist-two'])
       await Effect.runPromise(

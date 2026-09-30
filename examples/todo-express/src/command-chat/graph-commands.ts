@@ -67,6 +67,36 @@ export const todoGraphCommands = (
   });
   return [
     {
+      description: es ? 'Crear una lista nueva.' : 'Create a new list.',
+      request: strict({
+        version: graphSchema.literal(1),
+        kind: graphSchema.literal('graph-command'),
+        command: strict({
+          kind: graphSchema.literal('entity-mutation-command'),
+          action: graphSchema.literal('create'),
+          entityName: graphSchema.literal('TodoList'),
+          values: strict({
+            name: TodoList.fields.name,
+            color: TodoList.fields.color,
+          }),
+        }),
+      }),
+      validate: ({ command }) => {
+        const create = command as EntityMutationCommand;
+        return create.kind === 'entity-mutation-command' &&
+          create.action === 'create' &&
+          typeof create.values.name === 'string' &&
+          create.values.color === '#f5ddd5' &&
+          includesRequestedValue(text, create.values.name)
+          ? undefined
+          : unresolved;
+      },
+      message: ({ command }) => {
+        const name = command.action === 'create' ? String(command.values.name) : '';
+        return es ? `Lista “${name}” creada.` : `List “${name}” created.`;
+      },
+    },
+    {
       description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
       request: strict({
         version: graphSchema.literal(1),

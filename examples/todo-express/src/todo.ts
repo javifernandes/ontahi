@@ -15,7 +15,6 @@ import {
   defineTaskExecution,
   defineTaskExecutionStep,
   failOperation,
-  type OntahiCapabilities,
   type TaskExecutionState,
 } from '@ontahi/core/runtime/server';
 import type { JsonValue } from '@ontahi/core/value/json';
@@ -34,16 +33,8 @@ const entityDefaults = {
   layer: 'todos',
 } as const;
 
-export type TodoCapabilities = OntahiCapabilities & {
-  runtime: {
-    notifications: {
-      todoListCreated(input: { listId: string; name: string }): Effect.Effect<void>;
-    };
-  };
-};
-
 const todoListFields = {
-  id: field.id(),
+  id: field.generated(field.id(), 'uuid'),
   name: field.nonEmptyString({
     trim: true,
     exclude: {
@@ -54,7 +45,7 @@ const todoListFields = {
       exclude: 'Archive is reserved for system use.',
     },
   }),
-  color: field.named('Color', field.nonEmptyString({ trim: true })),
+  color: field.default(field.named('Color', field.nonEmptyString({ trim: true })), '#f5ddd5'),
 };
 
 const TodoItemCommandRef = entity.ref('TodoItem', {
@@ -79,10 +70,7 @@ export const TodoList = entity({
   }),
   display: { primary: 'name', search: ['name'] },
   domainOperationDefaults: entityDefaults,
-  uses: {
-    capabilities: {} as TodoCapabilities,
-  },
-  operations: ({ self, commands, commandsFor, operation, ingress, app }) => {
+  operations: ({ self, commandsFor, operation, ingress }) => {
     const todoCommands = commandsFor(TodoItemCommandRef);
     const CompleteAllInput = graphSchema.object({
       list: graphSchema.ref(self),
@@ -101,23 +89,6 @@ export const TodoList = entity({
     );
 
     return {
-      createList: operation({
-        description: 'Create a new list.',
-        input: graphSchema.pick(self, ['id', 'name', 'color']).named('CreateTodoListInput'),
-        output: self,
-        bridge: { invalidate: [['TodoList']] },
-        run: input =>
-          Effect.gen(function* () {
-            const created = yield* commands.insertReturning(input, ['id', 'name', 'color']).run();
-
-            yield* app.runtime.notifications.todoListCreated({
-              listId: created.id,
-              name: created.name,
-            });
-
-            return created;
-          }),
-      }),
       completeAll: operation({
         input: graphSchema.object({
           list: graphSchema.ref(self),
@@ -149,7 +120,7 @@ export const Tag = withSelectionFactories(
     fields: {
       id: field.id(),
       name: field.nonEmptyString({ trim: true }),
-      color: TodoList.fields.color,
+      color: field.named('Color', field.nonEmptyString({ trim: true })),
     },
     display: { primary: 'name', search: ['name'] },
   }),

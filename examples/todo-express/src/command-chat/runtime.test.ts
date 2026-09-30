@@ -58,6 +58,10 @@ const create = (id = 'list-1') => ({
     mutateEntity(TodoItem).create({ title: 'buy bread', list: list(id) }),
   ),
 });
+const createList = (name = 'Holidays') => ({
+  status: 'resolved' as const,
+  request: toGraphCommandRequest(mutateEntity(TodoList).create({ name })),
+});
 const rename = (entityName: 'TodoList' | 'TodoItem', id: string, before: string, after: string) => {
   const key = entityName === 'TodoList' ? 'name' : 'title';
   return {
@@ -246,16 +250,13 @@ describe('Todo canonical model requests', () => {
     expect(dataset().TodoList).toHaveLength(3);
   });
   it('creates a list with the declared input', async () => {
-    bind(async () =>
-      proposal('TodoList.createList', { id: 'new-list', name: 'Holidays', color: '#f5ddd5' }),
-    );
+    bind(async () => createList());
     expect(await submit('create list Holidays')).toMatchObject({ status: 'executed' });
-    expect(dataset().TodoList?.at(-1)?.name).toBe('Holidays');
+    expect(dataset().TodoList?.at(-1)).toMatchObject({ name: 'Holidays', color: '#f5ddd5' });
+    expect(dataset().TodoList?.at(-1)?.id).toEqual(expect.any(String));
   });
   it('rejects invented creation values', async () => {
-    bind(async () =>
-      proposal('TodoList.createList', { id: 'new-list', name: 'Holidays', color: '#f5ddd5' }),
-    );
+    bind(async () => createList());
     expect(await submit('create list Vacation')).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoList).toHaveLength(2);
 
@@ -264,9 +265,7 @@ describe('Todo canonical model requests', () => {
     expect(dataset().TodoItem).toHaveLength(2);
   });
   it('allows capitalization differences from speech recognition', async () => {
-    bind(async () =>
-      proposal('TodoList.createList', { id: 'new-list', name: 'Holidays', color: '#f5ddd5' }),
-    );
+    bind(async () => createList());
     expect(await submit('create list holidays')).toMatchObject({ status: 'executed' });
   });
   it.each([

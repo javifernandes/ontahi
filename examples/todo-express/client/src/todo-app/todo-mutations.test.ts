@@ -3,9 +3,32 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TodoItemSchema, TodoListSchema } from '../../../src/generated/client-entities.js';
 
-import { createTodoItem, renameTodoItem } from './todo-mutations.js';
+import { createTodoItem, createTodoList, renameTodoItem } from './todo-mutations.js';
 
 describe('Todo entity mutations', () => {
+  it('creates a list with receiver-owned identity and returns that identity', async () => {
+    const runEntityMutationCommand = vi.fn().mockResolvedValue({
+      created: [
+        {
+          entityName: 'TodoList',
+          ref: createEntityRef(TodoListSchema, { id: 'generated-list' }),
+          values: { id: 'generated-list', name: 'Reading', color: '#dcebdc' },
+        },
+      ],
+      updated: [],
+      deleted: [],
+    });
+    const refetchTodos = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      createTodoList({ runEntityMutationCommand }, refetchTodos, '  Reading  ', '#dcebdc'),
+    ).resolves.toEqual({ ok: true, id: 'generated-list' });
+    expect(runEntityMutationCommand).toHaveBeenCalledWith(
+      mutateEntity(TodoListSchema).create({ name: 'Reading', color: '#dcebdc' }),
+    );
+    expect(refetchTodos).toHaveBeenCalledOnce();
+  });
+
   it('creates through one Entity Mutation Command without client-owned defaults or identity', async () => {
     const runEntityMutationCommand = vi.fn().mockResolvedValue({});
     const refetchTodos = vi.fn().mockResolvedValue(undefined);

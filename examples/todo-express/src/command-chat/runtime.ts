@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { createEntityRef, Selection } from '@ontahi/core/data-graph';
 import {
   createApplicationModelCommandRuntime,
@@ -59,7 +57,6 @@ export const createTodoModelRuntime = ({
             ? 'Los datos disponibles exceden el alcance del chat.'
             : 'The available data exceeds the command scope.',
         context: {
-          creation: { id: randomUUID(), color: '#f5ddd5' },
           lists: current.lists.map(list => ({
             name: list.name,
             ref: createEntityRef(TodoList, { id: list.id }),
