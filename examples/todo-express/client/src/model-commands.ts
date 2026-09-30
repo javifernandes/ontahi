@@ -1,7 +1,16 @@
-import type { ModelCommandRequest, ModelCommandResult } from '@ontahi/core/runtime/contracts';
+import type {
+  ModelCommandRequest,
+  ModelCommandResult,
+  TaskInteractionResponse,
+  TaskRunIdentity,
+  TaskSnapshot,
+} from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeProtocolExchange,
+  isDurableOperationProtocolError,
+  parseDurableOperationProtocolResponse,
   parseModelCommandProtocolResponse,
+  toDurableOperationInteractionResponseRequest,
   toModelCommandProtocolRequest,
   type RuntimeTransport,
 } from '@ontahi/core/runtime/protocol';
@@ -12,6 +21,36 @@ export type ModelCommandSubmitResult =
 export type ModelCommandSubmitter = (
   request: ModelCommandRequest,
 ) => Promise<ModelCommandSubmitResult>;
+export type ModelCommandResponder = (
+  run: TaskRunIdentity,
+  response: TaskInteractionResponse,
+) => Promise<ModelCommandSubmitResult>;
+
+const modelResultFromSnapshot = (snapshot: TaskSnapshot): ModelCommandSubmitResult => {
+  if (snapshot.interaction)
+    return {
+      ok: true,
+      value: {
+        status: 'pending',
+        message: snapshot.interaction.prompt,
+        run: { taskId: snapshot.taskId, runId: snapshot.runId },
+        interaction: snapshot.interaction,
+      },
+    };
+  if (snapshot.status === 'completed') {
+    const parsed = parseModelCommandProtocolResponse({
+      version: 1,
+      kind: 'model-command-result',
+      result: snapshot.result,
+    });
+    if (parsed.success && parsed.response.kind === 'model-command-result')
+      return { ok: true, value: parsed.response.result };
+  }
+  return {
+    ok: false,
+    message: snapshot.error?.message ?? `Model command Task ${snapshot.status}.`,
+  };
+};
 
 export const createModelCommandSubmitter = (
   runtimeTransport: RuntimeTransport,
@@ -25,6 +64,33 @@ export const createModelCommandSubmitter = (
     if (parsed.response.kind === 'protocol-error')
       return { ok: false, message: parsed.response.error.message };
     return { ok: true, value: parsed.response.result };
+  };
+};
+
+export const createModelCommandResponder = (
+  runtimeTransport: RuntimeTransport,
+): ModelCommandResponder => {
+  const exchange = createRuntimeProtocolExchange({ transport: runtimeTransport });
+  return async (run, response) => {
+    const parsed = parseDurableOperationProtocolResponse(
+      await exchange({
+        family: 'durable.operation',
+        body: toDurableOperationInteractionResponseRequest(run, response),
+      }),
+    );
+    if (!parsed.success) throw new Error(parsed.error.error.message);
+    if (isDurableOperationProtocolError(parsed.response))
+      return { ok: false, message: parsed.response.error.message };
+    const initial = parsed.response.snapshot;
+    if (initial.interaction || ['completed', 'failed', 'cancelled'].includes(initial.status))
+      return modelResultFromSnapshot(initial);
+    if (!runtimeTransport.durableOperation)
+      return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };
+    for await (const snapshot of runtimeTransport.durableOperation.observe(run)) {
+      if (snapshot.interaction || ['completed', 'failed', 'cancelled'].includes(snapshot.status))
+        return modelResultFromSnapshot(snapshot);
+    }
+    return { ok: false, message: 'The model command observation ended before completion.' };
   };
 };
 

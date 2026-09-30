@@ -15,7 +15,7 @@ import { Tag, TodoItem, TodoList } from '../../src/generated/client-entities.js'
 
 import { App } from './App.js';
 import { Explorer } from './Explorer.js';
-import { createModelCommandSubmitter } from './model-commands.js';
+import { createModelCommandResponder, createModelCommandSubmitter } from './model-commands.js';
 import {
   loadAuthenticationSession,
   type AuthenticationSession,
@@ -74,6 +74,7 @@ const runtimeTransport = createRuntimeTransportRouter({
   },
 });
 const submitModelCommand = createModelCommandSubmitter(runtimeTransport);
+const respondToModelCommand = createModelCommandResponder(runtimeTransport);
 const graphClient = createRuntimeGraphClient({ runtimeTransport });
 const isExplorer = globalThis.location.pathname.startsWith('/explorer');
 const devtoolsConsole = {
@@ -113,6 +114,7 @@ const TodoClient = () => {
           authentication={authentication}
           setAuthentication={setAuthentication}
           submitModelCommand={submitModelCommand}
+          respondToModelCommand={respondToModelCommand}
         />
       )}
       {diagnostics ? (

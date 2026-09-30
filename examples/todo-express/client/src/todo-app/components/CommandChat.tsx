@@ -1,3 +1,9 @@
+import type {
+  ModelCommandResult,
+  TaskInteractionResponse,
+  TaskPendingInteraction,
+  TaskRunIdentity,
+} from '@ontahi/core/runtime/contracts';
 import {
   ArrowUp,
   ChevronDown,
@@ -11,7 +17,11 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { submitModelCommand, type ModelCommandSubmitter } from '../../model-commands.js';
+import {
+  submitModelCommand,
+  type ModelCommandResponder,
+  type ModelCommandSubmitter,
+} from '../../model-commands.js';
 
 import { useDictationCountdown } from './useDictationCountdown.js';
 import { useSpeechInput } from './useSpeechInput.js';
@@ -21,15 +31,20 @@ type Entry = {
   id: number;
   request: string;
   reply?: string;
-  status: 'pending' | 'executed' | 'answered' | 'unresolved' | 'failed';
+  status: 'pending' | 'interaction' | 'executed' | 'answered' | 'unresolved' | 'failed';
+  run?: TaskRunIdentity;
+  interaction?: TaskPendingInteraction;
+  responding?: boolean;
 };
 
 export const CommandChat = ({
   onExecuted,
   submit: execute = submitModelCommand,
+  respond,
 }: {
   onExecuted: () => Promise<unknown>;
   submit?: ModelCommandSubmitter;
+  respond?: ModelCommandResponder;
 }) => {
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
@@ -57,6 +72,53 @@ export const CommandChat = ({
   const busy = useRef(false);
   const sequence = useRef(0);
 
+  const answer = (id: number, status: Entry['status'], reply: string) => {
+    voice.speak(reply);
+    setEntries(previous =>
+      previous.map(candidate =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              status,
+              reply,
+              run: undefined,
+              interaction: undefined,
+              responding: false,
+            }
+          : candidate,
+      ),
+    );
+  };
+
+  const applyOutcome = async (id: number, outcome: ModelCommandResult) => {
+    if (outcome.status === 'pending') {
+      voice.speak(outcome.message);
+      setEntries(previous =>
+        previous.map(candidate =>
+          candidate.id === id
+            ? {
+                ...candidate,
+                status: 'interaction',
+                reply: outcome.message,
+                run: outcome.run,
+                interaction: outcome.interaction,
+                responding: false,
+              }
+            : candidate,
+        ),
+      );
+      return;
+    }
+    answer(id, outcome.status, outcome.message);
+    if (outcome.status === 'executed' && outcome.response === undefined) {
+      try {
+        await onExecuted();
+      } catch {
+        answer(id, 'executed', `${outcome.message} Refresh the board to see the change.`);
+      }
+    }
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     countdown.cancel();
@@ -68,14 +130,6 @@ export const CommandChat = ({
     const entry: Entry = { id, request: text.trim(), status: 'pending' };
     setEntries(previous => [...previous, entry]);
     setText('');
-    const answer = (status: Entry['status'], reply: string) => {
-      voice.speak(reply);
-      setEntries(previous =>
-        previous.map(candidate =>
-          candidate.id === id ? { ...candidate, status, reply } : candidate,
-        ),
-      );
-    };
     try {
       const result = await execute({
         text: entry.request,
@@ -83,23 +137,45 @@ export const CommandChat = ({
       });
       if (!result.ok) {
         answer(
+          id,
           'failed',
           result.message ?? 'The request failed. Check the list before trying again.',
         );
         return;
       }
       const outcome = result.value;
-      answer(outcome.status, outcome.message);
-      if (outcome.status === 'executed' && outcome.response === undefined) {
-        try {
-          await onExecuted();
-        } catch {
-          answer('executed', `${outcome.message} Refresh the board to see the change.`);
-        }
-      }
+      await applyOutcome(id, outcome);
     } catch {
       // A lost response may follow a successful write. Never automatically resubmit.
-      answer('failed', 'The server response was lost. Check the list before submitting again.');
+      answer(id, 'failed', 'The server response was lost. Check the list before submitting again.');
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
+
+  const respondToInteraction = async (entry: Entry, response: TaskInteractionResponse) => {
+    if (!respond || !entry.run || !entry.interaction || busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setEntries(previous =>
+      previous.map(candidate =>
+        candidate.id === entry.id ? { ...candidate, responding: true } : candidate,
+      ),
+    );
+    try {
+      const result = await respond(entry.run, response);
+      if (!result.ok) {
+        answer(entry.id, 'failed', result.message ?? 'The response could not be applied.');
+        return;
+      }
+      await applyOutcome(entry.id, result.value);
+    } catch {
+      answer(
+        entry.id,
+        'failed',
+        'The server response was lost. Reopen Activity to inspect the run.',
+      );
     } finally {
       busy.current = false;
       setPending(false);
@@ -150,6 +226,66 @@ export const CommandChat = ({
                     entry.reply
                   )}
                 </p>
+                {entry.status === 'interaction' && entry.interaction && respond ? (
+                  <div
+                    className='command-chat-approval'
+                    aria-label={
+                      entry.interaction.kind === 'approval'
+                        ? 'Approval required'
+                        : 'Choice required'
+                    }
+                  >
+                    {entry.interaction.kind === 'approval' ? (
+                      <>
+                        <span>{entry.interaction.proposal.summary}</span>
+                        <div>
+                          <button
+                            type='button'
+                            disabled={entry.responding}
+                            onClick={() =>
+                              void respondToInteraction(entry, {
+                                interactionId: entry.interaction!.id,
+                                decision: 'reject',
+                              })
+                            }
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type='button'
+                            disabled={entry.responding}
+                            onClick={() =>
+                              void respondToInteraction(entry, {
+                                interactionId: entry.interaction!.id,
+                                decision: 'approve',
+                              })
+                            }
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        {entry.interaction.options.map(option => (
+                          <button
+                            key={option.id}
+                            type='button'
+                            disabled={entry.responding}
+                            onClick={() =>
+                              void respondToInteraction(entry, {
+                                interactionId: entry.interaction!.id,
+                                optionId: option.id,
+                              })
+                            }
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

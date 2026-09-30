@@ -8,7 +8,7 @@ import {
 import {
   withInvocationContext,
   type ModelProvider,
-  type ModelCommandRuntime,
+  type PreparedModelCommandRuntime,
 } from '@ontahi/core/runtime/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,7 +21,7 @@ const dataset = () => {
   if (TodoApplication.storage.kind !== 'in-memory') throw new Error('Requires memory.');
   return TodoApplication.storage.dataset;
 };
-let runtime: ModelCommandRuntime;
+let runtime: PreparedModelCommandRuntime;
 const bind = (generate: ModelProvider['generate']) =>
   (runtime = createTodoModelRuntime({
     application: TodoApplication,
@@ -189,6 +189,24 @@ describe('Todo canonical model requests', () => {
   it('does not accept a guessed list for creation', async () => {
     bind(async () => create());
     expect(await submit('add buy bread')).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoItem).toHaveLength(2);
+  });
+  it('prepares canonical list choices when an item destination is missing', async () => {
+    const choice = {
+      status: 'choice' as const,
+      prompt: 'Which list?',
+      options: [
+        { id: 'list-1', label: 'Shopping', request: create('list-1').request },
+        { id: 'list-2', label: 'Other', request: create('list-2').request },
+      ],
+    };
+    bind(async () => choice);
+
+    await expect(
+      withInvocationContext({ principal }, () =>
+        runtime.prepare({ text: 'add buy bread', language: 'en-US' }, new AbortController().signal),
+      ),
+    ).resolves.toEqual(choice);
     expect(dataset().TodoItem).toHaveLength(2);
   });
   it('completes a unique item across lists', async () => {

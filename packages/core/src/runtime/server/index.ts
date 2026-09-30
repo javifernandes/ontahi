@@ -405,10 +405,21 @@ export {
 export {
   createModelCommandRuntime,
   type CreateModelCommandRuntimeOptions,
+  type ModelCommandCanonicalRequest,
   type ModelCommandRuntime,
+  type ModelCommandPreparation,
   type ModelCommandScope,
   type ModelCommandBinding,
+  type PreparedModelCommandRuntime,
 } from './model-command.js';
+export {
+  createTaskBackedModelCommandRuntime,
+  createModelCommandTask,
+  type CreateTaskBackedModelCommandRuntimeOptions,
+  type CreateModelCommandTaskOptions,
+  type ModelCommandApprovalPresentation,
+  type ModelCommandTaskHost,
+} from './model-command-task.js';
 export {
   createApplicationModelCommandRuntime,
   type ApplicationModelScopeAccess,

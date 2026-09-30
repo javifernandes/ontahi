@@ -25,6 +25,7 @@ import { styles } from './devtools-styles.js';
 import { EntityHistorySettings } from './entity-history-panel.js';
 import { ExchangeDetail } from './exchange-detail.js';
 import { GraphObservationDetail } from './graph-observation-detail.js';
+import { jsonViewCss } from './json-view.js';
 import { OperationProgressDetail } from './operation-progress-detail.js';
 import { PanelResizer } from './panel-resizer.js';
 import { RuntimeTransportSettings } from './runtime-transport-settings.js';
@@ -165,6 +166,7 @@ export const DevtoolsPanel = ({
   return (
     <AuthoringDialectContext.Provider value={dialect}>
       <aside style={{ ...styles.panel, height }} aria-label='Ontahí Devtools'>
+        <style>{jsonViewCss}</style>
         <PanelResizer height={height} resize={resize} />
         <header style={styles.header}>
           <span style={styles.brand}>

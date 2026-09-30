@@ -1448,6 +1448,38 @@ a {
   color: #873e36;
   background: #f7e9e3;
 }
+.command-chat-approval {
+  align-self: flex-start;
+  display: grid;
+  gap: 8px;
+  max-width: 85%;
+  padding: 0 4px;
+  color: #59645b;
+  font-size: 0.82rem;
+}
+.command-chat-approval > div {
+  display: flex;
+  gap: 7px;
+}
+.command-chat-approval button {
+  padding: 6px 11px;
+  border: 1px solid #bdc7ba;
+  border-radius: 999px;
+  color: #354e3e;
+  background: #fffefa;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.command-chat-approval button:last-child {
+  border-color: #456a51;
+  color: #fafff7;
+  background: #456a51;
+}
+.command-chat-approval button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .command-chat-composer {
   display: flex;
   align-items: center;

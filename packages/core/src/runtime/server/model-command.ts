@@ -37,16 +37,36 @@ export type ModelCommandScope = {
   commands?: readonly ModelGraphCommandExposure[];
   unresolved?: string;
 };
+export type ModelCommandCanonicalRequest =
+  | GraphReadRequest
+  | GraphCommandRequest
+  | OperationInvokeRequest;
+export type ModelCommandPreparation =
+  | ModelCommandResult<ModelCommandCanonicalRequest, ModelGraphReadResult>
+  | {
+      status: 'choice';
+      prompt: string;
+      options: ReadonlyArray<{
+        id: string;
+        label: string;
+        request: ModelCommandCanonicalRequest;
+      }>;
+    }
+  | { status: 'proposed'; request: ModelCommandCanonicalRequest };
 export type ModelCommandRuntime = {
   submit(
     request: ModelCommandRequest,
     signal: AbortSignal,
-  ): Promise<
-    ModelCommandResult<
-      GraphReadRequest | GraphCommandRequest | OperationInvokeRequest,
-      ModelGraphReadResult
-    >
-  >;
+  ): Promise<ModelCommandResult<ModelCommandCanonicalRequest, ModelGraphReadResult>>;
+};
+export type PreparedModelCommandRuntime = ModelCommandRuntime & {
+  prepare(request: ModelCommandRequest, signal: AbortSignal): Promise<ModelCommandPreparation>;
+  execute(
+    request: ModelCommandRequest,
+    proposal: ModelCommandCanonicalRequest,
+    signal: AbortSignal,
+    context?: { kind: 'proposal' | 'choice-option' },
+  ): Promise<ModelCommandResult<ModelCommandCanonicalRequest, ModelGraphReadResult>>;
 };
 
 export type CreateModelCommandRuntimeOptions = {
@@ -78,7 +98,7 @@ export const createModelCommandRuntime = ({
   formatHelp,
   dispatchRead,
   dispatchCommand,
-}: CreateModelCommandRuntimeOptions): ModelCommandRuntime => {
+}: CreateModelCommandRuntimeOptions): PreparedModelCommandRuntime => {
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
   const catalog = (current: ModelCommandScope): ModelOperationExposure[] =>
@@ -96,157 +116,184 @@ export const createModelCommandRuntime = ({
           binding.description ?? operation.description ?? 'Action description unavailable.',
       };
     });
-  return {
-    submit: async (request, signal) => {
-      await authorize();
-      signal.throwIfAborted();
-      if (
-        !isRecord(request) ||
-        typeof request.text !== 'string' ||
-        !request.text.trim() ||
-        request.text.length > 2000 ||
-        Object.keys(request).some(key => key !== 'text' && key !== 'context' && key !== 'language')
-      )
-        throw new ModelInterpretationError(
-          'command_invalid',
-          'Write a request between 1 and 2,000 characters.',
-        );
-      if (request.language !== undefined) {
-        try {
-          if (
-            typeof request.language !== 'string' ||
-            request.language.length > 64 ||
-            Intl.getCanonicalLocales(request.language).length !== 1
-          )
-            throw new Error('Invalid language');
-        } catch {
-          throw new ModelInterpretationError(
-            'command_invalid',
-            'Choose a valid response language.',
-          );
-        }
+  const validateRequest = (request: ModelCommandRequest) => {
+    if (
+      !isRecord(request) ||
+      typeof request.text !== 'string' ||
+      !request.text.trim() ||
+      request.text.length > 2000 ||
+      Object.keys(request).some(key => key !== 'text' && key !== 'context' && key !== 'language')
+    )
+      throw new ModelInterpretationError(
+        'command_invalid',
+        'Write a request between 1 and 2,000 characters.',
+      );
+    if (request.language !== undefined) {
+      try {
+        if (
+          typeof request.language !== 'string' ||
+          request.language.length > 64 ||
+          Intl.getCanonicalLocales(request.language).length !== 1
+        )
+          throw new Error('Invalid language');
+      } catch {
+        throw new ModelInterpretationError('command_invalid', 'Choose a valid response language.');
       }
-      const initial = await scope(request, signal);
-      if (initial.unresolved) return { status: 'unresolved', message: initial.unresolved };
-      const proposal = await interpretModelRequest({
-        provider,
-        operations: catalog(initial),
-        reads: initial.reads,
-        commands: initial.commands,
-        resolveOperation,
-        context: initial.context,
-        prompt: request.text,
-        signal,
-        instructions: [
-          instructions,
-          request.language
-            ? `Write any user-facing reason in ${request.language}, regardless of the request's language. Never translate entity names, item titles, operation IDs, or argument keys.`
-            : '',
-        ]
-          .filter(Boolean)
-          .join('\n'),
-      });
-      await authorize();
-      signal.throwIfAborted();
-      if (proposal.status === 'help')
-        return {
-          status: 'answered',
-          message:
-            formatHelp?.(
-              [
-                ...catalog(initial).map(op => op.description),
-                ...(initial.reads ?? []).map(read => read.description),
-                ...(initial.commands ?? []).map(command => command.description),
-              ],
-              request,
-            ) ??
-            `You can:\n${[
+    }
+  };
+
+  const prepare: PreparedModelCommandRuntime['prepare'] = async (request, signal) => {
+    validateRequest(request);
+    await authorize();
+    signal.throwIfAborted();
+    const initial = await scope(request, signal);
+    if (initial.unresolved) return { status: 'unresolved', message: initial.unresolved };
+    const proposal = await interpretModelRequest({
+      provider,
+      operations: catalog(initial),
+      reads: initial.reads,
+      commands: initial.commands,
+      resolveOperation,
+      context: initial.context,
+      prompt: request.text,
+      signal,
+      instructions: [
+        instructions,
+        request.language
+          ? `Write any user-facing reason in ${request.language}, regardless of the request's language. Never translate entity names, item titles, operation IDs, or argument keys.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    });
+    if (proposal.status === 'resolved') return { status: 'proposed', request: proposal.request };
+    if (proposal.status === 'choice') return proposal;
+    await authorize();
+    signal.throwIfAborted();
+    if (proposal.status === 'help')
+      return {
+        status: 'answered',
+        message:
+          formatHelp?.(
+            [
               ...catalog(initial).map(op => op.description),
               ...(initial.reads ?? []).map(read => read.description),
               ...(initial.commands ?? []).map(command => command.description),
-            ]
-              .map(description => `• ${description}`)
-              .join('\n')}`,
-        };
-      if (proposal.status === 'unresolved')
-        return { status: 'unresolved', message: proposal.reason };
-      if (proposal.request.kind === 'graph-read') {
-        if (!dispatchRead)
-          throw new ModelInterpretationError(
-            'command_unavailable',
-            'Graph reads are not configured.',
-          );
-        const fresh = await scope(request, signal);
-        if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
-        const exposure = resolveModelGraphRead(proposal.request, fresh.reads ?? []);
-        const reason = exposure.validate(proposal.request);
-        if (reason) return { status: 'unresolved', message: reason };
-        signal.throwIfAborted();
-        const response = await dispatchRead(proposal.request, signal);
-        if (response.kind !== 'graph-read-result' || !isJsonValue(response.value))
-          throw new ModelInterpretationError(
-            'command_execution_failed',
-            response.kind === 'protocol-error'
-              ? response.error.message
-              : 'The graph read was rejected.',
-          );
-        const readResponse: ModelGraphReadResult = {
-          kind: 'graph-read-result',
-          value: response.value,
-          ...(response.capabilities === undefined ? {} : { capabilities: response.capabilities }),
-        };
-        return {
-          status: 'executed',
-          message: exposure.message?.(readResponse, proposal.request) ?? 'Read completed.',
-          request: proposal.request,
-          response: readResponse,
-        };
-      }
-      if (proposal.request.kind === 'graph-command') {
-        if (!dispatchCommand)
-          throw new ModelInterpretationError(
-            'command_unavailable',
-            'Graph commands are not configured.',
-          );
-        const fresh = await scope(request, signal);
-        if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
-        const exposure = resolveModelGraphCommand(proposal.request, fresh.commands ?? []);
-        const reason = exposure.validate(proposal.request);
-        if (reason) return { status: 'unresolved', message: reason };
-        signal.throwIfAborted();
-        const result = await dispatchCommand(proposal.request, signal);
-        if (result.kind !== 'graph-command-result')
-          throw new ModelInterpretationError(
-            'command_execution_failed',
-            'The graph command was rejected.',
-          );
-        return {
-          status: 'executed',
-          message: exposure.message?.(proposal.request) ?? 'Updated.',
-          request: proposal.request,
-        };
-      }
-      const current = await scope(request, signal);
-      if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
-      const reason = validateModelInvocation(proposal.request, catalog(current), resolveOperation);
+            ],
+            request,
+          ) ??
+          `You can:\n${[
+            ...catalog(initial).map(op => op.description),
+            ...(initial.reads ?? []).map(read => read.description),
+            ...(initial.commands ?? []).map(command => command.description),
+          ]
+            .map(description => `• ${description}`)
+            .join('\n')}`,
+      };
+    return { status: 'unresolved', message: proposal.reason };
+  };
+
+  const execute: PreparedModelCommandRuntime['execute'] = async (
+    request,
+    proposal,
+    signal,
+    validation = { kind: 'proposal' },
+  ) => {
+    validateRequest(request);
+    await authorize();
+    signal.throwIfAborted();
+    if (proposal.kind === 'graph-read') {
+      if (!dispatchRead)
+        throw new ModelInterpretationError(
+          'command_unavailable',
+          'Graph reads are not configured.',
+        );
+      const fresh = await scope(request, signal);
+      if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
+      const exposure = resolveModelGraphRead(proposal, fresh.reads ?? []);
+      const reason = exposure.validate(proposal);
       if (reason) return { status: 'unresolved', message: reason };
       signal.throwIfAborted();
-      const result = await dispatch(proposal.request);
-      if (result.kind !== 'invocation-result' || !result.result.ok)
+      const response = await dispatchRead(proposal, signal);
+      if (response.kind !== 'graph-read-result' || !isJsonValue(response.value))
         throw new ModelInterpretationError(
           'command_execution_failed',
-          result.kind === 'invocation-result' && !result.result.ok
-            ? (result.result.message ?? 'The operation failed.')
-            : 'Operation unavailable.',
+          response.kind === 'protocol-error'
+            ? response.error.message
+            : 'The graph read was rejected.',
+        );
+      const readResponse: ModelGraphReadResult = {
+        kind: 'graph-read-result',
+        value: response.value,
+        ...(response.capabilities === undefined ? {} : { capabilities: response.capabilities }),
+      };
+      return {
+        status: 'executed',
+        message: exposure.message?.(readResponse, proposal) ?? 'Read completed.',
+        request: proposal,
+        response: readResponse,
+      };
+    }
+    if (proposal.kind === 'graph-command') {
+      if (!dispatchCommand)
+        throw new ModelInterpretationError(
+          'command_unavailable',
+          'Graph commands are not configured.',
+        );
+      const fresh = await scope(request, signal);
+      if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
+      const exposure = resolveModelGraphCommand(proposal, fresh.commands ?? []);
+      const reason = exposure.validate(proposal);
+      if (reason) return { status: 'unresolved', message: reason };
+      signal.throwIfAborted();
+      const result = await dispatchCommand(proposal, signal);
+      if (result.kind !== 'graph-command-result')
+        throw new ModelInterpretationError(
+          'command_execution_failed',
+          'The graph command was rejected.',
         );
       return {
         status: 'executed',
-        message:
-          current.bindings[proposal.request.operationId]?.message?.(
-            proposal.request.input as Record<string, unknown>,
-          ) ?? 'Operation completed.',
-        request: proposal.request,
+        message: exposure.message?.(proposal) ?? 'Updated.',
+        request: proposal,
       };
+    }
+    const current = await scope(request, signal);
+    if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
+    const reason = validateModelInvocation(
+      proposal,
+      catalog(current),
+      resolveOperation,
+      validation,
+    );
+    if (reason) return { status: 'unresolved', message: reason };
+    signal.throwIfAborted();
+    const result = await dispatch(proposal);
+    if (result.kind !== 'invocation-result' || !result.result.ok)
+      throw new ModelInterpretationError(
+        'command_execution_failed',
+        result.kind === 'invocation-result' && !result.result.ok
+          ? (result.result.message ?? 'The operation failed.')
+          : 'Operation unavailable.',
+      );
+    return {
+      status: 'executed',
+      message:
+        current.bindings[proposal.operationId]?.message?.(
+          proposal.input as Record<string, unknown>,
+        ) ?? 'Operation completed.',
+      request: proposal,
+    };
+  };
+
+  return {
+    prepare,
+    execute,
+    submit: async (request, signal) => {
+      const prepared = await prepare(request, signal);
+      if (prepared.status === 'proposed') return execute(request, prepared.request, signal);
+      if (prepared.status === 'choice') return { status: 'unresolved', message: prepared.prompt };
+      return prepared;
     },
   };
 };

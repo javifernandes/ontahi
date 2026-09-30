@@ -74,15 +74,15 @@ it(
     const detailElement = screen.getByRole('region', { name: 'Request detail' });
     const detail = within(detailElement);
     fireEvent.click(detail.getByRole('button', { name: 'Body JSON' }));
-    const json = detailElement.querySelector('pre')?.textContent;
+    const json = detailElement.querySelector('[role="tree"]')?.textContent;
     expect(JSON.parse(json!)).toEqual(envelope.body);
     act(() => authoringDialectPreference.set('ts'));
     expect(
       screen.getAllByText('TodoItem.where(completed eq false) · orderBy title desc · limit 25'),
     ).toHaveLength(2);
-    expect(detailElement.querySelector('pre')?.textContent).toBe(json);
+    expect(detailElement.querySelector('[role="tree"]')?.textContent).toBe(json);
     fireEvent.click(detail.getByRole('button', { name: 'Envelope' }));
-    expect(JSON.parse(detailElement.querySelector('pre')!.textContent!)).toEqual(
+    expect(JSON.parse(detailElement.querySelector('[role="tree"]')!.textContent!)).toEqual(
       captured.events[0]!.kind === 'exchange.started' ? captured.events[0].request : undefined,
     );
     expect(diagnostics.inspect()).toBe(captured);

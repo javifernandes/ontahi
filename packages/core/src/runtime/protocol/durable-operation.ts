@@ -107,7 +107,7 @@ const isIdentitySegment = (value: unknown): value is string =>
 const isTimestamp = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
-const isTaskRunIdentity = (value: unknown): value is TaskRunIdentity =>
+export const isTaskRunIdentity = (value: unknown): value is TaskRunIdentity =>
   isRecord(value) &&
   hasOnlyKeys(value, runKeys) &&
   isIdentitySegment(value.taskId) &&
@@ -275,7 +275,7 @@ const parseProgress = (value: unknown): TaskSnapshot['progress'] | undefined => 
   };
 };
 
-const parseInteraction = (value: unknown): TaskPendingInteraction | undefined => {
+export const parseTaskPendingInteraction = (value: unknown): TaskPendingInteraction | undefined => {
   if (value === undefined) return undefined;
   if (
     !isRecord(value) ||
@@ -384,7 +384,7 @@ const parseSnapshot = (value: unknown): SnapshotParseResult => {
 
   const subject = parseSubject(value.subject);
   const progress = parseProgress(value.progress);
-  const interaction = parseInteraction(value.interaction);
+  const interaction = parseTaskPendingInteraction(value.interaction);
   const error = parseTaskError(value.error);
   if (
     (value.subject !== undefined && subject === undefined) ||

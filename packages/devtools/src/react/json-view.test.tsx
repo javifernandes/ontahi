@@ -50,4 +50,30 @@ describe('JsonView', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
     expect(screen.getByRole('button', { name: 'Copy diagnostic' }).textContent).toBe('Copy');
   });
+
+  it('collapses and expands nested JSON nodes', () => {
+    render(
+      <JsonView label='diagnostic' value={{ request: { body: { text: 'add item buy milk' } } }} />,
+    );
+
+    const collapseButtons = screen.getAllByRole('button', { name: 'Collapse JSON node' });
+    expect(screen.getByText('"add item buy milk"')).toBeTruthy();
+
+    fireEvent.click(collapseButtons[1]!);
+    expect(screen.queryByText('"add item buy milk"')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand JSON node' }));
+    expect(screen.getByText('"add item buy milk"')).toBeTruthy();
+  });
+
+  it.each([
+    [null, 'null', 'rgb(135, 147, 141)'],
+    [undefined, 'undefined', 'rgb(135, 147, 141)'],
+    ['value', '"value"', 'rgb(214, 189, 130)'],
+    [true, 'true', 'rgb(136, 175, 224)'],
+    [42, '42', 'rgb(213, 139, 163)'],
+  ])('colors a primitive JSON value: %s', (value, text, color) => {
+    render(<JsonView label='diagnostic' value={value} />);
+    expect(screen.getByText(text).style.color).toBe(color);
+  });
 });

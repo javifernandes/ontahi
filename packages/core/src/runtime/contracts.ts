@@ -166,6 +166,7 @@ export type TaskSubject = {
 export type TaskActor = {
   kind: 'user' | 'integration' | 'service' | 'system';
   id?: string;
+  issuer?: string;
 };
 
 export type TaskTrigger = {
@@ -293,6 +294,12 @@ export type TaskRunListItem = TaskSnapshot & {
 /** Context is optional host-defined interaction context, never an authority credential. */
 export type ModelCommandRequest = { text: string; language?: string; context?: unknown };
 export type ModelCommandResult<TRequest = unknown, TResponse = unknown> =
+  | {
+      status: 'pending';
+      message: string;
+      run: TaskRunIdentity;
+      interaction: TaskPendingInteraction;
+    }
   | {
       status: 'executed';
       message: string;
