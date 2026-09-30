@@ -794,11 +794,15 @@ returns `executed`, `answered`, or `unresolved`. `scope` supplies:
 
 When reads and commands use an `OntahiApplication`,
 `createApplicationModelCommandRuntime(...)` creates the policy-aware graph dispatchers and binds
-each call to the host-provided authority. Its `scope` receives `{read?}` as a third argument. The
-application owns the bounded model-visible projection and uses `read` to obtain it; Core owns
-dispatcher construction, cancellation checks, and canonical execution through the same policies
-used by other callers. Command dispatch remains internal to the runtime so context construction
-cannot mutate the graph.
+each call to the host-provided authority. Register graph affordances as `{policies, expose}` pairs:
+the policies build the authoritative dispatcher, while `expose` projects the bounded canonical
+request schemas shown to the model. A host with no dynamic context needs no `scope`. When a catalog
+depends on current application data, `scope` receives `{read?}` as a third argument and may return
+`data`; Core passes that receiver-local value to `expose` but removes it before serializing model
+context. The application still owns the explicit model-visible `context`. Core owns dispatcher
+construction, cancellation checks, and canonical execution through the same policies used by other
+callers. Command dispatch remains internal to the runtime so context construction cannot mutate the
+graph.
 
 For local development, `createOllamaModelProvider({model, baseUrl?, ...})` implements
 `ModelProvider` with Ollama's structured `/api/chat` endpoint using `fetch`. Provider configuration

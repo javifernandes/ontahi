@@ -14,6 +14,7 @@ import {
 
 import { createApplicationModelCommandRuntime } from './application-model-command.js';
 import { entity } from './entity.js';
+import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
 import { ontahi } from './ontahi.js';
 
 it('binds model scope reads to application policies and the current authority', async () => {
@@ -32,23 +33,32 @@ it('binds model scope reads to application policies and the current authority', 
     });
     return { status: 'help' };
   });
+  const readPolicy = {
+    entity: Document,
+    modes: ['run'],
+    cardinalities: ['many'],
+    maxLimit: 10,
+    fields: { id: { select: true }, title: { select: true } },
+    scope: ({ authority: current }: { authority: { subject: string } }) => {
+      expect(current).toEqual({ subject: 'reader' });
+      return Selection.all(Document);
+    },
+  } as const;
   const runtime = createApplicationModelCommandRuntime({
     application,
     provider: { generate },
     authorize,
     graph: {
       authority,
-      readPolicies: [
+      reads: [
         {
-          entity: Document,
-          modes: ['run'],
-          cardinalities: ['many'],
-          maxLimit: 10,
-          fields: { id: { select: true }, title: { select: true } },
-          scope: ({ authority: current }) => {
-            expect(current).toEqual({ subject: 'reader' });
-            return Selection.all(Document);
-          },
+          policies: readPolicy,
+          expose: () =>
+            createModelGraphReadExposure(readPolicy, {
+              mode: 'run',
+              limit: 10,
+              description: 'Read documents.',
+            }),
         },
       ],
     },
@@ -69,7 +79,7 @@ it('binds model scope reads to application policies and the current authority', 
 
   await expect(
     runtime.submit({ text: 'What can I do?' }, new AbortController().signal),
-  ).resolves.toEqual({ status: 'answered', message: 'You can:\n' });
+  ).resolves.toEqual({ status: 'answered', message: 'You can:\n• Read documents.' });
   expect(authority).toHaveBeenCalledOnce();
   expect(authorize).toHaveBeenCalledTimes(2);
 });
@@ -85,10 +95,6 @@ it('does not expose graph services that were not configured', async () => {
     provider: { generate: async () => ({ status: 'help' }) },
     authorize: () => undefined,
     graph: { authority: () => undefined },
-    scope: async (_request, _signal, graph) => {
-      expect(graph).toEqual({});
-      return {};
-    },
   });
 
   await expect(
@@ -157,18 +163,38 @@ it('executes model graph commands through the application policy dispatcher', as
     },
     { unknownKeys: 'strict' },
   );
-  const runtime = createApplicationModelCommandRuntime({
+  const commandPolicy = {
+    entity: Document,
+    scope: 'all',
+    actions: {
+      update: { fields: ['title'], if: ['title'], result: ['id', 'title'] },
+    },
+  } as const;
+  const runtime = createApplicationModelCommandRuntime<
+    { subject: string },
+    { visibleDocumentIds: string[] }
+  >({
     application,
-    provider: { generate: async () => ({ status: 'resolved', request: command }) },
+    provider: {
+      generate: async ({ context }) => {
+        expect(context).not.toContain('visibleDocumentIds');
+        return { status: 'resolved', request: command };
+      },
+    },
     authorize: () => undefined,
     graph: {
       authority: () => ({ subject: 'editor' }),
-      commandPolicies: [
+      commands: [
         {
-          entity: Document,
-          scope: 'all',
-          actions: {
-            update: { fields: ['title'], if: ['title'], result: ['id', 'title'] },
+          policies: commandPolicy,
+          expose: ({ request, data }) => {
+            expect(request.text).toBe('rename the document');
+            expect(data).toEqual({ visibleDocumentIds: ['document-1'] });
+            return {
+              description: 'Rename a document.',
+              request: commandSchema,
+              validate: () => undefined,
+            };
           },
         },
       ],
@@ -176,15 +202,9 @@ it('executes model graph commands through the application policy dispatcher', as
     scope: async (_request, _signal, graph) => {
       expect(graph).toEqual({});
       return {
+        data: { visibleDocumentIds: ['document-1'] },
         context: {},
         bindings: {},
-        commands: [
-          {
-            description: 'Rename a document.',
-            request: commandSchema,
-            validate: () => undefined,
-          },
-        ],
       };
     },
   });

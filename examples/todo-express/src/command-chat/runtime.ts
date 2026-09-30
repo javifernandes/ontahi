@@ -15,7 +15,7 @@ import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read
 import { TodoItem, TodoList } from '../todo.js';
 
 import { todoCommandInstructions } from './bindings.js';
-import { readTodoModelContext } from './context.js';
+import { readTodoModelContext, type TodoModelContext } from './context.js';
 import { todoGraphCommands } from './graph-commands.js';
 import { todoGraphReads } from './graph-reads.js';
 
@@ -28,13 +28,23 @@ export const createTodoModelRuntime = ({
     Partial<GraphReadableOntahiApplication & GraphCommandableOntahiApplication>;
   provider: ModelProvider;
 }) => {
-  return createApplicationModelCommandRuntime<TodoGraphReadAuthority>({
+  return createApplicationModelCommandRuntime<TodoGraphReadAuthority, TodoModelContext>({
     application,
     provider,
     graph: {
       authority: () => ({ principal: getCurrentInvocationContext()?.principal ?? null }),
-      readPolicies: todoGraphReadPolicies,
-      commandPolicies: todoGraphCommandPolicies,
+      reads: [
+        {
+          policies: todoGraphReadPolicies,
+          expose: ({ request }) => todoGraphReads(request.language),
+        },
+      ],
+      commands: [
+        {
+          policies: todoGraphCommandPolicies,
+          expose: ({ request, data }) => todoGraphCommands(data, request.text, request.language),
+        },
+      ],
     },
     instructions: todoCommandInstructions,
     formatHelp: (descriptions, request) =>
@@ -51,6 +61,7 @@ export const createTodoModelRuntime = ({
         throw new ModelInterpretationError('context_unavailable', 'Graph reads are unavailable.');
       const current = await readTodoModelContext(graph.read, signal);
       return {
+        data: current,
         unresolved: current.complete
           ? undefined
           : request.language?.toLowerCase().startsWith('es')
@@ -68,8 +79,6 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
-        reads: todoGraphReads(request.language),
-        commands: todoGraphCommands(current, request.text, request.language),
       };
     },
   });

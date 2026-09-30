@@ -422,6 +422,10 @@ export {
 } from './model-command-task.js';
 export {
   createApplicationModelCommandRuntime,
+  type ApplicationModelGraphAffordanceContext,
+  type ApplicationModelGraphCommandAffordance,
+  type ApplicationModelGraphReadAffordance,
+  type ApplicationModelScope,
   type ApplicationModelScopeAccess,
   type CreateApplicationModelCommandRuntimeOptions,
 } from './application-model-command.js';
