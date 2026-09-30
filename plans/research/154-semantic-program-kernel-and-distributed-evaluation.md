@@ -15,6 +15,7 @@ Related plans:
 7. [153. Model-Backed Todo Command Spike](../current/153-model-backed-todo-command-spike.md)
 8. [153c. Operation Interactions And Resumption](../current/153c-operation-interactions-and-resumption.md)
 9. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
+10. [119. Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
 
 ## Summary
 
@@ -288,6 +289,52 @@ The plan must test whether a common `Application` abstraction genuinely reduces 
 not add a wrapper that merely nests the existing Read, Command, and Invoke ASTs without enabling
 shared inference, substitution, tooling, or execution.
 
+### Relationship navigation as Selection composition
+
+Graph relationships provide another Query surface for open programs. A concise authoring form may
+read:
+
+```text
+TodoItem related via list to ?list
+```
+
+`list` names the declared relationship or reference path; `?list` is the missing endpoint value.
+The expression denotes an open Selection, so other programs may consume it directly:
+
+```text
+delete (TodoItem related via list to ?list)
+
+observe (TodoItem related via list to ?list)
+```
+
+After substituting a Todo List Ref, the first expression becomes a closed selection-targeted Graph
+Command and the second becomes a closed reactive Query. The Selection remains first-class rather
+than being materialized into IDs by the authoring surface.
+
+Multi-hop navigation and nested selections should compose through the same model. One possible
+surface for “authors of movies whose genre is among my three favorites” is:
+
+```text
+Author related via movies to (
+  Movie whose genre in (
+    CurrentUser.preferredGenres
+      order by preference descending
+      limit 3
+  )
+)
+```
+
+This requires relationship traversal, contextual roots, ordering, limiting, and a semi-join, but it
+does not require a new kernel term for each phrase. `related`, `whose`, and `in` belong to the
+Selection expression algebra; the semantic kernel supplies typed composition, holes, substitution,
+evaluation, and observation around that algebra.
+
+The language must not interpret `related` as arbitrary transitive graph reachability. A direct
+relationship may be inferred only when the reflected model supplies one unambiguous path. Multiple
+paths require an explicit relation name or a typed resolution step. Multi-hop traversal remains
+explicit, bounded, authorized at each graph boundary, and available to execution planning for
+pushdown or delegation.
+
 ## Temporal Semantics And Reactive Values
 
 Observation belongs to Ontahí's evaluation model. React, a CLI, a workflow, another Operation, and a
@@ -532,6 +579,9 @@ their current public contracts remain authoritative.
 
 - [ ] Represent one parameterized Graph Read with a named hole.
 - [ ] Represent one Graph Command target or value hole.
+- [ ] Represent a relationship-traversal Selection with a missing endpoint Ref.
+- [ ] Apply one delete or update Command directly to the completed Selection.
+- [ ] Compose one contextual multi-hop Selection with ordering, limiting, and a relation predicate.
 - [ ] Reuse substitution and validation without weakening cardinality, mutation, or authority rules.
 - [ ] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
 - [ ] Decide whether one common Application abstraction is real or should remain a family of typed
