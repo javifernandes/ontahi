@@ -10,14 +10,18 @@ import {
 } from '@ontahi/core/runtime/server';
 
 import { todoAuthenticationMode } from '../authentication-mode.js';
-import { todoGraphCommandPolicies } from '../todo-command-policies.js';
-import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
+import { todoItemMutationPolicy, todoListMutationPolicy } from '../todo-command-policies.js';
+import {
+  todoItemReadPolicy,
+  todoListReadPolicy,
+  type TodoGraphReadAuthority,
+} from '../todo-read-policies.js';
 import { TodoItem, TodoList } from '../todo.js';
 
 import { todoCommandInstructions } from './bindings.js';
 import { readTodoModelContext, type TodoModelContext } from './context.js';
 import { todoGraphCommands } from './graph-commands.js';
-import { todoGraphReads } from './graph-reads.js';
+import { todoGraphReadPresentation } from './graph-reads.js';
 
 // Application composition only; orchestration lives in the Ontahi runtime.
 export const createTodoModelRuntime = ({
@@ -35,13 +39,21 @@ export const createTodoModelRuntime = ({
       authority: () => ({ principal: getCurrentInvocationContext()?.principal ?? null }),
       reads: [
         {
-          policies: todoGraphReadPolicies,
-          expose: ({ request }) => todoGraphReads(request.language),
+          policy: todoItemReadPolicy,
+          narrow: { limit: 100 },
+          presentation: ({ request, mode }) =>
+            todoGraphReadPresentation('item', mode, request.language),
+        },
+        {
+          policy: todoListReadPolicy,
+          narrow: { limit: 100 },
+          presentation: ({ request, mode }) =>
+            todoGraphReadPresentation('list', mode, request.language),
         },
       ],
       commands: [
         {
-          policies: todoGraphCommandPolicies,
+          policies: [todoItemMutationPolicy, todoListMutationPolicy],
           expose: ({ request, data }) => todoGraphCommands(data, request.text, request.language),
         },
       ],

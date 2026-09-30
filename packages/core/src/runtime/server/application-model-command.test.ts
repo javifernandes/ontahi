@@ -14,6 +14,7 @@ import {
 
 import { createApplicationModelCommandRuntime } from './application-model-command.js';
 import { entity } from './entity.js';
+import type { ModelRequest } from './model-interpretation.js';
 import { ontahi } from './ontahi.js';
 
 it('binds model scope reads to application policies and the current authority', async () => {
@@ -98,6 +99,54 @@ it('does not expose graph services that were not configured', async () => {
   await expect(
     runtime.submit({ text: 'help' }, new AbortController().signal),
   ).resolves.toMatchObject({ status: 'answered' });
+});
+
+it('customizes an inferred read affordance without rebuilding its request schema', async () => {
+  const Document = entity({ name: 'Document', fields: { id: field.id(), title: field.string() } });
+  const application = ontahi({
+    entities: [Document],
+    storage: createInMemoryDataGraphStorage({ dataset: { Document: [] } }),
+  });
+  const generate = vi.fn(async ({ outputSchema }: ModelRequest) => {
+    expect(outputSchema).toHaveProperty('anyOf.0.properties.request.properties.limit.const', 5);
+    expect(JSON.stringify(outputSchema)).not.toContain('"const":"count"');
+    return { status: 'help' as const };
+  });
+  const runtime = createApplicationModelCommandRuntime({
+    application,
+    provider: { generate },
+    authorize: () => undefined,
+    graph: {
+      authority: () => undefined,
+      reads: [
+        {
+          policy: {
+            entity: Document,
+            modes: ['run', 'count'],
+            cardinalities: ['many'],
+            maxLimit: 10,
+            fields: {
+              id: { select: true, filter: ['eq'] },
+              title: { select: true, filter: ['eq'], order: true },
+            },
+            scope: 'all',
+          },
+          narrow: { modes: ['run'], equals: ['title'], orderBy: [], limit: 5 },
+          presentation: ({ mode, request, data }) => {
+            expect(mode).toBe('run');
+            expect(request.text).toBe('help');
+            expect(data).toBeUndefined();
+            return { description: 'Browse the document library.' };
+          },
+        },
+      ],
+    },
+  });
+
+  await expect(runtime.submit({ text: 'help' }, new AbortController().signal)).resolves.toEqual({
+    status: 'answered',
+    message: 'You can:\n• Browse the document library.',
+  });
 });
 
 it('rejects graph configuration unsupported by the application surface', () => {

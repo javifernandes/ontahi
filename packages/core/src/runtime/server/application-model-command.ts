@@ -56,6 +56,31 @@ type ApplicationModelGraphReadExposureFactory<TAuthority, TData> = {
   ) => ModelGraphReadExposure | readonly ModelGraphReadExposure[];
 };
 
+export type ApplicationModelGraphReadPresentation = Pick<
+  ModelGraphReadExposure,
+  'description' | 'message'
+>;
+
+export type ApplicationModelGraphReadPresentationContext<TData> =
+  ApplicationModelGraphAffordanceContext<TData> & {
+    mode: 'run' | 'count';
+  };
+
+export type ApplicationModelGraphReadNarrowing = {
+  modes?: readonly ('run' | 'count')[];
+  equals?: readonly string[];
+  orderBy?: readonly string[];
+  limit?: number;
+};
+
+type ApplicationModelGraphReadPolicyAffordance<TAuthority, TData> = {
+  policy: GraphReadPolicy<any, TAuthority>;
+  narrow?: ApplicationModelGraphReadNarrowing;
+  presentation?: (
+    context: ApplicationModelGraphReadPresentationContext<TData>,
+  ) => ApplicationModelGraphReadPresentation;
+};
+
 type ApplicationModelGraphCommandExposureFactory<TData> = {
   policies: OneOrMany<ModelGraphCommandPolicy>;
   expose: (
@@ -65,6 +90,7 @@ type ApplicationModelGraphCommandExposureFactory<TData> = {
 
 export type ApplicationModelGraphReadAffordance<TAuthority, TData> =
   | GraphReadPolicy<any, TAuthority>
+  | ApplicationModelGraphReadPolicyAffordance<TAuthority, TData>
   | ApplicationModelGraphReadExposureFactory<TAuthority, TData>;
 
 export type ApplicationModelGraphCommandAffordance<TData> =
@@ -106,32 +132,47 @@ const exposures = <T>(value: T | readonly T[]): readonly T[] =>
 const isExposureFactory = <T extends { policies: unknown }>(value: unknown): value is T =>
   typeof value === 'object' && value !== null && 'policies' in value;
 
+const isReadPolicyAffordance = <TAuthority, TData>(
+  value: unknown,
+): value is ApplicationModelGraphReadPolicyAffordance<TAuthority, TData> =>
+  typeof value === 'object' && value !== null && 'policy' in value;
+
 const entityLabel = (name: string) => name.replaceAll(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase();
 
 const defaultReadExposures = (
   policy: GraphReadPolicy<any, any>,
+  context: ApplicationModelGraphAffordanceContext<any>,
+  narrow?: ApplicationModelGraphReadNarrowing,
+  presentation?: ApplicationModelGraphReadPolicyAffordance<any, any>['presentation'],
 ): readonly ModelGraphReadExposure[] => {
   const label = entityLabel(policy.entity.name);
-  const equals = Object.entries(policy.fields)
-    .filter(([, field]) => field?.filter?.includes('eq'))
-    .map(([fieldName]) => fieldName);
-  const orderBy = Object.entries(policy.fields)
-    .filter(([, field]) => field?.order)
-    .map(([fieldName]) => fieldName);
+  const equals =
+    narrow?.equals ??
+    Object.entries(policy.fields)
+      .filter(([, field]) => field?.filter?.includes('eq'))
+      .map(([fieldName]) => fieldName);
+  const orderBy =
+    narrow?.orderBy ??
+    Object.entries(policy.fields)
+      .filter(([, field]) => field?.order)
+      .map(([fieldName]) => fieldName);
   const message = ({ value }: { value: unknown }) => {
     const count = typeof value === 'number' ? value : Array.isArray(value) ? value.length : 0;
     return `${count} ${label} record${count === 1 ? '' : 's'}.`;
   };
   return policy.modes.flatMap(mode => {
     if (mode !== 'run' && mode !== 'count') return [];
+    if (narrow?.modes && !narrow.modes.includes(mode)) return [];
+    const presented = presentation?.({ ...context, mode });
     return [
       createModelGraphReadExposure(policy, {
         mode,
         equals,
         orderBy,
-        ...(mode === 'run' ? { limit: policy.maxLimit } : {}),
-        description: `${mode === 'run' ? 'List' : 'Count'} ${label} records.`,
-        message,
+        ...(mode === 'run' ? { limit: narrow?.limit ?? policy.maxLimit } : {}),
+        description:
+          presented?.description ?? `${mode === 'run' ? 'List' : 'Count'} ${label} records.`,
+        message: presented?.message ?? message,
       }),
     ];
   });
@@ -205,7 +246,7 @@ export const createApplicationModelCommandRuntime = <TAuthority, TData = undefin
     ...(graph.reads?.flatMap(affordance =>
       isExposureFactory<ApplicationModelGraphReadExposureFactory<TAuthority, TData>>(affordance)
         ? many(affordance.policies)
-        : [affordance],
+        : [isReadPolicyAffordance<TAuthority, TData>(affordance) ? affordance.policy : affordance],
     ) ?? []),
   ];
   const commandPolicies = [
@@ -265,7 +306,14 @@ export const createApplicationModelCommandRuntime = <TAuthority, TData = undefin
               affordance,
             )
               ? exposures(affordance.expose(context))
-              : defaultReadExposures(affordance),
+              : isReadPolicyAffordance<TAuthority, TData>(affordance)
+                ? defaultReadExposures(
+                    affordance.policy,
+                    context,
+                    affordance.narrow,
+                    affordance.presentation,
+                  )
+                : defaultReadExposures(affordance, context),
           ) ?? []),
         ],
         commands: [

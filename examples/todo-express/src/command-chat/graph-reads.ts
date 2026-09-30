@@ -1,10 +1,7 @@
-import {
-  createModelGraphReadExposure,
-  type ModelGraphReadExposure,
-  type ModelGraphReadResult,
+import type {
+  ApplicationModelGraphReadPresentation,
+  ModelGraphReadResult,
 } from '@ontahi/core/runtime/server';
-
-import { todoItemReadPolicy, todoListReadPolicy } from '../todo-read-policies.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -31,50 +28,31 @@ const resultMessage = (
   return `${response.value.length} ${es ? noun.es : `matching ${noun.en}`}${response.value.length === 1 ? '' : 's'}${visible.length ? `:\n${visible.join('\n')}` : '.'}`;
 };
 
-export const todoGraphReads = (language = 'en-US'): ModelGraphReadExposure[] => {
+export const todoGraphReadPresentation = (
+  kind: 'item' | 'list',
+  mode: 'run' | 'count',
+  language = 'en-US',
+): ApplicationModelGraphReadPresentation => {
   const es = language.toLowerCase().startsWith('es');
-  const itemMessage = (response: ModelGraphReadResult) =>
-    resultMessage(response, 'title', { en: 'item', es: 'ítem' }, language);
-  const listMessage = (response: ModelGraphReadResult) =>
-    resultMessage(response, 'name', { en: 'list', es: 'lista' }, language);
-  return [
-    createModelGraphReadExposure(todoItemReadPolicy, {
-      mode: 'run',
-      equals: ['completed', 'title', 'list'],
-      orderBy: ['title'],
-      limit: 100,
-      description: es
+  const item = kind === 'item';
+  const noun = item ? { en: 'item', es: 'ítem' } : { en: 'list', es: 'lista' };
+  const description = item
+    ? mode === 'run'
+      ? es
         ? 'Listar ítems, opcionalmente por estado, título o lista.'
-        : 'List items, optionally filtered by completion, title, or list.',
-      message: itemMessage,
-    }),
-    createModelGraphReadExposure(todoItemReadPolicy, {
-      mode: 'count',
-      equals: ['completed', 'title', 'list'],
-      orderBy: ['title'],
-      description: es
+        : 'List items, optionally filtered by completion, title, or list.'
+      : es
         ? 'Contar ítems, opcionalmente por estado, título o lista.'
-        : 'Count items, optionally filtered by completion, title, or list.',
-      message: itemMessage,
-    }),
-    createModelGraphReadExposure(todoListReadPolicy, {
-      mode: 'run',
-      equals: ['name'],
-      orderBy: ['name'],
-      limit: 100,
-      description: es
+        : 'Count items, optionally filtered by completion, title, or list.'
+    : mode === 'run'
+      ? es
         ? 'Listar listas, opcionalmente por nombre.'
-        : 'List lists, optionally filtered by name.',
-      message: listMessage,
-    }),
-    createModelGraphReadExposure(todoListReadPolicy, {
-      mode: 'count',
-      equals: ['name'],
-      orderBy: ['name'],
-      description: es
+        : 'List lists, optionally filtered by name.'
+      : es
         ? 'Contar listas, opcionalmente por nombre.'
-        : 'Count lists, optionally filtered by name.',
-      message: listMessage,
-    }),
-  ];
+        : 'Count lists, optionally filtered by name.';
+  return {
+    description,
+    message: response => resultMessage(response, item ? 'title' : 'name', noun, language),
+  };
 };
