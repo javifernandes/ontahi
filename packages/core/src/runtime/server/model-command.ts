@@ -160,7 +160,7 @@ export const createModelCommandRuntime = ({
       instructions: [
         instructions,
         request.language
-          ? `Write any user-facing reason in ${request.language}, regardless of the request's language. Never translate entity names, item titles, operation IDs, or argument keys.`
+          ? `Write any user-facing reason in ${request.language}, regardless of the request's language.`
           : '',
       ]
         .filter(Boolean)
