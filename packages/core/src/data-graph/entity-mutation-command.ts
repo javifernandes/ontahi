@@ -107,7 +107,10 @@ export const isEntityMutationDeltaForCommand = (
 };
 
 export type EntityMutationCommandDiagnostic = {
-  readonly reason: 'entity_mutation_cardinality_mismatch' | 'entity_mutation_condition_not_met';
+  readonly reason:
+    | 'entity_mutation_cardinality_mismatch'
+    | 'entity_mutation_condition_not_met'
+    | 'entity_mutation_reference_not_found';
   readonly rejection: RelationConstraintRejection;
 };
 
@@ -116,7 +119,8 @@ export const isEntityMutationCommandDiagnostic = (
 ): value is EntityMutationCommandDiagnostic =>
   isRecord(value) &&
   (value.reason === 'entity_mutation_cardinality_mismatch' ||
-    value.reason === 'entity_mutation_condition_not_met') &&
+    value.reason === 'entity_mutation_condition_not_met' ||
+    value.reason === 'entity_mutation_reference_not_found') &&
   isRelationConstraintRejection(value.rejection) &&
   value.rejection.code === value.reason;
 
@@ -141,6 +145,20 @@ export const entityMutationConditionNotMetDiagnostic = (
     code: 'entity_mutation_condition_not_met',
     message: 'Entity mutation condition was not satisfied.',
     parameters: { entityName: command.entityName, action: command.action },
+  },
+});
+
+export const entityMutationReferenceNotFoundDiagnostic = (
+  command: EntityMutationCommand,
+  fieldName: string,
+  targetEntityName: string,
+): EntityMutationCommandDiagnostic => ({
+  reason: 'entity_mutation_reference_not_found',
+  rejection: {
+    version: 1,
+    code: 'entity_mutation_reference_not_found',
+    message: `${command.entityName}.${fieldName} must reference an existing ${targetEntityName}.`,
+    parameters: { entityName: command.entityName, fieldName, targetEntityName },
   },
 });
 

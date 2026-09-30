@@ -79,6 +79,7 @@ export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEn
     source?: AnyEntityDefinition;
     fieldName?: string;
     referenceRequirement?: 'portable' | 'existing';
+    mutationRequirement?: 'existing';
     /** Receiver-owned classification requirement; portable Refs retain the base entityName. */
     variant?: EntityVariantDescriptor;
   };
@@ -940,6 +941,14 @@ export const field = {
     kind: 'field',
     fieldType: 'reference',
     target: target as TTarget,
+  }),
+  existingRef: <TTarget extends AnyEntityDefinition>(
+    target: TTarget | DeferredEntityReference<TTarget>,
+  ): ReferenceFieldDefinition<TTarget> & { mutationRequirement: 'existing' } => ({
+    kind: 'field',
+    fieldType: 'reference',
+    target: target as TTarget,
+    mutationRequirement: 'existing',
   }),
   derived: <TDefinition extends AnyFieldDefinition>(
     definition: TDefinition,

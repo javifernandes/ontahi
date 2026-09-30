@@ -104,6 +104,21 @@ JSON Schema. Todo declares `TodoItem.completed = false` in the Entity model and 
 TodoItem creation under its explicit command policy. A remote application test proves creation
 without supplying `completed`.
 
+## Second Checkpoint
+
+Core now distinguishes two reference contracts that had previously been conflated:
+
+- `referenceRequirement: 'existing'` controls how an Operation input reference is resolved for its
+  implementation.
+- `mutationRequirement: 'existing'`, authored with `field.existingRef(...)`, is a persisted model
+  invariant for Entity creation and replacement.
+
+Ontahí wraps the application Data Graph runtime so the mutation requirement is enforced for local
+Operations, durable/model execution, and Runtime Protocol commands before storage receives the
+mutation. The requirement is reflected in graph descriptors and JSON Schema. Todo uses it for
+`TodoItem.list`, and tests prove that generic create and update commands cannot point at a missing
+`TodoList`.
+
 ## Acceptance
 
 - [ ] Every removed Todo Operation has an equivalent canonical command path with the same model,

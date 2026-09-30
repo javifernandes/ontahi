@@ -51,7 +51,7 @@ export const TagSchema = withSelectionFactories(
 export const TodoItemSchema = withContextualSelections(
   defineEntitySchema('TodoItem', {
     id: field.id(),
-    list: field.ref(TodoListSchemaBase),
+    list: field.existingRef(TodoListSchemaBase),
     title: field.nonEmptyString({ trim: true }),
     completed: field.default(field.boolean(), false),
   })

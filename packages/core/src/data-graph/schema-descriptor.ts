@@ -96,6 +96,7 @@ export type GraphSchemaReferenceDescriptor = {
   description?: string;
   presentation?: GraphSchemaPresentation;
   resolution?: 'existing';
+  mutationRequirement?: 'existing';
   variant?: import('./entity-variant.js').EntityVariantDescriptor;
 };
 
@@ -308,6 +309,7 @@ const describeReferenceField = (
     ...(field.referenceRequirement === 'existing'
       ? { resolution: field.referenceRequirement }
       : {}),
+    ...(field.mutationRequirement ? { mutationRequirement: field.mutationRequirement } : {}),
     ...(field.variant ? { variant: structuredClone(field.variant) } : {}),
   };
 };
@@ -624,6 +626,9 @@ const descriptorToJsonSchema = (
         entityName: descriptor.entityName,
         ...(descriptor.identity ? { identity: descriptor.identity } : {}),
         ...(descriptor.resolution ? { resolution: descriptor.resolution } : {}),
+        ...(descriptor.mutationRequirement
+          ? { mutationRequirement: descriptor.mutationRequirement }
+          : {}),
         ...(descriptor.variant ? { variant: structuredClone(descriptor.variant) } : {}),
       },
     };

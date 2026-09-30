@@ -379,6 +379,23 @@ describe('Ontahi todo portability example', () => {
     ]);
   });
 
+  it('rejects a generic TodoItem creation whose declared existing list is missing', async () => {
+    const remoteClient = createFetchGraphClient({
+      runtimeTransport: { endpoint: `${origin}/runtime` },
+    });
+
+    await expect(
+      remoteClient.graphExecutor.runEntityMutationCommand!(
+        mutateEntity(ClientTodoItemSchema).create({
+          id: 'orphaned-todo',
+          list: createEntityRef(ClientTodoListSchema, { id: 'missing-list' }),
+          title: 'Must not be stored',
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'entity_mutation_reference_not_found' });
+    expect(getTodoDataset().TodoItem).toEqual([]);
+  });
+
   it('atomically deletes a TodoList with its items and tag associations', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'First', completed: false },

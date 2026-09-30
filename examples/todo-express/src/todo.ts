@@ -60,7 +60,7 @@ const todoListFields = {
 const TodoItemCommandRef = entity.ref('TodoItem', {
   fields: {
     id: field.id(),
-    list: field.ref(entity.ref('TodoList')),
+    list: field.existingRef(entity.ref('TodoList')),
     completed: field.boolean(),
   },
 });
@@ -171,7 +171,7 @@ export const Tag = withSelectionFactories(
 
 const todoItemFields = {
   id: field.id(),
-  list: field.ref(TodoList),
+  list: field.existingRef(TodoList),
   title: field.nonEmptyString({ trim: true }),
   completed: field.default(field.boolean(), false),
 };

@@ -160,6 +160,55 @@ describe('data-graph schema DSL', () => {
     });
   });
 
+  it('rejects stored defaults that cannot describe a stable scalar creation value', () => {
+    const Parent = entity('DefaultParent', { id: field.id() });
+
+    expect(() => field.default(field.optional(field.string()), 'value')).toThrow(
+      'non-optional, non-derived scalar Field',
+    );
+    expect(() =>
+      field.default(
+        field.derived(field.string(), () => ''),
+        'value',
+      ),
+    ).toThrow('non-optional, non-derived scalar Field');
+    expect(() => field.default(field.id(), 'fixed-id')).toThrow(
+      'non-optional, non-derived scalar Field',
+    );
+    expect(() =>
+      field.default(field.ref(Parent), createEntityRef(Parent, { id: 'parent-1' })),
+    ).toThrow('non-optional, non-derived scalar Field');
+    expect(() => field.default(field.string(), undefined as never)).toThrow('cannot be undefined');
+  });
+
+  it('reflects an existing-reference mutation requirement without changing input resolution', () => {
+    const Parent = entity('RequiredParent', { id: field.id() });
+    const Child = entity('RequiredChild', {
+      id: field.id(),
+      parent: field.existingRef(Parent),
+    });
+
+    expect(toGraphSchemaDescriptor(Child)).toMatchObject({
+      fields: {
+        parent: {
+          kind: 'entity-ref',
+          entityName: 'RequiredParent',
+          mutationRequirement: 'existing',
+        },
+      },
+    });
+    expect(toGraphJsonSchema(Child)).toMatchObject({
+      properties: {
+        parent: {
+          'x-ontahi-entity-ref': {
+            entityName: 'RequiredParent',
+            mutationRequirement: 'existing',
+          },
+        },
+      },
+    });
+  });
+
   it('expresses entity cardinality for inputs and materialized outputs', () => {
     const Todo = entity('Todo', {
       id: field.id(),
