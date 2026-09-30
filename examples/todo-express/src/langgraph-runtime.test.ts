@@ -194,7 +194,7 @@ describe('Todo LangGraph runtime', () => {
       TodoApplication.app.task.respondToInteraction(
         pending.run,
         { interactionId: pending.interaction.id, optionId: 'list-2' },
-        { actor: { kind: 'system' } },
+        { actor: { kind: 'user', id: 'local-test' } },
       ),
     );
     await vi.waitFor(async () => {
@@ -252,7 +252,7 @@ describe('Todo LangGraph runtime', () => {
       TodoApplication.app.task.respondToInteraction(
         pending.run,
         { interactionId: pending.interaction.id, decision: 'approve' },
-        { actor: { kind: 'system' } },
+        { actor: { kind: 'user', id: 'local-test' } },
       ),
     );
     await vi.waitFor(async () => {
