@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 
 import { TodoApplication, todoModelRuntime } from '../graph.js';
-import { TodoItem, TodoList } from '../todo.js';
+import { TodoList } from '../todo.js';
 
 if (TodoApplication.storage.kind !== 'in-memory' || process.env.TODO_AUTH_MODE !== 'disabled') {
   throw new Error('Evaluation requires TODO_STORAGE=in-memory and TODO_AUTH_MODE=disabled.');
@@ -144,8 +144,11 @@ assert.equal(dataset.TodoItem.length, 2);
 assert.equal(dataset.TodoItem[0]!.completed, true);
 assert.match(String(dataset.TodoItem[1]!.title), /hamburgers/i);
 
-await TodoItem.createItem({ id: 'duplicate-1', list, title: 'buy milk' });
-await TodoItem.createItem({ id: 'duplicate-2', list, title: 'buy milk' });
+dataset.TodoItem = [
+  ...dataset.TodoItem,
+  { id: 'duplicate-1', list: String(list.locator.id), title: 'buy milk', completed: false },
+  { id: 'duplicate-2', list: String(list.locator.id), title: 'buy milk', completed: false },
+];
 for (const text of ['complete buy milk', 'complete buy coffee']) {
   const start = Date.now();
   const result = await submit(text);
@@ -170,11 +173,10 @@ assert.equal(dataset.TodoList.filter(item => item.name === 'Holidays').length, 1
 console.info('List creation passed.');
 
 await TodoList.createList({ id: 'delete-me', name: 'Groceries', color: '#fff' });
-await TodoItem.createItem({
-  id: 'delete-child',
-  list: TodoList.refById('delete-me'),
-  title: 'buy apples',
-});
+dataset.TodoItem = [
+  ...dataset.TodoItem,
+  { id: 'delete-child', list: 'delete-me', title: 'buy apples', completed: false },
+];
 const deletion = await submit('delete list Groceries');
 console.info(JSON.stringify({ text: 'delete list Groceries', result: deletion }));
 assert.equal(deletion.status, 'executed');

@@ -8,7 +8,7 @@ export const todoGraphCommandPolicies = [
     scope: 'all',
     actions: {
       create: {
-        fields: ['id', 'list', 'title', 'completed'],
+        fields: ['list', 'title', 'completed'],
         result: ['id', 'list', 'title', 'completed'],
       },
       delete: { if: ['title'], result: ['id', 'list', 'title'] },

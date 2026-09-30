@@ -133,6 +133,18 @@ their generator name. Todo adoption is intentionally deferred to the migration s
 `createItem({ id, ... })` Operation is removed in the same vertical change rather than retaining two
 conflicting identity contracts.
 
+## First Todo Migration
+
+`TodoItem.createItem` has been removed. `TodoItem.id` is now receiver-generated, `completed` keeps
+its model default, and `list` keeps its existing-reference invariant. The React application and
+Model Support both submit the same canonical Entity Mutation Command containing only `list` and
+`title`; the Runtime Protocol result carries the generated identity and effective stored values.
+
+Model graph-command validation now receives `proposal | choice-option` context just like Operation
+validation. Todo uses it to keep an unspecified list as an interaction: a direct guessed target is
+rejected, while each explicit option in “Which list?” is valid and resumes through both in-process
+and LangGraph Task Runtimes.
+
 ## Acceptance
 
 - [ ] Every removed Todo Operation has an equivalent canonical command path with the same model,

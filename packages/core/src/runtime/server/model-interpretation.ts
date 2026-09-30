@@ -320,7 +320,9 @@ export const interpretModelRequest = async ({
           candidate.kind === 'graph-read'
             ? validateModelGraphRead(candidate, reads)
             : candidate.kind === 'graph-command'
-              ? validateModelGraphCommand(candidate, commands)
+              ? validateModelGraphCommand(candidate, commands, {
+                  kind: proposal.status === 'choice' ? 'choice-option' : 'proposal',
+                })
               : validateModelInvocation(candidate, operations, resolveOperation, {
                   kind: proposal.status === 'choice' ? 'choice-option' : 'proposal',
                 });

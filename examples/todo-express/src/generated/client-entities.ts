@@ -50,7 +50,7 @@ export const TagSchema = withSelectionFactories(
 );
 export const TodoItemSchema = withContextualSelections(
   defineEntitySchema('TodoItem', {
-    id: field.id(),
+    id: field.generated(field.id(), 'uuid'),
     list: field.existingRef(TodoListSchemaBase),
     title: field.nonEmptyString({ trim: true }),
     completed: field.default(field.boolean(), false),
@@ -112,15 +112,6 @@ export const Tag = defineClientEntity(TagSchema, {
 
 export const TodoItem = defineClientEntity(TodoItemSchema, {
   domainOperations: {
-    createItem: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['TodoItem']],
-      },
-      input: graphSchema.pick(TodoItemSchema, ['id', 'list', 'title']).named('CreateTodoItemInput'),
-      output: TodoItemSchema,
-    }),
     setCompleted: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',

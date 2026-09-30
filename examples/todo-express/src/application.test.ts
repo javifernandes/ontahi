@@ -161,31 +161,6 @@ describe('Ontahi todo portability example', () => {
     locator: { id },
   });
 
-  it('uses the bound TodoItem operation directly from Node', async () => {
-    await expect(
-      TodoItem.createItem({
-        id: 'todo-1',
-        list: TodoList.refById('list-1'),
-        title: 'Research receiver semantics',
-      }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: {
-        id: 'todo-1',
-        title: 'Research receiver semantics',
-        completed: false,
-      },
-    });
-    expect(getTodoDataset().TodoItem).toEqual([
-      {
-        id: 'todo-1',
-        list: 'list-1',
-        title: 'Research receiver semantics',
-        completed: false,
-      },
-    ]);
-  });
-
   it('runs one caller-authored projected Query directly and through Express HTTP', async () => {
     getTodoDataset().TodoItem = [
       { id: 'todo-2', list: 'list-1', title: 'Write bridge', completed: false },
@@ -314,32 +289,6 @@ describe('Ontahi todo portability example', () => {
     });
   });
 
-  it('invokes a successful operation over Express end to end', async () => {
-    const response = await invoke('TodoItem.createItem', {
-      id: 'todo-1',
-      list: todoListRef('list-1'),
-      title: 'Read Ontahi guide',
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      kind: 'invocation-result',
-      result: {
-        ok: true,
-        kind: 'success',
-        value: {
-          id: 'todo-1',
-          list: todoListRef('list-1'),
-          title: 'Read Ontahi guide',
-          completed: false,
-        },
-      },
-    });
-    expect(getTodoDataset().TodoItem).toEqual([
-      { id: 'todo-1', list: 'list-1', title: 'Read Ontahi guide', completed: false },
-    ]);
-  });
-
   it('renames one TodoList through the generic remote Entity mutation capability', async () => {
     const remoteClient = createFetchGraphClient({
       runtimeTransport: { endpoint: `${origin}/runtime` },
@@ -363,19 +312,18 @@ describe('Ontahi todo portability example', () => {
 
     await remoteClient.graphExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoItemSchema).create({
-        id: 'todo-defaulted',
         list: createEntityRef(ClientTodoListSchema, { id: 'list-1' }),
         title: 'Use entity defaults',
       }),
     );
 
     expect(getTodoDataset().TodoItem).toEqual([
-      {
-        id: 'todo-defaulted',
+      expect.objectContaining({
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         list: 'list-1',
         title: 'Use entity defaults',
         completed: false,
-      },
+      }),
     ]);
   });
 
@@ -387,7 +335,6 @@ describe('Ontahi todo portability example', () => {
     await expect(
       remoteClient.graphExecutor.runEntityMutationCommand!(
         mutateEntity(ClientTodoItemSchema).create({
-          id: 'orphaned-todo',
           list: createEntityRef(ClientTodoListSchema, { id: 'missing-list' }),
           title: 'Must not be stored',
         }),
@@ -531,49 +478,6 @@ describe('Ontahi todo portability example', () => {
         target: createEntityRef(Tag, { id: 'tag-2' }),
       },
     ]);
-  });
-
-  it('returns the canonical validation result for invalid input', async () => {
-    const response = await invoke('TodoItem.createItem', {
-      id: 'todo-1',
-      list: todoListRef('list-1'),
-      title: '',
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: {
-        ok: false,
-        kind: 'input_invalid',
-        executed: false,
-        issues: [{ path: 'title' }],
-      },
-    });
-    expect(getTodoDataset().TodoItem).toEqual([]);
-  });
-
-  it('rejects creating a TodoItem in an unknown list', async () => {
-    const response = await invoke('TodoItem.createItem', {
-      id: 'todo-1',
-      list: todoListRef('missing-list'),
-      title: 'Orphaned todo',
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      kind: 'invocation-result',
-      result: {
-        ok: false,
-        kind: 'failed',
-        executed: true,
-        failure: {
-          reason: 'todo_list_not_found',
-          list: todoListRef('missing-list'),
-        },
-      },
-    });
-    expect(getTodoDataset().TodoItem).toEqual([]);
   });
 
   it('requires one explicit Principal for a protected operation from Node', async () => {
@@ -775,11 +679,6 @@ describe('Ontahi todo portability example', () => {
         ]),
         operations: expect.arrayContaining([
           expect.objectContaining({
-            id: 'TodoItem.createItem',
-            resultEntityName: 'TodoItem',
-            inputRefs: [expect.objectContaining({ path: 'list', receiver: false })],
-          }),
-          expect.objectContaining({
             id: 'TodoItem.deleteList',
             receiverPath: 'list',
             inputRefs: [expect.objectContaining({ path: 'list', receiver: true })],
@@ -793,7 +692,7 @@ describe('Ontahi todo portability example', () => {
         expect.objectContaining({
           name: 'TodoItem',
           mutations: {
-            create: { fields: ['id', 'list', 'title', 'completed'] },
+            create: { fields: ['list', 'title', 'completed'] },
             update: { fields: ['list', 'title', 'completed'] },
             delete: true,
           },

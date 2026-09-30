@@ -30,7 +30,7 @@ import { tagsQuery, todoListsQuery } from '../todo-queries.js';
 import { loadTodoRuntime } from './bootstrap.js';
 import type { AuthenticationSession, BootstrapState, TodoRuntime } from './bootstrap.js';
 import { moveTodoItem } from './todo-list-state.js';
-import { renameTodoItem } from './todo-mutations.js';
+import { createTodoItem, renameTodoItem } from './todo-mutations.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
 
@@ -75,15 +75,6 @@ const thrownMessage = (error: unknown, fallback: string) =>
 const operationMessage = (result: { ok: boolean; message?: string }, fallback: string) =>
   result.ok ? undefined : result.message || fallback;
 
-const todoFailureReason = (result: { kind: string; failure?: unknown }) =>
-  result.kind === 'failed' &&
-  typeof result.failure === 'object' &&
-  result.failure !== null &&
-  'reason' in result.failure &&
-  typeof result.failure.reason === 'string'
-    ? result.failure.reason
-    : undefined;
-
 export type UseTodoAppOptions = {
   authentication: BootstrapState<AuthenticationSession>;
   setAuthentication: Dispatch<SetStateAction<BootstrapState<AuthenticationSession>>>;
@@ -111,7 +102,6 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const createListOperation = useOperation(TodoList.domain.createList);
   const deleteListOperation = useOperation(TodoItem.domain.deleteList);
   const deleteTagOperation = useOperation(TodoItem.domain.deleteTag);
-  const createTodoOperation = useOperation(TodoItem.domain.createItem);
   const setTodoCompletedOperation = useOperation(TodoItem.domain.setCompleted);
   const deleteTodoOperation = useOperation(TodoItem.domain.delete);
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
@@ -242,24 +232,9 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
     setActionError(undefined);
     setCreatingTodoFor(listId);
     try {
-      const result = await createTodoOperation.executeAsync({
-        id: globalThis.crypto.randomUUID(),
-        list: TodoList.refById(listId),
-        title,
-      });
-      if (result.ok) {
-        await lists.refetch();
-        return true;
-      }
-
-      if (todoFailureReason(result) === 'todo_list_not_found') {
-        await lists.refetch();
-        setActionError('That list no longer exists. The board has been refreshed.');
-        return false;
-      }
-
-      setActionError(result.message || 'The todo could not be added.');
-      return false;
+      const result = await createTodoItem(graphExecutor, lists.refetch, listId, title);
+      setActionError(result.ok ? undefined : result.message);
+      return result.ok;
     } catch (error) {
       setActionError(thrownMessage(error, 'The todo could not be added.'));
       return false;

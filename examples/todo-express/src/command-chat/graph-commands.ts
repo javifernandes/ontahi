@@ -1,4 +1,9 @@
-import { graphSchema, isEntityRef, type AnyEntityRef } from '@ontahi/core/data-graph';
+import {
+  graphSchema,
+  isEntityRef,
+  type AnyEntityRef,
+  type EntityMutationCommand,
+} from '@ontahi/core/data-graph';
 import type { ModelGraphCommandExposure } from '@ontahi/core/runtime/server';
 
 import { TodoItem, TodoList } from '../todo.js';
@@ -61,6 +66,44 @@ export const todoGraphCommands = (
     message: () => message,
   });
   return [
+    {
+      description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
+      request: strict({
+        version: graphSchema.literal(1),
+        kind: graphSchema.literal('graph-command'),
+        command: strict({
+          kind: graphSchema.literal('entity-mutation-command'),
+          action: graphSchema.literal('create'),
+          entityName: graphSchema.literal('TodoItem'),
+          values: strict({
+            list: graphSchema.ref(TodoList),
+            title: TodoItem.fields.title,
+            completed: TodoItem.fields.completed,
+          }),
+        }),
+      }),
+      validate: ({ command }, validation) => {
+        const create = command as EntityMutationCommand;
+        const list = create.action === 'create' ? create.values.list : undefined;
+        if (
+          create.kind !== 'entity-mutation-command' ||
+          create.action !== 'create' ||
+          !isEntityRef(list) ||
+          typeof create.values.title !== 'string' ||
+          create.values.completed !== false
+        )
+          return unresolved;
+        const target = context.lists.find(candidate => candidate.id === list.locator.id);
+        const mentioned = context.lists.filter(list => words(text).includes(words(list.name)));
+        return target &&
+          includesRequestedValue(text, create.values.title) &&
+          (mentioned.some(list => list.id === target.id) ||
+            (mentioned.length === 0 && validation?.kind === 'choice-option'))
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Ítem agregado.' : 'Item added.'),
+    },
     {
       description: es ? 'Borrar un ítem individual.' : 'Delete an individual item.',
       request: strict({

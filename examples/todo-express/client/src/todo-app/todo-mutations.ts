@@ -1,12 +1,41 @@
 import { createEntityRef, mutateEntity, type EntityMutationCommand } from '@ontahi/core/data-graph';
 
-import { TodoItemSchema } from '../../../src/generated/client-entities.js';
+import { TodoItemSchema, TodoListSchema } from '../../../src/generated/client-entities.js';
 
 type TodoMutationExecutor = {
   runEntityMutationCommand?: (command: EntityMutationCommand) => Promise<unknown>;
 };
 
 export type TodoMutationResult = { ok: true } | { ok: false; message: string };
+
+export const createTodoItem = async (
+  executor: TodoMutationExecutor | undefined,
+  refetchTodos: () => Promise<unknown>,
+  listId: string,
+  rawTitle: string,
+): Promise<TodoMutationResult> => {
+  const title = rawTitle.trim();
+  if (!title) return { ok: false, message: 'The todo title cannot be empty.' };
+  if (!executor?.runEntityMutationCommand) {
+    return { ok: false, message: 'This runtime cannot create todos.' };
+  }
+
+  try {
+    await executor.runEntityMutationCommand(
+      mutateEntity(TodoItemSchema).create({
+        list: createEntityRef(TodoListSchema, { id: listId }),
+        title,
+      }),
+    );
+    await refetchTodos();
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'The todo could not be created.',
+    };
+  }
+};
 
 export const renameTodoItem = async (
   executor: TodoMutationExecutor | undefined,

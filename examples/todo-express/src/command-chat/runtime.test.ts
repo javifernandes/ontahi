@@ -1,5 +1,6 @@
 import {
   createEntityRef,
+  mutateEntity,
   query,
   Selection,
   toGraphCommandRequest,
@@ -51,8 +52,12 @@ const complete = (id = 'tea') =>
     todos: Selection.references(TodoItem, [createEntityRef(TodoItem, { id })]).toJSON(),
     completed: true,
   });
-const create = (id = 'list-1') =>
-  proposal('TodoItem.createItem', { id: 'new-item', title: 'buy bread', list: list(id) });
+const create = (id = 'list-1') => ({
+  status: 'resolved' as const,
+  request: toGraphCommandRequest(
+    mutateEntity(TodoItem).create({ title: 'buy bread', list: list(id) }),
+  ),
+});
 const rename = (entityName: 'TodoList' | 'TodoItem', id: string, before: string, after: string) => {
   const key = entityName === 'TodoList' ? 'name' : 'title';
   return {
@@ -126,7 +131,7 @@ describe('Todo canonical model requests', () => {
     expect(await submit('delete item buy tea')).toMatchObject({ status: 'unresolved' });
     expect(dataset().TodoItem).toHaveLength(2);
   });
-  it('exposes real operation inputs and refs, then dispatches creation unchanged', async () => {
+  it('exposes the canonical create command and lets the receiver generate identity', async () => {
     const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) => create());
     bind(generate);
     expect(await submit()).toEqual({
@@ -135,20 +140,19 @@ describe('Todo canonical model requests', () => {
       request: create().request,
     });
     expect(dataset().TodoItem?.at(-1)).toMatchObject({
-      id: 'new-item',
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       title: 'buy bread',
       list: 'list-1',
       completed: false,
     });
     const catalog = JSON.parse(generate.mock.calls[0]![0].context);
-    const operation = catalog.operations.find(
-      (op: { operationId: string }) => op.operationId === 'TodoItem.createItem',
+    const command = catalog.commands.find(
+      (candidate: { description: string }) => candidate.description === 'Add an item to a list.',
     );
-    expect(operation.description).toBe(
-      TodoApplication.resolveOperation('TodoItem.createItem')!.description,
+    expect(command.request.properties.command.properties.values.properties).toHaveProperty('list');
+    expect(command.request.properties.command.properties.values.properties).not.toHaveProperty(
+      'id',
     );
-    expect(operation.input.properties).toHaveProperty('list');
-    expect(operation.input.properties).not.toHaveProperty('listName');
     expect(catalog.context.lists[0].ref).toEqual(list());
     expect(catalog.reads.map((read: { description: string }) => read.description)).toContain(
       'List items, optionally filtered by completion, title, or list.',
@@ -266,7 +270,6 @@ describe('Todo canonical model requests', () => {
     expect(await submit('create list holidays')).toMatchObject({ status: 'executed' });
   });
   it.each([
-    proposal('TodoItem.createItem', { title: 'bread', listName: 'Shopping' }),
     {
       status: 'update',
       entityName: 'TodoList',
@@ -283,15 +286,16 @@ describe('Todo canonical model requests', () => {
     expect(dataset().TodoList).toHaveLength(2);
     expect(dataset().TodoItem).toHaveLength(2);
   });
-  it.each([proposal('TodoItem.deleteAll', {}), create('foreign')])(
-    'keeps out-of-scope proposals unresolved and without effects',
-    async result => {
-      bind(async () => result);
-      expect(await submit()).toMatchObject({ status: 'unresolved' });
-      expect(dataset().TodoList).toHaveLength(2);
-      expect(dataset().TodoItem).toHaveLength(2);
-    },
-  );
+  it.each([
+    proposal('TodoItem.deleteAll', {}),
+    proposal('TodoItem.createItem', { title: 'bread', listName: 'Shopping' }),
+    create('foreign'),
+  ])('keeps out-of-scope proposals unresolved and without effects', async result => {
+    bind(async () => result);
+    expect(await submit()).toMatchObject({ status: 'unresolved' });
+    expect(dataset().TodoList).toHaveLength(2);
+    expect(dataset().TodoItem).toHaveLength(2);
+  });
   it('authenticates before disclosure', async () => {
     const generate = vi.fn();
     bind(generate);

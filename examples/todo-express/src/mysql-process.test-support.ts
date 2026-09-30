@@ -24,9 +24,18 @@ try {
       true,
     );
     for (const id of ['persist-one', 'persist-two'])
-      assert.equal(
-        (await TodoItem.createItem({ id, list: TodoList.refById('persist-list'), title: id })).ok,
-        true,
+      await Effect.runPromise(
+        runtime.runEntityMutationCommand({
+          kind: 'entity-mutation-command',
+          action: 'create',
+          entityName: 'TodoItem',
+          values: {
+            id,
+            list: TodoList.refById('persist-list'),
+            title: id,
+            completed: false,
+          },
+        }),
       );
     await Effect.runPromise(
       runtime.runEntityMutationCommand(

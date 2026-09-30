@@ -170,7 +170,7 @@ export const Tag = withSelectionFactories(
 );
 
 const todoItemFields = {
-  id: field.id(),
+  id: field.generated(field.id(), 'uuid'),
   list: field.existingRef(TodoList),
   title: field.nonEmptyString({ trim: true }),
   completed: field.default(field.boolean(), false),
@@ -413,31 +413,6 @@ export const TodoItem = entity({
       },
     });
     return {
-      createItem: operation({
-        description: 'Add an item to a list.',
-        input: graphSchema.pick(self, ['id', 'list', 'title']).named('CreateTodoItemInput'),
-        output: self,
-        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
-        run: ({ id, list, title }) =>
-          Effect.gen(function* () {
-            const existingList = yield* list.resolve();
-
-            if (!existingList) {
-              return yield* failOperation('todo_list_not_found', 'Todo list does not exist.', {
-                list,
-              });
-            }
-
-            return yield* commands
-              .insertReturning({ id, list, title, completed: false }, [
-                'id',
-                'list',
-                'title',
-                'completed',
-              ])
-              .run();
-          }),
-      }),
       setCompleted: operation({
         description: 'Mark existing items completed or incomplete.',
         input: graphSchema.object({

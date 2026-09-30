@@ -179,17 +179,18 @@ Fetch remains the portable fallback for hosts without WebSocket support. Configu
 `createFetchGraphClient({ runtimeTransport: { endpoint: '/runtime' } })` preserves the same
 application authoring and implements Durable observation with transport-owned polling.
 
-The family-specific routes remain available for explicit compatibility during migration. For
-example, these calls use the legacy unwrapped Operation route:
+The family-specific routes remain available for explicit compatibility during migration. List
+creation still uses the legacy Operation route, while item creation uses the canonical Entity
+Mutation Command and receiver-owned identity/defaults:
 
 ```sh
 curl -X POST http://localhost:3001/operations \
   -H 'content-type: application/json' \
   -d '{"kind":"invoke","operationId":"TodoList.createList","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
 
-curl -X POST http://localhost:3001/operations \
+curl -X POST http://localhost:3001/graph/commands \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoItem.createItem","input":{"id":"todo-1","list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}'
+  -d '{"version":1,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"create","entityName":"TodoItem","values":{"list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}}'
 ```
 
 Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded in the same Vite
@@ -273,12 +274,18 @@ The generated client preserves operation input and output schemas, so React infe
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
 const todos = useGraphQuery(TodoItem.all().where(visibleTodos).as(TodoItemListItem));
-const createTodo = useOperation(TodoItem.domain.createItem);
+const graph = useGraphExecutorCapability();
 const setVisibleCompleted = useOperation(
   TodoItem.domain.setCompleted({ todos: visibleTodos, completed: true }),
 );
 const completeAll = useDurableOperation(TodoList.domain.completeAll);
 
+graph?.runEntityMutationCommand?.(
+  mutateEntity(TodoItemSchema).create({
+    list: TodoListSchema.refById(selectedListId),
+    title: 'Read the guide',
+  }),
+);
 setVisibleCompleted.execute();
 completeAll.execute({ list: TodoList.refById(selectedListId) });
 ```

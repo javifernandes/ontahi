@@ -243,7 +243,7 @@ export const createModelCommandRuntime = ({
       const fresh = await scope(request, signal);
       if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
       const exposure = resolveModelGraphCommand(proposal, fresh.commands ?? []);
-      const reason = exposure.validate(proposal);
+      const reason = exposure.validate(proposal, validation);
       if (reason) return { status: 'unresolved', message: reason };
       signal.throwIfAborted();
       const result = await dispatchCommand(proposal, signal);
