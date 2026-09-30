@@ -87,7 +87,7 @@ it('does not expose graph services that were not configured', async () => {
     graph: { authority: () => undefined },
     scope: async (_request, _signal, graph) => {
       expect(graph).toEqual({});
-      return { context: {}, bindings: {} };
+      return {};
     },
   });
 

@@ -432,4 +432,12 @@ export {
 export { submitModelCommandProtocol } from './model-command-protocol.js';
 
 export type { ModelGraphCommandExposure } from './model-graph-command.js';
+export {
+  createModelEntityMutationExposure,
+  type ModelEntityMutationExposureOptions,
+} from './model-entity-mutation.js';
 export type { ModelGraphReadExposure, ModelGraphReadResult } from './model-graph-read.js';
+export {
+  createModelGraphReadExposure,
+  type ModelGraphReadExposureOptions,
+} from './model-graph-read-exposure.js';

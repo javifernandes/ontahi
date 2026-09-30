@@ -1,4 +1,8 @@
-import type { EntityMutationCommand, GraphCommandDispatchContext } from '@ontahi/core/data-graph';
+import type {
+  EntityMutationCommand,
+  EntityMutationCommandPolicy,
+  GraphCommandDispatchContext,
+} from '@ontahi/core/data-graph';
 
 import { todoAuthenticationMode } from './authentication-mode.js';
 import type { TodoGraphReadAuthority } from './todo-read-policies.js';
@@ -17,64 +21,70 @@ const authorizeCompletion = (
   );
 };
 
+export const todoItemMutationPolicy = {
+  entity: TodoItem,
+  scope: 'all',
+  actions: {
+    create: {
+      fields: ['list', 'title', 'completed'],
+      result: ['id', 'list', 'title', 'completed'],
+    },
+    delete: {
+      if: ['title'],
+      result: ['id', 'list', 'title'],
+      selection: { fields: { id: ['eq'], title: ['eq'] }, allowAll: true },
+    },
+    update: {
+      fields: ['list', 'title', 'completed'],
+      if: ['title', 'completed'],
+      result: ['id', 'list', 'title', 'completed'],
+      selection: { fields: { id: ['eq'], title: ['eq'] }, allowAll: true },
+      authorize: authorizeCompletion,
+    },
+  },
+} as const satisfies EntityMutationCommandPolicy<typeof TodoItem, TodoGraphReadAuthority>;
+
+export const todoListMutationPolicy = {
+  entity: TodoList,
+  scope: 'all',
+  actions: {
+    create: {
+      fields: ['name', 'color'],
+      result: ['id', 'name', 'color'],
+    },
+    update: {
+      fields: ['name', 'color'],
+      if: ['name'],
+      result: ['id', 'name', 'color'],
+    },
+    delete: { if: ['name'], result: ['id', 'name', 'color'] },
+  },
+} as const satisfies EntityMutationCommandPolicy<typeof TodoList, TodoGraphReadAuthority>;
+
+export const tagMutationPolicy = {
+  entity: Tag,
+  scope: 'all',
+  actions: {
+    create: {
+      fields: ['id', 'name', 'color'],
+      result: ['id', 'name', 'color'],
+    },
+    update: {
+      fields: ['name', 'color'],
+      result: ['id', 'name', 'color'],
+      selection: { fields: { name: ['eq'] } },
+    },
+    delete: {
+      result: ['id', 'name', 'color'],
+      selection: { fields: { name: ['eq'] } },
+    },
+  },
+} as const satisfies EntityMutationCommandPolicy<typeof Tag, TodoGraphReadAuthority>;
+
 export const todoGraphCommandPolicies = [
   { entity: TodoList, relationName: 'items', actions: ['move'] },
   { entity: TodoItem, relationName: 'tags', actions: ['link', 'unlink'] },
-  {
-    entity: TodoItem,
-    scope: 'all',
-    actions: {
-      create: {
-        fields: ['list', 'title', 'completed'],
-        result: ['id', 'list', 'title', 'completed'],
-      },
-      delete: {
-        if: ['title'],
-        result: ['id', 'list', 'title'],
-        selection: { fields: { id: ['eq'], title: ['eq'] }, allowAll: true },
-      },
-      update: {
-        fields: ['list', 'title', 'completed'],
-        if: ['title', 'completed'],
-        result: ['id', 'list', 'title', 'completed'],
-        selection: { fields: { id: ['eq'], title: ['eq'] }, allowAll: true },
-        authorize: authorizeCompletion,
-      },
-    },
-  },
-  {
-    entity: TodoList,
-    scope: 'all',
-    actions: {
-      create: {
-        fields: ['name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-      update: {
-        fields: ['name', 'color'],
-        if: ['name'],
-        result: ['id', 'name', 'color'],
-      },
-      delete: { if: ['name'], result: ['id', 'name', 'color'] },
-    },
-  },
-  {
-    entity: Tag,
-    scope: 'all',
-    actions: {
-      create: {
-        fields: ['id', 'name', 'color'],
-        result: ['id', 'name', 'color'],
-      },
-      update: {
-        fields: ['name', 'color'],
-        result: ['id', 'name', 'color'],
-        selection: { fields: { name: ['eq'] } },
-      },
-      delete: {
-        result: ['id', 'name', 'color'],
-        selection: { fields: { name: ['eq'] } },
-      },
-    },
-  },
+  todoItemMutationPolicy,
+  todoListMutationPolicy,
+  tagMutationPolicy,
 ] as const;

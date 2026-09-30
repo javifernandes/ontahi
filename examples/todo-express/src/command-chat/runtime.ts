@@ -70,7 +70,6 @@ export const createTodoModelRuntime = ({
         },
         reads: todoGraphReads(request.language),
         commands: todoGraphCommands(current, request.text, request.language),
-        bindings: {},
       };
     },
   });

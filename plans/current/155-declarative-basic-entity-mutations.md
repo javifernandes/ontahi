@@ -175,6 +175,26 @@ been removed. Per-action command authorization preserves GitHub-mode protection 
 updates without turning every TodoItem update into a named Operation. `completeAll` remains a named
 business action and `deleteFromNamedList` remains the interactive durable example.
 
+## Reflected Model Affordances
+
+Core now projects exact Model-facing Entity mutation schemas from an Entity Mutation Command policy.
+Applications select the intended action, writable fields, exact conditions, and optional literal
+constraints; Core supplies the canonical command envelope, protocol version, Entity reference,
+Field schemas, defaults, normalization, and policy-boundary checks. Todo's model command catalog no
+longer reconstructs those contracts by hand and retains only language, presentation, and contextual
+disambiguation rules.
+
+The same projection boundary now covers graph reads. An application selects a bounded subset of
+equality filters, ordering Fields, mode, and limit from its Graph Read policy, while Core authors the
+canonical Selection AST schema and rejects exposure that exceeds the receiver policy. A non-Todo
+Document fixture proves both projections independently of the example application. Model scopes no
+longer require placeholder context or empty Operation bindings, so graph-only activation has no
+artificial Operation setup.
+
+This checkpoint intentionally keeps Todo's explicit context reader. Declarative context scoping and
+automatic scope projection remain separate work; hiding those decisions behind a generic fetch
+helper would preserve the coupling rather than remove it.
+
 ## Acceptance
 
 - [x] Every removed Todo Operation has an equivalent canonical command path with the same model,
