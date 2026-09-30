@@ -340,9 +340,12 @@ A domain reaction has the same control primitive but different event semantics a
 
 ```text
 on each Book.created as book:
-  users = User where bookNotifications = true
-  sendEmail(users, book)
+  sendEmail(users = User.all where wantsBookNotifications, book)
 ```
+
+The inline Query is a first-class argument rather than a procedural temporary. The boolean
+predicate is shorthand for `wantsBookNotifications = true`; an evaluator may resolve that argument
+where the User graph capability lives before dispatching the email effect.
 
 Candidate temporal operators are:
 
