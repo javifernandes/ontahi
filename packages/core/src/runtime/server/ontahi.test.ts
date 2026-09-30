@@ -4,20 +4,24 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   compileQueryPlan,
   createInMemoryDataGraphStorage,
+  createEntityRef,
   createRuntimeBoundDataGraphApi,
   defineGraphOperation,
   entity as defineEntitySchema,
   field,
   graphSchema,
   mapRelation,
+  mutateEntity,
   query,
+  toGraphCommandRequest,
   toGraphReadRequest,
   type GraphReadPolicy,
+  type EntityMutationCommandExecutionRuntime,
   type InMemoryDataset,
   type RelationshipFact,
 } from '../../data-graph/index.js';
 
-import type { OntahiApplicationBuilder } from './ontahi.js';
+import type { GraphCommandableOntahiApplication, OntahiApplicationBuilder } from './ontahi.js';
 
 import {
   entity,
@@ -40,6 +44,105 @@ import {
 } from './index.js';
 
 describe('ontahi application composition root', () => {
+  it('enforces existing stored references before an Entity mutation reaches storage', async () => {
+    const Parent = entity({ name: 'ExistingParent', fields: { id: field.id() } });
+    const Child = entity({
+      name: 'ExistingChild',
+      fields: {
+        id: field.generated(field.id(), 'test-child-id'),
+        parent: field.existingRef(Parent),
+      },
+      operations: ({ app }) => ({
+        overwriteGeneratedId: app.operation.define({
+          run: () =>
+            getRequiredDataGraphRuntime<EntityMutationCommandExecutionRuntime<unknown>>()
+              .runEntityMutationCommand({
+                kind: 'entity-mutation-command',
+                action: 'update',
+                entityName: 'ExistingChild',
+                target: {
+                  kind: 'entity-ref',
+                  entityName: 'ExistingChild',
+                  locator: { id: 'child-1' },
+                },
+                values: { id: 'replacement-child' },
+              })
+              .pipe(Effect.orDie),
+        }),
+      }),
+    });
+    const storage = createInMemoryDataGraphStorage({
+      dataset: { ExistingParent: [], ExistingChild: [] },
+    });
+    const application = ontahi({
+      storage,
+      entities: [Parent, Child],
+      fieldGenerators: { 'test-child-id': () => 'child-1' },
+    });
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      {
+        entity: Child,
+        scope: 'all',
+        actions: {
+          create: { fields: ['parent'], result: ['id', 'parent'] },
+          update: { fields: ['parent'], result: ['id', 'parent'] },
+        },
+      },
+    ]);
+    const missingParent = createEntityRef(Parent, { id: 'missing-parent' });
+    const command = mutateEntity(Child).create({ parent: missingParent });
+
+    await expect(
+      dispatch(toGraphCommandRequest(command), { authority: undefined }),
+    ).resolves.toMatchObject({
+      kind: 'graph-command-rejection',
+      diagnostic: {
+        reason: 'entity_mutation_reference_not_found',
+        rejection: {
+          code: 'entity_mutation_reference_not_found',
+          parameters: {
+            entityName: 'ExistingChild',
+            fieldName: 'parent',
+            targetEntityName: 'ExistingParent',
+          },
+        },
+      },
+    });
+    expect(storage.dataset.ExistingChild).toEqual([]);
+
+    storage.dataset.ExistingParent = [{ id: 'parent-1' }];
+    const existingParent = createEntityRef(Parent, { id: 'parent-1' });
+    await expect(
+      dispatch(toGraphCommandRequest(mutateEntity(Child).create({ parent: existingParent })), {
+        authority: undefined,
+      }),
+    ).resolves.toMatchObject({ kind: 'graph-command-result' });
+    expect(storage.dataset.ExistingChild).toEqual([{ id: 'child-1', parent: 'parent-1' }]);
+
+    await expect(
+      application.invokeOperation(
+        application.graph.entities.ExistingChild.domain.overwriteGeneratedId,
+        undefined,
+      ),
+    ).resolves.toMatchObject({ ok: false, kind: 'failed' });
+    expect(storage.dataset.ExistingChild).toEqual([{ id: 'child-1', parent: 'parent-1' }]);
+
+    await expect(
+      dispatch(
+        toGraphCommandRequest(
+          mutateEntity(Child).update(Child.refById('child-1'), { parent: missingParent }),
+        ),
+        { authority: undefined },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'graph-command-rejection',
+      diagnostic: { reason: 'entity_mutation_reference_not_found' },
+    });
+    expect(storage.dataset.ExistingChild).toEqual([{ id: 'child-1', parent: 'parent-1' }]);
+  });
+
   it('registers durable Operations and resumes a persisted interaction in a new application runtime', async () => {
     const taskStorage = createInMemoryTaskStorage();
     const graphStorage = createInMemoryDataGraphStorage();

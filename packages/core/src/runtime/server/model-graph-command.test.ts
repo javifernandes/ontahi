@@ -148,6 +148,31 @@ it('does not dispatch when a target becomes ambiguous', async () => {
   });
   expect(f.dispatchCommand).not.toHaveBeenCalled();
 });
+it('lets graph-command scope distinguish a direct proposal from an explicit choice', async () => {
+  const f = fixture();
+  const validate = vi.fn(
+    (_request: GraphCommandRequest, context?: { kind: 'proposal' | 'choice-option' }) =>
+      context?.kind === 'choice-option' ? undefined : 'Which document?',
+  );
+  f.scope.mockResolvedValue({
+    context: {},
+    bindings: {},
+    commands: [{ ...f.binding, validate }],
+  });
+  const runtime = f.runtime();
+  const input = { text: 'rename' };
+
+  await expect(
+    runtime.execute(input, f.proposal.request, new AbortController().signal),
+  ).resolves.toEqual({ status: 'unresolved', message: 'Which document?' });
+  await expect(
+    runtime.execute(input, f.proposal.request, new AbortController().signal, {
+      kind: 'choice-option',
+    }),
+  ).resolves.toMatchObject({ status: 'executed' });
+  expect(validate).toHaveBeenNthCalledWith(1, f.proposal.request, { kind: 'proposal' });
+  expect(validate).toHaveBeenNthCalledWith(2, f.proposal.request, { kind: 'choice-option' });
+});
 it('respects conditional graph writes when the target changes just before execution', async () => {
   const f = fixture();
   f.generate.mockImplementation(async () => {

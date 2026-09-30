@@ -731,10 +731,23 @@ const resolveEntityMutationValues = (
   if (command.action === 'update' && payloadFields.length === 0) {
     return invalidEntityMutationPayload('Entity Mutation Command update payload cannot be empty.');
   }
+  const generatedField = payloadFields.find(
+    fieldName => storedFields[fieldName]?.generatedBy !== undefined,
+  );
+  if (generatedField) {
+    return invalidEntityMutationPayload(
+      `Entity Mutation Command cannot assign receiver-generated ${entity.name}.${generatedField}.`,
+    );
+  }
 
   const schema =
     command.action === 'create'
-      ? graphSchema.object(storedFields, { unknownKeys: 'strict' })
+      ? graphSchema.object(
+          Object.fromEntries(
+            Object.entries(storedFields).filter(([, field]) => field.generatedBy === undefined),
+          ),
+          { unknownKeys: 'strict' },
+        )
       : graphSchema.object(
           Object.fromEntries(payloadFields.map(fieldName => [fieldName, storedFields[fieldName]!])),
           { unknownKeys: 'strict' },

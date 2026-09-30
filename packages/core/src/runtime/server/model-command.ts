@@ -31,8 +31,8 @@ export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | '
   message?: (input: Record<string, unknown>) => string;
 };
 export type ModelCommandScope = {
-  context: unknown;
-  bindings: Readonly<Record<string, ModelCommandBinding>>;
+  context?: unknown;
+  bindings?: Readonly<Record<string, ModelCommandBinding>>;
   reads?: readonly ModelGraphReadExposure[];
   commands?: readonly ModelGraphCommandExposure[];
   unresolved?: string;
@@ -87,8 +87,8 @@ export type CreateModelCommandRuntimeOptions = {
   formatHelp?: (descriptions: readonly string[], request: ModelCommandRequest) => string;
 };
 
-/** Runtime entry point for graph instructions. The host supplies disclosure scope and bindings;
- * the operation declarations supply descriptions and canonical contracts. */
+/** Runtime entry point for graph instructions. The host supplies a disclosure scope;
+ * reflected graph affordances and optional Operations supply canonical contracts. */
 export const createModelCommandRuntime = ({
   application,
   provider,
@@ -102,7 +102,7 @@ export const createModelCommandRuntime = ({
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
   const catalog = (current: ModelCommandScope): ModelOperationExposure[] =>
-    Object.entries(current.bindings).map(([operationId, binding]) => {
+    Object.entries(current.bindings ?? {}).map(([operationId, binding]) => {
       const operation = resolveOperation(operationId);
       if (!operation)
         throw new ModelInterpretationError(
@@ -243,7 +243,7 @@ export const createModelCommandRuntime = ({
       const fresh = await scope(request, signal);
       if (fresh.unresolved) return { status: 'unresolved', message: fresh.unresolved };
       const exposure = resolveModelGraphCommand(proposal, fresh.commands ?? []);
-      const reason = exposure.validate(proposal);
+      const reason = exposure.validate(proposal, validation);
       if (reason) return { status: 'unresolved', message: reason };
       signal.throwIfAborted();
       const result = await dispatchCommand(proposal, signal);
@@ -279,7 +279,7 @@ export const createModelCommandRuntime = ({
     return {
       status: 'executed',
       message:
-        current.bindings[proposal.operationId]?.message?.(
+        current.bindings?.[proposal.operationId]?.message?.(
           proposal.input as Record<string, unknown>,
         ) ?? 'Operation completed.',
       request: proposal,

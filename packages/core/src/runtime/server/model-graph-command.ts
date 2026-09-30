@@ -10,7 +10,10 @@ import { ModelInterpretationError } from './model-interpretation.js';
 export type ModelGraphCommandExposure = {
   description: string;
   request: GraphSchemaDefinition;
-  validate: (request: GraphCommandRequest) => string | undefined;
+  validate: (
+    request: GraphCommandRequest,
+    context?: { kind: 'proposal' | 'choice-option' },
+  ) => string | undefined;
   message?: (request: GraphCommandRequest) => string;
 };
 
@@ -32,4 +35,5 @@ export const resolveModelGraphCommand = (
 export const validateModelGraphCommand = (
   request: GraphCommandRequest,
   commands: readonly ModelGraphCommandExposure[],
-) => resolveModelGraphCommand(request, commands).validate(request);
+  context: { kind: 'proposal' | 'choice-option' } = { kind: 'proposal' },
+) => resolveModelGraphCommand(request, commands).validate(request, context);

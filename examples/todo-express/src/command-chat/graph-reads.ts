@@ -1,49 +1,10 @@
-import { graphSchema, type GraphReadRequest } from '@ontahi/core/data-graph';
-import type { ModelGraphReadExposure, ModelGraphReadResult } from '@ontahi/core/runtime/server';
+import {
+  createModelGraphReadExposure,
+  type ModelGraphReadExposure,
+  type ModelGraphReadResult,
+} from '@ontahi/core/runtime/server';
 
-import { TodoItem, TodoList } from '../todo.js';
-
-const strict = (fields: Parameters<typeof graphSchema.object>[0]) =>
-  graphSchema.object(fields, { unknownKeys: 'strict' });
-const direction = graphSchema.union([graphSchema.literal('asc'), graphSchema.literal('desc')]);
-const all = strict({ kind: graphSchema.literal('all') });
-const predicate = (fieldName: string, value: Parameters<typeof strict>[0][string]) =>
-  strict({
-    kind: graphSchema.literal('predicate'),
-    fieldName: graphSchema.literal(fieldName),
-    operator: graphSchema.literal('eq'),
-    value,
-  });
-const selection = (entityName: string, expressions: readonly ReturnType<typeof strict>[]) => {
-  const simple = graphSchema.union(expressions);
-  return strict({
-    kind: graphSchema.literal('selection'),
-    entityName: graphSchema.literal(entityName),
-    expression: graphSchema.union([
-      simple,
-      strict({ kind: graphSchema.literal('and'), operands: graphSchema.array(simple) }),
-    ]),
-  });
-};
-const request = (
-  entityName: string,
-  mode: 'run' | 'count',
-  selectionSchema: ReturnType<typeof strict>,
-  orderFields: readonly string[],
-) =>
-  strict({
-    version: graphSchema.literal(1),
-    kind: graphSchema.literal('graph-read'),
-    mode: graphSchema.literal(mode),
-    selection: selectionSchema,
-    orderBy: graphSchema.array(
-      strict({
-        fieldName: graphSchema.union(orderFields.map(field => graphSchema.literal(field))),
-        direction,
-      }),
-    ),
-    ...(mode === 'run' ? { limit: graphSchema.literal(100) } : {}),
-  });
+import { todoItemReadPolicy, todoListReadPolicy } from '../todo-read-policies.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -71,68 +32,49 @@ const resultMessage = (
 };
 
 export const todoGraphReads = (language = 'en-US'): ModelGraphReadExposure[] => {
-  const itemSelection = selection('TodoItem', [
-    all,
-    predicate('completed', TodoItem.fields.completed),
-    predicate('title', TodoItem.fields.title),
-    predicate('list', graphSchema.ref(TodoList)),
-  ]);
-  const listSelection = selection('TodoList', [all, predicate('name', TodoList.fields.name)]);
-  const exposure = (
-    entityName: 'TodoItem' | 'TodoList',
-    mode: 'run' | 'count',
-    selectionSchema: ReturnType<typeof strict>,
-    orderFields: readonly string[],
-    description: string,
-    fieldName: 'title' | 'name',
-    noun: { en: string; es: string },
-  ): ModelGraphReadExposure => ({
-    description,
-    request: request(entityName, mode, selectionSchema, orderFields),
-    validate: (_request: GraphReadRequest) => undefined,
-    message: response => resultMessage(response, fieldName, noun, language),
-  });
   const es = language.toLowerCase().startsWith('es');
+  const itemMessage = (response: ModelGraphReadResult) =>
+    resultMessage(response, 'title', { en: 'item', es: 'ítem' }, language);
+  const listMessage = (response: ModelGraphReadResult) =>
+    resultMessage(response, 'name', { en: 'list', es: 'lista' }, language);
   return [
-    exposure(
-      'TodoItem',
-      'run',
-      itemSelection,
-      ['title'],
-      es
+    createModelGraphReadExposure(todoItemReadPolicy, {
+      mode: 'run',
+      equals: ['completed', 'title', 'list'],
+      orderBy: ['title'],
+      limit: 100,
+      description: es
         ? 'Listar ítems, opcionalmente por estado, título o lista.'
         : 'List items, optionally filtered by completion, title, or list.',
-      'title',
-      { en: 'item', es: 'ítem' },
-    ),
-    exposure(
-      'TodoItem',
-      'count',
-      itemSelection,
-      ['title'],
-      es
+      message: itemMessage,
+    }),
+    createModelGraphReadExposure(todoItemReadPolicy, {
+      mode: 'count',
+      equals: ['completed', 'title', 'list'],
+      orderBy: ['title'],
+      description: es
         ? 'Contar ítems, opcionalmente por estado, título o lista.'
         : 'Count items, optionally filtered by completion, title, or list.',
-      'title',
-      { en: 'item', es: 'ítem' },
-    ),
-    exposure(
-      'TodoList',
-      'run',
-      listSelection,
-      ['name'],
-      es ? 'Listar listas, opcionalmente por nombre.' : 'List lists, optionally filtered by name.',
-      'name',
-      { en: 'list', es: 'lista' },
-    ),
-    exposure(
-      'TodoList',
-      'count',
-      listSelection,
-      ['name'],
-      es ? 'Contar listas, opcionalmente por nombre.' : 'Count lists, optionally filtered by name.',
-      'name',
-      { en: 'list', es: 'lista' },
-    ),
+      message: itemMessage,
+    }),
+    createModelGraphReadExposure(todoListReadPolicy, {
+      mode: 'run',
+      equals: ['name'],
+      orderBy: ['name'],
+      limit: 100,
+      description: es
+        ? 'Listar listas, opcionalmente por nombre.'
+        : 'List lists, optionally filtered by name.',
+      message: listMessage,
+    }),
+    createModelGraphReadExposure(todoListReadPolicy, {
+      mode: 'count',
+      equals: ['name'],
+      orderBy: ['name'],
+      description: es
+        ? 'Contar listas, opcionalmente por nombre.'
+        : 'Count lists, optionally filtered by name.',
+      message: listMessage,
+    }),
   ];
 };

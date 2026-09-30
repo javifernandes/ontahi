@@ -7,7 +7,7 @@ import { createPool } from 'mysql2/promise';
 import { GenericContainer, Wait } from 'testcontainers';
 import { expect, it } from 'vitest';
 
-it('runs Todo operations and preserves tags and ordering across Express host restarts with MySQL', async () => {
+it('runs Todo graph mutations and preserves tags and ordering across Express host restarts with MySQL', async () => {
   const password = randomUUID();
   const container = await new GenericContainer('mysql:8.4')
     .withEnvironment({ MYSQL_ROOT_PASSWORD: password, MYSQL_DATABASE: 'ontahi_todos' })

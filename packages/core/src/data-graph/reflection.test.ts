@@ -26,6 +26,18 @@ describe('schema relation reflection', () => {
     ).toThrow('Relation constraints must be JSON-safe.');
   });
 
+  it('rejects delete policies that do not match the relation shape', () => {
+    const Parent = entity('LifecycleParent', { id: field.id() });
+    const Child = entity('LifecycleChild', { id: field.id() });
+
+    expect(() => Parent.hasMany('children', Child, { onDelete: 'detach' as never })).toThrow(
+      'hasMany Relations only support onDelete: cascade.',
+    );
+    expect(() => Parent.manyToMany('children', Child, { onDelete: 'cascade' as never })).toThrow(
+      'manyToMany Relations only support onDelete: detach.',
+    );
+  });
+
   it('reflects portable constraints and stable rejection descriptors', () => {
     const Team = entity('Team', { id: field.id() });
     const Member = entity('Member', {
@@ -119,7 +131,7 @@ describe('schema relation reflection', () => {
     const TodoItem = entity('TodoItem', {
       id: field.id(),
       list: field.ref(TodoList),
-    }).manyToMany('tags', Tag);
+    }).manyToMany('tags', Tag, { onDelete: 'detach' });
 
     expect(reflectSchemaRelations([TodoList, Tag, TodoItem])).toEqual(
       expect.arrayContaining([
@@ -145,6 +157,17 @@ describe('schema relation reflection', () => {
         }),
         expect.objectContaining({
           relationId: 'TodoItem.tags',
+          subjectEntityName: 'TodoItem',
+          targetEntityName: 'Tag',
+          name: 'tags',
+          kind: 'manyToMany',
+          provenance: 'declared',
+          direction: 'forward',
+          cardinality: 'many',
+          onDelete: 'detach',
+        }),
+        expect.objectContaining({
+          relationId: 'TodoItem.tags',
           subjectEntityName: 'Tag',
           targetEntityName: 'TodoItem',
           name: 'TodoItem.tags',
@@ -152,6 +175,7 @@ describe('schema relation reflection', () => {
           provenance: 'derived-inverse',
           direction: 'inverse',
           cardinality: 'many',
+          onDelete: 'detach',
         }),
       ]),
     );

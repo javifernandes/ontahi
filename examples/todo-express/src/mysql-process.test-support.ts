@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict';
 
-import { mutateEntity, query, relationship, relationshipSet } from '@ontahi/core/data-graph';
-import { getOntahiSemanticEntities } from '@ontahi/core/runtime/server';
+import {
+  mutateEntity,
+  query,
+  relationship,
+  relationshipSet,
+  toGraphCommandRequest,
+  type EntityMutationCommand,
+  type EntityMutationDelta,
+} from '@ontahi/core/data-graph';
+import {
+  getOntahiSemanticEntities,
+  type GraphCommandableOntahiApplication,
+} from '@ontahi/core/runtime/server';
 import { Effect } from 'effect';
 
 import { createTodoExpressApp } from './application.js';
-import { TodoItem, TodoList, Tag } from './graph.js';
+import { TodoApplication, TodoItem, TodoList, Tag } from './graph.js';
 import { defaultStorage } from './storage.js';
+import { todoGraphCommandPolicies } from './todo-command-policies.js';
 
 // Each invocation is a new host process. The parent test supplies an isolated MySQL database.
 const server = createTodoExpressApp().listen(0, '127.0.0.1');
@@ -17,33 +29,52 @@ await new Promise<void>((resolve, reject) => {
 try {
   if (defaultStorage.kind !== 'mysql') throw new Error('Expected MySQL storage.');
   const runtime = defaultStorage.createRuntime();
+  const dispatch = (
+    TodoApplication as unknown as GraphCommandableOntahiApplication
+  ).createGraphCommandDispatcher(todoGraphCommandPolicies);
+  const executeMutation = async (command: EntityMutationCommand): Promise<EntityMutationDelta> => {
+    const result = await dispatch(toGraphCommandRequest(command), {
+      authority: { principal: { subject: 'mysql-process-test', kind: 'system' } },
+    });
+    assert.equal(result.kind, 'graph-command-result');
+    return result.value as EntityMutationDelta;
+  };
   if (process.argv[2] === 'write') {
-    assert.equal(
-      (await TodoList.createList({ id: 'persist-list', name: 'Persistent list', color: 'blue' }))
-        .ok,
-      true,
-    );
-    for (const id of ['persist-one', 'persist-two'])
-      assert.equal(
-        (await TodoItem.createItem({ id, list: TodoList.refById('persist-list'), title: id })).ok,
-        true,
-      );
-    await Effect.runPromise(
-      runtime.runEntityMutationCommand(
-        mutateEntity(Tag).create({ id: 'persist-tag', name: 'Persistent tag', color: 'red' }),
-      ),
+    const createdList = await executeMutation({
+      kind: 'entity-mutation-command',
+      action: 'create',
+      entityName: 'TodoList',
+      values: { name: 'Persistent list', color: 'blue' },
+    });
+    const listId = String(createdList.created[0]!.ref!.locator.id);
+    const itemIds: string[] = [];
+    for (const title of ['Persistent one', 'Persistent two']) {
+      const createdItem = await executeMutation({
+        kind: 'entity-mutation-command',
+        action: 'create',
+        entityName: 'TodoItem',
+        values: {
+          list: TodoList.refById(listId),
+          title,
+          completed: false,
+        },
+      });
+      itemIds.push(String(createdItem.created[0]!.ref!.locator.id));
+    }
+    await executeMutation(
+      mutateEntity(Tag).create({ id: 'persist-tag', name: 'Persistent tag', color: 'red' }),
     );
     await Effect.runPromise(
       runtime.runManyToManyRelationshipCommand(
-        relationshipSet(TodoItem, 'tags', TodoItem.refById('persist-one')).add(
+        relationshipSet(TodoItem, 'tags', TodoItem.refById(itemIds[0]!)).add(
           Tag.refById('persist-tag'),
         ),
       ),
     );
     await Effect.runPromise(
       runtime.runOrderedRelationshipCommand(
-        relationship(TodoList, 'items', TodoList.refById('persist-list')).move(
-          TodoItem.refById('persist-two'),
+        relationship(TodoList, 'items', TodoList.refById(listId)).move(
+          TodoItem.refById(itemIds[1]!),
           { at: 'start' },
         ),
       ),
@@ -57,21 +88,33 @@ try {
       undefined,
     ),
   );
-  assert.deepEqual(lists, [
-    {
-      id: 'persist-list',
-      name: 'Persistent list',
-      color: 'blue',
-      items: ['persist-two', 'persist-one'].map(id => ({
-        id,
-        title: id,
+  assert.equal(lists.length, 1);
+  const [persistedList] = lists;
+  assert.equal(persistedList!.name, 'Persistent list');
+  assert.equal(persistedList!.color, 'blue');
+  const persistedItems = persistedList!.items;
+  assert(Array.isArray(persistedItems));
+  assert.deepEqual(
+    persistedItems.map(item => {
+      const { id, list, ...values } = item as Record<string, unknown>;
+      assert.match(String(id), /^[0-9a-f-]{36}$/);
+      assert(list && typeof list === 'object');
+      assert.equal(Reflect.get(list, 'kind'), 'entity-ref');
+      assert.equal(Reflect.get(list, 'entityName'), 'TodoList');
+      const locator = Reflect.get(list, 'locator');
+      assert(locator && typeof locator === 'object');
+      assert.equal(Reflect.get(locator, 'id'), persistedList!.id);
+      return values;
+    }),
+    [
+      { title: 'Persistent two', completed: false, tags: [] },
+      {
+        title: 'Persistent one',
         completed: false,
-        list: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'persist-list' } },
-        tags:
-          id === 'persist-one' ? [{ id: 'persist-tag', name: 'Persistent tag', color: 'red' }] : [],
-      })),
-    },
-  ]);
+        tags: [{ id: 'persist-tag', name: 'Persistent tag', color: 'red' }],
+      },
+    ],
+  );
 } finally {
   await new Promise<void>((resolve, reject) =>
     server.close(error => (error ? reject(error) : resolve())),

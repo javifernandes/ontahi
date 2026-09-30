@@ -127,6 +127,132 @@ describe('data-graph schema DSL', () => {
     });
   });
 
+  it('declares stored Field defaults once for parsing and reflection', () => {
+    const Todo = entity('DefaultedTodo', {
+      id: field.id(),
+      title: field.nonEmptyString({ trim: true }),
+      completed: field.default(field.boolean(), false),
+    });
+
+    expect(
+      safeParseGraphSchema(Todo, {
+        id: 'todo-1',
+        title: '  Write tests  ',
+      }),
+    ).toEqual({
+      success: true,
+      data: { id: 'todo-1', title: 'Write tests', completed: false },
+    });
+    expect(toGraphSchemaDescriptor(Todo)).toMatchObject({
+      fields: {
+        completed: {
+          kind: 'default',
+          defaultValue: false,
+          item: { kind: 'scalar', type: 'boolean' },
+        },
+      },
+    });
+    expect(toGraphJsonSchema(Todo)).toMatchObject({
+      required: ['id', 'title'],
+      properties: {
+        completed: { type: 'boolean', default: false },
+      },
+    });
+  });
+
+  it('rejects stored defaults that cannot describe a stable scalar creation value', () => {
+    const Parent = entity('DefaultParent', { id: field.id() });
+
+    expect(() => field.default(field.optional(field.string()), 'value')).toThrow(
+      'non-optional, non-derived scalar Field',
+    );
+    expect(() =>
+      field.default(
+        field.derived(field.string(), () => ''),
+        'value',
+      ),
+    ).toThrow('non-optional, non-derived scalar Field');
+    expect(() => field.default(field.id(), 'fixed-id')).toThrow(
+      'non-optional, non-derived scalar Field',
+    );
+    expect(() =>
+      field.default(field.ref(Parent), createEntityRef(Parent, { id: 'parent-1' })),
+    ).toThrow('non-optional, non-derived scalar Field');
+    expect(() => field.default(field.string(), undefined as never)).toThrow('cannot be undefined');
+  });
+
+  it('reflects receiver-generated stored Fields without making stored values optional', () => {
+    const Todo = entity('GeneratedTodo', {
+      id: field.generated(field.id(), 'uuid'),
+      title: field.string(),
+    });
+
+    expect(toGraphSchemaDescriptor(Todo)).toMatchObject({
+      fields: {
+        id: { kind: 'scalar', type: 'id', readOnly: true, generatedBy: 'uuid' },
+      },
+    });
+    expect(toGraphJsonSchema(Todo)).toMatchObject({
+      required: ['id', 'title'],
+      properties: {
+        id: { type: 'string', readOnly: true, 'x-ontahi-generated-by': 'uuid' },
+      },
+    });
+    expect(() => field.generated(field.optional(field.string()), 'slug')).toThrow(
+      'non-optional, non-derived scalar Field',
+    );
+    expect(() => field.generated(field.default(field.string(), 'draft'), 'slug')).toThrow(
+      'without a default',
+    );
+    expect(() => field.generated(field.string(), ' ')).toThrow('require a generator name');
+  });
+
+  it('reflects and validates array cardinality constraints', () => {
+    const EmptyStrings = graphSchema.array(field.string(), { minItems: 0, maxItems: 0 });
+
+    expect(toGraphSchemaDescriptor(EmptyStrings)).toEqual({
+      kind: 'array',
+      item: expect.objectContaining({ kind: 'scalar', type: 'string' }),
+      minItems: 0,
+      maxItems: 0,
+    });
+    expect(toGraphJsonSchema(EmptyStrings)).toMatchObject({
+      type: 'array',
+      minItems: 0,
+      maxItems: 0,
+    });
+    expect(safeParseGraphSchema(EmptyStrings, [])).toMatchObject({ success: true, data: [] });
+    expect(safeParseGraphSchema(EmptyStrings, ['unexpected']).success).toBe(false);
+  });
+
+  it('reflects an existing-reference mutation requirement without changing input resolution', () => {
+    const Parent = entity('RequiredParent', { id: field.id() });
+    const Child = entity('RequiredChild', {
+      id: field.id(),
+      parent: field.existingRef(Parent),
+    });
+
+    expect(toGraphSchemaDescriptor(Child)).toMatchObject({
+      fields: {
+        parent: {
+          kind: 'entity-ref',
+          entityName: 'RequiredParent',
+          mutationRequirement: 'existing',
+        },
+      },
+    });
+    expect(toGraphJsonSchema(Child)).toMatchObject({
+      properties: {
+        parent: {
+          'x-ontahi-entity-ref': {
+            entityName: 'RequiredParent',
+            mutationRequirement: 'existing',
+          },
+        },
+      },
+    });
+  });
+
   it('expresses entity cardinality for inputs and materialized outputs', () => {
     const Todo = entity('Todo', {
       id: field.id(),

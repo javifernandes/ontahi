@@ -533,6 +533,58 @@ describe('Entity Mutation Command dispatcher', () => {
     expect(executeEntityMutation).not.toHaveBeenCalled();
   });
 
+  it('authorizes one mutation action from the transport authority before execution', async () => {
+    const graph = defineBookGraph();
+    const executeEntityMutation = vi.fn(async command => ({
+      created: [],
+      updated: [
+        {
+          entityName: 'Book',
+          ref: command.target,
+          values: { id: 'book-1', title: 'Authorized' },
+        },
+      ],
+      deleted: [],
+    }));
+    const authorize = vi.fn(
+      (_command, context: { authority: { principal: string | null } }) =>
+        context.authority.principal !== null,
+    );
+    const dispatch = createGraphCommandDispatcher<{ principal: string | null }>({
+      policies: [
+        {
+          entity: graph.Book,
+          scope: 'all',
+          actions: {
+            update: {
+              fields: ['title'],
+              result: ['id', 'title'],
+              authorize,
+            },
+          },
+        },
+      ],
+      executeEntityMutation,
+    });
+    const request = toGraphCommandRequest(
+      mutateEntity(graph.Book).update(createEntityRef(graph.Book, { id: 'book-1' }), {
+        title: 'Authorized',
+      }),
+    );
+
+    await expect(dispatch(request, { authority: { principal: null } })).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'access_denied' },
+    });
+    expect(executeEntityMutation).not.toHaveBeenCalled();
+
+    await expect(dispatch(request, { authority: { principal: 'user-1' } })).resolves.toMatchObject({
+      kind: 'graph-command-result',
+    });
+    expect(authorize).toHaveBeenCalledTimes(2);
+    expect(executeEntityMutation).toHaveBeenCalledOnce();
+  });
+
   it('rebuilds against the server Entity and returns an exact JSON-safe delta', async () => {
     const client = defineBookGraph();
     const server = defineBookGraph();

@@ -1,14 +1,22 @@
-import { graphSchema, isEntityRef, type AnyEntityRef } from '@ontahi/core/data-graph';
-import type { ModelGraphCommandExposure } from '@ontahi/core/runtime/server';
+import {
+  isEntityRef,
+  type AnyEntityRef,
+  type AnyEntityDefinition,
+  type EntityMutationCommand,
+  type EntityMutationCommandPolicy,
+  type WritableStoredFieldName,
+} from '@ontahi/core/data-graph';
+import {
+  createModelEntityMutationExposure,
+  type ModelGraphCommandExposure,
+} from '@ontahi/core/runtime/server';
 
-import { TodoItem, TodoList } from '../todo.js';
+import { todoItemMutationPolicy, todoListMutationPolicy } from '../todo-command-policies.js';
 
 import type { TodoModelContext } from './context.js';
 
 type Context = TodoModelContext;
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const strict = (fields: Parameters<typeof graphSchema.object>[0]) =>
-  graphSchema.object(fields, { unknownKeys: 'strict' });
 const words = (text: string) =>
   ` ${text
     .toLowerCase()
@@ -27,53 +35,86 @@ export const todoGraphCommands = (
   const unresolved = es
     ? 'No pude identificar un único destino. Indicá el nombre actual y, para un ítem, su lista si hay varios iguales.'
     : 'I could not identify one target. Specify its current name and, for duplicate items, its list.';
-  const exposure = (
-    entity: typeof TodoList | typeof TodoItem,
-    key: 'name' | 'title',
+  const exposure = <TEntity extends AnyEntityDefinition, TAuthority>(
+    policy: EntityMutationCommandPolicy<TEntity, TAuthority>,
+    key: WritableStoredFieldName<TEntity['fields']> & string,
     validateTarget: (target: AnyEntityRef, before: string, after: string) => boolean,
     description: string,
     message: string,
-  ): ModelGraphCommandExposure => ({
-    description,
-    request: strict({
-      version: graphSchema.literal(2),
-      kind: graphSchema.literal('graph-command'),
-      command: strict({
-        kind: graphSchema.literal('entity-mutation-command'),
-        action: graphSchema.literal('update'),
-        entityName: graphSchema.literal(entity.name),
-        target: graphSchema.ref(entity),
-        values: strict({ [key]: key === 'name' ? TodoList.fields.name : TodoItem.fields.title }),
-        if: strict({ [key]: key === 'name' ? TodoList.fields.name : TodoItem.fields.title }),
-      }),
-    }),
-    validate: ({ command }) => {
-      if (
-        command.kind !== 'entity-mutation-command' ||
-        command.action !== 'update' ||
-        !isEntityRef(command.target)
-      )
-        return unresolved;
-      return validateTarget(command.target, String(command.if?.[key]), String(command.values[key]))
-        ? undefined
-        : unresolved;
-    },
-    message: () => message,
-  });
+  ): ModelGraphCommandExposure =>
+    createModelEntityMutationExposure(policy, {
+      action: 'update',
+      values: [key],
+      condition: [key],
+      description,
+      validate: ({ command }) => {
+        if (
+          command.kind !== 'entity-mutation-command' ||
+          command.action !== 'update' ||
+          !isEntityRef(command.target)
+        )
+          return unresolved;
+        return validateTarget(
+          command.target,
+          String(command.if?.[key]),
+          String(command.values[key]),
+        )
+          ? undefined
+          : unresolved;
+      },
+      message: () => message,
+    });
   return [
-    {
+    createModelEntityMutationExposure(todoListMutationPolicy, {
+      action: 'create',
+      values: ['name', 'color'],
+      description: es ? 'Crear una lista nueva.' : 'Create a new list.',
+      validate: ({ command }) => {
+        const create = command as EntityMutationCommand;
+        return create.kind === 'entity-mutation-command' &&
+          create.action === 'create' &&
+          typeof create.values.name === 'string' &&
+          create.values.color === '#f5ddd5' &&
+          includesRequestedValue(text, create.values.name)
+          ? undefined
+          : unresolved;
+      },
+      message: ({ command }) => {
+        const name = command.action === 'create' ? String(command.values.name) : '';
+        return es ? `Lista “${name}” creada.` : `List “${name}” created.`;
+      },
+    }),
+    createModelEntityMutationExposure(todoItemMutationPolicy, {
+      action: 'create',
+      values: ['list', 'title', 'completed'],
+      valueLiterals: { completed: false },
+      description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
+      validate: ({ command }, validation) => {
+        const create = command as EntityMutationCommand;
+        const list = create.action === 'create' ? create.values.list : undefined;
+        if (
+          create.kind !== 'entity-mutation-command' ||
+          create.action !== 'create' ||
+          !isEntityRef(list) ||
+          typeof create.values.title !== 'string' ||
+          create.values.completed !== false
+        )
+          return unresolved;
+        const target = context.lists.find(candidate => candidate.id === list.locator.id);
+        const mentioned = context.lists.filter(list => words(text).includes(words(list.name)));
+        return target &&
+          includesRequestedValue(text, create.values.title) &&
+          (mentioned.some(list => list.id === target.id) ||
+            (mentioned.length === 0 && validation?.kind === 'choice-option'))
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Ítem agregado.' : 'Item added.'),
+    }),
+    createModelEntityMutationExposure(todoItemMutationPolicy, {
+      action: 'delete',
+      condition: ['title'],
       description: es ? 'Borrar un ítem individual.' : 'Delete an individual item.',
-      request: strict({
-        version: graphSchema.literal(2),
-        kind: graphSchema.literal('graph-command'),
-        command: strict({
-          kind: graphSchema.literal('entity-mutation-command'),
-          action: graphSchema.literal('delete'),
-          entityName: graphSchema.literal('TodoItem'),
-          target: graphSchema.ref(TodoItem),
-          if: strict({ title: TodoItem.fields.title }),
-        }),
-      }),
       validate: ({ command }) => {
         if (
           command.kind !== 'entity-mutation-command' ||
@@ -113,9 +154,69 @@ export const todoGraphCommands = (
           : unresolved;
       },
       message: () => (es ? 'Ítem borrado.' : 'Item deleted.'),
-    },
+    }),
+    createModelEntityMutationExposure(todoListMutationPolicy, {
+      action: 'delete',
+      condition: ['name'],
+      description: es ? 'Borrar una lista y sus ítems.' : 'Delete a list and its items.',
+      validate: ({ command }, validation) => {
+        if (
+          command.kind !== 'entity-mutation-command' ||
+          command.action !== 'delete' ||
+          !isEntityRef(command.target)
+        )
+          return unresolved;
+        const targetRef = command.target;
+        const name = String(command.if?.name);
+        const matches = context.lists.filter(list => same(list.name, name));
+        const target = matches.find(list => list.id === targetRef.locator.id);
+        const mentioned = context.lists.filter(list => words(text).includes(words(list.name)));
+        return target &&
+          words(text).includes(words(name)) &&
+          (mentioned.length === 1 || validation?.kind === 'choice-option') &&
+          (matches.length === 1 || validation?.kind === 'choice-option')
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Lista borrada.' : 'List deleted.'),
+    }),
+    createModelEntityMutationExposure(todoItemMutationPolicy, {
+      action: 'update',
+      values: ['completed'],
+      valueLiterals: { completed: true },
+      condition: ['completed'],
+      conditionLiterals: { completed: false },
+      description: es ? 'Marcar un ítem como completado.' : 'Mark an item as completed.',
+      validate: ({ command }, validation) => {
+        if (
+          command.kind !== 'entity-mutation-command' ||
+          command.action !== 'update' ||
+          !isEntityRef(command.target) ||
+          command.values.completed !== true ||
+          command.if?.completed !== false
+        )
+          return unresolved;
+        const targetRef = command.target;
+        const target = context.items.find(item => item.id === targetRef.locator.id);
+        if (!target || target.completed || !words(text).includes(words(target.title))) {
+          return unresolved;
+        }
+        const mentionedLists = context.lists.filter(list => words(text).includes(words(list.name)));
+        const matches = context.items.filter(
+          item =>
+            !item.completed &&
+            same(item.title, target.title) &&
+            (!mentionedLists.length ||
+              mentionedLists.some(list => list.id === item.list.locator.id)),
+        );
+        return matches.length === 1 || validation?.kind === 'choice-option'
+          ? undefined
+          : unresolved;
+      },
+      message: () => (es ? 'Ítem completado.' : 'Item completed.'),
+    }),
     exposure(
-      TodoList,
+      todoListMutationPolicy,
       'name',
       (target, before, after) => {
         const matches = context.lists.filter(list => same(list.name, before));
@@ -131,7 +232,7 @@ export const todoGraphCommands = (
       es ? 'Lista renombrada.' : 'List renamed.',
     ),
     exposure(
-      TodoItem,
+      todoItemMutationPolicy,
       'title',
       (target, before, after) => {
         // A list mentioned inside the replacement title does not disambiguate the old item.

@@ -14,7 +14,7 @@ import {
 } from '@ontahi/core/data-graph';
 
 const TodoListSchemaBase = defineEntitySchema('TodoList', {
-  id: field.id(),
+  id: field.generated(field.id(), 'uuid'),
   name: field.nonEmptyString({
     trim: true,
     exclude: {
@@ -25,13 +25,13 @@ const TodoListSchemaBase = defineEntitySchema('TodoList', {
       exclude: 'Archive is reserved for system use.',
     },
   }),
-  color: field.named('Color', field.nonEmptyString({ trim: true })),
+  color: field.default(field.named('Color', field.nonEmptyString({ trim: true })), '#f5ddd5'),
 }).display({ primary: 'name', search: ['name'] });
 export const TagSchema = withSelectionFactories(
   defineEntitySchema('Tag', {
     id: field.id(),
     name: field.nonEmptyString({ trim: true }),
-    color: TodoListSchemaBase.fields.color,
+    color: field.named('Color', field.nonEmptyString({ trim: true })),
   }).display({ primary: 'name', search: ['name'] }),
   {
     identity: {
@@ -50,10 +50,10 @@ export const TagSchema = withSelectionFactories(
 );
 export const TodoItemSchema = withContextualSelections(
   defineEntitySchema('TodoItem', {
-    id: field.id(),
-    list: field.ref(TodoListSchemaBase),
+    id: field.generated(field.id(), 'uuid'),
+    list: field.existingRef(TodoListSchemaBase),
     title: field.nonEmptyString({ trim: true }),
-    completed: field.boolean(),
+    completed: field.default(field.boolean(), false),
   })
     .display({ primary: 'title', search: ['title'] })
     .manyToMany('tags', TagSchema),
@@ -80,15 +80,6 @@ const DeleteListItemsOutputValue = value('DeleteListItemsOutput', {
 
 export const TodoList = defineClientEntity(TodoListSchema, {
   domainOperations: {
-    createList: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList']],
-      },
-      input: graphSchema.pick(TodoListSchema, ['id', 'name', 'color']).named('CreateTodoListInput'),
-      output: TodoListSchema,
-    }),
     completeAll: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
@@ -112,36 +103,6 @@ export const Tag = defineClientEntity(TagSchema, {
 
 export const TodoItem = defineClientEntity(TodoItemSchema, {
   domainOperations: {
-    createItem: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['TodoItem']],
-      },
-      input: graphSchema.pick(TodoItemSchema, ['id', 'list', 'title']).named('CreateTodoItemInput'),
-      output: TodoItemSchema,
-    }),
-    setCompleted: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['TodoItem']],
-      },
-      input: graphSchema.object({
-        todos: TodoItemSchema.many(),
-        completed: TodoItemSchema.fields.completed,
-      }),
-    }),
-    delete: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['TodoItem']],
-      },
-      input: graphSchema.object({
-        todo: graphSchema.existingRef(TodoItemSchema),
-      }),
-    }),
     deleteFromNamedList: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',
@@ -155,35 +116,6 @@ export const TodoItem = defineClientEntity(TodoItemSchema, {
       durable: {
         runtime: 'in-process',
       },
-    }),
-    deleteList: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['TodoItem'], ['Tag']],
-      },
-      input: graphSchema.object({
-        list: graphSchema.existingRef(TodoListSchema),
-      }),
-      execution: { atomicity: 'required' },
-    }),
-    deleteTag: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['Tag'], ['TodoItem']],
-      },
-      input: graphSchema.object({
-        tag: graphSchema.existingRef(TagSchema),
-      }),
-    }),
-    deleteAll: defineClientDomainOperation({
-      authority: 'server',
-      exposure: 'bridge',
-      bridge: {
-        invalidate: [['TodoList'], ['TodoItem']],
-      },
-      input: graphSchema.void(),
     }),
   },
 });

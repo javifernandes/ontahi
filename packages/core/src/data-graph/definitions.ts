@@ -43,8 +43,28 @@ export type FieldDefinition<TValue> = {
   optional?: true;
   description?: string;
   presentation?: GraphSchemaPresentation;
+  defaultValue?: TValue;
+  generatedBy?: string;
   derived?: DerivedFieldMetadata;
   __value?: TValue;
+};
+
+export type DefaultedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
+  TField,
+  'defaultValue' | 'optional' | '__value'
+> & {
+  defaultValue: InferFieldValue<TField>;
+  optional?: never;
+  __value?: InferFieldValue<TField>;
+};
+
+export type GeneratedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
+  TField,
+  'generatedBy' | 'optional' | '__value'
+> & {
+  generatedBy: string;
+  optional?: never;
+  __value?: InferFieldValue<TField>;
 };
 
 export type DerivedFieldDefinition<TValue> = FieldDefinition<TValue> & {
@@ -69,6 +89,7 @@ export type ReferenceFieldDefinition<TTarget extends AnyEntityDefinition = AnyEn
     source?: AnyEntityDefinition;
     fieldName?: string;
     referenceRequirement?: 'portable' | 'existing';
+    mutationRequirement?: 'existing';
     /** Receiver-owned classification requirement; portable Refs retain the base entityName. */
     variant?: EntityVariantDescriptor;
   };
@@ -147,12 +168,20 @@ export type StoredFieldName<TFields extends FieldDefinitions> = {
   [TKey in keyof TFields]: TFields[TKey] extends { derived: DerivedFieldMetadata } ? never : TKey;
 }[keyof TFields];
 
-type OptionalStoredFieldName<TFields extends FieldDefinitions> = {
-  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends { optional: true } ? TKey : never;
+export type WritableStoredFieldName<TFields extends FieldDefinitions> = {
+  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends { generatedBy: string } ? never : TKey;
 }[StoredFieldName<TFields>];
 
+type OptionalStoredFieldName<TFields extends FieldDefinitions> = {
+  [TKey in WritableStoredFieldName<TFields>]: TFields[TKey] extends
+    | { optional: true }
+    | { defaultValue: unknown }
+    ? TKey
+    : never;
+}[WritableStoredFieldName<TFields>];
+
 type RequiredStoredFieldName<TFields extends FieldDefinitions> = Exclude<
-  StoredFieldName<TFields>,
+  WritableStoredFieldName<TFields>,
   OptionalStoredFieldName<TFields>
 >;
 
@@ -285,6 +314,8 @@ export type AnyGraphObjectDefinition = GraphObjectDefinition<
 export interface GraphArrayDefinition<TItem extends GraphSchemaLike = GraphSchemaDefinition> {
   kind: 'schema.array';
   item: TItem;
+  minItems?: number;
+  maxItems?: number;
   __value?: InferGraphSchemaValue<TItem>[];
 }
 
@@ -587,10 +618,13 @@ export const assertPortableRelationConstraints = (
   }
 };
 
+export type RelationDeletePolicy = 'cascade' | 'detach';
+
 export type RelationOptions = {
   via?: string;
   constraints?: readonly RelationConstraint[];
   ordered?: true;
+  onDelete?: RelationDeletePolicy;
 };
 
 export type RelationDefinition<
@@ -605,6 +639,7 @@ export type RelationDefinition<
   targetField?: string;
   nullable?: TNullable;
   ordered?: true;
+  onDelete?: RelationDeletePolicy;
   mapping?: ParsedRelationMapping;
   constraints?: readonly RelationConstraint[];
 };
@@ -729,8 +764,9 @@ export type EntityDefinition<
   hasMany: <
     TRelationName extends string,
     TTarget extends AnyEntityDefinition,
-    const TOptions extends Omit<RelationOptions, 'via'> & {
+    const TOptions extends Omit<RelationOptions, 'via' | 'onDelete'> & {
       via?: keyof TTarget['fields'] & string;
+      onDelete?: 'cascade';
     } = {},
   >(
     relationName: TRelationName,
@@ -748,7 +784,9 @@ export type EntityDefinition<
   belongsTo: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via' | 'ordered'> & { via?: keyof TFields & string },
+    options?: Omit<RelationOptions, 'via' | 'ordered' | 'onDelete'> & {
+      via?: keyof TFields & string;
+    },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -758,7 +796,7 @@ export type EntityDefinition<
   manyToMany: <TRelationName extends string, TTarget extends AnyEntityDefinition>(
     relationName: TRelationName,
     target: TTarget,
-    options?: Omit<RelationOptions, 'via' | 'ordered'>,
+    options?: Omit<RelationOptions, 'via' | 'ordered' | 'onDelete'> & { onDelete?: 'detach' },
   ) => EntityDefinition<
     TName,
     TFields,
@@ -927,6 +965,14 @@ export const field = {
     fieldType: 'reference',
     target: target as TTarget,
   }),
+  existingRef: <TTarget extends AnyEntityDefinition>(
+    target: TTarget | DeferredEntityReference<TTarget>,
+  ): ReferenceFieldDefinition<TTarget> & { mutationRequirement: 'existing' } => ({
+    kind: 'field',
+    fieldType: 'reference',
+    target: target as TTarget,
+    mutationRequirement: 'existing',
+  }),
   derived: <TDefinition extends AnyFieldDefinition>(
     definition: TDefinition,
     authoring:
@@ -975,6 +1021,46 @@ export const field = {
       optional: true;
       __value?: InferFieldValue<TDefinition> | undefined;
     },
+  default: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+    defaultValue: InferFieldValue<TDefinition>,
+  ): DefaultedFieldDefinition<TDefinition> => {
+    if (
+      definition.optional ||
+      definition.derived ||
+      definition.fieldType === 'id' ||
+      definition.fieldType === 'reference'
+    ) {
+      throw new TypeError(
+        'Stored Field defaults require a non-optional, non-derived scalar Field other than id.',
+      );
+    }
+    if (defaultValue === undefined) {
+      throw new TypeError('Stored Field defaults cannot be undefined.');
+    }
+
+    return { ...definition, defaultValue } as DefaultedFieldDefinition<TDefinition>;
+  },
+  generated: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+    generator: string,
+  ): GeneratedFieldDefinition<TDefinition> => {
+    if (
+      definition.optional ||
+      definition.derived ||
+      Object.prototype.hasOwnProperty.call(definition, 'defaultValue') ||
+      definition.fieldType === 'reference'
+    ) {
+      throw new TypeError(
+        'Generated stored Fields require a non-optional, non-derived scalar Field without a default.',
+      );
+    }
+    if (generator.trim().length === 0) {
+      throw new TypeError('Generated stored Fields require a generator name.');
+    }
+
+    return { ...definition, generatedBy: generator } as GeneratedFieldDefinition<TDefinition>;
+  },
 };
 
 const normalizeEntityLocatorDeclaration = <TFields extends FieldDefinitions>(
@@ -1128,6 +1214,9 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
       return viewDefinition;
     },
     hasMany(relationName: string, target: AnyEntityDefinition, options?: RelationOptions) {
+      if (options?.onDelete && options.onDelete !== 'cascade') {
+        throw new Error('hasMany Relations only support onDelete: cascade.');
+      }
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
@@ -1135,6 +1224,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
         target,
         ...(options?.via ? { targetField: options.via } : {}),
         ...(options?.ordered ? { ordered: true as const } : {}),
+        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
         ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
@@ -1142,7 +1232,7 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     belongsTo(
       relationName: string,
       target: AnyEntityDefinition,
-      options?: Omit<RelationOptions, 'ordered'>,
+      options?: Omit<RelationOptions, 'ordered' | 'onDelete'>,
     ) {
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
@@ -1157,13 +1247,19 @@ export const entity = <TName extends string, TFields extends FieldDefinitions>(
     manyToMany(
       relationName: string,
       target: AnyEntityDefinition,
-      options?: Omit<RelationOptions, 'via' | 'ordered'>,
+      options?: Omit<RelationOptions, 'via' | 'ordered' | 'onDelete'> & {
+        onDelete?: 'detach';
+      },
     ) {
+      if (options?.onDelete && options.onDelete !== 'detach') {
+        throw new Error('manyToMany Relations only support onDelete: detach.');
+      }
       assertPortableRelationConstraints(options?.constraints);
       this.relations[relationName] = {
         kind: 'relation',
         relationKind: 'manyToMany',
         target,
+        ...(options?.onDelete ? { onDelete: options.onDelete } : {}),
         ...(options?.constraints ? { constraints: options.constraints } : {}),
       };
       return this as never;
@@ -1272,9 +1368,12 @@ export const graphObject = <
 
 export const graphArray = <TItem extends GraphSchemaLike>(
   item: TItem,
+  options?: { minItems?: number; maxItems?: number },
 ): GraphArrayDefinition<TItem> => ({
   kind: 'schema.array',
   item,
+  ...(options?.minItems === undefined ? {} : { minItems: options.minItems }),
+  ...(options?.maxItems === undefined ? {} : { maxItems: options.maxItems }),
 });
 
 export const graphNullable = <TItem extends GraphSchemaLike>(

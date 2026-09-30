@@ -214,6 +214,10 @@ export type MutationReactionRunner = {
     command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
     delta: RelationshipDelta | OrderedRelationshipDelta,
   ) => AppliedRelationshipMutationOutcome;
+  createAppliedEntityOutcome: (
+    command: EntityMutationCommand,
+    delta: EntityMutationDelta,
+  ) => AppliedEntityMutationOutcome;
   react: (outcome: AppliedMutationOutcome) => Promise<MutationReactionResult>;
   applied: (
     command: RelationshipCommand | ManyToManyRelationshipCommand,
@@ -642,6 +646,16 @@ export const createMutationReactionRunner = ({
   ) => ({
     kind: 'applied-mutation-outcome',
     mutationKind: 'relationship-command',
+    command,
+    delta,
+    causality: causalityFor(),
+  });
+  run.createAppliedEntityOutcome = (
+    command: EntityMutationCommand,
+    delta: EntityMutationDelta,
+  ) => ({
+    kind: 'applied-mutation-outcome',
+    mutationKind: 'entity-mutation-command',
     command,
     delta,
     causality: causalityFor(),

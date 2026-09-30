@@ -1,6 +1,4 @@
-import { randomUUID } from 'node:crypto';
-
-import { createEntityRef, Selection } from '@ontahi/core/data-graph';
+import { createEntityRef } from '@ontahi/core/data-graph';
 import {
   createApplicationModelCommandRuntime,
   getCurrentInvocationContext,
@@ -16,7 +14,7 @@ import { todoGraphCommandPolicies } from '../todo-command-policies.js';
 import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
 import { TodoItem, TodoList } from '../todo.js';
 
-import { todoCommandBindings, todoCommandInstructions } from './bindings.js';
+import { todoCommandInstructions } from './bindings.js';
 import { readTodoModelContext } from './context.js';
 import { todoGraphCommands } from './graph-commands.js';
 import { todoGraphReads } from './graph-reads.js';
@@ -59,7 +57,6 @@ export const createTodoModelRuntime = ({
             ? 'Los datos disponibles exceden el alcance del chat.'
             : 'The available data exceeds the command scope.',
         context: {
-          creation: { id: randomUUID(), color: '#f5ddd5' },
           lists: current.lists.map(list => ({
             name: list.name,
             ref: createEntityRef(TodoList, { id: list.id }),
@@ -67,16 +64,12 @@ export const createTodoModelRuntime = ({
           items: current.items.map(item => ({
             title: item.title,
             ref: createEntityRef(TodoItem, { id: item.id }),
-            completion: Selection.references(TodoItem, [
-              createEntityRef(TodoItem, { id: item.id }),
-            ]).toJSON(),
             completed: item.completed,
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
         reads: todoGraphReads(request.language),
         commands: todoGraphCommands(current, request.text, request.language),
-        bindings: todoCommandBindings(current, request.text, request.language),
       };
     },
   });

@@ -6,7 +6,11 @@ import {
   createGraphCommandDispatcher as createDataGraphCommandDispatcher,
   assertMutationReactionConfiguration,
   isReferenceFieldDefinition,
+  isEntityRef,
   materializeDerivedFieldDefinitions,
+  entityMutationReferenceNotFoundDiagnostic,
+  query,
+  safeParseGraphSchema,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
@@ -18,6 +22,7 @@ import {
   type GraphReadPolicy,
   type GraphCommandDispatcher,
   type EntityMutationCommandExecutionRuntime,
+  type EntityMutationCommand,
   type EntityMutationCommandPolicy,
   type RelationshipCommandPolicy,
   type ManyToManyRelationshipCommandPolicy,
@@ -41,8 +46,10 @@ import type { ArchitectureDefinition } from './architecture-types.js';
 import { createDataGraphArchitectureAdapter } from './data-graph-app-adapter.js';
 import { DATA_GRAPH_RUNTIME_RESOURCE_KEY } from './data-graph.js';
 import { createTaskDefinitionFromDurableDomainOperation } from './domain-operations.js';
+import { executeEntityMutationLifecycle } from './entity-mutation-lifecycle.js';
 import {
   bindOntahiEntity,
+  getOntahiEntityReactions,
   getOntahiSemanticEntities,
   isOntahiEntityDeclaration,
   prepareOntahiEntity,
@@ -51,7 +58,12 @@ import {
   type BoundOntahiEntityDeclaration,
 } from './entity.js';
 import { getCurrentInvocationContext } from './invocation-context.js';
-import { createContextualMutationReactionExecutor } from './mutation-reaction.js';
+import {
+  applyContextualEntityMutationReactions,
+  applyContextualRelationshipMutationReactions,
+  createContextualMutationReactionExecutor,
+  type ContextualMutationReactionExecutorOptions,
+} from './mutation-reaction.js';
 import type { TaskConfig } from './tasks.js';
 
 type AnyDataGraphRuntime = DataGraphExecutionRuntime<any, any, any, any>;
@@ -186,6 +198,14 @@ export type OntahiOptions<
   reactions?: readonly MutationReaction[] | (() => readonly MutationReaction[]);
   operationConditions?: PortableOperationConditionRegistry;
   derivedFields?: PortableDerivedFieldRegistry;
+  fieldGenerators?: Record<
+    string,
+    (context: {
+      entityName: string;
+      fieldName: string;
+      values: Readonly<Record<string, unknown>>;
+    }) => unknown
+  >;
 };
 
 type BoundEntityRecord<
@@ -260,7 +280,8 @@ export const ontahi = <
   let registeredForReactions: RegisteredArchitecture<any, any> | undefined;
   let applicationForReactions: OntahiApplication | undefined;
   let registeredReactions: readonly MutationReaction[] = [];
-  const relationshipCommandExecutor = createContextualMutationReactionExecutor<any, any>({
+  const semanticEntities: AnyEntityDefinition[] = [];
+  const mutationReactionConfiguration: ContextualMutationReactionExecutorOptions = {
     getReactions: () => registeredReactions,
     invokeOperation: request => {
       const operation = applicationForReactions?.resolveOperation(request.operationId);
@@ -282,7 +303,170 @@ export const ontahi = <
       if (!effector) throw new Error('No effector registered for emit-event intents');
       return Effect.runPromise(effector({ kind: 'emit-event', event }));
     },
+  };
+  const decorateDataGraphRuntime = (
+    runtime: StorageRuntime<TStorage>,
+    insideTransaction = false,
+  ): StorageRuntime<TStorage> => {
+    if (!('runEntityMutationCommand' in runtime)) return runtime as StorageRuntime<TStorage>;
+
+    const mutationRuntime = runtime as unknown as EntityMutationCommandExecutionRuntime<unknown>;
+    return new Proxy(runtime, {
+      get(target, property, receiver) {
+        if (property === 'transaction') {
+          if (insideTransaction) return undefined;
+          const transaction = Reflect.get(target, property, receiver) as
+            | ((
+                work: (
+                  transactionRuntime: StorageRuntime<TStorage>,
+                ) => Effect.Effect<unknown, unknown>,
+              ) => Effect.Effect<unknown, unknown>)
+            | undefined;
+          if (!transaction) return undefined;
+          return (
+            work: (transactionRuntime: StorageRuntime<TStorage>) => Effect.Effect<unknown, unknown>,
+          ) =>
+            transaction.call(target, transactionRuntime =>
+              work(decorateDataGraphRuntime(transactionRuntime, true)),
+            );
+        }
+        if (property !== 'runEntityMutationCommand') {
+          const value = Reflect.get(target, property, receiver) as unknown;
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+
+        return (
+          command: Parameters<typeof mutationRuntime.runEntityMutationCommand>[0],
+          commandOptions: Parameters<typeof mutationRuntime.runEntityMutationCommand>[1],
+        ) =>
+          Effect.gen(function* () {
+            let executableCommand: EntityMutationCommand = command;
+            if (command.action === 'update') {
+              const entityDefinition = semanticEntities.find(
+                entity => entity.name === command.entityName,
+              );
+              const generatedFieldName = Object.keys(command.values).find(
+                fieldName => entityDefinition?.fields[fieldName]?.generatedBy !== undefined,
+              );
+              if (generatedFieldName) {
+                throw new Error(
+                  `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${generatedFieldName}.`,
+                );
+              }
+            }
+            if (command.action === 'create') {
+              const entityDefinition = semanticEntities.find(
+                entity => entity.name === command.entityName,
+              );
+              if (!entityDefinition) {
+                throw new Error(`Unknown Entity ${command.entityName}.`);
+              }
+              const values = { ...command.values };
+              for (const [fieldName, field] of Object.entries(entityDefinition.fields)) {
+                if (!field.generatedBy) continue;
+                if (Object.prototype.hasOwnProperty.call(values, fieldName)) {
+                  throw new Error(
+                    `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${fieldName}.`,
+                  );
+                }
+                const generator =
+                  field.generatedBy === 'uuid'
+                    ? () => globalThis.crypto.randomUUID()
+                    : options.fieldGenerators?.[field.generatedBy];
+                if (!generator) {
+                  throw new Error(
+                    `No Field generator ${JSON.stringify(field.generatedBy)} is configured for ${command.entityName}.${fieldName}.`,
+                  );
+                }
+                const generated = generator({
+                  entityName: command.entityName,
+                  fieldName,
+                  values,
+                });
+                if (!safeParseGraphSchema(field, generated).success) {
+                  throw new Error(
+                    `Field generator ${JSON.stringify(field.generatedBy)} returned an invalid value for ${command.entityName}.${fieldName}.`,
+                  );
+                }
+                values[fieldName] = generated;
+              }
+              executableCommand = { ...command, values };
+            }
+
+            if (executableCommand.action !== 'delete') {
+              const entityDefinition = semanticEntities.find(
+                entity => entity.name === executableCommand.entityName,
+              );
+              if (!entityDefinition) {
+                throw new Error(`Unknown Entity ${executableCommand.entityName}.`);
+              }
+              for (const [fieldName, value] of Object.entries(executableCommand.values)) {
+                const field = entityDefinition.fields[fieldName];
+                if (
+                  !field ||
+                  !isReferenceFieldDefinition(field) ||
+                  field.mutationRequirement !== 'existing' ||
+                  !isEntityRef(value)
+                ) {
+                  continue;
+                }
+                const count = yield* target.count(query(field.target).where(value), undefined);
+                if (count === 1) continue;
+
+                const error = new Error(
+                  `${command.entityName}.${fieldName} references a missing ${field.target.name}.`,
+                );
+                Object.assign(error, {
+                  diagnostic: entityMutationReferenceNotFoundDiagnostic(
+                    executableCommand,
+                    fieldName,
+                    field.target.name,
+                  ),
+                });
+                throw error;
+              }
+            }
+
+            const execution = yield* executeEntityMutationLifecycle(
+              target as never,
+              semanticEntities,
+              executableCommand,
+              commandOptions,
+            );
+            for (const outcome of execution.outcomes) {
+              if (outcome.kind === 'entity') {
+                yield* applyContextualEntityMutationReactions(
+                  outcome.command,
+                  outcome.delta,
+                  commandOptions,
+                  mutationReactionConfiguration,
+                );
+              } else {
+                yield* applyContextualRelationshipMutationReactions(
+                  outcome.command,
+                  outcome.result,
+                  commandOptions,
+                  mutationReactionConfiguration,
+                );
+              }
+            }
+            return execution.delta;
+          });
+      },
+    }) as unknown as StorageRuntime<TStorage>;
+  };
+  const createDataGraphRuntime = (): StorageRuntime<TStorage> =>
+    decorateDataGraphRuntime(options.storage.createRuntime() as StorageRuntime<TStorage>);
+  const applicationStorage = new Proxy(options.storage, {
+    get(target, property, receiver) {
+      if (property === 'createRuntime') return createDataGraphRuntime;
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
   });
+  const relationshipCommandExecutor = createContextualMutationReactionExecutor<any, any>(
+    mutationReactionConfiguration,
+  );
   const graph = createDataGraphArchitectureAdapter<
     unknown,
     any,
@@ -291,7 +475,7 @@ export const ontahi = <
     AnyDataGraphRuntime,
     RelationshipMutationResult
   >({
-    defaultStorage: options.storage,
+    defaultStorage: applicationStorage,
     relationshipCommandExecutor,
   });
   const configuredTasks = options.tasks ?? {};
@@ -306,15 +490,12 @@ export const ontahi = <
           const configured = configuredTasks.host?.createExecutionContext?.(source);
           if (configured) {
             if (!configured.resources.has(DATA_GRAPH_RUNTIME_RESOURCE_KEY)) {
-              configured.resources.set(
-                DATA_GRAPH_RUNTIME_RESOURCE_KEY,
-                options.storage.createRuntime(),
-              );
+              configured.resources.set(DATA_GRAPH_RUNTIME_RESOURCE_KEY, createDataGraphRuntime());
             }
             return configured;
           }
           const resources = new Map(getCurrentInvocationContext()?.resources);
-          resources.set(DATA_GRAPH_RUNTIME_RESOURCE_KEY, options.storage.createRuntime());
+          resources.set(DATA_GRAPH_RUNTIME_RESOURCE_KEY, createDataGraphRuntime());
           return {
             scope: source.taskId,
             telemetrySpanName: source.taskId,
@@ -350,8 +531,12 @@ export const ontahi = <
     materializeDerivedFieldDefinitions(semanticDeclarations, options.derivedFields);
     options.storage.bindEntities?.(semanticDeclarations);
   }
-  const declaredReactions =
+  const applicationReactions =
     typeof options.reactions === 'function' ? options.reactions() : (options.reactions ?? []);
+  const declaredReactions = [
+    ...(Array.isArray(declaredEntities) ? declaredEntities.flatMap(getOntahiEntityReactions) : []),
+    ...applicationReactions,
+  ];
   assertMutationReactionConfiguration(declaredReactions);
   registeredReactions = declaredReactions.map(declaration => ({
     id: declaration.id,
@@ -381,7 +566,7 @@ export const ontahi = <
       : declaredEntities
   ) as BoundEntityRecord<TEntities, StorageRuntime<TStorage>>;
   const entityRegistry = entities as Record<string, object>;
-  const semanticEntities: AnyEntityDefinition[] = semanticDeclarations;
+  semanticEntities.push(...semanticDeclarations);
   const application = defineOntahiApplication({
     entities,
     runtime: registered.app,
@@ -413,6 +598,8 @@ export const ontahi = <
       throw new Error(`Entity ${declaration.name} is already registered.`);
     }
     prepareOntahiEntity(declaration);
+    const nextReactions = getOntahiEntityReactions(declaration);
+    assertMutationReactionConfiguration([...registeredReactions, ...nextReactions]);
     const nextSemanticEntities = getOntahiSemanticEntities(declaration);
     nextSemanticEntities.forEach(entity => {
       const existing = semanticEntitiesByName.get(entity.name);
@@ -422,6 +609,7 @@ export const ontahi = <
       semanticEntitiesByName.set(entity.name, entity);
     });
     resolveOntahiEntityReferences(declaration, semanticEntitiesByName);
+    registeredReactions = [...registeredReactions, ...nextReactions];
     materializeDerivedFieldDefinitions(nextSemanticEntities);
     semanticEntities.push(...nextSemanticEntities);
     options.storage.bindEntities?.(semanticEntities);
@@ -500,7 +688,7 @@ export const ontahi = <
       policies,
       relationSelections: options.storage.graphReadCapabilities?.relationSelections,
       execute: (read, mode) => {
-        const runtime = options.storage.createRuntime();
+        const runtime = createDataGraphRuntime();
         if (mode === 'get') return runDataGraphEffect(runtime.get(read, undefined));
         if (mode === 'count') return runDataGraphEffect(runtime.count(read, undefined));
         return runDataGraphEffect(runtime.run(read, undefined));
@@ -512,7 +700,7 @@ export const ontahi = <
     createDataGraphReadObserver({
       policies,
       observe: (read, { signal }) => {
-        const runtime = options.storage.createRuntime() as AnyDataGraphRuntime &
+        const runtime = createDataGraphRuntime() as AnyDataGraphRuntime &
           Partial<DataGraphObservationRuntime<any>>;
         if (!runtime.observe) {
           throw new Error('Storage runtime does not support Data Graph observation.');
@@ -536,7 +724,7 @@ export const ontahi = <
     createDataGraphCommandDispatcher({
       policies,
       execute: command => {
-        const runtime = options.storage.createRuntime();
+        const runtime = createDataGraphRuntime();
         if (!('runRelationshipCommand' in runtime)) {
           throw new Error('Storage runtime does not support Relationship Commands.');
         }
@@ -547,7 +735,7 @@ export const ontahi = <
         );
       },
       executeManyToMany: command => {
-        const runtime = options.storage.createRuntime();
+        const runtime = createDataGraphRuntime();
         if (!('runManyToManyRelationshipCommand' in runtime)) {
           throw new Error('Storage runtime does not support many-to-many Relationship Commands.');
         }
@@ -558,7 +746,7 @@ export const ontahi = <
         );
       },
       executeOrdered: command => {
-        const runtime = options.storage.createRuntime();
+        const runtime = createDataGraphRuntime();
         if (!('runOrderedRelationshipCommand' in runtime)) {
           throw new Error('Storage runtime does not support ordered Relationship Commands.');
         }
@@ -569,7 +757,7 @@ export const ontahi = <
         );
       },
       executeEntityMutation: command => {
-        const runtime = options.storage.createRuntime();
+        const runtime = createDataGraphRuntime();
         if (!('runEntityMutationCommand' in runtime)) {
           throw new Error('Storage runtime does not support Entity Mutation Commands.');
         }

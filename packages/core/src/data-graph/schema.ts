@@ -485,8 +485,11 @@ const toZodFieldSchema = (field: AnyFieldDefinition): ZodType => {
   }
 
   const nullableSchema = field.nullable ? schema.nullable() : schema;
+  const defaultedSchema = Object.prototype.hasOwnProperty.call(field, 'defaultValue')
+    ? nullableSchema.default(field.defaultValue)
+    : nullableSchema;
 
-  return field.optional ? nullableSchema.optional() : nullableSchema;
+  return field.optional ? defaultedSchema.optional() : defaultedSchema;
 };
 
 const toZodObjectShape = (fields: GraphSchemaFields): Record<string, ZodType> =>
@@ -546,7 +549,10 @@ const toBareZodSchema = (schema: GraphSchemaDefinition): ZodType => {
   }
 
   if (isGraphArrayDefinition(schema)) {
-    return z.array(toZodSchemaInternal(schema.item));
+    let array = z.array(toZodSchemaInternal(schema.item));
+    if (schema.minItems !== undefined) array = array.min(schema.minItems);
+    if (schema.maxItems !== undefined) array = array.max(schema.maxItems);
+    return array;
   }
 
   if (isGraphNullableDefinition(schema)) {

@@ -3,16 +3,21 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
   createInMemoryDataGraphStorage,
+  createEntityRef,
   field,
   graphSchema,
+  mutateEntity,
   reaction,
+  toGraphCommandRequest,
   type AppliedRelationshipMutationResult,
   type InMemoryDataGraphError,
   type InMemoryDataset,
   type RelationshipMutationResult,
 } from '../../data-graph/index.js';
 
-import { entity, layer, ontahi, relation } from './index.js';
+import type { GraphCommandableOntahiApplication } from './ontahi.js';
+
+import { entity, entityModule, layer, ontahi, relation } from './index.js';
 
 const defineClassroom = () => {
   const CourseFields = {
@@ -53,6 +58,213 @@ const assertApplied: (
 };
 
 describe('Ontahi Reaction registration', () => {
+  it('runs an Entity create Reaction after the mutation is applied', async () => {
+    const events: unknown[] = [];
+    const Book = entity({
+      name: 'ReactionBook',
+      fields: { id: field.id(), title: field.string() },
+      reactions: ({ created }) => [
+        created({ id: 'book-created', delivery: 'inline' }).emit(outcome => ({
+          type: 'BookCreated',
+          title: outcome.delta.created[0]?.values.title,
+        })),
+      ],
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({ dataset: { ReactionBook: [] } }),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [Book],
+      reactions: () => [
+        reaction
+          .entity(Book)
+          .created({ id: 'audit-book-created', delivery: 'inline' })
+          .emit(outcome => ({
+            type: 'BookCreatedAudit',
+            title: outcome.delta.created[0]?.values.title,
+          })),
+      ],
+    });
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      {
+        entity: Book,
+        scope: 'all',
+        actions: { create: { fields: ['id', 'title'], result: ['id', 'title'] } },
+      },
+    ]);
+
+    await expect(
+      dispatch(
+        toGraphCommandRequest(mutateEntity(Book).create({ id: 'book-1', title: 'Ontahi' })),
+        {
+          authority: undefined,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'graph-command-result',
+      value: {
+        created: [{ entityName: 'ReactionBook', values: { id: 'book-1', title: 'Ontahi' } }],
+        updated: [],
+        deleted: [],
+      },
+    });
+    expect(events).toEqual([
+      { type: 'BookCreated', title: 'Ontahi' },
+      { type: 'BookCreatedAudit', title: 'Ontahi' },
+    ]);
+    expect(application.storage.dataset.ReactionBook).toEqual([{ id: 'book-1', title: 'Ontahi' }]);
+  });
+
+  it('registers colocated Entity Reactions with a deferred Entity', async () => {
+    const events: unknown[] = [];
+    const Note = entity({
+      name: 'DeferredReactionNote',
+      fields: { id: field.id(), text: field.string() },
+      reactions: ({ created }) => [
+        created({ id: 'deferred-note-created', delivery: 'inline' }).emit(outcome => ({
+          type: 'NoteCreated',
+          text: outcome.command.values.text,
+        })),
+      ],
+    });
+    const DeferredNote = entityModule({
+      entity: Note,
+      bind: app => app.graph.defineEntity(Note),
+    });
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage(),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [],
+    });
+
+    application.registerEntity(DeferredNote);
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      {
+        entity: Note,
+        scope: 'all',
+        actions: { create: { fields: ['id', 'text'], result: ['id', 'text'] } },
+      },
+    ]);
+
+    await dispatch(
+      toGraphCommandRequest(mutateEntity(Note).create({ id: 'note-1', text: 'Registered later' })),
+      { authority: undefined },
+    );
+
+    expect(events).toEqual([{ type: 'NoteCreated', text: 'Registered later' }]);
+  });
+
+  it('cascades owned Entities and detaches many-to-many links before publishing delete Reactions', async () => {
+    const events: unknown[] = [];
+    const ListRef = entity.ref('LifecycleList', { fields: { id: field.id() } });
+    const Tag = entity({
+      name: 'LifecycleTag',
+      fields: { id: field.id() },
+    });
+    const Item = entity({
+      name: 'LifecycleItem',
+      fields: { id: field.id(), list: field.existingRef(ListRef) },
+      relations: () => ({ tags: relation.manyToMany(Tag, { onDelete: 'detach' }) }),
+      reactions: ({ deleted }) => [
+        deleted({ id: 'lifecycle-item-deleted', delivery: 'inline' }).emit(outcome => ({
+          type: 'ItemDeleted',
+          id: outcome.command.target,
+        })),
+      ],
+    });
+    const List = entity({
+      name: 'LifecycleList',
+      fields: { id: field.id() },
+      relations: { items: relation.hasMany(Item, { via: 'list', onDelete: 'cascade' }) },
+      reactions: ({ deleted }) => [
+        deleted({ id: 'lifecycle-list-deleted', delivery: 'inline' }).emit(() => ({
+          type: 'ListDeleted',
+        })),
+      ],
+    });
+    const relationships: NonNullable<
+      Parameters<typeof createInMemoryDataGraphStorage>[0]
+    >['relationships'] = [
+      {
+        relation: {
+          sourceEntityName: 'LifecycleItem',
+          relationName: 'tags',
+          targetEntityName: 'LifecycleTag',
+          cardinality: 'many-to-many',
+        },
+        source: createEntityRef(Item, { id: 'item-1' }),
+        target: createEntityRef(Tag, { id: 'tag-1' }),
+      },
+    ];
+    const application = ontahi({
+      storage: createInMemoryDataGraphStorage({
+        dataset: {
+          LifecycleList: [{ id: 'list-1' }],
+          LifecycleItem: [
+            { id: 'item-1', list: 'list-1' },
+            { id: 'item-2', list: 'list-1' },
+          ],
+          LifecycleTag: [{ id: 'tag-1' }],
+        },
+        relationships,
+      }),
+      capabilities: {
+        effectors: {
+          'emit-event': (intent: { event: unknown }) =>
+            Effect.sync(() => {
+              events.push(intent.event);
+            }),
+        },
+      },
+      entities: [List, Item, Tag],
+      reactions: [
+        reaction
+          .relationship(Item, 'tags')
+          .removed({ id: 'lifecycle-tag-detached', delivery: 'inline' })
+          .emit(() => ({ type: 'TagDetached' })),
+      ],
+    });
+    const dispatch = (
+      application as unknown as GraphCommandableOntahiApplication
+    ).createGraphCommandDispatcher([
+      { entity: List, scope: 'all', actions: { delete: { result: ['id'] } } },
+    ]);
+
+    await dispatch(
+      toGraphCommandRequest(mutateEntity(List).delete(createEntityRef(List, { id: 'list-1' }))),
+      { authority: undefined },
+    );
+
+    expect(application.storage.dataset).toMatchObject({
+      LifecycleList: [],
+      LifecycleItem: [],
+      LifecycleTag: [{ id: 'tag-1' }],
+    });
+    expect(relationships).toEqual([]);
+    expect(events.map(event => (event as { type: string }).type)).toEqual([
+      'TagDetached',
+      'ItemDeleted',
+      'ListDeleted',
+    ]);
+  });
+
   it('runs an ordered move Reaction and an ordered follow-up through the contextual runtime', async () => {
     const ListFields = { id: field.id() };
     const Item = entity({

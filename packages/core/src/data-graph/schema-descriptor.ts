@@ -84,6 +84,7 @@ export type GraphSchemaScalarDescriptor = {
   presentation?: GraphSchemaPresentation;
   readOnly?: true;
   derived?: NonNullable<AnyFieldDefinition['derived']>;
+  generatedBy?: string;
 };
 
 export type GraphSchemaReferenceDescriptor = {
@@ -96,6 +97,7 @@ export type GraphSchemaReferenceDescriptor = {
   description?: string;
   presentation?: GraphSchemaPresentation;
   resolution?: 'existing';
+  mutationRequirement?: 'existing';
   variant?: import('./entity-variant.js').EntityVariantDescriptor;
 };
 
@@ -120,6 +122,8 @@ export type GraphSchemaObjectDescriptor = {
 export type GraphSchemaArrayDescriptor = {
   kind: 'array';
   item: GraphSchemaDescriptor;
+  minItems?: number;
+  maxItems?: number;
 };
 
 export type GraphSchemaNullableDescriptor = {
@@ -220,6 +224,7 @@ export type GraphJsonSchema = {
   presentation?: GraphSchemaPresentation;
   readOnly?: boolean;
   'x-ontahi-derived'?: NonNullable<AnyFieldDefinition['derived']>;
+  'x-ontahi-generated-by'?: string;
   'x-ontahi-string-exclusion'?: {
     values: readonly string[];
     caseInsensitive?: true;
@@ -240,6 +245,7 @@ export type GraphJsonSchema = {
       fields: string[];
     };
     resolution?: 'existing';
+    mutationRequirement?: 'existing';
     variant?: import('./entity-variant.js').EntityVariantDescriptor;
   };
 };
@@ -308,26 +314,32 @@ const describeReferenceField = (
     ...(field.referenceRequirement === 'existing'
       ? { resolution: field.referenceRequirement }
       : {}),
+    ...(field.mutationRequirement ? { mutationRequirement: field.mutationRequirement } : {}),
     ...(field.variant ? { variant: structuredClone(field.variant) } : {}),
   };
 };
 
-const describeField = (
-  field: AnyFieldDefinition,
-): GraphSchemaScalarDescriptor | GraphSchemaReferenceDescriptor =>
-  isReferenceFieldDefinition(field)
-    ? describeReferenceField(field)
-    : {
-        kind: 'scalar',
-        type: field.fieldType as GraphSchemaScalarType,
-        ...(field.valueType ? { valueType: field.valueType } : {}),
-        ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
-        ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
-        ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
-        ...(field.description ? { description: field.description } : {}),
-        ...(field.presentation ? { presentation: field.presentation } : {}),
-        ...(field.derived ? { readOnly: true, derived: field.derived } : {}),
-      };
+const describeField = (field: AnyFieldDefinition): GraphSchemaDescriptor => {
+  const descriptor: GraphSchemaScalarDescriptor | GraphSchemaReferenceDescriptor =
+    isReferenceFieldDefinition(field)
+      ? describeReferenceField(field)
+      : {
+          kind: 'scalar',
+          type: field.fieldType as GraphSchemaScalarType,
+          ...(field.valueType ? { valueType: field.valueType } : {}),
+          ...(field.enumValues ? { enumValues: [...field.enumValues] } : {}),
+          ...(field.stringConstraints ? { stringConstraints: { ...field.stringConstraints } } : {}),
+          ...(field.numberConstraints ? { numberConstraints: { ...field.numberConstraints } } : {}),
+          ...(field.description ? { description: field.description } : {}),
+          ...(field.presentation ? { presentation: field.presentation } : {}),
+          ...(field.derived ? { readOnly: true, derived: field.derived } : {}),
+          ...(field.generatedBy ? { readOnly: true, generatedBy: field.generatedBy } : {}),
+        };
+
+  return Object.prototype.hasOwnProperty.call(field, 'defaultValue')
+    ? { kind: 'default', item: descriptor, defaultValue: field.defaultValue }
+    : descriptor;
+};
 
 const describeEntity = (
   entity: AnyEntityDefinition,
@@ -413,9 +425,12 @@ export const toGraphSchemaDescriptor = (
   }
 
   if (schema.kind === 'schema.array') {
+    const array = schema as GraphArrayDefinition;
     return {
       kind: 'array',
-      item: toGraphSchemaDescriptor((schema as GraphArrayDefinition).item, resolvingLazyNames),
+      item: toGraphSchemaDescriptor(array.item, resolvingLazyNames),
+      ...(array.minItems === undefined ? {} : { minItems: array.minItems }),
+      ...(array.maxItems === undefined ? {} : { maxItems: array.maxItems }),
     };
   }
 
@@ -585,6 +600,7 @@ const scalarJsonSchema = (descriptor: GraphSchemaScalarDescriptor): GraphJsonSch
     ...(descriptor.presentation ? { presentation: descriptor.presentation } : {}),
     ...(descriptor.readOnly ? { readOnly: true } : {}),
     ...(descriptor.derived ? { 'x-ontahi-derived': descriptor.derived } : {}),
+    ...(descriptor.generatedBy ? { 'x-ontahi-generated-by': descriptor.generatedBy } : {}),
   };
 };
 
@@ -620,6 +636,9 @@ const descriptorToJsonSchema = (
         entityName: descriptor.entityName,
         ...(descriptor.identity ? { identity: descriptor.identity } : {}),
         ...(descriptor.resolution ? { resolution: descriptor.resolution } : {}),
+        ...(descriptor.mutationRequirement
+          ? { mutationRequirement: descriptor.mutationRequirement }
+          : {}),
         ...(descriptor.variant ? { variant: structuredClone(descriptor.variant) } : {}),
       },
     };
@@ -647,7 +666,12 @@ const descriptorToJsonSchema = (
   }
 
   if (descriptor.kind === 'array') {
-    return { type: 'array', items: descriptorToJsonSchema(descriptor.item, context) };
+    return {
+      type: 'array',
+      items: descriptorToJsonSchema(descriptor.item, context),
+      ...(descriptor.minItems === undefined ? {} : { minItems: descriptor.minItems }),
+      ...(descriptor.maxItems === undefined ? {} : { maxItems: descriptor.maxItems }),
+    };
   }
 
   if (descriptor.kind === 'nullable') {

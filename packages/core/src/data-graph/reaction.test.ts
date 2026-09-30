@@ -9,6 +9,7 @@ import {
   relationship,
   relationshipSet,
   type AppliedRelationshipMutationOutcome,
+  type EntityMutationDelta,
   type OrderedRelationshipDelta,
   type RelationshipDelta,
 } from './index.js';
@@ -39,6 +40,54 @@ const outcomeFor = (
 });
 
 describe('Reaction authoring', () => {
+  it('authors typed Entity create, update, and delete Reactions', () => {
+    const Book = entity('ReactionBook', {
+      id: field.id(),
+      title: field.string(),
+    });
+    const create = reaction
+      .entity(Book)
+      .created({ id: 'book-created', delivery: 'inline' })
+      .emit(outcome => {
+        expectTypeOf(outcome.command.action).toEqualTypeOf<'create'>();
+        return { type: 'BookCreated', title: outcome.command.values.title };
+      });
+    const update = reaction
+      .entity(Book)
+      .updated({ id: 'book-updated', delivery: 'best-effort' })
+      .react(outcome => {
+        expectTypeOf(outcome.command.action).toEqualTypeOf<'update'>();
+        return [];
+      });
+    const deleted = reaction
+      .entity(Book)
+      .deleted({ id: 'book-deleted', delivery: 'durable' })
+      .emit({ type: 'BookDeleted' });
+    const command = mutateEntity(Book).create({ id: 'book-1', title: 'Ontahi' });
+    const delta: EntityMutationDelta = {
+      created: [{ entityName: 'ReactionBook', values: command.values }],
+      updated: [],
+      deleted: [],
+    };
+
+    expect(create.when).toEqual({
+      mutationKind: 'entity-mutation-command',
+      action: 'create',
+      entityName: 'ReactionBook',
+    });
+    expect(
+      create.react({
+        kind: 'applied-mutation-outcome',
+        mutationKind: 'entity-mutation-command',
+        command,
+        delta,
+        causality: { outcomeId: 'created-1', rootOutcomeId: 'created-1', depth: 0 },
+      }),
+    ).toEqual([{ kind: 'emit-event', event: { type: 'BookCreated', title: 'Ontahi' } }]);
+    expect(update.when).toMatchObject({ action: 'update' });
+    expect(deleted.when).toMatchObject({ action: 'delete' });
+  });
+
   it('exposes moved only for ordered Relations with an ordered delta', () => {
     const { Course } = defineClassroomGraph();
     const ListBase = entity('ReactionOrderedList', { id: field.id() });

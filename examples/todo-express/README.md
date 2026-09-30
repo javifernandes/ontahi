@@ -48,8 +48,8 @@ surface remains the same durable Operation snapshots and Interaction reply proto
 Devtools. The native runtime persists its explicit checkpoint through Task storage; the LangGraph
 adapter additionally stores an opaque provider checkpoint behind its runtime boundary.
 
-The default is an explicit public mode: the complete application works without login and
-`TodoItem.setCompleted` has no authentication requirement.
+The default is an explicit public mode: the complete application works without login and changing
+`TodoItem.completed` has no authentication requirement.
 
 To exercise real authentication, create a GitHub OAuth App with
 `http://localhost:3001/auth/github/callback` as its callback URL and start Todo in GitHub mode:
@@ -62,19 +62,19 @@ pnpm todo:dev:local -- --auth github
 ```
 
 GitHub mode fails immediately when any required credential is missing, mounts real Passport login,
-session, callback, and logout routes, and adds `app.require.authenticated()` to
-`TodoItem.setCompleted`. Passport and GitHub OAuth belong to this Express host.
+session, callback, and logout routes, and authorizes completion updates through the TodoItem Entity
+Mutation Command policy. Passport and GitHub OAuth belong to this Express host.
 The host maps Passport's authenticated `request.user` through
 `authentication.principal(request)`. The common Runtime Protocol context and the explicit legacy
 adapters derive their trusted authority from that same host function. Todo passes its default-deny
 policies to the server dispatchers; no authorization or policy decision is serialized into the
 browser request. The application storage supplies execution.
-The same protected operation can be invoked from plain Node by establishing that scope explicitly:
+The same protected command can be dispatched from plain Node by establishing an invocation context
+with a Principal. The command remains an ordinary `mutateEntity(TodoItem).update(...)`; authority is
+receiver context and is never serialized in the command:
 
 ```ts
-await TodoApplication.app.runtime.withInvocationContext({ principal }, () =>
-  TodoItem.setCompleted({ todos: ['todo-123'], completed: true }),
-);
+mutateEntity(TodoItem).update(TodoItem.refById('todo-123'), { completed: true });
 ```
 
 The default `express-session` memory store is intentional for this local example. A deployed host
@@ -179,17 +179,18 @@ Fetch remains the portable fallback for hosts without WebSocket support. Configu
 `createFetchGraphClient({ runtimeTransport: { endpoint: '/runtime' } })` preserves the same
 application authoring and implements Durable observation with transport-owned polling.
 
-The family-specific routes remain available for explicit compatibility during migration. For
-example, these calls use the legacy unwrapped Operation route:
+The family-specific routes remain available for explicit compatibility during migration. Basic
+list and item creation use canonical Entity Mutation Commands with receiver-owned identities and
+model defaults:
 
 ```sh
-curl -X POST http://localhost:3001/operations \
+curl -X POST http://localhost:3001/graph/commands \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoList.createList","input":{"id":"list-1","name":"Inbox","color":"#f5ddd5"}}'
+  -d '{"version":1,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"create","entityName":"TodoList","values":{"name":"Inbox"}}}'
 
-curl -X POST http://localhost:3001/operations \
+curl -X POST http://localhost:3001/graph/commands \
   -H 'content-type: application/json' \
-  -d '{"kind":"invoke","operationId":"TodoItem.createItem","input":{"id":"todo-1","list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}'
+  -d '{"version":1,"kind":"graph-command","command":{"kind":"entity-mutation-command","action":"create","entityName":"TodoItem","values":{"list":{"kind":"entity-ref","entityName":"TodoList","locator":{"id":"list-1"}},"title":"Read the guide"}}}'
 ```
 
 Open `http://localhost:3001/explorer` to see `@ontahi/explorer-react` embedded in the same Vite
@@ -230,10 +231,10 @@ const lists = TodoList.all()
 The generated schema authors the selection, while the caller-owned View chooses its result shape.
 The server independently validates both against `TodoItem`'s explicit remote read policy.
 
-Each entity owns its fields, identity, relations, and operations in one semantic declaration.
-`TodoItem.setCompleted` accepts `self.many()` inside that declaration, so its target cardinality is
-part of the validated operation contract instead of an example-local list of IDs. Ontahi keeps the
-selection representation behind the entity-facing API.
+Each entity owns its fields, identity, relations, lifecycle, and named operations in one semantic
+declaration. Basic creation, updates, and deletion use Entity Mutation Commands directly. A command
+can target one Ref or a Selection, so bulk completion does not require an example-local list-of-IDs
+Operation contract.
 
 `relationshipSet(TodoItem, 'tags', todos).add(tags)` combines Selection-valued source and target
 endpoints in one structural Relationship Command. Ontahi validates explicit identities, resolves
@@ -264,22 +265,27 @@ Or by predicate:
 }
 ```
 
-Send either value as the `todos` field when invoking `TodoItem.setCompleted`, together with the
-desired `completed` Boolean. Ontahi validates the Selection, hydrates it at the transport boundary,
-and evaluates the same settled Selection algebra in the in-memory update command.
+Use either value as the target of `mutateEntity(TodoItem).updateSelection(...)`, together with the
+desired `completed` Boolean. Ontahi validates the Selection at the transport boundary and evaluates
+the same settled Selection algebra in the active storage runtime.
 
 The generated client preserves operation input and output schemas, so React infers hook types without local record declarations or generic arguments:
 
 ```ts
 const visibleTodos = TodoItem.selection(todo => todo.list.eq(TodoList.refById(selectedListId)));
 const todos = useGraphQuery(TodoItem.all().where(visibleTodos).as(TodoItemListItem));
-const createTodo = useOperation(TodoItem.domain.createItem);
-const setVisibleCompleted = useOperation(
-  TodoItem.domain.setCompleted({ todos: visibleTodos, completed: true }),
-);
+const graph = useGraphExecutorCapability();
 const completeAll = useDurableOperation(TodoList.domain.completeAll);
 
-setVisibleCompleted.execute();
+graph?.runEntityMutationCommand?.(
+  mutateEntity(TodoItemSchema).create({
+    list: TodoListSchema.refById(selectedListId),
+    title: 'Read the guide',
+  }),
+);
+graph?.runEntityMutationCommand?.(
+  mutateEntity(TodoItemSchema).updateSelection(visibleTodos, { completed: true }),
+);
 completeAll.execute({ list: TodoList.refById(selectedListId) });
 ```
 
@@ -289,20 +295,16 @@ current `ExecutionIdentity` to `OntahiGraphProvider`, so authenticated, public, 
 reads cannot reuse each other's cache entries; the server still authenticates every request from
 trusted request context.
 
-`TodoItem.deleteAll` demonstrates a void-input delete command and lets the UI clear whichever storage
-runtime is active.
-
-For explicit members, the hook accepts IDs or entity records and derives refs through the entity's
-default identity:
+Deletion uses the same command surface. Explicit members can be addressed by Ref, while a settled
+Selection can delete a complete population:
 
 ```ts
-await setTodosCompleted.executeAsync({ todos: selectedIds, completed: true });
+mutateEntity(TodoItemSchema).deleteSelection(visibleTodos);
 ```
 
-The operation still receives `Selection<typeof TodoItem>` on the server, and the transport still
-carries an explicit Selection AST containing refs. `TodoItem.selection(...)` authors predicate-based
-membership from either the bound Node entity or its generated browser projection; Boolean
-composition refines that same value without creating a UI-only filter language.
+The transport carries the explicit Selection AST. `TodoItem.selection(...)` authors
+predicate-based membership from either the bound Node entity or its generated browser projection;
+Boolean composition refines that same value without creating a UI-only filter language.
 
 ## How the application fits together
 
@@ -443,7 +445,9 @@ Unsupported browsers keep the speaker disabled. Voices depend on the browser and
 See [MDN SpeechSynthesisUtterance](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance).
 
 Ask “what things can I do?” for a concise capability explanation without executing an action.
-Informational replies use `answered`, separate from `executed` and `unresolved`. Help is rendered from localized operation descriptions rather than model-written prose. The completion binding narrows its description to match the exposed completed-only behavior. Technical identifiers stay in invocation payloads.
+Informational replies use `answered`, separate from `executed` and `unresolved`. Help is rendered
+from the localized descriptions of the currently exposed reads, commands, and Operations rather
+than model-written prose. Technical identifiers stay in canonical request payloads.
 
 The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
 `TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
@@ -462,14 +466,16 @@ service delegation loop.
 
 The boundaries are explicit:
 
-- `operation.description`, input/output contracts, and requirements belong to the domain model.
-  Core's `createModelCommandRuntime` resolves these declarations, interprets the request, reloads
-  the scope, validates the canonical proposal, and dispatches the selected operation.
+- Entity mutation contracts and Operation descriptions, inputs, outputs, and requirements belong to
+  the domain model. Core's `createModelCommandRuntime` interprets the request, reloads the scope,
+  validates the canonical proposal, and dispatches the selected read, command, or Operation.
 - `command-chat/runtime.ts` supplies Todo's authentication, bounded scope, messages, and
   instructions to Core's application-bound model runtime. Core constructs the policy-aware Graph
   Read and Graph Command dispatchers.
-- `command-chat/bindings.ts` contains the application-specific scope validation and result messages for canonical action inputs. It does not duplicate
-  operation descriptions. This explicit exposure configuration is not automatic graph-scope inference.
+- `command-chat/bindings.ts` contains only Todo-specific prompt guidance. Command scope validation
+  and result messages live beside the exposed canonical command shapes in
+  `command-chat/graph-commands.ts`. This explicit exposure remains a bounded spike rather than
+  automatic graph-scope inference.
 - `command-chat/graph-reads.ts` exposes the bounded Todo list/item read shapes the model may
   propose. Core validates the proposal against those shapes, reloads the scope, and sends it to the
   normal policy-aware Graph Read dispatcher.
@@ -487,8 +493,10 @@ whole normalized words). An invented qualifier cannot disambiguate duplicate tit
 named list, completion resolves globally. This conservative example policy is not general natural
 language reference resolution or an authorization boundary.
 
-Deletion uses the existing `TodoItem.deleteList`, including its item cascade. Each request still
-produces at most one read, command, or invocation. `show incomplete items` and
+List deletion is a canonical Entity Mutation Command. `TodoList.items` declares
+`onDelete: 'cascade'`, and `TodoItem.tags` declares `onDelete: 'detach'`, so cleanup applies to every
+caller without a wrapper Operation. Each request still produces at most one read, command, or
+invocation. `show incomplete items` and
 `how many incomplete items are there?` execute canonical Graph Reads and return the actual
 policy-authorized rows or count. Conversation continuation remains a follow-up.
 
@@ -526,7 +534,8 @@ context, prompt-injection hardening, provider disclosure policy, and stronger au
 binding are explicitly tracked follow-ups. See plans 153a–153c.
 
 The Ollama adapter sends context data and the actual user instruction as separate messages.
-Single-list deletion identifies a visible list and copies its Ref into the operation's `list` input. Batch requests are still outside the
+Single-list deletion identifies a visible list and copies its Ref into the Entity Mutation Command
+target. Batch requests are still outside the
 one-invocation contract and should request separate messages; prompt guidance and the small-model
 evaluation do not guarantee correct intent recognition for arbitrary compound requests.
 
@@ -535,7 +544,9 @@ Chat also supports `rename list Groceries to Shopping` and
 `rename item buy bread in Shopping to buy wholemeal bread`. Completed items can be renamed too.
 For mutations, the model returns `{status: "resolved", request}` containing the existing versioned
 Graph Command request; no rename Domain Operation or alternate update payload is added.
-`command-chat/graph-commands.ts`
-exposes only `TodoList.name` and `TodoItem.title`, with value schemas taken from entity declarations. It also exposes the built-in entity delete command for TodoItem, with a conditional current title and fresh scope validation; no domain operation is needed.
+`command-chat/graph-commands.ts` exposes bounded create, rename, completion, and delete request
+shapes with value schemas taken from Entity declarations. Delete and update requests carry current
+values as write preconditions and are revalidated against fresh scope; no structural Domain
+Operation is needed.
 Updates use the same Graph Command policies as browser editing, including conditional old-name/title
 checks. The chat still does not expose color changes or general field editing.

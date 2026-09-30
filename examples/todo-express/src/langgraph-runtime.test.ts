@@ -1,4 +1,4 @@
-import { createEntityRef, toGraphCommandRequest } from '@ontahi/core/data-graph';
+import { createEntityRef, mutateEntity, toGraphCommandRequest } from '@ontahi/core/data-graph';
 import {
   createTaskBackedModelCommandRuntime,
   withInvocationContext,
@@ -153,15 +153,13 @@ describe('Todo LangGraph runtime', () => {
       { id: 'list-1', name: 'Garage', color: '#f5ddd5' },
       { id: 'list-2', name: 'Later', color: '#dbe8f4' },
     ];
-    const invocation = (listId: string) => ({
-      kind: 'invoke' as const,
-      operationId: 'TodoItem.createItem',
-      input: {
-        id: 'buy-milk',
-        title: 'buy milk',
-        list: createEntityRef(TodoList, { id: listId }),
-      },
-    });
+    const invocation = (listId: string) =>
+      toGraphCommandRequest(
+        mutateEntity(TodoItem).create({
+          title: 'buy milk',
+          list: createEntityRef(TodoList, { id: listId }),
+        }),
+      );
     const generate = vi.fn(async () => ({
       status: 'choice' as const,
       prompt: 'Which list?',
@@ -205,7 +203,7 @@ describe('Todo LangGraph runtime', () => {
     });
     expect(generate).toHaveBeenCalledOnce();
     expect(getTodoDataset().TodoItem?.at(-1)).toMatchObject({
-      id: 'buy-milk',
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       list: 'list-2',
       title: 'buy milk',
     });

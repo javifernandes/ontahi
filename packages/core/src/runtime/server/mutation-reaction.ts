@@ -1,5 +1,9 @@
 import { Effect } from 'effect';
 
+import type {
+  EntityMutationCommand,
+  EntityMutationDelta,
+} from '../../data-graph/entity-mutation-command.js';
 import {
   createMutationReactionRunner,
   type AppliedRelationshipMutationResult,
@@ -11,10 +15,8 @@ import type { RelationshipCommandResult } from '../../data-graph/relationship-co
 import type {
   ManyToManyRelationshipCommand,
   OrderedRelationshipCommand,
-  OrderedRelationshipDelta,
   RelationshipCommand,
   RelationshipCommandExecutor,
-  RelationshipDelta,
 } from '../../data-graph/relationship-command.js';
 
 import { deferDataGraphPostCommitWork, getRequiredDataGraphRuntime } from './data-graph.js';
@@ -31,6 +33,103 @@ let outcomeSequence = 0;
 const createDefaultOutcomeId = () =>
   globalThis.crypto?.randomUUID?.() ?? `mutation-outcome-${Date.now()}-${++outcomeSequence}`;
 
+const createContextualRunner = <TError, TOptions>(
+  {
+    getReactions,
+    invokeOperation,
+    emitEvent,
+    createOutcomeId = createDefaultOutcomeId,
+    maxDepth,
+  }: ContextualMutationReactionExecutorOptions,
+  options?: TOptions,
+) =>
+  createMutationReactionRunner({
+    reactions: getReactions(),
+    executeRelationshipCommand: followUp => {
+      const runtime =
+        getRequiredDataGraphRuntime<
+          Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
+        >();
+      if (typeof runtime.runRelationshipCommand !== 'function') {
+        throw new TypeError(
+          'The current Data Graph runtime does not support direct Relationship Command execution.',
+        );
+      }
+      return Effect.runPromise(runtime.runRelationshipCommand(followUp, options));
+    },
+    executeManyToManyRelationshipCommand: followUp => {
+      const runtime =
+        getRequiredDataGraphRuntime<
+          Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
+        >();
+      if (typeof runtime.runManyToManyRelationshipCommand !== 'function') {
+        throw new TypeError(
+          'The current Data Graph runtime does not support many-to-many Relationship Command execution.',
+        );
+      }
+      return Effect.runPromise(runtime.runManyToManyRelationshipCommand(followUp, options));
+    },
+    executeOrderedRelationshipCommand: followUp => {
+      const runtime =
+        getRequiredDataGraphRuntime<
+          Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
+        >();
+      if (typeof runtime.runOrderedRelationshipCommand !== 'function') {
+        throw new TypeError(
+          'The current Data Graph runtime does not support ordered Relationship Command execution.',
+        );
+      }
+      return Effect.runPromise(runtime.runOrderedRelationshipCommand(followUp, options));
+    },
+    invokeOperation,
+    emitEvent,
+    createOutcomeId,
+    ...(maxDepth === undefined ? {} : { maxDepth }),
+  });
+
+export const applyContextualEntityMutationReactions = <TError = unknown, TOptions = undefined>(
+  command: EntityMutationCommand,
+  delta: EntityMutationDelta,
+  options: TOptions | undefined,
+  configuration: ContextualMutationReactionExecutorOptions,
+) => {
+  const runner = createContextualRunner<TError, TOptions>(configuration, options);
+  const outcome = runner.createAppliedEntityOutcome(command, delta);
+  const process = () => runner.react(outcome).then(() => undefined);
+
+  return deferDataGraphPostCommitWork(process)
+    ? Effect.succeed(delta)
+    : Effect.promise(process).pipe(Effect.as(delta));
+};
+
+export const applyContextualRelationshipMutationReactions = <
+  TError = unknown,
+  TOptions = undefined,
+>(
+  command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
+  result: RelationshipCommandResult,
+  options: TOptions | undefined,
+  configuration: ContextualMutationReactionExecutorOptions,
+): Effect.Effect<RelationshipMutationResult> => {
+  if (result.status === 'not-applied') return Effect.succeed(result);
+  const runner = createContextualRunner<TError, TOptions>(configuration, options);
+  const outcome = runner.createAppliedOutcome(command, result.delta);
+  const reactions: AppliedRelationshipMutationResult['reactions'] = [];
+  const applied: AppliedRelationshipMutationResult = {
+    status: 'applied',
+    outcome,
+    reactions,
+  };
+  const process = async () => {
+    const processed = await runner.react(outcome);
+    reactions.push(...processed.reactions);
+  };
+
+  return deferDataGraphPostCommitWork(process)
+    ? Effect.succeed(applied)
+    : Effect.promise(process).pipe(Effect.as(applied));
+};
+
 export const createContextualMutationReactionExecutor = <TError = unknown, TOptions = undefined>({
   getReactions,
   invokeOperation,
@@ -42,70 +141,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
   TOptions,
   RelationshipMutationResult
 > => {
-  const applyReactions = (
-    command: RelationshipCommand | ManyToManyRelationshipCommand | OrderedRelationshipCommand,
-    delta: RelationshipDelta | OrderedRelationshipDelta,
-    options?: TOptions,
-  ) => {
-    const runner = createMutationReactionRunner({
-      reactions: getReactions(),
-      executeRelationshipCommand: followUp => {
-        const runtime =
-          getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
-          >();
-        if (typeof runtime.runRelationshipCommand !== 'function') {
-          throw new TypeError(
-            'The current Data Graph runtime does not support direct Relationship Command execution.',
-          );
-        }
-        return Effect.runPromise(runtime.runRelationshipCommand(followUp, options));
-      },
-      executeManyToManyRelationshipCommand: followUp => {
-        const runtime =
-          getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
-          >();
-        if (typeof runtime.runManyToManyRelationshipCommand !== 'function') {
-          throw new TypeError(
-            'The current Data Graph runtime does not support many-to-many Relationship Command execution.',
-          );
-        }
-        return Effect.runPromise(runtime.runManyToManyRelationshipCommand(followUp, options));
-      },
-      executeOrderedRelationshipCommand: followUp => {
-        const runtime =
-          getRequiredDataGraphRuntime<
-            Partial<RelationshipCommandExecutor<TError, TOptions, RelationshipCommandResult>>
-          >();
-        if (typeof runtime.runOrderedRelationshipCommand !== 'function') {
-          throw new TypeError(
-            'The current Data Graph runtime does not support ordered Relationship Command execution.',
-          );
-        }
-        return Effect.runPromise(runtime.runOrderedRelationshipCommand(followUp, options));
-      },
-      invokeOperation,
-      emitEvent,
-      createOutcomeId,
-      ...(maxDepth === undefined ? {} : { maxDepth }),
-    });
-    const outcome = runner.createAppliedOutcome(command, delta);
-    const reactions: AppliedRelationshipMutationResult['reactions'] = [];
-    const result: AppliedRelationshipMutationResult = {
-      status: 'applied',
-      outcome,
-      reactions,
-    };
-    const process = async () => {
-      const processed = await runner.react(outcome);
-      reactions.push(...processed.reactions);
-    };
-
-    return deferDataGraphPostCommitWork(process)
-      ? Effect.succeed(result)
-      : Effect.promise(process).pipe(Effect.as(result));
-  };
+  const configuration = { getReactions, invokeOperation, emitEvent, createOutcomeId, maxDepth };
 
   return {
     runRelationshipCommand: (command, options) =>
@@ -123,11 +159,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           .runRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
-              result.status === 'not-applied'
-                ? Effect.succeed<RelationshipMutationResult>(result)
-                : applyReactions(command, result.delta, options).pipe(
-                    Effect.map(applied => applied as RelationshipMutationResult),
-                  ),
+              applyContextualRelationshipMutationReactions(command, result, options, configuration),
             ),
           );
       }),
@@ -146,11 +178,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           .runManyToManyRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
-              result.status === 'not-applied'
-                ? Effect.succeed<RelationshipMutationResult>(result)
-                : applyReactions(command, result.delta, options).pipe(
-                    Effect.map(applied => applied as RelationshipMutationResult),
-                  ),
+              applyContextualRelationshipMutationReactions(command, result, options, configuration),
             ),
           );
       }),
@@ -169,11 +197,7 @@ export const createContextualMutationReactionExecutor = <TError = unknown, TOpti
           .runOrderedRelationshipCommand(command, options)
           .pipe(
             Effect.flatMap(result =>
-              result.status === 'not-applied'
-                ? Effect.succeed<RelationshipMutationResult>(result)
-                : applyReactions(command, result.delta, options).pipe(
-                    Effect.map(applied => applied as RelationshipMutationResult),
-                  ),
+              applyContextualRelationshipMutationReactions(command, result, options, configuration),
             ),
           );
       }),

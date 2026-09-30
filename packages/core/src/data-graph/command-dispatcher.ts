@@ -13,6 +13,7 @@ import {
   isReferenceFieldDefinition,
   type AnyEntityDefinition,
   type StoredFieldName,
+  type WritableStoredFieldName,
 } from './definitions.js';
 import {
   entityMutationCommandDiagnosticFromError,
@@ -65,6 +66,9 @@ type EntityMutationPolicyFields<TEntity extends AnyEntityDefinition> = readonly 
 > &
   string)[];
 
+type EntityMutationWritablePolicyFields<TEntity extends AnyEntityDefinition> =
+  readonly (WritableStoredFieldName<TEntity['fields']> & string)[];
+
 type EntityMutationSelectionPolicy<TEntity extends AnyEntityDefinition> = {
   readonly fields: Partial<
     Record<StoredFieldName<TEntity['fields']> & string, readonly SelectionPredicate['operator'][]>
@@ -72,35 +76,49 @@ type EntityMutationSelectionPolicy<TEntity extends AnyEntityDefinition> = {
   readonly allowAll?: true;
 };
 
-export type EntityMutationCommandPolicy<TEntity extends AnyEntityDefinition = AnyEntityDefinition> =
-  {
-    readonly entity: TEntity;
-    readonly scope: 'all';
-    readonly actions: {
-      readonly create?: {
-        readonly fields: EntityMutationPolicyFields<TEntity>;
-        readonly result: EntityMutationPolicyFields<TEntity>;
-      };
-      readonly update?: {
-        readonly fields: EntityMutationPolicyFields<TEntity>;
-        readonly if?: EntityMutationPolicyFields<TEntity>;
-        readonly result: EntityMutationPolicyFields<TEntity>;
-        readonly selection?: EntityMutationSelectionPolicy<TEntity>;
-      };
-      readonly delete?: {
-        readonly if?: EntityMutationPolicyFields<TEntity>;
-        readonly result: EntityMutationPolicyFields<TEntity>;
-        readonly selection?: EntityMutationSelectionPolicy<TEntity>;
-      };
+export type EntityMutationCommandPolicy<
+  TEntity extends AnyEntityDefinition = AnyEntityDefinition,
+  TAuthority = unknown,
+> = {
+  readonly entity: TEntity;
+  readonly scope: 'all';
+  readonly actions: {
+    readonly create?: {
+      readonly fields: EntityMutationWritablePolicyFields<TEntity>;
+      readonly result: EntityMutationPolicyFields<TEntity>;
+      readonly authorize?: (
+        command: EntityMutationCommand,
+        context: GraphCommandDispatchContext<TAuthority>,
+      ) => boolean;
+    };
+    readonly update?: {
+      readonly fields: EntityMutationWritablePolicyFields<TEntity>;
+      readonly if?: EntityMutationPolicyFields<TEntity>;
+      readonly result: EntityMutationPolicyFields<TEntity>;
+      readonly selection?: EntityMutationSelectionPolicy<TEntity>;
+      readonly authorize?: (
+        command: EntityMutationCommand,
+        context: GraphCommandDispatchContext<TAuthority>,
+      ) => boolean;
+    };
+    readonly delete?: {
+      readonly if?: EntityMutationPolicyFields<TEntity>;
+      readonly result: EntityMutationPolicyFields<TEntity>;
+      readonly selection?: EntityMutationSelectionPolicy<TEntity>;
+      readonly authorize?: (
+        command: EntityMutationCommand,
+        context: GraphCommandDispatchContext<TAuthority>,
+      ) => boolean;
     };
   };
+};
 
-type AnyEntityMutationCommandPolicy = EntityMutationCommandPolicy<any>;
-type AnyGraphCommandPolicy =
+type AnyEntityMutationCommandPolicy = EntityMutationCommandPolicy<any, any>;
+type AnyGraphCommandPolicy<TAuthority = unknown> =
   | RelationshipCommandPolicy
   | ManyToManyRelationshipCommandPolicy
   | OrderedRelationshipCommandPolicy
-  | AnyEntityMutationCommandPolicy;
+  | EntityMutationCommandPolicy<any, TAuthority>;
 
 export type GraphCommandDispatchContext<TAuthority> = {
   readonly authority: TAuthority;
@@ -143,7 +161,7 @@ export type CreateGraphCommandDispatcherOptions<TAuthority> = {
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
     | OrderedRelationshipCommandPolicy
-    | EntityMutationCommandPolicy<any>
+    | EntityMutationCommandPolicy<any, TAuthority>
   )[];
   readonly execute?: GraphCommandDispatchExecutor<TAuthority>;
   readonly executeManyToMany?: ManyToManyGraphCommandDispatchExecutor<TAuthority>;
@@ -252,6 +270,10 @@ const validateEntityMutationActionDeclaration = (
     new Set(mutationFields).size !== mutationFields.length ||
     new Set(effectiveConditionFields).size !== effectiveConditionFields.length ||
     new Set(resultFields).size !== resultFields.length ||
+    mutationFields.some(fieldName => {
+      const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
+      return field?.generatedBy !== undefined;
+    }) ||
     fields.some(fieldName => {
       const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
       return !field || isDerivedFieldDefinition(field);
@@ -307,9 +329,9 @@ const validateEntityMutationPolicy = (policy: AnyEntityMutationCommandPolicy) =>
   }
 };
 
-const isEntityMutationPolicy = (
-  policy: AnyGraphCommandPolicy,
-): policy is AnyEntityMutationCommandPolicy => !Array.isArray(policy.actions);
+const isEntityMutationPolicy = <TAuthority>(
+  policy: AnyGraphCommandPolicy<TAuthority>,
+): policy is EntityMutationCommandPolicy<any, TAuthority> => !Array.isArray(policy.actions);
 
 export const createGraphCommandDispatcher = <TAuthority = unknown>({
   policies,
@@ -501,6 +523,12 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     if (!resolved.success) return resolved.error;
     if (resolved.command.kind !== 'entity-mutation-command') {
       return graphCommandProtocolError('invalid_request', 'Data graph Command kind changed.');
+    }
+    if (
+      typeof declaration.authorize === 'function' &&
+      !declaration.authorize(resolved.command, context)
+    ) {
+      return graphCommandProtocolError('access_denied', 'Data graph Command access denied.');
     }
     if (!executeEntityMutation) {
       return graphCommandProtocolError(
