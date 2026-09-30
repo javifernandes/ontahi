@@ -10,6 +10,7 @@ import {
   materializeDerivedFieldDefinitions,
   entityMutationReferenceNotFoundDiagnostic,
   query,
+  safeParseGraphSchema,
   type RelationshipMutationResult,
   type AnyEntityDefinition,
   type DataGraphDefaultStorage,
@@ -21,6 +22,7 @@ import {
   type GraphReadPolicy,
   type GraphCommandDispatcher,
   type EntityMutationCommandExecutionRuntime,
+  type EntityMutationCommand,
   type EntityMutationCommandPolicy,
   type RelationshipCommandPolicy,
   type ManyToManyRelationshipCommandPolicy,
@@ -189,6 +191,14 @@ export type OntahiOptions<
   reactions?: readonly MutationReaction[] | (() => readonly MutationReaction[]);
   operationConditions?: PortableOperationConditionRegistry;
   derivedFields?: PortableDerivedFieldRegistry;
+  fieldGenerators?: Record<
+    string,
+    (context: {
+      entityName: string;
+      fieldName: string;
+      values: Readonly<Record<string, unknown>>;
+    }) => unknown
+  >;
 };
 
 type BoundEntityRecord<
@@ -281,14 +291,54 @@ export const ontahi = <
           commandOptions: Parameters<typeof mutationRuntime.runEntityMutationCommand>[1],
         ) =>
           Effect.gen(function* () {
-            if (command.action !== 'delete') {
+            let executableCommand: EntityMutationCommand = command;
+            if (command.action === 'create') {
               const entityDefinition = semanticEntities.find(
                 entity => entity.name === command.entityName,
               );
               if (!entityDefinition) {
                 throw new Error(`Unknown Entity ${command.entityName}.`);
               }
-              for (const [fieldName, value] of Object.entries(command.values)) {
+              const values = { ...command.values };
+              for (const [fieldName, field] of Object.entries(entityDefinition.fields)) {
+                if (!field.generatedBy) continue;
+                if (Object.prototype.hasOwnProperty.call(values, fieldName)) {
+                  throw new Error(
+                    `Entity Mutation Command cannot assign receiver-generated ${command.entityName}.${fieldName}.`,
+                  );
+                }
+                const generator =
+                  field.generatedBy === 'uuid'
+                    ? () => globalThis.crypto.randomUUID()
+                    : options.fieldGenerators?.[field.generatedBy];
+                if (!generator) {
+                  throw new Error(
+                    `No Field generator ${JSON.stringify(field.generatedBy)} is configured for ${command.entityName}.${fieldName}.`,
+                  );
+                }
+                const generated = generator({
+                  entityName: command.entityName,
+                  fieldName,
+                  values,
+                });
+                if (!safeParseGraphSchema(field, generated).success) {
+                  throw new Error(
+                    `Field generator ${JSON.stringify(field.generatedBy)} returned an invalid value for ${command.entityName}.${fieldName}.`,
+                  );
+                }
+                values[fieldName] = generated;
+              }
+              executableCommand = { ...command, values };
+            }
+
+            if (executableCommand.action !== 'delete') {
+              const entityDefinition = semanticEntities.find(
+                entity => entity.name === executableCommand.entityName,
+              );
+              if (!entityDefinition) {
+                throw new Error(`Unknown Entity ${executableCommand.entityName}.`);
+              }
+              for (const [fieldName, value] of Object.entries(executableCommand.values)) {
                 const field = entityDefinition.fields[fieldName];
                 if (
                   !field ||
@@ -306,7 +356,7 @@ export const ontahi = <
                 );
                 Object.assign(error, {
                   diagnostic: entityMutationReferenceNotFoundDiagnostic(
-                    command,
+                    executableCommand,
                     fieldName,
                     field.target.name,
                   ),
@@ -315,7 +365,10 @@ export const ontahi = <
               }
             }
 
-            return yield* mutationRuntime.runEntityMutationCommand(command, commandOptions);
+            return yield* mutationRuntime.runEntityMutationCommand(
+              executableCommand,
+              commandOptions,
+            );
           });
       },
     }) as unknown as StorageRuntime<TStorage>;

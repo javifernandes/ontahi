@@ -13,6 +13,7 @@ import {
   isReferenceFieldDefinition,
   type AnyEntityDefinition,
   type StoredFieldName,
+  type WritableStoredFieldName,
 } from './definitions.js';
 import {
   entityMutationCommandDiagnosticFromError,
@@ -65,6 +66,9 @@ type EntityMutationPolicyFields<TEntity extends AnyEntityDefinition> = readonly 
 > &
   string)[];
 
+type EntityMutationWritablePolicyFields<TEntity extends AnyEntityDefinition> =
+  readonly (WritableStoredFieldName<TEntity['fields']> & string)[];
+
 type EntityMutationSelectionPolicy<TEntity extends AnyEntityDefinition> = {
   readonly fields: Partial<
     Record<StoredFieldName<TEntity['fields']> & string, readonly SelectionPredicate['operator'][]>
@@ -78,11 +82,11 @@ export type EntityMutationCommandPolicy<TEntity extends AnyEntityDefinition = An
     readonly scope: 'all';
     readonly actions: {
       readonly create?: {
-        readonly fields: EntityMutationPolicyFields<TEntity>;
+        readonly fields: EntityMutationWritablePolicyFields<TEntity>;
         readonly result: EntityMutationPolicyFields<TEntity>;
       };
       readonly update?: {
-        readonly fields: EntityMutationPolicyFields<TEntity>;
+        readonly fields: EntityMutationWritablePolicyFields<TEntity>;
         readonly if?: EntityMutationPolicyFields<TEntity>;
         readonly result: EntityMutationPolicyFields<TEntity>;
         readonly selection?: EntityMutationSelectionPolicy<TEntity>;
@@ -252,6 +256,10 @@ const validateEntityMutationActionDeclaration = (
     new Set(mutationFields).size !== mutationFields.length ||
     new Set(effectiveConditionFields).size !== effectiveConditionFields.length ||
     new Set(resultFields).size !== resultFields.length ||
+    mutationFields.some(fieldName => {
+      const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
+      return field?.generatedBy !== undefined;
+    }) ||
     fields.some(fieldName => {
       const field = typeof fieldName === 'string' ? policy.entity.fields[fieldName] : undefined;
       return !field || isDerivedFieldDefinition(field);

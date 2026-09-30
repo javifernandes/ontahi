@@ -44,6 +44,7 @@ export type FieldDefinition<TValue> = {
   description?: string;
   presentation?: GraphSchemaPresentation;
   defaultValue?: TValue;
+  generatedBy?: string;
   derived?: DerivedFieldMetadata;
   __value?: TValue;
 };
@@ -53,6 +54,15 @@ export type DefaultedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
   'defaultValue' | 'optional' | '__value'
 > & {
   defaultValue: InferFieldValue<TField>;
+  optional?: never;
+  __value?: InferFieldValue<TField>;
+};
+
+export type GeneratedFieldDefinition<TField extends AnyFieldDefinition> = Omit<
+  TField,
+  'generatedBy' | 'optional' | '__value'
+> & {
+  generatedBy: string;
   optional?: never;
   __value?: InferFieldValue<TField>;
 };
@@ -158,16 +168,20 @@ export type StoredFieldName<TFields extends FieldDefinitions> = {
   [TKey in keyof TFields]: TFields[TKey] extends { derived: DerivedFieldMetadata } ? never : TKey;
 }[keyof TFields];
 
+export type WritableStoredFieldName<TFields extends FieldDefinitions> = {
+  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends { generatedBy: string } ? never : TKey;
+}[StoredFieldName<TFields>];
+
 type OptionalStoredFieldName<TFields extends FieldDefinitions> = {
-  [TKey in StoredFieldName<TFields>]: TFields[TKey] extends
+  [TKey in WritableStoredFieldName<TFields>]: TFields[TKey] extends
     | { optional: true }
     | { defaultValue: unknown }
     ? TKey
     : never;
-}[StoredFieldName<TFields>];
+}[WritableStoredFieldName<TFields>];
 
 type RequiredStoredFieldName<TFields extends FieldDefinitions> = Exclude<
-  StoredFieldName<TFields>,
+  WritableStoredFieldName<TFields>,
   OptionalStoredFieldName<TFields>
 >;
 
@@ -1017,6 +1031,26 @@ export const field = {
     }
 
     return { ...definition, defaultValue } as DefaultedFieldDefinition<TDefinition>;
+  },
+  generated: <TDefinition extends AnyFieldDefinition>(
+    definition: TDefinition,
+    generator: string,
+  ): GeneratedFieldDefinition<TDefinition> => {
+    if (
+      definition.optional ||
+      definition.derived ||
+      Object.prototype.hasOwnProperty.call(definition, 'defaultValue') ||
+      definition.fieldType === 'reference'
+    ) {
+      throw new TypeError(
+        'Generated stored Fields require a non-optional, non-derived scalar Field without a default.',
+      );
+    }
+    if (generator.trim().length === 0) {
+      throw new TypeError('Generated stored Fields require a generator name.');
+    }
+
+    return { ...definition, generatedBy: generator } as GeneratedFieldDefinition<TDefinition>;
   },
 };
 

@@ -181,6 +181,32 @@ describe('data-graph schema DSL', () => {
     expect(() => field.default(field.string(), undefined as never)).toThrow('cannot be undefined');
   });
 
+  it('reflects receiver-generated stored Fields without making stored values optional', () => {
+    const Todo = entity('GeneratedTodo', {
+      id: field.generated(field.id(), 'uuid'),
+      title: field.string(),
+    });
+
+    expect(toGraphSchemaDescriptor(Todo)).toMatchObject({
+      fields: {
+        id: { kind: 'scalar', type: 'id', readOnly: true, generatedBy: 'uuid' },
+      },
+    });
+    expect(toGraphJsonSchema(Todo)).toMatchObject({
+      required: ['id', 'title'],
+      properties: {
+        id: { type: 'string', readOnly: true, 'x-ontahi-generated-by': 'uuid' },
+      },
+    });
+    expect(() => field.generated(field.optional(field.string()), 'slug')).toThrow(
+      'non-optional, non-derived scalar Field',
+    );
+    expect(() => field.generated(field.default(field.string(), 'draft'), 'slug')).toThrow(
+      'without a default',
+    );
+    expect(() => field.generated(field.string(), ' ')).toThrow('require a generator name');
+  });
+
   it('reflects an existing-reference mutation requirement without changing input resolution', () => {
     const Parent = entity('RequiredParent', { id: field.id() });
     const Child = entity('RequiredChild', {

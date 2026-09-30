@@ -119,6 +119,20 @@ mutation. The requirement is reflected in graph descriptors and JSON Schema. Tod
 `TodoItem.list`, and tests prove that generic create and update commands cannot point at a missing
 `TodoList`.
 
+## Third Checkpoint
+
+Core now supports receiver-owned creation values with
+`field.generated(fieldDefinition, generatorName)`. Generated Fields remain required in stored Entity
+records and query schemas, but are absent from typed mutation inputs and rejected when an untrusted
+command tries to assign them. The application receiver materializes them before reference checks
+and storage execution, so generated values appear in the canonical mutation delta.
+
+Ontahí includes the portable `uuid` generator and applications may register synchronous named Field
+generators in the composition root. Reflection marks generated Fields as read-only and exposes only
+their generator name. Todo adoption is intentionally deferred to the migration slice so the old
+`createItem({ id, ... })` Operation is removed in the same vertical change rather than retaining two
+conflicting identity contracts.
+
 ## Acceptance
 
 - [ ] Every removed Todo Operation has an equivalent canonical command path with the same model,

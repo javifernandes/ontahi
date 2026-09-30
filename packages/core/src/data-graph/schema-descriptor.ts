@@ -84,6 +84,7 @@ export type GraphSchemaScalarDescriptor = {
   presentation?: GraphSchemaPresentation;
   readOnly?: true;
   derived?: NonNullable<AnyFieldDefinition['derived']>;
+  generatedBy?: string;
 };
 
 export type GraphSchemaReferenceDescriptor = {
@@ -221,6 +222,7 @@ export type GraphJsonSchema = {
   presentation?: GraphSchemaPresentation;
   readOnly?: boolean;
   'x-ontahi-derived'?: NonNullable<AnyFieldDefinition['derived']>;
+  'x-ontahi-generated-by'?: string;
   'x-ontahi-string-exclusion'?: {
     values: readonly string[];
     caseInsensitive?: true;
@@ -241,6 +243,7 @@ export type GraphJsonSchema = {
       fields: string[];
     };
     resolution?: 'existing';
+    mutationRequirement?: 'existing';
     variant?: import('./entity-variant.js').EntityVariantDescriptor;
   };
 };
@@ -328,6 +331,7 @@ const describeField = (field: AnyFieldDefinition): GraphSchemaDescriptor => {
           ...(field.description ? { description: field.description } : {}),
           ...(field.presentation ? { presentation: field.presentation } : {}),
           ...(field.derived ? { readOnly: true, derived: field.derived } : {}),
+          ...(field.generatedBy ? { readOnly: true, generatedBy: field.generatedBy } : {}),
         };
 
   return Object.prototype.hasOwnProperty.call(field, 'defaultValue')
@@ -591,6 +595,7 @@ const scalarJsonSchema = (descriptor: GraphSchemaScalarDescriptor): GraphJsonSch
     ...(descriptor.presentation ? { presentation: descriptor.presentation } : {}),
     ...(descriptor.readOnly ? { readOnly: true } : {}),
     ...(descriptor.derived ? { 'x-ontahi-derived': descriptor.derived } : {}),
+    ...(descriptor.generatedBy ? { 'x-ontahi-generated-by': descriptor.generatedBy } : {}),
   };
 };
 

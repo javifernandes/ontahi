@@ -5,8 +5,10 @@ import type { GraphCommandSpec } from './command.js';
 import {
   isDerivedFieldDefinition,
   type AnyEntityDefinition,
+  type InferEntityRecord,
   type InferEntityMutationRecord,
   type RelationConstraintRejection,
+  type StoredFieldName,
 } from './definitions.js';
 import {
   createEntityIdentityRef,
@@ -361,7 +363,7 @@ const assertTarget = (entity: AnyEntityDefinition, target: AnyEntityRef) => {
 };
 
 export type EntityMutationCondition<TEntity extends AnyEntityDefinition> = Partial<
-  InferEntityMutationRecord<TEntity['fields']>
+  Pick<InferEntityRecord<TEntity['fields']>, StoredFieldName<TEntity['fields']>>
 >;
 
 export type EntityMutationConditionOptions<TEntity extends AnyEntityDefinition> = {

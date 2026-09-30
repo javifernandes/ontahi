@@ -460,6 +460,36 @@ describe('data graph Entity Mutation Command protocol', () => {
     });
   });
 
+  it('keeps receiver-generated Fields out of transported mutation inputs', () => {
+    const Job = entity('GeneratedJob', {
+      id: field.generated(field.id(), 'uuid'),
+      title: field.string(),
+    });
+    const accepted = toGraphCommandRequest(mutateEntity(Job).create({ title: 'Index books' }));
+
+    expect(resolveGraphCommandRequest(accepted, { entities: [Job] })).toEqual({
+      success: true,
+      request: accepted,
+      command: mutateEntity(Job).create({ title: 'Index books' }),
+    });
+
+    const supplied = toGraphCommandRequest({
+      kind: 'entity-mutation-command',
+      action: 'create',
+      entityName: 'GeneratedJob',
+      values: { id: 'caller-owned', title: 'Index books' },
+    });
+    expect(resolveGraphCommandRequest(supplied, { entities: [Job] })).toMatchObject({
+      success: false,
+      error: {
+        error: {
+          code: 'invalid_payload',
+          message: 'Entity Mutation Command cannot assign receiver-generated GeneratedJob.id.',
+        },
+      },
+    });
+  });
+
   it('uses a fail-closed protocol version for conditional exact mutations', () => {
     const client = defineBookGraph();
     const server = defineBookGraph();

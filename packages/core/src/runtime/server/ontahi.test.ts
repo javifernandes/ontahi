@@ -47,12 +47,19 @@ describe('ontahi application composition root', () => {
     const Parent = entity({ name: 'ExistingParent', fields: { id: field.id() } });
     const Child = entity({
       name: 'ExistingChild',
-      fields: { id: field.id(), parent: field.existingRef(Parent) },
+      fields: {
+        id: field.generated(field.id(), 'test-child-id'),
+        parent: field.existingRef(Parent),
+      },
     });
     const storage = createInMemoryDataGraphStorage({
       dataset: { ExistingParent: [], ExistingChild: [] },
     });
-    const application = ontahi({ storage, entities: [Parent, Child] });
+    const application = ontahi({
+      storage,
+      entities: [Parent, Child],
+      fieldGenerators: { 'test-child-id': () => 'child-1' },
+    });
     const dispatch = (
       application as unknown as GraphCommandableOntahiApplication
     ).createGraphCommandDispatcher([
@@ -60,13 +67,13 @@ describe('ontahi application composition root', () => {
         entity: Child,
         scope: 'all',
         actions: {
-          create: { fields: ['id', 'parent'], result: ['id', 'parent'] },
+          create: { fields: ['parent'], result: ['id', 'parent'] },
           update: { fields: ['parent'], result: ['id', 'parent'] },
         },
       },
     ]);
     const missingParent = createEntityRef(Parent, { id: 'missing-parent' });
-    const command = mutateEntity(Child).create({ id: 'child-1', parent: missingParent });
+    const command = mutateEntity(Child).create({ parent: missingParent });
 
     await expect(
       dispatch(toGraphCommandRequest(command), { authority: undefined }),
@@ -89,12 +96,9 @@ describe('ontahi application composition root', () => {
     storage.dataset.ExistingParent = [{ id: 'parent-1' }];
     const existingParent = createEntityRef(Parent, { id: 'parent-1' });
     await expect(
-      dispatch(
-        toGraphCommandRequest(
-          mutateEntity(Child).create({ id: 'child-1', parent: existingParent }),
-        ),
-        { authority: undefined },
-      ),
+      dispatch(toGraphCommandRequest(mutateEntity(Child).create({ parent: existingParent })), {
+        authority: undefined,
+      }),
     ).resolves.toMatchObject({ kind: 'graph-command-result' });
     expect(storage.dataset.ExistingChild).toEqual([{ id: 'child-1', parent: 'parent-1' }]);
 
