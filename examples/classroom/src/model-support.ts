@@ -1,8 +1,6 @@
 import type { EntityMutationCommandPolicy, GraphReadPolicy } from '@ontahi/core/data-graph';
 import {
   createApplicationModelCommandRuntime,
-  createModelEntityMutationExposure,
-  createModelGraphReadExposure,
   type GraphCommandableOntahiApplication,
   type GraphReadableOntahiApplication,
   type ModelProvider,
@@ -13,7 +11,7 @@ import { Course, School } from './classroom.js';
 
 const courseReadPolicy = {
   entity: Course,
-  modes: ['run'],
+  modes: ['run', 'count'],
   cardinalities: ['many'],
   maxLimit: 20,
   fields: {
@@ -54,31 +52,7 @@ export const createClassroomModelRuntime = ({
     authorize: () => undefined,
     graph: {
       authority: () => undefined,
-      reads: [
-        {
-          policies: courseReadPolicy,
-          expose: () =>
-            createModelGraphReadExposure(courseReadPolicy, {
-              mode: 'run',
-              equals: ['title'],
-              orderBy: ['title'],
-              limit: 20,
-              description: 'List courses, optionally filtered by title.',
-              message: ({ value }) => `${Array.isArray(value) ? value.length : 0} courses.`,
-            }),
-        },
-      ],
-      commands: [
-        {
-          policies: schoolMutationPolicy,
-          expose: () =>
-            createModelEntityMutationExposure(schoolMutationPolicy, {
-              action: 'create',
-              values: ['id', 'name'],
-              description: 'Create a school.',
-              message: () => 'School created.',
-            }),
-        },
-      ],
+      reads: [courseReadPolicy],
+      commands: [schoolMutationPolicy],
     },
   });

@@ -52,6 +52,10 @@ describe('Classroom Model Support activation', () => {
       },
       {
         status: 'resolved' as const,
+        request: toGraphReadRequest(query(Course), 'count'),
+      },
+      {
+        status: 'resolved' as const,
         request: toGraphCommandRequest(
           mutateEntity(School).create({ id: 'school-2', name: 'South School' }),
         ),
@@ -63,7 +67,7 @@ describe('Classroom Model Support activation', () => {
         commands: unknown[];
         context?: unknown;
       };
-      expect(catalog.reads).toHaveLength(1);
+      expect(catalog.reads).toHaveLength(2);
       expect(catalog.commands).toHaveLength(1);
       expect(catalog.context).toBeUndefined();
       return proposals.shift();
@@ -73,13 +77,18 @@ describe('Classroom Model Support activation', () => {
 
     await expect(runtime.submit({ text: 'list courses' }, signal)).resolves.toMatchObject({
       status: 'executed',
-      message: '2 courses.',
+      message: '2 course records.',
       response: {
         value: [
           { id: 'course-1', title: 'Algebra' },
           { id: 'course-2', title: 'Geometry' },
         ],
       },
+    });
+    await expect(runtime.submit({ text: 'count courses' }, signal)).resolves.toMatchObject({
+      status: 'executed',
+      message: '2 course records.',
+      response: { value: 2 },
     });
     await expect(runtime.submit({ text: 'create South School' }, signal)).resolves.toMatchObject({
       status: 'executed',
@@ -89,6 +98,6 @@ describe('Classroom Model Support activation', () => {
       { id: 'school-1', name: 'North School' },
       { id: 'school-2', name: 'South School' },
     ]);
-    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate).toHaveBeenCalledTimes(3);
   });
 });

@@ -794,15 +794,18 @@ returns `executed`, `answered`, or `unresolved`. `scope` supplies:
 
 When reads and commands use an `OntahiApplication`,
 `createApplicationModelCommandRuntime(...)` creates the policy-aware graph dispatchers and binds
-each call to the host-provided authority. Register graph affordances as `{policies, expose}` pairs:
-the policies build the authoritative dispatcher, while `expose` projects the bounded canonical
-request schemas shown to the model. A host with no dynamic context needs no `scope`. When a catalog
-depends on current application data, `scope` receives `{read?}` as a third argument and may return
-`data`; Core passes that receiver-local value to `expose` but removes it before serializing model
-context. The application still owns the explicit model-visible `context`. Core owns dispatcher
-construction, cancellation checks, and canonical execution through the same policies used by other
-callers. Command dispatch remains internal to the runtime so context construction cannot mutate the
-graph.
+each call to the host-provided authority. Register a Graph Read or Entity Mutation policy directly
+to expose its full authorized contract. Core derives read modes, equality filters, ordering, limits,
+mutation actions, writable values, conditions, descriptions, and result messages from that policy
+and its Entity. Use `{policies, expose}` only to narrow a contract or add contextual validation,
+localization, or custom presentation.
+
+A host with no dynamic context needs no `scope`. When a custom catalog depends on current
+application data, `scope` receives `{read?}` as a third argument and may return `data`; Core passes
+that receiver-local value to `expose` but removes it before serializing model context. The
+application still owns the explicit model-visible `context`. Core owns dispatcher construction,
+cancellation checks, and canonical execution through the same policies used by other callers.
+Command dispatch remains internal to the runtime so context construction cannot mutate the graph.
 
 For local development, `createOllamaModelProvider({model, baseUrl?, ...})` implements
 `ModelProvider` with Ollama's structured `/api/chat` endpoint using `fetch`. Provider configuration

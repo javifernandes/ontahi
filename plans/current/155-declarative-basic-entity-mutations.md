@@ -197,17 +197,19 @@ helper would preserve the coupling rather than remove it.
 
 ## Model Support Activation
 
-Application Model Support now registers Graph capabilities as paired `{ policies, expose }`
-affordances. Core derives the authoritative read/command dispatchers and the scoped model catalog
-from that single registration boundary. Dynamic catalog data returned by `scope` stays local to the
-receiver and is never serialized into model context unless the application explicitly projects it
-there. Static applications may omit `scope` entirely.
+Application Model Support now registers Graph Read and Entity Mutation policies directly. Core
+derives the authoritative dispatchers and the complete model catalog—including bounded filters,
+ordering, limits, mutation fields, descriptions, and result messages—from that single declaration.
+The paired `{ policies, expose }` form remains for intentional narrowing and contextual behavior.
+Dynamic catalog data returned by `scope` stays local to the receiver and is never serialized into
+model context unless the application explicitly projects it there. Static applications may omit
+`scope` entirely.
 
-Todo uses the paired API while retaining its genuinely application-specific context projection and
-disambiguation rules. Classroom is the second-host proof: it enables a Course read and a School
-create command with an injected provider and two affordance declarations, without Todo bindings or
-a context reader. The API remains evolutionary until Devtools and Model Support share a broader
-reflected-affordance discovery surface.
+Todo retains explicit exposure factories only for its genuinely application-specific context
+projection, localization, and disambiguation rules. Classroom is the second-host proof: it enables
+Course reads and a School create command by registering two policies, without Todo bindings,
+exposure factories, or a context reader. The API remains evolutionary until Devtools and Model
+Support share a broader reflected-affordance discovery surface.
 
 ## Acceptance
 

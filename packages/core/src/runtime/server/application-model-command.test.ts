@@ -14,7 +14,6 @@ import {
 
 import { createApplicationModelCommandRuntime } from './application-model-command.js';
 import { entity } from './entity.js';
-import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
 import { ontahi } from './ontahi.js';
 
 it('binds model scope reads to application policies and the current authority', async () => {
@@ -27,18 +26,19 @@ it('binds model scope reads to application policies and the current authority', 
   });
   const authority = vi.fn(() => ({ subject: 'reader' }));
   const authorize = vi.fn();
+  const modelRead = toGraphReadRequest(query(Document).limit(10), 'run');
   const generate = vi.fn(async ({ context }: { context: string }) => {
     expect(JSON.parse(context).context).toEqual({
       documents: [{ id: 'document-1', title: 'Visible' }],
     });
-    return { status: 'help' };
+    return { status: 'resolved', request: modelRead };
   });
   const readPolicy = {
     entity: Document,
-    modes: ['run'],
-    cardinalities: ['many'],
+    modes: ['get', 'run', 'count'],
+    cardinalities: ['one', 'many'],
     maxLimit: 10,
-    fields: { id: { select: true }, title: { select: true } },
+    fields: { id: { select: true }, title: { select: true, filter: ['eq'], order: true } },
     scope: ({ authority: current }: { authority: { subject: string } }) => {
       expect(current).toEqual({ subject: 'reader' });
       return Selection.all(Document);
@@ -50,17 +50,7 @@ it('binds model scope reads to application policies and the current authority', 
     authorize,
     graph: {
       authority,
-      reads: [
-        {
-          policies: readPolicy,
-          expose: () =>
-            createModelGraphReadExposure(readPolicy, {
-              mode: 'run',
-              limit: 10,
-              description: 'Read documents.',
-            }),
-        },
-      ],
+      reads: [readPolicy],
     },
     scope: async (_request, signal, graph) => {
       const response = await graph.read!(
@@ -78,9 +68,17 @@ it('binds model scope reads to application policies and the current authority', 
   });
 
   await expect(
-    runtime.submit({ text: 'What can I do?' }, new AbortController().signal),
-  ).resolves.toEqual({ status: 'answered', message: 'You can:\n• Read documents.' });
-  expect(authority).toHaveBeenCalledOnce();
+    runtime.submit({ text: 'Read documents' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'executed',
+    message: '1 document record.',
+    request: modelRead,
+    response: {
+      kind: 'graph-read-result',
+      value: [{ id: 'document-1', title: 'Visible' }],
+    },
+  });
+  expect(authority).toHaveBeenCalledTimes(3);
   expect(authorize).toHaveBeenCalledTimes(2);
 });
 
@@ -213,4 +211,44 @@ it('executes model graph commands through the application policy dispatcher', as
     runtime.submit({ text: 'rename the document' }, new AbortController().signal),
   ).resolves.toEqual({ status: 'executed', message: 'Updated.', request: command });
   expect(storage.dataset.Document).toEqual([{ id: 'document-1', title: 'After' }]);
+});
+
+it('infers model mutation exposures directly from an entity command policy', async () => {
+  const Document = entity({ name: 'Document', fields: { id: field.id(), title: field.string() } });
+  const storage = createInMemoryDataGraphStorage({ dataset: { Document: [] } });
+  const application = ontahi({ entities: [Document], storage });
+  const command = toGraphCommandRequest({
+    kind: 'entity-mutation-command',
+    action: 'create',
+    entityName: 'Document',
+    values: { id: 'document-1', title: 'First' },
+  });
+  const runtime = createApplicationModelCommandRuntime({
+    application,
+    provider: { generate: async () => ({ status: 'resolved', request: command }) },
+    authorize: () => undefined,
+    graph: {
+      authority: () => undefined,
+      commands: [
+        {
+          entity: Document,
+          scope: 'all',
+          actions: {
+            create: { fields: ['id', 'title'], result: ['id', 'title'] },
+            update: {
+              fields: ['title'],
+              if: ['title'],
+              result: ['id', 'title'],
+            },
+            delete: { if: ['title'], result: ['id', 'title'] },
+          },
+        },
+      ],
+    },
+  });
+
+  await expect(
+    runtime.submit({ text: 'create a document' }, new AbortController().signal),
+  ).resolves.toEqual({ status: 'executed', message: 'Document created.', request: command });
+  expect(storage.dataset.Document).toEqual([{ id: 'document-1', title: 'First' }]);
 });

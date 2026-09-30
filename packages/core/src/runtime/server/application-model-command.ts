@@ -17,7 +17,9 @@ import {
   type ModelCommandScope,
   type PreparedModelCommandRuntime,
 } from './model-command.js';
+import { createModelEntityMutationExposure } from './model-entity-mutation.js';
 import type { ModelGraphCommandExposure } from './model-graph-command.js';
+import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
 import type { ModelGraphReadExposure } from './model-graph-read.js';
 import type {
   GraphCommandableOntahiApplication,
@@ -47,19 +49,27 @@ export type ApplicationModelGraphAffordanceContext<TData> = {
   data: TData;
 };
 
-export type ApplicationModelGraphReadAffordance<TAuthority, TData> = {
+type ApplicationModelGraphReadExposureFactory<TAuthority, TData> = {
   policies: OneOrMany<GraphReadPolicy<any, TAuthority>>;
   expose: (
     context: ApplicationModelGraphAffordanceContext<TData>,
   ) => ModelGraphReadExposure | readonly ModelGraphReadExposure[];
 };
 
-export type ApplicationModelGraphCommandAffordance<TData> = {
+type ApplicationModelGraphCommandExposureFactory<TData> = {
   policies: OneOrMany<ModelGraphCommandPolicy>;
   expose: (
     context: ApplicationModelGraphAffordanceContext<TData>,
   ) => ModelGraphCommandExposure | readonly ModelGraphCommandExposure[];
 };
+
+export type ApplicationModelGraphReadAffordance<TAuthority, TData> =
+  | GraphReadPolicy<any, TAuthority>
+  | ApplicationModelGraphReadExposureFactory<TAuthority, TData>;
+
+export type ApplicationModelGraphCommandAffordance<TData> =
+  | EntityMutationCommandPolicy<any, any>
+  | ApplicationModelGraphCommandExposureFactory<TData>;
 
 export type ApplicationModelScopeAccess = {
   read?: (request: GraphReadRequest, signal: AbortSignal) => Promise<GraphReadDispatchResponse>;
@@ -75,9 +85,9 @@ export type CreateApplicationModelCommandRuntimeOptions<TAuthority, TData = unde
     authority: () => TAuthority;
     reads?: readonly ApplicationModelGraphReadAffordance<TAuthority, TData>[];
     commands?: readonly ApplicationModelGraphCommandAffordance<TData>[];
-    /** @deprecated Register policies with their scoped affordance factories in `reads`. */
+    /** @deprecated Register policies directly or with a scoped exposure factory in `reads`. */
     readPolicies?: readonly GraphReadPolicy<any, TAuthority>[];
-    /** @deprecated Register policies with their scoped affordance factories in `commands`. */
+    /** @deprecated Register policies directly or with a scoped exposure factory in `commands`. */
     commandPolicies?: readonly ModelGraphCommandPolicy[];
   };
   scope?: (
@@ -92,6 +102,85 @@ const many = <T>(value: OneOrMany<T>): readonly T[] =>
 
 const exposures = <T>(value: T | readonly T[]): readonly T[] =>
   Array.isArray(value) ? (value as readonly T[]) : [value as T];
+
+const isExposureFactory = <T extends { policies: unknown }>(value: unknown): value is T =>
+  typeof value === 'object' && value !== null && 'policies' in value;
+
+const entityLabel = (name: string) => name.replaceAll(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase();
+
+const defaultReadExposures = (
+  policy: GraphReadPolicy<any, any>,
+): readonly ModelGraphReadExposure[] => {
+  const label = entityLabel(policy.entity.name);
+  const equals = Object.entries(policy.fields)
+    .filter(([, field]) => field?.filter?.includes('eq'))
+    .map(([fieldName]) => fieldName);
+  const orderBy = Object.entries(policy.fields)
+    .filter(([, field]) => field?.order)
+    .map(([fieldName]) => fieldName);
+  const message = ({ value }: { value: unknown }) => {
+    const count = typeof value === 'number' ? value : Array.isArray(value) ? value.length : 0;
+    return `${count} ${label} record${count === 1 ? '' : 's'}.`;
+  };
+  return policy.modes.flatMap(mode => {
+    if (mode !== 'run' && mode !== 'count') return [];
+    return [
+      createModelGraphReadExposure(policy, {
+        mode,
+        equals,
+        orderBy,
+        ...(mode === 'run' ? { limit: policy.maxLimit } : {}),
+        description: `${mode === 'run' ? 'List' : 'Count'} ${label} records.`,
+        message,
+      }),
+    ];
+  });
+};
+
+const defaultCommandExposures = (
+  policy: EntityMutationCommandPolicy<any, any>,
+): readonly ModelGraphCommandExposure[] => {
+  const label = entityLabel(policy.entity.name);
+  return (['create', 'update', 'delete'] as const).flatMap(action => {
+    const actionPolicy = policy.actions[action];
+    if (!actionPolicy) return [];
+    const description = `${action === 'create' ? 'Create' : action === 'update' ? 'Update' : 'Delete'} a ${label}.`;
+    const message = () =>
+      `${label.charAt(0).toUpperCase()}${label.slice(1)} ${action === 'create' ? 'created' : action === 'update' ? 'updated' : 'deleted'}.`;
+    if (action === 'create') {
+      const create = policy.actions.create!;
+      return [
+        createModelEntityMutationExposure(policy, {
+          action,
+          values: create.fields,
+          description,
+          message,
+        }),
+      ];
+    }
+    if (action === 'update') {
+      const update = policy.actions.update!;
+      return [
+        createModelEntityMutationExposure(policy, {
+          action,
+          values: update.fields,
+          ...(update.if?.length ? { condition: update.if } : {}),
+          description,
+          message,
+        }),
+      ];
+    }
+    const remove = policy.actions.delete!;
+    return [
+      createModelEntityMutationExposure(policy, {
+        action,
+        ...(remove.if?.length ? { condition: remove.if } : {}),
+        description,
+        message,
+      }),
+    ];
+  });
+};
 
 const hasScopeData = <TData>(
   scope: ModelCommandScope | ApplicationModelScope<TData>,
@@ -113,11 +202,19 @@ export const createApplicationModelCommandRuntime = <TAuthority, TData = undefin
   const commandsConfigured = graph.commandPolicies !== undefined || graph.commands !== undefined;
   const readPolicies = [
     ...(graph.readPolicies ?? []),
-    ...(graph.reads?.flatMap(affordance => many(affordance.policies)) ?? []),
+    ...(graph.reads?.flatMap(affordance =>
+      isExposureFactory<ApplicationModelGraphReadExposureFactory<TAuthority, TData>>(affordance)
+        ? many(affordance.policies)
+        : [affordance],
+    ) ?? []),
   ];
   const commandPolicies = [
     ...(graph.commandPolicies ?? []),
-    ...(graph.commands?.flatMap(affordance => many(affordance.policies)) ?? []),
+    ...(graph.commands?.flatMap(affordance =>
+      isExposureFactory<ApplicationModelGraphCommandExposureFactory<TData>>(affordance)
+        ? many(affordance.policies)
+        : [affordance],
+    ) ?? []),
   ];
   if (readsConfigured && !application.createGraphReadDispatcher)
     throw new Error('Model graph reads require a graph-readable Ontahi application.');
@@ -163,11 +260,21 @@ export const createApplicationModelCommandRuntime = <TAuthority, TData = undefin
         ...modelScope,
         reads: [
           ...(modelScope.reads ?? []),
-          ...(graph.reads?.flatMap(affordance => exposures(affordance.expose(context))) ?? []),
+          ...(graph.reads?.flatMap(affordance =>
+            isExposureFactory<ApplicationModelGraphReadExposureFactory<TAuthority, TData>>(
+              affordance,
+            )
+              ? exposures(affordance.expose(context))
+              : defaultReadExposures(affordance),
+          ) ?? []),
         ],
         commands: [
           ...(modelScope.commands ?? []),
-          ...(graph.commands?.flatMap(affordance => exposures(affordance.expose(context))) ?? []),
+          ...(graph.commands?.flatMap(affordance =>
+            isExposureFactory<ApplicationModelGraphCommandExposureFactory<TData>>(affordance)
+              ? exposures(affordance.expose(context))
+              : defaultCommandExposures(affordance),
+          ) ?? []),
         ],
       };
     },
