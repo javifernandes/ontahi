@@ -98,7 +98,12 @@ try {
     persistedItems.map(item => {
       const { id, list, ...values } = item as Record<string, unknown>;
       assert.match(String(id), /^[0-9a-f-]{36}$/);
-      assert.deepEqual(list, TodoList.refById(String(persistedList!.id)));
+      assert(list && typeof list === 'object');
+      assert.equal(Reflect.get(list, 'kind'), 'entity-ref');
+      assert.equal(Reflect.get(list, 'entityName'), 'TodoList');
+      const locator = Reflect.get(list, 'locator');
+      assert(locator && typeof locator === 'object');
+      assert.equal(Reflect.get(locator, 'id'), persistedList!.id);
       return values;
     }),
     [
