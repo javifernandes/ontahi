@@ -166,6 +166,7 @@ export type TaskSubject = {
 export type TaskActor = {
   kind: 'user' | 'integration' | 'service' | 'system';
   id?: string;
+  issuer?: string;
 };
 
 export type TaskTrigger = {

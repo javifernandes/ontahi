@@ -65,4 +65,15 @@ describe('JsonView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expand JSON node' }));
     expect(screen.getByText('"add item buy milk"')).toBeTruthy();
   });
+
+  it.each([
+    [null, 'null', 'rgb(135, 147, 141)'],
+    [undefined, 'undefined', 'rgb(135, 147, 141)'],
+    ['value', '"value"', 'rgb(214, 189, 130)'],
+    [true, 'true', 'rgb(136, 175, 224)'],
+    [42, '42', 'rgb(213, 139, 163)'],
+  ])('colors a primitive JSON value: %s', (value, text, color) => {
+    render(<JsonView label='diagnostic' value={value} />);
+    expect(screen.getByText(text).style.color).toBe(color);
+  });
 });

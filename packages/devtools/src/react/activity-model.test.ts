@@ -89,6 +89,10 @@ describe('Devtools activity model', () => {
       label: 'choice requested',
       title: 'Choice requested · Which “Shopping” list should be emptied?',
     });
+    expect(operationProgressState(activity({ kind: 'unknown' }))).toEqual({
+      label: 'running',
+      title: 'running',
+    });
   });
 
   it('projects a pending model response as its semantic interaction', () => {
@@ -715,6 +719,18 @@ describe('Devtools activity model', () => {
         ...controlIdentity,
         kind: 'exchange.started',
         at: 30,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'durable.operation',
+          body: {
+            version: 1,
+            kind: 'respond',
+            run: { taskId: 'ontahi.model-command', runId: 'run-1' },
+            response: { interactionId: 'approve-model-command', decision: 'approve' },
+          },
+        },
       },
       {
         ...controlIdentity,
@@ -766,6 +782,45 @@ describe('Devtools activity model', () => {
     });
     expect(activityEntryTitle(entries[0]!)).toBe('Ask model · "rename list Inbox to Today"');
     expect(activityEntryOutcome(entries[0]!)).toBe('completed');
+  });
+
+  it('keeps successful durable inspection exchanges visible', () => {
+    const identity = {
+      exchangeId: 'inspect-model',
+      requestId: 'inspect-model',
+      family: 'durable.operation',
+      transportId: 'websocket',
+      transportKind: 'websocket',
+      startedAt: 10,
+    } as const;
+    const entries = buildActivityEntries([
+      {
+        ...identity,
+        kind: 'exchange.started',
+        at: 10,
+        request: {
+          protocol: 'ontahi.runtime',
+          version: 1,
+          kind: 'request',
+          family: 'durable.operation',
+          body: {
+            version: 1,
+            kind: 'inspect',
+            run: { taskId: 'ontahi.model-command', runId: 'run-1' },
+          },
+        },
+      },
+      {
+        ...identity,
+        kind: 'exchange.settled',
+        at: 11,
+        durationMs: 1,
+        outcome: 'success',
+      },
+    ]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ kind: 'exchange', exchange: { id: 'inspect-model' } });
   });
 
   it('maps outcomes and filters secondary metadata', () => {

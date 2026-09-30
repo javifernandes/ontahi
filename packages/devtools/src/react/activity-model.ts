@@ -502,7 +502,13 @@ const exchangeTaskRun = (
 
 const isSuccessfulDurableControlExchange = (activity: ExchangeActivity) => {
   const event = activity.started ?? activity.settled;
-  return event?.family === 'durable.operation' && activity.settled?.outcome === 'success';
+  const body = activity.started?.request?.body;
+  return (
+    event?.family === 'durable.operation' &&
+    activity.settled?.outcome === 'success' &&
+    isRecord(body) &&
+    body.kind === 'respond'
+  );
 };
 
 const correlateActivity = (

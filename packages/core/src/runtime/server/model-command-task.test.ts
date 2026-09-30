@@ -1,6 +1,7 @@
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
 import {
   createModelCommandTask,
   createTaskBackedModelCommandRuntime,
@@ -112,6 +113,28 @@ describe('Model Command Task', () => {
     expect(f.execute).toHaveBeenCalledOnce();
   });
 
+  it('completes immediately when interpretation answers without a canonical request', async () => {
+    const prepare = vi.fn(async () => ({
+      status: 'answered' as const,
+      message: 'You can rename documents.',
+    }));
+    const execute = vi.fn();
+    const task = createModelCommandTask({
+      runtime: { prepare, execute, submit: vi.fn() } as unknown as PreparedModelCommandRuntime,
+    });
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    taskRuntime.register?.(task);
+    const run = await Effect.runPromise(startTask(taskRuntime, task, input));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'answered', message: 'You can rename documents.' },
+      });
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('checkpoints a model choice and executes the selected canonical request', async () => {
     const second = { ...proposal, input: { name: 'Archive' } };
     const prepare = vi.fn(async () => ({
@@ -203,6 +226,34 @@ describe('Model Command Task', () => {
     expect(f.execute).not.toHaveBeenCalled();
   });
 
+  it('continues without approval when a host policy changes before presentation', async () => {
+    const f = fixture();
+    const approval = vi
+      .fn()
+      .mockReturnValueOnce({ prompt: 'Rename this document?', summary: 'Rename it.' })
+      .mockReturnValueOnce(undefined);
+    const task = createModelCommandTask({
+      runtime: {
+        prepare: f.prepare,
+        execute: f.execute,
+        submit: vi.fn(),
+      } as unknown as PreparedModelCommandRuntime,
+      approval,
+    });
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    taskRuntime.register?.(task);
+    const run = await Effect.runPromise(startTask(taskRuntime, task, input));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'executed', message: 'Document renamed.' },
+      });
+    });
+    expect(approval).toHaveBeenCalledTimes(2);
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+
   it('executes read proposals without requesting approval', async () => {
     const read = {
       version: 1 as const,
@@ -231,6 +282,119 @@ describe('Model Command Task', () => {
       });
     });
     expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('executes a graph read selected from a choice without requesting approval', async () => {
+    const read = {
+      version: 1 as const,
+      kind: 'graph-read' as const,
+      mode: 'run' as const,
+    } as never;
+    const prepare = vi.fn(async () => ({
+      status: 'choice' as const,
+      prompt: 'Which report?',
+      options: [{ id: 'open', label: 'Open documents', request: read }],
+    }));
+    const execute = vi.fn(async () => ({
+      status: 'executed' as const,
+      message: 'Read completed.',
+      request: read,
+      response: { kind: 'graph-read-result' as const, value: [] },
+    }));
+    const approval = vi.fn(() => ({
+      prompt: 'Approve this request?',
+      summary: 'Run the request.',
+    }));
+    const task = createModelCommandTask({
+      runtime: { prepare, execute, submit: vi.fn() } as unknown as PreparedModelCommandRuntime,
+      approval,
+    });
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    taskRuntime.register?.(task);
+    const run = await Effect.runPromise(
+      startTask(taskRuntime, task, input, {
+        trigger: { cause: 'system', actor: { kind: 'system' } },
+      }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toHaveProperty(
+        'interaction.id',
+        'choose-model-command',
+      );
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        taskRuntime,
+        run,
+        { interactionId: 'choose-model-command', optionId: 'open' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'executed', message: 'Read completed.' },
+      });
+    });
+    expect(approval).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('restores the initiating principal when an interaction is resumed by another principal', async () => {
+    const principals: unknown[] = [];
+    const prepare = vi.fn(async () => {
+      principals.push(getCurrentInvocationContext()?.principal);
+      return { status: 'proposed' as const, request: proposal };
+    });
+    const execute = vi.fn(async () => {
+      principals.push(getCurrentInvocationContext()?.principal);
+      return {
+        status: 'executed' as const,
+        message: 'Document renamed.',
+        request: proposal,
+      };
+    });
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const runtime = createTaskBackedModelCommandRuntime({
+      runtime: { prepare, execute, submit: vi.fn() } as unknown as PreparedModelCommandRuntime,
+      tasks: {
+        register: task => taskRuntime.register?.(task),
+        start: (task, taskInput, options) => startTask(taskRuntime, task, taskInput, options),
+        observe: run => taskRuntime.observe!(run),
+      },
+      approval: () => ({
+        prompt: 'Rename this document?',
+        summary: 'Rename the document to Notes.',
+      }),
+    });
+
+    const pending = await withInvocationContext(
+      { principal: { kind: 'user', subject: 'owner', issuer: 'test-issuer' } },
+      () => runtime.submit(input, new AbortController().signal),
+    );
+    expect(pending.status).toBe('pending');
+    if (pending.status !== 'pending') throw new Error('Expected approval interaction.');
+
+    await withInvocationContext({ principal: { kind: 'user', subject: 'inspector' } }, () =>
+      Effect.runPromise(
+        respondToTaskInteraction(
+          taskRuntime,
+          pending.run,
+          { interactionId: pending.interaction.id, decision: 'approve' },
+          { actor: { kind: 'user', id: 'owner' } },
+        ),
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(
+        Effect.runPromise(getTaskSnapshot(taskRuntime, pending.run)),
+      ).resolves.toHaveProperty('status', 'completed');
+    });
+    expect(principals).toEqual([
+      { kind: 'user', subject: 'owner', issuer: 'test-issuer' },
+      { kind: 'user', subject: 'owner', issuer: 'test-issuer' },
+    ]);
   });
 
   it('adapts the first durable interaction into a pending model result', async () => {

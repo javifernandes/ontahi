@@ -12,6 +12,7 @@ import type {
 } from '../contracts.js';
 import type { OperationInvokeRequest } from '../operation-invocation.js';
 
+import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
 import {
   type ModelCommandCanonicalRequest,
   type ModelCommandRuntime,
@@ -85,8 +86,21 @@ export type CreateTaskBackedModelCommandRuntimeOptions = CreateModelCommandTaskO
   trigger?: (request: ModelCommandRequest) => TaskTrigger;
 };
 
-const modelEffect = <TValue>(run: () => Promise<TValue>) =>
-  Effect.tryPromise({ try: run, catch: toTaskFailure });
+const principalFromTaskTrigger = (trigger: TaskTrigger) => {
+  const actor = trigger.actor;
+  if ((actor?.kind !== 'user' && actor?.kind !== 'service') || !actor.id) return null;
+  return {
+    kind: actor.kind,
+    subject: actor.id,
+    ...(actor.issuer === undefined ? {} : { issuer: actor.issuer }),
+  } as const;
+};
+
+const modelEffect = <TValue>(trigger: TaskTrigger, run: () => Promise<TValue>) =>
+  Effect.tryPromise({
+    try: () => withInvocationContext({ principal: principalFromTaskTrigger(trigger) }, run),
+    catch: toTaskFailure,
+  });
 
 /** Builds one durable model-command execution without making the model protocol own continuation.
  * Interpretation may checkpoint a choice; approval is an explicit host policy. */
@@ -104,9 +118,9 @@ export const createModelCommandTask = ({
     initial: () => ({ step: 'interpret' }),
     steps: {
       interpret: defineTaskExecutionStep({
-        run: ({ input, state }) => {
+        run: ({ input, state, context }) => {
           if (state.step !== 'interpret') return Effect.dieMessage('Invalid model command state.');
-          return modelEffect(async () => {
+          return modelEffect(context.trigger, async () => {
             const prepared = await runtime.prepare(input, new AbortController().signal);
             if (prepared.status === 'choice') {
               return {
@@ -159,17 +173,18 @@ export const createModelCommandTask = ({
           if (!selected) return Effect.dieMessage('Unknown model command choice.');
           return Effect.succeed({
             kind: 'continue' as const,
-            state: approval?.(selected.request, input)
-              ? {
-                  step: 'review' as const,
-                  request: selected.request,
-                  validation: 'choice-option' as const,
-                }
-              : {
-                  step: 'execute' as const,
-                  request: selected.request,
-                  validation: 'choice-option' as const,
-                },
+            state:
+              selected.request.kind !== 'graph-read' && approval?.(selected.request, input)
+                ? {
+                    step: 'review' as const,
+                    request: selected.request,
+                    validation: 'choice-option' as const,
+                  }
+                : {
+                    step: 'execute' as const,
+                    request: selected.request,
+                    validation: 'choice-option' as const,
+                  },
           });
         },
       }),
@@ -220,9 +235,9 @@ export const createModelCommandTask = ({
         },
       }),
       execute: defineTaskExecutionStep({
-        run: ({ input, state }) => {
+        run: ({ input, state, context }) => {
           if (state.step !== 'execute') return Effect.dieMessage('Invalid model command state.');
-          return modelEffect(async () => ({
+          return modelEffect(context.trigger, async () => ({
             kind: 'complete' as const,
             result: await runtime.execute(
               input,
@@ -252,7 +267,19 @@ const isModelCommandTaskSettled = (snapshot: TaskSnapshot) =>
 /** Starts model interpretation as a durable Task and returns at its first interaction or result. */
 export const createTaskBackedModelCommandRuntime = ({
   tasks,
-  trigger = () => ({ cause: 'system', actor: { kind: 'system' } }),
+  trigger = () => {
+    const principal = getCurrentInvocationContext()?.principal;
+    return {
+      cause: principal ? ('user_request' as const) : ('system' as const),
+      actor: principal
+        ? {
+            kind: principal.kind,
+            id: principal.subject,
+            ...(principal.issuer === undefined ? {} : { issuer: principal.issuer }),
+          }
+        : { kind: 'system' as const },
+    };
+  },
   ...taskOptions
 }: CreateTaskBackedModelCommandRuntimeOptions): ModelCommandRuntime => {
   const task = createModelCommandTask(taskOptions);

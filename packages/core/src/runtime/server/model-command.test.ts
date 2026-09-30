@@ -137,6 +137,15 @@ it('authorizes before disclosure and again before execution', async () => {
   expect(f.scope).not.toHaveBeenCalled();
   expect(f.generate).not.toHaveBeenCalled();
 });
+it('rejects an empty command before disclosure', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({ ...f, provider: { generate: f.generate } });
+  await expect(runtime.submit({ text: '' }, new AbortController().signal)).rejects.toHaveProperty(
+    'code',
+    'command_invalid',
+  );
+  expect(f.scope).not.toHaveBeenCalled();
+});
 it('rejects operations removed from the fresh scope', async () => {
   const f = fixture();
   f.scope
@@ -149,6 +158,16 @@ it('rejects operations removed from the fresh scope', async () => {
     ),
   ).rejects.toHaveProperty('code', 'proposal_out_of_scope');
   expect(f.run).not.toHaveBeenCalled();
+});
+it('reports operation failures from the canonical dispatcher', async () => {
+  const f = fixture();
+  f.run.mockReturnValue(Effect.die(new Error('rename failed')));
+  await expect(
+    createModelCommandRuntime({ ...f, provider: { generate: f.generate } }).submit(
+      { text: 'rename' },
+      new AbortController().signal,
+    ),
+  ).rejects.toHaveProperty('code', 'command_execution_failed');
 });
 it('does not execute unresolved results', async () => {
   const f = fixture();

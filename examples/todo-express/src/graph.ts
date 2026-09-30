@@ -2,7 +2,6 @@ import { adaptEffectMethods } from '@ontahi/core/computation/effect';
 import {
   createOllamaModelProvider,
   createTaskBackedModelCommandRuntime,
-  getCurrentInvocationContext,
   inProcessTasks,
   ontahi,
 } from '@ontahi/core/runtime/server';
@@ -49,13 +48,6 @@ export const todoModelRuntime = todoPreparedModelRuntime
   ? createTaskBackedModelCommandRuntime({
       runtime: todoPreparedModelRuntime,
       tasks: TodoApplication.app.task,
-      trigger: () => {
-        const principal = getCurrentInvocationContext()?.principal;
-        return {
-          cause: 'user_request',
-          actor: principal ? { kind: principal.kind, id: principal.subject } : { kind: 'system' },
-        };
-      },
     })
   : undefined;
 

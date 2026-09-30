@@ -86,9 +86,10 @@ Remote provider adapters, including a possible Vercel AI Gateway binding, follow
 provider seam; this plan does not require another provider integration.
 
 Interactive effect review is now the next bounded slice. Interpretation may finish with a canonical
-Graph Command or Operation Invocation proposal that is checkpointed in an explicit Task execution
-before an approval Interaction. Graph Reads continue directly. The approved path reloads authorized
-scope, validates the saved proposal again, and dispatches it; rejection completes without effects.
+Graph Command or Operation Invocation proposal in an explicit Task execution. A host approval policy
+may checkpoint selected effects before an approval Interaction; effects without that policy and Graph
+Reads continue directly. The approved path reloads authorized scope, validates the saved proposal
+again, and dispatches it; rejection completes without effects.
 `model.command` only starts the natural-language request and returns the pending run, while the
 existing `durable.operation` family owns inspection, observation, and replies.
 

@@ -85,7 +85,17 @@ const fixture = () => {
       authorize,
       dispatchCommand,
     });
-  return { proposal, storage, scope, binding, dispatchCommand, generate, authorize, runtime };
+  return {
+    application,
+    proposal,
+    storage,
+    scope,
+    binding,
+    dispatchCommand,
+    generate,
+    authorize,
+    runtime,
+  };
 };
 it('dispatches a canonical graph update without domain operations', async () => {
   const f = fixture();
@@ -111,6 +121,17 @@ it('rejects exposure removal between inference and dispatch', async () => {
     f.runtime().submit({ text: 'rename' }, new AbortController().signal),
   ).rejects.toHaveProperty('code', 'proposal_out_of_scope');
   expect(f.dispatchCommand).not.toHaveBeenCalled();
+});
+it('requires a graph-command dispatcher before execution', async () => {
+  const f = fixture();
+  await expect(
+    createModelCommandRuntime({
+      application: f.application,
+      provider: { generate: f.generate },
+      scope: f.scope,
+      authorize: f.authorize,
+    }).submit({ text: 'rename' }, new AbortController().signal),
+  ).rejects.toHaveProperty('code', 'command_unavailable');
 });
 it('does not dispatch when a target becomes ambiguous', async () => {
   const f = fixture();
