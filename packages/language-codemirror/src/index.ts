@@ -103,9 +103,9 @@ const consoleParser = consoleDocumentParser.configure({
       'EntityName/Identifier': tags.typeName,
       'Where OrderBy Limit First One Many Count Exists': tags.function(tags.propertyName),
       'OperationName/Identifier': tags.function(tags.propertyName),
-      'Order By Through Ascending Descending OrderDirection Invoke With Create Update Delete Ref':
+      'Order By Through Ascending Descending OrderDirection Invoke With Create Update Delete Ref Attach Detach Move Before After At Start End':
         tags.keyword,
-      'FieldName FactoryName InputName NavigationName': tags.variableName,
+      'FieldName FactoryName InputName NavigationName RelationName': tags.variableName,
       'StructuredKey/Identifier': tags.variableName,
       'Equals ComparisonOperator In Is': tags.operator,
       'And Or Not': tags.keyword,
@@ -486,7 +486,16 @@ const consoleDialectExtensions = (
         'update',
         'delete',
         'invoke',
+        'attach',
+        'detach',
+        'move',
+        'before',
+        'after',
       ].includes(completion.label) ||
+      completion.detail?.startsWith('Relationship source Entity') === true ||
+      completion.detail?.startsWith('Relationship target Entity') === true ||
+      completion.detail?.startsWith('Ordered anchor Entity') === true ||
+      completion.detail?.endsWith('Relationship') === true ||
       completion.detail?.startsWith('Selection factory') === true ||
       (completion.detail?.startsWith('Contextual Selection') === true &&
         options.dialect === 'declarative') ||

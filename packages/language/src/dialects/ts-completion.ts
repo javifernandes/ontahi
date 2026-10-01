@@ -6,6 +6,7 @@ import {
 } from '../console/completion.js';
 import { resolveConsoleContext } from '../console/context.js';
 import { completeConsoleFactory } from '../console/factories.js';
+import { completeRelationshipCommand } from '../console/relationship-completion.js';
 import type {
   ConsoleLanguageApplicationReflection,
   ConsoleLanguageCompletionResult,
@@ -53,6 +54,14 @@ export const completeTsConsoleDocument = (
       ),
     };
   }
+
+  const relationshipCompletion = completeRelationshipCommand(
+    document,
+    safePosition,
+    syntax,
+    application,
+  );
+  if (relationshipCompletion) return relationshipCompletion;
 
   const entity = resolveConsoleContext(syntax, application, safePosition);
   const factoryCompletion = completeConsoleFactory(

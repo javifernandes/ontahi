@@ -382,6 +382,48 @@ describe('Console actions', () => {
     },
   );
 
+  it.each(['ts', 'declarative'] as const)(
+    'completes Relationship Commands progressively in the %s dialect',
+    dialect => {
+      const labels = (source: string) =>
+        completeConsoleDocument(source, source.length, relationshipApplication, { dialect }).items;
+
+      expect(labels('attach ').map(item => item.label)).toEqual(['Student', 'TodoItem']);
+      expect(labels('attach TodoItem ')).toEqual([
+        expect.objectContaining({ label: '{…}', apply: '{ id: "" }' }),
+      ]);
+      expect(labels('attach TodoItem { id: "item-1" } ')).toEqual([
+        expect.objectContaining({ label: 'tags', apply: 'tags ' }),
+      ]);
+      expect(labels('attach TodoItem { id: "item-1" } tags ')).toEqual([
+        expect.objectContaining({ label: 'Tag', apply: 'Tag ' }),
+      ]);
+      expect(labels('attach TodoItem { id: "item-1" } tags Tag ')).toEqual([
+        expect.objectContaining({ label: '{…}', apply: '{ id: "" }' }),
+      ]);
+      expect(
+        labels('move TodoList { id: "list-1" } items TodoItem { id: "item-2" } ').map(
+          item => item.label,
+        ),
+      ).toEqual(['before', 'after', 'at start', 'at end']);
+      expect(
+        labels('move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before '),
+      ).toEqual([expect.objectContaining({ label: 'TodoItem', apply: 'TodoItem ' })]);
+    },
+  );
+
+  it.each([
+    'attach',
+    'attach ',
+    'attach TodoItem ',
+    'attach TodoItem { id: "item-1" } ',
+    'attach TodoItem { id: "item-1" } tags ',
+    'attach TodoItem { id: "item-1" } tags Tag ',
+    'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before ',
+  ])('does not report semantic errors while authoring a Relationship Command: %s', source => {
+    expect(analyzeConsoleDocument(source, relationshipApplication).semanticDiagnostics).toEqual([]);
+  });
+
   it.each([
     'attach TodoItem { id: "item-1" } tags Tag { id: }',
     'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before TodoItem { id: }',

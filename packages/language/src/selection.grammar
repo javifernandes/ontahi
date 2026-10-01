@@ -35,11 +35,12 @@ DeclarativeLimitClause { Limit NumberLiteral }
 
 ConsoleExpression { GraphReadExpression | OperationInvocationExpression | EntityMutationExpression | RelationshipCommandExpression }
 RelationshipCommandExpression { RelationshipAttachExpression | RelationshipDetachExpression | OrderedRelationshipMoveExpression }
-RelationshipAttachExpression { Attach EntityName StructuredObject RelationName EntityName StructuredObject }
-RelationshipDetachExpression { Detach EntityName StructuredObject RelationName EntityName StructuredObject }
+RelationshipAttachExpression { Attach (EntityName (StructuredObject (RelationName (EntityName StructuredObject?)?)?)?)? }
+RelationshipDetachExpression { Detach (EntityName (StructuredObject (RelationName (EntityName StructuredObject?)?)?)?)? }
 OrderedRelationshipMoveExpression {
-  Move EntityName StructuredObject RelationName EntityName StructuredObject
-  (Before EntityName StructuredObject | After EntityName StructuredObject | At (Start | End))
+  Move (EntityName (StructuredObject (RelationName (EntityName (StructuredObject
+    ((Before | After) (EntityName StructuredObject?)? | At (Start | End)?)?
+  )?)?)?)?)?
 }
 RelationName { Identifier }
 OperationInvocationExpression { EntityName Dot OperationName OpenParen StructuredValue? CloseParen }

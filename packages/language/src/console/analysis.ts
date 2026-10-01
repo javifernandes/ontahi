@@ -133,6 +133,17 @@ export const analyzeConsoleSyntax = (
   }
 
   if (expression.kind === 'relationship-command') {
+    const incomplete =
+      !expression.relationshipAction ||
+      !expression.source ||
+      !expression.relation ||
+      !expression.endpointEntity ||
+      !expression.endpoint ||
+      (expression.relationshipAction === 'move' &&
+        (!expression.placement ||
+          ((expression.placement === 'before' || expression.placement === 'after') &&
+            (!expression.anchorEntity || !expression.anchor))));
+    if (incomplete) return { ...parsed, semanticDiagnostics: [] };
     const entityName = expression.entity.text;
     const relationName = expression.relation?.text ?? '';
     const action = expression.relationshipAction;

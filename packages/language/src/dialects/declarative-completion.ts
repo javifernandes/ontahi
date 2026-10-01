@@ -9,6 +9,7 @@ import {
 } from '../console/completion.js';
 import { resolveConsoleContext } from '../console/context.js';
 import { completeConsoleFactory } from '../console/factories.js';
+import { completeRelationshipCommand } from '../console/relationship-completion.js';
 import { completeStructuredInput } from '../console/structured-value.js';
 import type {
   SelectionLanguageEntityReflection,
@@ -117,6 +118,13 @@ export const completeDeclarativeConsoleDocument = (
   if (/^\s*\w*$/.test(document.slice(0, pos))) {
     return result([...actionItems, ...consoleEntityCompletionItems(application)]);
   }
+  const relationshipCompletion = completeRelationshipCommand(
+    document,
+    pos,
+    dialect.parse(document).syntax.expression,
+    application,
+  );
+  if (relationshipCompletion) return relationshipCompletion;
   const commandPrefix = document.slice(0, range.from).match(/^\s*(create|update|delete)\s+$/);
   if (commandPrefix) {
     const action = commandPrefix[1] as 'create' | 'update' | 'delete';
