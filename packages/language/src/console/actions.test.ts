@@ -382,6 +382,15 @@ describe('Console actions', () => {
     },
   );
 
+  it.each([
+    'attach TodoItem { id: "item-1" } tags Tag { id: }',
+    'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before TodoItem { id: }',
+  ])('reports a malformed Relationship Command endpoint locator: %s', source => {
+    const analysis = analyzeConsoleDocument(source, relationshipApplication);
+    expect(analysis.syntaxDiagnostics).not.toHaveLength(0);
+    expect(analysis.execution).toBeUndefined();
+  });
+
   it('preserves Relationship Command intent when switching dialects', () => {
     const source =
       'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } after TodoItem { id: "item-1" }';
@@ -393,6 +402,73 @@ describe('Console actions', () => {
       analyzeConsoleDocument(converted!, relationshipApplication, { dialect: 'declarative' })
         .execution,
     ).toEqual(analyzeConsoleDocument(source, relationshipApplication).execution);
+
+    expect(
+      convertConsoleDocument(converted!, relationshipApplication, 'ts', {
+        dialect: 'declarative',
+      }),
+    ).toBe(converted);
+    for (const [command, sourceDialect, targetDialect] of [
+      ['attach TodoItem { id: "item-1" } tags Tag { id: "tag-1" }', 'ts', 'declarative'],
+      ['attach TodoItem { id: "item-1" } tags Tag { id: "tag-1" }', 'declarative', 'ts'],
+      [
+        'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } at end',
+        'ts',
+        'declarative',
+      ],
+      [
+        'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } at start',
+        'declarative',
+        'ts',
+      ],
+    ] as const) {
+      const output = convertConsoleDocument(command, relationshipApplication, targetDialect, {
+        dialect: sourceDialect,
+      });
+      expect(output).toBeDefined();
+      expect(
+        analyzeConsoleDocument(output!, relationshipApplication, { dialect: targetDialect })
+          .execution,
+      ).toEqual(
+        analyzeConsoleDocument(command, relationshipApplication, { dialect: sourceDialect })
+          .execution,
+      );
+    }
+  });
+
+  it.each([
+    [
+      'attach TodoItem { id: "item-1" } missing Tag { id: "tag-1" }',
+      'Relationship Command TodoItem.missing is not available.',
+    ],
+    [
+      'move TodoItem { id: "item-1" } tags Tag { id: "tag-1" } at end',
+      'Relationship Command TodoItem.tags.move is not available.',
+    ],
+    [
+      'attach TodoItem { missing: "item-1" } tags Tag { id: "tag-1" }',
+      'Field missing is not writable.',
+    ],
+    [
+      'attach TodoItem { id: "item-1" } tags Course { id: "tag-1" }',
+      'Expected endpoint Entity Tag.',
+    ],
+    [
+      'attach TodoItem { id: "item-1" } tags Tag { missing: "tag-1" }',
+      'Field missing is not writable.',
+    ],
+    [
+      'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before Tag { id: "item-1" }',
+      'Expected anchor Entity TodoItem.',
+    ],
+    [
+      'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } after TodoItem { missing: "item-1" }',
+      'Field missing is not writable.',
+    ],
+  ] as const)('diagnoses invalid Relationship Command authoring: %s', (source, message) => {
+    const analysis = analyzeConsoleDocument(source, relationshipApplication);
+    expect(analysis.semanticDiagnostics).toEqual([expect.objectContaining({ message })]);
+    expect(analysis.execution).toBeUndefined();
   });
 
   it.each(['ts', 'declarative'] as const)(

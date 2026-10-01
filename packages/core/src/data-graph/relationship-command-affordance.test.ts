@@ -37,9 +37,9 @@ describe('Relationship Command affordance discovery', () => {
         { authority: undefined },
       )) as GraphCommandCapabilitiesResult;
 
-    expect(
-      (await discover('AffordanceStudent')).capabilities.relationshipCommandAffordances,
-    ).toEqual([
+    const studentCapabilities = (await discover('AffordanceStudent')).capabilities;
+    expect(isGraphCommandCapabilities(studentCapabilities)).toBe(true);
+    expect(studentCapabilities.relationshipCommandAffordances).toEqual([
       expect.objectContaining({
         relationKind: 'direct',
         relation: expect.objectContaining({ fieldName: 'course' }),
@@ -57,7 +57,9 @@ describe('Relationship Command affordance discovery', () => {
         actions: ['link', 'unlink'],
       }),
     ]);
-    expect((await discover('AffordanceList')).capabilities.relationshipCommandAffordances).toEqual([
+    const listCapabilities = (await discover('AffordanceList')).capabilities;
+    expect(isGraphCommandCapabilities(listCapabilities)).toBe(true);
+    expect(listCapabilities.relationshipCommandAffordances).toEqual([
       expect.objectContaining({
         relationKind: 'ordered',
         relation: expect.objectContaining({ relationName: 'items' }),
@@ -82,6 +84,62 @@ describe('Relationship Command affordance discovery', () => {
             source: { entityName: 'List', locator: {} },
             member: { entityName: 'Item', locator: {} },
             placements: ['sideways'],
+            precondition: true,
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isGraphCommandCapabilities({
+        entityMutations: [],
+        relationshipCommandAffordances: [
+          {
+            kind: 'relationship-command-affordance',
+            relationKind: 'many-to-many',
+            relation: {
+              sourceEntityName: 'Source',
+              relationName: 'targets',
+              targetEntityName: 'Target',
+              cardinality: 'many-to-many',
+            },
+            actions: ['link'],
+            source: {
+              entityName: 'Source',
+              locator: {
+                kind: 'object',
+                unknownKeys: 'strict',
+                fields: { id: { kind: 'scalar', type: 'id' } },
+              },
+            },
+            target: { entityName: 'Target', locator: {} },
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isGraphCommandCapabilities({
+        entityMutations: [],
+        relationshipCommandAffordances: [
+          {
+            kind: 'relationship-command-affordance',
+            relationKind: 'ordered',
+            relation: {
+              sourceEntityName: 'List',
+              relationName: 'items',
+              targetEntityName: 'Item',
+              cardinality: 'ordered-many',
+            },
+            actions: ['move'],
+            source: {
+              entityName: 'List',
+              locator: {
+                kind: 'object',
+                unknownKeys: 'strict',
+                fields: { id: { kind: 'scalar', type: 'id' } },
+              },
+            },
+            member: { entityName: 'Item', locator: {} },
+            placements: ['before', 'after', 'start', 'end'],
             precondition: true,
           },
         ],

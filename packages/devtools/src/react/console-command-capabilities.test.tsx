@@ -163,4 +163,16 @@ describe('Console Command capability discovery', () => {
       'This server returned mismatched Graph Command capabilities.',
     );
   });
+
+  it('rejects a Relationship affordance for a different source Entity', async () => {
+    const { transport, reply } = pendingTransport();
+    const { result } = renderHook(() =>
+      useConsoleCommandCapabilities(transport, 'alice', ['Other']),
+    );
+    await act(async () => reply(0, 'Other', [], [relationshipAffordance]));
+    expect(result.current('Other')?.relationshipAffordances).toBeUndefined();
+    expect(result.current('Other')?.error).toBe(
+      'This server returned mismatched Graph Command capabilities.',
+    );
+  });
 });
