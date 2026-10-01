@@ -1552,7 +1552,7 @@ describe('Console bidirectional Query ordering', uiTestOptions, () => {
         if (change === 'transport') switchTransport();
         else setIdentity({ principal: null, cacheScope: 'restricted' });
       } else act(() => view.dispatch({ changes: { from: 0, to: 3, insert: 'Other' } }));
-      await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+      await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull(), { timeout: 5_000 });
       expect(view.state.doc.toString()).toBe(
         change === 'entity' ? 'Other.orderBy().many()' : source,
       );

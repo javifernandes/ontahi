@@ -43,11 +43,10 @@ export type RelationshipCommandAffordanceDescriptor =
       readonly precondition: true;
     };
 
-const endpointDescriptor = (entity: AnyEntityDefinition): EndpointDescriptor => {
+const endpointDescriptor = (entity: AnyEntityDefinition): EndpointDescriptor | undefined => {
   const identity = getEntityIdentityLocator(entity);
   const fields = identity?.locator.fields;
-  if (!fields?.length)
-    throw new Error(`Relationship Command Entity ${entity.name} has no identity.`);
+  if (!fields?.length) return undefined;
   const locator = graphSchema.object(
     Object.fromEntries(fields.map(name => [name, entity.fields[name]!])) as GraphSchemaFields,
     { unknownKeys: 'strict' },
@@ -63,44 +62,59 @@ export const directRelationshipCommandAffordance = (
   source: AnyEntityDefinition,
   target: AnyEntityDefinition,
   actions: readonly ('link' | 'unlink')[],
-): RelationshipCommandAffordanceDescriptor => ({
-  kind: 'relationship-command-affordance',
-  relationKind: 'direct',
-  relation,
-  actions,
-  source: endpointDescriptor(source),
-  target: endpointDescriptor(target),
-  precondition: true,
-});
+): RelationshipCommandAffordanceDescriptor | undefined => {
+  const sourceDescriptor = endpointDescriptor(source);
+  const targetDescriptor = endpointDescriptor(target);
+  if (!sourceDescriptor || !targetDescriptor) return undefined;
+  return {
+    kind: 'relationship-command-affordance',
+    relationKind: 'direct',
+    relation,
+    actions,
+    source: sourceDescriptor,
+    target: targetDescriptor,
+    precondition: true,
+  };
+};
 
 export const manyToManyRelationshipCommandAffordance = (
   relation: CanonicalManyToManyRelationIdentity,
   source: AnyEntityDefinition,
   target: AnyEntityDefinition,
   actions: readonly ('link' | 'unlink')[],
-): RelationshipCommandAffordanceDescriptor => ({
-  kind: 'relationship-command-affordance',
-  relationKind: 'many-to-many',
-  relation,
-  actions,
-  source: endpointDescriptor(source),
-  target: endpointDescriptor(target),
-});
+): RelationshipCommandAffordanceDescriptor | undefined => {
+  const sourceDescriptor = endpointDescriptor(source);
+  const targetDescriptor = endpointDescriptor(target);
+  if (!sourceDescriptor || !targetDescriptor) return undefined;
+  return {
+    kind: 'relationship-command-affordance',
+    relationKind: 'many-to-many',
+    relation,
+    actions,
+    source: sourceDescriptor,
+    target: targetDescriptor,
+  };
+};
 
 export const orderedRelationshipCommandAffordance = (
   relation: CanonicalOrderedRelationIdentity,
   source: AnyEntityDefinition,
   member: AnyEntityDefinition,
-): RelationshipCommandAffordanceDescriptor => ({
-  kind: 'relationship-command-affordance',
-  relationKind: 'ordered',
-  relation,
-  actions: ['move'],
-  source: endpointDescriptor(source),
-  member: endpointDescriptor(member),
-  placements: ['before', 'after', 'start', 'end'],
-  precondition: true,
-});
+): RelationshipCommandAffordanceDescriptor | undefined => {
+  const sourceDescriptor = endpointDescriptor(source);
+  const memberDescriptor = endpointDescriptor(member);
+  if (!sourceDescriptor || !memberDescriptor) return undefined;
+  return {
+    kind: 'relationship-command-affordance',
+    relationKind: 'ordered',
+    relation,
+    actions: ['move'],
+    source: sourceDescriptor,
+    member: memberDescriptor,
+    placements: ['before', 'after', 'start', 'end'],
+    precondition: true,
+  };
+};
 
 const isEndpointDescriptor = (value: unknown): value is EndpointDescriptor =>
   isRecord(value) &&
@@ -113,8 +127,11 @@ const isEndpointDescriptor = (value: unknown): value is EndpointDescriptor =>
   Object.values(value.locator.fields).every(
     field =>
       isRecord(field) &&
-      field.kind === 'scalar' &&
-      ['id', 'string', 'number', 'boolean', 'date', 'json', 'enum'].includes(String(field.type)),
+      ((field.kind === 'scalar' &&
+        ['id', 'string', 'number', 'boolean', 'date', 'json', 'enum'].includes(
+          String(field.type),
+        )) ||
+        (field.kind === 'entity-ref' && typeof field.entityName === 'string')),
   );
 
 const hasRelationEndpoints = (

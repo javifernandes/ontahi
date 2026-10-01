@@ -375,8 +375,9 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
   >();
   const addRelationshipAffordance = (
     entityName: string,
-    affordance: RelationshipCommandAffordanceDescriptor,
+    affordance: RelationshipCommandAffordanceDescriptor | undefined,
   ) => {
+    if (!affordance) return;
     const affordances = relationshipAffordancesByEntity.get(entityName) ?? [];
     affordances.push(affordance);
     relationshipAffordancesByEntity.set(entityName, affordances);

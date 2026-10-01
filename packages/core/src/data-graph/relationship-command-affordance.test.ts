@@ -88,4 +88,59 @@ describe('Relationship Command affordance discovery', () => {
       }),
     ).toBe(false);
   });
+
+  it('keeps unsupported identity reflection advisory', async () => {
+    const Unidentified = entity('UnidentifiedTarget', { code: field.string() });
+    const Source = entity('IdentifiedSource', {
+      id: field.id(),
+      target: field.nullable(field.ref(Unidentified)),
+    });
+
+    const dispatch = createGraphCommandDispatcher({
+      policies: [{ entity: Source, fieldName: 'target', actions: ['link', 'unlink'] }],
+      execute: vi.fn(),
+      executeManyToMany: vi.fn(),
+    });
+
+    await expect(
+      dispatch(
+        { version: 1, kind: 'graph-command-capabilities', entityName: Source.name },
+        { authority: undefined },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'graph-command-capabilities-result',
+      capabilities: { entityMutations: [] },
+    });
+  });
+
+  it('publishes and accepts reference-valued identity locators', async () => {
+    const Student = entity('LocatorStudent', { id: field.id() });
+    const Course = entity('LocatorCourse', { id: field.id() });
+    const Enrollment = entity('LocatorEnrollment', {
+      student: field.ref(Student),
+      course: field.ref(Course),
+      advisor: field.nullable(field.ref(Student)),
+    })
+      .locators({ byStudentAndCourse: ['student', 'course'] })
+      .identity('byStudentAndCourse');
+    const dispatch = createGraphCommandDispatcher({
+      policies: [{ entity: Enrollment, fieldName: 'advisor', actions: ['link'] }],
+      execute: vi.fn(),
+      executeManyToMany: vi.fn(),
+    });
+
+    const response = (await dispatch(
+      { version: 1, kind: 'graph-command-capabilities', entityName: Enrollment.name },
+      { authority: undefined },
+    )) as GraphCommandCapabilitiesResult;
+    expect(isGraphCommandCapabilities(response.capabilities)).toBe(true);
+    expect(response.capabilities.relationshipCommandAffordances?.[0]?.source.locator).toMatchObject(
+      {
+        fields: {
+          student: { kind: 'entity-ref', entityName: Student.name },
+          course: { kind: 'entity-ref', entityName: Course.name },
+        },
+      },
+    );
+  });
 });

@@ -195,7 +195,7 @@ export const analyzeConsoleSyntax = (
         action: expectedAction,
         relation: reflection.relation,
         source: sourceRef,
-        ...(expectedAction === 'link' ? { target: endpointRef } : {}),
+        target: endpointRef,
       };
     } else if (reflection.relationKind === 'many-to-many') {
       command = {

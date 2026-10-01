@@ -340,6 +340,7 @@ describe('Console actions', () => {
             action: 'unlink',
             relation: { fieldName: 'course' },
             source: { locator: { id: 'student-1' } },
+            target: { locator: { id: 'course-1' } },
           },
         },
       });
