@@ -794,11 +794,20 @@ returns `executed`, `answered`, or `unresolved`. `scope` supplies:
 
 When reads and commands use an `OntahiApplication`,
 `createApplicationModelCommandRuntime(...)` creates the policy-aware graph dispatchers and binds
-each call to the host-provided authority. Its `scope` receives `{read?}` as a third argument. The
-application owns the bounded model-visible projection and uses `read` to obtain it; Core owns
-dispatcher construction, cancellation checks, and canonical execution through the same policies
-used by other callers. Command dispatch remains internal to the runtime so context construction
-cannot mutate the graph.
+each call to the host-provided authority. Register a Graph Read or Entity Mutation policy directly
+to expose its full authorized contract. Core derives read modes, equality filters, ordering, limits,
+mutation actions, writable values, conditions, descriptions, and result messages from that policy
+and its Entity. A read may use `{policy, narrow, presentation}` when the Model needs a smaller limit
+or modes, localized descriptions, or custom result messages without rebuilding its request schema.
+Use `{policies, expose}` for contextual validation or other dynamic contracts that cannot be derived
+from the registered policies.
+
+A host with no dynamic context needs no `scope`. When a custom catalog depends on current
+application data, `scope` receives `{read?}` as a third argument and may return `data`; Core passes
+that receiver-local value to `expose` but removes it before serializing model context. The
+application still owns the explicit model-visible `context`. Core owns dispatcher construction,
+cancellation checks, and canonical execution through the same policies used by other callers.
+Command dispatch remains internal to the runtime so context construction cannot mutate the graph.
 
 For local development, `createOllamaModelProvider({model, baseUrl?, ...})` implements
 `ModelProvider` with Ollama's structured `/api/chat` endpoint using `fetch`. Provider configuration

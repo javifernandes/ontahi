@@ -26,6 +26,12 @@ Run the proof from the repository root:
 pnpm --filter @ontahi/example-classroom test
 ```
 
+`createClassroomModelRuntime(...)` is also the second-host activation proof for Model Support.
+Classroom registers its Graph Read and Entity Mutation policies directly; Core derives the
+policy-aware dispatchers and complete model catalog. The host only injects a provider, explicit
+authorization/authority, and its chosen policies. It needs no Todo bindings, exposure factories,
+context reader, or empty scope.
+
 Run the provider-backed transfer proof against the example's isolated PostgreSQL service:
 
 ```sh

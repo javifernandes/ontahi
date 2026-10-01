@@ -10,14 +10,18 @@ import {
 } from '@ontahi/core/runtime/server';
 
 import { todoAuthenticationMode } from '../authentication-mode.js';
-import { todoGraphCommandPolicies } from '../todo-command-policies.js';
-import { todoGraphReadPolicies, type TodoGraphReadAuthority } from '../todo-read-policies.js';
+import { todoItemMutationPolicy, todoListMutationPolicy } from '../todo-command-policies.js';
+import {
+  todoItemReadPolicy,
+  todoListReadPolicy,
+  type TodoGraphReadAuthority,
+} from '../todo-read-policies.js';
 import { TodoItem, TodoList } from '../todo.js';
 
 import { todoCommandInstructions } from './bindings.js';
-import { readTodoModelContext } from './context.js';
+import { readTodoModelContext, type TodoModelContext } from './context.js';
 import { todoGraphCommands } from './graph-commands.js';
-import { todoGraphReads } from './graph-reads.js';
+import { todoGraphReadPresentation } from './graph-reads.js';
 
 // Application composition only; orchestration lives in the Ontahi runtime.
 export const createTodoModelRuntime = ({
@@ -28,13 +32,31 @@ export const createTodoModelRuntime = ({
     Partial<GraphReadableOntahiApplication & GraphCommandableOntahiApplication>;
   provider: ModelProvider;
 }) => {
-  return createApplicationModelCommandRuntime<TodoGraphReadAuthority>({
+  return createApplicationModelCommandRuntime<TodoGraphReadAuthority, TodoModelContext>({
     application,
     provider,
     graph: {
       authority: () => ({ principal: getCurrentInvocationContext()?.principal ?? null }),
-      readPolicies: todoGraphReadPolicies,
-      commandPolicies: todoGraphCommandPolicies,
+      reads: [
+        {
+          policy: todoItemReadPolicy,
+          narrow: { limit: 100 },
+          presentation: ({ request, mode }) =>
+            todoGraphReadPresentation('item', mode, request.language),
+        },
+        {
+          policy: todoListReadPolicy,
+          narrow: { limit: 100 },
+          presentation: ({ request, mode }) =>
+            todoGraphReadPresentation('list', mode, request.language),
+        },
+      ],
+      commands: [
+        {
+          policies: [todoItemMutationPolicy, todoListMutationPolicy],
+          expose: ({ request, data }) => todoGraphCommands(data, request.text, request.language),
+        },
+      ],
     },
     instructions: todoCommandInstructions,
     formatHelp: (descriptions, request) =>
@@ -51,6 +73,7 @@ export const createTodoModelRuntime = ({
         throw new ModelInterpretationError('context_unavailable', 'Graph reads are unavailable.');
       const current = await readTodoModelContext(graph.read, signal);
       return {
+        data: current,
         unresolved: current.complete
           ? undefined
           : request.language?.toLowerCase().startsWith('es')
@@ -68,8 +91,6 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
-        reads: todoGraphReads(request.language),
-        commands: todoGraphCommands(current, request.text, request.language),
       };
     },
   });

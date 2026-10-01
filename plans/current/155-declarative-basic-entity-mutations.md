@@ -195,6 +195,22 @@ This checkpoint intentionally keeps Todo's explicit context reader. Declarative 
 automatic scope projection remain separate work; hiding those decisions behind a generic fetch
 helper would preserve the coupling rather than remove it.
 
+## Model Support Activation
+
+Application Model Support now registers Graph Read and Entity Mutation policies directly. Core
+derives the authoritative dispatchers and the complete model catalog—including bounded filters,
+ordering, limits, mutation fields, descriptions, and result messages—from that single declaration.
+The paired `{ policies, expose }` form remains for intentional narrowing and contextual behavior.
+Dynamic catalog data returned by `scope` stays local to the receiver and is never serialized into
+model context unless the application explicitly projects it there. Static applications may omit
+`scope` entirely.
+
+Todo retains explicit exposure factories only for its genuinely application-specific context
+projection, localization, and disambiguation rules. Classroom is the second-host proof: it enables
+Course reads and a School create command by registering two policies, without Todo bindings,
+exposure factories, or a context reader. The API remains evolutionary until Devtools and Model
+Support share a broader reflected-affordance discovery surface.
+
 ## Acceptance
 
 - [x] Every removed Todo Operation has an equivalent canonical command path with the same model,
@@ -203,4 +219,4 @@ helper would preserve the coupling rather than remove it.
       types and reflection.
 - [x] Remote command payloads cannot bypass defaults, reference requirements, or lifecycle rules.
 - [ ] Devtools and Model Support consume reflected mutation contracts rather than Todo-owned copies.
-- [ ] A second application enables the same capabilities with materially less setup.
+- [x] A second application enables the same capabilities with materially less setup.
