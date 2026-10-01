@@ -119,5 +119,51 @@ describe('Entity mutation affordance reflection', () => {
         },
       }),
     ).toBe(false);
+    expect(
+      isEntityMutationAffordanceDescriptor({
+        kind: 'entity-mutation-affordance',
+        entityName: 'Document',
+        action: 'create',
+        values: {
+          kind: 'object',
+          unknownKeys: 'strict',
+          fields: { fixed: { kind: 'literal', value: true } },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isEntityMutationAffordanceDescriptor({
+        kind: 'entity-mutation-affordance',
+        entityName: 'Document',
+        action: 'create',
+        values: {
+          kind: 'object',
+          unknownKeys: 'strict',
+          fields: { title: { kind: 'scalar', type: 'string', readOnly: true } },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects invalid and generated policy Fields before publishing affordances', () => {
+    const Document = entity('InvalidAffordanceDocument', {
+      id: field.generated(field.id(), 'uuid'),
+      title: field.string(),
+    });
+
+    expect(() =>
+      reflectEntityMutationAffordances({
+        entity: Document,
+        scope: 'all',
+        actions: { create: { fields: ['missing' as 'title'], result: [] } },
+      }),
+    ).toThrow('invalid values Field missing');
+    expect(() =>
+      reflectEntityMutationAffordances({
+        entity: Document,
+        scope: 'all',
+        actions: { create: { fields: ['id'], result: [] } },
+      }),
+    ).toThrow('cannot expose generated Field id');
   });
 });

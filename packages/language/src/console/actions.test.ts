@@ -609,5 +609,36 @@ describe('Console actions', () => {
     ).toEqual([
       expect.objectContaining({ message: 'Operator in is not available for Field title.' }),
     ]);
+    expect(
+      analyzeConsoleDocument('delete Document where all', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Selection of every Entity is not available.' }),
+    ]);
+    expect(
+      analyzeConsoleDocument('delete Document where not title = "x"', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Negated mutation selections are not available.' }),
+    ]);
+    expect(
+      analyzeConsoleDocument(
+        'delete Document where title = "x" and secret = "hidden"',
+        affordedApplication,
+        { dialect: 'declarative' },
+      ).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Field secret is not available for this mutation.' }),
+    ]);
+  });
+
+  it('diagnoses unknown mutation Entities before execution', () => {
+    expect(
+      analyzeConsoleDocument('create Missing { title: "Draft" }', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ message: 'Unknown Entity Missing.' })]);
   });
 });
