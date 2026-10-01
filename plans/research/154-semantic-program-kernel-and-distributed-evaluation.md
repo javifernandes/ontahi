@@ -14,15 +14,18 @@ Related plans:
 6. [150. Ontahí DevTools Semantic Console](../current/150-ontahi-devtools-semantic-console.md)
 7. [153. Model-Backed Todo Command Spike](../current/153-model-backed-todo-command-spike.md)
 8. [153c. Operation Interactions And Resumption](../current/153c-operation-interactions-and-resumption.md)
-9. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
-10. [119. Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
+9. [153d. LangGraph Task Runtime Comparison](../current/153d-langgraph-task-runtime-comparison.md)
+10. [142h. Distributed Execution Topologies](../backlog/142h-distributed-execution-topologies.md)
+11. [119. Selection Relation Predicates](../backlog/119-selection-relation-predicates.md)
 
 ## Summary
 
 Investigate Ontahí as a language and distributed evaluation runtime whose semantic programs can be
 partially constructed, completed by typed substitution, executed by capability-owning runtimes,
 suspended for events or interactions, and observed as live values across process and transport
-boundaries.
+boundaries. Also investigate addressable, stateful semantic participants that receive messages,
+configure the environment in which programs are interpreted and resolved, and may initiate many
+independent program runs over time.
 
 The existing system already contains much of this language in separate forms:
 
@@ -35,6 +38,9 @@ The existing system already contains much of this language in separate forms:
    control without making one framework or transport authoritative.
 6. DevTools dialects and model interpretation are different frontends that produce existing
    canonical forms.
+7. Model Support currently behaves like one implicit default participant: each message starts one
+   bounded interpretation run, while provider, affordances, grounding, presentation, context, and
+   instructions are supplied as unrelated runtime options.
 
 The new hypothesis is that these are projections of one smaller semantic kernel rather than an
 accidental collection of protocols. A user interface, CLI, model, workflow, remote runtime, or
@@ -47,6 +53,11 @@ The durable thesis is:
 > **Ontahí programs describe values, computations, effects, waits, and observations over a shared
 > semantic model. Runtimes complete and evaluate those programs wherever the required capabilities
 > live.**
+
+An assistant or other semantic participant is not the program and does not own its contracts. It is
+an addressable receiver that contributes an interpretation frontend, an evaluation environment, and
+an execution strategy. A session relates participants over time; each requested or autonomous unit
+of work still has its own inspectable Program Run.
 
 This plan is intentionally reformulatory and must proceed through small semantic proofs. It does
 not authorize a syntax-first general-purpose language rewrite.
@@ -103,6 +114,11 @@ Ontahí should test a semantic kernel in which:
 7. Existing canonical requests remain stable wire projections for closed executable programs.
 8. Authority, policy, consistency, lifecycle, and delivery guarantees remain explicit at every
    evaluation boundary.
+9. Addressable assistants may receive multiple messages, retain carefully scoped state, use
+   different providers, and initiate concurrent or autonomous Program Runs without becoming an
+   authority source or a parallel semantic language.
+10. Assistant state, interaction-session state, and Program Run state remain separate even when one
+    durable runtime persists all three.
 
 The kernel should be smaller than the current API surface. Its usefulness must be demonstrated by
 projecting existing Ontahí concepts into it, not by renaming all existing concepts prematurely.
@@ -111,21 +127,31 @@ projecting existing Ontahí concepts into it, not by renaming all existing conce
 
 These names express candidate semantics, not accepted TypeScript APIs.
 
-| Concept             | Meaning                                                                         |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `Program<T>`        | A typed semantic term that may produce `T`                                      |
-| `Value<T>`          | A value already available to evaluation                                         |
-| `Hole<T>`           | A typed variable with no bound value yet                                        |
-| `Computation<T>`    | A closed term that declares how to produce `T`                                  |
-| `Effect<T>`         | A computation requiring an external or state-changing capability                |
-| `Event<T>`          | A discrete occurrence carrying `T`, without an implied current value            |
-| `Reactive<T>`       | A current `T` plus later revisions while observation remains active             |
-| `Application<I, O>` | A function-like semantic term applied to typed input                            |
-| `Environment`       | Bindings, contextual values, capabilities, and authority visible to evaluation  |
-| `Substitution`      | A binding from one or more named holes to validated values or terms             |
-| `Continuation<T>`   | The resumable remainder of a suspended program                                  |
-| `Evaluator`         | A runtime capable of reducing some program terms                                |
-| `Handler`           | An implementation of an effect, wait, interaction, event source, or observation |
+| Concept             | Meaning                                                                          |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `Program<T>`        | A typed semantic term that may produce `T`                                       |
+| `Value<T>`          | A value already available to evaluation                                          |
+| `Hole<T>`           | A typed variable with no bound value yet                                         |
+| `Computation<T>`    | A closed term that declares how to produce `T`                                   |
+| `Effect<T>`         | A computation requiring an external or state-changing capability                 |
+| `Event<T>`          | A discrete occurrence carrying `T`, without an implied current value             |
+| `Reactive<T>`       | A current `T` plus later revisions while observation remains active              |
+| `Application<I, O>` | A function-like semantic term applied to typed input                             |
+| `Environment`       | Bindings, contextual values, capabilities, and authority visible to evaluation   |
+| `Substitution`      | A binding from one or more named holes to validated values or terms              |
+| `Continuation<T>`   | The resumable remainder of a suspended program                                   |
+| `Evaluator`         | A runtime capable of reducing some program terms                                 |
+| `Handler`           | An implementation of an effect, wait, interaction, event source, or observation  |
+| `Assistant`         | An addressable semantic participant configured with frontends and an Environment |
+| `Session`           | A scoped relationship among participants across one or more messages             |
+| `ProgramRun`        | One causally identified evaluation of a Program                                  |
+| `Provider`          | An inference service used by a model frontend, not an evaluator authority        |
+
+`Assistant` is provisional terminology. Ontahí already uses Task `actor` for the authenticated
+user, service, or system identity that caused work and may answer an Interaction. Reusing `Actor`
+for a model-backed participant would blur identity and authorization. A future persisted Assistant
+instance may be Entity-like and stateful, but this plan must not assume that every Assistant is an
+ordinary data-graph Entity or that declaring one grants capabilities.
 
 ### States that must remain distinct
 
@@ -142,6 +168,117 @@ These names express candidate semantics, not accepted TypeScript APIs.
 A hole is not a slow computation. A suspended program is not an open program. A reactive value is
 not merely an event stream. These distinctions are foundational even when one Task Runtime or Effect
 Stream supplies common implementation machinery.
+
+## Participants, Sessions, And Program Runs
+
+The first Model Support implementation is request-shaped. One message asks a model to infer one
+Read, Command, or Operation Invocation; an explicit Task may then pause for a choice or approval and
+eventually completes. In function-like terms it is approximately:
+
+```text
+interpret(message, environment) -> proposed program or terminal answer
+evaluate(proposal)               -> result, interaction, unresolved, or failure
+```
+
+This bounded lifecycle remains useful. It is one Program Run with a beginning, durable waits, and a
+terminal outcome. It should not be confused with a long-lived participant. A live Assistant is an
+addressable identity that may receive many messages and start many such runs:
+
+```text
+Session(todo-assistant, user)
+  message 1 -> ProgramRun A -> completed
+  message 2 -> ProgramRun B -> suspended on a choice
+  timer     -> ProgramRun C -> completed
+  message 3 -> ProgramRun D -> running concurrently with B
+```
+
+“Live” does not require one blocked process, permanent JavaScript object, or infinite workflow. It
+means the Assistant can be addressed over time, has explicitly scoped durable state, and may respond
+to messages or declared triggers by initiating work. Concurrent runs remain distinct causal units;
+shared Session or Assistant state requires explicit consistency rules rather than mutable prompt
+history hidden inside a provider.
+
+### Three state domains
+
+| State domain      | Lifetime and examples                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| Assistant state   | Identity, durable preferences, long-term memory references, provider/profile selection  |
+| Session state     | Participants, channel bindings, conversation history, selected UI context, active turns |
+| Program Run state | Program revision, substitutions, current step, waits, continuation, effects, outcome    |
+
+Assistant state may outlive every Session. A Session may contain several sequential or concurrent
+Program Runs. A Program Run may move across evaluators or survive restart without turning its local
+substitutions and continuation into global Assistant memory. Promotion of a Run result into Session
+or Assistant state must be an explicit effect with provenance and authority.
+
+The authenticated Task `actor` remains separate from all three. It identifies who caused work and
+which participant may answer an Interaction. An Assistant never gains the caller's authority merely
+because a message was addressed to it. Autonomous runs need their own declared trigger and service
+or system Principal, and every dispatched effect is authorized again by the receiver.
+
+### Assistant definition and environment
+
+One provisional declaration shape is:
+
+```text
+Assistant
+  identity and address
+  model frontend and Provider selection
+  visible semantic capabilities
+  grounding and resolver policy
+  context disclosure
+  presentation and localization
+  execution strategy
+```
+
+These concerns form a cohesive receiver configuration, but they are not embedded in Program terms.
+`?list` remains a typed hole rather than “ask assistant X” or “use provider Y.” The selected
+Assistant contributes an Environment containing permitted resolvers and contextual values. Another
+Assistant, a form, a CLI, or a remote evaluator may complete the same Program under a different
+Environment without changing its meaning.
+
+Applications may register several Assistants and nominate one default. Omitting an Assistant address
+preserves today's behavior by routing to that default. Explicit addressing is required when a UI,
+CLI, or Runtime wants another receiver; hidden route-dependent switching would make Activity,
+authority, and Session history difficult to explain. Context such as the selected screen or Entity
+may vary within one Assistant, while materially different capabilities, provider choices, durable
+memory, or behavior usually justify a distinct Assistant identity.
+
+Provider selection belongs to the Assistant frontend or Environment and may be static or resolved
+per Principal or Session. Credentials remain receiver-owned. A Provider performs inference; it does
+not grant graph capabilities, choose authority, own Session state, or define the semantic Program.
+
+### Execution strategy and LangGraph
+
+The current model-backed flow is a **one-inference interpreter**, not a one-step workflow:
+
+```text
+interpret once
+  -> choice Interaction if needed
+  -> approval Interaction if required
+  -> execute the selected canonical request
+  -> complete
+```
+
+It can already span several durable Task steps and user turns. After a choice, execution resumes from
+the stored canonical alternatives without calling the model again. The native Task Runtime and the
+LangGraph Task Runtime adapter execute the same explicit Ontahí state machine. LangGraph currently
+supplies checkpoint, replay, and interrupt/resume mechanics; it is not currently an LLM tool loop.
+
+A future agentic execution strategy could instead repeat inference and evaluation:
+
+```text
+model proposes Program or tool application
+  -> Ontahí validates and evaluates it
+  -> result returns to the model
+  -> model proposes another term
+  -> ... until terminal result or bounded stop
+```
+
+LangGraph could implement that loop, but it is neither required by Assistant identity nor allowed to
+create a parallel tool language. Tools should project completable Ontahí Programs, and each effect
+still lowers through canonical dispatch and authority. A non-agentic Assistant may remain live across
+many messages while using the simpler one-inference strategy for every Program Run.
 
 ## Programs, Requests, And Wire Forms
 
@@ -488,6 +625,13 @@ the boundary. Do not send arbitrary executable JavaScript or user-controlled aut
 11. Distributed evaluation does not imply distributed transactions.
 12. Every substitution, delegation, wait, resume, and effect dispatch is inspectable without
     leaking private values or credentials.
+13. Assistant identity, Session identity, Program Run identity, Task Run identity, transport
+    session identity, and Principal remain distinguishable and causally linked.
+14. Addressing an Assistant cannot select or manufacture the caller's Principal.
+15. Concurrent Program Runs cannot mutate shared Session or Assistant state without an explicit,
+    authorized, consistency-aware effect.
+16. Provider credentials, private prompts, and long-term memory remain receiver-owned disclosures,
+    not portable Program values by default.
 
 ## Relationship To Existing Plans
 
@@ -503,7 +647,9 @@ This plan coordinates existing evidence rather than superseding it immediately:
 6. Plan 150 owns semantic authoring and inspection in DevTools.
 7. Plan 153 owns natural-language interpretation into existing semantic capabilities.
 8. Plan 153c owns typed interactions and resumable Operation evidence.
-9. Plan 142h owns concrete deployment topology, consistency, and convergence work.
+9. Plan 153d proves that native and LangGraph Task Runtimes can execute the same explicit steps;
+   it deliberately does not yet implement an LLM tool loop.
+10. Plan 142h owns concrete deployment topology, consistency, and convergence work.
 
 If the kernel is validated, those concepts may become projections of one language model. Until then,
 their current public contracts remain authoritative.
@@ -526,7 +672,13 @@ their current public contracts remain authoritative.
 10. Demonstrate bounded evaluation delegation between two runtimes only after the local kernel is
     stable.
 11. Define compatibility and migration rules for current TypeScript and declarative dialects.
-12. Extract implementation subplans rather than shipping the full hypothesis in one intervention.
+12. Model the current implicit default model participant as a compatibility case for explicit
+    Assistant registration and addressing.
+13. Specify Assistant, Session, and Program Run state boundaries, including sequential, concurrent,
+    participant-initiated, and autonomous runs.
+14. Compare one-inference, explicit workflow, and bounded model-tool-loop execution strategies
+    without making LangGraph or one Provider semantic.
+15. Extract implementation subplans rather than shipping the full hypothesis in one intervention.
 
 ## Non-Goals
 
@@ -546,6 +698,12 @@ their current public contracts remain authoritative.
     semantic owner of reactivity or suspension.
 11. Do not let fuzzy interpretation bypass canonical validation, scope, authority, or effect policy.
 12. Do not create a public package until the first two semantic proofs establish a reusable boundary.
+13. Do not build a general autonomous-agent platform before explicit Assistant and Session identity
+    boundaries are validated.
+14. Do not treat Assistant memory, conversation history, Program substitutions, or provider threads
+    as interchangeable state.
+15. Do not require LangGraph for a live Assistant or equate durable multi-step execution with an
+    agentic model-tool loop.
 
 ## Execution Slices
 
@@ -556,6 +714,10 @@ their current public contracts remain authoritative.
       cannot regress.
 - [ ] Define conformance examples for closed Read, Command, and Operation applications.
 - [ ] Identify apparent unifications that would only rename or wrap existing concepts.
+- [ ] Inventory Principal, Task actor, Assistant, Session, Program Run, Task Run, Interaction,
+      provider thread, and transport session identities without collapsing them.
+- [ ] Describe today's `createApplicationModelCommandRuntime` as one implicit default Assistant and
+      preserve that source-level compatibility while the new boundary remains experimental.
 
 ### Slice 1: Operation Application And Typed Holes
 
@@ -574,6 +736,8 @@ their current public contracts remain authoritative.
 - [ ] Render the same open application as a generic form, CLI-style prompt, and conversational
       Interaction without changing its semantics.
 - [ ] Record provenance for every accepted substitution.
+- [ ] Prove that two Assistants can use different resolver and presentation policies for the same
+      hole without changing the Program representation.
 
 ### Slice 3: Read And Command Generalization
 
@@ -603,6 +767,7 @@ their current public contracts remain authoritative.
       decisions.
 - [ ] Prove restart-safe wait and resume on two Task Runtime implementations.
 - [ ] Specify correlation, actor authorization, cancellation, timeout, and idempotency boundaries.
+- [ ] Keep Session continuity separate from the Program Run continuation being resumed.
 
 ### Slice 6: Bounded Distributed Evaluation
 
@@ -612,13 +777,22 @@ their current public contracts remain authoritative.
 - [ ] Preserve authority, cancellation, provenance, model compatibility, and causal identity.
 - [ ] Keep execution placement separate from authored semantic meaning.
 
-### Slice 7: Frontends, Models, And Tooling
+### Slice 7: Assistants, Frontends, Models, And Tooling
 
 - [ ] Treat TypeScript, declarative text, projectional editing, UI forms, CLI, and natural language as
       frontends producing the same semantic terms.
+- [ ] Define explicit Assistant registration, stable addressing, and one application default without
+      making an Assistant a new authority kind.
+- [ ] Separate Assistant state, Session state, and Program Run state in reflection and Activity.
+- [ ] Allow several messages and independently tracked Program Runs within one Session, including a
+      bounded concurrent-run case.
+- [ ] Compare provider and execution-strategy selection across two Assistants while keeping provider
+      credentials and checkpoints private.
 - [ ] Project model tools from closed or completable Ontahí applications rather than creating a
       parallel tool vocabulary.
 - [ ] Let a model propose terms and substitutions under the ordinary resolver and authority rules.
+- [ ] Demonstrate one bounded agentic loop as an optional execution strategy only after the same
+      tools exist as Ontahí Program projections.
 - [ ] Inspect open terms, substitutions, evaluation plans, waits, and reactive dependencies in
       DevTools.
 - [ ] Generate readable dialect text from the semantic AST for review and diagnostics.
@@ -677,6 +851,42 @@ The proof may use a fake IMDb adapter. It must demonstrate:
 This proof is allowed to conclude that full reactive federation is premature. Its purpose is to
 find the minimal dependency and evaluator contracts.
 
+## Assistant And Session Proof
+
+After the Operation/resolution boundary is stable, reinterpret current Model Support as one default
+Assistant rather than adding an independent agent framework. The proof should register two
+Assistants over the same application:
+
+```text
+todo-assistant
+  provider = local model
+  capabilities = Todo reads and mutations
+  grounding = Todo display/search and authorized context
+
+planning-assistant
+  provider = different model or configuration
+  capabilities = read-oriented planning surface
+  grounding = planning context
+```
+
+It must demonstrate:
+
+1. an omitted Assistant address routes to the declared default;
+2. an explicit address selects another Assistant and appears in Activity;
+3. the same Principal starts both runs without Assistant identity becoming authority;
+4. one Session accepts several messages and retains only declared Session state;
+5. two concurrent Program Runs remain independently cancellable, inspectable, and resumable;
+6. one open Program can be projected or resolved differently by each Assistant Environment while
+   retaining the same Program identity and contract;
+7. native and LangGraph Task Runtime adapters preserve the same Assistant, Session, Program Run,
+   Interaction, and canonical effect identities;
+8. an optional bounded model-tool loop, if included, uses projected Ontahí Programs and does not
+   expose LangGraph tools or provider threads as the public contract.
+
+This proof may begin with static Assistant definitions. Persisted user-created Assistant instances,
+long-term memory stores, autonomous schedules, and dynamic installation are later concerns. The
+first result should clarify identity and state ownership rather than maximize agent features.
+
 ## Verification Strategy
 
 1. Golden semantic examples that parse or author into one normalized kernel representation.
@@ -691,6 +901,12 @@ find the minimal dependency and evaluator contracts.
 9. Security tests proving substitutions and remote evaluation cannot widen authority.
 10. Failure-injection tests for disconnect, stale model version, resolver loss, duplicate events,
     partial runtime capability, and external-effect retry.
+11. Identity tests proving Assistant addressing cannot alter Principal, Session, Program Run, or
+    Interaction authorization.
+12. State-isolation tests covering several messages, concurrent runs, restart, cancellation, and
+    explicit promotion of Run output into Session or Assistant state.
+13. Execution-strategy conformance proving native steps, LangGraph-backed steps, and any bounded
+    agentic loop expose the same semantic and Activity boundaries.
 
 ## Acceptance Checklist
 
@@ -713,6 +929,12 @@ find the minimal dependency and evaluator contracts.
 - [ ] One second Task Runtime resumes the same semantic wait.
 - [ ] One bounded subcomputation or substitution crosses a runtime boundary.
 - [ ] DevTools explains open terms, substitutions, waits, delegates, effects, and outcomes causally.
+- [ ] One application registers a default and a second explicitly addressed Assistant.
+- [ ] Assistant, Session, Program Run, Task actor, and Principal identities remain distinct and
+      inspectable across restart and concurrent runs.
+- [ ] A live Assistant can receive multiple messages without requiring one endless workflow or
+      conflating its state with conversation history.
+- [ ] Native and LangGraph execution preserve the same public Assistant and Program semantics.
 - [ ] Existing application APIs remain compatible until a smaller public boundary is proven.
 - [ ] Follow-up implementation plans are extracted with explicit ownership and dependencies.
 
@@ -726,7 +948,7 @@ These are anticipated slices, not created plans yet:
 4. `154d`: reactive program evaluation and dependency planning;
 5. `154e`: Event waits, reactions, and durable continuation semantics;
 6. `154f`: distributed evaluation and substitution routing;
-7. `154g`: semantic frontends, model projection, and DevTools inspection.
+7. `154g`: assistants, sessions, semantic frontends, model projection, and DevTools inspection.
 
 ## Open Questions
 
@@ -754,6 +976,17 @@ These are anticipated slices, not created plans yet:
 19. What capability discovery is safe to expose without leaking private topology?
 20. Where should the evaluator refuse distribution because authority, consistency, cost, or
     lifecycle requirements cannot be preserved?
+21. Is `Assistant` the durable public name, or should it remain one kind of semantic participant?
+22. Which Assistant configuration is definition-time code, persisted instance data, or Session
+    override, and how is each versioned?
+23. What is the minimal Session contract shared by browser, CLI, voice, and background triggers?
+24. Which history or result promotion is explicit Assistant memory rather than transient Session or
+    Program Run state?
+25. How are concurrent runs ordered, isolated, cancelled, or joined when they share one Session?
+26. Does an autonomous trigger address an existing Assistant instance, instantiate a profile, or
+    invoke a separate service identity?
+27. Which execution-strategy contract can cover one-inference interpretation, explicit workflows,
+    and bounded agentic loops without exposing LangGraph internals?
 
 ## Initial Decisions
 
@@ -772,3 +1005,13 @@ These are anticipated slices, not created plans yet:
 11. The first proof is local, deterministic, and model-optional.
 12. Public API and package decisions are deferred until the first two vertical proofs produce
     evidence.
+13. Current Model Support is treated as one implicit default Assistant whose message starts one
+    bounded Program Run; compatibility does not require an Assistant address yet.
+14. Assistant, Session, and Program Run state are separate domains, and Task `actor` continues to
+    mean the authenticated causal identity rather than the Assistant receiver.
+15. A live Assistant may start many sequential or concurrent runs; it is not modeled as one endless
+    Task or one mutable provider thread.
+16. LangGraph remains an optional Task Runtime or future execution-strategy implementation, not the
+    semantic owner of Assistant identity, Session state, tools, or Programs.
+17. Assistant configuration supplies an Environment and frontends; it does not enter hole identity,
+    duplicate schema contracts, or grant authority.
