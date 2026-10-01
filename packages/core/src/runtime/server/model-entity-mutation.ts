@@ -1,6 +1,8 @@
 import {
   graphSchema,
+  reflectEntityMutationAffordances,
   type AnyEntityDefinition,
+  type AnyFieldDefinition,
   type EntityMutationCommandPolicy,
   type GraphSchemaDefinition,
   type GraphSchemaFields,
@@ -65,16 +67,16 @@ const assertFieldsAllowed = (
 };
 
 const projectFields = (
-  entity: AnyEntityDefinition,
+  entityName: string,
+  available: GraphSchemaFields,
   names: readonly string[],
   literals: Partial<Record<string, JsonPrimitive>> | undefined,
   presence: 'entity' | 'required',
 ): GraphSchemaFields =>
   Object.fromEntries(
     names.map(name => {
-      const field = entity.fields[name];
-      if (!field)
-        throw new Error(`Unknown field ${entity.name}.${name} in Model command exposure.`);
+      const field = available[name] as AnyFieldDefinition | undefined;
+      if (!field) throw new Error(`Unknown field ${entityName}.${name} in Model command exposure.`);
       const hasLiteral = Object.prototype.hasOwnProperty.call(literals ?? {}, name);
       const literalValue = hasLiteral ? literals![name]! : undefined;
       const literal = hasLiteral
@@ -129,8 +131,10 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
   policy: EntityMutationCommandPolicy<TEntity, TAuthority>,
   options: ModelEntityMutationExposureOptions<TEntity>,
 ): ModelGraphCommandExposure => {
-  const actionPolicy = policy.actions[options.action];
-  if (!actionPolicy)
+  const affordance = reflectEntityMutationAffordances(policy).find(
+    candidate => candidate.action === options.action,
+  );
+  if (!affordance)
     throw new Error(
       `Model ${policy.entity.name} ${options.action} exposure has no matching command policy.`,
     );
@@ -146,7 +150,7 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
       options.action,
       'values',
       values,
-      'fields' in actionPolicy ? actionPolicy.fields : undefined,
+      affordance.values ? Object.keys(affordance.values.fields) : undefined,
     );
     assertLiteralFieldsProjected(policy.entity.name, 'values', values, valueLiterals);
   }
@@ -156,7 +160,7 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
       options.action,
       'condition',
       condition,
-      'if' in actionPolicy ? actionPolicy.if : undefined,
+      affordance.condition ? Object.keys(affordance.condition.fields) : undefined,
     );
     assertLiteralFieldsProjected(policy.entity.name, 'condition', condition, conditionLiterals);
   } else if (conditionLiterals && Object.keys(conditionLiterals).length > 0) {
@@ -167,12 +171,13 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
     kind: graphSchema.literal('entity-mutation-command'),
     action: graphSchema.literal(options.action),
     entityName: graphSchema.literal(policy.entity.name),
-    ...(options.action === 'create' ? {} : { target: graphSchema.ref(policy.entity) }),
+    ...(affordance.target ? { target: affordance.target.exact.reference } : {}),
     ...(values
       ? {
           values: strict(
             projectFields(
-              policy.entity,
+              policy.entity.name,
+              affordance.values!.fields,
               values,
               valueLiterals,
               options.action === 'create' ? 'entity' : 'required',
@@ -182,7 +187,15 @@ export const createModelEntityMutationExposure = <TEntity extends AnyEntityDefin
       : {}),
     ...(condition
       ? {
-          if: strict(projectFields(policy.entity, condition, conditionLiterals, 'required')),
+          if: strict(
+            projectFields(
+              policy.entity.name,
+              affordance.condition!.fields,
+              condition,
+              conditionLiterals,
+              'required',
+            ),
+          ),
         }
       : {}),
   });

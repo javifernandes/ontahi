@@ -16,6 +16,11 @@ import {
   type WritableStoredFieldName,
 } from './definitions.js';
 import {
+  reflectEntityMutationAffordances,
+  toEntityMutationAffordanceDescriptor,
+  type EntityMutationAffordanceDescriptor,
+} from './entity-mutation-affordance.js';
+import {
   entityMutationCommandDiagnosticFromError,
   isEntityMutationCommandDiagnostic,
   isEntityMutationDeltaForCommand,
@@ -354,6 +359,10 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     { policy: OrderedRelationshipCommandPolicy; target: AnyEntityDefinition }
   >();
   const entityMutationPolicyByEntity = new Map<string, AnyEntityMutationCommandPolicy>();
+  const mutationAffordancesByEntity = new Map<
+    string,
+    readonly EntityMutationAffordanceDescriptor[]
+  >();
   for (const policy of policies) {
     if (isEntityMutationPolicy(policy)) {
       validateEntityMutationPolicy(policy);
@@ -363,6 +372,10 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         );
       }
       entityMutationPolicyByEntity.set(policy.entity.name, policy);
+      mutationAffordancesByEntity.set(
+        policy.entity.name,
+        reflectEntityMutationAffordances(policy).map(toEntityMutationAffordanceDescriptor),
+      );
       continue;
     }
     if ('relationName' in policy) {
@@ -665,6 +678,13 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
             ? (Object.keys(policy.actions) as ('create' | 'update' | 'delete')[])
             : [],
           ...(selectionMutations.length ? { selectionMutations } : {}),
+          ...(mutationAffordancesByEntity.get(parsed.request.entityName)
+            ? {
+                entityMutationAffordances: mutationAffordancesByEntity.get(
+                  parsed.request.entityName,
+                )!,
+              }
+            : {}),
         },
       };
     }

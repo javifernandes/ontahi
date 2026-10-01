@@ -65,7 +65,16 @@ describe('Entity Mutation Command dispatcher', () => {
     ).resolves.toEqual({
       kind: 'graph-command-capabilities-result',
       entityName: 'Book',
-      capabilities: { entityMutations: ['update', 'delete'] },
+      capabilities: {
+        entityMutations: ['update', 'delete'],
+        entityMutationAffordances: [
+          expect.objectContaining({
+            action: 'update',
+            values: expect.objectContaining({ fields: { title: expect.any(Object) } }),
+          }),
+          expect.objectContaining({ action: 'delete' }),
+        ],
+      },
     });
     await expect(
       dispatch(
@@ -110,6 +119,24 @@ describe('Entity Mutation Command dispatcher', () => {
       capabilities: {
         entityMutations: ['update', 'delete'],
         selectionMutations: ['update', 'delete'],
+        entityMutationAffordances: [
+          expect.objectContaining({
+            action: 'update',
+            target: expect.objectContaining({
+              selection: expect.objectContaining({
+                fields: { title: expect.objectContaining({ operators: ['eq'] }) },
+              }),
+            }),
+          }),
+          expect.objectContaining({
+            action: 'delete',
+            target: expect.objectContaining({
+              selection: expect.objectContaining({
+                fields: { published: expect.objectContaining({ operators: ['eq'] }) },
+              }),
+            }),
+          }),
+        ],
       },
     });
   });

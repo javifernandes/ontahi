@@ -594,11 +594,10 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           ? [
               {
                 entityName: entity.definition.name,
-                actions:
-                  commandCapabilities(entity.definition.name)?.actions ??
-                  (['create', 'update', 'delete'] as const),
+                actions: commandCapabilities(entity.definition.name)?.actions ?? [],
                 selectionActions:
                   commandCapabilities(entity.definition.name)?.selectionActions ?? [],
+                affordances: commandCapabilities(entity.definition.name)?.affordances,
               },
             ]
           : [],

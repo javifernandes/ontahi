@@ -18,6 +18,7 @@ relatedPlans:
   - ontahi://plans/128g-supabase-exact-entity-mutation-commands
   - ontahi://plans/138a-client-entity-mutation-authoring
   - ontahi://plans/138b-conditional-exact-entity-mutations
+  - ontahi://plans/155-declarative-basic-entity-mutations
   - ontahi://plans/146-ontahi-runtime-protocol
   - ontahi://plans/122-ontahi-developer-book
 migratedFrom: bookops://atlas/model/command
@@ -65,3 +66,9 @@ single authority-safe `entity_mutation_condition_not_met` rejection; it does not
 target as missing, changed, replaced, or policy-hidden. Remote policy allowlists condition Fields
 separately from writable and returned Fields. Conditional Commands use a fail-closed protocol
 version so an older receiver cannot discard the condition and execute an unconditional mutation.
+
+An Entity Mutation Command policy also reflects one neutral authoring affordance per allowed
+create, update, or delete action. It combines the exact target and optional Selection permissions
+with policy-bounded writable and condition Fields while retaining each Field's schema, presence,
+nullability, default, generation, and reference semantics. This reflection is advisory: dispatch
+still parses, authorizes, and executes every submitted Command against the live receiver policy.

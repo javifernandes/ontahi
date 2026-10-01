@@ -360,6 +360,14 @@ export const completeSelectionDocument = (
   affordances?: SelectionLanguageExecutionAffordances,
 ): SelectionLanguageCompletionResult => {
   const position = clampDocumentPosition(document, requestedPosition);
+  const completionEntity = affordances?.fields
+    ? {
+        ...entity,
+        fields: entity.fields.filter(field =>
+          affordances.fields!.some(candidate => candidate.name === field.name),
+        ),
+      }
+    : entity;
   const tree = parser.parse(document);
   const syntax = syntaxFromTree(document, tree);
   const expression = expressionAtPosition(syntax.expression, position);
@@ -377,17 +385,23 @@ export const completeSelectionDocument = (
     items,
   });
 
-  if (!syntax.expression) return result('expression', expressionCompletionItems(entity));
+  if (!syntax.expression) return result('expression', expressionCompletionItems(completionEntity));
   if (!expression) {
     return result('continuation', continuationItemsAt(syntax, position));
   }
 
-  const nonPredicate = completeNonPredicateExpression(expression, position, entity, syntax, result);
+  const nonPredicate = completeNonPredicateExpression(
+    expression,
+    position,
+    completionEntity,
+    syntax,
+    result,
+  );
   if (nonPredicate) return nonPredicate;
   return completePredicateExpression(
     expression as SelectionPredicateSyntax,
     position,
-    entity,
+    completionEntity,
     affordances,
     syntax,
     cursorNode,

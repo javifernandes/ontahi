@@ -1,6 +1,6 @@
 # 155. Declarative Basic Entity Mutations
 
-Status: current
+Status: done
 
 Canonical ID: `ontahi://plans/155-declarative-basic-entity-mutations`
 
@@ -211,6 +211,23 @@ Course reads and a School create command by registering two policies, without To
 exposure factories, or a context reader. The API remains evolutionary until Devtools and Model
 Support share a broader reflected-affordance discovery surface.
 
+## Unified Mutation Affordances
+
+Core now derives one neutral Entity mutation affordance from the Entity schema and registered
+`EntityMutationCommandPolicy`. Each create, update, or delete descriptor carries only the policy's
+published writable and condition Fields, the exact identity target, optional Selection permissions,
+and existing Field descriptors for caller-required, caller-optional, defaulted, nullable,
+generated, derived, and reference semantics. Generated and derived Fields remain absent from
+writable values; a generated identity may still appear in the required locator contract.
+
+Model Support builds its exact command schemas from that reflection rather than independently
+reading Entity Fields and policy allowlists. The `graph.command` capability response adds portable
+affordance descriptors while retaining the legacy action lists for older clients. Devtools binds
+those descriptors to the current Entity, transport route, and execution identity; its headless
+language completion and diagnostics use the published locators, values, and Selection operators.
+Unknown capability state is fail-closed for assistance. Every submitted Command still traverses the
+ordinary receiver parser, policy, authorization callback, and execution boundary.
+
 ## Acceptance
 
 - [x] Every removed Todo Operation has an equivalent canonical command path with the same model,
@@ -218,5 +235,5 @@ Support share a broader reflected-affordance discovery surface.
 - [x] Default, generated, caller-required, optional, nullable, and derived Fields remain distinct in
       types and reflection.
 - [x] Remote command payloads cannot bypass defaults, reference requirements, or lifecycle rules.
-- [ ] Devtools and Model Support consume reflected mutation contracts rather than Todo-owned copies.
+- [x] Devtools and Model Support consume reflected mutation contracts rather than Todo-owned copies.
 - [x] A second application enables the same capabilities with materially less setup.
