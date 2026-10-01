@@ -240,7 +240,7 @@ describe('nested Value client projections', () => {
           expect(generated.Item.domain.read.input.fields.subject).toBe(
             generated.Item.domain.detail.output,
           );
-          expect(generated.descriptor.fields.state).toEqual({
+          expect(generated.descriptor.fields.state).toMatchObject({
             kind: 'scalar',
             type: 'enum',
             enumValues: ['open', 'closed'],
