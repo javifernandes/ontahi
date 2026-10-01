@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/153d-langgraph-task-runtime-comparison
   - ontahi://plans/153e-vercel-workflow-interaction-resumption
   - ontahi://plans/153f-queue-backed-task-runtime
+  - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
 ---
 
 Operation Interaction names the emerging need for an operation to obtain information or a decision

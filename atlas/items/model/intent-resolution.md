@@ -14,6 +14,7 @@ relatedPlans:
   - ontahi://plans/153-model-backed-todo-command-spike
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/153b-declarative-operation-context-scope
+  - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
 ---
 
 Intent Resolution maps a human request and its relevant context to a proposed typed

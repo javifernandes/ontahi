@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/153-model-backed-todo-command-spike
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/153b-declarative-operation-context-scope
+  - ontahi://plans/154-semantic-program-kernel-and-distributed-evaluation
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---
