@@ -8,6 +8,13 @@ import { completeDeclarativeConsoleDocument } from './declarative-completion.js'
 const print = (document: string, expression: ConsoleGraphReadSyntax): string => {
   const entity = expression.entity!.text;
   const value = (input: unknown) => JSON.stringify(input);
+  if (expression.kind === 'relationship-command') {
+    const base = `${expression.relationshipAction} ${entity} ${value(expression.sourceValue)} ${expression.relation!.text} ${expression.endpointEntity!.text} ${value(expression.endpointValue)}`;
+    if (expression.relationshipAction !== 'move') return base;
+    if (expression.placement === 'start' || expression.placement === 'end')
+      return `${base} at ${expression.placement}`;
+    return `${base} ${expression.placement} ${expression.anchorEntity!.text} ${value(expression.anchorValue)}`;
+  }
   if (expression.kind === 'operation')
     return `invoke ${entity}.${expression.operation!.text}${expression.input ? ` with ${value(expression.inputValue)}` : ''}`;
   if (expression.kind === 'entity-mutation') {
@@ -75,8 +82,8 @@ const renderCompletion: Dialect['renderCompletion'] = (candidate: ConsoleCandida
 };
 
 const syntaxError: Dialect['syntaxError'] = (document, _syntax) => {
-  const action = /^\s*(create|update|delete|invoke)\b/.exec(document)?.[1];
-  return ['create', 'update', 'delete', 'invoke'].includes(action ?? '')
+  const action = /^\s*(create|update|delete|invoke|attach|detach|move)\b/.exec(document)?.[1];
+  return ['create', 'update', 'delete', 'invoke', 'attach', 'detach', 'move'].includes(action ?? '')
     ? `Expected a complete ${action} expression.`
     : 'Expected Entity, optional by factory argument (and by factory argument)*, optional where predicate, order by Field [ascending|descending], limit number, and terminal (many, first, one, count, exists).';
 };

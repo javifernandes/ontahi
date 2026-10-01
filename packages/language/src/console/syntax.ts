@@ -37,6 +37,14 @@ const invalidStructuredValueRanges = (syntax: ConsoleDocumentSyntax): SelectionL
   const expression = syntax.expression;
   if (expression?.kind === 'operation')
     return expression.input && expression.inputValue === undefined ? [expression.input] : [];
+  if (expression?.kind === 'relationship-command')
+    return [
+      expression.source && expression.sourceValue === undefined ? expression.source : undefined,
+      expression.endpoint && expression.endpointValue === undefined
+        ? expression.endpoint
+        : undefined,
+      expression.anchor && expression.anchorValue === undefined ? expression.anchor : undefined,
+    ].filter((range): range is SelectionLanguageRange => range !== undefined);
   if (expression?.kind !== 'entity-mutation') return [];
   return [
     expression.target && expression.targetValue === undefined ? expression.target : undefined,
@@ -84,6 +92,55 @@ export const consoleSyntaxFromTree = (document: string, tree: Tree): ConsoleDocu
         ),
         input: input ? rangeOf(input) : undefined,
         inputValue: parsedStructuredValue(document, input),
+      },
+    };
+  }
+  const relationshipCommand =
+    consoleExpression?.getChild('RelationshipCommandExpression')?.firstChild ??
+    declarativeExpression?.getChild('RelationshipCommandExpression')?.firstChild;
+  if (relationshipCommand) {
+    const entities = relationshipCommand.getChildren('EntityName');
+    const objects = relationshipCommand.getChildren('StructuredObject');
+    const relationshipAction = relationshipCommand.name.includes('Attach')
+      ? 'attach'
+      : relationshipCommand.name.includes('Detach')
+        ? 'detach'
+        : 'move';
+    const placement = relationshipCommand.getChild('Before')
+      ? 'before'
+      : relationshipCommand.getChild('After')
+        ? 'after'
+        : relationshipCommand.getChild('Start')
+          ? 'start'
+          : relationshipCommand.getChild('End')
+            ? 'end'
+            : undefined;
+    return {
+      kind: 'console-document',
+      from: 0,
+      to: document.length,
+      expression: {
+        kind: 'relationship-command',
+        ...rangeOf(relationshipCommand),
+        steps: [],
+        factories: [],
+        navigations: [],
+        relationshipAction,
+        entity: tokenOf('entity-name', entities[0], document),
+        source: objects[0] && rangeOf(objects[0]),
+        sourceValue: parsedStructuredValue(document, objects[0]),
+        relation: tokenOf(
+          'relation-name',
+          relationshipCommand.getChild('RelationName')?.getChild('Identifier') ?? null,
+          document,
+        ),
+        endpointEntity: tokenOf('entity-name', entities[1], document),
+        endpoint: objects[1] && rangeOf(objects[1]),
+        endpointValue: parsedStructuredValue(document, objects[1]),
+        placement,
+        anchorEntity: tokenOf('entity-name', entities[2], document),
+        anchor: objects[2] && rangeOf(objects[2]),
+        anchorValue: parsedStructuredValue(document, objects[2]),
       },
     };
   }

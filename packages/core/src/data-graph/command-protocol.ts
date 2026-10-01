@@ -17,6 +17,10 @@ import {
 } from './entity-mutation-command.js';
 import { validateGraphReadSelection } from './read-protocol.js';
 import { isEntityRef, type AnyEntityRef } from './ref/index.js';
+import {
+  isRelationshipCommandAffordanceDescriptor,
+  type RelationshipCommandAffordanceDescriptor,
+} from './relationship-command-affordance.js';
 import type {
   ManyToManyRelationshipCommand,
   OrderedRelationshipCommand,
@@ -76,6 +80,8 @@ export type GraphCommandCapabilities = {
   readonly selectionMutations?: readonly ('update' | 'delete')[];
   /** Policy-derived authoring contracts. Optional for compatibility with action-only servers. */
   readonly entityMutationAffordances?: readonly EntityMutationAffordanceDescriptor[];
+  /** Registered structural Relation authoring contracts. */
+  readonly relationshipCommandAffordances?: readonly RelationshipCommandAffordanceDescriptor[];
 };
 
 export type GraphCommandCapabilitiesResult = {
@@ -155,7 +161,10 @@ export const isGraphCommandCapabilities = (value: unknown): value is GraphComman
       value.selectionMutations.every(action => action === 'update' || action === 'delete'))) &&
   (value.entityMutationAffordances === undefined ||
     (Array.isArray(value.entityMutationAffordances) &&
-      value.entityMutationAffordances.every(isEntityMutationAffordanceDescriptor)));
+      value.entityMutationAffordances.every(isEntityMutationAffordanceDescriptor))) &&
+  (value.relationshipCommandAffordances === undefined ||
+    (Array.isArray(value.relationshipCommandAffordances) &&
+      value.relationshipCommandAffordances.every(isRelationshipCommandAffordanceDescriptor)));
 
 export const parseGraphCommandFamilyRequest = (
   value: unknown,

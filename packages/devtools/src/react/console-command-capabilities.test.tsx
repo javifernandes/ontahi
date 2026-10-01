@@ -1,5 +1,8 @@
 import { isJsonValue } from '@ontahi/core';
-import type { EntityMutationAffordanceDescriptor } from '@ontahi/core/data-graph';
+import type {
+  EntityMutationAffordanceDescriptor,
+  RelationshipCommandAffordanceDescriptor,
+} from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolResponse,
   createRuntimeTransportRouter,
@@ -36,6 +39,36 @@ const updateAffordance: EntityMutationAffordanceDescriptor = {
   },
 };
 
+const relationshipAffordance: RelationshipCommandAffordanceDescriptor = {
+  kind: 'relationship-command-affordance',
+  relationKind: 'many-to-many',
+  relation: {
+    sourceEntityName: 'Document',
+    relationName: 'tags',
+    targetEntityName: 'Tag',
+    cardinality: 'many-to-many',
+  },
+  actions: ['link', 'unlink'],
+  source: {
+    entityName: 'Document',
+    locator: {
+      kind: 'object',
+      role: 'object',
+      unknownKeys: 'strict',
+      fields: { id: { kind: 'scalar', type: 'id' } },
+    },
+  },
+  target: {
+    entityName: 'Tag',
+    locator: {
+      kind: 'object',
+      role: 'object',
+      unknownKeys: 'strict',
+      fields: { id: { kind: 'scalar', type: 'id' } },
+    },
+  },
+};
+
 const pendingTransport = () => {
   const pending: {
     envelope: RuntimeProtocolRequestEnvelope;
@@ -49,6 +82,7 @@ const pendingTransport = () => {
     index: number,
     entityName: string,
     affordances: readonly EntityMutationAffordanceDescriptor[] = [],
+    relationshipAffordances: readonly RelationshipCommandAffordanceDescriptor[] = [],
   ) => {
     const call = pending[index]!;
     const body = {
@@ -57,6 +91,7 @@ const pendingTransport = () => {
       capabilities: {
         entityMutations: affordances.map(affordance => affordance.action),
         entityMutationAffordances: affordances,
+        relationshipCommandAffordances: relationshipAffordances,
       },
     } as const;
     if (!isJsonValue(body)) throw new Error('Expected portable Command capabilities.');
@@ -73,8 +108,9 @@ describe('Console Command capability discovery', () => {
         useConsoleCommandCapabilities(transport, identityKey, entityNames),
       { initialProps: { identityKey: 'alice', entityNames: ['Document'] } },
     );
-    await act(async () => reply(0, 'Document', [updateAffordance]));
+    await act(async () => reply(0, 'Document', [updateAffordance], [relationshipAffordance]));
     expect(result.current('Document')?.affordances).toEqual([updateAffordance]);
+    expect(result.current('Document')?.relationshipAffordances).toEqual([relationshipAffordance]);
 
     rerender({ identityKey: 'bob', entityNames: ['Other'] });
     expect(result.current('Document')).toBeUndefined();

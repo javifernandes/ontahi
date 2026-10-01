@@ -55,6 +55,9 @@ execution exactly as they do for application-authored traffic.
 The `graph.command` family supports additive mutation capability discovery. Legacy clients may
 consume only the allowed action lists; newer clients also receive portable policy-derived
 affordances for exact identity targets, writable values, conditions, and Selection mutations.
+The same response can describe registered direct, many-to-many, and ordered Relationship Commands,
+including endpoint locators, allowed link/unlink actions, ordered placements, and whether the
+canonical command supports a precondition.
 Capability responses describe the registered receiver policy; action-level `authorize` callbacks
 are command-dependent and do not filter generic discovery. A host whose policy shape is sensitive
 must protect the discovery route with its transport/session boundary. These responses remain

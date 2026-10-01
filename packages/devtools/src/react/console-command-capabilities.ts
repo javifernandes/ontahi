@@ -3,6 +3,7 @@ import {
   isGraphCommandCapabilities,
   type EntityMutationAffordanceDescriptor,
   type EntityMutationCommandAction,
+  type RelationshipCommandAffordanceDescriptor,
 } from '@ontahi/core/data-graph';
 import {
   createRuntimeProtocolExchange,
@@ -15,6 +16,7 @@ type Entry = {
   actions?: readonly EntityMutationCommandAction[];
   selectionActions?: readonly ('update' | 'delete')[];
   affordances?: readonly EntityMutationAffordanceDescriptor[];
+  relationshipAffordances?: readonly RelationshipCommandAffordanceDescriptor[];
   error?: string;
 };
 type Discovery = {
@@ -85,10 +87,17 @@ export const useConsoleCommandCapabilities = (
             )
           )
             throw new Error('This server returned mismatched Graph Command capabilities.');
+          if (
+            capabilities.relationshipCommandAffordances?.some(
+              affordance => affordance.relation.sourceEntityName !== name,
+            )
+          )
+            throw new Error('This server returned mismatched Graph Command capabilities.');
           publish(name, {
             actions: capabilities.entityMutations,
             selectionActions: capabilities.selectionMutations,
             affordances: capabilities.entityMutationAffordances,
+            relationshipAffordances: capabilities.relationshipCommandAffordances,
           });
         })
         .catch((error: unknown) =>

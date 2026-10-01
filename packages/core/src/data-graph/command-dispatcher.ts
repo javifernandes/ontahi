@@ -30,6 +30,12 @@ import {
 } from './entity-mutation-command.js';
 import { getEntityIdentityLocator, isEntityRef } from './ref/index.js';
 import {
+  directRelationshipCommandAffordance,
+  manyToManyRelationshipCommandAffordance,
+  orderedRelationshipCommandAffordance,
+  type RelationshipCommandAffordanceDescriptor,
+} from './relationship-command-affordance.js';
+import {
   isRelationshipCommandDiagnostic,
   isRelationshipCommandResult,
   relationshipCommandDiagnosticFromError,
@@ -363,6 +369,18 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
     string,
     readonly EntityMutationAffordanceDescriptor[]
   >();
+  const relationshipAffordancesByEntity = new Map<
+    string,
+    RelationshipCommandAffordanceDescriptor[]
+  >();
+  const addRelationshipAffordance = (
+    entityName: string,
+    affordance: RelationshipCommandAffordanceDescriptor,
+  ) => {
+    const affordances = relationshipAffordancesByEntity.get(entityName) ?? [];
+    affordances.push(affordance);
+    relationshipAffordancesByEntity.set(entityName, affordances);
+  };
   for (const policy of policies) {
     if (isEntityMutationPolicy(policy)) {
       validateEntityMutationPolicy(policy);
@@ -408,6 +426,19 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
           policy: policy as OrderedRelationshipCommandPolicy,
           target: relation.target,
         });
+        addRelationshipAffordance(
+          policy.entity.name,
+          orderedRelationshipCommandAffordance(
+            {
+              sourceEntityName: policy.entity.name,
+              relationName: policy.relationName,
+              targetEntityName: relation.target.name,
+              cardinality: 'ordered-many',
+            },
+            policy.entity,
+            relation.target,
+          ),
+        );
         continue;
       }
       if (manyToManyPolicyByRelation.has(key)) {
@@ -419,6 +450,20 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
         policy: policy as ManyToManyRelationshipCommandPolicy,
         target: relation.target,
       });
+      addRelationshipAffordance(
+        policy.entity.name,
+        manyToManyRelationshipCommandAffordance(
+          {
+            sourceEntityName: policy.entity.name,
+            relationName: policy.relationName,
+            targetEntityName: relation.target.name,
+            cardinality: 'many-to-many',
+          },
+          policy.entity,
+          relation.target,
+          policy.actions as readonly ('link' | 'unlink')[],
+        ),
+      );
       continue;
     }
     const field = validatePolicy(policy);
@@ -429,6 +474,19 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
       );
     }
     policyByRelation.set(key, { policy, target: field.target });
+    addRelationshipAffordance(
+      policy.entity.name,
+      directRelationshipCommandAffordance(
+        {
+          sourceEntityName: policy.entity.name,
+          fieldName: policy.fieldName,
+          targetEntityName: field.target.name,
+        },
+        policy.entity,
+        field.target,
+        policy.actions,
+      ),
+    );
   }
 
   const executeSafely = async (
@@ -681,6 +739,13 @@ export const createGraphCommandDispatcher = <TAuthority = unknown>({
           ...(mutationAffordancesByEntity.get(parsed.request.entityName)
             ? {
                 entityMutationAffordances: mutationAffordancesByEntity.get(
+                  parsed.request.entityName,
+                )!,
+              }
+            : {}),
+          ...(relationshipAffordancesByEntity.get(parsed.request.entityName)
+            ? {
+                relationshipCommandAffordances: relationshipAffordancesByEntity.get(
                   parsed.request.entityName,
                 )!,
               }

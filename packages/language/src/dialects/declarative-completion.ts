@@ -92,6 +92,24 @@ export const completeDeclarativeConsoleDocument = (
         kind: 'keyword' as const,
         detail: 'Entity Command',
       })),
+    ...(['attach', 'detach', 'move'] as const)
+      .filter(action =>
+        application.commands?.some(command =>
+          command.relationshipAffordances?.some(affordance =>
+            action === 'move'
+              ? affordance.relationKind === 'ordered'
+              : affordance.actions.some(
+                  candidate => candidate === (action === 'attach' ? 'link' : 'unlink'),
+                ),
+          ),
+        ),
+      )
+      .map(action => ({
+        label: action,
+        apply: `${action} `,
+        kind: 'keyword' as const,
+        detail: 'Relationship Command',
+      })),
     ...(application.operations?.length
       ? [{ label: 'invoke', apply: 'invoke ', kind: 'keyword' as const, detail: 'Operation' }]
       : []),

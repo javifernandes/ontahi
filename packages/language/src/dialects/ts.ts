@@ -15,6 +15,13 @@ const startsAsGraphRead = (document: string) =>
 const print = (document: string, expression: ConsoleGraphReadSyntax): string => {
   const entity = expression.entity!.text;
   const value = (input: unknown) => JSON.stringify(input);
+  if (expression.kind === 'relationship-command') {
+    const base = `${expression.relationshipAction} ${entity} ${value(expression.sourceValue)} ${expression.relation!.text} ${expression.endpointEntity!.text} ${value(expression.endpointValue)}`;
+    if (expression.relationshipAction !== 'move') return base;
+    if (expression.placement === 'start' || expression.placement === 'end')
+      return `${base} at ${expression.placement}`;
+    return `${base} ${expression.placement} ${expression.anchorEntity!.text} ${value(expression.anchorValue)}`;
+  }
   if (expression.kind === 'operation')
     return `${entity}.${expression.operation!.text}(${expression.input ? value(expression.inputValue) : ''})`;
   if (expression.kind === 'entity-mutation') {

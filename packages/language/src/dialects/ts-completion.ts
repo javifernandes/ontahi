@@ -28,9 +28,29 @@ export const completeTsConsoleDocument = (
   const rootPrefix = document.slice(0, safePosition);
   if (!rootPrefix.includes('.') && /^\s*\w*$/.test(rootPrefix)) {
     const range = completionWordRange(document, safePosition);
+    const relationshipActions = (['attach', 'detach', 'move'] as const)
+      .filter(action =>
+        application.commands?.some(command =>
+          command.relationshipAffordances?.some(affordance =>
+            action === 'move'
+              ? affordance.relationKind === 'ordered'
+              : affordance.actions.some(
+                  candidate => candidate === (action === 'attach' ? 'link' : 'unlink'),
+                ),
+          ),
+        ),
+      )
+      .map(action => ({
+        label: action,
+        apply: `${action} `,
+        kind: 'keyword' as const,
+        detail: 'Relationship Command',
+      }));
     return {
       ...range,
-      items: consoleEntityCompletionItems(application),
+      items: [...relationshipActions, ...consoleEntityCompletionItems(application)].filter(item =>
+        item.label.startsWith(document.slice(range.from, safePosition)),
+      ),
     };
   }
 
