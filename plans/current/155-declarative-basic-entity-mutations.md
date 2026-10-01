@@ -215,7 +215,7 @@ Support share a broader reflected-affordance discovery surface.
 
 - [x] Every removed Todo Operation has an equivalent canonical command path with the same model,
       authority, lifecycle, reaction, cache, and result semantics.
-- [ ] Default, generated, caller-required, optional, nullable, and derived Fields remain distinct in
+- [x] Default, generated, caller-required, optional, nullable, and derived Fields remain distinct in
       types and reflection.
 - [x] Remote command payloads cannot bypass defaults, reference requirements, or lifecycle rules.
 - [ ] Devtools and Model Support consume reflected mutation contracts rather than Todo-owned copies.

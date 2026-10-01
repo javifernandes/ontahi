@@ -55,6 +55,7 @@ describe('schema-native Entity Ref input', () => {
       kind: 'entity-ref',
       entityName: 'SchemaRefBook',
       identity: { name: 'refById', fields: ['id'] },
+      field: { source: 'caller-required', nullable: false },
     });
   });
 
@@ -84,6 +85,7 @@ describe('schema-native Entity Ref input', () => {
       entityName: 'ExistingSchemaRefBook',
       identity: { name: 'refById', fields: ['id'] },
       resolution: 'existing',
+      field: { source: 'caller-required', nullable: false },
     });
     expect(toGraphJsonSchema(input.fields.book)['x-ontahi-entity-ref']).toEqual({
       entityName: 'ExistingSchemaRefBook',
