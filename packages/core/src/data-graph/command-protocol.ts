@@ -60,7 +60,11 @@ export type GraphCommandRequest =
 
 export type EntityMutationCommandAction = 'create' | 'update' | 'delete';
 
-/** Advisory Entity mutation policy discovery. Execution remains independently authorized. */
+/**
+ * Advisory registered-policy discovery. This metadata is not filtered by per-command `authorize`;
+ * hosts must protect the discovery route when policy shape is sensitive. Execution remains
+ * independently authorized.
+ */
 export type GraphCommandCapabilitiesRequestV1 = {
   readonly version: 1;
   readonly kind: 'graph-command-capabilities';

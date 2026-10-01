@@ -110,6 +110,9 @@ Devtools keeps no writable-Field schema of its own: it projects Core's policy-de
 update, delete, locator, condition, and Selection affordances into Console completion and
 diagnostics. The snapshot is invalidated when Entity, transport, route, principal, or cache scope
 changes, and unavailable metadata never falls back to assumed mutation actions.
+That principal/cache-scope key prevents stale client reuse; it does not make the generic capability
+response authority-filtered. Hosts protect discovery routing when registered policy shape is
+sensitive, and execution still authorizes every concrete Command.
 
 The many-result limit control is another source-backed projection. Apply/Enter edits only the limit
 through headless source ranges, then submits the current same-Entity draft. A compact result toolbar

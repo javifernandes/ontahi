@@ -41,7 +41,7 @@ const policyFor = (
 });
 
 describe('Entity Mutation Command dispatcher', () => {
-  it('projects registered Entity mutation actions as advisory capabilities', async () => {
+  it('projects registered policy metadata independently of per-command authorization', async () => {
     const graph = defineBookGraph();
     const dispatch = createGraphCommandDispatcher({
       policies: [
@@ -49,7 +49,11 @@ describe('Entity Mutation Command dispatcher', () => {
           entity: graph.Book,
           scope: 'all',
           actions: {
-            update: { fields: ['title'], result: ['id', 'title'] },
+            update: {
+              fields: ['title'],
+              result: ['id', 'title'],
+              authorize: () => false,
+            },
             delete: { result: ['id'] },
           },
         },
@@ -60,7 +64,7 @@ describe('Entity Mutation Command dispatcher', () => {
     await expect(
       dispatch(
         { version: 1, kind: 'graph-command-capabilities', entityName: 'Book' },
-        { authority: undefined },
+        { authority: { principal: null } },
       ),
     ).resolves.toEqual({
       kind: 'graph-command-capabilities-result',

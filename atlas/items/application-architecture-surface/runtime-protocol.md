@@ -55,9 +55,11 @@ execution exactly as they do for application-authored traffic.
 The `graph.command` family supports additive mutation capability discovery. Legacy clients may
 consume only the allowed action lists; newer clients also receive portable policy-derived
 affordances for exact identity targets, writable values, conditions, and Selection mutations.
-Capability responses are scoped to the receiver policy and current authority context, but remain
-authoring snapshots rather than grants. Execution always re-enters the authoritative Command
-parser, policy, and authorization boundary.
+Capability responses describe the registered receiver policy; action-level `authorize` callbacks
+are command-dependent and do not filter generic discovery. A host whose policy shape is sensitive
+must protect the discovery route with its transport/session boundary. These responses remain
+authoring snapshots rather than grants: execution always re-enters the authoritative Command
+parser, live policy, and authorization boundary.
 
 Core exposes the first envelope, typed family registry, and transport-neutral dispatcher.
 `operation` body version 1 preserves the existing `invoke` and `check-permission` semantics;

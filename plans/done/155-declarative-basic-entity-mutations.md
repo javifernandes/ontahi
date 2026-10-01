@@ -227,6 +227,10 @@ those descriptors to the current Entity, transport route, and execution identity
 language completion and diagnostics use the published locators, values, and Selection operators.
 Unknown capability state is fail-closed for assistance. Every submitted Command still traverses the
 ordinary receiver parser, policy, authorization callback, and execution boundary.
+Discovery describes registered policy shape and does not invoke command-dependent `authorize`
+callbacks without a concrete Command. Deployments that treat Field or action metadata as sensitive
+protect the discovery route at the transport/session boundary; changing execution identity still
+invalidates Devtools snapshots so metadata is never reused across client authority contexts.
 
 ## Acceptance
 
