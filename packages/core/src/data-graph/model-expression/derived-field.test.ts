@@ -55,6 +55,7 @@ describe('portable derived Fields', () => {
       numberConstraints: { integer: true, min: 0 },
       readOnly: true,
       derived: availableSeats.derived,
+      field: { source: 'derived', nullable: false },
     });
     expect(toGraphJsonSchema(availableSeats)).toMatchObject({
       type: 'integer',

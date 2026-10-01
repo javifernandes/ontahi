@@ -207,6 +207,59 @@ describe('data-graph schema DSL', () => {
     expect(() => field.generated(field.string(), ' ')).toThrow('require a generator name');
   });
 
+  it('reflects Field input ownership independently from nullability', () => {
+    const Presence = entity('Presence', {
+      required: field.string(),
+      nullable: field.nullable(field.string()),
+      optional: field.optional(field.string()),
+      optionalNullable: field.optional(field.nullable(field.string())),
+      defaulted: field.default(field.boolean(), false),
+      generated: field.generated(field.id(), 'uuid'),
+      derived: field.derived(field.string(), () => ''),
+    });
+
+    expect(toGraphSchemaDescriptor(Presence)).toMatchObject({
+      fields: {
+        required: {
+          kind: 'scalar',
+          field: { source: 'caller-required', nullable: false },
+        },
+        nullable: {
+          kind: 'nullable',
+          field: { source: 'caller-required', nullable: true },
+        },
+        optional: {
+          kind: 'optional',
+          field: { source: 'caller-optional', nullable: false },
+        },
+        optionalNullable: {
+          kind: 'optional',
+          field: { source: 'caller-optional', nullable: true },
+        },
+        defaulted: {
+          kind: 'default',
+          field: { source: 'defaulted', nullable: false },
+        },
+        generated: {
+          kind: 'scalar',
+          field: { source: 'generated', nullable: false },
+        },
+        derived: {
+          kind: 'scalar',
+          field: { source: 'derived', nullable: false },
+        },
+      },
+    });
+
+    expectTypeOf(Presence.fields.nullable.nullable).toEqualTypeOf<true>();
+    expectTypeOf(Presence.fields.optional.optional).toEqualTypeOf<true>();
+    expectTypeOf(Presence.fields.defaulted.defaultValue).toEqualTypeOf<boolean>();
+    expectTypeOf(Presence.fields.generated.generatedBy).toEqualTypeOf<string>();
+    expectTypeOf(Presence.fields.derived.derived).toEqualTypeOf<
+      NonNullable<(typeof Presence.fields.derived)['derived']>
+    >();
+  });
+
   it('reflects and validates array cardinality constraints', () => {
     const EmptyStrings = graphSchema.array(field.string(), { minItems: 0, maxItems: 0 });
 

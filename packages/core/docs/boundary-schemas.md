@@ -84,6 +84,13 @@ Framework adapters include:
 
 Explorer and generated clients must use the first three surfaces. They must not inspect the generated Zod adapter.
 
+Descriptors reflected from `field.*` declarations include `field.source` and `field.nullable`.
+`source` is one of `caller-required`, `caller-optional`, `defaulted`, `generated`, or `derived`.
+Nullability is a separate axis: a caller-required nullable Field accepts `null`, but omission still
+means that required input is missing. Consumers should use this metadata when deciding whether an
+absent value needs caller input; they should not infer omission semantics from JSON Schema
+`required`, `default`, or `readOnly` properties independently.
+
 ## Transport-Only Boundaries
 
 A route or action that directly exposes a `DomainOperation` should delegate opaque input to operation invocation. The operation owns parsing, validation, and canonical `input_invalid` results.

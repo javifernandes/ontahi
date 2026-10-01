@@ -31,7 +31,19 @@ export type GraphSchemaScalarType =
   | 'json'
   | 'enum';
 
-export type GraphSchemaDescriptor =
+export type GraphSchemaFieldSource =
+  | 'caller-required'
+  | 'caller-optional'
+  | 'defaulted'
+  | 'generated'
+  | 'derived';
+
+export type GraphSchemaFieldSemantics = {
+  source: GraphSchemaFieldSource;
+  nullable: boolean;
+};
+
+export type GraphSchemaDescriptor = (
   | GraphSchemaScalarDescriptor
   | GraphSchemaReferenceDescriptor
   | GraphSchemaObjectDescriptor
@@ -47,7 +59,11 @@ export type GraphSchemaDescriptor =
   | GraphSchemaLazyDescriptor
   | GraphSchemaNamedDescriptor
   | GraphSelectionDescriptor
-  | GraphSchemaVoidDescriptor;
+  | GraphSchemaVoidDescriptor
+) & {
+  /** Present when this schema node was reflected from an Entity or Value Field declaration. */
+  field?: GraphSchemaFieldSemantics;
+};
 
 export type GraphSchemaScalarDescriptor = {
   kind: 'scalar';
@@ -341,6 +357,19 @@ const describeField = (field: AnyFieldDefinition): GraphSchemaDescriptor => {
     : descriptor;
 };
 
+const describeFieldSemantics = (field: AnyFieldDefinition): GraphSchemaFieldSemantics => ({
+  source: field.derived
+    ? 'derived'
+    : field.generatedBy
+      ? 'generated'
+      : Object.prototype.hasOwnProperty.call(field, 'defaultValue')
+        ? 'defaulted'
+        : field.optional
+          ? 'caller-optional'
+          : 'caller-required',
+  nullable: field.nullable === true,
+});
+
 const describeEntity = (
   entity: AnyEntityDefinition,
   resolvingLazyNames: Set<string>,
@@ -404,8 +433,11 @@ export const toGraphSchemaDescriptor = (
     const nullableDescriptor: GraphSchemaDescriptor = schema.nullable
       ? { kind: 'nullable', item: descriptor }
       : descriptor;
+    const reflected = schema.optional
+      ? ({ kind: 'optional', item: nullableDescriptor } as const)
+      : nullableDescriptor;
 
-    return schema.optional ? { kind: 'optional', item: nullableDescriptor } : nullableDescriptor;
+    return { ...reflected, field: describeFieldSemantics(schema) };
   }
 
   if (schema.kind === 'entity') {

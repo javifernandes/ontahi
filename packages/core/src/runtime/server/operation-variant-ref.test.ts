@@ -97,6 +97,7 @@ describe('schema-native variant participants', () => {
       entityName: 'ParticipantNode',
       identity: { name: 'refById', fields: ['id'] },
       resolution: 'existing',
+      field: { source: 'caller-required', nullable: false },
       variant: {
         kind: 'entity-variant',
         name: 'Chapter',

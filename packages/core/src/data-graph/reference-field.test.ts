@@ -243,6 +243,7 @@ describe('data-graph reference fields', () => {
       kind: 'entity-ref',
       entityName: 'TodoList',
       identity: { name: 'refById', fields: ['id'] },
+      field: { source: 'caller-required', nullable: false },
     });
     expect(toGraphJsonSchema(Todo.fields.list)).toMatchObject({
       type: 'object',
