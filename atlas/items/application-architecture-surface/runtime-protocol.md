@@ -26,6 +26,7 @@ relatedPlans:
   - ontahi://plans/146g-unified-fetch-runtime-protocol-clients
   - ontahi://plans/146h-websocket-runtime-transport-and-durable-progress
   - ontahi://plans/150-ontahi-devtools-semantic-console
+  - ontahi://plans/155-declarative-basic-entity-mutations
 ---
 
 The Ontahí Runtime Protocol is the transport-independent contract through which distributed
@@ -50,6 +51,15 @@ documents onto existing `graph.read`, `graph.command`, and `operation` bodies. T
 Console protocol family or place authority in a portable request. The configured transport and
 receiver dispatcher continue to own routing, compatibility, context derivation, policy, and
 execution exactly as they do for application-authored traffic.
+
+The `graph.command` family supports additive mutation capability discovery. Legacy clients may
+consume only the allowed action lists; newer clients also receive portable policy-derived
+affordances for exact identity targets, writable values, conditions, and Selection mutations.
+Capability responses describe the registered receiver policy; action-level `authorize` callbacks
+are command-dependent and do not filter generic discovery. A host whose policy shape is sensitive
+must protect the discovery route with its transport/session boundary. These responses remain
+authoring snapshots rather than grants: execution always re-enters the authoritative Command
+parser, live policy, and authorization boundary.
 
 Core exposes the first envelope, typed family registry, and transport-neutral dispatcher.
 `operation` body version 1 preserves the existing `invoke` and `check-permission` semantics;

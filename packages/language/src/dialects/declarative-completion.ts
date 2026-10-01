@@ -125,9 +125,15 @@ export const completeDeclarativeConsoleDocument = (
       candidate => candidate.name === commandTargetPrefix[2],
     );
     const capabilities = application.commands?.find(command => command.entityName === entity?.name);
-    const refAvailable = capabilities?.actions.includes(action);
+    const affordance = capabilities?.affordances?.find(candidate => candidate.action === action);
+    const refAvailable = affordance
+      ? action === 'create' || affordance.target !== undefined
+      : capabilities?.actions.includes(action);
     const selectionAvailable =
-      action !== 'create' && capabilities?.selectionActions?.includes(action);
+      action !== 'create' &&
+      (affordance
+        ? affordance.target?.selection !== undefined
+        : capabilities?.selectionActions?.includes(action));
     if (!entity || (!refAvailable && !selectionAvailable)) return result([]);
     if (action === 'create')
       return result([
@@ -139,10 +145,14 @@ export const completeDeclarativeConsoleDocument = (
           detail: 'Entity values',
         },
       ]);
-    const locator =
-      entity.fields.find(field => field.type === 'id') ??
-      entity.fields.find(field => field.name === 'id') ??
-      entity.fields[0];
+    const locatorName = affordance?.target
+      ? Object.keys(affordance.target.exact.locator.fields)[0]
+      : undefined;
+    const locator = locatorName
+      ? entity.fields.find(field => field.name === locatorName)
+      : (entity.fields.find(field => field.type === 'id') ??
+        entity.fields.find(field => field.name === 'id') ??
+        entity.fields[0]);
     if (!locator) return result([]);
     const value = locatorValue(locator.type, locator.enumValues);
     const apply = `{ ${locator.name}: ${value} }`;
@@ -236,6 +246,9 @@ export const completeDeclarativeConsoleDocument = (
   if (syntax?.kind === 'entity-mutation' && syntax.entity) {
     const entity = application.entities.find(candidate => candidate.name === syntax.entity?.text);
     if (entity) {
+      const affordance = application.commands
+        ?.find(command => command.entityName === entity.name)
+        ?.affordances?.find(candidate => candidate.action === syntax.action);
       const locator =
         entity.fields.find(field => field.type === 'id') ??
         entity.fields.find(field => field.name === 'id') ??
@@ -245,7 +258,7 @@ export const completeDeclarativeConsoleDocument = (
           document,
           pos,
           syntax.target.from,
-          reflectedObjectDescriptor(entity, [locator]),
+          affordance?.target?.exact.locator ?? reflectedObjectDescriptor(entity, [locator]),
         );
         if (completion) return completion;
       }
@@ -258,7 +271,7 @@ export const completeDeclarativeConsoleDocument = (
           document,
           pos,
           syntax.values.from,
-          reflectedObjectDescriptor(entity, fields),
+          affordance?.values ?? reflectedObjectDescriptor(entity, fields),
         );
         if (completion) return completion;
       }
@@ -271,6 +284,14 @@ export const completeDeclarativeConsoleDocument = (
             document.slice(from, to),
             pos - from,
             entity,
+            affordance?.target?.selection
+              ? {
+                  fields: Object.entries(affordance.target.selection.fields).map(
+                    ([name, field]) => ({ name, operators: field.operators }),
+                  ),
+                  ...(affordance.target.selection.allowAll ? { allowAll: true as const } : {}),
+                }
+              : undefined,
           );
           return {
             from: from + completion.from,

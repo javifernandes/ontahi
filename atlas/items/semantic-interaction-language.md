@@ -23,6 +23,7 @@ relatedPlans:
   - ontahi://plans/147-application-bound-headless-graph-reads
   - ontahi://plans/150-ontahi-devtools-semantic-console
   - ontahi://plans/150a-selection-factories-locators-and-refs
+  - ontahi://plans/155-declarative-basic-entity-mutations
 ---
 
 The [[ontahi.semantic-interaction-language|Ontahí Semantic Interaction Language]] is a family of
@@ -184,6 +185,13 @@ may later contribute authority-aware capabilities or dynamic value suggestions, 
 Refs. It is not required to parse or lower the first Boolean predicate. Runtime capability and
 authority may narrow what can execute without changing the intrinsic meaning of a valid Selection;
 an editor affordance is never an authorization decision.
+
+Graph Command authoring further intersects static Entity reflection with the receiver's reflected
+mutation affordance. Declarative completion and diagnostics therefore use only the published
+action's locator, writable values, presence semantics, and Selection Field/operator permissions;
+they do not reconstruct mutation contracts from the complete Entity. Missing or stale discovery
+removes assistance rather than implying access, and the resulting canonical Command is still
+reauthorized when executed.
 
 That static boundary now also produces cursor context, structural completions, semantic
 classifications, and hover help from the same recovered syntax and resolver facts. Boolean and enum

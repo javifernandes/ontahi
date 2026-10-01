@@ -4,6 +4,7 @@ import {
   createEntityRef,
   entity,
   field,
+  isGraphCommandCapabilities,
   mutateEntity,
   parseGraphCommandFamilyRequest,
   parseGraphCommandRequest,
@@ -51,6 +52,34 @@ describe('data graph Relationship Command protocol', () => {
         entityName: '',
       }),
     ).toMatchObject({ success: false, error: { error: { code: 'invalid_request' } } });
+  });
+
+  it('accepts action-only capability responses and rejects malformed affordances', () => {
+    expect(isGraphCommandCapabilities({ entityMutations: ['create'] })).toBe(true);
+    expect(
+      isGraphCommandCapabilities({
+        entityMutations: ['create'],
+        entityMutationAffordances: [
+          {
+            kind: 'entity-mutation-affordance',
+            entityName: 'Student',
+            action: 'create',
+            values: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { name: { kind: 'scalar', type: 'string' } },
+            },
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isGraphCommandCapabilities({
+        entityMutations: ['create'],
+        entityMutationAffordances: [{ action: 'create', values: { fields: [] } }],
+      }),
+    ).toBe(false);
   });
 
   it('round-trips a canonical command and resolves it against server-owned Entities', () => {

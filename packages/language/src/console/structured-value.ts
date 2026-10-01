@@ -180,9 +180,91 @@ const descriptorValue = (descriptor: GraphSchemaDescriptor): string => {
 
 const descriptorDetail = (descriptor: GraphSchemaDescriptor): string => {
   const value = unwrapDescriptor(descriptor);
-  if (value.kind === 'scalar') return value.type;
-  if (value.kind === 'entity-ref') return `${value.entityName} reference`;
-  return value.kind.replace(/^.*\./, '');
+  const type =
+    value.kind === 'scalar'
+      ? value.type
+      : value.kind === 'entity-ref'
+        ? `${value.entityName} reference`
+        : value.kind.replace(/^.*\./, '');
+  const source = descriptor.field?.source;
+  const presence = source
+    ? source === 'caller-required'
+      ? 'required'
+      : source.replace('caller-', '')
+    : undefined;
+  return [type, presence, descriptor.field?.nullable ? 'nullable' : undefined]
+    .filter(Boolean)
+    .join(' · ');
+};
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isOptionalDescriptor = (descriptor: GraphSchemaDescriptor) =>
+  descriptor.kind === 'optional' || descriptor.kind === 'default';
+
+export const validateStructuredInput = (
+  value: unknown,
+  descriptor: GraphSchemaDescriptor,
+  options: { requireFields?: boolean; requireOne?: boolean } = {},
+): string | undefined => {
+  if (descriptor.kind === 'nullable' && value === null) return;
+  if (
+    ['nullable', 'optional', 'default', 'transform', 'refinement', 'named'].includes(
+      descriptor.kind,
+    )
+  )
+    return validateStructuredInput(
+      value,
+      (descriptor as Extract<GraphSchemaDescriptor, { item: GraphSchemaDescriptor }>).item,
+      options,
+    );
+  if (descriptor.kind === 'scalar') {
+    const valid =
+      descriptor.type === 'number'
+        ? typeof value === 'number' && Number.isFinite(value)
+        : descriptor.type === 'boolean'
+          ? typeof value === 'boolean'
+          : descriptor.type === 'json'
+            ? value !== undefined
+            : typeof value === 'string';
+    if (!valid) return `Expected ${descriptor.type}.`;
+    if (descriptor.type === 'enum' && !descriptor.enumValues?.includes(value as string))
+      return `Expected one of ${descriptor.enumValues?.join(', ') ?? 'the allowed values'}.`;
+    return;
+  }
+  if (descriptor.kind === 'entity-ref')
+    return isObject(value) ? undefined : 'Expected a reference.';
+  if (descriptor.kind === 'literal')
+    return value === descriptor.value ? undefined : `Expected ${JSON.stringify(descriptor.value)}.`;
+  if (descriptor.kind === 'array') {
+    if (!Array.isArray(value)) return 'Expected an array.';
+    for (const entry of value) {
+      const error = validateStructuredInput(entry, descriptor.item);
+      if (error) return error;
+    }
+    return;
+  }
+  if (descriptor.kind === 'object') {
+    if (!isObject(value)) return 'Expected an object.';
+    const names = Object.keys(value);
+    if (options.requireOne && names.length === 0) return 'At least one Field is required.';
+    const unknown = names.find(name => !descriptor.fields[name]);
+    if (unknown && descriptor.unknownKeys === 'strict') return `Field ${unknown} is not writable.`;
+    if (options.requireFields) {
+      const missing = Object.entries(descriptor.fields).find(
+        ([name, field]) => !isOptionalDescriptor(field) && !(name in value),
+      );
+      if (missing) return `Field ${missing[0]} is required.`;
+    }
+    for (const [name, entry] of Object.entries(value)) {
+      const field = descriptor.fields[name];
+      if (!field) continue;
+      const error = validateStructuredInput(entry, field);
+      if (error) return `Field ${name}: ${error}`;
+    }
+  }
+  return;
 };
 
 const placeholderCursorOffset = (value: string): number | undefined => {

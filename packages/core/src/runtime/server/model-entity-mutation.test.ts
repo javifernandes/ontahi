@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   createEntityRef,
   field,
+  reflectEntityMutationAffordances,
   safeParseUnknownGraphSchema,
+  toEntityMutationAffordanceDescriptor,
+  toGraphSchemaDescriptor,
   type EntityMutationCommandPolicy,
 } from '../../data-graph/index.js';
 
@@ -126,5 +129,28 @@ describe('Model Entity mutation exposure', () => {
         description: 'Delete a published document.',
       }),
     ).toThrow('condition field published outside its command policy');
+  });
+
+  it('projects the same reflected Field semantics used by Runtime Protocol discovery', () => {
+    const affordance = toEntityMutationAffordanceDescriptor(
+      reflectEntityMutationAffordances(policy).find(candidate => candidate.action === 'create')!,
+    );
+    const exposure = createModelEntityMutationExposure(policy, {
+      action: 'create',
+      values: ['id', 'title', 'published'],
+      description: 'Create a document.',
+    });
+    const request = toGraphSchemaDescriptor(exposure.request);
+    if (request.kind !== 'object') throw new Error('Expected a request object.');
+    const command = request.fields.command;
+    if (command?.kind !== 'object') throw new Error('Expected a command object.');
+
+    expect(command.fields.values).toEqual(affordance.values);
+    expect(command.fields.values).toMatchObject({
+      fields: {
+        title: { field: { source: 'caller-required' } },
+        published: { field: { source: 'defaulted' } },
+      },
+    });
   });
 });

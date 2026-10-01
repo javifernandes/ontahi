@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/148b-devtools-live-history
   - ontahi://plans/148c-devtools-console-observe
   - ontahi://plans/150-ontahi-devtools-semantic-console
+  - ontahi://plans/155-declarative-basic-entity-mutations
 ---
 
 Ontahí Devtools is the browser-resident implementation component for inspecting an Ontahí web
@@ -103,6 +104,15 @@ not durable grants: authorization still runs on every submitted query.
 Console ordering autocomplete consumes the same snapshot through a headless completion resolver.
 It suggests only permitted reflected Fields for the matching Entity and transport, while manual
 authoring and other completion contexts remain independent of that advisory capability.
+
+Entity mutation authoring follows the same ownership rule through `graph.command` discovery.
+Devtools keeps no writable-Field schema of its own: it projects Core's policy-derived create,
+update, delete, locator, condition, and Selection affordances into Console completion and
+diagnostics. The snapshot is invalidated when Entity, transport, route, principal, or cache scope
+changes, and unavailable metadata never falls back to assumed mutation actions.
+That principal/cache-scope key prevents stale client reuse; it does not make the generic capability
+response authority-filtered. Hosts protect discovery routing when registered policy shape is
+sensitive, and execution still authorizes every concrete Command.
 
 The many-result limit control is another source-backed projection. Apply/Enter edits only the limit
 through headless source ranges, then submits the current same-Entity draft. A compact result toolbar

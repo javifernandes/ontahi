@@ -79,6 +79,112 @@ const application: ConsoleLanguageApplicationReflection = {
   ],
 };
 
+const affordedApplication: ConsoleLanguageApplicationReflection = {
+  entities: [
+    {
+      name: 'Document',
+      fields: [
+        { name: 'id', type: 'id', nullable: false },
+        { name: 'title', type: 'string', nullable: false },
+        { name: 'note', type: 'string', nullable: false },
+        { name: 'archivedAt', type: 'string', nullable: true },
+        { name: 'published', type: 'boolean', nullable: false },
+        { name: 'secret', type: 'string', nullable: false },
+      ],
+    },
+  ],
+  commands: [
+    {
+      entityName: 'Document',
+      actions: ['create', 'update', 'delete'],
+      selectionActions: ['update', 'delete'],
+      affordances: [
+        {
+          kind: 'entity-mutation-affordance',
+          entityName: 'Document',
+          action: 'create',
+          values: {
+            kind: 'object',
+            role: 'object',
+            unknownKeys: 'strict',
+            fields: {
+              title: {
+                kind: 'scalar',
+                type: 'string',
+                field: { source: 'caller-required', nullable: false },
+              },
+              note: {
+                kind: 'optional',
+                item: { kind: 'scalar', type: 'string' },
+                field: { source: 'caller-optional', nullable: false },
+              },
+              archivedAt: {
+                kind: 'nullable',
+                item: { kind: 'scalar', type: 'string' },
+                field: { source: 'caller-required', nullable: true },
+              },
+              published: {
+                kind: 'default',
+                item: { kind: 'scalar', type: 'boolean' },
+                defaultValue: false,
+                field: { source: 'defaulted', nullable: false },
+              },
+            },
+          },
+        },
+        {
+          kind: 'entity-mutation-affordance',
+          entityName: 'Document',
+          action: 'update',
+          target: {
+            exact: {
+              reference: { kind: 'entity-ref', entityName: 'Document' },
+              locator: {
+                kind: 'object',
+                role: 'object',
+                unknownKeys: 'strict',
+                fields: { id: { kind: 'scalar', type: 'id' } },
+              },
+            },
+            selection: {
+              fields: {
+                title: { schema: { kind: 'scalar', type: 'string' }, operators: ['eq'] },
+              },
+            },
+          },
+          values: {
+            kind: 'object',
+            role: 'object',
+            unknownKeys: 'strict',
+            fields: { title: { kind: 'scalar', type: 'string' } },
+          },
+        },
+        {
+          kind: 'entity-mutation-affordance',
+          entityName: 'Document',
+          action: 'delete',
+          target: {
+            exact: {
+              reference: { kind: 'entity-ref', entityName: 'Document' },
+              locator: {
+                kind: 'object',
+                role: 'object',
+                unknownKeys: 'strict',
+                fields: { id: { kind: 'scalar', type: 'id' } },
+              },
+            },
+            selection: {
+              fields: {
+                title: { schema: { kind: 'scalar', type: 'string' }, operators: ['eq'] },
+              },
+            },
+          },
+        },
+      ],
+    },
+  ],
+};
+
 describe('Console actions', () => {
   it('lowers a reflected TS Operation to the canonical operation family', () => {
     expect(
@@ -422,5 +528,117 @@ describe('Console actions', () => {
         dialect: 'declarative',
       }).items,
     ).toEqual([expect.objectContaining({ label: 'where' })]);
+  });
+
+  it('uses reflected mutation affordances for fields, presence, and diagnostics', () => {
+    expect(
+      completeConsoleDocument('create Document ', 16, affordedApplication, {
+        dialect: 'declarative',
+      }).items,
+    ).toEqual([expect.objectContaining({ label: '{…}' })]);
+    const create = 'create Document {  }';
+    const createItems = completeConsoleDocument(create, create.indexOf('}'), affordedApplication, {
+      dialect: 'declarative',
+    }).items;
+    expect(createItems.map(item => item.label)).toEqual([
+      'title',
+      'note',
+      'archivedAt',
+      'published',
+    ]);
+    expect(createItems.find(item => item.label === 'published')?.detail).toContain('defaulted');
+    expect(createItems.find(item => item.label === 'archivedAt')?.detail).toContain('nullable');
+
+    expect(
+      analyzeConsoleDocument('create Document { archivedAt: null }', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ message: 'Field title is required.' })]);
+    expect(
+      analyzeConsoleDocument(
+        'create Document { title: "Draft", archivedAt: null, secret: "hidden" }',
+        affordedApplication,
+        { dialect: 'declarative' },
+      ).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ message: 'Field secret is not writable.' })]);
+    expect(
+      analyzeConsoleDocument(
+        'create Document { title: "Draft", archivedAt: null }',
+        affordedApplication,
+        { dialect: 'declarative' },
+      ).semanticDiagnostics,
+    ).toEqual([]);
+
+    const update = 'update Document { id: "doc-1" } with {  }';
+    expect(
+      completeConsoleDocument(update, update.lastIndexOf('}'), affordedApplication, {
+        dialect: 'declarative',
+      }).items.map(item => item.label),
+    ).toEqual(['title']);
+    expect(
+      analyzeConsoleDocument(
+        'update Document { id: "doc-1" } with { secret: "hidden" }',
+        affordedApplication,
+        { dialect: 'declarative' },
+      ).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ message: 'Field secret is not writable.' })]);
+  });
+
+  it('narrows Selection completion and diagnostics to the published mutation policy', () => {
+    expect(
+      completeConsoleDocument('delete Document where {  }', 24, affordedApplication, {
+        dialect: 'declarative',
+      }).items.map(item => item.label),
+    ).toContain('title');
+    expect(
+      completeConsoleDocument('delete Document where {  }', 24, affordedApplication, {
+        dialect: 'declarative',
+      }).items.map(item => item.label),
+    ).not.toContain('secret');
+    expect(
+      analyzeConsoleDocument('delete Document where { secret = "x" }', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Field secret is not available for this mutation.' }),
+    ]);
+    expect(
+      analyzeConsoleDocument('delete Document where { title in ["x"] }', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Operator in is not available for Field title.' }),
+    ]);
+    expect(
+      analyzeConsoleDocument('delete Document where all', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Selection of every Entity is not available.' }),
+    ]);
+    expect(
+      analyzeConsoleDocument('delete Document where not title = "x"', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Negated mutation selections are not available.' }),
+    ]);
+    expect(
+      analyzeConsoleDocument(
+        'delete Document where title = "x" and secret = "hidden"',
+        affordedApplication,
+        { dialect: 'declarative' },
+      ).semanticDiagnostics,
+    ).toEqual([
+      expect.objectContaining({ message: 'Field secret is not available for this mutation.' }),
+    ]);
+  });
+
+  it('diagnoses unknown mutation Entities before execution', () => {
+    expect(
+      analyzeConsoleDocument('create Missing { title: "Draft" }', affordedApplication, {
+        dialect: 'declarative',
+      }).semanticDiagnostics,
+    ).toEqual([expect.objectContaining({ message: 'Unknown Entity Missing.' })]);
   });
 });

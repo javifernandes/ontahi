@@ -22,7 +22,39 @@ import { resolveExpression } from '../selection/semantics.js';
 
 import { consoleNavigationTarget } from './context.js';
 import { resolveConsoleFactory } from './factories.js';
-import { normalizeStructuredInput } from './structured-value.js';
+import { normalizeStructuredInput, validateStructuredInput } from './structured-value.js';
+
+type SelectionMutationAffordance = NonNullable<
+  NonNullable<
+    NonNullable<ConsoleLanguageApplicationReflection['commands']>[number]['affordances']
+  >[number]['target']
+>['selection'];
+
+const selectionAffordanceError = (
+  expression: SelectionExpression,
+  affordance: SelectionMutationAffordance,
+): string | undefined => {
+  if (!affordance) return 'Selection mutation is not available.';
+  if (expression.kind === 'none') return;
+  if (expression.kind === 'all')
+    return affordance.allowAll ? undefined : 'Selection of every Entity is not available.';
+  if (expression.kind === 'predicate') {
+    const field = affordance.fields[expression.fieldName];
+    if (!field) return `Field ${expression.fieldName} is not available for this mutation.`;
+    return field.operators.includes(expression.operator)
+      ? undefined
+      : `Operator ${expression.operator} is not available for Field ${expression.fieldName}.`;
+  }
+  if (expression.kind === 'and' || expression.kind === 'or')
+    return expression.operands
+      .map(operand => selectionAffordanceError(operand, affordance))
+      .find(Boolean);
+  if (expression.kind === 'not')
+    return affordance.allowAll
+      ? selectionAffordanceError(expression.operand, affordance)
+      : 'Negated mutation selections are not available.';
+  return 'This mutation Selection is not available.';
+};
 
 const diagnostic = (
   parsed: ConsoleDocumentParseResult,
@@ -113,11 +145,20 @@ export const analyzeConsoleSyntax = (
     const commandReflection = application.commands?.find(
       candidate => candidate.entityName === entityName,
     );
+    const affordance = commandReflection?.affordances?.find(
+      candidate => candidate.action === expression.action,
+    );
+    const hasAffordances = commandReflection?.affordances !== undefined;
     if (
       !expression.action ||
       !(selectionMutation
-        ? commandReflection?.selectionActions?.includes(expression.action as 'update' | 'delete')
-        : commandReflection?.actions.includes(expression.action))
+        ? hasAffordances
+          ? affordance?.target?.selection !== undefined
+          : commandReflection?.selectionActions?.includes(expression.action as 'update' | 'delete')
+        : hasAffordances
+          ? affordance !== undefined &&
+            (expression.action === 'create' || affordance.target !== undefined)
+          : commandReflection?.actions.includes(expression.action))
     )
       return diagnostic(
         parsed,
@@ -139,6 +180,10 @@ export const analyzeConsoleSyntax = (
       if (!resolved.expression || resolved.diagnostics.length)
         return { ...parsed, semanticDiagnostics: resolved.diagnostics };
       selection = resolved.expression;
+      if (affordance?.target?.selection) {
+        const error = selectionAffordanceError(selection, affordance.target.selection);
+        if (error) return diagnostic(parsed, expression, 'console.semantic.invalid-command', error);
+      }
     }
     const target = expression.targetValue;
     if (
@@ -152,13 +197,29 @@ export const analyzeConsoleSyntax = (
         'console.semantic.invalid-command',
         'Entity Command target must be an object locator.',
       );
+    if (affordance?.target && !selectionMutation) {
+      const error = validateStructuredInput(target, affordance.target.exact.locator, {
+        requireFields: true,
+      });
+      if (error) return diagnostic(parsed, expression, 'console.semantic.invalid-command', error);
+    }
+    const values = affordance?.values
+      ? normalizeStructuredInput(expression.valuesValue, affordance.values)
+      : expression.valuesValue;
+    if (affordance?.values) {
+      const error = validateStructuredInput(values, affordance.values, {
+        requireFields: expression.action === 'create',
+        requireOne: expression.action === 'update',
+      });
+      if (error) return diagnostic(parsed, expression, 'console.semantic.invalid-command', error);
+    }
     const command =
       expression.action === 'create'
         ? {
             kind: 'entity-mutation-command' as const,
             action: 'create' as const,
             entityName,
-            values: expression.valuesValue as Record<string, unknown>,
+            values: values as Record<string, unknown>,
           }
         : expression.action === 'update'
           ? {
@@ -172,7 +233,7 @@ export const analyzeConsoleSyntax = (
                     entityName,
                     locator: target as Record<string, unknown>,
                   },
-              values: expression.valuesValue as Record<string, unknown>,
+              values: values as Record<string, unknown>,
             }
           : {
               kind: 'entity-mutation-command' as const,

@@ -6,6 +6,7 @@ import type {
   GraphCommandRequest,
   GraphReadRequest,
   GraphSchemaDescriptor,
+  EntityMutationAffordanceDescriptor,
   EntityVariantDescriptor,
 } from '@ontahi/core/data-graph';
 import type { OperationProtocolRequestV1 } from '@ontahi/core/runtime/protocol';
@@ -192,6 +193,7 @@ export type SelectionLanguageExecutionAffordances = {
     readonly name: string;
     readonly operators: readonly SelectionLanguagePredicateOperator[];
   }[];
+  readonly allowAll?: true;
 };
 
 export type SelectionLanguageSemanticClassification = SelectionLanguageRange & {
@@ -218,6 +220,7 @@ export type ConsoleLanguageApplicationReflection = {
     readonly entityName: string;
     readonly actions: readonly ('create' | 'update' | 'delete')[];
     readonly selectionActions?: readonly ('update' | 'delete')[];
+    readonly affordances?: readonly EntityMutationAffordanceDescriptor[];
   }[];
 };
 

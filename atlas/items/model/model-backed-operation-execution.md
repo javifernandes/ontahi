@@ -19,6 +19,7 @@ relatedPlans:
   - ontahi://plans/153-model-backed-todo-command-spike
   - ontahi://plans/153a-model-execution-security-and-authorization
   - ontahi://plans/153b-declarative-operation-context-scope
+  - ontahi://plans/155-declarative-basic-entity-mutations
 migratedFrom: bookops://atlas/model/model-backed-operation-execution
 sourceCommit: 67713696
 ---
@@ -91,6 +92,12 @@ Core; Todo configures authorized context, exposed contracts and validators. Olla
 example-owned adapter. Simple provider-and-scope activation across arbitrary apps remains a design
 goal, not an established public convenience API. Graph instruction interpretation remains distinct
 from choosing a model as the implementation of a particular domain operation.
+
+Model-visible Entity mutation schemas now project from the same Core mutation affordance used by
+Runtime Protocol discovery and Devtools. Presentation and intentional narrowing remain local to
+Model Support, but writable Fields, identity, conditions, defaults, nullability, generation, and
+reference requirements are derived once from the Entity plus command policy. This removes a
+parallel model-only mutation schema without turning discovery or schema validation into authority.
 
 The next checkpoint composes interpretation with [[ontahi.model.operation-interaction|Operation
 Interaction]]. Core prepares a canonical Read, Command, or Invocation. An unambiguous request

@@ -8,6 +8,10 @@ import {
   type AnyEntityDefinition,
 } from './definitions.js';
 import {
+  isEntityMutationAffordanceDescriptor,
+  type EntityMutationAffordanceDescriptor,
+} from './entity-mutation-affordance.js';
+import {
   hasEntityMutationCondition,
   type EntityMutationCommand,
 } from './entity-mutation-command.js';
@@ -56,7 +60,11 @@ export type GraphCommandRequest =
 
 export type EntityMutationCommandAction = 'create' | 'update' | 'delete';
 
-/** Advisory Entity mutation policy discovery. Execution remains independently authorized. */
+/**
+ * Advisory registered-policy discovery. This metadata is not filtered by per-command `authorize`;
+ * hosts must protect the discovery route when policy shape is sensitive. Execution remains
+ * independently authorized.
+ */
 export type GraphCommandCapabilitiesRequestV1 = {
   readonly version: 1;
   readonly kind: 'graph-command-capabilities';
@@ -66,6 +74,8 @@ export type GraphCommandCapabilitiesRequestV1 = {
 export type GraphCommandCapabilities = {
   readonly entityMutations: readonly EntityMutationCommandAction[];
   readonly selectionMutations?: readonly ('update' | 'delete')[];
+  /** Policy-derived authoring contracts. Optional for compatibility with action-only servers. */
+  readonly entityMutationAffordances?: readonly EntityMutationAffordanceDescriptor[];
 };
 
 export type GraphCommandCapabilitiesResult = {
@@ -142,7 +152,10 @@ export const isGraphCommandCapabilities = (value: unknown): value is GraphComman
   ) &&
   (value.selectionMutations === undefined ||
     (Array.isArray(value.selectionMutations) &&
-      value.selectionMutations.every(action => action === 'update' || action === 'delete')));
+      value.selectionMutations.every(action => action === 'update' || action === 'delete'))) &&
+  (value.entityMutationAffordances === undefined ||
+    (Array.isArray(value.entityMutationAffordances) &&
+      value.entityMutationAffordances.every(isEntityMutationAffordanceDescriptor)));
 
 export const parseGraphCommandFamilyRequest = (
   value: unknown,

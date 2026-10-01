@@ -1,6 +1,7 @@
 import { isRecord } from '@ontahi/core';
 import {
   isGraphCommandCapabilities,
+  type EntityMutationAffordanceDescriptor,
   type EntityMutationCommandAction,
 } from '@ontahi/core/data-graph';
 import {
@@ -13,6 +14,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 type Entry = {
   actions?: readonly EntityMutationCommandAction[];
   selectionActions?: readonly ('update' | 'delete')[];
+  affordances?: readonly EntityMutationAffordanceDescriptor[];
   error?: string;
 };
 type Discovery = {
@@ -68,15 +70,25 @@ export const useConsoleCommandCapabilities = (
             typeof response.error.message === 'string'
           )
             throw new Error(response.error.message);
+          const capabilities = response.capabilities;
           if (
             response.kind !== 'graph-command-capabilities-result' ||
             response.entityName !== name ||
-            !isGraphCommandCapabilities(response.capabilities)
+            !isGraphCommandCapabilities(capabilities)
           )
             throw new Error('This server did not return Graph Command capabilities.');
+          if (
+            capabilities.entityMutationAffordances?.some(
+              affordance =>
+                affordance.entityName !== name ||
+                !capabilities.entityMutations.includes(affordance.action),
+            )
+          )
+            throw new Error('This server returned mismatched Graph Command capabilities.');
           publish(name, {
-            actions: response.capabilities.entityMutations,
-            selectionActions: response.capabilities.selectionMutations,
+            actions: capabilities.entityMutations,
+            selectionActions: capabilities.selectionMutations,
+            affordances: capabilities.entityMutationAffordances,
           });
         })
         .catch((error: unknown) =>

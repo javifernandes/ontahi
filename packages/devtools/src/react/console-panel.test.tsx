@@ -290,8 +290,14 @@ describe('Console actions', uiTestOptions, () => {
     const clientCache = createGraphClientCache();
     clientCache.writeEntity(ListSchema, { id: 'list-1', name: 'Inbox' });
     const onActionExecuted = vi.fn();
-    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
-      createRuntimeProtocolResponse(envelope, {
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      if ((envelope.body as { kind?: string }).kind === 'graph-command-capabilities')
+        return createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-command-capabilities-result',
+          entityName: 'List',
+          capabilities: { entityMutations: ['update'] },
+        });
+      return createRuntimeProtocolResponse(envelope, {
         kind: 'graph-command-result',
         value: {
           created: [],
@@ -304,8 +310,8 @@ describe('Console actions', uiTestOptions, () => {
           ],
           deleted: [],
         },
-      }),
-    );
+      });
+    });
     render(
       <ConsolePanel
         clientCache={clientCache}
@@ -318,6 +324,11 @@ describe('Console actions', uiTestOptions, () => {
       />,
     );
 
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() =>
       expect(
