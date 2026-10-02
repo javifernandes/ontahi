@@ -444,6 +444,7 @@ export {
   type ModelEntityMutationExposureOptions,
 } from './model-entity-mutation.js';
 export type { ModelGraphReadExposure, ModelGraphReadResult } from './model-graph-read.js';
+export type { ModelEntityCandidate, ModelEntityMatch } from './model-graph-read-application.js';
 export {
   createModelGraphReadExposure,
   type ModelGraphReadExposureOptions,

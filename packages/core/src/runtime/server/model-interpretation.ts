@@ -19,6 +19,11 @@ import {
   validateModelGraphCommand,
   type ModelGraphCommandExposure,
 } from './model-graph-command.js';
+import {
+  openModelGraphReadSchema,
+  parseModelGraphReadApplication,
+  type ModelGraphReadApplicationProposal,
+} from './model-graph-read-application.js';
 import { validateModelGraphRead, type ModelGraphReadExposure } from './model-graph-read.js';
 
 export type ModelRequest = {
@@ -53,6 +58,7 @@ export type ModelInterpretationValue =
         request: GraphReadRequest | GraphCommandRequest | OperationInvokeRequest;
       }>;
     }
+  | ({ status: 'application' } & ModelGraphReadApplicationProposal)
   | { status: 'help' }
   | { status: 'unresolved'; reason: string };
 
@@ -95,6 +101,10 @@ export const parseModelInterpretation = (raw: unknown): ModelInterpretationValue
     if (raw.status === 'resolved' && keys.length === 2 && isRecord(raw.request)) {
       const request = parseCanonicalRequest(raw.request);
       if (request) return { status: 'resolved', request };
+    }
+    if (raw.status === 'application' && keys.length === 3) {
+      const proposal = parseModelGraphReadApplication(raw);
+      if (proposal) return { status: 'application', ...proposal };
     }
     if (
       raw.status === 'choice' &&
@@ -247,6 +257,35 @@ export const interpretModelRequest = async ({
         required: ['status', 'request'],
         properties: { status: { const: 'resolved' }, request },
       })),
+      ...readCatalog.map(read => ({
+        type: 'object' as const,
+        additionalProperties: false,
+        required: ['status', 'application', 'bindings'],
+        properties: {
+          status: { const: 'application' },
+          application: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'request'],
+            properties: {
+              kind: { const: 'graph-read-application' },
+              request: openModelGraphReadSchema(read.request),
+            },
+          },
+          bindings: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['kind', 'text'],
+              properties: {
+                kind: { const: 'entity-match' },
+                text: { type: 'string', minLength: 1 },
+              },
+            },
+          },
+        },
+      })),
       {
         type: 'object' as const,
         additionalProperties: false,
@@ -286,6 +325,7 @@ export const interpretModelRequest = async ({
   const modelInstructions = [
     'Interpret the user request. Return JSON only.',
     'For ONE supported read or action return {status:"resolved",request:...}. request must be an existing Ontahi graph-read request, graph-command request (including version and command), or invoke request (kind, operationId, input), exactly as advertised.',
+    'For a graph read whose entity reference is named but not supplied as a canonical Ref, return {status:"application",application:{kind:"graph-read-application",request:...},bindings:{holeId:{kind:"entity-match",text:"..."}}}. Put {kind:"hole",id:"holeId"} only in the unresolved reference predicate value. Keep all known predicates closed. Hole ids identify slots only; put the user wording in bindings.',
     'Use an advertised graph read for questions that ask for stored data or a count. Never answer those questions from the supplied context.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
     'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',
@@ -309,7 +349,13 @@ export const interpretModelRequest = async ({
     });
     signal.throwIfAborted();
     const proposal = parseModelInterpretation(raw);
-    if (proposal.status !== 'resolved' && proposal.status !== 'choice') return proposal;
+    if (
+      proposal.status !== 'resolved' &&
+      proposal.status !== 'choice' &&
+      proposal.status !== 'application'
+    )
+      return proposal;
+    if (proposal.status === 'application') return proposal;
     const candidates =
       proposal.status === 'resolved'
         ? [proposal.request]
