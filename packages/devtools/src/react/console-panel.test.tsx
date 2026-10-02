@@ -1106,14 +1106,14 @@ const mountConsole = (
 
 describe('Console Graph Read applications', uiTestOptions, () => {
   it.each([
-    ['ts', 'Tag.where(name = ?wanted).many()'],
-    ['declarative', 'Tag where name = ?wanted'],
-  ] as const)('binds and runs a named Hole from the %s dialect', async (dialect, source) => {
+    ['ts', 'Tag.where(name = ?wanted).many()', 'Alpha'],
+    ['declarative', 'Tag where name = ?wanted', '"Alpha"'],
+  ] as const)('binds and runs a named Hole from the %s dialect', async (dialect, source, input) => {
     const { request, result } = mountConsole(source, undefined, dialect);
 
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?wanted' }), {
-      target: { value: 'Alpha' },
+      target: { value: input },
     });
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -1127,6 +1127,48 @@ describe('Console Graph Read applications', uiTestOptions, () => {
         expression: { kind: 'predicate', fieldName: 'name', operator: 'eq', value: 'Alpha' },
       },
     });
+  });
+
+  it('treats inherited property names as unbound Hole ids', () => {
+    mountConsole('Tag.where(name = ?toString).many()');
+
+    expect(screen.getByRole('textbox', { name: 'Value for ?toString' })).toBeDefined();
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('parses typed values first and falls back to raw strings when the Field requires one', async () => {
+    const { request, replaceSource, result } = mountConsole('Tag.where(active = ?enabled).many()');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?enabled' }), {
+      target: { value: 'true' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await result.findByText('Alpha');
+    expect(request.mock.calls[0]![0].body).toMatchObject({
+      selection: { expression: { fieldName: 'active', value: true } },
+    });
+
+    replaceSource('Tag.where(name = ?name).many()');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?name' }), {
+      target: { value: '123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(request.mock.calls[1]![0].body).toMatchObject({
+      selection: { expression: { fieldName: 'name', value: '123' } },
+    });
+  });
+
+  it.each([
+    ['Tag.where(name = ?value).many()', '{broken}', '?value is not valid JSON.'],
+    ['Tag.where(active = ?value).many()', 'maybe', 'expected boolean'],
+  ])('reports an invalid Hole binding for %s', (source, value, message) => {
+    mountConsole(source);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?value' }), {
+      target: { value },
+    });
+
+    expect(screen.getByRole('alert').textContent).toContain(message);
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

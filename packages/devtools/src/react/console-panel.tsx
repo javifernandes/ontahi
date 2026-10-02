@@ -244,6 +244,16 @@ type PreparedOpenGraphRead =
   | { readonly execution: ConsoleRequest; readonly error?: undefined }
   | { readonly execution?: undefined; readonly error: string };
 
+const consoleHoleInput = (
+  inputs: Readonly<Record<string, string>>,
+  holeId: string,
+): string | undefined => {
+  const input = inputs[holeId];
+  return Object.prototype.hasOwnProperty.call(inputs, holeId) && typeof input === 'string'
+    ? input
+    : undefined;
+};
+
 const prepareOpenGraphRead = (
   application: GraphReadApplication | undefined,
   entities: readonly AnyEntityDefinition[],
@@ -252,7 +262,7 @@ const prepareOpenGraphRead = (
   if (!application) return {};
   let current = application;
   for (const holeId of graphReadApplicationHoles(application)) {
-    const input = inputs[holeId];
+    const input = consoleHoleInput(inputs, holeId);
     if (!input?.trim()) return {};
     const rawValue = input.trim();
     let parsedValue: unknown;
@@ -261,9 +271,9 @@ const prepareOpenGraphRead = (
     } catch {
       return { error: `?${holeId} is not valid JSON.` };
     }
-    let substituted = substituteGraphReadApplication(current, entities, holeId, rawValue);
+    let substituted = substituteGraphReadApplication(current, entities, holeId, parsedValue);
     if (!substituted.success && parsedValue !== rawValue)
-      substituted = substituteGraphReadApplication(current, entities, holeId, parsedValue);
+      substituted = substituteGraphReadApplication(current, entities, holeId, rawValue);
     if (!substituted.success)
       return {
         error:
@@ -1288,7 +1298,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                   aria-label={`Value for ?${holeId}`}
                   style={styles.consoleHoleInput}
                   placeholder='value'
-                  value={holeInputs[holeId] ?? ''}
+                  value={consoleHoleInput(holeInputs, holeId) ?? ''}
                   onChange={event =>
                     setHoleInputs(previous => ({ ...previous, [holeId]: event.target.value }))
                   }

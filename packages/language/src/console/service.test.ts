@@ -72,6 +72,42 @@ describe('Console Graph Read language', () => {
     ]);
   });
 
+  it('preserves named Holes through nested boolean Graph Read predicates', () => {
+    const analysis = analyzeConsoleDocument(
+      'TodoItem.where(title = ?title and not (completed = ?completed)).many()',
+      application,
+    );
+
+    expect(analysis.semanticDiagnostics).toEqual([]);
+    expect(analysis.openExecution?.body.request.selection.expression).toEqual({
+      kind: 'and',
+      operands: [
+        {
+          kind: 'predicate',
+          fieldName: 'title',
+          operator: 'eq',
+          value: { kind: 'hole', id: 'title' },
+        },
+        {
+          kind: 'not',
+          operand: {
+            kind: 'predicate',
+            fieldName: 'completed',
+            operator: 'eq',
+            value: { kind: 'hole', id: 'completed' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('keeps an incomplete Hole as recoverable syntax', () => {
+    const analysis = analyzeSelectionDocument('title = ?', application.entities[0]);
+
+    expect(analysis.selection).toBeUndefined();
+    expect(analysis.syntaxDiagnostics).not.toEqual([]);
+  });
+
   it.each(['where', 'first', 'one', 'many', 'count', 'exists', 'limit', 'orderBy'])(
     'keeps %s available as a Field and Entity identifier',
     name => {
