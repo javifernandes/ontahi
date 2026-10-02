@@ -796,6 +796,8 @@ their current public contracts remain authoritative.
       dialects, bind its named Holes in Devtools, and execute only the closed canonical request.
 - [x] Project one direct Entity Ref Graph Read Hole as receiver-authorized searchable choices and
       substitute the selection as a canonical Ref without adding a second execution path.
+- [x] Project Boolean Graph Read Holes as typed choices and align Hole inputs in a stable
+      parameter/control/help grid backed by registered Field descriptions.
 - [ ] Treat TypeScript, declarative text, projectional editing, UI forms, CLI, and natural language as
       frontends producing the same semantic terms.
 - [ ] Define explicit Assistant registration, stable addressing, and one application default without
@@ -933,6 +935,10 @@ receiver-authorized Runtime Protocol, and projects them as searchable choices us
 metadata. Selecting a candidate substitutes a canonical Entity Ref; scalar and unsupported Ref
 shapes retain the existing explicit input. This is bounded candidate projection, not a general
 resolver registry or server-side search protocol.
+
+Boolean predicate Holes use explicit true/false choices (plus null for nullable Fields) rather than
+free text. The Console renders one aligned row per named Hole and exposes registered Field
+descriptions through contextual help, while other scalar types retain their generic input.
 
 This checkpoint introduces a bounded experimental Core subpath for semantic-program frontends; it
 does not export the experiment from the stable Core root or claim a universal Application type.

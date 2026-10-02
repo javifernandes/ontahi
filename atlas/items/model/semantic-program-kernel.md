@@ -97,3 +97,6 @@ a bounded set of visible target Entities through the ordinary receiver-authorize
 projects display metadata as searchable choices, and substitutes the selection as a canonical Ref.
 Composite identities, relationship endpoints, and server-side candidate search remain outside this
 bounded frontend proof.
+The same adapter projects Boolean predicate Holes as explicit choices and lays out each named Hole
+as one parameter row. Registered Field descriptions may appear as contextual help without becoming
+copied application metadata; remaining scalar types continue to use the generic input path.

@@ -1108,11 +1108,13 @@ describe('Console Graph Read applications', uiTestOptions, () => {
   it('discovers and binds authorized Reference candidates instead of showing free input', async () => {
     const List = entity('HoleList', { id: field.id(), name: field.string() }).display({
       primary: 'name',
+      secondary: ['id'],
     });
     const Item = entity('HoleItem', {
       id: field.id(),
       list: field.existingRef(List),
       title: field.string(),
+      completed: { ...field.boolean(), description: 'Whether this item is complete.' },
     });
     const runtime = createInMemoryDataGraphRuntime({
       entities: [List, Item],
@@ -1121,7 +1123,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
           { id: 'list-inbox', name: 'Inbox' },
           { id: 'list-later', name: 'Later' },
         ],
-        HoleItem: [{ id: 'item-1', list: 'list-inbox', title: 'Ship it' }],
+        HoleItem: [{ id: 'item-1', list: 'list-inbox', title: 'Ship it', completed: false }],
       },
     });
     const dispatch = createGraphReadDispatcher({
@@ -1144,6 +1146,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
             id: { select: true },
             list: { select: true, filter: ['eq'] },
             title: { select: true },
+            completed: { select: true, filter: ['eq'] },
           },
         },
       ],
@@ -1159,7 +1162,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
       <ConsolePanel
         options={{
           entities: [List, Item],
-          initialDocument: 'HoleItem where list = ?list',
+          initialDocument: 'HoleItem where list = ?list and completed = ?completed',
           initialDialect: 'declarative',
         }}
         runtimeTransport={transport}
@@ -1167,10 +1170,18 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     );
 
     expect(screen.queryByRole('textbox', { name: 'Value for list' })).toBeNull();
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Search HoleList for list' }), {
+    expect(screen.queryByRole('textbox', { name: 'Value for completed' })).toBeNull();
+    expect(screen.getByLabelText('Help for completed').getAttribute('title')).toContain(
+      'HoleItem.completed: Whether this item is complete.',
+    );
+    const search = await screen.findByRole('textbox', { name: 'Search HoleList for list' });
+    fireEvent.change(search, { target: { value: 'missing' } });
+    expect(await screen.findByText('No matches')).toBeDefined();
+    fireEvent.change(search, {
       target: { value: 'inb' },
     });
-    fireEvent.click(await screen.findByRole('option', { name: 'Inbox' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Inbox · list-inbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'False' }));
     await waitFor(() =>
       expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
         false,
@@ -1193,14 +1204,25 @@ describe('Console Graph Read applications', uiTestOptions, () => {
         selection: {
           entityName: 'HoleItem',
           expression: {
-            kind: 'predicate',
-            fieldName: 'list',
-            operator: 'eq',
-            value: {
-              kind: 'entity-ref',
-              entityName: 'HoleList',
-              locator: { id: 'list-inbox' },
-            },
+            kind: 'and',
+            operands: expect.arrayContaining([
+              {
+                kind: 'predicate',
+                fieldName: 'list',
+                operator: 'eq',
+                value: {
+                  kind: 'entity-ref',
+                  entityName: 'HoleList',
+                  locator: { id: 'list-inbox' },
+                },
+              },
+              {
+                kind: 'predicate',
+                fieldName: 'completed',
+                operator: 'eq',
+                value: false,
+              },
+            ]),
           },
         },
       },
@@ -1209,7 +1231,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
       <ConsolePanel
         options={{
           entities: [List, Item],
-          initialDocument: 'HoleItem where list = ?list',
+          initialDocument: 'HoleItem where list = ?list and completed = ?completed',
           initialDialect: 'declarative',
           identity: { principal: { kind: 'user', subject: 'alice' } },
         }}
@@ -1227,6 +1249,51 @@ describe('Console Graph Read applications', uiTestOptions, () => {
       ).toHaveLength(2),
     );
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('explains when Reference candidate discovery has no Runtime Transport', async () => {
+    const List = entity('UnconnectedList', { id: field.id(), name: field.string() });
+    const Item = entity('UnconnectedItem', {
+      id: field.id(),
+      list: field.existingRef(List),
+    });
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'UnconnectedItem where list = ?list',
+          initialDialect: 'declarative',
+        }}
+      />,
+    );
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Runtime Transport unavailable.',
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('surfaces Reference candidate discovery failures', async () => {
+    const List = entity('FailedList', { id: field.id() });
+    const Item = entity('FailedItem', { id: field.id(), list: field.existingRef(List) });
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'FailedItem where list = ?list',
+          initialDialect: 'declarative',
+        }}
+        runtimeTransport={{
+          request: async () => {
+            throw new Error('Candidate discovery denied.');
+          },
+        }}
+      />,
+    );
+
+    expect((await screen.findByText('Candidate discovery denied.')).textContent).toBe(
+      'Candidate discovery denied.',
+    );
   });
 
   it.each([
@@ -1263,11 +1330,11 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('parses typed values first and falls back to raw strings when the Field requires one', async () => {
+  it('binds typed Boolean choices and falls back to raw strings when the Field requires one', async () => {
     const { request, replaceSource, result } = mountConsole('Tag.where(active = ?enabled).many()');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Value for enabled' }), {
-      target: { value: 'true' },
-    });
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Value for enabled' })).getByText('True'),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByText('Alpha');
     expect(request.mock.calls[0]![0].body).toMatchObject({
@@ -1285,16 +1352,13 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     });
   });
 
-  it.each([
-    ['Tag.where(name = ?value).many()', '{broken}', '?value is not valid JSON.'],
-    ['Tag.where(active = ?value).many()', 'maybe', 'expected boolean'],
-  ])('reports an invalid Hole binding for %s', (source, value, message) => {
-    mountConsole(source);
+  it('reports an invalid free-input Hole binding', () => {
+    mountConsole('Tag.where(name = ?value).many()');
     fireEvent.change(screen.getByRole('textbox', { name: 'Value for value' }), {
-      target: { value },
+      target: { value: '{broken}' },
     });
 
-    expect(screen.getByRole('alert').textContent).toContain(message);
+    expect(screen.getByRole('alert').textContent).toContain('?value is not valid JSON.');
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -1541,8 +1605,10 @@ describe('Console bidirectional Query limit', uiTestOptions, () => {
     await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '1'));
     expect(result.getAllByRole('row')).toHaveLength(2);
     expect(view.state.doc.toString()).toBe('Tag.where(active = false).many()');
+    await act(async () => Promise.resolve());
     switchTransport();
     expect(result.getByRole('spinbutton')).toHaveProperty('disabled', true);
+    await act(async () => Promise.resolve());
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '25'));
     expect(result.getAllByRole('row')).toHaveLength(2);

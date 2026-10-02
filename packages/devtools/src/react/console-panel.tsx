@@ -13,6 +13,7 @@ import {
   toGraphSchemaDescriptor,
   type GraphClientCache,
   type AnyEntityDefinition,
+  type AnyFieldDefinition,
   type GraphSchemaDefinition,
   type GraphReadCapabilities,
   type GraphReadRequest,
@@ -309,17 +310,31 @@ type ConsoleReferenceHole = {
   readonly identityField: string;
 };
 
+type ConsoleHoleField = {
+  readonly entityName: string;
+  readonly fieldName: string;
+  readonly field: AnyFieldDefinition;
+};
+
+const holeFields = (
+  application: GraphReadApplication,
+  entities: readonly AnyEntityDefinition[],
+  holeId: string,
+): readonly ConsoleHoleField[] =>
+  graphReadApplicationHolePositions(application).flatMap(position => {
+    if (position.holeId !== holeId) return [];
+    const field = entities.find(entity => entity.name === position.entityName)?.fields[
+      position.fieldName
+    ];
+    return field ? [{ ...position, field }] : [];
+  });
+
 const referenceHole = (
   application: GraphReadApplication,
   entities: readonly AnyEntityDefinition[],
   holeId: string,
 ): ConsoleReferenceHole | undefined => {
-  const positions = graphReadApplicationHolePositions(application).filter(
-    position => position.holeId === holeId,
-  );
-  const targets = positions.map(position => {
-    const source = entities.find(entity => entity.name === position.entityName);
-    const field = source?.fields[position.fieldName];
+  const targets = holeFields(application, entities, holeId).map(({ field }) => {
     if (!field || !isReferenceFieldDefinition(field)) return undefined;
     const identityName = field.target.identityLocatorName;
     const identity = identityName ? field.target.refLocators[identityName] : undefined;
@@ -332,6 +347,43 @@ const referenceHole = (
   return first && targets.every(candidate => candidate?.target === first.target)
     ? first
     : undefined;
+};
+
+type ConsoleBooleanHole = {
+  readonly nullable: boolean;
+  readonly labels?: {
+    readonly true?: string;
+    readonly false?: string;
+    readonly unset?: string;
+  };
+};
+
+const booleanHole = (
+  application: GraphReadApplication,
+  entities: readonly AnyEntityDefinition[],
+  holeId: string,
+): ConsoleBooleanHole | undefined => {
+  const fields = holeFields(application, entities, holeId).map(position => position.field);
+  const first = fields[0];
+  return first && fields.every(field => field.fieldType === 'boolean')
+    ? {
+        nullable: fields.every(field => field.nullable),
+        ...(first.presentation?.booleanLabels ? { labels: first.presentation.booleanLabels } : {}),
+      }
+    : undefined;
+};
+
+const holeDescription = (
+  application: GraphReadApplication,
+  entities: readonly AnyEntityDefinition[],
+  holeId: string,
+): string | undefined => {
+  const descriptions = holeFields(application, entities, holeId).flatMap(position =>
+    position.field.description
+      ? [`${position.entityName}.${position.fieldName}: ${position.field.description}`]
+      : [],
+  );
+  return descriptions.length > 0 ? [...new Set(descriptions)].join('\n') : undefined;
 };
 
 type ConsoleReferenceCandidate = {
@@ -430,16 +482,13 @@ const ConsoleReferenceHoleInput = ({
   );
   return (
     <div style={styles.consoleReferenceHole}>
-      <label style={styles.consoleHoleBinding}>
-        <span>{holeId}</span>
-        <input
-          aria-label={`Search ${reference.target.name} for ${holeId}`}
-          style={styles.consoleHoleInput}
-          placeholder={`Search ${reference.target.name}`}
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-        />
-      </label>
+      <input
+        aria-label={`Search ${reference.target.name} for ${holeId}`}
+        style={styles.consoleHoleInput}
+        placeholder={`Search ${reference.target.name}`}
+        value={query}
+        onChange={event => setQuery(event.target.value)}
+      />
       <div style={styles.consoleReferenceChoices} role='listbox' aria-label={`${holeId} choices`}>
         {state.loading ? <span>Loading…</span> : null}
         {state.error ? <span role='alert'>{state.error}</span> : null}
@@ -466,6 +515,36 @@ const ConsoleReferenceHoleInput = ({
     </div>
   );
 };
+
+const ConsoleBooleanHoleInput = ({
+  holeId,
+  definition,
+  value,
+  onChange,
+}: {
+  readonly holeId: string;
+  readonly definition: ConsoleBooleanHole;
+  readonly value: unknown;
+  readonly onChange: (value: unknown) => void;
+}) => (
+  <div role='group' aria-label={`Value for ${holeId}`} style={styles.consoleBooleanChoices}>
+    {[
+      { value: true, label: definition.labels?.true ?? 'True' },
+      { value: false, label: definition.labels?.false ?? 'False' },
+      ...(definition.nullable ? [{ value: null, label: definition.labels?.unset ?? 'Null' }] : []),
+    ].map(option => (
+      <button
+        key={String(option.value)}
+        type='button'
+        aria-pressed={value === option.value}
+        style={{ ...styles.mode, ...(value === option.value ? styles.activeMode : {}) }}
+        onClick={() => onChange(option.value)}
+      >
+        {option.label}
+      </button>
+    ))}
+  </div>
+);
 
 const ConsoleResultContent = ({
   result,
@@ -958,6 +1037,30 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           ? holeIds.flatMap(holeId => {
               const reference = referenceHole(openApplication, entityDefinitions, holeId);
               return reference ? [[holeId, reference] as const] : [];
+            })
+          : [],
+      ),
+    [openApplication, entityDefinitions],
+  );
+  const booleanHoles = useMemo(
+    () =>
+      new Map(
+        openApplication
+          ? holeIds.flatMap(holeId => {
+              const definition = booleanHole(openApplication, entityDefinitions, holeId);
+              return definition ? [[holeId, definition] as const] : [];
+            })
+          : [],
+      ),
+    [openApplication, entityDefinitions],
+  );
+  const holeDescriptions = useMemo(
+    () =>
+      new Map(
+        openApplication
+          ? holeIds.flatMap(holeId => {
+              const description = holeDescription(openApplication, entityDefinitions, holeId);
+              return description ? [[holeId, description] as const] : [];
             })
           : [],
       ),
@@ -1476,31 +1579,53 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
         />
         {holeIds.length > 0 ? (
           <div style={styles.consoleHoleBindings} aria-label='Graph Read Hole values'>
-            {holeIds.map(holeId =>
-              referenceHoles.has(holeId) ? (
-                <ConsoleReferenceHoleInput
-                  key={holeId}
-                  holeId={holeId}
-                  reference={referenceHoles.get(holeId)!}
-                  runtimeTransport={runtimeTransport}
-                  identityKey={identityKey}
-                  onChange={value => setHoleInputs(previous => ({ ...previous, [holeId]: value }))}
-                />
-              ) : (
-                <label key={holeId} style={styles.consoleHoleBinding}>
-                  <span>{holeId}</span>
-                  <input
-                    aria-label={`Value for ${holeId}`}
-                    style={styles.consoleHoleInput}
-                    placeholder='value'
-                    value={consoleHoleInput(holeInputs, holeId) ?? ''}
-                    onChange={event =>
-                      setHoleInputs(previous => ({ ...previous, [holeId]: event.target.value }))
-                    }
-                  />
-                </label>
-              ),
-            )}
+            {holeIds.map(holeId => {
+              const setHoleInput = (value: unknown) =>
+                setHoleInputs(previous => ({ ...previous, [holeId]: value }));
+              return (
+                <div key={holeId} style={styles.consoleHoleRow}>
+                  <span style={styles.consoleHoleLabel}>{holeId}</span>
+                  <div style={styles.consoleHoleControl}>
+                    {referenceHoles.has(holeId) ? (
+                      <ConsoleReferenceHoleInput
+                        holeId={holeId}
+                        reference={referenceHoles.get(holeId)!}
+                        runtimeTransport={runtimeTransport}
+                        identityKey={identityKey}
+                        onChange={setHoleInput}
+                      />
+                    ) : booleanHoles.has(holeId) ? (
+                      <ConsoleBooleanHoleInput
+                        holeId={holeId}
+                        definition={booleanHoles.get(holeId)!}
+                        value={consoleHoleBinding(holeInputs, holeId)}
+                        onChange={setHoleInput}
+                      />
+                    ) : (
+                      <input
+                        aria-label={`Value for ${holeId}`}
+                        style={styles.consoleHoleInput}
+                        placeholder='value'
+                        value={consoleHoleInput(holeInputs, holeId) ?? ''}
+                        onChange={event => setHoleInput(event.target.value)}
+                      />
+                    )}
+                  </div>
+                  {holeDescriptions.has(holeId) ? (
+                    <span
+                      aria-label={`Help for ${holeId}`}
+                      role='img'
+                      title={holeDescriptions.get(holeId)}
+                      style={styles.consoleHoleHelp}
+                    >
+                      ?
+                    </span>
+                  ) : (
+                    <span aria-hidden='true' />
+                  )}
+                </div>
+              );
+            })}
             {preparedOpenRead.error ? (
               <span role='alert' style={styles.consoleDiagnostic}>
                 {preparedOpenRead.error}
