@@ -57,3 +57,10 @@ project it to a generic form field or the existing Task choice Interaction. Both
 option identity and use the same schema-validated substitution path. The accepted candidate keeps
 its discovery provenance. Prompt wording and labels may vary by caller without changing Program
 semantics; durable interaction lifecycle and a public form contract remain separate concerns.
+
+Resolution is now tested behind an internal replaceable resolver contract. The coordinator derives
+the named Hole's positions and original schemas from the Operation contract; ordered resolvers may
+produce an outcome or abstain without modifying the Program. Authorized Entity Ref discovery is
+one adapter, while direct scalar positions can yield a distinct free-input outcome. Manual values
+still pass through canonical schema substitution and carry descriptive `free-input` provenance.
+Resolver policy remains separate from Hole identity and grants no execution authority.
