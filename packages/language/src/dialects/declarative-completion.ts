@@ -9,6 +9,7 @@ import {
 } from '../console/completion.js';
 import { resolveConsoleContext } from '../console/context.js';
 import { completeConsoleFactory } from '../console/factories.js';
+import { completeRelationshipCommand } from '../console/relationship-completion.js';
 import { completeStructuredInput } from '../console/structured-value.js';
 import type {
   SelectionLanguageEntityReflection,
@@ -92,6 +93,24 @@ export const completeDeclarativeConsoleDocument = (
         kind: 'keyword' as const,
         detail: 'Entity Command',
       })),
+    ...(['attach', 'detach', 'move'] as const)
+      .filter(action =>
+        application.commands?.some(command =>
+          command.relationshipAffordances?.some(affordance =>
+            action === 'move'
+              ? affordance.relationKind === 'ordered'
+              : affordance.actions.some(
+                  candidate => candidate === (action === 'attach' ? 'link' : 'unlink'),
+                ),
+          ),
+        ),
+      )
+      .map(action => ({
+        label: action,
+        apply: `${action} `,
+        kind: 'keyword' as const,
+        detail: 'Relationship Command',
+      })),
     ...(application.operations?.length
       ? [{ label: 'invoke', apply: 'invoke ', kind: 'keyword' as const, detail: 'Operation' }]
       : []),
@@ -99,6 +118,13 @@ export const completeDeclarativeConsoleDocument = (
   if (/^\s*\w*$/.test(document.slice(0, pos))) {
     return result([...actionItems, ...consoleEntityCompletionItems(application)]);
   }
+  const relationshipCompletion = completeRelationshipCommand(
+    document,
+    pos,
+    dialect.parse(document).syntax.expression,
+    application,
+  );
+  if (relationshipCompletion) return relationshipCompletion;
   const commandPrefix = document.slice(0, range.from).match(/^\s*(create|update|delete)\s+$/);
   if (commandPrefix) {
     const action = commandPrefix[1] as 'create' | 'update' | 'delete';

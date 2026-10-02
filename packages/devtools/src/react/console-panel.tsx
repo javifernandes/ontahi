@@ -598,6 +598,8 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                 selectionActions:
                   commandCapabilities(entity.definition.name)?.selectionActions ?? [],
                 affordances: commandCapabilities(entity.definition.name)?.affordances,
+                relationshipAffordances: commandCapabilities(entity.definition.name)
+                  ?.relationshipAffordances,
               },
             ]
           : [],

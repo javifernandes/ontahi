@@ -88,4 +88,31 @@ describe('authoring syntax contrast', () => {
       view.destroy();
     }
   });
+
+  it.each(['attach', 'attach ', 'attach TodoItem '])(
+    'keeps an incomplete Relationship Command keyword highlighted: %s',
+    source => {
+      const view = new EditorView({
+        parent: document.body,
+        state: EditorState.create({
+          doc: source,
+          extensions: consoleExpressionExtensions(
+            { entities: [{ name: 'TodoItem', fields: [] }] },
+            { colorScheme: 'dark' },
+          ),
+        }),
+      });
+      try {
+        const keywords = [...view.dom.querySelectorAll('.cm-ontahi-syntax-keyword')].map(
+          node => node.textContent,
+        );
+        expect(keywords).toContain('attach');
+        if (source.includes('TodoItem')) {
+          expect(view.dom.querySelector('.cm-ontahi-syntax-entity')?.textContent).toBe('TodoItem');
+        }
+      } finally {
+        view.destroy();
+      }
+    },
+  );
 });

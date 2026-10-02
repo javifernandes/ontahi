@@ -193,6 +193,11 @@ they do not reconstruct mutation contracts from the complete Entity. Missing or 
 removes assistance rather than implying access, and the resulting canonical Command is still
 reauthorized when executed.
 
+Relationship Command authoring follows the same receiver-owned contract. Explicit
+`attach`/`detach` and ordered `move ... before|after|at` documents resolve against reflected
+Relation affordances and lower to the existing direct, many-to-many, or ordered Command IR. The
+keywords describe structural intent rather than generated client method names.
+
 That static boundary now also produces cursor context, structural completions, semantic
 classifications, and hover help from the same recovered syntax and resolver facts. Boolean and enum
 values are finite reflection facts; string and number suggestions are syntax placeholders, not

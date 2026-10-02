@@ -11,6 +11,7 @@ export * from './definitions.js';
 export * from './execution.js';
 export * from './entity-mutation-command.js';
 export * from './entity-mutation-affordance.js';
+export * from './relationship-command-affordance.js';
 export * from './entity-mutation-authoring.js';
 export * from './entity-variant.js';
 export * from './in-memory/command.js';

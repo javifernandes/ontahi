@@ -327,6 +327,11 @@ runtime resolves its Entity names and Reference Field identity against server-ow
 validates endpoint Refs and declared locators, and drops unknown envelope metadata. The wire form
 contains no executable functions, provider mappings, authority claims, or Entity patch fallback.
 
+The dispatcher can also reflect its registered direct, many-to-many, and ordered policies as
+portable authoring affordances. Those descriptors carry canonical Relation identity, endpoint
+identity locators, allowed actions, ordered placements, and precondition support; they remain
+advisory and do not replace execution-time policy enforcement.
+
 Remote execution remains default-deny. A transport-neutral Graph Command dispatcher requires an
 explicit policy for the canonical source Entity and Reference Field plus an allowed `link/unlink`
 action before invoking storage. It accepts server-owned authority context as a future policy input,

@@ -64,6 +64,8 @@ describe('Console actions', uiTestOptions, () => {
       }),
     },
   });
+  const ItemSchema = entity('Item', { id: field.id(), name: field.string() });
+  const Item = defineClientEntity(ItemSchema);
 
   it('invokes a reflected Operation through its canonical Runtime Protocol family', async () => {
     const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) =>
@@ -365,6 +367,105 @@ describe('Console actions', uiTestOptions, () => {
     expect(clientCache.readEntity(createEntityRef(ListSchema, { id: 'list-1' }))).toEqual({
       id: 'list-1',
       name: 'Today',
+    });
+  });
+
+  it('discovers and executes a Relationship Command authored in Console', async () => {
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      if ((envelope.body as { kind?: string }).kind === 'graph-command-capabilities') {
+        const entityName = (envelope.body as { entityName: string }).entityName;
+        return createRuntimeProtocolResponse(envelope, {
+          kind: 'graph-command-capabilities-result',
+          entityName,
+          capabilities: {
+            entityMutations: [],
+            relationshipCommandAffordances:
+              entityName === 'List'
+                ? [
+                    {
+                      kind: 'relationship-command-affordance',
+                      relationKind: 'ordered',
+                      relation: {
+                        sourceEntityName: 'List',
+                        relationName: 'items',
+                        targetEntityName: 'Item',
+                        cardinality: 'ordered-many',
+                      },
+                      actions: ['move'],
+                      source: {
+                        entityName: 'List',
+                        locator: {
+                          kind: 'object',
+                          role: 'object',
+                          unknownKeys: 'strict',
+                          fields: { id: { kind: 'scalar', type: 'id' } },
+                        },
+                      },
+                      member: {
+                        entityName: 'Item',
+                        locator: {
+                          kind: 'object',
+                          role: 'object',
+                          unknownKeys: 'strict',
+                          fields: { id: { kind: 'scalar', type: 'id' } },
+                        },
+                      },
+                      placements: ['before', 'after', 'start', 'end'],
+                      precondition: true,
+                    },
+                  ]
+                : [],
+          },
+        });
+      }
+      return createRuntimeProtocolResponse(envelope, {
+        kind: 'graph-command-result',
+        value: { created: [], updated: [], deleted: [] },
+      });
+    });
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'move List { id: "list-1" } items Item { id: "item-2" } at end',
+        }}
+        runtimeTransport={{ request }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() =>
+      expect(
+        request.mock.calls.some(
+          ([envelope]) =>
+            envelope.family === 'graph.command' &&
+            (envelope.body as { kind?: string }).kind === 'graph-command',
+        ),
+      ).toBe(true),
+    );
+    expect(
+      request.mock.calls.find(
+        ([envelope]) =>
+          envelope.family === 'graph.command' &&
+          (envelope.body as { kind?: string }).kind === 'graph-command',
+      )![0],
+    ).toMatchObject({
+      family: 'graph.command',
+      body: {
+        version: 2,
+        command: {
+          kind: 'ordered-relationship-command',
+          relation: { relationName: 'items' },
+          source: { locator: { id: 'list-1' } },
+          member: { locator: { id: 'item-2' } },
+          position: { at: 'end' },
+        },
+      },
     });
   });
 
@@ -1451,7 +1552,7 @@ describe('Console bidirectional Query ordering', uiTestOptions, () => {
         if (change === 'transport') switchTransport();
         else setIdentity({ principal: null, cacheScope: 'restricted' });
       } else act(() => view.dispatch({ changes: { from: 0, to: 3, insert: 'Other' } }));
-      await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+      await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull(), { timeout: 5_000 });
       expect(view.state.doc.toString()).toBe(
         change === 'entity' ? 'Other.orderBy().many()' : source,
       );

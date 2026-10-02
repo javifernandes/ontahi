@@ -8,7 +8,8 @@ DeclarativeConsoleExpression {
   DeclarativeOperationInvocationExpression |
   DeclarativeEntityCreateExpression |
   DeclarativeEntityUpdateExpression |
-  DeclarativeEntityDeleteExpression
+  DeclarativeEntityDeleteExpression |
+  RelationshipCommandExpression
 }
 
 DeclarativeOperationInvocationExpression { Invoke EntityName Dot OperationName (With StructuredValue)? }
@@ -32,7 +33,16 @@ DeclarativeOrderByClause { Order By FieldName DeclarativeOrderDirection? }
 DeclarativeOrderDirection { Ascending | Descending }
 DeclarativeLimitClause { Limit NumberLiteral }
 
-ConsoleExpression { GraphReadExpression | OperationInvocationExpression | EntityMutationExpression }
+ConsoleExpression { GraphReadExpression | OperationInvocationExpression | EntityMutationExpression | RelationshipCommandExpression }
+RelationshipCommandExpression { RelationshipAttachExpression | RelationshipDetachExpression | OrderedRelationshipMoveExpression }
+RelationshipAttachExpression { Attach (EntityName (StructuredObject (RelationName (EntityName StructuredObject?)?)?)?)? }
+RelationshipDetachExpression { Detach (EntityName (StructuredObject (RelationName (EntityName StructuredObject?)?)?)?)? }
+OrderedRelationshipMoveExpression {
+  Move (EntityName (StructuredObject (RelationName (EntityName (StructuredObject
+    ((Before | After) (EntityName StructuredObject?)? | At (Start | End)?)?
+  )?)?)?)?)?
+}
+RelationName { Identifier }
 OperationInvocationExpression { EntityName Dot OperationName OpenParen StructuredValue? CloseParen }
 EntityMutationExpression { EntityCreateExpression | EntityUpdateExpression | EntityDeleteExpression }
 EntityCreateExpression { EntityName Dot Create OpenParen StructuredObject CloseParen }
@@ -122,6 +132,14 @@ With { @extend<Identifier, "with"> }
 Create { @extend<Identifier, "create"> }
 Update { @extend<Identifier, "update"> }
 Delete { @extend<Identifier, "delete"> }
+Attach { @extend<Identifier, "attach"> }
+Detach { @extend<Identifier, "detach"> }
+Move { @extend<Identifier, "move"> }
+Before { @extend<Identifier, "before"> }
+After { @extend<Identifier, "after"> }
+At { @extend<Identifier, "at"> }
+Start { @extend<Identifier, "start"> }
+End { @extend<Identifier, "end"> }
 Ref { @extend<Identifier, "ref"> }
 Ascending { @extend<Identifier, "ascending"> }
 Descending { @extend<Identifier, "descending"> }

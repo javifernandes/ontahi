@@ -144,6 +144,64 @@ describe('Ontahi todo portability example', () => {
     }
   });
 
+  it('discovers Todo structural Commands over the ordinary Runtime Protocol transports', async () => {
+    const http = createFetchRuntimeTransport({ endpoint: `${origin}/runtime` });
+    const websocket = createWebSocketRuntimeTransport({
+      url: `${origin.replace(/^http/, 'ws')}/runtime`,
+      createWebSocket: url => new WebSocket(url, { origin }) as unknown as RuntimeWebSocket,
+    });
+    try {
+      for (const transport of [http, websocket]) {
+        const exchange = createRuntimeProtocolExchange({ transport });
+        await expect(
+          exchange({
+            family: 'graph.command',
+            body: {
+              version: 1,
+              kind: 'graph-command-capabilities',
+              entityName: 'TodoItem',
+            },
+          }),
+        ).resolves.toMatchObject({
+          kind: 'graph-command-capabilities-result',
+          capabilities: {
+            relationshipCommandAffordances: [
+              {
+                relationKind: 'many-to-many',
+                relation: { relationName: 'tags', targetEntityName: 'Tag' },
+                actions: ['link', 'unlink'],
+              },
+            ],
+          },
+        });
+        await expect(
+          exchange({
+            family: 'graph.command',
+            body: {
+              version: 1,
+              kind: 'graph-command-capabilities',
+              entityName: 'TodoList',
+            },
+          }),
+        ).resolves.toMatchObject({
+          kind: 'graph-command-capabilities-result',
+          capabilities: {
+            relationshipCommandAffordances: [
+              {
+                relationKind: 'ordered',
+                relation: { relationName: 'items', targetEntityName: 'TodoItem' },
+                actions: ['move'],
+                placements: ['before', 'after', 'start', 'end'],
+              },
+            ],
+          },
+        });
+      }
+    } finally {
+      websocket.close();
+    }
+  });
+
   const invoke = (operationId: string, input: unknown, authenticated = false) =>
     fetch(endpoint, {
       method: 'POST',

@@ -7,6 +7,7 @@ import type {
   GraphReadRequest,
   GraphSchemaDescriptor,
   EntityMutationAffordanceDescriptor,
+  RelationshipCommandAffordanceDescriptor,
   EntityVariantDescriptor,
 } from '@ontahi/core/data-graph';
 import type { OperationProtocolRequestV1 } from '@ontahi/core/runtime/protocol';
@@ -221,6 +222,7 @@ export type ConsoleLanguageApplicationReflection = {
     readonly actions: readonly ('create' | 'update' | 'delete')[];
     readonly selectionActions?: readonly ('update' | 'delete')[];
     readonly affordances?: readonly EntityMutationAffordanceDescriptor[];
+    readonly relationshipAffordances?: readonly RelationshipCommandAffordanceDescriptor[];
   }[];
 };
 
@@ -283,7 +285,7 @@ export type ConsoleMembershipStep =
   | ConsoleFilterSyntax;
 
 export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
-  readonly kind: 'graph-read' | 'operation' | 'entity-mutation';
+  readonly kind: 'graph-read' | 'operation' | 'entity-mutation' | 'relationship-command';
   /** Authoring stages in source order, before final read shaping. */
   readonly steps: readonly ConsoleMembershipStep[];
   readonly factories: readonly ConsoleFactorySyntax[];
@@ -314,6 +316,17 @@ export type ConsoleGraphReadSyntax = SelectionLanguageRange & {
   readonly targetValue?: unknown;
   readonly values?: SelectionLanguageRange;
   readonly valuesValue?: unknown;
+  readonly relationshipAction?: 'attach' | 'detach' | 'move';
+  readonly relation?: SelectionLanguageToken<'relation-name'>;
+  readonly source?: SelectionLanguageRange;
+  readonly sourceValue?: unknown;
+  readonly endpointEntity?: SelectionLanguageToken<'entity-name'>;
+  readonly endpoint?: SelectionLanguageRange;
+  readonly endpointValue?: unknown;
+  readonly placement?: 'before' | 'after' | 'start' | 'end';
+  readonly anchorEntity?: SelectionLanguageToken<'entity-name'>;
+  readonly anchor?: SelectionLanguageRange;
+  readonly anchorValue?: unknown;
 };
 
 export type ConsoleOperationInvocationSyntax = ConsoleGraphReadSyntax & {

@@ -1,6 +1,7 @@
 import {
   selectionAll,
   selectionAnd,
+  selectionReferences,
   toGraphCommandRequest,
   type GraphReadRequest,
   type SelectionExpression,
@@ -127,6 +128,149 @@ export const analyzeConsoleSyntax = (
         expression,
         'console.semantic.invalid-input',
         `${operationId} input cannot be represented by the Runtime Protocol.`,
+      );
+    }
+  }
+
+  if (expression.kind === 'relationship-command') {
+    const incomplete =
+      !expression.relationshipAction ||
+      !expression.source ||
+      !expression.relation ||
+      !expression.endpointEntity ||
+      !expression.endpoint ||
+      (expression.relationshipAction === 'move' &&
+        (!expression.placement ||
+          ((expression.placement === 'before' || expression.placement === 'after') &&
+            (!expression.anchorEntity || !expression.anchor))));
+    if (incomplete) return { ...parsed, semanticDiagnostics: [] };
+    const entityName = expression.entity.text;
+    const relationName = expression.relation?.text ?? '';
+    const action = expression.relationshipAction;
+    const reflection = application.commands
+      ?.find(candidate => candidate.entityName === entityName)
+      ?.relationshipAffordances?.find(candidate => {
+        const reflectedName =
+          candidate.relationKind === 'direct'
+            ? candidate.relation.fieldName
+            : candidate.relation.relationName;
+        return reflectedName === relationName;
+      });
+    if (!reflection || !action)
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Relationship Command ${entityName}.${relationName} is not available.`,
+      );
+    const expectedAction = action === 'attach' ? 'link' : action === 'detach' ? 'unlink' : 'move';
+    if (!reflection.actions.includes(expectedAction as never))
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Relationship Command ${entityName}.${relationName}.${action} is not available.`,
+      );
+    const sourceError = validateStructuredInput(expression.sourceValue, reflection.source.locator, {
+      requireFields: true,
+    });
+    if (sourceError)
+      return diagnostic(parsed, expression, 'console.semantic.invalid-command', sourceError);
+    const endpoint = reflection.relationKind === 'ordered' ? reflection.member : reflection.target;
+    if (expression.endpointEntity?.text !== endpoint.entityName)
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Expected endpoint Entity ${endpoint.entityName}.`,
+      );
+    const endpointError = validateStructuredInput(expression.endpointValue, endpoint.locator, {
+      requireFields: true,
+    });
+    if (endpointError)
+      return diagnostic(parsed, expression, 'console.semantic.invalid-command', endpointError);
+    const sourceRef = {
+      kind: 'entity-ref' as const,
+      entityName: reflection.source.entityName,
+      locator: expression.sourceValue as Record<string, never>,
+    };
+    const endpointRef = {
+      kind: 'entity-ref' as const,
+      entityName: endpoint.entityName,
+      locator: expression.endpointValue as Record<string, never>,
+    };
+    let command: unknown;
+    if (reflection.relationKind === 'direct') {
+      command = {
+        kind: 'relationship-command',
+        action: expectedAction,
+        relation: reflection.relation,
+        source: sourceRef,
+        target: endpointRef,
+      };
+    } else if (reflection.relationKind === 'many-to-many') {
+      command = {
+        kind: 'many-to-many-relationship-command',
+        action: expectedAction,
+        relation: reflection.relation,
+        sources: { entityName, selection: selectionReferences([sourceRef]) },
+        targets: { entityName: endpoint.entityName, selection: selectionReferences([endpointRef]) },
+      };
+    } else {
+      const placement = expression.placement;
+      if (!placement)
+        return diagnostic(
+          parsed,
+          expression,
+          'console.semantic.invalid-command',
+          'Ordered Relationship Command requires a placement.',
+        );
+      let position:
+        | { at: 'start' | 'end' }
+        | { before: typeof endpointRef }
+        | { after: typeof endpointRef };
+      if (placement === 'start' || placement === 'end') position = { at: placement };
+      else {
+        if (expression.anchorEntity?.text !== endpoint.entityName)
+          return diagnostic(
+            parsed,
+            expression,
+            'console.semantic.invalid-command',
+            `Expected anchor Entity ${endpoint.entityName}.`,
+          );
+        const anchorError = validateStructuredInput(expression.anchorValue, endpoint.locator, {
+          requireFields: true,
+        });
+        if (anchorError)
+          return diagnostic(parsed, expression, 'console.semantic.invalid-command', anchorError);
+        const anchor = {
+          kind: 'entity-ref' as const,
+          entityName: endpoint.entityName,
+          locator: expression.anchorValue as Record<string, never>,
+        };
+        position = placement === 'before' ? { before: anchor } : { after: anchor };
+      }
+      command = {
+        kind: 'ordered-relationship-command',
+        action: 'move',
+        relation: reflection.relation,
+        source: sourceRef,
+        member: endpointRef,
+        position,
+      };
+    }
+    try {
+      return {
+        ...parsed,
+        semanticDiagnostics: [],
+        execution: { family: 'graph.command', body: toGraphCommandRequest(command as never) },
+      };
+    } catch {
+      return diagnostic(
+        parsed,
+        expression,
+        'console.semantic.invalid-command',
+        `Relationship Command ${entityName}.${relationName} cannot be represented by the Runtime Protocol.`,
       );
     }
   }

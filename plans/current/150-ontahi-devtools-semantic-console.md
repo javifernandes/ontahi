@@ -607,12 +607,21 @@ Status: partial. Exact Entity create, update, and delete now lower through the e
 
 - [x] Discover exact Entity mutation Commands from generated client Entities and lower them to the
       canonical versioned Command body.
-- [ ] Add Relationship Command discovery from the application model.
-- [ ] Lower direct, many-to-many, and ordered forms to the existing versioned Command body.
+- [x] Add Relationship Command discovery from the application model.
+- [x] Lower direct, many-to-many, and ordered forms to the existing versioned Command body.
 - [ ] Preserve typed preconditions and Command results.
 - [ ] Prove attach/detach plus ordered `move before|after|at` in Todo.
 - [ ] Require explicit submission/confirmation; never retry through transport ambiguity.
 - [ ] Choose targeting syntax from the completed model gate, not by copying generated TS methods.
+
+Relationship Command discovery checkpoint — 2026-10-01: `graph.command` capabilities now publish
+portable direct, many-to-many, and ordered affordances with exact endpoint locators, allowed actions,
+placements, and precondition support. Both Console dialect parsers accept the same explicit
+`attach`/`detach`/`move ... before|after|at` documents and lower them to existing versioned Command
+bodies; no generated-client method name becomes protocol syntax. Devtools invalidates these
+affordances with the existing Entity/transport/route/identity discovery scope. Todo proves the
+metadata over both HTTP and WebSocket. Conditional authoring and executed Todo UI flows remain the
+next bounded part of this section.
 
 ### E. Operation Invocation
 

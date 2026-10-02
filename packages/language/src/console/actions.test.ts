@@ -185,7 +185,346 @@ const affordedApplication: ConsoleLanguageApplicationReflection = {
   ],
 };
 
+const relationshipApplication: ConsoleLanguageApplicationReflection = {
+  entities: ['TodoList', 'TodoItem', 'Tag', 'Student', 'Course'].map(name => ({
+    name,
+    fields: [{ name: 'id', type: 'id', nullable: false }],
+  })),
+  commands: [
+    {
+      entityName: 'Student',
+      actions: [],
+      relationshipAffordances: [
+        {
+          kind: 'relationship-command-affordance',
+          relationKind: 'direct',
+          relation: {
+            sourceEntityName: 'Student',
+            fieldName: 'course',
+            targetEntityName: 'Course',
+          },
+          actions: ['link', 'unlink'],
+          source: {
+            entityName: 'Student',
+            locator: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { id: { kind: 'scalar', type: 'id' } },
+            },
+          },
+          target: {
+            entityName: 'Course',
+            locator: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { id: { kind: 'scalar', type: 'id' } },
+            },
+          },
+          precondition: true,
+        },
+      ],
+    },
+    {
+      entityName: 'TodoItem',
+      actions: [],
+      relationshipAffordances: [
+        {
+          kind: 'relationship-command-affordance',
+          relationKind: 'many-to-many',
+          relation: {
+            sourceEntityName: 'TodoItem',
+            relationName: 'tags',
+            targetEntityName: 'Tag',
+            cardinality: 'many-to-many',
+          },
+          actions: ['link', 'unlink'],
+          source: {
+            entityName: 'TodoItem',
+            locator: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { id: { kind: 'scalar', type: 'id' } },
+            },
+          },
+          target: {
+            entityName: 'Tag',
+            locator: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { id: { kind: 'scalar', type: 'id' } },
+            },
+          },
+        },
+      ],
+    },
+    {
+      entityName: 'TodoList',
+      actions: [],
+      relationshipAffordances: [
+        {
+          kind: 'relationship-command-affordance',
+          relationKind: 'ordered',
+          relation: {
+            sourceEntityName: 'TodoList',
+            relationName: 'items',
+            targetEntityName: 'TodoItem',
+            cardinality: 'ordered-many',
+          },
+          actions: ['move'],
+          source: {
+            entityName: 'TodoList',
+            locator: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { id: { kind: 'scalar', type: 'id' } },
+            },
+          },
+          member: {
+            entityName: 'TodoItem',
+            locator: {
+              kind: 'object',
+              role: 'object',
+              unknownKeys: 'strict',
+              fields: { id: { kind: 'scalar', type: 'id' } },
+            },
+          },
+          placements: ['before', 'after', 'start', 'end'],
+          precondition: true,
+        },
+      ],
+    },
+  ],
+};
+
 describe('Console actions', () => {
+  it.each(['ts', 'declarative'] as const)(
+    'lowers reflected Relationship Commands in the %s dialect',
+    dialect => {
+      expect(completeConsoleDocument('a', 1, relationshipApplication, { dialect }).items).toEqual([
+        expect.objectContaining({ label: 'attach' }),
+      ]);
+      expect(
+        analyzeConsoleDocument(
+          'attach TodoItem { id: "item-1" } tags Tag { id: "tag-1" }',
+          relationshipApplication,
+          { dialect },
+        ).execution,
+      ).toMatchObject({
+        family: 'graph.command',
+        body: {
+          version: 1,
+          command: {
+            kind: 'many-to-many-relationship-command',
+            action: 'link',
+            relation: { relationName: 'tags' },
+          },
+        },
+      });
+      expect(
+        analyzeConsoleDocument(
+          'detach Student { id: "student-1" } course Course { id: "course-1" }',
+          relationshipApplication,
+          { dialect },
+        ).execution,
+      ).toMatchObject({
+        family: 'graph.command',
+        body: {
+          version: 1,
+          command: {
+            kind: 'relationship-command',
+            action: 'unlink',
+            relation: { fieldName: 'course' },
+            source: { locator: { id: 'student-1' } },
+            target: { locator: { id: 'course-1' } },
+          },
+        },
+      });
+      expect(
+        analyzeConsoleDocument(
+          'detach TodoItem { id: "item-1" } tags Tag { id: "tag-1" }',
+          relationshipApplication,
+          { dialect },
+        ).execution,
+      ).toMatchObject({
+        body: { command: { kind: 'many-to-many-relationship-command', action: 'unlink' } },
+      });
+      expect(
+        analyzeConsoleDocument(
+          'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before TodoItem { id: "item-1" }',
+          relationshipApplication,
+          { dialect },
+        ).execution,
+      ).toMatchObject({
+        family: 'graph.command',
+        body: {
+          version: 2,
+          command: {
+            kind: 'ordered-relationship-command',
+            relation: { relationName: 'items' },
+            position: { before: { locator: { id: 'item-1' } } },
+          },
+        },
+      });
+      expect(
+        analyzeConsoleDocument(
+          'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } at end',
+          relationshipApplication,
+          { dialect },
+        ).execution,
+      ).toMatchObject({
+        body: { version: 2, command: { position: { at: 'end' } } },
+      });
+    },
+  );
+
+  it.each(['ts', 'declarative'] as const)(
+    'completes Relationship Commands progressively in the %s dialect',
+    dialect => {
+      const labels = (source: string) =>
+        completeConsoleDocument(source, source.length, relationshipApplication, { dialect }).items;
+
+      expect(labels('attach ').map(item => item.label)).toEqual(['Student', 'TodoItem']);
+      expect(labels('attach TodoItem ')).toEqual([
+        expect.objectContaining({ label: '{…}', apply: '{ id: "" }' }),
+      ]);
+      expect(labels('attach TodoItem { id: "item-1" } ')).toEqual([
+        expect.objectContaining({ label: 'tags', apply: 'tags ' }),
+      ]);
+      expect(labels('attach TodoItem { id: "item-1" } tags ')).toEqual([
+        expect.objectContaining({ label: 'Tag', apply: 'Tag ' }),
+      ]);
+      expect(labels('attach TodoItem { id: "item-1" } tags Tag ')).toEqual([
+        expect.objectContaining({ label: '{…}', apply: '{ id: "" }' }),
+      ]);
+      expect(
+        labels('move TodoList { id: "list-1" } items TodoItem { id: "item-2" } ').map(
+          item => item.label,
+        ),
+      ).toEqual(['before', 'after', 'at start', 'at end']);
+      expect(
+        labels('move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before '),
+      ).toEqual([expect.objectContaining({ label: 'TodoItem', apply: 'TodoItem ' })]);
+    },
+  );
+
+  it.each([
+    'attach',
+    'attach ',
+    'attach TodoItem ',
+    'attach TodoItem { id: "item-1" } ',
+    'attach TodoItem { id: "item-1" } tags ',
+    'attach TodoItem { id: "item-1" } tags Tag ',
+    'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before ',
+  ])('does not report semantic errors while authoring a Relationship Command: %s', source => {
+    expect(analyzeConsoleDocument(source, relationshipApplication).semanticDiagnostics).toEqual([]);
+  });
+
+  it.each([
+    'attach TodoItem { id: "item-1" } tags Tag { id: }',
+    'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before TodoItem { id: }',
+  ])('reports a malformed Relationship Command endpoint locator: %s', source => {
+    const analysis = analyzeConsoleDocument(source, relationshipApplication);
+    expect(analysis.syntaxDiagnostics).not.toHaveLength(0);
+    expect(analysis.execution).toBeUndefined();
+  });
+
+  it('preserves Relationship Command intent when switching dialects', () => {
+    const source =
+      'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } after TodoItem { id: "item-1" }';
+    const converted = convertConsoleDocument(source, relationshipApplication, 'declarative');
+    expect(converted).toBe(
+      'move TodoList {"id":"list-1"} items TodoItem {"id":"item-2"} after TodoItem {"id":"item-1"}',
+    );
+    expect(
+      analyzeConsoleDocument(converted!, relationshipApplication, { dialect: 'declarative' })
+        .execution,
+    ).toEqual(analyzeConsoleDocument(source, relationshipApplication).execution);
+
+    expect(
+      convertConsoleDocument(converted!, relationshipApplication, 'ts', {
+        dialect: 'declarative',
+      }),
+    ).toBe(converted);
+    for (const [command, sourceDialect, targetDialect] of [
+      ['attach TodoItem { id: "item-1" } tags Tag { id: "tag-1" }', 'ts', 'declarative'],
+      ['attach TodoItem { id: "item-1" } tags Tag { id: "tag-1" }', 'declarative', 'ts'],
+      [
+        'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } at end',
+        'ts',
+        'declarative',
+      ],
+      [
+        'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } at start',
+        'declarative',
+        'ts',
+      ],
+    ] as const) {
+      const output = convertConsoleDocument(command, relationshipApplication, targetDialect, {
+        dialect: sourceDialect,
+      });
+      expect(output).toBeDefined();
+      expect(
+        analyzeConsoleDocument(output!, relationshipApplication, { dialect: targetDialect })
+          .execution,
+      ).toEqual(
+        analyzeConsoleDocument(command, relationshipApplication, { dialect: sourceDialect })
+          .execution,
+      );
+    }
+  });
+
+  it.each([
+    [
+      'attach TodoItem { id: "item-1" } missing Tag { id: "tag-1" }',
+      'Relationship Command TodoItem.missing is not available.',
+    ],
+    [
+      'move TodoItem { id: "item-1" } tags Tag { id: "tag-1" } at end',
+      'Relationship Command TodoItem.tags.move is not available.',
+    ],
+    [
+      'attach TodoItem { missing: "item-1" } tags Tag { id: "tag-1" }',
+      'Field missing is not writable.',
+    ],
+    [
+      'attach TodoItem { id: "item-1" } tags Course { id: "tag-1" }',
+      'Expected endpoint Entity Tag.',
+    ],
+    [
+      'attach TodoItem { id: "item-1" } tags Tag { missing: "tag-1" }',
+      'Field missing is not writable.',
+    ],
+    [
+      'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } before Tag { id: "item-1" }',
+      'Expected anchor Entity TodoItem.',
+    ],
+    [
+      'move TodoList { id: "list-1" } items TodoItem { id: "item-2" } after TodoItem { missing: "item-1" }',
+      'Field missing is not writable.',
+    ],
+  ] as const)('diagnoses invalid Relationship Command authoring: %s', (source, message) => {
+    const analysis = analyzeConsoleDocument(source, relationshipApplication);
+    expect(analysis.semanticDiagnostics).toEqual([expect.objectContaining({ message })]);
+    expect(analysis.execution).toBeUndefined();
+  });
+
+  it.each(['ts', 'declarative'] as const)(
+    'reports malformed Relationship Command locators in the %s dialect',
+    dialect => {
+      const analysis = analyzeConsoleDocument(
+        'attach TodoItem { id: } tags Tag { id: "tag-1" }',
+        relationshipApplication,
+        { dialect },
+      );
+      expect(analysis.syntaxDiagnostics).not.toHaveLength(0);
+      expect(analysis.execution).toBeUndefined();
+    },
+  );
   it('lowers a reflected TS Operation to the canonical operation family', () => {
     expect(
       analyzeConsoleDocument(
