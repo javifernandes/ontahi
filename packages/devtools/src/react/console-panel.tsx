@@ -249,16 +249,6 @@ type PreparedOpenGraphRead =
   | { readonly execution: ConsoleRequest; readonly error?: undefined }
   | { readonly execution?: undefined; readonly error: string };
 
-const consoleHoleInput = (
-  inputs: Readonly<Record<string, unknown>>,
-  holeId: string,
-): string | undefined => {
-  const input = inputs[holeId];
-  return Object.prototype.hasOwnProperty.call(inputs, holeId) && typeof input === 'string'
-    ? input
-    : undefined;
-};
-
 const consoleHoleBinding = (inputs: Readonly<Record<string, unknown>>, holeId: string): unknown =>
   Object.prototype.hasOwnProperty.call(inputs, holeId) ? inputs[holeId] : undefined;
 
@@ -526,25 +516,66 @@ const ConsoleBooleanHoleInput = ({
   readonly definition: ConsoleBooleanHole;
   readonly value: unknown;
   readonly onChange: (value: unknown) => void;
-}) => (
-  <div role='group' aria-label={`Value for ${holeId}`} style={styles.consoleBooleanChoices}>
-    {[
-      { value: true, label: definition.labels?.true ?? 'True' },
-      { value: false, label: definition.labels?.false ?? 'False' },
-      ...(definition.nullable ? [{ value: null, label: definition.labels?.unset ?? 'Null' }] : []),
-    ].map(option => (
-      <button
-        key={String(option.value)}
-        type='button'
-        aria-pressed={value === option.value}
-        style={{ ...styles.mode, ...(value === option.value ? styles.activeMode : {}) }}
-        onClick={() => onChange(option.value)}
-      >
-        {option.label}
-      </button>
-    ))}
-  </div>
-);
+}) => {
+  const normalizedValue =
+    value === true || value === false || (definition.nullable && value === null)
+      ? value
+      : typeof value === 'string' && ['true', 'false'].includes(value.trim())
+        ? value.trim() === 'true'
+        : definition.nullable && typeof value === 'string' && value.trim() === 'null'
+          ? null
+          : undefined;
+  useEffect(() => {
+    if (value !== undefined && value !== normalizedValue) onChange(normalizedValue);
+  }, [definition.nullable, normalizedValue, onChange, value]);
+  return (
+    <div role='group' aria-label={`Value for ${holeId}`} style={styles.consoleBooleanChoices}>
+      {[
+        { value: true, label: definition.labels?.true ?? 'True' },
+        { value: false, label: definition.labels?.false ?? 'False' },
+        ...(definition.nullable
+          ? [{ value: null, label: definition.labels?.unset ?? 'Null' }]
+          : []),
+      ].map(option => (
+        <button
+          key={String(option.value)}
+          type='button'
+          aria-pressed={normalizedValue === option.value}
+          style={{
+            ...styles.mode,
+            ...(normalizedValue === option.value ? styles.activeMode : {}),
+          }}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const ConsoleScalarHoleInput = ({
+  holeId,
+  value,
+  onChange,
+}: {
+  readonly holeId: string;
+  readonly value: unknown;
+  readonly onChange: (value: unknown) => void;
+}) => {
+  useEffect(() => {
+    if (value !== undefined && typeof value !== 'string') onChange(undefined);
+  }, [onChange, value]);
+  return (
+    <input
+      aria-label={`Value for ${holeId}`}
+      style={styles.consoleHoleInput}
+      placeholder='value'
+      value={typeof value === 'string' ? value : ''}
+      onChange={event => onChange(event.target.value)}
+    />
+  );
+};
 
 const ConsoleResultContent = ({
   result,
@@ -1602,12 +1633,10 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                         onChange={setHoleInput}
                       />
                     ) : (
-                      <input
-                        aria-label={`Value for ${holeId}`}
-                        style={styles.consoleHoleInput}
-                        placeholder='value'
-                        value={consoleHoleInput(holeInputs, holeId) ?? ''}
-                        onChange={event => setHoleInput(event.target.value)}
+                      <ConsoleScalarHoleInput
+                        holeId={holeId}
+                        value={consoleHoleBinding(holeInputs, holeId)}
+                        onChange={setHoleInput}
                       />
                     )}
                   </div>

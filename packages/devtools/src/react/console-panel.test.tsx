@@ -1330,6 +1330,38 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('normalizes a retained text binding when its Hole becomes Boolean', async () => {
+    const { request, replaceSource, result } = mountConsole('Tag.where(name = ?value).many()');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for value' }), {
+      target: { value: 'false' },
+    });
+
+    replaceSource('Tag.where(active = ?value).many()');
+    const choices = screen.getByRole('group', { name: 'Value for value' });
+    await waitFor(() =>
+      expect(
+        within(choices).getByRole('button', { name: 'False' }).getAttribute('aria-pressed'),
+      ).toBe('true'),
+    );
+    expect(within(choices).getByRole('button', { name: 'True' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await result.findByText('A hidden');
+    expect(request.mock.calls[0]![0].body).toMatchObject({
+      selection: { expression: { fieldName: 'active', value: false } },
+    });
+
+    replaceSource('Tag.where(name = ?value).many()');
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('textbox', { name: 'Value for value' }) as HTMLInputElement).value,
+      ).toBe(''),
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('binds typed Boolean choices and falls back to raw strings when the Field requires one', async () => {
     const { request, replaceSource, result } = mountConsole('Tag.where(active = ?enabled).many()');
     fireEvent.click(
