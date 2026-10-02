@@ -191,7 +191,7 @@ describe('Todo canonical model requests', () => {
   });
 
   it('resolves an open Operation application through authorized entity search', async () => {
-    bind(async () => ({
+    const generate = vi.fn(async () => ({
       status: 'application',
       application: {
         kind: 'operation-application',
@@ -200,6 +200,7 @@ describe('Todo canonical model requests', () => {
       },
       bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
     }));
+    bind(generate);
 
     await expect(
       withInvocationContext({ principal }, () =>
@@ -216,6 +217,9 @@ describe('Todo canonical model requests', () => {
         input: { list: list() },
       },
     });
+    expect(generate.mock.calls[0]![0].instructions).toContain(
+      'directly matches TodoList.completeAll',
+    );
   });
   it('uses the graph read result for counts instead of answering from prompt context', async () => {
     bind(async () => readIncompleteItems('count'));
