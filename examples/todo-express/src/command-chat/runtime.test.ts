@@ -189,6 +189,27 @@ describe('Todo canonical model requests', () => {
     });
     expect(dataset().TodoItem).toHaveLength(2);
   });
+
+  it('resolves an open Operation application through authorized entity search', async () => {
+    bind(async () => ({
+      status: 'application',
+      application: {
+        kind: 'operation-application',
+        operationId: 'TodoList.completeAll',
+        arguments: { list: { kind: 'hole', id: 'list' } },
+      },
+      bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
+    }));
+
+    await expect(submit('complete everything in Shopping')).resolves.toMatchObject({
+      status: 'executed',
+      request: {
+        kind: 'invoke',
+        operationId: 'TodoList.completeAll',
+        input: { list: list() },
+      },
+    });
+  });
   it('uses the graph read result for counts instead of answering from prompt context', async () => {
     bind(async () => readIncompleteItems('count'));
 

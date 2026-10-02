@@ -145,6 +145,67 @@ const openGraphReadFixture = () => {
   return { application, Folder, Note, inbox, closed, exposure, generate };
 };
 
+it('resolves and executes a model-proposed open Operation application', async () => {
+  const Folder = entity({ name: 'OperationFolder', fields: { id: field.id() } });
+  const run = vi.fn(({ folder }: { folder: unknown }) => Effect.succeed(folder));
+  const Document = entity({
+    name: 'OperationDocument',
+    fields: { id: field.id() },
+    operations: ({ operation }) => ({
+      move: operation({
+        input: graphSchema.object({ folder: graphSchema.ref(Folder), title: field.string() }),
+        run,
+      }),
+    }),
+  });
+  const application = ontahi({
+    entities: [Folder, Document],
+    storage: createInMemoryDataGraphStorage({
+      dataset: { OperationFolder: [], OperationDocument: [] },
+    }),
+  });
+  const inbox = createEntityRef(Folder, { id: 'inbox' });
+  const runtime = createModelCommandRuntime({
+    application,
+    graphEntities: [Folder, Document],
+    provider: {
+      generate: async () => ({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: 'OperationDocument.move',
+          arguments: {
+            folder: { kind: 'hole', id: 'folder' },
+            title: { kind: 'value', value: 'Notes' },
+          },
+        },
+        bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    resolveEntityMatch: async ({ target, text }) => {
+      expect(target).toBe(Folder);
+      expect(text).toBe('Inbox');
+      return { status: 'matched', candidates: [{ ref: inbox, label: 'Inbox' }] };
+    },
+    scope: async () => ({
+      bindings: { 'OperationDocument.move': { validate: () => undefined } },
+    }),
+  });
+
+  await expect(
+    runtime.submit({ text: 'Move Notes to Inbox' }, new AbortController().signal),
+  ).resolves.toMatchObject({
+    status: 'executed',
+    request: {
+      kind: 'invoke',
+      operationId: 'OperationDocument.move',
+      input: { folder: inbox, title: 'Notes' },
+    },
+  });
+  expect(run.mock.calls[0]?.[0]).toEqual({ folder: inbox, title: 'Notes' });
+});
+
 it('keeps unresolved model Graph Read applications out of execution', async () => {
   const fixture = openGraphReadFixture();
   const runtime = createModelCommandRuntime({

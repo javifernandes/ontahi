@@ -25,6 +25,11 @@ import {
   type ModelGraphReadApplicationProposal,
 } from './model-graph-read-application.js';
 import { validateModelGraphRead, type ModelGraphReadExposure } from './model-graph-read.js';
+import {
+  modelOperationApplicationSchema,
+  parseModelOperationApplication,
+  type ModelOperationApplicationProposal,
+} from './model-operation-application.js';
 
 export type ModelRequest = {
   instructions: string;
@@ -58,7 +63,10 @@ export type ModelInterpretationValue =
         request: GraphReadRequest | GraphCommandRequest | OperationInvokeRequest;
       }>;
     }
-  | ({ status: 'application' } & ModelGraphReadApplicationProposal)
+  | ({ status: 'application' } & (
+      | ModelGraphReadApplicationProposal
+      | ModelOperationApplicationProposal
+    ))
   | { status: 'help' }
   | { status: 'unresolved'; reason: string };
 
@@ -103,7 +111,7 @@ export const parseModelInterpretation = (raw: unknown): ModelInterpretationValue
       if (request) return { status: 'resolved', request };
     }
     if (raw.status === 'application' && keys.length === 3) {
-      const proposal = parseModelGraphReadApplication(raw);
+      const proposal = parseModelGraphReadApplication(raw) ?? parseModelOperationApplication(raw);
       if (proposal) return { status: 'application', ...proposal };
     }
     if (
@@ -286,6 +294,27 @@ export const interpretModelRequest = async ({
           },
         },
       })),
+      ...catalog.map(operation => ({
+        type: 'object' as const,
+        additionalProperties: false,
+        required: ['status', 'application', 'bindings'],
+        properties: {
+          status: { const: 'application' },
+          application: modelOperationApplicationSchema(operation.operationId, operation.input),
+          bindings: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['kind', 'text'],
+              properties: {
+                kind: { const: 'entity-match' },
+                text: { type: 'string', minLength: 1 },
+              },
+            },
+          },
+        },
+      })),
       {
         type: 'object' as const,
         additionalProperties: false,
@@ -326,6 +355,7 @@ export const interpretModelRequest = async ({
     'Interpret the user request. Return JSON only.',
     'For ONE supported read or action return {status:"resolved",request:...}. request must be an existing Ontahi graph-read request, graph-command request (including version and command), or invoke request (kind, operationId, input), exactly as advertised.',
     'For a graph read whose entity reference is named but not supplied as a canonical Ref, return {status:"application",application:{kind:"graph-read-application",request:...},bindings:{holeId:{kind:"entity-match",text:"..."}}}. Put {kind:"hole",id:"holeId"} only in the unresolved reference predicate value. Keep all known predicates closed. Hole ids identify slots only; put the user wording in bindings.',
+    'For an advertised operation whose Entity Ref argument is named but unresolved, return the advertised operation-application form. Wrap known arguments as {kind:"value",value:...}, use {kind:"hole",id:"..."} only for unresolved Entity Refs, and provide one entity-match binding per Hole.',
     'Use an advertised graph read for questions that ask for stored data or a count. Never answer those questions from the supplied context.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
     'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',

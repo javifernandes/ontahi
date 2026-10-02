@@ -111,3 +111,9 @@ Known predicates stay closed, and the completed request is revalidated against t
 affordance before the existing dispatcher executes it. This proof covers direct Ref equality only;
 fuzzy matching, relational display paths, scalar inference, and multi-turn Assistant state remain
 later work.
+
+The same Model Support boundary also accepts open Operation applications. Known inputs remain value
+terms, unresolved direct Refs use the same external `entity-match` bindings, and authorized search
+feeds ordinary schema substitution before lowering to the existing `OperationInvokeRequest`.
+Ambiguous matches become canonical invocation choices; execution still rechecks the fresh scoped
+Operation exposure. Todo exposes `TodoList.completeAll` as the first end-to-end model proof.
