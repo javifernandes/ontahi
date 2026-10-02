@@ -65,6 +65,21 @@ describe('Model Graph Read applications', () => {
     expect(parseModelGraphReadApplication({ application, bindings: {} })).toBeUndefined();
     expect(
       parseModelGraphReadApplication({
+        application: { kind: 'other', request: application.request },
+        bindings: {},
+      }),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphReadApplication({
+        application: {
+          kind: 'graph-read-application',
+          request: { ...application.request, mode: 'delete' },
+        },
+        bindings: {},
+      }),
+    ).toBeUndefined();
+    expect(
+      parseModelGraphReadApplication({
         application: {
           ...application,
           request: {
@@ -100,6 +115,28 @@ describe('Model Graph Read applications', () => {
         ],
       }),
     ).toEqual({ status: 'resolved', request });
+  });
+
+  it('matches authorized aliases and rejects candidates with invalid canonical identities', () => {
+    expect(
+      resolveModelGraphReadApplication({
+        proposal,
+        entities: [List, Item],
+        candidates: [{ ref: inbox, label: 'Incoming', aliases: [' inbox '] }],
+      }),
+    ).toEqual({ status: 'resolved', request });
+    expect(
+      resolveModelGraphReadApplication({
+        proposal,
+        entities: [List, Item],
+        candidates: [
+          {
+            ref: createEntityRef(List, { wrongIdentity: 'inbox' }) as never,
+            label: 'Inbox',
+          },
+        ],
+      }),
+    ).toEqual({ status: 'unresolved', reason: 'The proposed read could not be completed.' });
   });
 
   it('returns a choice for ambiguous visible matches and unresolved for no match', () => {

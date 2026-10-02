@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { expect, it, vi } from 'vitest';
 
 import {
+  createEntityRef,
   createInMemoryDataGraphStorage,
   field,
   graphSchema,
@@ -12,6 +13,7 @@ import {
 import { entity } from './entity.js';
 import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
 import { createModelCommandRuntime } from './model-command.js';
+import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
 import { ontahi } from './ontahi.js';
 
 const fixture = () => {
@@ -73,6 +75,137 @@ const graphReadFixture = () => {
   };
   return { ...f, request, read };
 };
+
+const openGraphReadFixture = () => {
+  const Folder = entity({ name: 'ScopedFolder', fields: { id: field.id(), name: field.string() } });
+  const Note = entity({
+    name: 'ScopedNote',
+    fields: { id: field.id(), folder: field.ref(Folder), archived: field.boolean() },
+  });
+  const application = ontahi({
+    entities: [Folder, Note],
+    storage: createInMemoryDataGraphStorage({ dataset: { ScopedFolder: [], ScopedNote: [] } }),
+  });
+  const inbox = createEntityRef(Folder, { id: 'inbox' });
+  const closed = toGraphReadRequest(
+    query(Note)
+      .where(note => note.folder.eq(inbox))
+      .where(note => note.archived.eq(false))
+      .limit(10),
+    'run',
+  );
+  const open = {
+    ...closed,
+    selection: {
+      ...closed.selection,
+      expression: {
+        kind: 'and' as const,
+        operands: [
+          {
+            kind: 'predicate' as const,
+            fieldName: 'folder',
+            operator: 'eq' as const,
+            value: { kind: 'hole' as const, id: 'folder' },
+          },
+          {
+            kind: 'predicate' as const,
+            fieldName: 'archived',
+            operator: 'eq' as const,
+            value: false,
+          },
+        ],
+      },
+    },
+  };
+  const exposure = createModelGraphReadExposure(
+    {
+      entity: Note,
+      modes: ['run'],
+      cardinalities: ['many'],
+      maxLimit: 10,
+      fields: {
+        id: { select: true },
+        folder: { select: true, filter: ['eq'] },
+        archived: { select: true, filter: ['eq'] },
+      },
+      scope: 'all',
+    },
+    {
+      mode: 'run',
+      equals: ['folder', 'archived'],
+      limit: 10,
+      description: 'Read scoped notes.',
+    },
+  );
+  const generate = async () => ({
+    status: 'application',
+    application: { kind: 'graph-read-application', request: open },
+    bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+  });
+  return { application, Folder, Note, inbox, closed, exposure, generate };
+};
+
+it('keeps unresolved model Graph Read applications out of execution', async () => {
+  const fixture = openGraphReadFixture();
+  const runtime = createModelCommandRuntime({
+    application: fixture.application,
+    graphEntities: [fixture.Folder, fixture.Note],
+    provider: { generate: fixture.generate },
+    authorize: () => undefined,
+    scope: async () => ({ reads: [fixture.exposure] }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Read Inbox notes' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'No visible ScopedFolder matches “Inbox”.',
+  });
+});
+
+it('projects ambiguous model Graph Read application matches as canonical choices', async () => {
+  const fixture = openGraphReadFixture();
+  const runtime = createModelCommandRuntime({
+    application: fixture.application,
+    graphEntities: [fixture.Folder, fixture.Note],
+    provider: { generate: fixture.generate },
+    authorize: () => undefined,
+    scope: async () => ({
+      reads: [fixture.exposure],
+      entityCandidates: [
+        { ref: fixture.inbox, label: 'Inbox' },
+        { ref: createEntityRef(fixture.Folder, { id: 'other-inbox' }), label: 'INBOX' },
+      ],
+    }),
+  });
+
+  const prepared = await runtime.prepare(
+    { text: 'Read Inbox notes' },
+    new AbortController().signal,
+  );
+  expect(prepared).toMatchObject({
+    status: 'choice',
+    options: [{ label: 'Inbox' }, { label: 'INBOX' }],
+  });
+});
+
+it('revalidates a completed model Graph Read application against its exposure', async () => {
+  const fixture = openGraphReadFixture();
+  const runtime = createModelCommandRuntime({
+    application: fixture.application,
+    graphEntities: [fixture.Folder, fixture.Note],
+    provider: { generate: fixture.generate },
+    authorize: () => undefined,
+    scope: async () => ({
+      reads: [{ ...fixture.exposure, validate: () => 'Read is no longer available.' }],
+      entityCandidates: [{ ref: fixture.inbox, label: 'Inbox' }],
+    }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Read Inbox notes' }, new AbortController().signal),
+  ).resolves.toEqual({ status: 'unresolved', message: 'Read is no longer available.' });
+});
 it('derives descriptions and dispatches a canonical operation in the caller context', async () => {
   const f = fixture();
   const runtime = createModelCommandRuntime({ ...f, provider: { generate: f.generate } });
