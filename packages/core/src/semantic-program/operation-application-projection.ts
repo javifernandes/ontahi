@@ -5,6 +5,7 @@ import type {
   OperationApplicationResolutionCandidate,
 } from './operation-application-resolution.js';
 import {
+  operationApplicationHoles,
   substituteOperationApplication,
   type OperationApplication,
   type OperationApplicationContract,
@@ -87,6 +88,10 @@ export const prepareOperationApplicationChoice = (
     throw new Error('Operation application choice prompt must not be empty.');
   if (resolution.candidates.length < 2)
     throw new Error('Operation application choice requires at least two candidates.');
+  if (!operationApplicationHoles(application).includes(resolution.holeId))
+    throw new Error(
+      `Operation application choice Hole "${resolution.holeId}" is not open in ${application.operationId}.`,
+    );
 
   const seen = new Set<string>();
   const options = resolution.candidates.map((candidate, index) => {

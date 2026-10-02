@@ -160,6 +160,9 @@ describe('Operation application choice projection', () => {
         compact,
       ),
     ).toThrow('choice requires at least two candidates');
+    expect(() =>
+      prepareOperationApplicationChoice(open, { ...resolution, holeId: 'missing' }, compact),
+    ).toThrow(`Operation application choice Hole "missing" is not open in ${completeAll.id}.`);
 
     const choice = prepareOperationApplicationChoice(open, resolution, compact);
     const other = { ...completeAll, id: 'SemanticProjectionTodoList.archive' };
