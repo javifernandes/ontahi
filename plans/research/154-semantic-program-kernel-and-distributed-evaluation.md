@@ -738,12 +738,13 @@ their current public contracts remain authoritative.
       Interaction without changing the open application.
 - [x] Accept one shared option identity through schema-validated substitution while retaining the
       selected candidate's provenance.
-- [ ] Define a resolver contract that consumes a typed hole plus authorized environment.
-- [ ] Separate candidate discovery, auto-binding, choice, free input, and unresolved outcomes.
+- [x] Define a replaceable resolver contract that consumes a Hole context with its authoritative
+      Operation schema positions.
+- [x] Separate candidate discovery, auto-binding, choice, free input, and unresolved outcomes.
 - [ ] Declare reusable Entity Ref presentation and input-position candidate restrictions.
 - [ ] Render the same open application as a generic form, CLI-style prompt, and conversational
       Interaction without changing its semantics.
-- [ ] Record provenance for every accepted substitution.
+- [x] Record provenance for accepted authorized-candidate and free-input substitutions.
 - [ ] Prove that two Assistants can use different resolver and presentation policies for the same
       hole without changing the Program representation.
 
@@ -879,6 +880,20 @@ Prompt text and candidate labels are presentation policy, so two callers can des
 application differently without changing its semantics. This checkpoint does not yet provide a
 CLI projection, reusable Entity display fields, scalar free input, Assistant configuration, Task
 persistence, or a public form contract. Those broader Slice 2 items remain open.
+
+### Replaceable Resolver And Free Input Checkpoint
+
+Implemented on 2026-10-02: Hole resolution now has an internal replaceable resolver contract. The
+coordinator derives every named-Hole position and its original schema from the Operation contract,
+then offers that immutable context to ordered resolvers. A resolver may return an outcome or
+abstain; changing resolver policy does not change the authored application. Exhaustion is an
+explicit unresolved outcome rather than an implicit failure.
+
+The authorized Entity Ref discovery path adapts to this contract, and a second resolver recognizes
+direct scalar fields as free input. Submitted free input uses the same substitution and Operation
+schema validation as every other binding and records `free-input` provenance. Composite, mixed,
+unknown, stale, or unsupported positions remain unresolved. This checkpoint does not add nested
+input traversal, contextual auto-values, UI controls, model authority, or public exports.
 
 ## Second Vertical Proof
 
