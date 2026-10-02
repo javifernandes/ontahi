@@ -91,16 +91,6 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
-        entityCandidates: [
-          ...current.lists.map(list => ({
-            ref: createEntityRef(TodoList, { id: list.id }),
-            label: list.name,
-          })),
-          ...current.items.map(item => ({
-            ref: createEntityRef(TodoItem, { id: item.id }),
-            label: item.title,
-          })),
-        ],
       };
     },
   });

@@ -153,6 +153,17 @@ it('resolves a model-proposed Graph Read Hole from authorized scoped entities', 
       authority: () => undefined,
       reads: [
         {
+          entity: Folder.display({ primary: 'name', search: ['name'] }),
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 20,
+          fields: {
+            id: { select: true },
+            name: { select: true, filter: ['eq'] },
+          },
+          scope: 'all',
+        },
+        {
           entity: Document,
           modes: ['run'],
           cardinalities: ['many'],
@@ -166,10 +177,7 @@ it('resolves a model-proposed Graph Read Hole from authorized scoped entities', 
         },
       ],
     },
-    scope: async () => ({
-      context: {},
-      entityCandidates: [{ ref: inbox, label: 'Inbox' }],
-    }),
+    scope: async () => ({ context: {} }),
   });
 
   await expect(

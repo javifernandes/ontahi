@@ -13,6 +13,7 @@ import type { OperationInvokeRequest } from '../operation-invocation.js';
 import type { OntahiApplication } from './application.js';
 import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './model-graph-command.js';
 import {
+  modelGraphReadApplicationEntityMatches,
   resolveModelGraphReadApplication,
   type ModelEntityCandidate,
 } from './model-graph-read-application.js';
@@ -79,6 +80,13 @@ export type PreparedModelCommandRuntime = ModelCommandRuntime & {
 export type CreateModelCommandRuntimeOptions = {
   application: OntahiApplication;
   graphEntities?: readonly AnyEntityDefinition[];
+  resolveEntityMatch?: (
+    request: { target: AnyEntityDefinition; text: string },
+    signal: AbortSignal,
+  ) => Promise<
+    | { status: 'matched'; candidates: readonly ModelEntityCandidate[] }
+    | { status: 'unresolved'; reason: string }
+  >;
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
   scope: (request: ModelCommandRequest, signal: AbortSignal) => Promise<ModelCommandScope>;
@@ -107,6 +115,7 @@ export const createModelCommandRuntime = ({
   dispatchRead,
   dispatchCommand,
   graphEntities = [],
+  resolveEntityMatch,
 }: CreateModelCommandRuntimeOptions): PreparedModelCommandRuntime => {
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
@@ -178,10 +187,25 @@ export const createModelCommandRuntime = ({
     if (proposal.status === 'resolved') return { status: 'proposed', request: proposal.request };
     if (proposal.status === 'choice') return proposal;
     if (proposal.status === 'application') {
+      const entityCandidates = [...(initial.entityCandidates ?? [])];
+      if (resolveEntityMatch) {
+        const matches = modelGraphReadApplicationEntityMatches(proposal, graphEntities);
+        if (!matches)
+          return { status: 'unresolved', message: 'The proposed read has an unsupported Hole.' };
+        for (const match of matches) {
+          const result = await resolveEntityMatch(
+            { target: match.target, text: match.match.text },
+            signal,
+          );
+          if (result.status === 'unresolved')
+            return { status: 'unresolved', message: result.reason };
+          entityCandidates.push(...result.candidates);
+        }
+      }
       const resolved = resolveModelGraphReadApplication({
         proposal,
         entities: graphEntities,
-        candidates: initial.entityCandidates ?? [],
+        candidates: entityCandidates,
       });
       if (resolved.status === 'unresolved')
         return { status: 'unresolved', message: resolved.reason };
