@@ -76,6 +76,39 @@ const graphReadFixture = () => {
   return { ...f, request, read };
 };
 
+it('reports a durable Operation as started with its child Task identity', async () => {
+  const input = graphSchema.object({ name: field.string() });
+  const operation = { id: 'Document.reindex', input, description: 'Reindex documents.' };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+      invokeOperation: async () => ({
+        ok: true,
+        kind: 'success',
+        value: { taskId: operation.id, runId: 'run-1', status: 'queued' },
+      }),
+      checkPermission: async () => ({ allowed: true }),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'resolved',
+        request: { kind: 'invoke', operationId: operation.id, input: { name: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: { [operation.id]: { validate: () => undefined } } }),
+  });
+
+  await expect(
+    runtime.submit({ text: 'Reindex Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'started',
+    message: 'Operation started.',
+    request: { kind: 'invoke', operationId: operation.id, input: { name: 'Inbox' } },
+    run: { taskId: operation.id, runId: 'run-1' },
+  });
+});
+
 const openGraphReadFixture = () => {
   const Folder = entity({ name: 'ScopedFolder', fields: { id: field.id(), name: field.string() } });
   const Note = entity({

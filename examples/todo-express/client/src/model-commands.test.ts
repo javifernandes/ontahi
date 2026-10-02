@@ -73,6 +73,51 @@ it('preserves an expected model command failure from the protocol family', async
   });
 });
 
+it('observes a started Operation before reporting the model command as executed', async () => {
+  const run = { taskId: 'TodoList.completeAll', runId: 'complete-all-1' };
+  const invocation = {
+    kind: 'invoke' as const,
+    operationId: 'TodoList.completeAll',
+    input: {
+      list: { kind: 'entity-ref' as const, entityName: 'TodoList', locator: { id: 'inbox' } },
+    },
+  };
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(envelope, {
+      version: 1,
+      kind: 'model-command-result',
+      result: { status: 'started', message: 'List items completed.', request: invocation, run },
+    }),
+  );
+  const observe = vi.fn(async function* () {
+    yield {
+      ...run,
+      status: 'running' as const,
+      updatedAt: '2026-09-29T00:00:00.000Z',
+    };
+    yield {
+      ...run,
+      status: 'completed' as const,
+      updatedAt: '2026-09-29T00:00:01.000Z',
+      result: { completed: 2 },
+    };
+  });
+  const submit = createModelCommandSubmitter({
+    request,
+    durableOperation: { observe },
+  } as unknown as RuntimeTransport);
+
+  await expect(submit({ text: 'Complete Inbox' })).resolves.toEqual({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: 'List items completed.',
+      request: invocation,
+    },
+  });
+  expect(observe).toHaveBeenCalledWith(run);
+});
+
 it('responds through durable.operation and observes the model Task to completion', async () => {
   const run = { taskId: 'ontahi.model-command', runId: 'run-1' };
   const request = vi.fn(async envelope =>

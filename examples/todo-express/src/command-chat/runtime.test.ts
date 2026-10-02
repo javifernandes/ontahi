@@ -191,7 +191,7 @@ describe('Todo canonical model requests', () => {
   });
 
   it('resolves an open Operation application through authorized entity search', async () => {
-    const generate = vi.fn(async () => ({
+    const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) => ({
       status: 'application',
       application: {
         kind: 'operation-application',

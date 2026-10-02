@@ -120,6 +120,30 @@ describe('Runtime Protocol model.command family', () => {
     });
   });
 
+  it('parses a started durable Operation with its canonical request and run', () => {
+    const started = {
+      version: 1,
+      kind: 'model-command-result',
+      result: {
+        status: 'started',
+        message: 'List items completed.',
+        request: {
+          kind: 'invoke',
+          operationId: 'TodoList.completeAll',
+          input: {
+            list: { kind: 'entity-ref', entityName: 'TodoList', locator: { id: 'inbox' } },
+          },
+        },
+        run: { taskId: 'TodoList.completeAll', runId: 'run-1' },
+      },
+    } as const;
+
+    expect(parseModelCommandProtocolResponse(started)).toEqual({
+      success: true,
+      response: started,
+    });
+  });
+
   it('returns the canonical parsed invocation without unknown transport fields', () => {
     expect(
       parseModelCommandProtocolResponse({

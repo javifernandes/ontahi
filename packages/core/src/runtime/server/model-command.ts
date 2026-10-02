@@ -397,6 +397,22 @@ export const createModelCommandRuntime = ({
           ? (result.result.message ?? 'The operation failed.')
           : 'Operation unavailable.',
       );
+    const run = result.result.value;
+    if (
+      isRecord(run) &&
+      typeof run.taskId === 'string' &&
+      typeof run.runId === 'string' &&
+      typeof run.status === 'string'
+    )
+      return {
+        status: 'started',
+        message:
+          current.bindings?.[proposal.operationId]?.message?.(
+            proposal.input as Record<string, unknown>,
+          ) ?? 'Operation started.',
+        request: proposal,
+        run: { taskId: run.taskId, runId: run.runId },
+      };
     return {
       status: 'executed',
       message:
