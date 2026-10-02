@@ -87,3 +87,8 @@ model. Devtools presents explicit values, delegates normalization and validation
 substitution, and dispatches only after lowering yields the existing closed `GraphReadRequest`.
 This proves one textual/UI projection and runtime path, not a general projectional editor, resolver
 UI, observation of open terms, or stable root export.
+
+Graph Read applications also expose each named Hole's occupied Entity and Field positions. This is
+structural context rather than copied type metadata: resolvers and frontends join it with the
+registered Entity schema to decide whether a Hole is scalar free input or an Entity Ref requiring
+authorized candidate discovery. Presentation and candidate policy remain outside the application.

@@ -759,6 +759,8 @@ their current public contracts remain authoritative.
 - [x] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
 - [x] Validate a named Graph Read hole against every predicate position it occupies and lower the
       closed application to the current `GraphReadRequest` unchanged.
+- [x] Expose every Graph Read Hole's Entity and Field positions so resolvers and presentation
+      adapters can derive input semantics from the authoritative application schema.
 - [x] Decide whether one common Application abstraction is real or should remain a family of typed
       terms sharing smaller substitution primitives.
 

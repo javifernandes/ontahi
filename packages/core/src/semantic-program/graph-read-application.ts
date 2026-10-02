@@ -150,6 +150,27 @@ export const graphReadApplicationHoles = (application: GraphReadApplication): re
   ),
 ];
 
+export type GraphReadApplicationHolePosition = {
+  readonly holeId: string;
+  readonly entityName: string;
+  readonly fieldName: string;
+};
+
+export const graphReadApplicationHolePositions = (
+  application: GraphReadApplication,
+): readonly GraphReadApplicationHolePosition[] =>
+  predicateValues(application.request.selection.expression).flatMap(predicate =>
+    isApplicationHole(predicate.value)
+      ? [
+          {
+            holeId: predicate.value.id,
+            entityName: application.request.selection.entityName,
+            fieldName: predicate.fieldName,
+          },
+        ]
+      : [],
+  );
+
 export const substituteGraphReadApplication = (
   application: GraphReadApplication,
   entities: readonly AnyEntityDefinition[],
