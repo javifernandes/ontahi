@@ -19,6 +19,7 @@ import {
   type PreparedModelCommandRuntime,
 } from './model-command.js';
 import type { ModelGraphReadResult } from './model-graph-read.js';
+import { ModelInterpretationError } from './model-interpretation.js';
 import {
   defineTask,
   defineTaskExecution,
@@ -99,8 +100,22 @@ const principalFromTaskTrigger = (trigger: TaskTrigger) => {
 const modelEffect = <TValue>(trigger: TaskTrigger, run: () => Promise<TValue>) =>
   Effect.tryPromise({
     try: () => withInvocationContext({ principal: principalFromTaskTrigger(trigger) }, run),
-    catch: toTaskFailure,
+    catch: error =>
+      error instanceof ModelInterpretationError
+        ? {
+            reason: `model_interpretation_failed:${error.code}`,
+            message: error.message,
+          }
+        : toTaskFailure(error),
   });
+
+const modelInterpretationErrorFromTaskFailure = (failure: TaskSnapshot['error']) =>
+  failure?.code.startsWith('model_interpretation_failed:')
+    ? new ModelInterpretationError(
+        failure.code.slice('model_interpretation_failed:'.length),
+        failure.message,
+      )
+    : undefined;
 
 /** Builds one durable model-command execution without making the model protocol own continuation.
  * Interpretation may checkpoint a choice; approval is an explicit host policy. */
@@ -309,6 +324,10 @@ export const createTaskBackedModelCommandRuntime = ({
       }
       if (snapshot.status === 'completed' && snapshot.result !== undefined) {
         return snapshot.result as ModelCommandTaskResult;
+      }
+      if (snapshot.error) {
+        const interpretationError = modelInterpretationErrorFromTaskFailure(snapshot.error);
+        if (interpretationError) throw interpretationError;
       }
       throw new Error(snapshot.error?.message ?? `Model command Task ${snapshot.status}.`);
     },

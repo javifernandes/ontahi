@@ -201,8 +201,15 @@ describe('Todo canonical model requests', () => {
       bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
     }));
 
-    await expect(submit('complete everything in Shopping')).resolves.toMatchObject({
-      status: 'executed',
+    await expect(
+      withInvocationContext({ principal }, () =>
+        runtime.prepare(
+          { text: 'complete everything in Shopping' },
+          new AbortController().signal,
+        ),
+      ),
+    ).resolves.toMatchObject({
+      status: 'proposed',
       request: {
         kind: 'invoke',
         operationId: 'TodoList.completeAll',

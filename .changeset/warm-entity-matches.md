@@ -4,4 +4,5 @@
 
 Resolve Model Support entity-match bindings for Graph Read and Operation applications through
 registered display metadata and authorized Graph Read policies without requiring applications to
-assemble candidate lists manually.
+assemble candidate lists manually. Preserve typed Model Interpretation failures across the durable
+Model Command Task boundary so transports can return actionable protocol errors.
