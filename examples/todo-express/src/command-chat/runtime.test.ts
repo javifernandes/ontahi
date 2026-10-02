@@ -204,10 +204,7 @@ describe('Todo canonical model requests', () => {
 
     await expect(
       withInvocationContext({ principal }, () =>
-        runtime.prepare(
-          { text: 'complete everything in Shopping' },
-          new AbortController().signal,
-        ),
+        runtime.prepare({ text: 'complete everything in Shopping' }, new AbortController().signal),
       ),
     ).resolves.toMatchObject({
       status: 'proposed',

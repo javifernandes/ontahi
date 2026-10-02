@@ -397,13 +397,14 @@ export const createModelCommandRuntime = ({
           ? (result.result.message ?? 'The operation failed.')
           : 'Operation unavailable.',
       );
-    const run = result.result.value;
-    if (
-      isRecord(run) &&
-      typeof run.taskId === 'string' &&
-      typeof run.runId === 'string' &&
-      typeof run.status === 'string'
-    )
+    const operation = resolveOperation(proposal.operationId);
+    if (operation?.durable) {
+      const run = result.result.value;
+      if (!isRecord(run) || typeof run.taskId !== 'string' || typeof run.runId !== 'string')
+        throw new ModelInterpretationError(
+          'command_execution_failed',
+          'The durable Operation did not return a Task run.',
+        );
       return {
         status: 'started',
         message:
@@ -413,6 +414,7 @@ export const createModelCommandRuntime = ({
         request: proposal,
         run: { taskId: run.taskId, runId: run.runId },
       };
+    }
     return {
       status: 'executed',
       message:

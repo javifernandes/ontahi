@@ -99,7 +99,7 @@ export const resolveAuthorizedModelEntityMatch = async <TAuthority>({
   });
   if (response.kind !== 'graph-read-result' || !Array.isArray(response.value))
     return { status: 'unresolved', reason: `Authorized search for ${target.name} is unavailable.` };
-  if (response.value.length >= limit && limit <= 20)
+  if (response.value.length >= limit)
     return { status: 'unresolved', reason: 'Too many matching entities. Be more specific.' };
   const candidates = response.value.flatMap(value => {
     if (typeof value !== 'object' || value === null) return [];

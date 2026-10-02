@@ -78,7 +78,12 @@ const graphReadFixture = () => {
 
 it('reports a durable Operation as started with its child Task identity', async () => {
   const input = graphSchema.object({ name: field.string() });
-  const operation = { id: 'Document.reindex', input, description: 'Reindex documents.' };
+  const operation = {
+    id: 'Document.reindex',
+    input,
+    description: 'Reindex documents.',
+    durable: { runtime: 'in-process' },
+  };
   const runtime = createModelCommandRuntime({
     application: {
       resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
@@ -107,6 +112,37 @@ it('reports a durable Operation as started with its child Task identity', async 
     request: { kind: 'invoke', operationId: operation.id, input: { name: 'Inbox' } },
     run: { taskId: operation.id, runId: 'run-1' },
   });
+});
+
+it('rejects a durable Operation result without a Task identity', async () => {
+  const input = graphSchema.object({});
+  const operation = {
+    id: 'Document.reindexInvalid',
+    input,
+    durable: { runtime: 'in-process' },
+  };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+      invokeOperation: async () => ({ ok: true, kind: 'success', value: { accepted: true } }),
+      checkPermission: async () => ({ allowed: true }),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'resolved',
+        request: { kind: 'invoke', operationId: operation.id, input: {} },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: { [operation.id]: { validate: () => undefined } } }),
+  });
+
+  await expect(runtime.submit({ text: 'Reindex' }, new AbortController().signal)).rejects.toEqual(
+    expect.objectContaining({
+      code: 'command_execution_failed',
+      message: 'The durable Operation did not return a Task run.',
+    }),
+  );
 });
 
 const openGraphReadFixture = () => {

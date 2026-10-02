@@ -58,22 +58,29 @@ const settleStartedOperation = async (
 ): Promise<ModelCommandSubmitResult> => {
   if (!runtimeTransport.durableOperation)
     return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };
-  for await (const snapshot of runtimeTransport.durableOperation.observe(outcome.run)) {
-    if (snapshot.interaction)
-      return {
-        ok: false,
-        message: 'The started Operation requires an interaction that command chat cannot resume.',
-      };
-    if (snapshot.status === 'completed')
-      return {
-        ok: true,
-        value: { status: 'executed', message: outcome.message, request: outcome.request },
-      };
-    if (snapshot.status === 'failed' || snapshot.status === 'cancelled')
-      return {
-        ok: false,
-        message: snapshot.error?.message ?? `Operation ${snapshot.status}.`,
-      };
+  try {
+    for await (const snapshot of runtimeTransport.durableOperation.observe(outcome.run)) {
+      if (snapshot.interaction)
+        return {
+          ok: false,
+          message: 'The started Operation requires an interaction that command chat cannot resume.',
+        };
+      if (snapshot.status === 'completed')
+        return {
+          ok: true,
+          value: { status: 'executed', message: outcome.message, request: outcome.request },
+        };
+      if (snapshot.status === 'failed' || snapshot.status === 'cancelled')
+        return {
+          ok: false,
+          message: snapshot.error?.message ?? `Operation ${snapshot.status}.`,
+        };
+    }
+  } catch {
+    return {
+      ok: false,
+      message: 'The Operation started, but its completion could not be observed. Check the list.',
+    };
   }
   return { ok: false, message: 'The Operation observation ended before completion.' };
 };

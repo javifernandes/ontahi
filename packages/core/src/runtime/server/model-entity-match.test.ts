@@ -74,6 +74,23 @@ it('requires an authorized searchable display field', async () => {
     reason: 'No authorized search is configured for MatchFolder.',
   });
   expect(read).not.toHaveBeenCalled();
+  await expect(
+    resolveAuthorizedModelEntityMatch({
+      target: Folder,
+      text: 'Inbox',
+      policies: [
+        {
+          ...policy,
+          fields: { ...policy.fields, id: { select: false } },
+        } as unknown as GraphReadPolicy<typeof Folder, undefined>,
+      ],
+      read,
+      authority: undefined,
+    }),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    reason: 'No authorized identity is available for MatchFolder.',
+  });
 });
 
 it('does not accept truncated, rejected, or malformed candidate reads', async () => {
@@ -95,6 +112,21 @@ it('does not accept truncated, rejected, or malformed candidate reads', async ()
       ...common,
       policies: [{ ...policy, maxLimit: 1 }],
       read: async () => ({ kind: 'graph-read-result', value: [{ id: 'one', name: 'Inbox' }] }),
+    }),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    reason: 'Too many matching entities. Be more specific.',
+  });
+  await expect(
+    resolveAuthorizedModelEntityMatch({
+      ...common,
+      read: async () => ({
+        kind: 'graph-read-result',
+        value: Array.from({ length: 21 }, (_, index) => ({
+          id: `match-${index}`,
+          name: 'Inbox',
+        })),
+      }),
     }),
   ).resolves.toEqual({
     status: 'unresolved',

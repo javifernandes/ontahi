@@ -52,6 +52,18 @@ describe('Model Operation applications', () => {
       proposal,
     );
     expect(parseModelOperationApplication({ application, bindings: {} })).toBeUndefined();
+    expect(
+      parseModelOperationApplication({
+        application: { ...application, kind: 'other' },
+        bindings: proposal.bindings,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseModelOperationApplication({
+        application: { ...application, arguments: { ...application.arguments, title: null } },
+        bindings: proposal.bindings,
+      }),
+    ).toBeUndefined();
   });
 
   it('derives the Ref target and keeps scalar values closed', () => {
@@ -93,6 +105,26 @@ describe('Model Operation applications', () => {
     expect(resolveModelOperationApplication(proposal, contract, {})).toEqual({
       status: 'unresolved',
       reason: 'No visible entity matches this request.',
+    });
+    expect(
+      resolveModelOperationApplication(proposal, contract, {
+        list: Array.from({ length: 21 }, (_, index) => ({
+          ref: createEntityRef(List, { id: `inbox-${index}` }),
+          label: `Inbox ${index}`,
+        })),
+      }),
+    ).toEqual({
+      status: 'unresolved',
+      reason: 'Too many matching entities. Be more specific.',
+    });
+    const Other = entity({ name: 'OtherOperationList', fields: { id: field.id() } });
+    expect(
+      resolveModelOperationApplication(proposal, contract, {
+        list: [{ ref: createEntityRef(Other, { id: 'other' }), label: 'Other' }],
+      }),
+    ).toEqual({
+      status: 'unresolved',
+      reason: 'The proposed operation could not be completed.',
     });
   });
 });
