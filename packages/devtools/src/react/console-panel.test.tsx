@@ -1112,7 +1112,10 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     const { request, result } = mountConsole(source, undefined, dialect);
 
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?wanted' }), {
+    const bindings = within(screen.getByLabelText('Graph Read Hole values'));
+    expect(bindings.getByText('wanted')).toBeDefined();
+    expect(bindings.queryByText('?wanted')).toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for wanted' }), {
       target: { value: input },
     });
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
@@ -1132,13 +1135,13 @@ describe('Console Graph Read applications', uiTestOptions, () => {
   it('treats inherited property names as unbound Hole ids', () => {
     mountConsole('Tag.where(name = ?toString).many()');
 
-    expect(screen.getByRole('textbox', { name: 'Value for ?toString' })).toBeDefined();
+    expect(screen.getByRole('textbox', { name: 'Value for toString' })).toBeDefined();
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('parses typed values first and falls back to raw strings when the Field requires one', async () => {
     const { request, replaceSource, result } = mountConsole('Tag.where(active = ?enabled).many()');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?enabled' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for enabled' }), {
       target: { value: 'true' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -1148,7 +1151,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     });
 
     replaceSource('Tag.where(name = ?name).many()');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?name' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for name' }), {
       target: { value: '123' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -1163,7 +1166,7 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     ['Tag.where(active = ?value).many()', 'maybe', 'expected boolean'],
   ])('reports an invalid Hole binding for %s', (source, value, message) => {
     mountConsole(source);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?value' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for value' }), {
       target: { value },
     });
 

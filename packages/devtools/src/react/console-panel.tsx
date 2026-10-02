@@ -1293,9 +1293,9 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           <div style={styles.consoleHoleBindings} aria-label='Graph Read Hole values'>
             {holeIds.map(holeId => (
               <label key={holeId} style={styles.consoleHoleBinding}>
-                <span>?{holeId}</span>
+                <span>{holeId}</span>
                 <input
-                  aria-label={`Value for ?${holeId}`}
+                  aria-label={`Value for ${holeId}`}
                   style={styles.consoleHoleInput}
                   placeholder='value'
                   value={consoleHoleInput(holeInputs, holeId) ?? ''}
