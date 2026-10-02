@@ -790,6 +790,8 @@ their current public contracts remain authoritative.
 
 ### Slice 7: Assistants, Frontends, Models, And Tooling
 
+- [x] Project one open Graph Read application through the existing TS and declarative Console
+      dialects, bind its named Holes in Devtools, and execute only the closed canonical request.
 - [ ] Treat TypeScript, declarative text, projectional editing, UI forms, CLI, and natural language as
       frontends producing the same semantic terms.
 - [ ] Define explicit Assistant registration, stable addressing, and one application default without
@@ -910,6 +912,21 @@ This first Read proof deliberately excludes `in` predicates, missing relationshi
 computed producers, observation, Graph Commands, dispatch, and public exports. It tests the shared
 open/validate/close mechanics without claiming that Operation and Graph Read applications already
 form one public abstraction.
+
+### First Console Projection Checkpoint
+
+Implemented on 2026-10-02: the existing TS and declarative Console dialects accept a named Hole in
+a Graph Read predicate (`Tag.where(name = ?wanted).many()` and
+`Tag where name = ?wanted`). Analysis produces the same typed open Graph Read application rather
+than an executable request. Devtools projects every named Hole as an explicit input, validates and
+normalizes substitutions through the Entity field schema, and enables Run only after the
+application lowers to the unchanged canonical `GraphReadRequest`. Execution then uses the ordinary
+Runtime Protocol and receiver policy path.
+
+This checkpoint introduces a bounded experimental Core subpath for semantic-program frontends; it
+does not export the experiment from the stable Core root or claim a universal Application type.
+Observation remains closed-request-only, and richer resolver-driven inputs, relationship endpoint
+Holes, projectional editing, CLI, and natural-language frontends remain later work.
 
 ### First Parameterized Graph Command Checkpoint
 

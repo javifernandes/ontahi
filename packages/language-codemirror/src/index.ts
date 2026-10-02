@@ -87,6 +87,8 @@ const selectionParser = selectionDocumentParser.configure({
       Null: tags.null,
       NumberLiteral: tags.number,
       StringLiteral: tags.string,
+      Identifier: tags.variableName,
+      QuestionMark: tags.punctuation,
       'OpenParen CloseParen OpenBracket CloseBracket Comma': tags.punctuation,
     }),
   ],
@@ -114,6 +116,8 @@ const consoleParser = consoleDocumentParser.configure({
       Null: tags.null,
       NumberLiteral: tags.number,
       StringLiteral: tags.string,
+      Identifier: tags.variableName,
+      QuestionMark: tags.punctuation,
       'Dot OpenParen CloseParen OpenBracket CloseBracket OpenBrace CloseBrace Colon Comma':
         tags.punctuation,
     }),

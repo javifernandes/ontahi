@@ -61,6 +61,41 @@ describe('authoring syntax contrast', () => {
     }
   });
 
+  it.each(['ts', 'declarative'] as const)('highlights named Graph Read Holes in %s', dialect => {
+    const view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc:
+          dialect === 'ts'
+            ? 'TodoItem.where(ownerId = ?owner).many()'
+            : 'TodoItem where ownerId = ?owner',
+        extensions: consoleExpressionExtensions(
+          {
+            entities: [
+              {
+                name: 'TodoItem',
+                fields: [{ name: 'ownerId', type: 'id', nullable: false }],
+              },
+            ],
+          },
+          { dialect, colorScheme: 'dark' },
+        ),
+      }),
+    });
+    try {
+      expect(
+        [...view.dom.querySelectorAll('.cm-ontahi-syntax-field')].map(node => node.textContent),
+      ).toContain('owner');
+      expect(
+        [...view.dom.querySelectorAll('.cm-ontahi-syntax-punctuation')].map(
+          node => node.textContent,
+        ),
+      ).toContain('?');
+    } finally {
+      view.destroy();
+    }
+  });
+
   it('highlights Declarative Operations and structured input', () => {
     const view = new EditorView({
       parent: document.body,

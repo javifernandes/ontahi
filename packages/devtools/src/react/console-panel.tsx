@@ -15,6 +15,12 @@ import {
   type GraphReadRequest,
   type GraphReadOrder,
 } from '@ontahi/core/data-graph';
+import {
+  graphReadApplicationHoles,
+  lowerGraphReadApplication,
+  substituteGraphReadApplication,
+  type GraphReadApplication,
+} from '@ontahi/core/experimental/semantic-program';
 import type { TaskRunIdentity, TaskSnapshot } from '@ontahi/core/runtime/contracts';
 import {
   anonymousExecutionIdentity,
@@ -177,15 +183,21 @@ const nextConsoleOrder = (
 };
 
 const consoleReadSummary = (analysis: ConsoleDocumentAnalysis, limit: number) => {
-  if (analysis.execution?.family !== 'graph.read') {
+  const request =
+    analysis.execution?.family === 'graph.read'
+      ? analysis.execution.body
+      : analysis.openExecution?.family === 'graph.read'
+        ? analysis.openExecution.body.request
+        : undefined;
+  if (!request) {
     const expression = analysis.syntax.expression;
     return expression?.kind === 'operation'
       ? `invoke ${expression.operation?.text ?? ''}`
       : (expression?.action ?? 'invalid');
   }
   if (analysis.syntax.expression?.terminal?.kind === 'exists-member') return 'exists';
-  if (analysis.request?.mode === 'count') return 'count';
-  return 'limit ' + (analysis.request?.limit ?? limit);
+  if (request.mode === 'count') return 'count';
+  return 'limit ' + (request.limit ?? limit);
 };
 
 const ConsoleAnalysisStatus = ({
@@ -199,7 +211,8 @@ const ConsoleAnalysisStatus = ({
   if (diagnostics.length === 0)
     return [
       analysis.syntax.expression?.entity?.text ?? 'No Entity',
-      analysis.execution?.family ?? 'No request',
+      analysis.execution?.family ??
+        (analysis.openExecution ? `${analysis.openExecution.family} application` : 'No request'),
       consoleReadSummary(analysis, limit),
     ].join(' · ');
   return diagnostics.map(diagnostic => (
@@ -211,6 +224,74 @@ const ConsoleAnalysisStatus = ({
       {diagnostic.message}
     </span>
   ));
+};
+
+const parseConsoleHoleInput = (input: string): unknown => {
+  const value = input.trim();
+  if (value === 'true' || value === 'false' || value === 'null') return JSON.parse(value);
+  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) return Number(value);
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith('[') && value.endsWith(']')) ||
+    (value.startsWith('{') && value.endsWith('}'))
+  )
+    return JSON.parse(value);
+  return value;
+};
+
+type PreparedOpenGraphRead =
+  | { readonly execution?: undefined; readonly error?: undefined }
+  | { readonly execution: ConsoleRequest; readonly error?: undefined }
+  | { readonly execution?: undefined; readonly error: string };
+
+const consoleHoleInput = (
+  inputs: Readonly<Record<string, string>>,
+  holeId: string,
+): string | undefined => {
+  const input = inputs[holeId];
+  return Object.prototype.hasOwnProperty.call(inputs, holeId) && typeof input === 'string'
+    ? input
+    : undefined;
+};
+
+const prepareOpenGraphRead = (
+  application: GraphReadApplication | undefined,
+  entities: readonly AnyEntityDefinition[],
+  inputs: Readonly<Record<string, string>>,
+): PreparedOpenGraphRead => {
+  if (!application) return {};
+  let current = application;
+  for (const holeId of graphReadApplicationHoles(application)) {
+    const input = consoleHoleInput(inputs, holeId);
+    if (!input?.trim()) return {};
+    const rawValue = input.trim();
+    let parsedValue: unknown;
+    try {
+      parsedValue = parseConsoleHoleInput(input);
+    } catch {
+      return { error: `?${holeId} is not valid JSON.` };
+    }
+    let substituted = substituteGraphReadApplication(current, entities, holeId, parsedValue);
+    if (!substituted.success && parsedValue !== rawValue)
+      substituted = substituteGraphReadApplication(current, entities, holeId, rawValue);
+    if (!substituted.success)
+      return {
+        error:
+          substituted.reason === 'invalid-substitution'
+            ? substituted.issues.map(issue => issue.message).join(' ')
+            : `Unknown Hole ?${holeId}.`,
+      };
+    current = substituted.application;
+  }
+  const lowered = lowerGraphReadApplication(current, entities);
+  if (!lowered.success)
+    return {
+      error:
+        lowered.reason === 'open-application'
+          ? `Complete ${lowered.holes.map(id => `?${id}`).join(', ')} before running.`
+          : lowered.error.error.message,
+    };
+  return { execution: { family: 'graph.read', body: lowered.request } };
 };
 
 const ConsoleResultContent = ({
@@ -628,6 +709,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           : update,
     }));
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
+  const [holeInputs, setHoleInputs] = useState<Readonly<Record<string, string>>>({});
   const [activeDurableRun, setActiveDurableRun] = useState<TaskRunIdentity>();
   const viewRef = useRef<EditorView>();
   const executingRef = useRef<AbortController>();
@@ -693,6 +775,14 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
     () => analyzeConsoleDocument(document, application, { limit, dialect }),
     [application, document, limit, dialect],
   );
+  const openApplication =
+    analysis.openExecution?.family === 'graph.read' ? analysis.openExecution.body : undefined;
+  const holeIds = openApplication ? graphReadApplicationHoles(openApplication) : [];
+  const preparedOpenRead = useMemo(
+    () => prepareOpenGraphRead(openApplication, entityDefinitions, holeInputs),
+    [openApplication, entityDefinitions, holeInputs],
+  );
+  const effectiveExecution = analysis.execution ?? preparedOpenRead.execution;
   const durableInvocation =
     analysis.execution?.family === 'operation' &&
     durableOperationIds.has(analysis.execution.body.operationId);
@@ -706,12 +796,21 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       limit,
       dialect: viewRef.current?.state.field(consoleExpressionDialect) ?? dialect,
     });
-    const execution = executedAnalysis.execution;
+    const executedOpenApplication =
+      executedAnalysis.openExecution?.family === 'graph.read'
+        ? executedAnalysis.openExecution.body
+        : undefined;
+    const prepared = prepareOpenGraphRead(executedOpenApplication, entityDefinitions, holeInputs);
+    const execution = executedAnalysis.execution ?? prepared.execution;
     if (!execution) {
       setResult(previous => ({
         snapshot: previous.snapshot,
         status: 'error',
-        message: 'Fix the Console expression before running it.',
+        message:
+          prepared.error ??
+          (executedOpenApplication
+            ? 'Complete every Hole before running it.'
+            : 'Fix the Console expression before running it.'),
       }));
       return;
     }
@@ -1108,9 +1207,14 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                   type='button'
                   style={{ ...styles.mode, ...(dialect === value ? styles.activeMode : {}) }}
                   aria-pressed={dialect === value}
-                  disabled={value !== dialect && document.trim() !== '' && !analysis.execution}
+                  disabled={
+                    value !== dialect &&
+                    document.trim() !== '' &&
+                    !analysis.execution &&
+                    !analysis.openExecution
+                  }
                   title={
-                    !analysis.execution && document.trim() !== ''
+                    !analysis.execution && !analysis.openExecution && document.trim() !== ''
                       ? 'Fix the expression before switching dialect. Your draft will be kept.'
                       : 'Convert syntax without running the query. Undo restores the original text and dialect.'
                   }
@@ -1124,7 +1228,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
               type='button'
               style={{
                 ...styles.primaryButton,
-                ...(!analysis.execution ||
+                ...(!effectiveExecution ||
                 result.status === 'executing' ||
                 observation?.status === 'observing' ||
                 activeDurableRun
@@ -1132,7 +1236,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
                   : {}),
               }}
               disabled={
-                !analysis.execution ||
+                !effectiveExecution ||
                 result.status === 'executing' ||
                 observation?.status === 'observing' ||
                 Boolean(activeDurableRun)
@@ -1185,6 +1289,29 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           value={document}
           viewRef={viewRef}
         />
+        {holeIds.length > 0 ? (
+          <div style={styles.consoleHoleBindings} aria-label='Graph Read Hole values'>
+            {holeIds.map(holeId => (
+              <label key={holeId} style={styles.consoleHoleBinding}>
+                <span>{holeId}</span>
+                <input
+                  aria-label={`Value for ${holeId}`}
+                  style={styles.consoleHoleInput}
+                  placeholder='value'
+                  value={consoleHoleInput(holeInputs, holeId) ?? ''}
+                  onChange={event =>
+                    setHoleInputs(previous => ({ ...previous, [holeId]: event.target.value }))
+                  }
+                />
+              </label>
+            ))}
+            {preparedOpenRead.error ? (
+              <span role='alert' style={styles.consoleDiagnostic}>
+                {preparedOpenRead.error}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <div style={styles.consoleStatus} aria-live='polite'>
           <ConsoleAnalysisStatus analysis={analysis} limit={limit} />
           {observation ? (
@@ -1213,7 +1340,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
       <ConsoleResultPanel
         result={result}
         matchesDraft={
-          JSON.stringify(result.snapshot?.execution) === JSON.stringify(analysis.execution) &&
+          JSON.stringify(result.snapshot?.execution) === JSON.stringify(effectiveExecution) &&
           result.snapshot?.exists ===
             (analysis.syntax.expression?.terminal?.kind === 'exists-member')
         }

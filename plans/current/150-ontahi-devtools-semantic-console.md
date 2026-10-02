@@ -38,6 +38,8 @@ TodoItem.where(completed = false).orderBy(title).limit(20).many()
 Tag.many()
 TodoItem.where(id = "todo-explorer").one()
 TodoItem.where(completed = false).exists()
+TodoItem.where(ownerId = ?owner).many()
+TodoItem where ownerId = ?owner
 ```
 
 Original future-facing examples, retained as design context rather than executable syntax:
@@ -643,6 +645,8 @@ Status: partial; read usability shipped, broader session experience remains.
       `Mod-Enter`, source undo/redo, and a resizable Devtools host.
 - [x] Deliver Visual/JSON result values, compact elapsed time/limit controls, and pending/stale/error
       presentation without redundant query or success panels.
+- [x] Project named Graph Read Holes as explicit inputs in both Console dialects, validate them
+      against the reflected Entity schema, and execute only the resulting closed request.
 - [ ] Complete hover/help and deliberate formatting for the supported dialects/families.
 - [ ] Add optional request/body/envelope disclosure and a direct Activity correlation link without
       reclaiming the table's space for redundant metadata.
@@ -664,6 +668,14 @@ or standalone CLI proof.
       non-interactive exit codes in a separate implementation plan.
 
 ## Implementation Checkpoint
+
+Checkpoint 2026-10-02, open Graph Read applications in Console: both existing dialects parse named
+predicate Holes without adding a `read` keyword. Headless analysis returns a typed open application
+and no executable request. Devtools renders one input per Hole, validates and normalizes each value
+against every occupied Entity field, then lowers and sends the unchanged canonical Graph Read body
+through Runtime Protocol. Run remains disabled while any Hole is empty or invalid; observation
+continues to require a closed source request. Component tests execute the TS and declarative forms
+through the real in-memory dispatcher.
 
 Checkpoint 2026-09-08, Graph Read walking skeleton:
 

@@ -99,6 +99,11 @@
       "import": "./dist/data-graph/index.js",
       "require": "./dist/data-graph/index.js"
     },
+    "./experimental/semantic-program": {
+      "types": "./dist/semantic-program/experimental.d.ts",
+      "import": "./dist/semantic-program/experimental.js",
+      "require": "./dist/semantic-program/experimental.js"
+    },
     "./entity": {
       "types": "./dist/runtime/server/entity.d.ts",
       "import": "./dist/runtime/server/entity.js",

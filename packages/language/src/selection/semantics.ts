@@ -6,6 +6,7 @@ import {
   selectionOr,
   type SelectionExpression,
 } from '@ontahi/core/data-graph';
+import { applicationHole } from '@ontahi/core/experimental/semantic-program';
 
 import type {
   SelectionLanguageRange,
@@ -23,6 +24,10 @@ import { parseSelectionDocument } from './syntax.js';
 export type SemanticResolution = {
   readonly expression?: SelectionExpression;
   readonly diagnostics: readonly SelectionLanguageDiagnostic[];
+};
+
+export type SemanticResolutionOptions = {
+  readonly allowHoles?: boolean;
 };
 
 export const semanticDiagnostic = (
@@ -145,6 +150,7 @@ export const validateLiteral = (
 export const resolvePredicate = (
   syntax: SelectionPredicateSyntax,
   entity: SelectionLanguageEntityReflection,
+  options: SemanticResolutionOptions = {},
 ): SemanticResolution => {
   const { field, operator } = syntax;
   if (!field || !operator) return { diagnostics: [] };
@@ -229,6 +235,29 @@ export const resolvePredicate = (
     };
   }
 
+  if (syntax.value?.kind === 'hole') {
+    if (operator.operator === 'in') return { diagnostics: [] };
+    return options.allowHoles
+      ? {
+          diagnostics: [],
+          expression: {
+            kind: 'predicate',
+            fieldName: field.text,
+            operator: operator.operator,
+            value: applicationHole(syntax.value.id),
+          },
+        }
+      : {
+          diagnostics: [
+            semanticDiagnostic(
+              'selection.semantic.unbound-hole',
+              `Hole ?${syntax.value.id} requires an application binding.`,
+              syntax.value,
+            ),
+          ],
+        };
+  }
+
   const literals =
     operator.operator === 'in' && syntax.value?.kind === 'list-literal'
       ? syntax.value.values
@@ -266,23 +295,26 @@ export const resolvePredicate = (
 export const resolveExpression = (
   syntax: SelectionExpressionSyntax,
   entity: SelectionLanguageEntityReflection,
+  options: SemanticResolutionOptions = {},
 ): SemanticResolution => {
   if (syntax.kind === 'all') return { diagnostics: [], expression: selectionAll() };
   if (syntax.kind === 'none') return { diagnostics: [], expression: selectionNone() };
-  if (syntax.kind === 'predicate') return resolvePredicate(syntax, entity);
+  if (syntax.kind === 'predicate') return resolvePredicate(syntax, entity, options);
   if (syntax.kind === 'parenthesized') {
-    return syntax.expression ? resolveExpression(syntax.expression, entity) : { diagnostics: [] };
+    return syntax.expression
+      ? resolveExpression(syntax.expression, entity, options)
+      : { diagnostics: [] };
   }
   if (syntax.kind === 'not') {
     if (!syntax.operand) return { diagnostics: [] };
-    const operand = resolveExpression(syntax.operand, entity);
+    const operand = resolveExpression(syntax.operand, entity, options);
     return {
       diagnostics: operand.diagnostics,
       ...(operand.expression ? { expression: selectionNot(operand.expression) } : {}),
     };
   }
 
-  const operands = syntax.operands.map(operand => resolveExpression(operand, entity));
+  const operands = syntax.operands.map(operand => resolveExpression(operand, entity, options));
   const diagnostics = operands.flatMap(operand => operand.diagnostics);
   const expressions = operands.flatMap(operand => operand.expression ?? []);
   return {

@@ -682,6 +682,9 @@ describe('Selection CodeMirror adapter', () => {
       ).map(projection => projection.value),
     ).toEqual(['list-inbox', 'list-later']);
     expect(deriveSelectionReferenceValueProjections('list = ', ReferencedTodoItem)).toEqual([]);
+    expect(deriveSelectionReferenceValueProjections('list = ?list', ReferencedTodoItem)).toEqual(
+      [],
+    );
     expect(
       deriveSelectionReferenceValueProjections(
         'not (list = "list-inbox" or list in ["list-later"]) and all',
@@ -732,6 +735,7 @@ describe('Selection CodeMirror adapter', () => {
       },
     ]);
     expect(deriveSelectionFiniteValueProjections('status = ', WorkItem)).toEqual([]);
+    expect(deriveSelectionFiniteValueProjections('status = ?status', WorkItem)).toEqual([]);
     expect(deriveSelectionFiniteValueProjections('status = "unknown"', WorkItem)).toEqual([]);
     expect(deriveSelectionFiniteValueProjections('title = "open"', TodoItem)).toEqual([]);
     expect(
