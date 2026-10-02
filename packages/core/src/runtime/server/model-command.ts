@@ -190,7 +190,14 @@ export const createModelCommandRuntime = ({
           ? [resolved.request]
           : resolved.options.map(option => option.request);
       for (const candidate of candidates) {
-        const exposure = resolveModelGraphRead(candidate, initial.reads ?? []);
+        let exposure: ModelGraphReadExposure;
+        try {
+          exposure = resolveModelGraphRead(candidate, initial.reads ?? []);
+        } catch (error) {
+          if (error instanceof ModelInterpretationError && error.code === 'proposal_out_of_scope')
+            return { status: 'unresolved', message: error.message };
+          throw error;
+        }
         const reason = exposure.validate(candidate);
         if (reason) return { status: 'unresolved', message: reason };
       }

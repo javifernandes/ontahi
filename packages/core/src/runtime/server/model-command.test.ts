@@ -206,6 +206,26 @@ it('revalidates a completed model Graph Read application against its exposure', 
     runtime.prepare({ text: 'Read Inbox notes' }, new AbortController().signal),
   ).resolves.toEqual({ status: 'unresolved', message: 'Read is no longer available.' });
 });
+
+it('keeps completed model Graph Read applications outside the scoped catalog unresolved', async () => {
+  const fixture = openGraphReadFixture();
+  const runtime = createModelCommandRuntime({
+    application: fixture.application,
+    graphEntities: [fixture.Folder, fixture.Note],
+    provider: { generate: fixture.generate },
+    authorize: () => undefined,
+    scope: async () => ({
+      entityCandidates: [{ ref: fixture.inbox, label: 'Inbox' }],
+    }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Read Inbox notes' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Graph read is outside the configured scope.',
+  });
+});
 it('derives descriptions and dispatches a canonical operation in the caller context', async () => {
   const f = fixture();
   const runtime = createModelCommandRuntime({ ...f, provider: { generate: f.generate } });

@@ -162,6 +162,22 @@ describe('Model Graph Read applications', () => {
     ).toEqual({ status: 'unresolved', reason: 'No visible ModelList matches “Inbox”.' });
   });
 
+  it('rejects an oversized match expansion before producing choices', () => {
+    expect(
+      resolveModelGraphReadApplication({
+        proposal,
+        entities: [List, Item],
+        candidates: Array.from({ length: 21 }, (_, index) => ({
+          ref: createEntityRef(List, { id: `inbox-${index}` }),
+          label: 'Inbox',
+        })),
+      }),
+    ).toEqual({
+      status: 'unresolved',
+      reason: 'Too many matching entities. Be more specific.',
+    });
+  });
+
   it('does not resolve Holes on scalar fields', () => {
     const scalarApplication = openGraphReadApplication(request, [List, Item], {
       completed: 'completed',

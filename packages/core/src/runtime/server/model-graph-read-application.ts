@@ -145,6 +145,8 @@ export const resolveModelGraphReadApplication = ({
         status: 'unresolved',
         reason: `No visible ${field.target.name} matches “${hint.text}”.`,
       };
+    if (applications.length > 20 / matches.length)
+      return { status: 'unresolved', reason: 'Too many matching entities. Be more specific.' };
     applications = applications.flatMap(current =>
       matches.flatMap(candidate => {
         const substitution = substituteGraphReadApplication(
