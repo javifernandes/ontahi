@@ -734,6 +734,10 @@ their current public contracts remain authoritative.
       authoritative Operation input schema.
 - [x] Auto-bind one authorized candidate, preserve several as a neutral choice, and keep zero or
       denied candidates unresolved.
+- [x] Project one prepared choice to both a generic form field and the existing Task choice
+      Interaction without changing the open application.
+- [x] Accept one shared option identity through schema-validated substitution while retaining the
+      selected candidate's provenance.
 - [ ] Define a resolver contract that consumes a typed hole plus authorized environment.
 - [ ] Separate candidate discovery, auto-binding, choice, free input, and unresolved outcomes.
 - [ ] Declare reusable Entity Ref presentation and input-position candidate restrictions.
@@ -861,6 +865,20 @@ This checkpoint deliberately supports only direct Entity Ref positions. It does 
 free input, nested Ref discovery, presentation metadata, generic resolver chains, UI projection,
 or a public Core export. The receiver must still authorize the lowered invocation at execution
 time; candidate visibility grants no Operation authority.
+
+### First Generic Projection Checkpoint
+
+Implemented on 2026-10-02: a presentation policy can prepare the resolver's neutral multi-candidate
+choice without modifying the open application or its candidates. The prepared choice projects to
+both a generic form field and the existing Task choice Interaction request. Both surfaces expose
+the same option identities; selecting one performs the original schema-validated substitution and
+returns the accepted candidate with its authorized Graph Read provenance. Invalid, empty, or
+duplicate presentation identities fail before a surface can present an ambiguous choice.
+
+Prompt text and candidate labels are presentation policy, so two callers can describe the same
+application differently without changing its semantics. This checkpoint does not yet provide a
+CLI projection, reusable Entity display fields, scalar free input, Assistant configuration, Task
+persistence, or a public form contract. Those broader Slice 2 items remain open.
 
 ## Second Vertical Proof
 

@@ -50,3 +50,10 @@ canonical identity from the registered Operation schema, discovers visible candi
 existing read policy, auto-binds exactly one, exposes several as a neutral choice, and otherwise
 remains unresolved. Candidate provenance records the authorized Graph Read; invocation remains a
 separate receiver-authorized step. Scalar input and presentation policy remain outside this proof.
+
+The first projection proof keeps presentation policy outside the Program: a prepared
+multi-candidate choice retains the open application and authorized candidates, while adapters
+project it to a generic form field or the existing Task choice Interaction. Both surfaces share
+option identity and use the same schema-validated substitution path. The accepted candidate keeps
+its discovery provenance. Prompt wording and labels may vary by caller without changing Program
+semantics; durable interaction lifecycle and a public form contract remain separate concerns.
