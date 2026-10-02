@@ -794,6 +794,8 @@ their current public contracts remain authoritative.
 
 - [x] Project one open Graph Read application through the existing TS and declarative Console
       dialects, bind its named Holes in Devtools, and execute only the closed canonical request.
+- [x] Project one direct Entity Ref Graph Read Hole as receiver-authorized searchable choices and
+      substitute the selection as a canonical Ref without adding a second execution path.
 - [ ] Treat TypeScript, declarative text, projectional editing, UI forms, CLI, and natural language as
       frontends producing the same semantic terms.
 - [ ] Define explicit Assistant registration, stable addressing, and one application default without
@@ -925,10 +927,18 @@ normalizes substitutions through the Entity field schema, and enables Run only a
 application lowers to the unchanged canonical `GraphReadRequest`. Execution then uses the ordinary
 Runtime Protocol and receiver policy path.
 
+For a direct Ref predicate Hole whose target has one identity field, Devtools joins the Hole's
+positions to the registered schema, reads up to 25 visible target candidates through that same
+receiver-authorized Runtime Protocol, and projects them as searchable choices using display
+metadata. Selecting a candidate substitutes a canonical Entity Ref; scalar and unsupported Ref
+shapes retain the existing explicit input. This is bounded candidate projection, not a general
+resolver registry or server-side search protocol.
+
 This checkpoint introduces a bounded experimental Core subpath for semantic-program frontends; it
 does not export the experiment from the stable Core root or claim a universal Application type.
-Observation remains closed-request-only, and richer resolver-driven inputs, relationship endpoint
-Holes, projectional editing, CLI, and natural-language frontends remain later work.
+Observation remains closed-request-only, and relationship endpoint Holes, composite-identity
+choice inputs, server-side candidate search, projectional editing, CLI, and natural-language
+frontends remain later work.
 
 ### First Parameterized Graph Command Checkpoint
 

@@ -92,3 +92,8 @@ Graph Read applications also expose each named Hole's occupied Entity and Field 
 structural context rather than copied type metadata: resolvers and frontends join it with the
 registered Entity schema to decide whether a Hole is scalar free input or an Entity Ref requiring
 authorized candidate discovery. Presentation and candidate policy remain outside the application.
+The first Console adapter uses that context for direct Refs with a single identity field: it reads
+a bounded set of visible target Entities through the ordinary receiver-authorized Graph Read path,
+projects display metadata as searchable choices, and substitutes the selection as a canonical Ref.
+Composite identities, relationship endpoints, and server-side candidate search remain outside this
+bounded frontend proof.

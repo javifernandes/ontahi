@@ -4,9 +4,12 @@ import { history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { Annotation, Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import {
+  createEntityRef,
   isEntityMutationDelta,
   isGraphReadCapabilities,
+  isReferenceFieldDefinition,
   graphOutput,
+  selectionAll,
   toGraphSchemaDescriptor,
   type GraphClientCache,
   type AnyEntityDefinition,
@@ -17,6 +20,7 @@ import {
 } from '@ontahi/core/data-graph';
 import {
   graphReadApplicationHoles,
+  graphReadApplicationHolePositions,
   lowerGraphReadApplication,
   substituteGraphReadApplication,
   type GraphReadApplication,
@@ -245,7 +249,7 @@ type PreparedOpenGraphRead =
   | { readonly execution?: undefined; readonly error: string };
 
 const consoleHoleInput = (
-  inputs: Readonly<Record<string, string>>,
+  inputs: Readonly<Record<string, unknown>>,
   holeId: string,
 ): string | undefined => {
   const input = inputs[holeId];
@@ -254,25 +258,31 @@ const consoleHoleInput = (
     : undefined;
 };
 
+const consoleHoleBinding = (inputs: Readonly<Record<string, unknown>>, holeId: string): unknown =>
+  Object.prototype.hasOwnProperty.call(inputs, holeId) ? inputs[holeId] : undefined;
+
 const prepareOpenGraphRead = (
   application: GraphReadApplication | undefined,
   entities: readonly AnyEntityDefinition[],
-  inputs: Readonly<Record<string, string>>,
+  inputs: Readonly<Record<string, unknown>>,
 ): PreparedOpenGraphRead => {
   if (!application) return {};
   let current = application;
   for (const holeId of graphReadApplicationHoles(application)) {
-    const input = consoleHoleInput(inputs, holeId);
-    if (!input?.trim()) return {};
-    const rawValue = input.trim();
-    let parsedValue: unknown;
-    try {
-      parsedValue = parseConsoleHoleInput(input);
-    } catch {
-      return { error: `?${holeId} is not valid JSON.` };
+    const binding = consoleHoleBinding(inputs, holeId);
+    if (binding === undefined || (typeof binding === 'string' && !binding.trim())) return {};
+    let parsedValue: unknown = binding;
+    let rawValue: string | undefined;
+    if (typeof binding === 'string') {
+      rawValue = binding.trim();
+      try {
+        parsedValue = parseConsoleHoleInput(binding);
+      } catch {
+        return { error: `?${holeId} is not valid JSON.` };
+      }
     }
     let substituted = substituteGraphReadApplication(current, entities, holeId, parsedValue);
-    if (!substituted.success && parsedValue !== rawValue)
+    if (!substituted.success && rawValue !== undefined && parsedValue !== rawValue)
       substituted = substituteGraphReadApplication(current, entities, holeId, rawValue);
     if (!substituted.success)
       return {
@@ -292,6 +302,169 @@ const prepareOpenGraphRead = (
           : lowered.error.error.message,
     };
   return { execution: { family: 'graph.read', body: lowered.request } };
+};
+
+type ConsoleReferenceHole = {
+  readonly target: AnyEntityDefinition;
+  readonly identityField: string;
+};
+
+const referenceHole = (
+  application: GraphReadApplication,
+  entities: readonly AnyEntityDefinition[],
+  holeId: string,
+): ConsoleReferenceHole | undefined => {
+  const positions = graphReadApplicationHolePositions(application).filter(
+    position => position.holeId === holeId,
+  );
+  const targets = positions.map(position => {
+    const source = entities.find(entity => entity.name === position.entityName);
+    const field = source?.fields[position.fieldName];
+    if (!field || !isReferenceFieldDefinition(field)) return undefined;
+    const identityName = field.target.identityLocatorName;
+    const identity = identityName ? field.target.refLocators[identityName] : undefined;
+    const identityFields = identity?.fields;
+    return identityFields?.length === 1
+      ? { target: field.target, identityField: identityFields[0]! }
+      : undefined;
+  });
+  const first = targets[0];
+  return first && targets.every(candidate => candidate?.target === first.target)
+    ? first
+    : undefined;
+};
+
+type ConsoleReferenceCandidate = {
+  readonly value: string | number;
+  readonly label: string;
+  readonly detail?: string;
+};
+
+const ConsoleReferenceHoleInput = ({
+  holeId,
+  reference,
+  runtimeTransport,
+  identityKey,
+  onChange,
+}: {
+  readonly holeId: string;
+  readonly reference: ConsoleReferenceHole;
+  readonly runtimeTransport?: RuntimeTransport<any>;
+  readonly identityKey: string;
+  readonly onChange: (value: unknown) => void;
+}) => {
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | number>();
+  const [state, setState] = useState<{
+    readonly loading: boolean;
+    readonly options: readonly ConsoleReferenceCandidate[];
+    readonly error?: string;
+  }>({ loading: Boolean(runtimeTransport), options: [] });
+  useEffect(() => {
+    setSelected(undefined);
+    onChange(undefined);
+    if (!runtimeTransport) {
+      setState({ loading: false, options: [], error: 'Runtime Transport unavailable.' });
+      return;
+    }
+    let active = true;
+    const controller = new AbortController();
+    const exchange = createRuntimeProtocolExchange({ transport: runtimeTransport });
+    setState({ loading: true, options: [] });
+    void exchange(
+      {
+        family: 'graph.read',
+        body: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          cardinality: 'many',
+          selection: {
+            kind: 'selection',
+            entityName: reference.target.name,
+            expression: selectionAll(),
+          },
+          orderBy: [],
+          limit: 25,
+        },
+      },
+      { signal: controller.signal },
+    )
+      .then(response => {
+        const result = graphReadResult(response);
+        if (!Array.isArray(result.value)) throw new Error('Reference discovery expected a list.');
+        const primary = reference.target.displayMetadata?.primary;
+        const secondary = reference.target.displayMetadata?.secondary ?? [];
+        const options = result.value.flatMap(row => {
+          if (!isRecord(row)) return [];
+          const identity = row[reference.identityField];
+          if (typeof identity !== 'string' && typeof identity !== 'number') return [];
+          const label = primary && row[primary] != null ? String(row[primary]) : String(identity);
+          const detail = secondary
+            .flatMap(fieldName => (row[fieldName] == null ? [] : [String(row[fieldName])]))
+            .join(' · ');
+          return [{ value: identity, label, ...(detail ? { detail } : {}) }];
+        });
+        if (active) setState({ loading: false, options });
+      })
+      .catch((error: unknown) => {
+        if (active && !controller.signal.aborted)
+          setState({
+            loading: false,
+            options: [],
+            error: error instanceof Error ? error.message : 'Reference discovery failed.',
+          });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [identityKey, reference.identityField, reference.target.name, runtimeTransport]);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const options = state.options.filter(option =>
+    [option.label, option.detail, option.value].some(text =>
+      String(text ?? '')
+        .toLocaleLowerCase()
+        .includes(normalizedQuery),
+    ),
+  );
+  return (
+    <div style={styles.consoleReferenceHole}>
+      <label style={styles.consoleHoleBinding}>
+        <span>{holeId}</span>
+        <input
+          aria-label={`Search ${reference.target.name} for ${holeId}`}
+          style={styles.consoleHoleInput}
+          placeholder={`Search ${reference.target.name}`}
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+        />
+      </label>
+      <div style={styles.consoleReferenceChoices} role='listbox' aria-label={`${holeId} choices`}>
+        {state.loading ? <span>Loading…</span> : null}
+        {state.error ? <span role='alert'>{state.error}</span> : null}
+        {!state.loading && !state.error && options.length === 0 ? <span>No matches</span> : null}
+        {options.map(option => (
+          <button
+            key={String(option.value)}
+            type='button'
+            role='option'
+            aria-selected={selected === option.value}
+            style={{ ...styles.mode, ...(selected === option.value ? styles.activeMode : {}) }}
+            onClick={() => {
+              setSelected(option.value);
+              onChange(
+                createEntityRef(reference.target, { [reference.identityField]: option.value }),
+              );
+            }}
+          >
+            {option.label}
+            {option.detail ? ` · ${option.detail}` : ''}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const ConsoleResultContent = ({
@@ -709,7 +882,7 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
           : update,
     }));
   const [resultMode, setResultMode] = useState<ConsoleResultMode>('visual');
-  const [holeInputs, setHoleInputs] = useState<Readonly<Record<string, string>>>({});
+  const [holeInputs, setHoleInputs] = useState<Readonly<Record<string, unknown>>>({});
   const [activeDurableRun, setActiveDurableRun] = useState<TaskRunIdentity>();
   const viewRef = useRef<EditorView>();
   const executingRef = useRef<AbortController>();
@@ -778,6 +951,18 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
   const openApplication =
     analysis.openExecution?.family === 'graph.read' ? analysis.openExecution.body : undefined;
   const holeIds = openApplication ? graphReadApplicationHoles(openApplication) : [];
+  const referenceHoles = useMemo(
+    () =>
+      new Map(
+        openApplication
+          ? holeIds.flatMap(holeId => {
+              const reference = referenceHole(openApplication, entityDefinitions, holeId);
+              return reference ? [[holeId, reference] as const] : [];
+            })
+          : [],
+      ),
+    [openApplication, entityDefinitions],
+  );
   const preparedOpenRead = useMemo(
     () => prepareOpenGraphRead(openApplication, entityDefinitions, holeInputs),
     [openApplication, entityDefinitions, holeInputs],
@@ -1291,20 +1476,31 @@ export const ConsolePanel = ({ options, runtimeTransport, clientCache }: Console
         />
         {holeIds.length > 0 ? (
           <div style={styles.consoleHoleBindings} aria-label='Graph Read Hole values'>
-            {holeIds.map(holeId => (
-              <label key={holeId} style={styles.consoleHoleBinding}>
-                <span>{holeId}</span>
-                <input
-                  aria-label={`Value for ${holeId}`}
-                  style={styles.consoleHoleInput}
-                  placeholder='value'
-                  value={consoleHoleInput(holeInputs, holeId) ?? ''}
-                  onChange={event =>
-                    setHoleInputs(previous => ({ ...previous, [holeId]: event.target.value }))
-                  }
+            {holeIds.map(holeId =>
+              referenceHoles.has(holeId) ? (
+                <ConsoleReferenceHoleInput
+                  key={holeId}
+                  holeId={holeId}
+                  reference={referenceHoles.get(holeId)!}
+                  runtimeTransport={runtimeTransport}
+                  identityKey={identityKey}
+                  onChange={value => setHoleInputs(previous => ({ ...previous, [holeId]: value }))}
                 />
-              </label>
-            ))}
+              ) : (
+                <label key={holeId} style={styles.consoleHoleBinding}>
+                  <span>{holeId}</span>
+                  <input
+                    aria-label={`Value for ${holeId}`}
+                    style={styles.consoleHoleInput}
+                    placeholder='value'
+                    value={consoleHoleInput(holeInputs, holeId) ?? ''}
+                    onChange={event =>
+                      setHoleInputs(previous => ({ ...previous, [holeId]: event.target.value }))
+                    }
+                  />
+                </label>
+              ),
+            )}
             {preparedOpenRead.error ? (
               <span role='alert' style={styles.consoleDiagnostic}>
                 {preparedOpenRead.error}

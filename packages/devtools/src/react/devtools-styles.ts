@@ -514,6 +514,16 @@ export const styles: Record<string, CSSProperties> = {
     color: '#e5f1e9',
     font: 'inherit',
   },
+  consoleReferenceHole: { display: 'grid', gap: 6 },
+  consoleReferenceChoices: {
+    display: 'flex',
+    minHeight: 26,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 5,
+    color: '#789385',
+    fontSize: 9,
+  },
   consoleStatus: {
     display: 'flex',
     minHeight: 34,

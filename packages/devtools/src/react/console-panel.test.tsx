@@ -1105,6 +1105,130 @@ const mountConsole = (
 };
 
 describe('Console Graph Read applications', uiTestOptions, () => {
+  it('discovers and binds authorized Reference candidates instead of showing free input', async () => {
+    const List = entity('HoleList', { id: field.id(), name: field.string() }).display({
+      primary: 'name',
+    });
+    const Item = entity('HoleItem', {
+      id: field.id(),
+      list: field.existingRef(List),
+      title: field.string(),
+    });
+    const runtime = createInMemoryDataGraphRuntime({
+      entities: [List, Item],
+      dataset: {
+        HoleList: [
+          { id: 'list-inbox', name: 'Inbox' },
+          { id: 'list-later', name: 'Later' },
+        ],
+        HoleItem: [{ id: 'item-1', list: 'list-inbox', title: 'Ship it' }],
+      },
+    });
+    const dispatch = createGraphReadDispatcher({
+      policies: [
+        {
+          entity: List,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 25,
+          scope: 'all',
+          fields: { id: { select: true }, name: { select: true } },
+        },
+        {
+          entity: Item,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 25,
+          scope: 'all',
+          fields: {
+            id: { select: true },
+            list: { select: true, filter: ['eq'] },
+            title: { select: true },
+          },
+        },
+      ],
+      execute: (query, mode) => Effect.runPromise(runtime.run(query, undefined)),
+    });
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      const body = await dispatch(envelope.body, { authority: undefined });
+      if (!isJsonValue(body)) throw new Error('Expected portable response.');
+      return createRuntimeProtocolResponse(envelope, body);
+    });
+    const transport = { request };
+    const rendered = render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'HoleItem where list = ?list',
+          initialDialect: 'declarative',
+        }}
+        runtimeTransport={transport}
+      />,
+    );
+
+    expect(screen.queryByRole('textbox', { name: 'Value for list' })).toBeNull();
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Search HoleList for list' }), {
+      target: { value: 'inb' },
+    });
+    fireEvent.click(await screen.findByRole('option', { name: 'Inbox' }));
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    expect(
+      await within(screen.getByLabelText('Console result')).findByText('Ship it'),
+    ).toBeDefined();
+    const itemRead = request.mock.calls.find(
+      ([envelope]) =>
+        envelope.family === 'graph.read' &&
+        (envelope.body as { selection?: { entityName?: string } }).selection?.entityName ===
+          'HoleItem',
+    )?.[0];
+    expect(itemRead).toMatchObject({
+      family: 'graph.read',
+      body: {
+        selection: {
+          entityName: 'HoleItem',
+          expression: {
+            kind: 'predicate',
+            fieldName: 'list',
+            operator: 'eq',
+            value: {
+              kind: 'entity-ref',
+              entityName: 'HoleList',
+              locator: { id: 'list-inbox' },
+            },
+          },
+        },
+      },
+    });
+    rendered.rerender(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'HoleItem where list = ?list',
+          initialDialect: 'declarative',
+          identity: { principal: { kind: 'user', subject: 'alice' } },
+        }}
+        runtimeTransport={transport}
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        request.mock.calls.filter(
+          ([envelope]) =>
+            envelope.family === 'graph.read' &&
+            (envelope.body as { selection?: { entityName?: string } }).selection?.entityName ===
+              'HoleList',
+        ),
+      ).toHaveLength(2),
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it.each([
     ['ts', 'Tag.where(name = ?wanted).many()', 'Alpha'],
     ['declarative', 'Tag where name = ?wanted', '"Alpha"'],
