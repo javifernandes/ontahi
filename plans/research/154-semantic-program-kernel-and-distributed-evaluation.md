@@ -751,15 +751,15 @@ their current public contracts remain authoritative.
 ### Slice 3: Read And Command Generalization
 
 - [x] Represent one parameterized Graph Read with a named hole.
-- [ ] Represent one Graph Command target or value hole.
+- [x] Represent one Graph Command target or value hole.
 - [ ] Represent a relationship-traversal Selection with a missing endpoint Ref.
 - [ ] Apply one delete or update Command directly to the completed Selection.
 - [ ] Compose one contextual multi-hop Selection with ordering, limiting, and a relation predicate.
-- [ ] Reuse substitution and validation without weakening cardinality, mutation, or authority rules.
-- [ ] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
+- [x] Reuse substitution and validation without weakening cardinality, mutation, or authority rules.
+- [x] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
 - [x] Validate a named Graph Read hole against every predicate position it occupies and lower the
       closed application to the current `GraphReadRequest` unchanged.
-- [ ] Decide whether one common Application abstraction is real or should remain a family of typed
+- [x] Decide whether one common Application abstraction is real or should remain a family of typed
       terms sharing smaller substitution primitives.
 
 ### Slice 4: Reactive Program Evaluation
@@ -910,6 +910,21 @@ This first Read proof deliberately excludes `in` predicates, missing relationshi
 computed producers, observation, Graph Commands, dispatch, and public exports. It tests the shared
 open/validate/close mechanics without claiming that Operation and Graph Read applications already
 form one public abstraction.
+
+### First Parameterized Graph Command Checkpoint
+
+Implemented on 2026-10-02: an internal Graph Command application can replace one or more Entity
+create or update payload values with the same named Hole. Substitution validates and normalizes the
+candidate independently against every occupied Entity field schema, preserves the mutation target
+and all other request fields, and remains immutable. Open Commands cannot lower; closed Commands
+parse and resolve to the existing `GraphCommandRequest`, leaving execution and receiver-owned
+authorization on the current dispatcher path.
+
+The three proofs now justify a common named-Hole term and the same open/validate/substitute/close
+discipline, but not one universal Application representation. Operation inputs, Graph Read
+predicates, and Graph Command payloads retain distinct typed application shapes and traversal rules.
+This checkpoint deliberately excludes delete payloads, target Holes, relationship Commands,
+conditional mutation values, dispatch, public exports, and console integration.
 
 ## Second Vertical Proof
 

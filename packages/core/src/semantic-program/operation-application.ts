@@ -12,10 +12,9 @@ import {
 } from '../data-graph/index.js';
 import type { OperationInvokeRequest } from '../runtime/operation-invocation.js';
 
-export type OperationApplicationHole = {
-  readonly kind: 'hole';
-  readonly id: string;
-};
+import { applicationHole, isApplicationHole, type ApplicationHole } from './application-hole.js';
+
+export type OperationApplicationHole = ApplicationHole;
 
 export type OperationApplicationValue = {
   readonly kind: 'value';
@@ -72,7 +71,7 @@ export type OperationApplicationSubstitutionResult =
 
 export const operationApplicationHole = (id: string): OperationApplicationHole => {
   if (id.length === 0) throw new Error('Operation application Hole id must not be empty.');
-  return { kind: 'hole', id };
+  return applicationHole(id);
 };
 
 const operationInputFields = (contract: OperationApplicationContract) => {
@@ -81,15 +80,6 @@ const operationInputFields = (contract: OperationApplicationContract) => {
   }
   return contract.input.fields;
 };
-
-const isHole = (value: unknown): value is OperationApplicationHole =>
-  typeof value === 'object' &&
-  value !== null &&
-  'kind' in value &&
-  value.kind === 'hole' &&
-  'id' in value &&
-  typeof value.id === 'string' &&
-  value.id.length > 0;
 
 const isRequiredInput = (schema: GraphSchemaDefinition) => {
   const descriptor = toGraphSchemaDescriptor(schema);
@@ -127,7 +117,7 @@ export const normalizeOperationApplication = <TInput extends AnyGraphObjectDefin
   for (const [name, schema] of Object.entries(fields)) {
     if (Object.prototype.hasOwnProperty.call(input, name)) {
       const value = input[name];
-      argumentsByName[name] = isHole(value) ? value : { kind: 'value', value };
+      argumentsByName[name] = isApplicationHole(value) ? value : { kind: 'value', value };
     } else if (isRequiredInput(schema as GraphSchemaDefinition)) {
       argumentsByName[name] = operationApplicationHole(name);
     }
@@ -135,7 +125,7 @@ export const normalizeOperationApplication = <TInput extends AnyGraphObjectDefin
 
   for (const [name, value] of Object.entries(input)) {
     if (!(name in fields)) {
-      argumentsByName[name] = isHole(value) ? value : { kind: 'value', value };
+      argumentsByName[name] = isApplicationHole(value) ? value : { kind: 'value', value };
     }
   }
 
