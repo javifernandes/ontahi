@@ -730,6 +730,10 @@ their current public contracts remain authoritative.
 
 ### Slice 2: Resolution And Generic Projection
 
+- [x] Resolve direct Entity Ref holes through the existing authorized Graph Read dispatcher and the
+      authoritative Operation input schema.
+- [x] Auto-bind one authorized candidate, preserve several as a neutral choice, and keep zero or
+      denied candidates unresolved.
 - [ ] Define a resolver contract that consumes a typed hole plus authorized environment.
 - [ ] Separate candidate discovery, auto-binding, choice, free input, and unresolved outcomes.
 - [ ] Declare reusable Entity Ref presentation and input-position candidate restrictions.
@@ -842,6 +846,21 @@ request; a closed application is parsed by the original schema and lowers to the
 The local proof uses the input shape of `TodoList.completeAll(list = ?list)`. It does not yet add a
 resolver, Interaction, textual syntax, DevTools projection, transport form, or public Core API.
 Those remain Slice 2 work.
+
+### First Authorized Resolution Checkpoint
+
+Implemented on 2026-10-02: the internal experiment can now resolve a direct Entity Ref Hole against
+the actual Operation registered in an application graph. Candidate discovery projects only the
+target Entity's canonical identity and runs through the existing Graph Read dispatcher with the
+caller's authority and policy scope. One candidate is substituted automatically, several remain a
+presentation-neutral choice, and zero, denied, malformed, unsupported, or unavailable results keep
+the application open. Accepted candidates carry Graph Read provenance and still pass through the
+Operation schema before lowering to `OperationInvokeRequest`.
+
+This checkpoint deliberately supports only direct Entity Ref positions. It does not add scalar
+free input, nested Ref discovery, presentation metadata, generic resolver chains, UI projection,
+or a public Core export. The receiver must still authorize the lowered invocation at execution
+time; candidate visibility grants no Operation authority.
 
 ## Second Vertical Proof
 

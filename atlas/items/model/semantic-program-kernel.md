@@ -43,3 +43,10 @@ value and named Hole terms. Hole types come from their positions in the Operatio
 schema rather than copied metadata. A substitution is validated against that same schema, and only
 a closed application can lower to the existing canonical `OperationInvokeRequest`. The experiment
 is intentionally not exported while later proofs test whether the boundary generalizes.
+
+The first resolution proof connects that representation to the application graph and authorized
+Graph Reads without granting new authority. A direct Entity Ref Hole derives its target and
+canonical identity from the registered Operation schema, discovers visible candidates through the
+existing read policy, auto-binds exactly one, exposes several as a neutral choice, and otherwise
+remains unresolved. Candidate provenance records the authorized Graph Read; invocation remains a
+separate receiver-authorized step. Scalar input and presentation policy remain outside this proof.
