@@ -759,6 +759,8 @@ their current public contracts remain authoritative.
 - [x] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
 - [x] Validate a named Graph Read hole against every predicate position it occupies and lower the
       closed application to the current `GraphReadRequest` unchanged.
+- [x] Expose every Graph Read Hole's Entity and Field positions so resolvers and presentation
+      adapters can derive input semantics from the authoritative application schema.
 - [x] Decide whether one common Application abstraction is real or should remain a family of typed
       terms sharing smaller substitution primitives.
 
@@ -792,6 +794,10 @@ their current public contracts remain authoritative.
 
 - [x] Project one open Graph Read application through the existing TS and declarative Console
       dialects, bind its named Holes in Devtools, and execute only the closed canonical request.
+- [x] Project one direct Entity Ref Graph Read Hole as receiver-authorized searchable choices and
+      substitute the selection as a canonical Ref without adding a second execution path.
+- [x] Project Boolean Graph Read Holes as typed choices and align Hole inputs in a stable
+      parameter/control/help grid backed by registered Field descriptions.
 - [ ] Treat TypeScript, declarative text, projectional editing, UI forms, CLI, and natural language as
       frontends producing the same semantic terms.
 - [ ] Define explicit Assistant registration, stable addressing, and one application default without
@@ -923,10 +929,22 @@ normalizes substitutions through the Entity field schema, and enables Run only a
 application lowers to the unchanged canonical `GraphReadRequest`. Execution then uses the ordinary
 Runtime Protocol and receiver policy path.
 
+For a direct Ref predicate Hole whose target has one identity field, Devtools joins the Hole's
+positions to the registered schema, reads up to 25 visible target candidates through that same
+receiver-authorized Runtime Protocol, and projects them as searchable choices using display
+metadata. Selecting a candidate substitutes a canonical Entity Ref; scalar and unsupported Ref
+shapes retain the existing explicit input. This is bounded candidate projection, not a general
+resolver registry or server-side search protocol.
+
+Boolean predicate Holes use explicit true/false choices (plus null for nullable Fields) rather than
+free text. The Console renders one aligned row per named Hole and exposes registered Field
+descriptions through contextual help, while other scalar types retain their generic input.
+
 This checkpoint introduces a bounded experimental Core subpath for semantic-program frontends; it
 does not export the experiment from the stable Core root or claim a universal Application type.
-Observation remains closed-request-only, and richer resolver-driven inputs, relationship endpoint
-Holes, projectional editing, CLI, and natural-language frontends remain later work.
+Observation remains closed-request-only, and relationship endpoint Holes, composite-identity
+choice inputs, server-side candidate search, projectional editing, CLI, and natural-language
+frontends remain later work.
 
 ### First Parameterized Graph Command Checkpoint
 

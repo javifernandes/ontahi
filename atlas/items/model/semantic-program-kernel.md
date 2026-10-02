@@ -87,3 +87,16 @@ model. Devtools presents explicit values, delegates normalization and validation
 substitution, and dispatches only after lowering yields the existing closed `GraphReadRequest`.
 This proves one textual/UI projection and runtime path, not a general projectional editor, resolver
 UI, observation of open terms, or stable root export.
+
+Graph Read applications also expose each named Hole's occupied Entity and Field positions. This is
+structural context rather than copied type metadata: resolvers and frontends join it with the
+registered Entity schema to decide whether a Hole is scalar free input or an Entity Ref requiring
+authorized candidate discovery. Presentation and candidate policy remain outside the application.
+The first Console adapter uses that context for direct Refs with a single identity field: it reads
+a bounded set of visible target Entities through the ordinary receiver-authorized Graph Read path,
+projects display metadata as searchable choices, and substitutes the selection as a canonical Ref.
+Composite identities, relationship endpoints, and server-side candidate search remain outside this
+bounded frontend proof.
+The same adapter projects Boolean predicate Holes as explicit choices and lays out each named Hole
+as one parameter row. Registered Field descriptions may appear as contextual help without becoming
+copied application metadata; remaining scalar types continue to use the generic input path.

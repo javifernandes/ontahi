@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { entity, field, query, toGraphReadRequest } from '../data-graph/index.js';
 
 import {
+  graphReadApplicationHolePositions,
   graphReadApplicationHoles,
   lowerGraphReadApplication,
   openGraphReadApplication,
@@ -54,6 +55,13 @@ describe('Graph Read application', () => {
       },
     });
     expect(graphReadApplicationHoles(application)).toEqual(['owner']);
+    expect(graphReadApplicationHolePositions(application)).toEqual([
+      {
+        holeId: 'owner',
+        entityName: 'SemanticGraphReadDocument',
+        fieldName: 'ownerId',
+      },
+    ]);
   });
 
   it('cannot lower while open and lowers closed terms to the unchanged protocol', () => {

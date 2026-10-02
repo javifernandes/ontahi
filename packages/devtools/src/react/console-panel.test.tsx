@@ -1105,6 +1105,197 @@ const mountConsole = (
 };
 
 describe('Console Graph Read applications', uiTestOptions, () => {
+  it('discovers and binds authorized Reference candidates instead of showing free input', async () => {
+    const List = entity('HoleList', { id: field.id(), name: field.string() }).display({
+      primary: 'name',
+      secondary: ['id'],
+    });
+    const Item = entity('HoleItem', {
+      id: field.id(),
+      list: field.existingRef(List),
+      title: field.string(),
+      completed: { ...field.boolean(), description: 'Whether this item is complete.' },
+    });
+    const runtime = createInMemoryDataGraphRuntime({
+      entities: [List, Item],
+      dataset: {
+        HoleList: [
+          { id: 'list-inbox', name: 'Inbox' },
+          { id: 'list-later', name: 'Later' },
+        ],
+        HoleItem: [{ id: 'item-1', list: 'list-inbox', title: 'Ship it', completed: false }],
+      },
+    });
+    const dispatch = createGraphReadDispatcher({
+      policies: [
+        {
+          entity: List,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 25,
+          scope: 'all',
+          fields: { id: { select: true }, name: { select: true } },
+        },
+        {
+          entity: Item,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 25,
+          scope: 'all',
+          fields: {
+            id: { select: true },
+            list: { select: true, filter: ['eq'] },
+            title: { select: true },
+            completed: { select: true, filter: ['eq'] },
+          },
+        },
+      ],
+      execute: (query, mode) => Effect.runPromise(runtime.run(query, undefined)),
+    });
+    const request = vi.fn(async (envelope: RuntimeProtocolRequestEnvelope) => {
+      const body = await dispatch(envelope.body, { authority: undefined });
+      if (!isJsonValue(body)) throw new Error('Expected portable response.');
+      return createRuntimeProtocolResponse(envelope, body);
+    });
+    const transport = { request };
+    const rendered = render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'HoleItem where list = ?list and completed = ?completed',
+          initialDialect: 'declarative',
+        }}
+        runtimeTransport={transport}
+      />,
+    );
+
+    expect(screen.queryByRole('textbox', { name: 'Value for list' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Value for completed' })).toBeNull();
+    expect(screen.getByLabelText('Help for completed').getAttribute('title')).toContain(
+      'HoleItem.completed: Whether this item is complete.',
+    );
+    const search = await screen.findByRole('textbox', { name: 'Search HoleList for list' });
+    fireEvent.change(search, { target: { value: 'missing' } });
+    expect(await screen.findByText('No matches')).toBeDefined();
+    fireEvent.change(search, {
+      target: { value: 'inb' },
+    });
+    fireEvent.click(await screen.findByRole('option', { name: 'Inbox · list-inbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'False' }));
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    expect(
+      await within(screen.getByLabelText('Console result')).findByText('Ship it'),
+    ).toBeDefined();
+    const itemRead = request.mock.calls.find(
+      ([envelope]) =>
+        envelope.family === 'graph.read' &&
+        (envelope.body as { selection?: { entityName?: string } }).selection?.entityName ===
+          'HoleItem',
+    )?.[0];
+    expect(itemRead).toMatchObject({
+      family: 'graph.read',
+      body: {
+        selection: {
+          entityName: 'HoleItem',
+          expression: {
+            kind: 'and',
+            operands: expect.arrayContaining([
+              {
+                kind: 'predicate',
+                fieldName: 'list',
+                operator: 'eq',
+                value: {
+                  kind: 'entity-ref',
+                  entityName: 'HoleList',
+                  locator: { id: 'list-inbox' },
+                },
+              },
+              {
+                kind: 'predicate',
+                fieldName: 'completed',
+                operator: 'eq',
+                value: false,
+              },
+            ]),
+          },
+        },
+      },
+    });
+    rendered.rerender(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'HoleItem where list = ?list and completed = ?completed',
+          initialDialect: 'declarative',
+          identity: { principal: { kind: 'user', subject: 'alice' } },
+        }}
+        runtimeTransport={transport}
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        request.mock.calls.filter(
+          ([envelope]) =>
+            envelope.family === 'graph.read' &&
+            (envelope.body as { selection?: { entityName?: string } }).selection?.entityName ===
+              'HoleList',
+        ),
+      ).toHaveLength(2),
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('explains when Reference candidate discovery has no Runtime Transport', async () => {
+    const List = entity('UnconnectedList', { id: field.id(), name: field.string() });
+    const Item = entity('UnconnectedItem', {
+      id: field.id(),
+      list: field.existingRef(List),
+    });
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'UnconnectedItem where list = ?list',
+          initialDialect: 'declarative',
+        }}
+      />,
+    );
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Runtime Transport unavailable.',
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('surfaces Reference candidate discovery failures', async () => {
+    const List = entity('FailedList', { id: field.id() });
+    const Item = entity('FailedItem', { id: field.id(), list: field.existingRef(List) });
+    render(
+      <ConsolePanel
+        options={{
+          entities: [List, Item],
+          initialDocument: 'FailedItem where list = ?list',
+          initialDialect: 'declarative',
+        }}
+        runtimeTransport={{
+          request: async () => {
+            throw new Error('Candidate discovery denied.');
+          },
+        }}
+      />,
+    );
+
+    expect((await screen.findByText('Candidate discovery denied.')).textContent).toBe(
+      'Candidate discovery denied.',
+    );
+  });
+
   it.each([
     ['ts', 'Tag.where(name = ?wanted).many()', 'Alpha'],
     ['declarative', 'Tag where name = ?wanted', '"Alpha"'],
@@ -1139,11 +1330,43 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('parses typed values first and falls back to raw strings when the Field requires one', async () => {
-    const { request, replaceSource, result } = mountConsole('Tag.where(active = ?enabled).many()');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Value for enabled' }), {
-      target: { value: 'true' },
+  it('normalizes a retained text binding when its Hole becomes Boolean', async () => {
+    const { request, replaceSource, result } = mountConsole('Tag.where(name = ?value).many()');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for value' }), {
+      target: { value: 'false' },
     });
+
+    replaceSource('Tag.where(active = ?value).many()');
+    const choices = screen.getByRole('group', { name: 'Value for value' });
+    await waitFor(() =>
+      expect(
+        within(choices).getByRole('button', { name: 'False' }).getAttribute('aria-pressed'),
+      ).toBe('true'),
+    );
+    expect(within(choices).getByRole('button', { name: 'True' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await result.findByText('A hidden');
+    expect(request.mock.calls[0]![0].body).toMatchObject({
+      selection: { expression: { fieldName: 'active', value: false } },
+    });
+
+    replaceSource('Tag.where(name = ?value).many()');
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('textbox', { name: 'Value for value' }) as HTMLInputElement).value,
+      ).toBe(''),
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('binds typed Boolean choices and falls back to raw strings when the Field requires one', async () => {
+    const { request, replaceSource, result } = mountConsole('Tag.where(active = ?enabled).many()');
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Value for enabled' })).getByText('True'),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await result.findByText('Alpha');
     expect(request.mock.calls[0]![0].body).toMatchObject({
@@ -1161,16 +1384,13 @@ describe('Console Graph Read applications', uiTestOptions, () => {
     });
   });
 
-  it.each([
-    ['Tag.where(name = ?value).many()', '{broken}', '?value is not valid JSON.'],
-    ['Tag.where(active = ?value).many()', 'maybe', 'expected boolean'],
-  ])('reports an invalid Hole binding for %s', (source, value, message) => {
-    mountConsole(source);
+  it('reports an invalid free-input Hole binding', () => {
+    mountConsole('Tag.where(name = ?value).many()');
     fireEvent.change(screen.getByRole('textbox', { name: 'Value for value' }), {
-      target: { value },
+      target: { value: '{broken}' },
     });
 
-    expect(screen.getByRole('alert').textContent).toContain(message);
+    expect(screen.getByRole('alert').textContent).toContain('?value is not valid JSON.');
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -1417,8 +1637,10 @@ describe('Console bidirectional Query limit', uiTestOptions, () => {
     await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '1'));
     expect(result.getAllByRole('row')).toHaveLength(2);
     expect(view.state.doc.toString()).toBe('Tag.where(active = false).many()');
+    await act(async () => Promise.resolve());
     switchTransport();
     expect(result.getByRole('spinbutton')).toHaveProperty('disabled', true);
+    await act(async () => Promise.resolve());
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(result.getByRole('spinbutton')).toHaveProperty('value', '25'));
     expect(result.getAllByRole('row')).toHaveLength(2);
