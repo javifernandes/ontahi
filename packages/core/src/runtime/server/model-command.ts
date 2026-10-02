@@ -1,4 +1,5 @@
 import {
+  type AnyEntityDefinition,
   type GraphCommandDispatchResponse,
   type GraphCommandRequest,
   type GraphReadDispatchResponse,
@@ -11,6 +12,10 @@ import type { OperationInvokeRequest } from '../operation-invocation.js';
 
 import type { OntahiApplication } from './application.js';
 import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './model-graph-command.js';
+import {
+  resolveModelGraphReadApplication,
+  type ModelEntityCandidate,
+} from './model-graph-read-application.js';
 import {
   resolveModelGraphRead,
   type ModelGraphReadExposure,
@@ -32,6 +37,8 @@ export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | '
 };
 export type ModelCommandScope = {
   context?: unknown;
+  /** Authorized, already-disclosed entities that may satisfy model-proposed Ref holes. */
+  entityCandidates?: readonly ModelEntityCandidate[];
   bindings?: Readonly<Record<string, ModelCommandBinding>>;
   reads?: readonly ModelGraphReadExposure[];
   commands?: readonly ModelGraphCommandExposure[];
@@ -71,6 +78,7 @@ export type PreparedModelCommandRuntime = ModelCommandRuntime & {
 
 export type CreateModelCommandRuntimeOptions = {
   application: OntahiApplication;
+  graphEntities?: readonly AnyEntityDefinition[];
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
   scope: (request: ModelCommandRequest, signal: AbortSignal) => Promise<ModelCommandScope>;
@@ -98,6 +106,7 @@ export const createModelCommandRuntime = ({
   formatHelp,
   dispatchRead,
   dispatchCommand,
+  graphEntities = [],
 }: CreateModelCommandRuntimeOptions): PreparedModelCommandRuntime => {
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
@@ -168,6 +177,27 @@ export const createModelCommandRuntime = ({
     });
     if (proposal.status === 'resolved') return { status: 'proposed', request: proposal.request };
     if (proposal.status === 'choice') return proposal;
+    if (proposal.status === 'application') {
+      const resolved = resolveModelGraphReadApplication({
+        proposal,
+        entities: graphEntities,
+        candidates: initial.entityCandidates ?? [],
+      });
+      if (resolved.status === 'unresolved')
+        return { status: 'unresolved', message: resolved.reason };
+      const candidates =
+        resolved.status === 'resolved'
+          ? [resolved.request]
+          : resolved.options.map(option => option.request);
+      for (const candidate of candidates) {
+        const exposure = resolveModelGraphRead(candidate, initial.reads ?? []);
+        const reason = exposure.validate(candidate);
+        if (reason) return { status: 'unresolved', message: reason };
+      }
+      return resolved.status === 'resolved'
+        ? { status: 'proposed', request: resolved.request }
+        : resolved;
+    }
     await authorize();
     signal.throwIfAborted();
     if (proposal.status === 'help')

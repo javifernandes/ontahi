@@ -807,9 +807,9 @@ their current public contracts remain authoritative.
       bounded concurrent-run case.
 - [ ] Compare provider and execution-strategy selection across two Assistants while keeping provider
       credentials and checkpoints private.
-- [ ] Project model tools from closed or completable Ontahí applications rather than creating a
+- [x] Project model tools from closed or completable Ontahí applications rather than creating a
       parallel tool vocabulary.
-- [ ] Let a model propose terms and substitutions under the ordinary resolver and authority rules.
+- [x] Let a model propose terms and substitutions under the ordinary resolver and authority rules.
 - [ ] Demonstrate one bounded agentic loop as an optional execution strategy only after the same
       tools exist as Ontahí Program projections.
 - [ ] Inspect open terms, substitutions, evaluation plans, waits, and reactive dependencies in

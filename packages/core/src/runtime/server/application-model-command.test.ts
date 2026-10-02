@@ -83,6 +83,108 @@ it('binds model scope reads to application policies and the current authority', 
   expect(authorize).toHaveBeenCalledTimes(2);
 });
 
+it('resolves a model-proposed Graph Read Hole from authorized scoped entities', async () => {
+  const Folder = entity({ name: 'Folder', fields: { id: field.id(), name: field.string() } });
+  const Document = entity({
+    name: 'FiledDocument',
+    fields: {
+      id: field.id(),
+      folder: field.ref(Folder),
+      archived: field.boolean(),
+    },
+  });
+  const inbox = createEntityRef(Folder, { id: 'inbox' });
+  const application = ontahi({
+    entities: [Folder, Document],
+    storage: createInMemoryDataGraphStorage({
+      dataset: {
+        Folder: [{ id: 'inbox', name: 'Inbox' }],
+        FiledDocument: [
+          { id: 'open', folder: 'inbox', archived: false },
+          { id: 'old', folder: 'inbox', archived: true },
+        ],
+      },
+    }),
+  });
+  const closed = toGraphReadRequest(
+    query(Document)
+      .where(document => document.folder.eq(inbox))
+      .where(document => document.archived.eq(false))
+      .limit(10),
+    'run',
+  );
+  const open = {
+    ...closed,
+    selection: {
+      ...closed.selection,
+      expression: {
+        kind: 'and' as const,
+        operands: [
+          {
+            kind: 'predicate' as const,
+            fieldName: 'folder',
+            operator: 'eq' as const,
+            value: { kind: 'hole' as const, id: 'folder' },
+          },
+          {
+            kind: 'predicate' as const,
+            fieldName: 'archived',
+            operator: 'eq' as const,
+            value: false,
+          },
+        ],
+      },
+    },
+  };
+  const runtime = createApplicationModelCommandRuntime({
+    application,
+    provider: {
+      generate: async ({ outputSchema }: ModelRequest) => {
+        expect(JSON.stringify(outputSchema)).toContain('graph-read-application');
+        return {
+          status: 'application',
+          application: { kind: 'graph-read-application', request: open },
+          bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+        };
+      },
+    },
+    authorize: () => undefined,
+    graph: {
+      authority: () => undefined,
+      reads: [
+        {
+          entity: Document,
+          modes: ['run'],
+          cardinalities: ['many'],
+          maxLimit: 10,
+          fields: {
+            id: { select: true },
+            folder: { select: true, filter: ['eq'] },
+            archived: { select: true, filter: ['eq'] },
+          },
+          scope: 'all',
+        },
+      ],
+    },
+    scope: async () => ({
+      context: {},
+      entityCandidates: [{ ref: inbox, label: 'Inbox' }],
+    }),
+  });
+
+  await expect(
+    runtime.submit({ text: 'Show active documents in Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'executed',
+    message: '1 filed document record.',
+    request: closed,
+    response: {
+      kind: 'graph-read-result',
+      value: [{ id: 'open', folder: inbox, archived: false }],
+    },
+  });
+});
+
 it('does not expose graph services that were not configured', async () => {
   const Document = entity({ name: 'Document', fields: { id: field.id() } });
   const application = ontahi({

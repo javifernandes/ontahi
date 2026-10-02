@@ -288,6 +288,7 @@ export const createApplicationModelCommandRuntime = <TAuthority, TData = undefin
   return createModelCommandRuntime({
     ...options,
     application,
+    graphEntities: application.graph.listEntities(),
     scope: async (request, signal) => {
       const current = scope
         ? await scope(request, signal, scopeAccess)
