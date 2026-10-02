@@ -199,9 +199,6 @@ export const substituteOperationApplication = (
   );
   if (issues.length > 0) return { success: false, reason: 'invalid-substitution', holeId, issues };
 
-  const parsedByName = new Map(
-    parsedPositions.map(({ name, result }) => [name, result.success ? result.data : undefined]),
-  );
   return {
     success: true,
     application: {
@@ -209,9 +206,7 @@ export const substituteOperationApplication = (
       arguments: Object.fromEntries(
         Object.entries(application.arguments).map(([name, argument]) => [
           name,
-          argument.kind === 'hole' && argument.id === holeId
-            ? { kind: 'value', value: parsedByName.get(name) }
-            : argument,
+          argument.kind === 'hole' && argument.id === holeId ? { kind: 'value', value } : argument,
         ]),
       ),
     },

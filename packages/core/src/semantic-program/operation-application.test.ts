@@ -107,10 +107,69 @@ describe('Operation application', () => {
       application: {
         ...application,
         arguments: {
-          currentName: { kind: 'value', value: 'Notes' },
-          nextName: { kind: 'value', value: 'Notes' },
+          currentName: { kind: 'value', value: '  Notes  ' },
+          nextName: { kind: 'value', value: '  Notes  ' },
         },
       },
+    });
+  });
+
+  it('validates a substitution without applying a transform twice during lowering', () => {
+    const contract = {
+      id: 'Document.label',
+      input: graphSchema.object({
+        label: graphSchema.transform(field.string(), value => `${value}!`),
+      }),
+    };
+    const open = normalizeOperationApplication(contract);
+    const substitution = substituteOperationApplication(contract, open, 'label', 'draft');
+    expect(substitution).toMatchObject({
+      success: true,
+      application: { arguments: { label: { kind: 'value', value: 'draft' } } },
+    });
+    if (!substitution.success) return;
+
+    expect(lowerOperationApplication(contract, substitution.application)).toEqual({
+      success: true,
+      request: {
+        kind: 'invoke',
+        operationId: contract.id,
+        input: { label: 'draft!' },
+      },
+    });
+  });
+
+  it('reports normalization failures and unknown Hole positions as substitution diagnostics', () => {
+    const unavailable = {
+      id: 'Document.unavailable',
+      input: graphSchema.object({
+        value: graphSchema.transform(field.string(), () => {
+          throw 'unavailable';
+        }),
+      }),
+    };
+    const open = normalizeOperationApplication(unavailable);
+    expect(substituteOperationApplication(unavailable, open, 'value', 'draft')).toMatchObject({
+      success: false,
+      reason: 'invalid-substitution',
+      issues: [
+        {
+          code: 'invalid_operation_input',
+          path: ['value'],
+          message: 'Input does not match the Operation schema.',
+        },
+      ],
+    });
+
+    const unknown = normalizeOperationApplication(completeAll, {
+      list: inbox,
+      note: null,
+      extra: operationApplicationHole('extra'),
+    } as never);
+    expect(substituteOperationApplication(completeAll, unknown, 'extra', 'value')).toMatchObject({
+      success: false,
+      reason: 'invalid-substitution',
+      issues: [{ code: 'unknown_operation_input', path: ['extra'] }],
     });
   });
 
