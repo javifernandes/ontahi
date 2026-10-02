@@ -750,13 +750,15 @@ their current public contracts remain authoritative.
 
 ### Slice 3: Read And Command Generalization
 
-- [ ] Represent one parameterized Graph Read with a named hole.
+- [x] Represent one parameterized Graph Read with a named hole.
 - [ ] Represent one Graph Command target or value hole.
 - [ ] Represent a relationship-traversal Selection with a missing endpoint Ref.
 - [ ] Apply one delete or update Command directly to the completed Selection.
 - [ ] Compose one contextual multi-hop Selection with ordering, limiting, and a relation predicate.
 - [ ] Reuse substitution and validation without weakening cardinality, mutation, or authority rules.
 - [ ] Lower closed terms to the current Graph Read and Graph Command requests unchanged.
+- [x] Validate a named Graph Read hole against every predicate position it occupies and lower the
+      closed application to the current `GraphReadRequest` unchanged.
 - [ ] Decide whether one common Application abstraction is real or should remain a family of typed
       terms sharing smaller substitution primitives.
 
@@ -894,6 +896,20 @@ direct scalar fields as free input. Submitted free input uses the same substitut
 schema validation as every other binding and records `free-input` provenance. Composite, mixed,
 unknown, stale, or unsupported positions remain unresolved. This checkpoint does not add nested
 input traversal, contextual auto-values, UI controls, model authority, or public exports.
+
+### First Parameterized Graph Read Checkpoint
+
+Implemented on 2026-10-02: an internal Graph Read application can replace one or more scalar
+predicate values with the same named Hole while preserving the request's boolean Selection tree,
+ordering, limit, mode, and other protocol fields. Substitution is immutable and validates the
+candidate against every Entity field schema occupied by that Hole. An open application cannot
+lower; after all Holes are bound, parsing and Entity resolution produce the existing canonical
+`GraphReadRequest` without a second execution protocol.
+
+This first Read proof deliberately excludes `in` predicates, missing relationship endpoints,
+computed producers, observation, Graph Commands, dispatch, and public exports. It tests the shared
+open/validate/close mechanics without claiming that Operation and Graph Read applications already
+form one public abstraction.
 
 ## Second Vertical Proof
 

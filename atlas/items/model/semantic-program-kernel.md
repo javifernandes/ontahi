@@ -64,3 +64,10 @@ produce an outcome or abstain without modifying the Program. Authorized Entity R
 one adapter, while direct scalar positions can yield a distinct free-input outcome. Manual values
 still pass through canonical schema substitution and carry descriptive `free-input` provenance.
 Resolver policy remains separate from Hole identity and grants no execution authority.
+
+The first Read generalization proof keeps the canonical Graph Read protocol intact. An internal
+application may place a named Hole in one or more scalar predicate values, preserves the surrounding
+Selection and request fields, and validates substitution against every occupied Entity field
+schema. Open applications cannot lower; closed applications parse and resolve to the existing
+`GraphReadRequest`. Relationship endpoints, set-valued predicates, dispatch, observation, Graph
+Commands, and a common public Application abstraction remain outside this bounded proof.
