@@ -1005,6 +1005,7 @@ const rows = [
 const mountConsole = (
   source = 'Tag.where(active = true).limit(2).many()',
   metadataResponse?: JsonValue,
+  initialDialect?: 'ts' | 'declarative',
 ) => {
   const runtime = createInMemoryDataGraphRuntime({ dataset: { Tag: rows }, entities: [Tag] });
   const dispatch = createGraphReadDispatcher({
@@ -1051,7 +1052,7 @@ const mountConsole = (
   const transport = { request: route(request) };
   const rendered = render(
     <ConsolePanel
-      options={{ entities: [Tag, Other], initialDocument: source }}
+      options={{ entities: [Tag, Other], initialDocument: source, initialDialect }}
       runtimeTransport={transport}
     />,
   );
@@ -1071,7 +1072,7 @@ const mountConsole = (
     const nextRequest = vi.fn(respond);
     rendered.rerender(
       <ConsolePanel
-        options={{ entities: [Tag, Other], initialDocument: source }}
+        options={{ entities: [Tag, Other], initialDocument: source, initialDialect }}
         runtimeTransport={{ request: route(nextRequest) }}
       />,
     );
@@ -1095,13 +1096,39 @@ const mountConsole = (
     setIdentity: (identity: ExecutionIdentity) =>
       rendered.rerender(
         <ConsolePanel
-          options={{ entities: [Tag, Other], initialDocument: source, identity }}
+          options={{ entities: [Tag, Other], initialDocument: source, initialDialect, identity }}
           runtimeTransport={transport}
         />,
       ),
     applyLimit,
   };
 };
+
+describe('Console Graph Read applications', uiTestOptions, () => {
+  it.each([
+    ['ts', 'Tag.where(name = ?wanted).many()'],
+    ['declarative', 'Tag where name = ?wanted'],
+  ] as const)('binds and runs a named Hole from the %s dialect', async (dialect, source) => {
+    const { request, result } = mountConsole(source, undefined, dialect);
+
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for ?wanted' }), {
+      target: { value: 'Alpha' },
+    });
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    expect(await result.findByText('Alpha')).toBeDefined();
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]![0].body).toMatchObject({
+      kind: 'graph-read',
+      selection: {
+        entityName: 'Tag',
+        expression: { kind: 'predicate', fieldName: 'name', operator: 'eq', value: 'Alpha' },
+      },
+    });
+  });
+});
 
 describe('Console exists reads', uiTestOptions, () => {
   it.each([

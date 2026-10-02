@@ -23,6 +23,55 @@ const application = {
 } as const;
 
 describe('Console Graph Read language', () => {
+  it.each([
+    ['TodoItem.where(title = ?title).many()', 'ts'],
+    ['TodoItem where title = ?title', 'declarative'],
+  ] as const)('represents %s as an open Graph Read application', (source, dialect) => {
+    const analysis = analyzeConsoleDocument(source, application, { dialect });
+
+    expect(analysis.syntaxDiagnostics).toEqual([]);
+    expect(analysis.semanticDiagnostics).toEqual([]);
+    expect(analysis.execution).toBeUndefined();
+    expect(analysis.request).toBeUndefined();
+    expect(analysis.openExecution).toEqual({
+      family: 'graph.read',
+      body: {
+        kind: 'graph-read-application',
+        request: {
+          version: 1,
+          kind: 'graph-read',
+          mode: 'run',
+          cardinality: 'many',
+          selection: {
+            kind: 'selection',
+            entityName: 'TodoItem',
+            expression: {
+              kind: 'predicate',
+              fieldName: 'title',
+              operator: 'eq',
+              value: { kind: 'hole', id: 'title' },
+            },
+          },
+          orderBy: [],
+          limit: 25,
+        },
+      },
+    });
+  });
+
+  it('does not treat an unbound Hole as an executable standalone Selection', () => {
+    const analysis = analyzeSelectionDocument('title = ?title', application.entities[0]);
+
+    expect(analysis.syntaxDiagnostics).toEqual([]);
+    expect(analysis.selection).toBeUndefined();
+    expect(analysis.semanticDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'selection.semantic.unbound-hole',
+        message: 'Hole ?title requires an application binding.',
+      }),
+    ]);
+  });
+
   it.each(['where', 'first', 'one', 'many', 'count', 'exists', 'limit', 'orderBy'])(
     'keeps %s available as a Field and Entity identifier',
     name => {

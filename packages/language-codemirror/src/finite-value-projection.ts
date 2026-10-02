@@ -87,7 +87,9 @@ const predicateProjections = (
   if (!field) return [];
   const value = predicate.value;
   const literals = value.kind === 'list-literal' ? value.values : [value];
-  return literals.flatMap(literal => projectionForLiteral(literal, field) ?? []);
+  return literals.flatMap(literal =>
+    literal.kind === 'hole' ? [] : (projectionForLiteral(literal, field) ?? []),
+  );
 };
 
 const expressionProjections = (

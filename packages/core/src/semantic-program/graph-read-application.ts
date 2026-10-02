@@ -55,6 +55,13 @@ export type GraphReadApplicationLoweringResult =
       readonly error: GraphReadProtocolError;
     };
 
+export const graphReadApplication = (
+  request: GraphReadApplication['request'],
+): GraphReadApplication => ({
+  kind: 'graph-read-application',
+  request,
+});
+
 type PredicateValue = {
   readonly fieldName: string;
   readonly value: unknown;
@@ -129,13 +136,10 @@ export const openGraphReadApplication = (
   if (missing.length > 0)
     throw new Error(`Graph Read application has no value predicate for ${missing.join(', ')}.`);
 
-  return {
-    kind: 'graph-read-application',
-    request: {
-      ...request,
-      selection: { ...request.selection, expression },
-    },
-  };
+  return graphReadApplication({
+    ...request,
+    selection: { ...request.selection, expression },
+  });
 };
 
 export const graphReadApplicationHoles = (application: GraphReadApplication): readonly string[] => [

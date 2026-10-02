@@ -79,3 +79,11 @@ and receiver authorization remain unchanged. The evidence supports a small commo
 and lifecycle discipline, while Operations, Reads, and Commands remain distinct typed application
 families with their own traversal and lowering rules. Target Holes, relationship Commands, and a
 public universal Application remain unproven.
+
+The first frontend projection exposes only the bounded Graph Read application API from the
+experimental semantic-program package subpath. Both existing Console dialects produce that same
+open term for named predicate Holes; they do not invent a `read` keyword or an alternate request
+model. Devtools presents explicit values, delegates normalization and validation to Core
+substitution, and dispatches only after lowering yields the existing closed `GraphReadRequest`.
+This proves one textual/UI projection and runtime path, not a general projectional editor, resolver
+UI, observation of open terms, or stable root export.

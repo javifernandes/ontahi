@@ -6,6 +6,7 @@ import type {
   SelectionLanguageDiagnostic,
   SelectionLanguageToken,
   SelectionScalarLiteralSyntax,
+  SelectionHoleSyntax,
   SelectionListLiteralSyntax,
   SelectionPredicateOperatorSyntax,
   SelectionPredicateSyntax,
@@ -73,6 +74,21 @@ export const scalarLiteralSyntax = (
   }
 
   return undefined;
+};
+
+export const holeSyntax = (
+  node: SyntaxNode | null,
+  document: string,
+): SelectionHoleSyntax | undefined => {
+  if (!node) return undefined;
+  const id = node.getChild('Identifier');
+  if (!id) return undefined;
+  return {
+    kind: 'hole',
+    ...rangeOf(node),
+    text: document.slice(node.from, node.to),
+    id: document.slice(id.from, id.to),
+  };
 };
 
 export const listLiteralSyntax = (
@@ -148,7 +164,8 @@ export const predicateSyntax = (node: SyntaxNode, document: string): SelectionPr
     operator: predicateOperatorSyntax(predicateNode, document),
     value: membership
       ? listLiteralSyntax(predicateNode.getChild('ListLiteral'), document)
-      : scalarLiteralSyntax(predicateNode.getChild('ScalarLiteral'), document),
+      : (scalarLiteralSyntax(predicateNode.getChild('ScalarLiteral'), document) ??
+        holeSyntax(predicateNode.getChild('HoleLiteral'), document)),
   };
 };
 

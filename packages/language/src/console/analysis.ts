@@ -6,6 +6,10 @@ import {
   type GraphReadRequest,
   type SelectionExpression,
 } from '@ontahi/core/data-graph';
+import {
+  graphReadApplication,
+  graphReadApplicationHoles,
+} from '@ontahi/core/experimental/semantic-program';
 import { toOperationProtocolRequest } from '@ontahi/core/runtime/protocol';
 
 import type { Dialect } from '../dialects/contract.js';
@@ -443,7 +447,7 @@ export const analyzeConsoleSyntax = (
   for (const step of expression.steps) {
     if (step.kind === 'filter') {
       if (!step.selection) return { ...parsed, semanticDiagnostics };
-      const resolved = resolveExpression(step.selection, entity);
+      const resolved = resolveExpression(step.selection, entity, { allowHoles: true });
       semanticDiagnostics.push(...resolved.diagnostics);
       if (!resolved.expression) return { ...parsed, semanticDiagnostics };
       membership = selectionAnd(membership, resolved.expression);
@@ -526,6 +530,14 @@ export const analyzeConsoleSyntax = (
         ]
       : [],
   };
+  const applicationTerm = graphReadApplication(request);
+  if (graphReadApplicationHoles(applicationTerm).length > 0) {
+    return {
+      ...parsed,
+      semanticDiagnostics,
+      openExecution: { family: 'graph.read', body: applicationTerm },
+    };
+  }
   return {
     ...parsed,
     semanticDiagnostics,

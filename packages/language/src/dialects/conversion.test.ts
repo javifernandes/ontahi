@@ -24,6 +24,18 @@ const application = {
 } as const;
 
 describe('Console read dialects', () => {
+  it('converts an open Graph Read Hole without executing or losing its identity', () => {
+    const declarative = 'TodoItem where title = ?subject';
+    const ts = convertConsoleDocument(declarative, application, 'ts', {
+      dialect: 'declarative',
+    });
+
+    expect(ts).toBe('TodoItem.where(title = ?subject).many()');
+    expect(convertConsoleDocument(ts!, application, 'declarative')).toBe(
+      'TodoItem where title = ?subject many',
+    );
+  });
+
   it.each(['Tag by named', 'Tag by named "Important" and by'])(
     'includes factory intersections in the grammar guidance for %s',
     source => {

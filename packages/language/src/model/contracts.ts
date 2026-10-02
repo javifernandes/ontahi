@@ -10,6 +10,7 @@ import type {
   RelationshipCommandAffordanceDescriptor,
   EntityVariantDescriptor,
 } from '@ontahi/core/data-graph';
+import type { GraphReadApplication } from '@ontahi/core/experimental/semantic-program';
 import type { OperationProtocolRequestV1 } from '@ontahi/core/runtime/protocol';
 
 export type ConsoleFactorySyntax = SelectionLanguageRange & {
@@ -42,6 +43,7 @@ export type SelectionLanguageDiagnostic = SelectionLanguageRange & {
     | 'selection.semantic.non-nullable-field'
     | 'selection.semantic.unknown-enum-value'
     | 'selection.semantic.non-finite-number'
+    | 'selection.semantic.unbound-hole'
     | 'selection.semantic.unsupported-reference-identity'
     | 'selection.semantic.unsupported-relation';
   readonly message: string;
@@ -91,6 +93,10 @@ export type SelectionScalarLiteralSyntax =
   | SelectionStringLiteralSyntax
   | SelectionNumberLiteralSyntax;
 
+export type SelectionHoleSyntax = SelectionLanguageToken<'hole'> & {
+  readonly id: string;
+};
+
 export type SelectionListLiteralSyntax = SelectionLanguageRange & {
   readonly kind: 'list-literal';
   readonly open?: SelectionLanguageToken<'open-bracket'>;
@@ -109,7 +115,7 @@ export type SelectionPredicateSyntax = SelectionLanguageRange & {
   readonly kind: 'predicate';
   readonly field?: SelectionLanguageToken<'field-name'>;
   readonly operator?: SelectionPredicateOperatorSyntax;
-  readonly value?: SelectionScalarLiteralSyntax | SelectionListLiteralSyntax;
+  readonly value?: SelectionScalarLiteralSyntax | SelectionListLiteralSyntax | SelectionHoleSyntax;
 };
 
 export type SelectionConstantSyntax =
@@ -239,6 +245,11 @@ export type ConsoleRequest =
   | { readonly family: 'graph.command'; readonly body: GraphCommandRequest }
   | { readonly family: 'operation'; readonly body: OperationProtocolRequestV1 };
 
+export type ConsoleOpenRequest = {
+  readonly family: 'graph.read';
+  readonly body: GraphReadApplication;
+};
+
 export type ConsoleLanguageDiagnostic =
   | SelectionLanguageDiagnostic
   | (SelectionLanguageRange & {
@@ -351,6 +362,7 @@ export type ConsoleDocumentParseResult = {
 export type ConsoleDocumentAnalysis = ConsoleDocumentParseResult & {
   readonly semanticDiagnostics: readonly ConsoleLanguageDiagnostic[];
   readonly execution?: ConsoleRequest;
+  readonly openExecution?: ConsoleOpenRequest;
   /** @deprecated Graph Read compatibility projection. */
   readonly request?: GraphReadRequest;
 };

@@ -96,13 +96,14 @@ PrimaryExpression { All | None | Predicate | ParenthesizedExpression }
 ParenthesizedExpression { OpenParen OrExpression CloseParen }
 
 Predicate { EqualityPredicate | MembershipPredicate | NullPredicate | ComparisonPredicate }
-EqualityPredicate { FieldName Equals ScalarLiteral }
+EqualityPredicate { FieldName Equals (ScalarLiteral | HoleLiteral) }
 MembershipPredicate { FieldName In ListLiteral }
 NullPredicate { FieldName Is Null }
-ComparisonPredicate { FieldName ComparisonOperator ScalarLiteral }
+ComparisonPredicate { FieldName ComparisonOperator (ScalarLiteral | HoleLiteral) }
 
 FieldName { Identifier }
 ScalarLiteral { StringLiteral | NumberLiteral | BooleanLiteral }
+HoleLiteral { QuestionMark Identifier }
 BooleanLiteral { True | False }
 ListLiteral { OpenBracket (ScalarLiteral (Comma ScalarLiteral)*)? CloseBracket }
 
@@ -159,6 +160,7 @@ Dot { "." }
 OpenBrace { "{" }
 CloseBrace { "}" }
 Colon { ":" }
+QuestionMark { "?" }
 
 @tokens {
   Identifier { $[A-Za-z_] $[A-Za-z0-9_]* }
