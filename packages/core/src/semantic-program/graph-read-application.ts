@@ -170,6 +170,7 @@ export const substituteGraphReadApplication = (
   );
   if (positions.length === 0) return { success: false, reason: 'unknown-hole', holeId };
 
+  const normalizedValues = new Map<string, unknown>();
   const issues = positions.flatMap(position => {
     const schema = entity?.fields[position.fieldName];
     if (!schema)
@@ -181,9 +182,11 @@ export const substituteGraphReadApplication = (
         },
       ];
     const parsed = parseFieldValue(schema as GraphSchemaDefinition, value);
-    return parsed.success
-      ? []
-      : parsed.issues.map(issue => ({ ...issue, path: [position.fieldName, ...issue.path] }));
+    if (parsed.success) {
+      normalizedValues.set(position.fieldName, parsed.data);
+      return [];
+    }
+    return parsed.issues.map(issue => ({ ...issue, path: [position.fieldName, ...issue.path] }));
   });
   if (issues.length > 0) return { success: false, reason: 'invalid-substitution', holeId, issues };
 
@@ -196,7 +199,9 @@ export const substituteGraphReadApplication = (
         selection: {
           ...application.request.selection,
           expression: mapPredicateValues(application.request.selection.expression, predicate =>
-            isHole(predicate.value) && predicate.value.id === holeId ? value : predicate.value,
+            isHole(predicate.value) && predicate.value.id === holeId
+              ? normalizedValues.get(predicate.fieldName)
+              : predicate.value,
           ),
         },
       },

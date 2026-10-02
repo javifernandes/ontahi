@@ -12,6 +12,7 @@ import {
 const Document = entity('SemanticGraphReadDocument', {
   id: field.id(),
   ownerId: field.nonEmptyString({ trim: true }),
+  label: field.string(),
   published: field.boolean(),
 });
 const request = toGraphReadRequest(
@@ -63,7 +64,7 @@ describe('Graph Read application', () => {
       holes: ['owner'],
     });
 
-    const substitution = substituteGraphReadApplication(open, [Document], 'owner', 'reader-1');
+    const substitution = substituteGraphReadApplication(open, [Document], 'owner', '  reader-1  ');
     expect(substitution.success).toBe(true);
     if (!substitution.success) return;
     expect(lowerGraphReadApplication(substitution.application, [Document])).toEqual({
@@ -98,19 +99,40 @@ describe('Graph Read application', () => {
     const repeatedRequest = toGraphReadRequest(
       query(Document)
         .where(document => document.ownerId.eq('placeholder'))
-        .where(document => document.id.eq('placeholder')),
+        .where(document => document.label.eq('placeholder')),
       'run',
     );
     const open = openGraphReadApplication(repeatedRequest, [Document], {
       ownerId: 'identity',
-      id: 'identity',
+      label: 'identity',
     });
 
     expect(graphReadApplicationHoles(open)).toEqual(['identity']);
     expect(substituteGraphReadApplication(open, [Document], 'identity', '')).toMatchObject({
       success: false,
       reason: 'invalid-substitution',
-      issues: [{ path: ['ownerId'] }, { path: ['id'] }],
+      issues: [{ path: ['ownerId'] }],
+    });
+    const substitution = substituteGraphReadApplication(
+      open,
+      [Document],
+      'identity',
+      '  reader-1  ',
+    );
+    expect(substitution).toMatchObject({
+      success: true,
+      application: {
+        request: {
+          selection: {
+            expression: {
+              operands: [
+                { fieldName: 'ownerId', value: 'reader-1' },
+                { fieldName: 'label', value: '  reader-1  ' },
+              ],
+            },
+          },
+        },
+      },
     });
     expect(substituteGraphReadApplication(open, [Document], 'missing', 'reader-1')).toEqual({
       success: false,
