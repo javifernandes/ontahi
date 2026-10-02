@@ -71,3 +71,11 @@ Selection and request fields, and validates substitution against every occupied 
 schema. Open applications cannot lower; closed applications parse and resolve to the existing
 `GraphReadRequest`. Relationship endpoints, set-valued predicates, dispatch, observation, Graph
 Commands, and a common public Application abstraction remain outside this bounded proof.
+
+The first Command generalization proof places the shared named-Hole term in Entity create or update
+payload values. Each occupied field independently validates and normalizes a substitution before a
+closed application can lower to the existing `GraphCommandRequest`; targets, mutation semantics,
+and receiver authorization remain unchanged. The evidence supports a small common Hole primitive
+and lifecycle discipline, while Operations, Reads, and Commands remain distinct typed application
+families with their own traversal and lowering rules. Target Holes, relationship Commands, and a
+public universal Application remain unproven.

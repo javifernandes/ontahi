@@ -13,10 +13,7 @@ import {
   safeParseUnknownGraphSchema,
 } from '../data-graph/index.js';
 
-import {
-  operationApplicationHole,
-  type OperationApplicationHole,
-} from './operation-application.js';
+import { applicationHole, isApplicationHole } from './application-hole.js';
 
 type OpenGraphReadSelectionExpression = SelectionExpression;
 
@@ -62,15 +59,6 @@ type PredicateValue = {
   readonly fieldName: string;
   readonly value: unknown;
 };
-
-const isHole = (value: unknown): value is OperationApplicationHole =>
-  typeof value === 'object' &&
-  value !== null &&
-  'kind' in value &&
-  value.kind === 'hole' &&
-  'id' in value &&
-  typeof value.id === 'string' &&
-  value.id.length > 0;
 
 const mapPredicateValues = (
   expression: SelectionExpression,
@@ -135,7 +123,7 @@ export const openGraphReadApplication = (
     const holeId = holesByField[predicate.fieldName];
     if (holeId === undefined) return predicate.value;
     matched.add(predicate.fieldName);
-    return operationApplicationHole(holeId);
+    return applicationHole(holeId);
   });
   const missing = Object.keys(holesByField).filter(fieldName => !matched.has(fieldName));
   if (missing.length > 0)
@@ -153,7 +141,7 @@ export const openGraphReadApplication = (
 export const graphReadApplicationHoles = (application: GraphReadApplication): readonly string[] => [
   ...new Set(
     predicateValues(application.request.selection.expression).flatMap(predicate =>
-      isHole(predicate.value) ? [predicate.value.id] : [],
+      isApplicationHole(predicate.value) ? [predicate.value.id] : [],
     ),
   ),
 ];
@@ -166,7 +154,7 @@ export const substituteGraphReadApplication = (
 ): GraphReadApplicationSubstitutionResult => {
   const entity = readEntity(application.request as GraphReadRequest, entities);
   const positions = predicateValues(application.request.selection.expression).filter(
-    predicate => isHole(predicate.value) && predicate.value.id === holeId,
+    predicate => isApplicationHole(predicate.value) && predicate.value.id === holeId,
   );
   if (positions.length === 0) return { success: false, reason: 'unknown-hole', holeId };
 
@@ -199,7 +187,7 @@ export const substituteGraphReadApplication = (
         selection: {
           ...application.request.selection,
           expression: mapPredicateValues(application.request.selection.expression, predicate =>
-            isHole(predicate.value) && predicate.value.id === holeId
+            isApplicationHole(predicate.value) && predicate.value.id === holeId
               ? normalizedValues.get(predicate.fieldName)
               : predicate.value,
           ),
