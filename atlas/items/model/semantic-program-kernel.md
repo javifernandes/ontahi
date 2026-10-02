@@ -37,3 +37,9 @@ This item records a research direction rather than an accepted universal AST or 
 API. Plan 154 owns the incremental proofs for typed holes, substitution, Reads and Commands,
 reactive evaluation, durable waits, distributed evaluation, Assistants, Sessions, and tooling. The
 item may be narrowed, split, or removed as those proofs produce evidence.
+
+The first internal proof represents an open Operation application as one argument tree containing
+value and named Hole terms. Hole types come from their positions in the Operation's existing input
+schema rather than copied metadata. A substitution is validated against that same schema, and only
+a closed application can lower to the existing canonical `OperationInvokeRequest`. The experiment
+is intentionally not exported while later proofs test whether the boundary generalizes.

@@ -721,12 +721,12 @@ their current public contracts remain authoritative.
 
 ### Slice 1: Operation Application And Typed Holes
 
-- [ ] Define an internal open Operation application representation.
-- [ ] Infer argument types from the existing Operation input schema.
-- [ ] Normalize omitted required inputs into holes while preserving optional/default semantics.
-- [ ] Support explicit and named holes without exposing duplicate contract metadata.
-- [ ] Validate substitution and lower only a closed application into `OperationInvokeRequest`.
-- [ ] Prove the complete lifecycle with `TodoItem.createItem(title = "buy milk", list = ?list)`.
+- [x] Define an internal open Operation application representation.
+- [x] Infer argument types from the existing Operation input schema.
+- [x] Normalize omitted required inputs into holes while preserving optional/default semantics.
+- [x] Support explicit and named holes without exposing duplicate contract metadata.
+- [x] Validate substitution and lower only a closed application into `OperationInvokeRequest`.
+- [x] Prove the local application lifecycle with `TodoList.completeAll(list = ?list)`.
 
 ### Slice 2: Resolution And Generic Projection
 
@@ -812,11 +812,11 @@ The first implementation subplan should deliberately avoid LLMs, remote executio
 delivery:
 
 ```text
-TodoItem.createItem(title = "buy milk")
+TodoList.completeAll()
 ```
 
 1. Reflection resolves the existing Operation and input schema.
-2. Normalization produces one typed `list` hole.
+2. Normalization produces one typed `list` hole from the required input.
 3. An authorized resolver executes the declared Todo List candidate Selection.
 4. One candidate binds automatically; several candidates produce a generic choice Interaction.
 5. A browser form and a chat renderer project the same pending application.
@@ -828,6 +828,20 @@ TodoItem.createItem(title = "buy milk")
 
 This proof tests whether partial application is a real framework primitive rather than more
 model-command orchestration. It must remain useful when the interpreter is entirely code-backed.
+
+### First Operation Application Checkpoint
+
+Implemented on 2026-10-02: Core now has an internal, deliberately unexported Operation application
+experiment. Its argument tree contains only value and Hole terms; the existing Operation input
+schema remains the sole contract. Required omissions become typed positional Holes, while optional
+and defaulted omissions remain absent and explicit `null` remains a value. Named Hole substitution
+is immutable and validates every matching position. Open applications cannot lower to an executable
+request; a closed application is parsed by the original schema and lowers to the unchanged
+`OperationInvokeRequest`, including schema defaults and canonical Entity Refs.
+
+The local proof uses the input shape of `TodoList.completeAll(list = ?list)`. It does not yet add a
+resolver, Interaction, textual syntax, DevTools projection, transport form, or public Core API.
+Those remain Slice 2 work.
 
 ## Second Vertical Proof
 
