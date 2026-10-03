@@ -7,6 +7,7 @@ import {
   type RuntimeProtocolDurableObserver,
   type RuntimeProtocolGraphObserver,
 } from '@ontahi/core/runtime/protocol';
+import type { ApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
 import { WebSocket, WebSocketServer } from 'ws';
 
 export type ExpressRuntimeProtocolWebSocketContextFactory<TContext> = (
@@ -19,7 +20,8 @@ export type ExpressRuntimeProtocolWebSocketUpgradeAuthorization = (
 
 export type CreateExpressRuntimeProtocolWebSocketServerOptions<TContext> = {
   readonly server: Server;
-  readonly dispatcher: RuntimeProtocolDispatcher<TContext>;
+  readonly dispatcher?: RuntimeProtocolDispatcher<TContext>;
+  readonly receiver?: ApplicationRuntimeProtocol<TContext>;
   readonly context: ExpressRuntimeProtocolWebSocketContextFactory<TContext>;
   readonly authorizeUpgrade?: ExpressRuntimeProtocolWebSocketUpgradeAuthorization;
   readonly observeDurableOperation?: RuntimeProtocolDurableObserver<TContext>;
@@ -52,6 +54,7 @@ const rejectUpgrade = (socket: Duplex, status: number, message: string) => {
 export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
   server,
   dispatcher,
+  receiver,
   context,
   authorizeUpgrade,
   observeDurableOperation,
@@ -60,6 +63,10 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
   path = '/runtime',
   reportError,
 }: CreateExpressRuntimeProtocolWebSocketServerOptions<TContext>): ExpressRuntimeProtocolWebSocketServer => {
+  const dispatch = receiver?.dispatcher ?? dispatcher;
+  if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+  const durableObserver = observeDurableOperation ?? receiver?.observeDurableOperation;
+  const graphObserver = observeGraph ?? receiver?.observeGraph;
   const routePath = normalizePath(path);
   const webSocketServer = new WebSocketServer({ noServer: true });
   let closed = false;
@@ -103,10 +110,10 @@ export const createExpressRuntimeProtocolWebSocketServer = <TContext>({
 
       webSocketServer.handleUpgrade(request, socket, head, webSocket => {
         const session = createRuntimeProtocolServerSession({
-          dispatcher,
+          dispatcher: dispatch,
           context: receiverContext,
-          observeDurableOperation,
-          observeGraph,
+          observeDurableOperation: durableObserver,
+          observeGraph: graphObserver,
           reportError: error => reportError?.(error, request),
           send: frame => {
             if (webSocket.readyState === WebSocket.OPEN) {

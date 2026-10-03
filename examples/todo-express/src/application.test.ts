@@ -16,11 +16,7 @@ import {
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
 } from '@ontahi/core/runtime/protocol';
-import {
-  createUserTaskTrigger,
-  defineTask,
-  type GraphCommandableOntahiApplication,
-} from '@ontahi/core/runtime/server';
+import { createUserTaskTrigger, defineTask } from '@ontahi/core/runtime/server';
 import {
   createFetchGraphClient,
   createFetchGraphReadExecutor,
@@ -86,7 +82,6 @@ const getTodoRelationships = () => {
 
 describe('Ontahi todo portability example', () => {
   let closeServer: (() => Promise<void>) | undefined;
-  let endpoint = '';
   let origin = '';
 
   beforeEach(async () => {
@@ -99,7 +94,6 @@ describe('Ontahi todo portability example', () => {
       const started = runtimeServer.listen(0, '127.0.0.1', () => resolve(started));
     });
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    endpoint = `${origin}/operations`;
     closeServer = async () => {
       await runtimeServer.runtimeProtocolWebSocket.close();
       server.closeAllConnections();
@@ -202,16 +196,6 @@ describe('Ontahi todo portability example', () => {
     }
   });
 
-  const invoke = (operationId: string, input: unknown, authenticated = false) =>
-    fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(authenticated ? { 'x-test-principal': testPrincipal.subject } : {}),
-      },
-      body: JSON.stringify({ kind: 'invoke', operationId, input }),
-    });
-
   const todoListRef = (id: string) => ({
     kind: 'entity-ref',
     entityName: 'TodoList',
@@ -223,6 +207,16 @@ describe('Ontahi todo portability example', () => {
     entityName,
     locator: { id },
   });
+
+  const runtimeExchange = (authenticated = false) =>
+    createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        ...(authenticated
+          ? { requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }) }
+          : {}),
+      }),
+    });
 
   it('runs one caller-authored projected Query directly and through Express HTTP', async () => {
     getTodoDataset().TodoItem = [
@@ -281,7 +275,9 @@ describe('Ontahi todo portability example', () => {
       { id: 'list-inbox', name: 'Inbox', color: '#f5ddd5' },
       { id: 'list-later', name: 'Later', color: '#dbe8f4' },
     ];
-    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+    const remoteExecutor = createFetchGraphReadExecutor({
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
+    });
     const matchingLists = query(ClientTodoListSchema)
       .where(list => list.name.in(['Inbox', 'Archive']))
       .where(list => list.color.in(['#f5ddd5']));
@@ -299,7 +295,9 @@ describe('Ontahi todo portability example', () => {
     const exactTodo = query(ClientTodoItemSchema)
       .where(todo => todo.completed.eq(false))
       .one().read;
-    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+    const remoteExecutor = createFetchGraphReadExecutor({
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
+    });
 
     await expect(remoteExecutor.get(exactTodo, undefined)).rejects.toMatchObject({
       code: 'cardinality_mismatch',
@@ -328,7 +326,9 @@ describe('Ontahi todo portability example', () => {
       tags: { id: true, name: true, color: true },
     });
     const read = query(ClientTodoItemSchema).as(TodoWithTags);
-    const remoteExecutor = createFetchGraphReadExecutor({ endpoint: `${origin}/graph/reads` });
+    const remoteExecutor = createFetchGraphReadExecutor({
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
+    });
 
     await expect(remoteExecutor.run(read, undefined)).resolves.toEqual([
       { id: 'todo-1', tags: [{ id: 'tag-1', name: 'Core', color: '#527d8c' }] },
@@ -426,7 +426,7 @@ describe('Ontahi todo portability example', () => {
     });
 
     const remoteExecutor = createFetchGraphReadExecutor({
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     await remoteExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoListSchema).delete(
@@ -441,8 +441,7 @@ describe('Ontahi todo portability example', () => {
 
   it('assigns a persisted pastel color through the generic remote Entity mutation capability', async () => {
     const remoteExecutor = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     await remoteExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoListSchema).update(
@@ -482,7 +481,7 @@ describe('Ontahi todo portability example', () => {
     );
 
     const remoteExecutor = createFetchGraphReadExecutor({
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     await remoteExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoItemSchema).delete(
@@ -529,7 +528,7 @@ describe('Ontahi todo portability example', () => {
     );
 
     const remoteExecutor = createFetchGraphReadExecutor({
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     await remoteExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTagSchema).delete(createEntityRef(ClientTagSchema, { id: 'tag-1' })),
@@ -549,9 +548,7 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', list: 'list-1', title: 'Authenticate the runtime', completed: false },
     ];
 
-    const dispatch = (
-      TodoApplication as unknown as GraphCommandableOntahiApplication
-    ).createGraphCommandDispatcher(todoGraphCommandPolicies);
+    const dispatch = TodoApplication.createGraphCommandDispatcher(todoGraphCommandPolicies);
     const complete = (completed: boolean) =>
       toGraphCommandRequest(
         mutateEntity(TodoItem).update(createEntityRef(TodoItem, { id: 'todo-1' }), { completed }),
@@ -572,9 +569,7 @@ describe('Ontahi todo portability example', () => {
   });
 
   it('requires one explicit Principal to create an already-completed TodoItem', async () => {
-    const dispatch = (
-      TodoApplication as unknown as GraphCommandableOntahiApplication
-    ).createGraphCommandDispatcher(todoGraphCommandPolicies);
+    const dispatch = TodoApplication.createGraphCommandDispatcher(todoGraphCommandPolicies);
     const create = (completed: boolean) =>
       toGraphCommandRequest(
         mutateEntity(TodoItem).create({
@@ -691,7 +686,7 @@ describe('Ontahi todo portability example', () => {
     ];
 
     const remoteExecutor = createFetchGraphReadExecutor({
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     await remoteExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoItemSchema).deleteSelection(
@@ -702,7 +697,6 @@ describe('Ontahi todo portability example', () => {
   });
 
   it('serves the embedded Explorer snapshot and active runtime metadata', async () => {
-    const origin = endpoint.replace(/\/operations$/, '');
     getTodoDataset().Tag = [{ id: 'tag-1', name: 'Framework', color: '#6f8d72' }];
     getTodoDataset().TodoItem = [
       { id: 'todo-1', list: 'list-1', title: 'Visible in Explorer', completed: false },
@@ -795,6 +789,17 @@ describe('Ontahi todo portability example', () => {
     });
   });
 
+  it('exposes execution only through the unified Runtime Protocol endpoint', async () => {
+    for (const path of ['/operations', '/graph/reads', '/graph/commands', '/model/commands']) {
+      const response = await fetch(`${origin}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      expect(response.status, path).toBe(404);
+    }
+  });
+
   it.each([
     {
       name: 'reference-defined membership',
@@ -821,8 +826,10 @@ describe('Ontahi todo portability example', () => {
     ];
 
     const remoteExecutor = createFetchGraphReadExecutor({
-      commandEndpoint: `${origin}/graph/commands`,
-      requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      runtimeTransport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      }),
     });
     await remoteExecutor.runEntityMutationCommand!(
       mutateEntity(ClientTodoItemSchema).updateSelection(
@@ -852,14 +859,9 @@ describe('Ontahi todo portability example', () => {
         createEntityRef(TodoItem, { id: 'todo-2' }),
       ]),
     ).add(createEntityRef(Tag, { id: 'tag-1' }));
-    const response = await fetch(`${origin}/graph/commands`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(toGraphCommandRequest(command)),
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(
+      runtimeExchange()({ family: 'graph.command', body: toGraphCommandRequest(command) }),
+    ).resolves.toMatchObject({
       kind: 'graph-command-result',
       value: {
         status: 'applied',
@@ -884,8 +886,7 @@ describe('Ontahi todo portability example', () => {
       createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
     );
     const client = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
 
     await expect(client.runOrderedRelationshipCommand!(command)).resolves.toMatchObject({
@@ -920,8 +921,7 @@ describe('Ontahi todo portability example', () => {
 
   it('creates a Tag through the generic remote Entity mutation capability', async () => {
     const remoteExecutor = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     const command = mutateEntity(ClientTagSchema).create({
       id: 'tag-remote',
@@ -952,8 +952,7 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', list: 'list-1', title: 'Original title', completed: false },
     ];
     const remoteExecutor = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     const command = mutateEntity(ClientTodoItemSchema).update(
       createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
@@ -998,9 +997,10 @@ describe('Ontahi todo portability example', () => {
       { id: 'todo-1', list: 'list-1', title: 'Ship it', completed: false },
     ];
     const remoteExecutor = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
-      requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      runtimeTransport: createFetchRuntimeTransport({
+        endpoint: `${origin}/runtime`,
+        requestInit: () => ({ headers: { 'x-test-principal': testPrincipal.subject } }),
+      }),
     });
     const command = mutateEntity(ClientTodoItemSchema).update(
       createEntityRef(ClientTodoItemSchema, { id: 'todo-1' }),
@@ -1031,8 +1031,7 @@ describe('Ontahi todo portability example', () => {
   it('denies a remotely mutable Tag Field that is absent from policy', async () => {
     getTodoDataset().Tag = [{ id: 'tag-1', name: 'Urgent', color: '#d95d4f' }];
     const remoteExecutor = createFetchGraphReadExecutor({
-      endpoint: `${origin}/graph/reads`,
-      commandEndpoint: `${origin}/graph/commands`,
+      runtimeTransport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
     });
     const command = mutateEntity(ClientTagSchema).update(
       createEntityRef(ClientTagSchema, { id: 'tag-1' }),
@@ -1061,14 +1060,9 @@ describe('Ontahi todo portability example', () => {
         createEntityRef(Tag, { id: 'missing-tag' }),
       ]),
     );
-    const response = await fetch(`${origin}/graph/commands`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(toGraphCommandRequest(command)),
-    });
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(
+      runtimeExchange()({ family: 'graph.command', body: toGraphCommandRequest(command) }),
+    ).resolves.toMatchObject({
       kind: 'protocol-error',
       error: { code: 'execution_unavailable' },
     });
@@ -1090,14 +1084,9 @@ describe('Ontahi todo portability example', () => {
       ]),
     ).add(createEntityRef(Tag, { id: 'tag-1' }));
 
-    const response = await fetch(`${origin}/graph/commands`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(toGraphCommandRequest(command)),
-    });
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(
+      runtimeExchange()({ family: 'graph.command', body: toGraphCommandRequest(command) }),
+    ).resolves.toMatchObject({
       kind: 'graph-command-rejection',
       diagnostic: {
         reason: 'relation_constraint_rejected',

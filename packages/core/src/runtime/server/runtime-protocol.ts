@@ -1,0 +1,154 @@
+import { Cause, Option, Runtime, type Stream } from 'effect';
+
+import type {
+  EntityMutationCommandPolicy,
+  GraphReadPolicy,
+  ManyToManyRelationshipCommandPolicy,
+  OrderedRelationshipCommandPolicy,
+  RelationshipCommandPolicy,
+} from '../../data-graph/index.js';
+import type { TaskActor, TaskRunIdentity, TaskSnapshot } from '../contracts.js';
+import {
+  createRuntimeProtocolDispatcher,
+  createTaskRunDurableOperationObserver,
+  durableOperationProtocolError,
+  toDurableOperationSnapshotResponse,
+  type RuntimeProtocolDispatcher,
+  type RuntimeProtocolDurableObserver,
+  type RuntimeProtocolGraphObserver,
+} from '../protocol/index.js';
+
+import type { InvocationContextInput } from './invocation-context.js';
+import { submitModelCommandProtocol } from './model/command/protocol.js';
+import type { ModelCommandRuntime } from './model/command/runtime.js';
+import type {
+  GraphCommandableOntahiApplication,
+  GraphObservableOntahiApplication,
+  GraphReadableOntahiApplication,
+} from './ontahi.js';
+import { createOperationInvocationDispatcher } from './operation-invocation.js';
+
+type RuntimeProtocolApplication = GraphReadableOntahiApplication &
+  GraphObservableOntahiApplication &
+  GraphCommandableOntahiApplication & {
+    readonly app: {
+      readonly runtime: {
+        withInvocationContext<TValue>(context: InvocationContextInput, run: () => TValue): TValue;
+      };
+      readonly task: {
+        observe(run: TaskRunIdentity): Stream.Stream<TaskSnapshot, unknown>;
+      };
+    };
+  };
+
+type GraphCommandPolicy =
+  | RelationshipCommandPolicy
+  | ManyToManyRelationshipCommandPolicy
+  | OrderedRelationshipCommandPolicy
+  | EntityMutationCommandPolicy<any>;
+
+export type ApplicationRuntimeProtocolOptions<TContext extends InvocationContextInput> = {
+  readonly application: RuntimeProtocolApplication;
+  readonly graphRead: { readonly policies: readonly GraphReadPolicy<any, TContext>[] };
+  readonly graphCommand: { readonly policies: readonly GraphCommandPolicy[] };
+  readonly modelCommand?: { readonly runtime: ModelCommandRuntime };
+  /** Returning null denies an Interaction response. Authenticated principals are mapped by default. */
+  readonly taskInteractionActor?: (context: TContext) => TaskActor | null;
+  readonly reportError?: (error: unknown) => void;
+};
+
+export type ApplicationRuntimeProtocol<TContext> = {
+  readonly dispatcher: RuntimeProtocolDispatcher<TContext>;
+  readonly observeDurableOperation: RuntimeProtocolDurableObserver<TContext>;
+  readonly observeGraph: RuntimeProtocolGraphObserver<TContext>;
+  readonly graphReadPolicies: readonly GraphReadPolicy<any, TContext>[];
+  readonly graphCommandPolicies: readonly GraphCommandPolicy[];
+};
+
+const actorFromContext = (context: InvocationContextInput): TaskActor | null => {
+  const principal = context.principal;
+  return principal ? { kind: principal.kind, id: principal.subject } : null;
+};
+
+const hasTaskInteractionAccessDeniedReason = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'reason' in error &&
+  error.reason === 'task_interaction_access_denied';
+
+const isTaskInteractionAccessDenied = (error: unknown) => {
+  if (!Runtime.isFiberFailure(error)) return hasTaskInteractionAccessDeniedReason(error);
+  const failure = Cause.failureOption(error[Runtime.FiberFailureCauseId]);
+  return Option.isSome(failure) && hasTaskInteractionAccessDeniedReason(failure.value);
+};
+
+export const createApplicationRuntimeProtocol = <TContext extends InvocationContextInput>({
+  application,
+  graphRead,
+  graphCommand,
+  modelCommand,
+  taskInteractionActor = actorFromContext,
+  reportError,
+}: ApplicationRuntimeProtocolOptions<TContext>): ApplicationRuntimeProtocol<TContext> => {
+  const operation = createOperationInvocationDispatcher(application);
+  const read = application.createGraphReadDispatcher<TContext>(graphRead.policies);
+  const observeGraph = application.createGraphReadObserver<TContext>(graphRead.policies);
+  const command = application.createGraphCommandDispatcher<TContext>(graphCommand.policies);
+  const withContext = <TValue>(context: TContext, run: () => TValue) =>
+    application.app.runtime.withInvocationContext(context, run);
+
+  const dispatcher = createRuntimeProtocolDispatcher<TContext>({
+    handlers: {
+      operation: (request, context) => withContext(context, () => operation(request)),
+      'graph.read': (request, context) => read(request, { authority: context }),
+      'graph.command': (request, context) => command(request, { authority: context }),
+      'durable.operation': (request, context) =>
+        withContext(context, async () => {
+          if (request.kind === 'inspect')
+            return toDurableOperationSnapshotResponse(
+              await application.getTaskSnapshot(request.run),
+            );
+
+          const actor = taskInteractionActor(context);
+          if (!actor)
+            return durableOperationProtocolError(
+              'access_denied',
+              'Authentication is required to respond to this task interaction.',
+            );
+
+          try {
+            return toDurableOperationSnapshotResponse(
+              await application.respondToTaskInteraction(request.run, request.response, { actor }),
+            );
+          } catch (error) {
+            if (isTaskInteractionAccessDenied(error))
+              return durableOperationProtocolError(
+                'access_denied',
+                'The authenticated actor cannot respond to this task interaction.',
+              );
+            throw error;
+          }
+        }),
+      ...(modelCommand
+        ? {
+            'model.command': (request, context, { signal }) =>
+              withContext(context, () =>
+                submitModelCommandProtocol(modelCommand.runtime, request, signal),
+              ),
+          }
+        : {}),
+    },
+    reportError: error => reportError?.(error),
+  });
+
+  return {
+    dispatcher,
+    graphReadPolicies: graphRead.policies,
+    graphCommandPolicies: graphCommand.policies,
+    observeGraph: (request, { context, signal }) =>
+      observeGraph(request, { authority: context, signal }),
+    observeDurableOperation: createTaskRunDurableOperationObserver<TContext>({
+      observe: (run, context) => withContext(context, () => application.app.task.observe(run)),
+    }),
+  };
+};

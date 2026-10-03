@@ -5,13 +5,15 @@ import {
   type RuntimeProtocolDispatchResult,
   type RuntimeProtocolDispatcher,
 } from '@ontahi/core/runtime/protocol';
+import type { ApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
 
 export type NextRuntimeProtocolContextFactory<TContext> = (
   request: Request,
 ) => TContext | Promise<TContext>;
 
 export type CreateNextRuntimeProtocolRouteHandlerOptions<TContext> = {
-  dispatcher: RuntimeProtocolDispatcher<TContext>;
+  dispatcher?: RuntimeProtocolDispatcher<TContext>;
+  receiver?: ApplicationRuntimeProtocol<TContext>;
   context: NextRuntimeProtocolContextFactory<TContext>;
   reportError?: (error: unknown, request: Request) => void;
 };
@@ -39,17 +41,20 @@ const registry = createRuntimeProtocolRegistry(runtimeProtocolFamilies);
 export const createNextRuntimeProtocolRouteHandler =
   <TContext>({
     dispatcher,
+    receiver,
     context,
     reportError,
   }: CreateNextRuntimeProtocolRouteHandlerOptions<TContext>) =>
   async (request: Request): Promise<Response> => {
+    const dispatch = receiver?.dispatcher ?? dispatcher;
+    if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
     const parsed = registry.parseRequest(await request.json().catch(() => null));
     if (!parsed.success) {
       return Response.json(parsed.error, { status: responseStatus(parsed.error) });
     }
 
     try {
-      const result = await dispatcher(parsed.request, await context(request), {
+      const result = await dispatch(parsed.request, await context(request), {
         signal: request.signal,
       });
       return Response.json(result, { status: responseStatus(result) });

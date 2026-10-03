@@ -80,21 +80,37 @@ a View for a projectable Selection output; `check-permission` may not. Its parse
 structurally compatible with the existing canonical dispatcher, which continues to own Operation
 resolution, input hydration, authority, permission checks, projections, and execution.
 
-Core composes the registered execution boundaries behind one transport-neutral dispatcher:
+An application can compose the registered execution boundaries, their Graph policies, and their
+observers once as a transport-neutral receiver:
 
 ```ts
-const dispatch = createRuntimeProtocolDispatcher({
-  handlers: {
-    operation: operationDispatcher,
-    'durable.operation': durableObservationHandler,
-    'graph.read': graphReadDispatcher,
-    'graph.command': graphCommandDispatcher,
-    'model.command': modelCommandDispatcher,
-  },
-});
+import { createApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
 
-const response = await dispatch(portableRequest, { authority });
+const protocol = createApplicationRuntimeProtocol({
+  application,
+  graphRead: { policies: graphReadPolicies },
+  graphCommand: { policies: graphCommandPolicies },
+  modelCommand: { runtime: modelCommandRuntime },
+});
 ```
+
+The receiver is the reusable application-side protocol boundary. HTTP, WebSocket, a future RPC
+adapter, or an in-process adapter project it without rebuilding family dispatch or policy wiring:
+
+```text
+HTTP ------┐
+WebSocket -+--> Runtime Protocol receiver (policies) --> graph / entities / operations / tasks
+RPC -------┘
+```
+
+Transport adapters still own trusted context derivation, connection authorization, cancellation,
+and wire-specific framing. The receiver owns the family implementations and applies the same
+application policies regardless of which adapter delivered a request. Its default Task interaction
+actor is derived from the authenticated principal; a host may supply an explicit mapping when, for
+example, a deliberately unauthenticated local application acts as `system`.
+
+`createRuntimeProtocolDispatcher(...)` remains the lower-level composition primitive for custom
+receivers and partial protocol implementations.
 
 The receiver-owned context is not serialized. Each handler receives its canonical family body,
 that context, and dispatch options containing the transport cancellation signal. An Operation
@@ -132,12 +148,13 @@ implementation sends one observation control frame and receives the same snapsho
 `useDurableOperation` selects neither strategy, and Operation bridge adapters no longer carry Task
 snapshot methods.
 
-Express can project an injected common dispatcher at `POST /runtime`. It validates the envelope and
+Express can project an injected receiver or common dispatcher at `POST /runtime`. It validates the envelope and
 family body before deriving receiver context, but does not install handlers or authorization. The
 host explicitly chooses which families the dispatcher exposes. The Fetch client uses that common
 path for Operation invocation and permission, Graph Read, Graph Command, and Durable inspection.
 The legacy `/operations`, `/graph/reads`, `/graph/commands`, and raw Task GET routes remain bounded
-compatibility surfaces.
+compatibility surfaces by default. Applications that have migrated all clients can set
+`legacyRuntimeEndpoints: false` so `/runtime` is their only execution endpoint.
 
 ## One protocol, request exchanges and observations
 
@@ -218,16 +235,14 @@ const socketServer = createExpressRuntimeProtocolWebSocketServer({
   server: httpServer,
   path: '/runtime',
   ownsUpgradeBoundary: true,
-  dispatcher: runtimeDispatcher,
+  receiver: runtimeProtocol,
   authorizeUpgrade: isAllowedBrowserOrigin,
   context: resolveSessionContext,
-  observeDurableOperation: durableObserver,
-  observeGraph: graphObserver,
 });
 ```
 
-The named context, authorization and observer functions above are host bindings, not implied
-defaults. `runtimeDispatcher` is the same four-family dispatcher used for HTTP. Choose
+The named context and authorization functions above are host bindings, not implied defaults. The
+receiver is the same application protocol used for HTTP and supplies its observers. Choose
 `ownsUpgradeBoundary: true` only when this adapter owns the server's upgrade boundary; omit it
 when another socket service also handles upgrades. Retain `socketServer` and await its `close()`
 during host shutdown. The complete [Todo host](../../../examples/todo-express/src/application.ts)
@@ -252,7 +267,7 @@ Next.js App Router can project that same dispatcher without an application-local
 import { createNextRuntimeProtocolRouteHandler } from '@ontahi/runtime-nextjs/runtime-protocol';
 
 export const POST = createNextRuntimeProtocolRouteHandler({
-  dispatcher: runtimeDispatcher,
+  receiver: runtimeProtocol,
   context: async request => ({
     principal: await resolvePrincipal(request),
   }),
