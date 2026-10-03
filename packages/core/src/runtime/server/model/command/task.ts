@@ -1,7 +1,7 @@
 import { Effect, Option, Stream } from 'effect';
 
-import type { GraphCommandRequest, GraphReadRequest } from '../../data-graph/index.js';
-import type { JsonValue } from '../../value/json.js';
+import type { GraphCommandRequest, GraphReadRequest } from '../../../../data-graph/index.js';
+import type { JsonValue } from '../../../../value/json.js';
 import type {
   ModelCommandRequest,
   ModelCommandResult,
@@ -9,18 +9,9 @@ import type {
   TaskRunRef,
   TaskSnapshot,
   TaskTrigger,
-} from '../contracts.js';
-import type { OperationInvokeRequest } from '../operation-invocation.js';
-
-import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
-import {
-  type ModelCommandCanonicalRequest,
-  type ModelCommandRuntime,
-  type PreparedModelCommandRuntime,
-} from './model-command.js';
-import type { ModelGraphReadResult } from './model-graph-read.js';
-import { ModelInterpretationError } from './model-interpretation.js';
-import type { ModelOperationApplicationChoice } from './model-operation-application.js';
+} from '../../../contracts.js';
+import type { OperationInvokeRequest } from '../../../operation-invocation.js';
+import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
 import {
   defineTask,
   defineTaskExecution,
@@ -29,7 +20,16 @@ import {
   type TaskDefinition,
   type TaskFailure,
   type TaskStartOptions,
-} from './tasks.js';
+} from '../../tasks.js';
+import type { ModelOperationApplicationChoice } from '../application/operation.js';
+import { ModelInterpretationError } from '../interpretation.js';
+import type { ModelGraphReadResult } from '../read/graph.js';
+
+import {
+  type ModelCommandCanonicalRequest,
+  type ModelCommandRuntime,
+  type PreparedModelCommandRuntime,
+} from './runtime.js';
 
 type ModelCommandTaskResult = ModelCommandResult<
   GraphReadRequest | GraphCommandRequest | OperationInvokeRequest,

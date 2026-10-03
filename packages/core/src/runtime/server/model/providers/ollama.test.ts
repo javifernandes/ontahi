@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createOllamaModelProvider } from './ollama-model-provider.js';
+import { createOllamaModelProvider } from './ollama.js';
 
 const request = () => ({
   instructions: 'Resolve',

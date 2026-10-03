@@ -4,17 +4,16 @@ import {
   type AnyReferenceFieldDefinition,
   type GraphJsonSchema,
   type GraphSchemaDefinition,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
 import {
   lowerOperationApplication,
   operationApplicationHoles,
   substituteOperationApplication,
   type OperationApplication,
   type OperationApplicationContract,
-} from '../../semantic-program/operation-application.js';
-import { hasOwn, isRecord } from '../../value/object.js';
-
-import type { ModelEntityCandidate, ModelEntityMatch } from './model-graph-read-application.js';
+} from '../../../../semantic-program/operation-application.js';
+import { hasOwn, isRecord } from '../../../../value/object.js';
+import type { ModelEntityCandidate, ModelEntityMatch } from '../read/application.js';
 
 export type ModelOperationApplicationProposal = {
   readonly application: OperationApplication;

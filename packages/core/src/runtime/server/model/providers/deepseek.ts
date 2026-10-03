@@ -1,6 +1,5 @@
-import { isRecord } from '../../value/object.js';
-
-import { ModelInterpretationError, type ModelProvider } from './model-interpretation.js';
+import { isRecord } from '../../../../value/object.js';
+import { ModelInterpretationError, type ModelProvider } from '../interpretation.js';
 
 export type DeepSeekModelProviderOptions = {
   model: string;

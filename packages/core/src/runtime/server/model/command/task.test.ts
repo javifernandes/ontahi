@@ -1,21 +1,22 @@
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
-import {
-  createModelCommandTask,
-  createTaskBackedModelCommandRuntime,
-  type ModelCommandTaskHost,
-} from './model-command-task.js';
-import type { PreparedModelCommandRuntime } from './model-command.js';
-import { ModelInterpretationError } from './model-interpretation.js';
+import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
 import {
   createInMemoryTaskStorage,
   createInProcessTaskRuntime,
   getTaskSnapshot,
   respondToTaskInteraction,
   startTask,
-} from './tasks.js';
+} from '../../tasks.js';
+import { ModelInterpretationError } from '../interpretation.js';
+
+import type { PreparedModelCommandRuntime } from './runtime.js';
+import {
+  createModelCommandTask,
+  createTaskBackedModelCommandRuntime,
+  type ModelCommandTaskHost,
+} from './task.js';
 
 const input = { text: 'rename the document' };
 const proposal = {

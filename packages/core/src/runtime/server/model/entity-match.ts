@@ -8,9 +8,9 @@ import {
   type GraphReadDispatcher,
   type GraphReadPolicy,
   type SelectionExpression,
-} from '../../data-graph/index.js';
+} from '../../../data-graph/index.js';
 
-import type { ModelEntityCandidate } from './model-graph-read-application.js';
+import type { ModelEntityCandidate } from './read/application.js';
 
 export type ModelEntityMatchResult =
   | { readonly status: 'matched'; readonly candidates: readonly ModelEntityCandidate[] }

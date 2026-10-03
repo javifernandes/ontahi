@@ -401,7 +401,7 @@ export {
   type ModelRequest,
   type ModelProvider,
   type ModelOperationExposure,
-} from './model-interpretation.js';
+} from './model/interpretation.js';
 export {
   createModelCommandRuntime,
   type CreateModelCommandRuntimeOptions,
@@ -411,7 +411,7 @@ export {
   type ModelCommandScope,
   type ModelCommandBinding,
   type PreparedModelCommandRuntime,
-} from './model-command.js';
+} from './model/command/runtime.js';
 export {
   createTaskBackedModelCommandRuntime,
   createModelCommandTask,
@@ -419,7 +419,7 @@ export {
   type CreateModelCommandTaskOptions,
   type ModelCommandApprovalPresentation,
   type ModelCommandTaskHost,
-} from './model-command-task.js';
+} from './model/command/task.js';
 export {
   createApplicationModelCommandRuntime,
   type ApplicationModelGraphAffordanceContext,
@@ -431,26 +431,26 @@ export {
   type ApplicationModelScope,
   type ApplicationModelScopeAccess,
   type CreateApplicationModelCommandRuntimeOptions,
-} from './application-model-command.js';
+} from './model/command/application-runtime.js';
 export {
   createDeepSeekModelProvider,
   type DeepSeekModelProviderOptions,
-} from './deepseek-model-provider.js';
+} from './model/providers/deepseek.js';
 export {
   createOllamaModelProvider,
   type OllamaModelProviderOptions,
-} from './ollama-model-provider.js';
-export { submitModelCommandProtocol } from './model-command-protocol.js';
+} from './model/providers/ollama.js';
+export { submitModelCommandProtocol } from './model/command/protocol.js';
 
-export type { ModelGraphCommandExposure } from './model-graph-command.js';
+export type { ModelGraphCommandExposure } from './model/command/graph.js';
 export {
   createModelEntityMutationExposure,
   type ModelEntityMutationExposureOptions,
-} from './model-entity-mutation.js';
-export type { ModelGraphReadExposure, ModelGraphReadResult } from './model-graph-read.js';
-export type { ModelEntityCandidate, ModelEntityMatch } from './model-graph-read-application.js';
-export type { ModelOperationApplicationProposal } from './model-operation-application.js';
+} from './model/command/entity-mutation.js';
+export type { ModelGraphReadExposure, ModelGraphReadResult } from './model/read/graph.js';
+export type { ModelEntityCandidate, ModelEntityMatch } from './model/read/application.js';
+export type { ModelOperationApplicationProposal } from './model/application/operation.js';
 export {
   createModelGraphReadExposure,
   type ModelGraphReadExposureOptions,
-} from './model-graph-read-exposure.js';
+} from './model/read/exposure.js';

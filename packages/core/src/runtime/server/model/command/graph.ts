@@ -2,9 +2,8 @@ import {
   safeParseUnknownGraphSchema,
   type GraphSchemaDefinition,
   type GraphCommandRequest,
-} from '../../data-graph/index.js';
-
-import { ModelInterpretationError } from './model-interpretation.js';
+} from '../../../../data-graph/index.js';
+import { ModelInterpretationError } from '../interpretation.js';
 
 /** A scoped projection of the existing graph-command contract, never an alternative payload. */
 export type ModelGraphCommandExposure = {

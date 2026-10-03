@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { createEntityRef, field, graphSchema, toGraphJsonSchema } from '../../data-graph/index.js';
+import {
+  createEntityRef,
+  field,
+  graphSchema,
+  toGraphJsonSchema,
+} from '../../../../data-graph/index.js';
+import { entity } from '../../entity.js';
 
-import { entity } from './entity.js';
 import {
   continueModelOperationApplication,
   modelOperationApplicationEntityMatches,
   modelOperationApplicationSchema,
   parseModelOperationApplication,
   resolveModelOperationApplication,
-} from './model-operation-application.js';
+} from './operation.js';
 
 const List = entity({ name: 'OperationList', fields: { id: field.id(), name: field.string() } });
 const contract = {

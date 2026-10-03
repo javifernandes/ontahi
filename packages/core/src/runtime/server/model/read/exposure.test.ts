@@ -5,10 +5,10 @@ import {
   safeParseUnknownGraphSchema,
   toGraphJsonSchema,
   type GraphReadPolicy,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
+import { entity } from '../../entity.js';
 
-import { entity } from './entity.js';
-import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
+import { createModelGraphReadExposure } from './exposure.js';
 
 const Document = entity({
   name: 'Document',

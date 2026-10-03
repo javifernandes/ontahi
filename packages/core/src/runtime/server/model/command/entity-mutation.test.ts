@@ -8,10 +8,10 @@ import {
   toEntityMutationAffordanceDescriptor,
   toGraphSchemaDescriptor,
   type EntityMutationCommandPolicy,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
+import { entity } from '../../entity.js';
 
-import { entity } from './entity.js';
-import { createModelEntityMutationExposure } from './model-entity-mutation.js';
+import { createModelEntityMutationExposure } from './entity-mutation.js';
 
 const Document = entity({
   name: 'Document',

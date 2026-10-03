@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { field, graphSchema } from '../../data-graph/index.js';
+import { field, graphSchema } from '../../../data-graph/index.js';
 
-import type { ModelGraphCommandExposure } from './model-graph-command.js';
-import type { ModelGraphReadExposure } from './model-graph-read.js';
+import type { ModelGraphCommandExposure } from './command/graph.js';
 import {
   interpretModelRequest,
   validateModelInvocation,
   type ModelOperationExposure,
   type ModelRequest,
-} from './model-interpretation.js';
+} from './interpretation.js';
+import type { ModelGraphReadExposure } from './read/graph.js';
 
 const schema = graphSchema.object(
   { documentId: field.string(), name: field.nonEmptyString() },

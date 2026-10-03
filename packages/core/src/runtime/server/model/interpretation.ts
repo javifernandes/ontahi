@@ -7,29 +7,26 @@ import {
   toGraphJsonSchema,
   type GraphJsonSchema,
   type GraphSchemaDefinition,
-} from '../../data-graph/index.js';
-import { isRecord } from '../../value/object.js';
+} from '../../../data-graph/index.js';
+import { isRecord } from '../../../value/object.js';
 import {
   parseOperationInvocationRequest,
   type OperationInvokeRequest,
-} from '../operation-invocation.js';
+} from '../../operation-invocation.js';
 
-import { createModelContextSchema } from './model-context-schema.js';
-import {
-  validateModelGraphCommand,
-  type ModelGraphCommandExposure,
-} from './model-graph-command.js';
-import {
-  openModelGraphReadSchema,
-  parseModelGraphReadApplication,
-  type ModelGraphReadApplicationProposal,
-} from './model-graph-read-application.js';
-import { validateModelGraphRead, type ModelGraphReadExposure } from './model-graph-read.js';
 import {
   modelOperationApplicationSchema,
   parseModelOperationApplication,
   type ModelOperationApplicationProposal,
-} from './model-operation-application.js';
+} from './application/operation.js';
+import { validateModelGraphCommand, type ModelGraphCommandExposure } from './command/graph.js';
+import { createModelContextSchema } from './context-schema.js';
+import {
+  openModelGraphReadSchema,
+  parseModelGraphReadApplication,
+  type ModelGraphReadApplicationProposal,
+} from './read/application.js';
+import { validateModelGraphRead, type ModelGraphReadExposure } from './read/graph.js';
 
 export type ModelRequest = {
   instructions: string;

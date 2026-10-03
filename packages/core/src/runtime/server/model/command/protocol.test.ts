@@ -1,8 +1,9 @@
 import { expect, it, vi } from 'vitest';
 
-import { submitModelCommandProtocol } from './model-command-protocol.js';
-import type { ModelCommandRuntime } from './model-command.js';
-import { ModelInterpretationError } from './model-interpretation.js';
+import { ModelInterpretationError } from '../interpretation.js';
+
+import { submitModelCommandProtocol } from './protocol.js';
+import type { ModelCommandRuntime } from './runtime.js';
 
 const request = {
   version: 1,

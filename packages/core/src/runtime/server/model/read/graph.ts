@@ -3,10 +3,9 @@ import {
   type GraphReadCapabilities,
   type GraphReadRequest,
   type GraphSchemaDefinition,
-} from '../../data-graph/index.js';
-import type { JsonValue } from '../../value/json.js';
-
-import { ModelInterpretationError } from './model-interpretation.js';
+} from '../../../../data-graph/index.js';
+import type { JsonValue } from '../../../../value/json.js';
+import { ModelInterpretationError } from '../interpretation.js';
 
 export type ModelGraphReadResult = {
   readonly kind: 'graph-read-result';

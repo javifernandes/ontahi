@@ -5,40 +5,40 @@ import {
   type GraphCommandRequest,
   type GraphReadDispatchResponse,
   type GraphReadRequest,
-} from '../../data-graph/index.js';
-import { isJsonValue } from '../../value/json.js';
-import { isRecord } from '../../value/object.js';
-import type { ModelCommandRequest, ModelCommandResult } from '../contracts.js';
-import type { OperationInvokeRequest } from '../operation-invocation.js';
-
-import type { OntahiApplication } from './application.js';
-import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './model-graph-command.js';
-import {
-  modelGraphReadApplicationEntityMatches,
-  resolveModelGraphReadApplication,
-  type ModelEntityCandidate,
-  type ModelGraphReadApplicationProposal,
-} from './model-graph-read-application.js';
-import {
-  resolveModelGraphRead,
-  type ModelGraphReadExposure,
-  type ModelGraphReadResult,
-} from './model-graph-read.js';
-import {
-  interpretModelRequest,
-  validateModelInvocation,
-  ModelInterpretationError,
-  type ModelProvider,
-  type ModelOperationExposure,
-} from './model-interpretation.js';
+} from '../../../../data-graph/index.js';
+import { isJsonValue } from '../../../../value/json.js';
+import { isRecord } from '../../../../value/object.js';
+import type { ModelCommandRequest, ModelCommandResult } from '../../../contracts.js';
+import type { OperationInvokeRequest } from '../../../operation-invocation.js';
+import type { OntahiApplication } from '../../application.js';
+import { createOperationInvocationDispatcher } from '../../operation-invocation.js';
 import {
   continueModelOperationApplication,
   modelOperationApplicationEntityMatches,
   resolveModelOperationApplication,
   type ModelOperationApplicationChoice,
   type ModelOperationApplicationProposal,
-} from './model-operation-application.js';
-import { createOperationInvocationDispatcher } from './operation-invocation.js';
+} from '../application/operation.js';
+import {
+  interpretModelRequest,
+  validateModelInvocation,
+  ModelInterpretationError,
+  type ModelProvider,
+  type ModelOperationExposure,
+} from '../interpretation.js';
+import {
+  modelGraphReadApplicationEntityMatches,
+  resolveModelGraphReadApplication,
+  type ModelEntityCandidate,
+  type ModelGraphReadApplicationProposal,
+} from '../read/application.js';
+import {
+  resolveModelGraphRead,
+  type ModelGraphReadExposure,
+  type ModelGraphReadResult,
+} from '../read/graph.js';
+
+import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './graph.js';
 
 export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | 'description'> & {
   /** Override only when the exposed arguments narrow the operation's advertised behavior. */

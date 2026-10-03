@@ -3,9 +3,9 @@ import {
   type AnyEntityDefinition,
   type GraphReadPolicy,
   type GraphSchemaFields,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
 
-import type { ModelGraphReadExposure } from './model-graph-read.js';
+import type { ModelGraphReadExposure } from './graph.js';
 
 type EntityFieldName<TEntity extends AnyEntityDefinition> = keyof TEntity['fields'] & string;
 

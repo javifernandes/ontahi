@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest';
 
-import { createEntityRef, field, type GraphReadPolicy } from '../../data-graph/index.js';
+import { createEntityRef, field, type GraphReadPolicy } from '../../../data-graph/index.js';
+import { entity } from '../entity.js';
 
-import { entity } from './entity.js';
-import { resolveAuthorizedModelEntityMatch } from './model-entity-match.js';
+import { resolveAuthorizedModelEntityMatch } from './entity-match.js';
 
 const Folder = entity({
   name: 'MatchFolder',

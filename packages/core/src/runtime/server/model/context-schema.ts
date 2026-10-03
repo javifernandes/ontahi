@@ -1,5 +1,5 @@
-import type { GraphJsonSchema } from '../../data-graph/index.js';
-import { isRecord } from '../../value/object.js';
+import type { GraphJsonSchema } from '../../../data-graph/index.js';
+import { isRecord } from '../../../value/object.js';
 
 /** Restrict generated refs and selections to concrete values disclosed in this request.
  * This is decoding guidance; canonical validation and fresh scope checks remain mandatory.

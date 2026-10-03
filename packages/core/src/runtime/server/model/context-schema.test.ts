@@ -6,10 +6,10 @@ import {
   graphSchema,
   Selection,
   toGraphJsonSchema,
-} from '../../data-graph/index.js';
+} from '../../../data-graph/index.js';
+import { entity } from '../entity.js';
 
-import { entity } from './entity.js';
-import { createModelContextSchema } from './model-context-schema.js';
+import { createModelContextSchema } from './context-schema.js';
 
 it('grounds nested canonical references and selections in disclosed values', () => {
   const Document = entity({ name: 'Document', fields: { id: field.id() } });

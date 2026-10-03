@@ -4,15 +4,15 @@ import {
   type AnyEntityRef,
   type GraphJsonSchema,
   type GraphReadRequest,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
 import {
   graphReadApplication,
   graphReadApplicationHolePositions,
   lowerGraphReadApplication,
   substituteGraphReadApplication,
   type GraphReadApplication,
-} from '../../semantic-program/graph-read-application.js';
-import { isRecord } from '../../value/object.js';
+} from '../../../../semantic-program/graph-read-application.js';
+import { isRecord } from '../../../../value/object.js';
 
 export type ModelEntityMatch = { readonly kind: 'entity-match'; readonly text: string };
 export type ModelGraphReadApplicationProposal = {

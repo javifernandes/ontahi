@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createDeepSeekModelProvider } from './deepseek-model-provider.js';
+import { createDeepSeekModelProvider } from './deepseek.js';
 
 const request = () => ({
   instructions: 'Resolve as JSON',

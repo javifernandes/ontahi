@@ -7,25 +7,25 @@ import type {
   ManyToManyRelationshipCommandPolicy,
   OrderedRelationshipCommandPolicy,
   RelationshipCommandPolicy,
-} from '../../data-graph/index.js';
-import type { ModelCommandRequest } from '../contracts.js';
+} from '../../../../data-graph/index.js';
+import type { ModelCommandRequest } from '../../../contracts.js';
+import type { OntahiApplication } from '../../application.js';
+import type {
+  GraphCommandableOntahiApplication,
+  GraphReadableOntahiApplication,
+} from '../../ontahi.js';
+import { resolveAuthorizedModelEntityMatch } from '../entity-match.js';
+import { createModelGraphReadExposure } from '../read/exposure.js';
+import type { ModelGraphReadExposure } from '../read/graph.js';
 
-import type { OntahiApplication } from './application.js';
+import { createModelEntityMutationExposure } from './entity-mutation.js';
+import type { ModelGraphCommandExposure } from './graph.js';
 import {
   createModelCommandRuntime,
   type CreateModelCommandRuntimeOptions,
   type ModelCommandScope,
   type PreparedModelCommandRuntime,
-} from './model-command.js';
-import { resolveAuthorizedModelEntityMatch } from './model-entity-match.js';
-import { createModelEntityMutationExposure } from './model-entity-mutation.js';
-import type { ModelGraphCommandExposure } from './model-graph-command.js';
-import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
-import type { ModelGraphReadExposure } from './model-graph-read.js';
-import type {
-  GraphCommandableOntahiApplication,
-  GraphReadableOntahiApplication,
-} from './ontahi.js';
+} from './runtime.js';
 
 type ModelGraphCommandPolicy =
   | RelationshipCommandPolicy

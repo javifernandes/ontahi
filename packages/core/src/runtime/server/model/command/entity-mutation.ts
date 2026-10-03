@@ -8,10 +8,10 @@ import {
   type GraphSchemaFields,
   type StoredFieldName,
   type WritableStoredFieldName,
-} from '../../data-graph/index.js';
-import type { JsonPrimitive } from '../../value/json.js';
+} from '../../../../data-graph/index.js';
+import type { JsonPrimitive } from '../../../../value/json.js';
 
-import type { ModelGraphCommandExposure } from './model-graph-command.js';
+import type { ModelGraphCommandExposure } from './graph.js';
 
 type EntityFieldName<TEntity extends AnyEntityDefinition> = StoredFieldName<TEntity['fields']> &
   string;

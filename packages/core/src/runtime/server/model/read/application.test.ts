@@ -7,15 +7,15 @@ import {
   query,
   toGraphJsonSchema,
   toGraphReadRequest,
-} from '../../data-graph/index.js';
-import { openGraphReadApplication } from '../../semantic-program/graph-read-application.js';
+} from '../../../../data-graph/index.js';
+import { openGraphReadApplication } from '../../../../semantic-program/graph-read-application.js';
+import { entity } from '../../entity.js';
 
-import { entity } from './entity.js';
 import {
   openModelGraphReadSchema,
   parseModelGraphReadApplication,
   resolveModelGraphReadApplication,
-} from './model-graph-read-application.js';
+} from './application.js';
 
 const List = entity({ name: 'ModelList', fields: { id: field.id(), name: field.string() } });
 const Item = entity({

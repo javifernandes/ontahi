@@ -10,12 +10,12 @@ import {
   Selection,
   toGraphCommandRequest,
   toGraphReadRequest,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
+import { entity } from '../../entity.js';
+import { ontahi } from '../../ontahi.js';
+import type { ModelRequest } from '../interpretation.js';
 
-import { createApplicationModelCommandRuntime } from './application-model-command.js';
-import { entity } from './entity.js';
-import type { ModelRequest } from './model-interpretation.js';
-import { ontahi } from './ontahi.js';
+import { createApplicationModelCommandRuntime } from './application-runtime.js';
 
 it('binds model scope reads to application policies and the current authority', async () => {
   const Document = entity({ name: 'Document', fields: { id: field.id(), title: field.string() } });

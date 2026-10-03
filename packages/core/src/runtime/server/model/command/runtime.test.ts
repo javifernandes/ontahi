@@ -8,13 +8,13 @@ import {
   graphSchema,
   query,
   toGraphReadRequest,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
+import { entity } from '../../entity.js';
+import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
+import { ontahi } from '../../ontahi.js';
+import { createModelGraphReadExposure } from '../read/exposure.js';
 
-import { entity } from './entity.js';
-import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
-import { createModelCommandRuntime, type ModelCommandScope } from './model-command.js';
-import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
-import { ontahi } from './ontahi.js';
+import { createModelCommandRuntime, type ModelCommandScope } from './runtime.js';
 
 const fixture = () => {
   const run = vi.fn(({ name }: { name: string }) => Effect.succeed(name));

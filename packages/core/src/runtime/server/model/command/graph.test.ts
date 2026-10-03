@@ -7,12 +7,12 @@ import {
   graphSchema,
   toGraphCommandRequest,
   type GraphCommandRequest,
-} from '../../data-graph/index.js';
+} from '../../../../data-graph/index.js';
+import { entity } from '../../entity.js';
+import { getCurrentInvocationContext, withInvocationContext } from '../../invocation-context.js';
+import { ontahi, type GraphCommandableOntahiApplication } from '../../ontahi.js';
 
-import { entity } from './entity.js';
-import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
-import { createModelCommandRuntime, type ModelCommandScope } from './model-command.js';
-import { ontahi, type GraphCommandableOntahiApplication } from './ontahi.js';
+import { createModelCommandRuntime, type ModelCommandScope } from './runtime.js';
 
 const fixture = () => {
   const Document = entity({

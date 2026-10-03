@@ -3,10 +3,10 @@ import {
   modelCommandProtocolResult,
   type ModelCommandProtocolRequestV1,
   type ModelCommandProtocolResponse,
-} from '../protocol/model-command.js';
+} from '../../../protocol/model-command.js';
+import { ModelInterpretationError } from '../interpretation.js';
 
-import type { ModelCommandRuntime } from './model-command.js';
-import { ModelInterpretationError } from './model-interpretation.js';
+import type { ModelCommandRuntime } from './runtime.js';
 
 const neverAbortedSignal = new AbortController().signal;
 
