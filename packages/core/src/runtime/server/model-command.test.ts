@@ -275,6 +275,68 @@ it('resolves and executes a model-proposed open Operation application', async ()
   expect(run.mock.calls[0]?.[0]).toEqual({ folder: inbox, title: 'Notes' });
 });
 
+it('keeps model-proposed Operation applications outside the scoped catalog unresolved', async () => {
+  const Folder = entity({ name: 'OutOfScopeFolder', fields: { id: field.id() } });
+  const input = graphSchema.object({ folder: graphSchema.ref(Folder) });
+  const operation = { id: 'Document.renameOpen', input };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: operation.id,
+          arguments: { folder: { kind: 'hole', id: 'folder' } },
+        },
+        bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: {} }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Move to Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Operation is outside the configured scope.',
+  });
+});
+
+it('keeps model-proposed Operation entity Holes unresolved without a match resolver', async () => {
+  const Folder = entity({ name: 'UnresolvedFolder', fields: { id: field.id() } });
+  const input = graphSchema.object({ folder: graphSchema.ref(Folder) });
+  const operation = { id: 'Document.moveOpen', input };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: operation.id,
+          arguments: { folder: { kind: 'hole', id: 'folder' } },
+        },
+        bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: { [operation.id]: { validate: () => undefined } } }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Move to Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'The proposed operation has an unsupported Hole.',
+  });
+});
+
 it('keeps unresolved model Graph Read applications out of execution', async () => {
   const fixture = openGraphReadFixture();
   const runtime = createModelCommandRuntime({
