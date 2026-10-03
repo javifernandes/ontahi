@@ -191,6 +191,26 @@ it('shows an executed read without refreshing mutation state', async () => {
   expect(refresh).not.toHaveBeenCalled();
 });
 
+it('refreshes mutation state when an executed Operation also returns a response', async () => {
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: 'Completed 3 items.',
+      request: {
+        kind: 'invoke',
+        operationId: 'TodoList.completeAll',
+        input: { list: { id: 'inbox' } },
+      },
+      response: { completed: 3 },
+    },
+  });
+  await write();
+  await submit();
+  expect(container.textContent).toContain('Completed 3 items.');
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it('does not retry an unknown transport outcome', async () => {
   execute.mockRejectedValue(new Error('Disconnected'));
   await write();
