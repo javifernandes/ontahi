@@ -25,6 +25,11 @@ const words = (text: string) =>
 // Speech recognition may choose capitalization the user did not explicitly control.
 const includesRequestedValue = (text: string, value: string) =>
   value.trim().length > 0 && text.toLowerCase().includes(value.trim().toLowerCase());
+const requestsBulkCompletion = (text: string) =>
+  /^(?:please\s+)?(?:complete|finish|mark)\s+(?:all|every)\b/u.test(text.trim().toLowerCase()) ||
+  /^(?:por\s+favor\s+)?(?:completa|completá|completar|termina|terminá|terminar|marca|marcá|marcar)\s+(?:todos|todas)\b/u.test(
+    text.trim().toLowerCase(),
+  );
 
 export const todoGraphCommands = (
   context: Context,
@@ -90,6 +95,8 @@ export const todoGraphCommands = (
       valueLiterals: { completed: false },
       description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
       validate: ({ command }, validation) => {
+        if (requestsBulkCompletion(text))
+          return 'This is a bulk-completion request. Use the TodoList.completeAll Operation; never create an item whose title copies the request.';
         const create = command as EntityMutationCommand;
         const list = create.action === 'create' ? create.values.list : undefined;
         if (

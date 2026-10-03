@@ -62,11 +62,9 @@ const deleteList = (id = 'list-2', name = 'Other') => ({
     mutateEntity(TodoList).delete(createEntityRef(TodoList, { id }), { if: { name } }),
   ),
 });
-const create = (id = 'list-1') => ({
+const create = (id = 'list-1', title = 'buy bread') => ({
   status: 'resolved' as const,
-  request: toGraphCommandRequest(
-    mutateEntity(TodoItem).create({ title: 'buy bread', list: list(id) }),
-  ),
+  request: toGraphCommandRequest(mutateEntity(TodoItem).create({ title, list: list(id) })),
 });
 const createList = (name = 'Holidays') => ({
   status: 'resolved' as const,
@@ -266,6 +264,16 @@ describe('Todo canonical model requests', () => {
     bind(async () => create('list-2'));
     expect(await submit('add buy bread to Other')).toMatchObject({ status: 'executed' });
     expect(dataset().TodoItem?.at(-1)?.list).toBe('list-2');
+  });
+  it('never creates an item by copying a bulk-completion request', async () => {
+    dataset().TodoList![1]!.name = 'Later';
+    const wrong = create('list-2', 'complete all items in Later');
+    bind(async () => wrong);
+
+    await expect(submit('complete all items in Later')).resolves.toMatchObject({
+      status: 'unresolved',
+    });
+    expect(dataset().TodoItem).toHaveLength(2);
   });
   it('does not accept a guessed list for creation', async () => {
     bind(async () => create());
