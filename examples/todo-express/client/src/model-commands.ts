@@ -85,6 +85,16 @@ const settleStartedOperation = async (
   return { ok: false, message: 'The Operation observation ended before completion.' };
 };
 
+const settleModelCommandSnapshot = async (
+  runtimeTransport: RuntimeTransport,
+  snapshot: TaskSnapshot,
+): Promise<ModelCommandSubmitResult> => {
+  const result = modelResultFromSnapshot(snapshot);
+  return result.ok && result.value.status === 'started'
+    ? settleStartedOperation(runtimeTransport, result.value)
+    : result;
+};
+
 export const createModelCommandSubmitter = (
   runtimeTransport: RuntimeTransport,
 ): ModelCommandSubmitter => {
@@ -119,12 +129,12 @@ export const createModelCommandResponder = (
       return { ok: false, message: parsed.response.error.message };
     const initial = parsed.response.snapshot;
     if (initial.interaction || ['completed', 'failed', 'cancelled'].includes(initial.status))
-      return modelResultFromSnapshot(initial);
+      return settleModelCommandSnapshot(runtimeTransport, initial);
     if (!runtimeTransport.durableOperation)
       return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };
     for await (const snapshot of runtimeTransport.durableOperation.observe(run)) {
       if (snapshot.interaction || ['completed', 'failed', 'cancelled'].includes(snapshot.status))
-        return modelResultFromSnapshot(snapshot);
+        return settleModelCommandSnapshot(runtimeTransport, snapshot);
     }
     return { ok: false, message: 'The model command observation ended before completion.' };
   };
