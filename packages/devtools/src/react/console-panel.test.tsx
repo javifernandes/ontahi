@@ -1079,10 +1079,14 @@ const mountConsole = (
     return nextRequest;
   };
   const applyLimit = (limit: number | string) => {
-    fireEvent.change(result.getByRole('spinbutton', { name: 'Result limit' }), {
-      target: { value: String(limit) },
+    act(() => {
+      fireEvent.change(result.getByRole('spinbutton', { name: 'Result limit' }), {
+        target: { value: String(limit) },
+      });
     });
-    fireEvent.submit(result.getByRole('form', { name: 'Query limit' }));
+    act(() => {
+      fireEvent.submit(result.getByRole('form', { name: 'Query limit' }));
+    });
   };
   return {
     request,
