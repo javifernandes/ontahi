@@ -41,6 +41,7 @@ export const todoGraphCommands = (
     ? 'No pude identificar un único destino. Indicá el nombre actual y, para un ítem, su lista si hay varios iguales.'
     : 'I could not identify one target. Specify its current name and, for duplicate items, its list.';
   const bulkCompletion = requestsBulkCompletion(text);
+  if (bulkCompletion) return [];
   const exposure = <TEntity extends AnyEntityDefinition, TAuthority>(
     policy: EntityMutationCommandPolicy<TEntity, TAuthority>,
     key: WritableStoredFieldName<TEntity['fields']> & string,

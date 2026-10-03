@@ -276,9 +276,7 @@ describe('Todo canonical model requests', () => {
     });
     expect(dataset().TodoItem).toHaveLength(2);
     const catalog = JSON.parse(generate.mock.calls[0]![0].context);
-    expect(
-      catalog.commands.map((command: { description: string }) => command.description),
-    ).not.toContain('Add an item to a list.');
+    expect(catalog.commands).toEqual([]);
   });
   it('does not accept a guessed list for creation', async () => {
     bind(async () => create());
