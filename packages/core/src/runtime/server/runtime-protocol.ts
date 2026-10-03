@@ -82,6 +82,29 @@ const isTaskInteractionAccessDenied = (error: unknown) => {
   return Option.isSome(failure) && hasTaskInteractionAccessDeniedReason(failure.value);
 };
 
+const withAsyncIterableContext = <TValue, TContext extends InvocationContextInput>(
+  context: TContext,
+  withContext: <TResult>(context: TContext, run: () => TResult) => TResult,
+  create: () => AsyncIterable<TValue>,
+): AsyncIterable<TValue> => ({
+  [Symbol.asyncIterator]() {
+    const iterator = withContext(context, () => create()[Symbol.asyncIterator]());
+    return {
+      next: value => withContext(context, () => iterator.next(value)),
+      return: value =>
+        withContext(context, () =>
+          iterator.return
+            ? iterator.return(value)
+            : Promise.resolve({ done: true as const, value }),
+        ),
+      throw: error =>
+        withContext(context, () =>
+          iterator.throw ? iterator.throw(error) : Promise.reject(error),
+        ),
+    };
+  },
+});
+
 export const createApplicationRuntimeProtocol = <TContext extends InvocationContextInput>({
   application,
   graphRead,
@@ -100,8 +123,10 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
   const dispatcher = createRuntimeProtocolDispatcher<TContext>({
     handlers: {
       operation: (request, context) => withContext(context, () => operation(request)),
-      'graph.read': (request, context) => read(request, { authority: context }),
-      'graph.command': (request, context) => command(request, { authority: context }),
+      'graph.read': (request, context) =>
+        withContext(context, () => read(request, { authority: context })),
+      'graph.command': (request, context) =>
+        withContext(context, () => command(request, { authority: context })),
       'durable.operation': (request, context) =>
         withContext(context, async () => {
           if (request.kind === 'inspect')
@@ -146,7 +171,9 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
     graphReadPolicies: graphRead.policies,
     graphCommandPolicies: graphCommand.policies,
     observeGraph: (request, { context, signal }) =>
-      observeGraph(request, { authority: context, signal }),
+      withAsyncIterableContext(context, withContext, () =>
+        observeGraph(request, { authority: context, signal }),
+      ),
     observeDurableOperation: createTaskRunDurableOperationObserver<TContext>({
       observe: (run, context) => withContext(context, () => application.app.task.observe(run)),
     }),

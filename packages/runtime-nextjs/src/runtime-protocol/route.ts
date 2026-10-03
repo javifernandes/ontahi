@@ -38,16 +38,16 @@ const responseStatus = (result: RuntimeProtocolDispatchResult) => {
 
 const registry = createRuntimeProtocolRegistry(runtimeProtocolFamilies);
 
-export const createNextRuntimeProtocolRouteHandler =
-  <TContext>({
-    dispatcher,
-    receiver,
-    context,
-    reportError,
-  }: CreateNextRuntimeProtocolRouteHandlerOptions<TContext>) =>
-  async (request: Request): Promise<Response> => {
-    const dispatch = receiver?.dispatcher ?? dispatcher;
-    if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+export const createNextRuntimeProtocolRouteHandler = <TContext>({
+  dispatcher,
+  receiver,
+  context,
+  reportError,
+}: CreateNextRuntimeProtocolRouteHandlerOptions<TContext>) => {
+  const dispatch = receiver?.dispatcher ?? dispatcher;
+  if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+
+  return async (request: Request): Promise<Response> => {
     const parsed = registry.parseRequest(await request.json().catch(() => null));
     if (!parsed.success) {
       return Response.json(parsed.error, { status: responseStatus(parsed.error) });
@@ -71,3 +71,4 @@ export const createNextRuntimeProtocolRouteHandler =
       );
     }
   };
+};

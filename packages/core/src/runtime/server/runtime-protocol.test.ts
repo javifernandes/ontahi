@@ -9,6 +9,10 @@ import {
 } from '../protocol/index.js';
 
 import {
+  getCurrentInvocationContext,
+  withInvocationContext as runWithInvocationContext,
+} from './invocation-context.js';
+import {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocolOptions,
 } from './runtime-protocol.js';
@@ -27,42 +31,47 @@ const request = (family: string, body: unknown) =>
   createRuntimeProtocolRequest({ id: `${family}-1`, family, body });
 
 const createApplication = () => {
+  const observedPrincipals: unknown[] = [];
   const respondToTaskInteraction = vi.fn(async () => snapshot);
-  const withInvocationContext = vi.fn(<T>(_: Context, effect: () => T) => effect());
+  const withInvocationContext = vi.fn(<T>(context: Context, effect: () => T) =>
+    runWithInvocationContext(context, effect),
+  );
   const application = {
     resolveOperation: () => undefined,
     invokeOperation: vi.fn(),
     checkPermission: vi.fn(),
     getTaskSnapshot: vi.fn(async () => snapshot),
     respondToTaskInteraction,
-    createGraphReadDispatcher: vi.fn(() => async () => ({
-      version: 1,
-      kind: 'graph-read-result',
-      value: [],
-    })),
+    createGraphReadDispatcher: vi.fn(() => async () => {
+      observedPrincipals.push(getCurrentInvocationContext()?.principal);
+      return { version: 1, kind: 'graph-read-result', value: [] };
+    }),
     createGraphReadObserver: vi.fn(
       () =>
         async function* () {
-          // Empty observer.
+          observedPrincipals.push(getCurrentInvocationContext()?.principal);
         },
     ),
-    createGraphCommandDispatcher: vi.fn(() => async () => ({
-      version: 1,
-      kind: 'graph-command-result',
-      value: { status: 'applied', delta: { added: [], removed: [], moved: [] } },
-    })),
+    createGraphCommandDispatcher: vi.fn(() => async () => {
+      observedPrincipals.push(getCurrentInvocationContext()?.principal);
+      return {
+        version: 1,
+        kind: 'graph-command-result',
+        value: { status: 'applied', delta: { added: [], removed: [], moved: [] } },
+      };
+    }),
     app: {
       runtime: { withInvocationContext },
       task: { observe: () => Stream.empty },
     },
   } as unknown as Application;
 
-  return { application, respondToTaskInteraction, withInvocationContext };
+  return { application, observedPrincipals, respondToTaskInteraction, withInvocationContext };
 };
 
 describe('application Runtime Protocol', () => {
   it('composes application families and preserves the configured policies', async () => {
-    const { application, withInvocationContext } = createApplication();
+    const { application, observedPrincipals, withInvocationContext } = createApplication();
     const graphReadPolicies = [{ entity: { name: 'Todo' } }] as never;
     const graphCommandPolicies = [{ entity: { name: 'Todo' } }] as never;
     const protocol = createApplicationRuntimeProtocol({
@@ -131,6 +140,7 @@ describe('application Runtime Protocol', () => {
     expect(protocol.graphReadPolicies).toBe(graphReadPolicies);
     expect(protocol.graphCommandPolicies).toBe(graphCommandPolicies);
     expect(withInvocationContext).toHaveBeenCalled();
+    expect(observedPrincipals).toEqual([context.principal, context.principal, context.principal]);
   });
 
   it('denies anonymous interaction responses and derives authenticated actors by default', async () => {

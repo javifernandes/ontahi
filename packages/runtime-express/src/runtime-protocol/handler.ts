@@ -44,10 +44,11 @@ export const createExpressRuntimeProtocolHandler = <TContext>({
   receiver,
   context,
   reportError,
-}: CreateExpressRuntimeProtocolHandlerOptions<TContext>): RequestHandler =>
-  async function runtimeProtocolHandler(request, response) {
-    const dispatch = receiver?.dispatcher ?? dispatcher;
-    if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+}: CreateExpressRuntimeProtocolHandlerOptions<TContext>): RequestHandler => {
+  const dispatch = receiver?.dispatcher ?? dispatcher;
+  if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+
+  return async function runtimeProtocolHandler(request, response) {
     const controller = new AbortController();
     const cancel = () => {
       if (!response.writableEnded) controller.abort();
@@ -80,3 +81,4 @@ export const createExpressRuntimeProtocolHandler = <TContext>({
       response.off('close', cancel);
     }
   };
+};

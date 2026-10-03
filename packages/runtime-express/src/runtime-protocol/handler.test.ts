@@ -153,7 +153,7 @@ describe('Express Runtime Protocol adapter', () => {
 
     const response = await invokeHandler(
       createExpressRuntimeProtocolHandler({
-        dispatcher,
+        receiver: { dispatcher } as never,
         context: request => ({ ownerId: (request as Request & { ownerId: string }).ownerId }),
       }),
       requestBody,
@@ -182,6 +182,12 @@ describe('Express Runtime Protocol adapter', () => {
       requestBody.body,
       { ownerId: 'owner-1' },
       { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it('rejects a missing receiver when the handler is created', () => {
+    expect(() => createExpressRuntimeProtocolHandler({ context: () => undefined })).toThrow(
+      'Runtime Protocol requires a receiver or dispatcher.',
     );
   });
 

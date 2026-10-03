@@ -56,7 +56,7 @@ describe('Next.js Runtime Protocol adapter', () => {
     }));
     const dispatcher = createRuntimeProtocolDispatcher({ handlers: { operation } });
     const handler = createNextRuntimeProtocolRouteHandler({
-      dispatcher,
+      receiver: { dispatcher } as never,
       context: () => ({ source: 'next-route' }),
     });
 
@@ -80,6 +80,12 @@ describe('Next.js Runtime Protocol adapter', () => {
       {
         signal: expect.any(AbortSignal),
       },
+    );
+  });
+
+  it('rejects a missing receiver when the route handler is created', () => {
+    expect(() => createNextRuntimeProtocolRouteHandler({ context: () => undefined })).toThrow(
+      'Runtime Protocol requires a receiver or dispatcher.',
     );
   });
 
