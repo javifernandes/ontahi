@@ -1,5 +1,26 @@
 # @ontahi/language-codemirror
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- 96d8092: Expose the bounded experimental Graph Read application contract, let both Semantic Console
+  dialects author named predicate Holes, and project those Holes as schema-validated Devtools inputs
+  before dispatching the unchanged canonical Graph Read request.
+- 6e9eb49: Extend the Semantic Console with safe TS-like and declarative syntax for exact Entity mutation
+  Commands and reflected Operation invocations. Lower actions through the existing `graph.command`
+  and `operation` Runtime Protocol families, and let generated client Entities provide the Console's
+  schemas and Operation metadata.
+
+### Patch Changes
+
+- Updated dependencies [96d8092]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [6e9eb49]
+  - @ontahi/language@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes
