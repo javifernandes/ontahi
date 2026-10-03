@@ -215,8 +215,42 @@ describe('Todo canonical model requests', () => {
       },
     });
     expect(generate.mock.calls[0]![0].instructions).toContain(
-      'directly matches TodoList.completeAll',
+      'directly matches the TodoList.completeAll Operation',
     );
+    expect(generate.mock.calls[0]![0].instructions).toContain('completá todas las tareas de Inbox');
+  });
+  it('repairs a guessed duplicate list into an Operation application choice', async () => {
+    dataset().TodoList![1]!.name = 'Shopping';
+    const generate = vi
+      .fn<ModelProvider['generate']>()
+      .mockResolvedValueOnce(proposal('TodoList.completeAll', { list: list() }))
+      .mockResolvedValueOnce({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: 'TodoList.completeAll',
+          arguments: { list: { kind: 'hole', id: 'list' } },
+        },
+        bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
+      });
+    bind(generate);
+
+    await expect(
+      withInvocationContext({ principal }, () =>
+        runtime.prepare(
+          { text: 'Completá todas las tareas de Shopping', language: 'es-ES' },
+          new AbortController().signal,
+        ),
+      ),
+    ).resolves.toMatchObject({
+      status: 'application-choice',
+      choice: {
+        holeId: 'list',
+        options: [{ label: 'Shopping' }, { label: 'Shopping' }],
+      },
+    });
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1]![0].prompt).toContain('Do not return a graph-read application.');
   });
   it('uses the graph read result for counts instead of answering from prompt context', async () => {
     bind(async () => readIncompleteItems('count'));

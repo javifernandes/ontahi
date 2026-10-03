@@ -1,4 +1,4 @@
-import { createEntityRef } from '@ontahi/core/data-graph';
+import { createEntityRef, isEntityRef } from '@ontahi/core/data-graph';
 import {
   createApplicationModelCommandRuntime,
   getCurrentInvocationContext,
@@ -76,8 +76,18 @@ export const createTodoModelRuntime = ({
         data: current,
         bindings: {
           'TodoList.completeAll': {
-            description: 'Complete every unfinished item in one list.',
-            validate: () => undefined,
+            description: request.language?.toLowerCase().startsWith('es')
+              ? 'Completar todas las tareas pendientes de una lista (por ejemplo: "completá todas las tareas de Inbox").'
+              : 'Complete every unfinished item in one list (for example: "complete all tasks in Inbox").',
+            validate: (input, context) => {
+              const listRef = input.list;
+              if (context?.kind === 'choice-option' || !isEntityRef(listRef)) return undefined;
+              const selected = current.lists.find(list => list.id === listRef.locator.id);
+              return selected &&
+                current.lists.filter(list => list.name === selected.name).length > 1
+                ? `The list name is ambiguous. Return status "application" with an "operation-application" for TodoList.completeAll, a Hole whose id is "list" in the list argument, and binding "list" as entity-match text ${JSON.stringify(selected.name)} so the user can choose. Do not return a graph-read application.`
+                : undefined;
+            },
             message: () =>
               request.language?.toLowerCase().startsWith('es')
                 ? 'Se completaron los ítems de la lista.'
