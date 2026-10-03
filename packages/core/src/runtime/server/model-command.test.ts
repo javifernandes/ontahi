@@ -12,7 +12,7 @@ import {
 
 import { entity } from './entity.js';
 import { getCurrentInvocationContext, withInvocationContext } from './invocation-context.js';
-import { createModelCommandRuntime } from './model-command.js';
+import { createModelCommandRuntime, type ModelCommandScope } from './model-command.js';
 import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
 import { ontahi } from './ontahi.js';
 
@@ -293,9 +293,11 @@ it('continues an ambiguous Operation application without asking the model again'
   const first = createEntityRef(Folder, { id: 'inbox-a' });
   const second = createEntityRef(Folder, { id: 'inbox-b' });
   const authorize = vi.fn();
-  const scope = vi.fn(async () => ({
-    bindings: { [operation.id]: { validate: () => undefined } },
-  }));
+  const scope = vi.fn(
+    async (): Promise<ModelCommandScope> => ({
+      bindings: { [operation.id]: { validate: () => undefined } },
+    }),
+  );
   const runtime = createModelCommandRuntime({
     application: {
       resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
@@ -322,6 +324,11 @@ it('continues an ambiguous Operation application without asking the model again'
   });
   if (prepared.status !== 'application-choice') throw new Error('Expected application choice.');
 
+  await expect(runtime.submit(request, new AbortController().signal)).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Which folder did you mean?',
+  });
+
   await expect(
     runtime.continueApplication(
       request,
@@ -345,9 +352,32 @@ it('continues an ambiguous Operation application without asking the model again'
     status: 'unresolved',
     message: 'Operation is outside the configured scope.',
   });
-  expect(generate).toHaveBeenCalledOnce();
-  expect(authorize).toHaveBeenCalledTimes(3);
-  expect(scope).toHaveBeenCalledTimes(3);
+  scope.mockResolvedValueOnce({ unresolved: 'The command scope is no longer available.' });
+  await expect(
+    runtime.continueApplication(
+      request,
+      prepared.choice,
+      prepared.choice.options[0]!.id,
+      new AbortController().signal,
+    ),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'The command scope is no longer available.',
+  });
+  await expect(
+    runtime.continueApplication(
+      request,
+      prepared.choice,
+      'missing-option',
+      new AbortController().signal,
+    ),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'The selected entity is no longer available.',
+  });
+  expect(generate).toHaveBeenCalledTimes(2);
+  expect(authorize).toHaveBeenCalledTimes(6);
+  expect(scope).toHaveBeenCalledTimes(6);
 });
 
 it('keeps model-proposed Operation applications outside the scoped catalog unresolved', async () => {
