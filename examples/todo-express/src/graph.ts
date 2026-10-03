@@ -1,5 +1,6 @@
 import { adaptEffectMethods } from '@ontahi/core/computation/effect';
 import {
+  createDeepSeekModelProvider,
   createOllamaModelProvider,
   createTaskBackedModelCommandRuntime,
   inProcessTasks,
@@ -19,11 +20,20 @@ export const todoNotifications = adaptEffectMethods<{
 });
 
 const model = process.env.TODO_LLM_MODEL;
+const modelProvider = process.env.TODO_LLM_PROVIDER ?? 'ollama';
+if (model && modelProvider !== 'ollama' && modelProvider !== 'deepseek')
+  throw new Error(`Unsupported TODO_LLM_PROVIDER: ${modelProvider}`);
 export const todoCommandProvider = model
-  ? createOllamaModelProvider({
-      model,
-      baseUrl: process.env.TODO_LLM_URL,
-    })
+  ? modelProvider === 'deepseek'
+    ? createDeepSeekModelProvider({
+        model,
+        apiKey: process.env.DEEPSEEK_API_KEY ?? '',
+        baseUrl: process.env.TODO_LLM_URL,
+      })
+    : createOllamaModelProvider({
+        model,
+        baseUrl: process.env.TODO_LLM_URL,
+      })
   : undefined;
 
 export const todoTaskRuntime =
