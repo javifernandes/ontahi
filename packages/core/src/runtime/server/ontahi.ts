@@ -247,6 +247,12 @@ export type ComposedOntahiApplication<
       GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>,
       RuntimeReadOptions<StorageRuntime<TStorage>>
     >
+  > &
+  GraphCommandableOntahiApplication<
+    ApplicationGraph<
+      GraphApi<BoundEntityRecord<TEntities, StorageRuntime<TStorage>>>,
+      RuntimeReadOptions<StorageRuntime<TStorage>>
+    >
   > & {
     architecture: RegisteredArchitecture<
       OntahiCapabilityEvent<TCapabilities>,

@@ -13,6 +13,11 @@ export {
   type OntahiApplication,
 } from './application.js';
 export {
+  createApplicationRuntimeProtocol,
+  type ApplicationRuntimeProtocol,
+  type ApplicationRuntimeProtocolOptions,
+} from './runtime-protocol.js';
+export {
   ontahi,
   type ApplicationGraphReadObserverFactory,
   type ApplicationGraphReadDispatcherFactory,

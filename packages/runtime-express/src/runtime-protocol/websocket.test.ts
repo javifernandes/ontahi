@@ -90,7 +90,7 @@ describe('Express Runtime Protocol WebSocket server', () => {
     };
     const adapter = createExpressRuntimeProtocolWebSocketServer({
       server,
-      dispatcher,
+      receiver: { dispatcher } as never,
       path: '/runtime////',
       context: request => ({
         principal:
@@ -129,6 +129,18 @@ describe('Express Runtime Protocol WebSocket server', () => {
       { principal: 'github-user-123' },
       { principal: 'github-user-123' },
     ]);
+  });
+
+  it('rejects a missing receiver when the socket adapter is created', () => {
+    const server = createServer();
+    servers.push(server);
+
+    expect(() =>
+      createExpressRuntimeProtocolWebSocketServer({
+        server,
+        context: () => undefined,
+      }),
+    ).toThrow('Runtime Protocol requires a receiver or dispatcher.');
   });
 
   it('keeps malformed input recoverable and releases pushed observation on unsubscribe', async () => {

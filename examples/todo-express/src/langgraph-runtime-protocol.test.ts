@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { TaskRunIdentity } from '@ontahi/core/runtime/contracts';
 import {
   createRuntimeProtocolExchange,
+  toOperationProtocolRequest,
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
 } from '@ontahi/core/runtime/protocol';
@@ -46,21 +47,18 @@ describe('Todo LangGraph Runtime Protocol', () => {
   });
 
   it('completes a rejected interaction through Runtime Protocol without snapshot recovery', async () => {
-    const invocation = (await fetch(`${origin}/operations`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
+    const exchange = createRuntimeProtocolExchange({
+      transport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
+    });
+    const invocation = (await exchange({
+      family: 'operation',
+      body: toOperationProtocolRequest({
         kind: 'invoke',
         operationId: 'TodoItem.deleteFromNamedList',
         input: { listName: 'Inbox' },
       }),
-    }).then(response => response.json())) as {
-      result: { value: TaskRunIdentity };
-    };
+    })) as { result: { value: TaskRunIdentity } };
     const run = invocation.result.value as TaskRunIdentity;
-    const exchange = createRuntimeProtocolExchange({
-      transport: createFetchRuntimeTransport({ endpoint: `${origin}/runtime` }),
-    });
 
     await vi.waitFor(async () => {
       await expect(

@@ -5,6 +5,7 @@ import {
   type RuntimeProtocolDispatchResult,
   type RuntimeProtocolDispatcher,
 } from '@ontahi/core/runtime/protocol';
+import type { ApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
 import type { Request, RequestHandler } from 'express';
 
 export type ExpressRuntimeProtocolContextFactory<TContext> = (
@@ -12,7 +13,8 @@ export type ExpressRuntimeProtocolContextFactory<TContext> = (
 ) => TContext | Promise<TContext>;
 
 export type CreateExpressRuntimeProtocolHandlerOptions<TContext> = {
-  dispatcher: RuntimeProtocolDispatcher<TContext>;
+  dispatcher?: RuntimeProtocolDispatcher<TContext>;
+  receiver?: ApplicationRuntimeProtocol<TContext>;
   context: ExpressRuntimeProtocolContextFactory<TContext>;
   reportError?: (error: unknown, request: Request) => void;
 };
@@ -39,10 +41,14 @@ const registry = createRuntimeProtocolRegistry(runtimeProtocolFamilies);
 
 export const createExpressRuntimeProtocolHandler = <TContext>({
   dispatcher,
+  receiver,
   context,
   reportError,
-}: CreateExpressRuntimeProtocolHandlerOptions<TContext>): RequestHandler =>
-  async function runtimeProtocolHandler(request, response) {
+}: CreateExpressRuntimeProtocolHandlerOptions<TContext>): RequestHandler => {
+  const dispatch = receiver?.dispatcher ?? dispatcher;
+  if (!dispatch) throw new TypeError('Runtime Protocol requires a receiver or dispatcher.');
+
+  return async function runtimeProtocolHandler(request, response) {
     const controller = new AbortController();
     const cancel = () => {
       if (!response.writableEnded) controller.abort();
@@ -56,7 +62,7 @@ export const createExpressRuntimeProtocolHandler = <TContext>({
     }
 
     try {
-      const result = await dispatcher(parsed.request, await context(request), {
+      const result = await dispatch(parsed.request, await context(request), {
         signal: controller.signal,
       });
       response.status(responseStatus(result)).json(result);
@@ -75,3 +81,4 @@ export const createExpressRuntimeProtocolHandler = <TContext>({
       response.off('close', cancel);
     }
   };
+};

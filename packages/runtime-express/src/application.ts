@@ -116,6 +116,8 @@ export type OntahiExpressOptions<
   graphRead?: OntahiExpressGraphReadOptions<TGraphReadAuthority>;
   graphCommand?: OntahiExpressGraphCommandOptions<TGraphCommandAuthority>;
   runtimeProtocol?: OntahiExpressRuntimeProtocolOptions<TRuntimeProtocolContext>;
+  /** Mount pre-Runtime-Protocol execution endpoints. Defaults to true for compatibility. */
+  legacyRuntimeEndpoints?: boolean;
   applicationPath?: string | false;
   explorer?: OntahiExpressExplorerOptions;
   ingress?: OntahiExpressIngressOptions;
@@ -148,23 +150,25 @@ export const ontahiExpress = <
       ? undefined
       : routePath(options.applicationPath ?? '/application');
   const explorer = options.explorer;
+  const legacyRuntimeEndpoints = options.legacyRuntimeEndpoints ?? true;
   const dispatcher = createOperationInvocationDispatcher({
     resolveOperation: application.resolveOperation,
     invokeOperation: application.invokeOperation,
     checkPermission: application.checkPermission,
   });
 
-  router.post(
-    operationsPath,
-    express.json(),
-    createExpressOperationInvocationHandler({
-      dispatcher,
-      invocationContext: options.invocationContext,
-      reportError: options.reportError,
-    }),
-  );
+  if (legacyRuntimeEndpoints)
+    router.post(
+      operationsPath,
+      express.json(),
+      createExpressOperationInvocationHandler({
+        dispatcher,
+        invocationContext: options.invocationContext,
+        reportError: options.reportError,
+      }),
+    );
 
-  if (options.modelCommands)
+  if (legacyRuntimeEndpoints && options.modelCommands)
     router.post(
       routePath(options.modelCommands.path ?? '/model/commands'),
       express.json({ limit: '32kb' }),
@@ -183,7 +187,7 @@ export const ontahiExpress = <
     );
   }
 
-  if (options.graphRead) {
+  if (legacyRuntimeEndpoints && options.graphRead) {
     const graphReadOptions = options.graphRead;
     const dispatcher = (graphReadOptions.dispatcher ??
       (() => {
@@ -210,7 +214,7 @@ export const ontahiExpress = <
     );
   }
 
-  if (options.graphCommand) {
+  if (legacyRuntimeEndpoints && options.graphCommand) {
     const graphCommandOptions = options.graphCommand;
     const graphApplication = application as Partial<GraphCommandableOntahiApplication>;
     const commandDispatcher =
@@ -244,13 +248,14 @@ export const ontahiExpress = <
     });
   }
 
-  router.get(
-    `${operationsPath}/tasks/:taskId/:runId`,
-    createExpressTaskSnapshotHandler({
-      getSnapshot: application.getTaskSnapshot,
-      reportError: options.reportError,
-    }),
-  );
+  if (legacyRuntimeEndpoints)
+    router.get(
+      `${operationsPath}/tasks/:taskId/:runId`,
+      createExpressTaskSnapshotHandler({
+        getSnapshot: application.getTaskSnapshot,
+        reportError: options.reportError,
+      }),
+    );
 
   if (applicationPath) {
     router.get(applicationPath, (_request, response) =>
@@ -264,7 +269,10 @@ export const ontahiExpress = <
     router.get(`${explorerPath}/snapshot`, (_request, response) =>
       response.json(
         explorer.buildSnapshot(application, {
-          graphCommandPolicies: options.graphCommand?.policies ?? [],
+          graphCommandPolicies:
+            options.graphCommand?.policies ??
+            options.runtimeProtocol?.receiver?.graphCommandPolicies ??
+            [],
         }),
       ),
     );

@@ -1,17 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import path from 'node:path';
 
-import {
-  createRuntimeProtocolDispatcher,
-  createTaskRunDurableOperationObserver,
-  durableOperationProtocolError,
-  toDurableOperationSnapshotResponse,
-} from '@ontahi/core/runtime/protocol';
-import {
-  createOperationInvocationDispatcher,
-  submitModelCommandProtocol,
-  type GraphCommandableOntahiApplication,
-} from '@ontahi/core/runtime/server';
+import { createApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
 import { ontahiExpress } from '@ontahi/runtime-express';
 import { createOntahiExpressExplorer } from '@ontahi/runtime-express/explorer';
 import {
@@ -36,78 +26,22 @@ export type CreateTodoExpressAppOptions = {
   publicOrigin?: string;
 };
 
-const isTaskInteractionAccessDenied = (error: unknown) =>
-  typeof error === 'object' &&
-  error !== null &&
-  'reason' in error &&
-  error.reason === 'task_interaction_access_denied';
-
 const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => {
   const server = express();
   const clientDirectory = path.resolve(process.cwd(), 'dist/client');
   const authentication = options.authentication ?? createTodoAuthentication();
-  const operationDispatcher = createOperationInvocationDispatcher(TodoApplication);
-  const graphReadDispatcher =
-    TodoApplication.createGraphReadDispatcher<TodoGraphReadAuthority>(todoGraphReadPolicies);
-  const graphReadObserver =
-    TodoApplication.createGraphReadObserver<TodoGraphReadAuthority>(todoGraphReadPolicies);
-  const graphCommandDispatcher = (
-    TodoApplication as unknown as GraphCommandableOntahiApplication
-  ).createGraphCommandDispatcher<TodoGraphReadAuthority>(todoGraphCommandPolicies);
   const modelCommandRuntime = todoModelRuntime;
-  const runtimeProtocolDispatcher = createRuntimeProtocolDispatcher<TodoGraphReadAuthority>({
-    handlers: {
-      operation: (request, context) =>
-        TodoApplication.app.runtime.withInvocationContext(context, () =>
-          operationDispatcher(request),
-        ),
-      'graph.read': (request, authority) => graphReadDispatcher(request, { authority }),
-      'graph.command': (request, authority) => graphCommandDispatcher(request, { authority }),
-      'durable.operation': (request, context) =>
-        TodoApplication.app.runtime.withInvocationContext(context, async () => {
-          if (request.kind === 'inspect') {
-            return toDurableOperationSnapshotResponse(
-              await TodoApplication.getTaskSnapshot(request.run),
-            );
-          }
-
-          if (!context.principal && todoAuthenticationMode === 'github') {
-            return durableOperationProtocolError(
-              'access_denied',
-              'Authentication is required to respond to this task interaction.',
-            );
-          }
-
-          try {
-            return toDurableOperationSnapshotResponse(
-              await TodoApplication.respondToTaskInteraction(request.run, request.response, {
-                actor: context.principal
-                  ? {
-                      kind: context.principal.kind,
-                      id: context.principal.subject,
-                    }
-                  : { kind: 'system' },
-              }),
-            );
-          } catch (error) {
-            if (isTaskInteractionAccessDenied(error)) {
-              return durableOperationProtocolError(
-                'access_denied',
-                'The authenticated actor cannot respond to this task interaction.',
-              );
-            }
-            throw error;
-          }
-        }),
-      ...(modelCommandRuntime
-        ? {
-            'model.command': (request, context, { signal }) =>
-              TodoApplication.app.runtime.withInvocationContext(context, () =>
-                submitModelCommandProtocol(modelCommandRuntime, request, signal),
-              ),
-          }
-        : {}),
-    },
+  const runtimeProtocol = createApplicationRuntimeProtocol<TodoGraphReadAuthority>({
+    application: TodoApplication,
+    graphRead: { policies: todoGraphReadPolicies },
+    graphCommand: { policies: todoGraphCommandPolicies },
+    ...(modelCommandRuntime ? { modelCommand: { runtime: modelCommandRuntime } } : {}),
+    taskInteractionActor: context =>
+      context.principal
+        ? { kind: context.principal.kind, id: context.principal.subject }
+        : todoAuthenticationMode === 'disabled'
+          ? { kind: 'system' }
+          : null,
   });
 
   authentication.mount(server);
@@ -117,7 +51,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
   // Setup Express for Ontahi App
   server.use(
     ontahiExpress(TodoApplication, {
-      modelCommands: modelCommandRuntime ? { runtime: modelCommandRuntime } : undefined,
+      legacyRuntimeEndpoints: false,
       explorer: createOntahiExpressExplorer({
         indexFile: path.join(clientDirectory, 'index.html'),
       }),
@@ -125,16 +59,10 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
         principal: authentication.principal(request),
       }),
       runtimeProtocol: {
-        dispatcher: runtimeProtocolDispatcher,
+        receiver: runtimeProtocol,
         context: request => ({
           principal: authentication.principal(request),
         }),
-      },
-      graphRead: {
-        policies: todoGraphReadPolicies,
-      },
-      graphCommand: {
-        policies: todoGraphCommandPolicies,
       },
     }),
   );
@@ -151,7 +79,7 @@ const createTodoExpressRuntime = (options: CreateTodoExpressAppOptions = {}) => 
     response.sendFile(path.join(clientDirectory, 'index.html')),
   );
 
-  return { application: server, authentication, graphReadObserver, runtimeProtocolDispatcher };
+  return { application: server, authentication, runtimeProtocol };
 };
 
 export const createTodoExpressApp = (options: CreateTodoExpressAppOptions = {}): Express =>
@@ -203,16 +131,11 @@ export const createTodoExpressServer = (
     server,
     path: '/runtime',
     ownsUpgradeBoundary: true,
-    dispatcher: runtime.runtimeProtocolDispatcher,
+    receiver: runtime.runtimeProtocol,
     authorizeUpgrade: request => isSameOriginBrowserUpgrade(request, publicOrigin),
     context: async request => ({
       principal: await runtime.authentication.webSocketPrincipal(request),
     }),
-    observeDurableOperation: createTaskRunDurableOperationObserver<TodoGraphReadAuthority>({
-      observe: run => TodoApplication.app.task.observe(run),
-    }),
-    observeGraph: (request, { context, signal }) =>
-      runtime.graphReadObserver(request, { authority: context, signal }),
   });
 
   return Object.assign(server, { runtimeProtocolWebSocket });
