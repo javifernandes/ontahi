@@ -25,6 +25,11 @@ const words = (text: string) =>
 // Speech recognition may choose capitalization the user did not explicitly control.
 const includesRequestedValue = (text: string, value: string) =>
   value.trim().length > 0 && text.toLowerCase().includes(value.trim().toLowerCase());
+const requestsBulkCompletion = (text: string) =>
+  /^(?:please\s+)?(?:complete|finish|mark)\s+(?:all|every)\b/u.test(text.trim().toLowerCase()) ||
+  /^(?:por\s+favor\s+)?(?:completa|completá|completar|termina|terminá|terminar|marca|marcá|marcar)\s+(?:todos|todas)\b/u.test(
+    text.trim().toLowerCase(),
+  );
 
 export const todoGraphCommands = (
   context: Context,
@@ -35,6 +40,8 @@ export const todoGraphCommands = (
   const unresolved = es
     ? 'No pude identificar un único destino. Indicá el nombre actual y, para un ítem, su lista si hay varios iguales.'
     : 'I could not identify one target. Specify its current name and, for duplicate items, its list.';
+  const bulkCompletion = requestsBulkCompletion(text);
+  if (bulkCompletion) return [];
   const exposure = <TEntity extends AnyEntityDefinition, TAuthority>(
     policy: EntityMutationCommandPolicy<TEntity, TAuthority>,
     key: WritableStoredFieldName<TEntity['fields']> & string,
@@ -84,33 +91,39 @@ export const todoGraphCommands = (
         return es ? `Lista “${name}” creada.` : `List “${name}” created.`;
       },
     }),
-    createModelEntityMutationExposure(todoItemMutationPolicy, {
-      action: 'create',
-      values: ['list', 'title', 'completed'],
-      valueLiterals: { completed: false },
-      description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
-      validate: ({ command }, validation) => {
-        const create = command as EntityMutationCommand;
-        const list = create.action === 'create' ? create.values.list : undefined;
-        if (
-          create.kind !== 'entity-mutation-command' ||
-          create.action !== 'create' ||
-          !isEntityRef(list) ||
-          typeof create.values.title !== 'string' ||
-          create.values.completed !== false
-        )
-          return unresolved;
-        const target = context.lists.find(candidate => candidate.id === list.locator.id);
-        const mentioned = context.lists.filter(list => words(text).includes(words(list.name)));
-        return target &&
-          includesRequestedValue(text, create.values.title) &&
-          (mentioned.some(list => list.id === target.id) ||
-            (mentioned.length === 0 && validation?.kind === 'choice-option'))
-          ? undefined
-          : unresolved;
-      },
-      message: () => (es ? 'Ítem agregado.' : 'Item added.'),
-    }),
+    ...(bulkCompletion
+      ? []
+      : [
+          createModelEntityMutationExposure(todoItemMutationPolicy, {
+            action: 'create',
+            values: ['list', 'title', 'completed'],
+            valueLiterals: { completed: false },
+            description: es ? 'Agregar un ítem a una lista.' : 'Add an item to a list.',
+            validate: ({ command }, validation) => {
+              const create = command as EntityMutationCommand;
+              const list = create.action === 'create' ? create.values.list : undefined;
+              if (
+                create.kind !== 'entity-mutation-command' ||
+                create.action !== 'create' ||
+                !isEntityRef(list) ||
+                typeof create.values.title !== 'string' ||
+                create.values.completed !== false
+              )
+                return unresolved;
+              const target = context.lists.find(candidate => candidate.id === list.locator.id);
+              const mentioned = context.lists.filter(list =>
+                words(text).includes(words(list.name)),
+              );
+              return target &&
+                includesRequestedValue(text, create.values.title) &&
+                (mentioned.some(list => list.id === target.id) ||
+                  (mentioned.length === 0 && validation?.kind === 'choice-option'))
+                ? undefined
+                : unresolved;
+            },
+            message: () => (es ? 'Ítem agregado.' : 'Item added.'),
+          }),
+        ]),
     createModelEntityMutationExposure(todoItemMutationPolicy, {
       action: 'delete',
       condition: ['title'],

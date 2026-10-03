@@ -231,6 +231,63 @@ it('responds through durable.operation and observes the model Task to completion
   expect(observe).toHaveBeenCalledWith(run);
 });
 
+it('observes an Operation started after a model interaction before reporting execution', async () => {
+  const modelRun = { taskId: 'ontahi.model-command', runId: 'model-run' };
+  const operationRun = { taskId: 'TodoList.completeAll', runId: 'complete-all-after-choice' };
+  const invocation = {
+    kind: 'invoke' as const,
+    operationId: 'TodoList.completeAll',
+    input: {
+      list: { kind: 'entity-ref' as const, entityName: 'TodoList', locator: { id: 'later' } },
+    },
+  };
+  const request = vi.fn(async envelope =>
+    createRuntimeProtocolResponse(envelope, {
+      version: 1,
+      kind: 'snapshot',
+      snapshot: {
+        ...modelRun,
+        status: 'completed',
+        updatedAt: '2026-10-03T00:00:00.000Z',
+        result: {
+          status: 'started',
+          message: 'List items completed.',
+          request: invocation,
+          run: operationRun,
+        },
+      },
+    }),
+  );
+  const observe = vi.fn(async function* (run) {
+    expect(run).toEqual(operationRun);
+    yield {
+      ...operationRun,
+      status: 'completed' as const,
+      updatedAt: '2026-10-03T00:00:01.000Z',
+      result: { completed: 3 },
+    };
+  });
+  const respond = createModelCommandResponder({
+    request,
+    durableOperation: { observe },
+  } as unknown as RuntimeTransport);
+
+  await expect(
+    respond(modelRun, {
+      interactionId: 'TodoList.completeAll:list',
+      optionId: 'list:1',
+    }),
+  ).resolves.toEqual({
+    ok: true,
+    value: {
+      status: 'executed',
+      message: 'List items completed.',
+      request: invocation,
+    },
+  });
+  expect(observe).toHaveBeenCalledOnce();
+});
+
 it('returns a pending follow-up interaction directly from the durable response', async () => {
   const run = { taskId: 'ontahi.model-command', runId: 'run-2' };
   const interaction = {

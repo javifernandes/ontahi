@@ -117,3 +117,9 @@ terms, unresolved direct Refs use the same external `entity-match` bindings, and
 feeds ordinary schema substitution before lowering to the existing `OperationInvokeRequest`.
 Ambiguous matches become canonical invocation choices; execution still rechecks the fresh scoped
 Operation exposure. Todo exposes `TodoList.completeAll` as the first end-to-end model proof.
+
+Ambiguous Operation inputs now remain an open application inside the durable Model Command run.
+Each accepted choice substitutes exactly one named Hole; another unresolved Hole produces the next
+Interaction, while a closed application lowers once to the canonical invocation. The model is not
+called again during this continuation, and fresh authorization plus Operation exposure are checked
+before every resumed substitution and before execution.

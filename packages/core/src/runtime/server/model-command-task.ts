@@ -20,6 +20,7 @@ import {
 } from './model-command.js';
 import type { ModelGraphReadResult } from './model-graph-read.js';
 import { ModelInterpretationError } from './model-interpretation.js';
+import type { ModelOperationApplicationChoice } from './model-operation-application.js';
 import {
   defineTask,
   defineTaskExecution,
@@ -45,6 +46,10 @@ type ModelCommandTaskState =
         readonly label: string;
         readonly request: ModelCommandCanonicalRequest;
       }>;
+    }
+  | {
+      readonly step: 'choose-application';
+      readonly choice: ModelOperationApplicationChoice;
     }
   | {
       readonly step: 'review';
@@ -125,6 +130,42 @@ export const createModelCommandTask = ({
   approval,
   rejectedMessage = () => 'The proposed action was not approved.',
 }: CreateModelCommandTaskOptions): TaskDefinition<ModelCommandRequest, ModelCommandTaskResult> => {
+  const routePreparation = (
+    prepared: Awaited<ReturnType<PreparedModelCommandRuntime['prepare']>>,
+    input: ModelCommandRequest,
+    validation?: 'choice-option',
+  ) => {
+    if (prepared.status === 'choice')
+      return {
+        kind: 'continue' as const,
+        state: {
+          step: 'choose' as const,
+          prompt: prepared.prompt,
+          options: prepared.options,
+        },
+      };
+    if (prepared.status === 'application-choice')
+      return {
+        kind: 'continue' as const,
+        state: { step: 'choose-application' as const, choice: prepared.choice },
+      };
+    if (prepared.status !== 'proposed') return { kind: 'complete' as const, result: prepared };
+    return {
+      kind: 'continue' as const,
+      state:
+        prepared.request.kind !== 'graph-read' && approval?.(prepared.request, input)
+          ? {
+              step: 'review' as const,
+              request: prepared.request,
+              ...(validation ? { validation } : {}),
+            }
+          : {
+              step: 'execute' as const,
+              request: prepared.request,
+              ...(validation ? { validation } : {}),
+            },
+    };
+  };
   const execution = defineTaskExecution<
     ModelCommandRequest,
     ModelCommandTaskState,
@@ -137,31 +178,7 @@ export const createModelCommandTask = ({
           if (state.step !== 'interpret') return Effect.dieMessage('Invalid model command state.');
           return modelEffect(context.trigger, async () => {
             const prepared = await runtime.prepare(input, new AbortController().signal);
-            if (prepared.status === 'choice') {
-              return {
-                kind: 'continue' as const,
-                state: {
-                  step: 'choose' as const,
-                  prompt: prepared.prompt,
-                  options: prepared.options,
-                },
-              };
-            }
-            if (prepared.status !== 'proposed') {
-              return { kind: 'complete' as const, result: prepared };
-            }
-            if (prepared.request.kind === 'graph-read' || !approval?.(prepared.request, input)) {
-              const result = await runtime.execute(
-                input,
-                prepared.request,
-                new AbortController().signal,
-              );
-              return { kind: 'complete' as const, result };
-            }
-            return {
-              kind: 'continue' as const,
-              state: { step: 'review' as const, request: prepared.request },
-            };
+            return routePreparation(prepared, input);
           });
         },
       }),
@@ -200,6 +217,37 @@ export const createModelCommandTask = ({
                     request: selected.request,
                     validation: 'choice-option' as const,
                   },
+          });
+        },
+      }),
+      'choose-application': defineTaskExecutionStep({
+        run: ({ input, state, response, context }) => {
+          if (state.step !== 'choose-application')
+            return Effect.dieMessage('Invalid model command state.');
+          if (!response) {
+            return Effect.succeed({
+              kind: 'interaction' as const,
+              state,
+              interaction: {
+                id: `${state.choice.proposal.application.operationId}:${state.choice.holeId}`,
+                prompt: state.choice.prompt,
+                options: state.choice.options.map(option => ({
+                  id: option.id,
+                  label: option.label,
+                  value: option.candidate.ref as JsonValue,
+                })),
+              },
+            });
+          }
+          if (!('optionId' in response)) return Effect.dieMessage('Invalid choice response.');
+          return modelEffect(context.trigger, async () => {
+            const prepared = await runtime.continueApplication(
+              input,
+              state.choice,
+              response.optionId,
+              new AbortController().signal,
+            );
+            return routePreparation(prepared, input, 'choice-option');
           });
         },
       }),

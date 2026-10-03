@@ -413,7 +413,7 @@ Operation, and verifies invalid input returns Ontahi's canonical `input_invalid`
 
 ## Local model-backed command spike
 
-Enable the optional assistant with an installed Ollama model. It floats at the bottom center of the board. Write the instruction directly;
+Enable the optional assistant with an installed Ollama model or the DeepSeek API. It floats at the bottom center of the board. Write the instruction directly;
 name a list in the message only when needed. Send with the arrow or Command/Ctrl+Enter. ArrowUp in an empty draft recalls the latest submitted message without sending it; existing drafts retain normal cursor navigation.
 The latest exchange is visible by default, with earlier exchanges behind the history icon. Each message is independent: this is not a resumable chat or
 an autonomous agent.
@@ -450,8 +450,23 @@ from the localized descriptions of the currently exposed reads, commands, and Op
 than model-written prose. Technical identifiers stay in canonical request payloads.
 
 The usual application URL is `http://localhost:3001`; set `PORT=3003` to use another port.
-`TODO_LLM_URL` optionally changes the Ollama server base URL (default `http://127.0.0.1:11434`).
+`TODO_LLM_URL` optionally changes the selected provider's base URL.
 Without `TODO_LLM_MODEL`, the assistant is hidden and interpretation reports that it is disabled.
+
+To use DeepSeek instead of a local Ollama model:
+
+```bash
+DEEPSEEK_API_KEY=... \
+TODO_LLM_PROVIDER=deepseek \
+TODO_LLM_MODEL=deepseek-flash \
+TODO_STORAGE=in-memory \
+TODO_AUTH_MODE=disabled \
+pnpm todo:dev:local
+```
+
+DeepSeek uses its Responses API with JSON Schema structured output. `TODO_LLM_URL` may override
+its default `https://api.deepseek.com` endpoint as well. Keep `DEEPSEEK_API_KEY` in the environment;
+do not commit it to an example env file.
 The model name and URL are server configuration, not client input. Model data stays with that
 configured provider; use local, disposable Todo data for this spike.
 

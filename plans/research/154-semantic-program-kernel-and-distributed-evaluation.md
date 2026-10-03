@@ -961,6 +961,17 @@ predicates, and Graph Command payloads retain distinct typed application shapes 
 This checkpoint deliberately excludes delete payloads, target Holes, relationship Commands,
 conditional mutation values, dispatch, public exports, and console integration.
 
+### First Durable Application Dialogue Checkpoint
+
+Implemented on 2026-10-03: Model Support no longer expands several ambiguous Operation Ref Holes
+into a cartesian list of completed invocations. The durable Model Command Task checkpoints the open
+`OperationApplication`, presents one authorized candidate choice, applies that choice through the
+ordinary schema substitution path, and emits another Interaction when a later Hole is still
+ambiguous. No effect reaches the dispatcher until the application closes, and the provider is not
+asked to reconstruct the invocation between answers. Every continuation restores the initiating
+principal, reauthorizes the request, and confirms that the Operation remains in fresh scope before
+eventual execution performs its existing receiver authorization.
+
 ## Second Vertical Proof
 
 After the first proof, reuse the kernel for a live Query with one externally computed value:

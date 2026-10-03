@@ -433,6 +433,10 @@ export {
   type CreateApplicationModelCommandRuntimeOptions,
 } from './application-model-command.js';
 export {
+  createDeepSeekModelProvider,
+  type DeepSeekModelProviderOptions,
+} from './deepseek-model-provider.js';
+export {
   createOllamaModelProvider,
   type OllamaModelProviderOptions,
 } from './ollama-model-provider.js';

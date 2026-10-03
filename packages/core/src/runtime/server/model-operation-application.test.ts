@@ -4,6 +4,7 @@ import { createEntityRef, field, graphSchema, toGraphJsonSchema } from '../../da
 
 import { entity } from './entity.js';
 import {
+  continueModelOperationApplication,
   modelOperationApplicationEntityMatches,
   modelOperationApplicationSchema,
   parseModelOperationApplication,
@@ -97,6 +98,31 @@ describe('Model Operation applications', () => {
         input: { list: inbox.ref, title: 'Buy milk' },
       },
     });
+    const choice = resolveModelOperationApplication(proposal, contract, {
+      list: [inbox, { ref: createEntityRef(List, { id: 'inbox-2' }), label: 'INBOX' }],
+    });
+    expect(choice).toMatchObject({
+      status: 'choice',
+      holeId: 'list',
+      options: [{ label: 'Inbox' }, { label: 'INBOX' }],
+      proposal: { application },
+    });
+    if (choice.status !== 'choice') throw new Error('Expected a choice.');
+    expect(continueModelOperationApplication(choice, contract, choice.options[1]!.id)).toEqual({
+      status: 'resolved',
+      request: {
+        kind: 'invoke',
+        operationId: contract.id,
+        input: {
+          list: createEntityRef(List, { id: 'inbox-2' }),
+          title: 'Buy milk',
+        },
+      },
+    });
+    expect(continueModelOperationApplication(choice, contract, 'missing')).toEqual({
+      status: 'unresolved',
+      reason: 'The selected entity is no longer available.',
+    });
     expect(
       resolveModelOperationApplication(proposal, contract, {
         list: [inbox, { ref: createEntityRef(List, { id: 'inbox-2' }), label: 'INBOX' }],
@@ -125,6 +151,81 @@ describe('Model Operation applications', () => {
     ).toEqual({
       status: 'unresolved',
       reason: 'The proposed operation could not be completed.',
+    });
+  });
+
+  it('keeps the partial application and asks for ambiguous Holes one at a time', () => {
+    const Destination = entity({
+      name: 'OperationDestination',
+      fields: { id: field.id(), name: field.string() },
+    });
+    const multiContract = {
+      id: 'OperationList.moveItem',
+      input: graphSchema.object({
+        source: graphSchema.ref(List),
+        destination: graphSchema.ref(Destination),
+      }),
+    };
+    const multiProposal = {
+      application: {
+        kind: 'operation-application' as const,
+        operationId: multiContract.id,
+        arguments: {
+          source: { kind: 'hole' as const, id: 'source' },
+          destination: { kind: 'hole' as const, id: 'destination' },
+        },
+      },
+      bindings: {
+        source: { kind: 'entity-match' as const, text: 'Inbox' },
+        destination: { kind: 'entity-match' as const, text: 'Later' },
+      },
+    };
+    const candidates = {
+      source: [
+        { ref: createEntityRef(List, { id: 'inbox-a' }), label: 'Inbox A' },
+        { ref: createEntityRef(List, { id: 'inbox-b' }), label: 'Inbox B' },
+      ],
+      destination: [
+        { ref: createEntityRef(Destination, { id: 'later-a' }), label: 'Later A' },
+        { ref: createEntityRef(Destination, { id: 'later-b' }), label: 'Later B' },
+      ],
+    };
+
+    const sourceChoice = resolveModelOperationApplication(multiProposal, multiContract, candidates);
+    expect(sourceChoice).toMatchObject({ status: 'choice', holeId: 'source' });
+    if (sourceChoice.status !== 'choice') throw new Error('Expected source choice.');
+    const destinationChoice = continueModelOperationApplication(
+      sourceChoice,
+      multiContract,
+      sourceChoice.options[1]!.id,
+    );
+    expect(destinationChoice).toMatchObject({
+      status: 'choice',
+      holeId: 'destination',
+      proposal: {
+        application: {
+          arguments: {
+            source: { kind: 'value', value: createEntityRef(List, { id: 'inbox-b' }) },
+            destination: { kind: 'hole', id: 'destination' },
+          },
+        },
+      },
+    });
+    if (destinationChoice.status !== 'choice') throw new Error('Expected destination choice.');
+    expect(
+      continueModelOperationApplication(
+        destinationChoice,
+        multiContract,
+        destinationChoice.options[0]!.id,
+      ),
+    ).toMatchObject({
+      status: 'resolved',
+      request: {
+        input: {
+          source: createEntityRef(List, { id: 'inbox-b' }),
+          destination: createEntityRef(Destination, { id: 'later-a' }),
+        },
+      },
     });
   });
 });
