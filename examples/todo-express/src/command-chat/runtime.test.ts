@@ -268,12 +268,17 @@ describe('Todo canonical model requests', () => {
   it('never creates an item by copying a bulk-completion request', async () => {
     dataset().TodoList![1]!.name = 'Later';
     const wrong = create('list-2', 'complete all items in Later');
-    bind(async () => wrong);
+    const generate = vi.fn<ModelProvider['generate']>(async () => wrong);
+    bind(generate);
 
     await expect(submit('complete all items in Later')).resolves.toMatchObject({
       status: 'unresolved',
     });
     expect(dataset().TodoItem).toHaveLength(2);
+    const catalog = JSON.parse(generate.mock.calls[0]![0].context);
+    expect(
+      catalog.commands.map((command: { description: string }) => command.description),
+    ).not.toContain('Add an item to a list.');
   });
   it('does not accept a guessed list for creation', async () => {
     bind(async () => create());
