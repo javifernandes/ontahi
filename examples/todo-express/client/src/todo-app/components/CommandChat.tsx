@@ -37,6 +37,12 @@ type Entry = {
   responding?: boolean;
 };
 
+const isGraphReadOutcome = (outcome: Extract<ModelCommandResult, { status: 'executed' }>) =>
+  typeof outcome.request === 'object' &&
+  outcome.request !== null &&
+  'kind' in outcome.request &&
+  outcome.request.kind === 'graph-read';
+
 export const CommandChat = ({
   onExecuted,
   submit: execute = submitModelCommand,
@@ -110,7 +116,7 @@ export const CommandChat = ({
       return;
     }
     answer(id, outcome.status, outcome.message);
-    if (outcome.status === 'executed' && outcome.response === undefined) {
+    if (outcome.status === 'executed' && !isGraphReadOutcome(outcome)) {
       try {
         await onExecuted();
       } catch {
