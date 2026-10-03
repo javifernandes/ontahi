@@ -1,5 +1,52 @@
 # @ontahi/runtime-express
 
+## 1.0.0-alpha.13
+
+### Minor Changes
+
+- c275332: Add a graph instruction runtime that derives operation descriptions from declarations, interprets scoped requests, revalidates proposals, and executes through the canonical dispatcher. Expose an optional Express model-command entry point with invocation context propagation and cancellation. Applications supply data scope and argument bindings without declaring domain operations for the chat itself.
+- 3252d6c: Add the versioned `model.command` Runtime Protocol family for natural-language requests and return
+  the canonical Graph Command or Operation invocation with executed results. Forward transport
+  cancellation signals through Runtime Protocol dispatchers and render model requests, outcomes, and
+  executed actions in Devtools Activity.
+
+### Patch Changes
+
+- Updated dependencies [7a9bb92]
+- Updated dependencies [a35b2d0]
+- Updated dependencies [8a7eaec]
+- Updated dependencies [7eaddca]
+- Updated dependencies [0802a01]
+- Updated dependencies [03c1af6]
+- Updated dependencies [c275332]
+- Updated dependencies [399f7f5]
+- Updated dependencies [f5e085f]
+- Updated dependencies [7c2a6b9]
+- Updated dependencies [c275332]
+- Updated dependencies [8ab4218]
+- Updated dependencies [c275332]
+- Updated dependencies [b807692]
+- Updated dependencies [ddec3e7]
+- Updated dependencies [3252d6c]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [f552bed]
+- Updated dependencies [c275332]
+- Updated dependencies [c275332]
+- Updated dependencies [5ea8abd]
+- Updated dependencies [96d8092]
+- Updated dependencies [5b13c9a]
+- Updated dependencies [f552bed]
+- Updated dependencies [8ff883f]
+- Updated dependencies [e114d60]
+- Updated dependencies [d1d3f36]
+- Updated dependencies [82d155a]
+- Updated dependencies [072ad16]
+- Updated dependencies [848b50d]
+- Updated dependencies [9904cff]
+  - @ontahi/core@1.0.0-alpha.13
+  - @ontahi/explorer-react@1.0.0-alpha.13
+
 ## 1.0.0-alpha.12
 
 ### Minor Changes
