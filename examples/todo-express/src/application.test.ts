@@ -89,16 +89,12 @@ describe('Ontahi todo portability example', () => {
     getTodoDataset().Tag = [];
     getTodoRelationships().length = 0;
     getTodoDataset().TodoItem = [];
-    const runtimeServer = createTodoExpressServer({ authentication: testAuthentication });
+    const runtimeHost = createTodoExpressServer({ authentication: testAuthentication });
     const server = await new Promise<Server>(resolve => {
-      const started = runtimeServer.listen(0, '127.0.0.1', () => resolve(started));
+      const started = runtimeHost.server.listen(0, '127.0.0.1', () => resolve(started));
     });
     origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    closeServer = async () => {
-      await runtimeServer.runtimeProtocolWebSocket.close();
-      server.closeAllConnections();
-      await new Promise<void>(resolve => server.close(() => resolve()));
-    };
+    closeServer = () => runtimeHost.close();
   });
 
   afterEach(async () => {

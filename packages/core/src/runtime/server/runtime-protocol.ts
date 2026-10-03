@@ -41,16 +41,19 @@ type RuntimeProtocolApplication = GraphReadableOntahiApplication &
     };
   };
 
-type GraphCommandPolicy =
+export type ApplicationRuntimeGraphCommandPolicy<TContext = unknown> =
   | RelationshipCommandPolicy
   | ManyToManyRelationshipCommandPolicy
   | OrderedRelationshipCommandPolicy
-  | EntityMutationCommandPolicy<any>;
+  | EntityMutationCommandPolicy<any, TContext>;
+
+export type ApplicationRuntimePolicy<TContext = unknown> =
+  | GraphReadPolicy<any, TContext>
+  | ApplicationRuntimeGraphCommandPolicy<TContext>;
 
 export type ApplicationRuntimeProtocolOptions<TContext extends InvocationContextInput> = {
   readonly application: RuntimeProtocolApplication;
-  readonly graphRead: { readonly policies: readonly GraphReadPolicy<any, TContext>[] };
-  readonly graphCommand: { readonly policies: readonly GraphCommandPolicy[] };
+  readonly policies: readonly ApplicationRuntimePolicy<TContext>[];
   readonly modelCommand?: { readonly runtime: ModelCommandRuntime };
   /** Returning null denies an Interaction response. Authenticated principals are mapped by default. */
   readonly taskInteractionActor?: (context: TContext) => TaskActor | null;
@@ -62,8 +65,13 @@ export type ApplicationRuntimeProtocol<TContext> = {
   readonly observeDurableOperation: RuntimeProtocolDurableObserver<TContext>;
   readonly observeGraph: RuntimeProtocolGraphObserver<TContext>;
   readonly graphReadPolicies: readonly GraphReadPolicy<any, TContext>[];
-  readonly graphCommandPolicies: readonly GraphCommandPolicy[];
+  readonly graphCommandPolicies: readonly ApplicationRuntimeGraphCommandPolicy<TContext>[];
 };
+
+const isGraphReadPolicy = <TContext>(
+  policy: ApplicationRuntimePolicy<TContext>,
+): policy is GraphReadPolicy<any, TContext> =>
+  'modes' in policy && 'cardinalities' in policy && 'maxLimit' in policy;
 
 const actorFromContext = (context: InvocationContextInput): TaskActor | null => {
   const principal = context.principal;
@@ -107,16 +115,20 @@ const withAsyncIterableContext = <TValue, TContext extends InvocationContextInpu
 
 export const createApplicationRuntimeProtocol = <TContext extends InvocationContextInput>({
   application,
-  graphRead,
-  graphCommand,
+  policies,
   modelCommand,
   taskInteractionActor = actorFromContext,
   reportError,
 }: ApplicationRuntimeProtocolOptions<TContext>): ApplicationRuntimeProtocol<TContext> => {
+  const graphReadPolicies = policies.filter(isGraphReadPolicy);
+  const graphCommandPolicies = policies.filter(
+    (policy): policy is ApplicationRuntimeGraphCommandPolicy<TContext> =>
+      !isGraphReadPolicy(policy),
+  );
   const operation = createOperationInvocationDispatcher(application);
-  const read = application.createGraphReadDispatcher<TContext>(graphRead.policies);
-  const observeGraph = application.createGraphReadObserver<TContext>(graphRead.policies);
-  const command = application.createGraphCommandDispatcher<TContext>(graphCommand.policies);
+  const read = application.createGraphReadDispatcher<TContext>(graphReadPolicies);
+  const observeGraph = application.createGraphReadObserver<TContext>(graphReadPolicies);
+  const command = application.createGraphCommandDispatcher<TContext>(graphCommandPolicies);
   const withContext = <TValue>(context: TContext, run: () => TValue) =>
     application.app.runtime.withInvocationContext(context, run);
 
@@ -168,8 +180,8 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
 
   return {
     dispatcher,
-    graphReadPolicies: graphRead.policies,
-    graphCommandPolicies: graphCommand.policies,
+    graphReadPolicies,
+    graphCommandPolicies,
     observeGraph: (request, { context, signal }) =>
       withAsyncIterableContext(context, withContext, () =>
         observeGraph(request, { authority: context, signal }),

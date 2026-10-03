@@ -15,7 +15,9 @@ export {
 export {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocol,
+  type ApplicationRuntimeGraphCommandPolicy,
   type ApplicationRuntimeProtocolOptions,
+  type ApplicationRuntimePolicy,
 } from './runtime-protocol.js';
 export {
   ontahi,

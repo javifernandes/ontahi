@@ -1,4 +1,10 @@
 export {
+  authorizeSameOriginRuntimeProtocolUpgrade,
+  createExpressRuntimeProtocolHost,
+  type CreateExpressRuntimeProtocolHostOptions,
+  type ExpressRuntimeProtocolHost,
+} from './host.js';
+export {
   createExpressRuntimeProtocolHandler,
   type CreateExpressRuntimeProtocolHandlerOptions,
   type ExpressRuntimeProtocolContextFactory,

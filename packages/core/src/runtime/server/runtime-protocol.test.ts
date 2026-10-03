@@ -72,12 +72,22 @@ const createApplication = () => {
 describe('application Runtime Protocol', () => {
   it('composes application families and preserves the configured policies', async () => {
     const { application, observedPrincipals, withInvocationContext } = createApplication();
-    const graphReadPolicies = [{ entity: { name: 'Todo' } }] as never;
-    const graphCommandPolicies = [{ entity: { name: 'Todo' } }] as never;
+    const graphReadPolicies = [
+      {
+        entity: { name: 'Todo' },
+        fields: {},
+        modes: ['run'],
+        cardinalities: ['many'],
+        maxLimit: 25,
+        scope: 'all',
+      },
+    ] as never;
+    const graphCommandPolicies = [
+      { entity: { name: 'Todo' }, fieldName: 'owner', actions: ['link'] },
+    ] as never;
     const protocol = createApplicationRuntimeProtocol({
       application,
-      graphRead: { policies: graphReadPolicies },
-      graphCommand: { policies: graphCommandPolicies },
+      policies: [...graphReadPolicies, ...graphCommandPolicies],
     });
     const context: Context = { principal: { kind: 'user', subject: 'user-1' } };
 
@@ -137,8 +147,8 @@ describe('application Runtime Protocol', () => {
       // Empty observer; iteration proves the receiver restores invocation context.
     }
 
-    expect(protocol.graphReadPolicies).toBe(graphReadPolicies);
-    expect(protocol.graphCommandPolicies).toBe(graphCommandPolicies);
+    expect(protocol.graphReadPolicies).toEqual(graphReadPolicies);
+    expect(protocol.graphCommandPolicies).toEqual(graphCommandPolicies);
     expect(withInvocationContext).toHaveBeenCalled();
     expect(observedPrincipals).toEqual([context.principal, context.principal, context.principal]);
   });
@@ -147,8 +157,7 @@ describe('application Runtime Protocol', () => {
     const { application, respondToTaskInteraction } = createApplication();
     const protocol = createApplicationRuntimeProtocol({
       application,
-      graphRead: { policies: [] },
-      graphCommand: { policies: [] },
+      policies: [],
     });
     const body = toDurableOperationInteractionResponseRequest(run, {
       interactionId: 'approve',
@@ -177,8 +186,7 @@ describe('application Runtime Protocol', () => {
     });
     const protocol = createApplicationRuntimeProtocol({
       application,
-      graphRead: { policies: [] },
-      graphCommand: { policies: [] },
+      policies: [],
       taskInteractionActor: () => ({ kind: 'system' }),
     });
     const body = toDurableOperationInteractionResponseRequest(run, {
@@ -211,8 +219,7 @@ describe('application Runtime Protocol', () => {
       .mockRejectedValueOnce(new Error('storage unavailable'));
     const protocol = createApplicationRuntimeProtocol({
       application,
-      graphRead: { policies: [] },
-      graphCommand: { policies: [] },
+      policies: [],
       reportError,
     });
     const body = toDurableOperationInteractionResponseRequest(run, {
