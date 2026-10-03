@@ -9,6 +9,7 @@ import {
 import {
   useGraphExecutorCapability,
   useGraphQuery,
+  useCanonicalRequestInvalidation,
   useManyToManyRelationshipCommand,
   useOrderedRelationshipCommand,
   useDurableOperation,
@@ -19,6 +20,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import {
   Tag,
   TagSchema,
+  TodoItem,
   TodoItemSchema,
   TodoList,
   TodoListSchema,
@@ -39,6 +41,10 @@ import {
 } from './todo-mutations.js';
 
 const tagColors = ['#dd6658', '#6f8d72', '#527d8c', '#a77b45', '#8a6ab1'] as const;
+const modelCommandOperations = [
+  TodoList.domain.completeAll,
+  TodoItem.domain.deleteFromNamedList,
+] as const;
 
 export const listPastelColors = [
   '#f5ddd5',
@@ -106,6 +112,7 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   const lists = useGraphQuery(todoListsQuery);
   const tags = useGraphQuery(tagsQuery);
   const graphExecutor = useGraphExecutorCapability();
+  const invalidateModelCommand = useCanonicalRequestInvalidation(modelCommandOperations);
   const completeAllOperation = useDurableOperation(TodoList.domain.completeAll);
   const reorderTodo = useOrderedRelationshipCommand(createTodoOrderCommand);
   const linkTags = useManyToManyRelationshipCommand(
@@ -424,7 +431,8 @@ export const useTodoApp = ({ authentication, setAuthentication }: UseTodoAppOpti
   return {
     commandChat: {
       enabled: runtime.status === 'ready' && runtime.value.commandChat === true,
-      refresh: lists.refetch,
+      refresh: async (outcome: { request: Parameters<typeof invalidateModelCommand>[0] }) =>
+        invalidateModelCommand(outcome.request),
     },
     header: {
       runtime,
