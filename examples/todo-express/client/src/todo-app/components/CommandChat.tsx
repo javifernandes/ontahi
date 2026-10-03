@@ -31,7 +31,7 @@ type Entry = {
   id: number;
   request: string;
   reply?: string;
-  status: 'pending' | 'interaction' | 'executed' | 'answered' | 'unresolved' | 'failed';
+  status: 'pending' | 'interaction' | 'started' | 'executed' | 'answered' | 'unresolved' | 'failed';
   run?: TaskRunIdentity;
   interaction?: TaskPendingInteraction;
   responding?: boolean;

@@ -1,5 +1,6 @@
 import {
   type AnyEntityDefinition,
+  type AnyGraphObjectDefinition,
   type GraphCommandDispatchResponse,
   type GraphCommandRequest,
   type GraphReadDispatchResponse,
@@ -13,8 +14,10 @@ import type { OperationInvokeRequest } from '../operation-invocation.js';
 import type { OntahiApplication } from './application.js';
 import { resolveModelGraphCommand, type ModelGraphCommandExposure } from './model-graph-command.js';
 import {
+  modelGraphReadApplicationEntityMatches,
   resolveModelGraphReadApplication,
   type ModelEntityCandidate,
+  type ModelGraphReadApplicationProposal,
 } from './model-graph-read-application.js';
 import {
   resolveModelGraphRead,
@@ -28,6 +31,11 @@ import {
   type ModelProvider,
   type ModelOperationExposure,
 } from './model-interpretation.js';
+import {
+  modelOperationApplicationEntityMatches,
+  resolveModelOperationApplication,
+  type ModelOperationApplicationProposal,
+} from './model-operation-application.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
 
 export type ModelCommandBinding = Omit<ModelOperationExposure, 'operationId' | 'description'> & {
@@ -79,6 +87,13 @@ export type PreparedModelCommandRuntime = ModelCommandRuntime & {
 export type CreateModelCommandRuntimeOptions = {
   application: OntahiApplication;
   graphEntities?: readonly AnyEntityDefinition[];
+  resolveEntityMatch?: (
+    request: { target: AnyEntityDefinition; text: string },
+    signal: AbortSignal,
+  ) => Promise<
+    | { status: 'matched'; candidates: readonly ModelEntityCandidate[] }
+    | { status: 'unresolved'; reason: string }
+  >;
   provider: ModelProvider;
   authorize: () => void | Promise<void>;
   scope: (request: ModelCommandRequest, signal: AbortSignal) => Promise<ModelCommandScope>;
@@ -107,6 +122,7 @@ export const createModelCommandRuntime = ({
   dispatchRead,
   dispatchCommand,
   graphEntities = [],
+  resolveEntityMatch,
 }: CreateModelCommandRuntimeOptions): PreparedModelCommandRuntime => {
   const resolveOperation = (id: string) => application.resolveOperation(id);
   const dispatch = createOperationInvocationDispatcher(application);
@@ -178,10 +194,78 @@ export const createModelCommandRuntime = ({
     if (proposal.status === 'resolved') return { status: 'proposed', request: proposal.request };
     if (proposal.status === 'choice') return proposal;
     if (proposal.status === 'application') {
+      if (proposal.application.kind === 'operation-application') {
+        const operationProposal = proposal as typeof proposal & ModelOperationApplicationProposal;
+        if (
+          !catalog(initial).some(
+            item => item.operationId === operationProposal.application.operationId,
+          )
+        )
+          return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
+        const operation = resolveOperation(operationProposal.application.operationId);
+        if (!operation || operation.input.kind !== 'schema.object')
+          return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
+        const operationInput = operation.input as AnyGraphObjectDefinition;
+        const matches = modelOperationApplicationEntityMatches(operationProposal, {
+          id: operationProposal.application.operationId,
+          input: operationInput,
+        });
+        if (!matches || !resolveEntityMatch)
+          return {
+            status: 'unresolved',
+            message: 'The proposed operation has an unsupported Hole.',
+          };
+        const candidates: Record<string, readonly ModelEntityCandidate[]> = {};
+        for (const match of matches) {
+          const result = await resolveEntityMatch(
+            { target: match.target, text: match.text },
+            signal,
+          );
+          if (result.status === 'unresolved')
+            return { status: 'unresolved', message: result.reason };
+          candidates[match.holeId] = result.candidates;
+        }
+        const resolved = resolveModelOperationApplication(
+          operationProposal,
+          { id: operationProposal.application.operationId, input: operationInput },
+          candidates,
+        );
+        if (resolved.status === 'unresolved')
+          return { status: 'unresolved', message: resolved.reason };
+        const requests =
+          resolved.status === 'resolved'
+            ? [resolved.request]
+            : resolved.options.map(option => option.request);
+        for (const candidate of requests) {
+          const reason = validateModelInvocation(candidate, catalog(initial), resolveOperation, {
+            kind: resolved.status === 'choice' ? 'choice-option' : 'proposal',
+          });
+          if (reason) return { status: 'unresolved', message: reason };
+        }
+        return resolved.status === 'resolved'
+          ? { status: 'proposed', request: resolved.request }
+          : resolved;
+      }
+      const readProposal = proposal as typeof proposal & ModelGraphReadApplicationProposal;
+      const entityCandidates = [...(initial.entityCandidates ?? [])];
+      if (resolveEntityMatch) {
+        const matches = modelGraphReadApplicationEntityMatches(readProposal, graphEntities);
+        if (!matches)
+          return { status: 'unresolved', message: 'The proposed read has an unsupported Hole.' };
+        for (const match of matches) {
+          const result = await resolveEntityMatch(
+            { target: match.target, text: match.match.text },
+            signal,
+          );
+          if (result.status === 'unresolved')
+            return { status: 'unresolved', message: result.reason };
+          entityCandidates.push(...result.candidates);
+        }
+      }
       const resolved = resolveModelGraphReadApplication({
-        proposal,
+        proposal: readProposal,
         entities: graphEntities,
-        candidates: initial.entityCandidates ?? [],
+        candidates: entityCandidates,
       });
       if (resolved.status === 'unresolved')
         return { status: 'unresolved', message: resolved.reason };
@@ -190,7 +274,14 @@ export const createModelCommandRuntime = ({
           ? [resolved.request]
           : resolved.options.map(option => option.request);
       for (const candidate of candidates) {
-        const exposure = resolveModelGraphRead(candidate, initial.reads ?? []);
+        let exposure: ModelGraphReadExposure;
+        try {
+          exposure = resolveModelGraphRead(candidate, initial.reads ?? []);
+        } catch (error) {
+          if (error instanceof ModelInterpretationError && error.code === 'proposal_out_of_scope')
+            return { status: 'unresolved', message: error.message };
+          throw error;
+        }
         const reason = exposure.validate(candidate);
         if (reason) return { status: 'unresolved', message: reason };
       }
@@ -306,6 +397,24 @@ export const createModelCommandRuntime = ({
           ? (result.result.message ?? 'The operation failed.')
           : 'Operation unavailable.',
       );
+    const operation = resolveOperation(proposal.operationId);
+    if (operation?.durable) {
+      const run = result.result.value;
+      if (!isRecord(run) || typeof run.taskId !== 'string' || typeof run.runId !== 'string')
+        throw new ModelInterpretationError(
+          'command_execution_failed',
+          'The durable Operation did not return a Task run.',
+        );
+      return {
+        status: 'started',
+        message:
+          current.bindings?.[proposal.operationId]?.message?.(
+            proposal.input as Record<string, unknown>,
+          ) ?? 'Operation started.',
+        request: proposal,
+        run: { taskId: run.taskId, runId: run.runId },
+      };
+    }
     return {
       status: 'executed',
       message:

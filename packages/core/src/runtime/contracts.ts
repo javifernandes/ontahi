@@ -301,6 +301,12 @@ export type ModelCommandResult<TRequest = unknown, TResponse = unknown> =
       interaction: TaskPendingInteraction;
     }
   | {
+      status: 'started';
+      message: string;
+      request: TRequest;
+      run: TaskRunIdentity;
+    }
+  | {
       status: 'executed';
       message: string;
       /** Canonical graph read, graph command, or operation invocation selected by the runtime. */

@@ -103,9 +103,17 @@ copied application metadata; remaining scalar types continue to use the generic 
 
 The first Model Support projection lets a provider propose that same open Graph Read application
 instead of inventing a separate tool request. The Hole remains only a typed slot; a separate
-`entity-match` binding carries the user's wording. Core resolves that hint exclusively against
-receiver-authorized Entity candidates already disclosed by the application scope, substitutes a
-canonical Ref for one exact match, returns a choice for several, and remains unresolved for none.
+`entity-match` binding carries the user's wording. Core derives the target, identity, and searchable
+Fields from the registered schema and display metadata, discovers matches through the ordinary
+receiver-authorized Graph Read policy, substitutes a canonical Ref for one exact match, returns a
+choice for several, and remains unresolved for none.
 Known predicates stay closed, and the completed request is revalidated against the advertised Read
 affordance before the existing dispatcher executes it. This proof covers direct Ref equality only;
-fuzzy matching, remote search, scalar inference, and multi-turn Assistant state remain later work.
+fuzzy matching, relational display paths, scalar inference, and multi-turn Assistant state remain
+later work.
+
+The same Model Support boundary also accepts open Operation applications. Known inputs remain value
+terms, unresolved direct Refs use the same external `entity-match` bindings, and authorized search
+feeds ordinary schema substitution before lowering to the existing `OperationInvokeRequest`.
+Ambiguous matches become canonical invocation choices; execution still rechecks the fresh scoped
+Operation exposure. Todo exposes `TodoList.completeAll` as the first end-to-end model proof.

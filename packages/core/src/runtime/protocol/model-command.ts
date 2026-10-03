@@ -231,6 +231,27 @@ export const parseModelCommandProtocolResponse = (
         };
     }
     if (
+      value.result.status === 'started' &&
+      value.result.response === undefined &&
+      value.result.interaction === undefined
+    ) {
+      const request = parseModelCommandCanonicalRequest(value.result.request);
+      if (request && isTaskRunIdentity(value.result.run))
+        return {
+          success: true,
+          response: {
+            version: 1,
+            kind: 'model-command-result',
+            result: {
+              status: 'started',
+              message: value.result.message,
+              request,
+              run: { taskId: value.result.run.taskId, runId: value.result.run.runId },
+            },
+          },
+        };
+    }
+    if (
       value.result.status === 'pending' &&
       value.result.request === undefined &&
       value.result.response === undefined &&

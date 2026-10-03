@@ -74,6 +74,16 @@ export const createTodoModelRuntime = ({
       const current = await readTodoModelContext(graph.read, signal);
       return {
         data: current,
+        bindings: {
+          'TodoList.completeAll': {
+            description: 'Complete every unfinished item in one list.',
+            validate: () => undefined,
+            message: () =>
+              request.language?.toLowerCase().startsWith('es')
+                ? 'Se completaron los ítems de la lista.'
+                : 'List items completed.',
+          },
+        },
         unresolved: current.complete
           ? undefined
           : request.language?.toLowerCase().startsWith('es')
@@ -91,16 +101,6 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
-        entityCandidates: [
-          ...current.lists.map(list => ({
-            ref: createEntityRef(TodoList, { id: list.id }),
-            label: list.name,
-          })),
-          ...current.items.map(item => ({
-            ref: createEntityRef(TodoItem, { id: item.id }),
-            label: item.title,
-          })),
-        ],
       };
     },
   });

@@ -52,6 +52,39 @@ const modelResultFromSnapshot = (snapshot: TaskSnapshot): ModelCommandSubmitResu
   };
 };
 
+const settleStartedOperation = async (
+  runtimeTransport: RuntimeTransport,
+  outcome: Extract<ModelCommandResult, { status: 'started' }>,
+): Promise<ModelCommandSubmitResult> => {
+  if (!runtimeTransport.durableOperation)
+    return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };
+  try {
+    for await (const snapshot of runtimeTransport.durableOperation.observe(outcome.run)) {
+      if (snapshot.interaction)
+        return {
+          ok: false,
+          message: 'The started Operation requires an interaction that command chat cannot resume.',
+        };
+      if (snapshot.status === 'completed')
+        return {
+          ok: true,
+          value: { status: 'executed', message: outcome.message, request: outcome.request },
+        };
+      if (snapshot.status === 'failed' || snapshot.status === 'cancelled')
+        return {
+          ok: false,
+          message: snapshot.error?.message ?? `Operation ${snapshot.status}.`,
+        };
+    }
+  } catch {
+    return {
+      ok: false,
+      message: 'The Operation started, but its completion could not be observed. Check the list.',
+    };
+  }
+  return { ok: false, message: 'The Operation observation ended before completion.' };
+};
+
 export const createModelCommandSubmitter = (
   runtimeTransport: RuntimeTransport,
 ): ModelCommandSubmitter => {
@@ -63,7 +96,10 @@ export const createModelCommandSubmitter = (
     if (!parsed.success) throw new Error(parsed.error.error.message);
     if (parsed.response.kind === 'protocol-error')
       return { ok: false, message: parsed.response.error.message };
-    return { ok: true, value: parsed.response.result };
+    const outcome = parsed.response.result;
+    return outcome.status === 'started'
+      ? settleStartedOperation(runtimeTransport, outcome)
+      : { ok: true, value: outcome };
   };
 };
 

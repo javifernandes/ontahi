@@ -189,6 +189,35 @@ describe('Todo canonical model requests', () => {
     });
     expect(dataset().TodoItem).toHaveLength(2);
   });
+
+  it('resolves an open Operation application through authorized entity search', async () => {
+    const generate = vi.fn(async (_request: Parameters<ModelProvider['generate']>[0]) => ({
+      status: 'application',
+      application: {
+        kind: 'operation-application',
+        operationId: 'TodoList.completeAll',
+        arguments: { list: { kind: 'hole', id: 'list' } },
+      },
+      bindings: { list: { kind: 'entity-match', text: 'Shopping' } },
+    }));
+    bind(generate);
+
+    await expect(
+      withInvocationContext({ principal }, () =>
+        runtime.prepare({ text: 'complete everything in Shopping' }, new AbortController().signal),
+      ),
+    ).resolves.toMatchObject({
+      status: 'proposed',
+      request: {
+        kind: 'invoke',
+        operationId: 'TodoList.completeAll',
+        input: { list: list() },
+      },
+    });
+    expect(generate.mock.calls[0]![0].instructions).toContain(
+      'directly matches TodoList.completeAll',
+    );
+  });
   it('uses the graph read result for counts instead of answering from prompt context', async () => {
     bind(async () => readIncompleteItems('count'));
 

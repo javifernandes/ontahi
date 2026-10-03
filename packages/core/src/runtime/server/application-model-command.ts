@@ -17,6 +17,7 @@ import {
   type ModelCommandScope,
   type PreparedModelCommandRuntime,
 } from './model-command.js';
+import { resolveAuthorizedModelEntityMatch } from './model-entity-match.js';
 import { createModelEntityMutationExposure } from './model-entity-mutation.js';
 import type { ModelGraphCommandExposure } from './model-graph-command.js';
 import { createModelGraphReadExposure } from './model-graph-read-exposure.js';
@@ -289,6 +290,19 @@ export const createApplicationModelCommandRuntime = <TAuthority, TData = undefin
     ...options,
     application,
     graphEntities: application.graph.listEntities(),
+    resolveEntityMatch:
+      readDispatcher && readPolicies.length > 0
+        ? ({ target, text }, signal) => {
+            signal.throwIfAborted();
+            return resolveAuthorizedModelEntityMatch({
+              target,
+              text,
+              policies: readPolicies,
+              read: readDispatcher,
+              authority: graph.authority(),
+            });
+          }
+        : undefined,
     scope: async (request, signal) => {
       const current = scope
         ? await scope(request, signal, scopeAccess)

@@ -24,6 +24,24 @@ export type ModelEntityCandidate = {
   readonly label: string;
   readonly aliases?: readonly string[];
 };
+export type ModelEntityMatchRequest = {
+  readonly target: AnyEntityDefinition;
+  readonly match: ModelEntityMatch;
+};
+
+export const modelGraphReadApplicationEntityMatches = (
+  proposal: ModelGraphReadApplicationProposal,
+  entities: readonly AnyEntityDefinition[],
+): readonly ModelEntityMatchRequest[] | undefined => {
+  const requests = graphReadApplicationHolePositions(proposal.application).map(position => {
+    const entity = entities.find(item => item.name === position.entityName);
+    const field = entity?.fields[position.fieldName];
+    return field && isReferenceFieldDefinition(field)
+      ? { target: field.target, match: proposal.bindings[position.holeId] }
+      : undefined;
+  });
+  return requests.every(request => request !== undefined) ? requests : undefined;
+};
 
 const holeSchema: GraphJsonSchema = {
   type: 'object',
@@ -145,6 +163,8 @@ export const resolveModelGraphReadApplication = ({
         status: 'unresolved',
         reason: `No visible ${field.target.name} matches “${hint.text}”.`,
       };
+    if (applications.length > 20 / matches.length)
+      return { status: 'unresolved', reason: 'Too many matching entities. Be more specific.' };
     applications = applications.flatMap(current =>
       matches.flatMap(candidate => {
         const substitution = substituteGraphReadApplication(

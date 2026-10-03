@@ -25,6 +25,11 @@ import {
   type ModelGraphReadApplicationProposal,
 } from './model-graph-read-application.js';
 import { validateModelGraphRead, type ModelGraphReadExposure } from './model-graph-read.js';
+import {
+  modelOperationApplicationSchema,
+  parseModelOperationApplication,
+  type ModelOperationApplicationProposal,
+} from './model-operation-application.js';
 
 export type ModelRequest = {
   instructions: string;
@@ -58,7 +63,10 @@ export type ModelInterpretationValue =
         request: GraphReadRequest | GraphCommandRequest | OperationInvokeRequest;
       }>;
     }
-  | ({ status: 'application' } & ModelGraphReadApplicationProposal)
+  | ({ status: 'application' } & (
+      | ModelGraphReadApplicationProposal
+      | ModelOperationApplicationProposal
+    ))
   | { status: 'help' }
   | { status: 'unresolved'; reason: string };
 
@@ -103,7 +111,7 @@ export const parseModelInterpretation = (raw: unknown): ModelInterpretationValue
       if (request) return { status: 'resolved', request };
     }
     if (raw.status === 'application' && keys.length === 3) {
-      const proposal = parseModelGraphReadApplication(raw);
+      const proposal = parseModelGraphReadApplication(raw) ?? parseModelOperationApplication(raw);
       if (proposal) return { status: 'application', ...proposal };
     }
     if (
@@ -286,6 +294,27 @@ export const interpretModelRequest = async ({
           },
         },
       })),
+      ...catalog.map(operation => ({
+        type: 'object' as const,
+        additionalProperties: false,
+        required: ['status', 'application', 'bindings'],
+        properties: {
+          status: { const: 'application' },
+          application: modelOperationApplicationSchema(operation.operationId, operation.input),
+          bindings: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['kind', 'text'],
+              properties: {
+                kind: { const: 'entity-match' },
+                text: { type: 'string', minLength: 1 },
+              },
+            },
+          },
+        },
+      })),
       {
         type: 'object' as const,
         additionalProperties: false,
@@ -326,10 +355,11 @@ export const interpretModelRequest = async ({
     'Interpret the user request. Return JSON only.',
     'For ONE supported read or action return {status:"resolved",request:...}. request must be an existing Ontahi graph-read request, graph-command request (including version and command), or invoke request (kind, operationId, input), exactly as advertised.',
     'For a graph read whose entity reference is named but not supplied as a canonical Ref, return {status:"application",application:{kind:"graph-read-application",request:...},bindings:{holeId:{kind:"entity-match",text:"..."}}}. Put {kind:"hole",id:"holeId"} only in the unresolved reference predicate value. Keep all known predicates closed. Hole ids identify slots only; put the user wording in bindings.',
+    'For an advertised operation whose Entity Ref argument is named but unresolved, return the advertised operation-application form. Wrap known arguments as {kind:"value",value:...}, use {kind:"hole",id:"..."} only for unresolved Entity Refs, and provide one entity-match binding per Hole.',
     'Use an advertised graph read for questions that ask for stored data or a count. Never answer those questions from the supplied context.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
     'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',
-    'Copy entity references and selections from the supplied context. Use the declared operation input fields directly. Never replace references with names or invent IDs.',
+    'For advertised reads and operations, prefer an application with entity-match when the user names an Entity target, even if context also contains its canonical Ref. For graph commands, copy entity references and selections from the supplied context. Use declared input fields directly. Never replace canonical references with names or invent IDs.',
     'Preserve user-supplied entity names and string field values exactly, including casing, accents, and spelling. Never translate, correct, or normalize them.',
     'For missing or ambiguous targets, unsupported requests, or multiple actions return status "unresolved" and a reason explaining the specific problem to the user. Never guess a target or execute part of a request.',
     'When exactly one required argument is missing or ambiguous and every valid value is present in context, return {status:"choice",prompt:"...",options:[...]}. Each option must have a stable context-derived id, a concise natural-language label, and the complete canonical request that should execute if selected. All options must represent the same action and differ only in the ambiguous argument. Never use choice to ask for confirmation.',

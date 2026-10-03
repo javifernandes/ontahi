@@ -8,6 +8,7 @@ import {
   type ModelCommandTaskHost,
 } from './model-command-task.js';
 import type { PreparedModelCommandRuntime } from './model-command.js';
+import { ModelInterpretationError } from './model-interpretation.js';
 import {
   createInMemoryTaskStorage,
   createInProcessTaskRuntime,
@@ -482,5 +483,27 @@ describe('Model Command Task', () => {
         }),
       ).submit(input, new AbortController().signal),
     ).rejects.toThrow('Model execution failed.');
+  });
+
+  it('preserves model interpretation failures across the Task boundary', async () => {
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const runtime = createTaskBackedModelCommandRuntime({
+      runtime: {
+        prepare: async () => {
+          throw new ModelInterpretationError('model_output_invalid', 'Use the advertised schema.');
+        },
+      } as unknown as PreparedModelCommandRuntime,
+      tasks: {
+        register: task => taskRuntime.register?.(task),
+        start: (task, taskInput, options) => startTask(taskRuntime, task, taskInput, options),
+        observe: run => taskRuntime.observe!(run),
+      },
+    });
+
+    await expect(runtime.submit(input, new AbortController().signal)).rejects.toMatchObject({
+      name: 'ModelInterpretationError',
+      code: 'model_output_invalid',
+      message: 'Use the advertised schema.',
+    });
   });
 });

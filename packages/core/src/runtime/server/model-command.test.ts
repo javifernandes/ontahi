@@ -76,6 +76,75 @@ const graphReadFixture = () => {
   return { ...f, request, read };
 };
 
+it('reports a durable Operation as started with its child Task identity', async () => {
+  const input = graphSchema.object({ name: field.string() });
+  const operation = {
+    id: 'Document.reindex',
+    input,
+    description: 'Reindex documents.',
+    durable: { runtime: 'in-process' },
+  };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+      invokeOperation: async () => ({
+        ok: true,
+        kind: 'success',
+        value: { taskId: operation.id, runId: 'run-1', status: 'queued' },
+      }),
+      checkPermission: async () => ({ allowed: true }),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'resolved',
+        request: { kind: 'invoke', operationId: operation.id, input: { name: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: { [operation.id]: { validate: () => undefined } } }),
+  });
+
+  await expect(
+    runtime.submit({ text: 'Reindex Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'started',
+    message: 'Operation started.',
+    request: { kind: 'invoke', operationId: operation.id, input: { name: 'Inbox' } },
+    run: { taskId: operation.id, runId: 'run-1' },
+  });
+});
+
+it('rejects a durable Operation result without a Task identity', async () => {
+  const input = graphSchema.object({});
+  const operation = {
+    id: 'Document.reindexInvalid',
+    input,
+    durable: { runtime: 'in-process' },
+  };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+      invokeOperation: async () => ({ ok: true, kind: 'success', value: { accepted: true } }),
+      checkPermission: async () => ({ allowed: true }),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'resolved',
+        request: { kind: 'invoke', operationId: operation.id, input: {} },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: { [operation.id]: { validate: () => undefined } } }),
+  });
+
+  await expect(runtime.submit({ text: 'Reindex' }, new AbortController().signal)).rejects.toEqual(
+    expect.objectContaining({
+      code: 'command_execution_failed',
+      message: 'The durable Operation did not return a Task run.',
+    }),
+  );
+});
+
 const openGraphReadFixture = () => {
   const Folder = entity({ name: 'ScopedFolder', fields: { id: field.id(), name: field.string() } });
   const Note = entity({
@@ -145,6 +214,129 @@ const openGraphReadFixture = () => {
   return { application, Folder, Note, inbox, closed, exposure, generate };
 };
 
+it('resolves and executes a model-proposed open Operation application', async () => {
+  const Folder = entity({ name: 'OperationFolder', fields: { id: field.id() } });
+  const run = vi.fn(({ folder }: { folder: unknown }) => Effect.succeed(folder));
+  const Document = entity({
+    name: 'OperationDocument',
+    fields: { id: field.id() },
+    operations: ({ operation }) => ({
+      move: operation({
+        input: graphSchema.object({ folder: graphSchema.ref(Folder), title: field.string() }),
+        run,
+      }),
+    }),
+  });
+  const application = ontahi({
+    entities: [Folder, Document],
+    storage: createInMemoryDataGraphStorage({
+      dataset: { OperationFolder: [], OperationDocument: [] },
+    }),
+  });
+  const inbox = createEntityRef(Folder, { id: 'inbox' });
+  const runtime = createModelCommandRuntime({
+    application,
+    graphEntities: [Folder, Document],
+    provider: {
+      generate: async () => ({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: 'OperationDocument.move',
+          arguments: {
+            folder: { kind: 'hole', id: 'folder' },
+            title: { kind: 'value', value: 'Notes' },
+          },
+        },
+        bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    resolveEntityMatch: async ({ target, text }) => {
+      expect(target).toBe(Folder);
+      expect(text).toBe('Inbox');
+      return { status: 'matched', candidates: [{ ref: inbox, label: 'Inbox' }] };
+    },
+    scope: async () => ({
+      bindings: { 'OperationDocument.move': { validate: () => undefined } },
+    }),
+  });
+
+  await expect(
+    runtime.submit({ text: 'Move Notes to Inbox' }, new AbortController().signal),
+  ).resolves.toMatchObject({
+    status: 'executed',
+    request: {
+      kind: 'invoke',
+      operationId: 'OperationDocument.move',
+      input: { folder: inbox, title: 'Notes' },
+    },
+  });
+  expect(run.mock.calls[0]?.[0]).toEqual({ folder: inbox, title: 'Notes' });
+});
+
+it('keeps model-proposed Operation applications outside the scoped catalog unresolved', async () => {
+  const Folder = entity({ name: 'OutOfScopeFolder', fields: { id: field.id() } });
+  const input = graphSchema.object({ folder: graphSchema.ref(Folder) });
+  const operation = { id: 'Document.renameOpen', input };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: operation.id,
+          arguments: { folder: { kind: 'hole', id: 'folder' } },
+        },
+        bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: {} }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Move to Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Operation is outside the configured scope.',
+  });
+});
+
+it('keeps model-proposed Operation entity Holes unresolved without a match resolver', async () => {
+  const Folder = entity({ name: 'UnresolvedFolder', fields: { id: field.id() } });
+  const input = graphSchema.object({ folder: graphSchema.ref(Folder) });
+  const operation = { id: 'Document.moveOpen', input };
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+    } as never,
+    provider: {
+      generate: async () => ({
+        status: 'application',
+        application: {
+          kind: 'operation-application',
+          operationId: operation.id,
+          arguments: { folder: { kind: 'hole', id: 'folder' } },
+        },
+        bindings: { folder: { kind: 'entity-match', text: 'Inbox' } },
+      }),
+    },
+    authorize: () => undefined,
+    scope: async () => ({ bindings: { [operation.id]: { validate: () => undefined } } }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Move to Inbox' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'The proposed operation has an unsupported Hole.',
+  });
+});
+
 it('keeps unresolved model Graph Read applications out of execution', async () => {
   const fixture = openGraphReadFixture();
   const runtime = createModelCommandRuntime({
@@ -205,6 +397,26 @@ it('revalidates a completed model Graph Read application against its exposure', 
   await expect(
     runtime.prepare({ text: 'Read Inbox notes' }, new AbortController().signal),
   ).resolves.toEqual({ status: 'unresolved', message: 'Read is no longer available.' });
+});
+
+it('keeps completed model Graph Read applications outside the scoped catalog unresolved', async () => {
+  const fixture = openGraphReadFixture();
+  const runtime = createModelCommandRuntime({
+    application: fixture.application,
+    graphEntities: [fixture.Folder, fixture.Note],
+    provider: { generate: fixture.generate },
+    authorize: () => undefined,
+    scope: async () => ({
+      entityCandidates: [{ ref: fixture.inbox, label: 'Inbox' }],
+    }),
+  });
+
+  await expect(
+    runtime.prepare({ text: 'Read Inbox notes' }, new AbortController().signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Graph read is outside the configured scope.',
+  });
 });
 it('derives descriptions and dispatches a canonical operation in the caller context', async () => {
   const f = fixture();
@@ -313,6 +525,19 @@ it('does not execute unresolved results', async () => {
     message: 'Which document?',
   });
   expect(f.run).not.toHaveBeenCalled();
+});
+it('stops before model interpretation when scope cannot be disclosed', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({
+    ...f,
+    provider: { generate: f.generate },
+    scope: async () => ({ unresolved: 'Context is incomplete.' }),
+  });
+  await expect(runtime.submit({ text: 'rename' }, new AbortController().signal)).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Context is incomplete.',
+  });
+  expect(f.generate).not.toHaveBeenCalled();
 });
 it('does not dispatch after cancellation', async () => {
   const f = fixture();
