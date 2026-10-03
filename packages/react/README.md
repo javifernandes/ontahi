@@ -133,6 +133,23 @@ await completeVisible.executeAsync();
 The bound invocation always uses the latest render input. Passing the Operation declaration itself
 keeps the lower-level reusable mutation form, where each execution supplies its input.
 
+When a canonical request is executed outside an Operation hook—for example after a model selects
+and runs an Operation—`useCanonicalRequestInvalidation` applies the same declared bridge
+invalidation to React Query:
+
+```ts
+const invalidateRequest = useCanonicalRequestInvalidation([
+  TodoList.domain.completeAll,
+  TodoItem.domain.deleteFromNamedList,
+]);
+
+await invalidateRequest(executed.request);
+```
+
+Graph Reads are ignored, Graph Commands invalidate their participating Entity roots, and Operation
+invocations use the registered Operation's `bridge.invalidate` metadata. An unregistered Operation
+is reported instead of silently leaving stale client state.
+
 Durable Operations use the same invocation bridge to start a run, then observe its lifecycle
 through Runtime Transport:
 

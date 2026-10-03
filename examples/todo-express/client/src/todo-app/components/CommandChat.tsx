@@ -1,5 +1,4 @@
 import type {
-  ModelCommandResult,
   TaskInteractionResponse,
   TaskPendingInteraction,
   TaskRunIdentity,
@@ -21,6 +20,7 @@ import {
   submitModelCommand,
   type ModelCommandResponder,
   type ModelCommandSubmitter,
+  type TodoModelCommandResult,
 } from '../../model-commands.js';
 
 import { useDictationCountdown } from './useDictationCountdown.js';
@@ -37,18 +37,14 @@ type Entry = {
   responding?: boolean;
 };
 
-const isGraphReadOutcome = (outcome: Extract<ModelCommandResult, { status: 'executed' }>) =>
-  typeof outcome.request === 'object' &&
-  outcome.request !== null &&
-  'kind' in outcome.request &&
-  outcome.request.kind === 'graph-read';
-
 export const CommandChat = ({
   onExecuted,
   submit: execute = submitModelCommand,
   respond,
 }: {
-  onExecuted: () => Promise<unknown>;
+  onExecuted: (
+    outcome: Extract<TodoModelCommandResult, { status: 'executed' }>,
+  ) => Promise<unknown>;
   submit?: ModelCommandSubmitter;
   respond?: ModelCommandResponder;
 }) => {
@@ -96,7 +92,7 @@ export const CommandChat = ({
     );
   };
 
-  const applyOutcome = async (id: number, outcome: ModelCommandResult) => {
+  const applyOutcome = async (id: number, outcome: TodoModelCommandResult) => {
     if (outcome.status === 'pending') {
       voice.speak(outcome.message);
       setEntries(previous =>
@@ -116,9 +112,9 @@ export const CommandChat = ({
       return;
     }
     answer(id, outcome.status, outcome.message);
-    if (outcome.status === 'executed' && !isGraphReadOutcome(outcome)) {
+    if (outcome.status === 'executed' && outcome.request?.kind !== 'graph-read') {
       try {
-        await onExecuted();
+        await onExecuted(outcome);
       } catch {
         answer(id, 'executed', `${outcome.message} Refresh the board to see the change.`);
       }

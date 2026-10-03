@@ -1,6 +1,7 @@
 'use client';
 
 export * from './context.js';
+export * from './canonical-request-invalidation.js';
 export * from './executor.js';
 export * from './fetch-graph-read-executor.js';
 export * from './fetch-runtime-transport.js';

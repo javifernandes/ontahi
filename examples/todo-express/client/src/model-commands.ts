@@ -13,10 +13,16 @@ import {
   toDurableOperationInteractionResponseRequest,
   toModelCommandProtocolRequest,
   type RuntimeTransport,
+  type ModelCommandCanonicalRequest,
+  type ModelCommandReadResponse,
 } from '@ontahi/core/runtime/protocol';
 
+export type TodoModelCommandResult = ModelCommandResult<
+  ModelCommandCanonicalRequest,
+  ModelCommandReadResponse
+>;
 export type ModelCommandSubmitResult =
-  | { ok: true; value: ModelCommandResult }
+  | { ok: true; value: TodoModelCommandResult }
   | { ok: false; message?: string };
 export type ModelCommandSubmitter = (
   request: ModelCommandRequest,
@@ -54,7 +60,7 @@ const modelResultFromSnapshot = (snapshot: TaskSnapshot): ModelCommandSubmitResu
 
 const settleStartedOperation = async (
   runtimeTransport: RuntimeTransport,
-  outcome: Extract<ModelCommandResult, { status: 'started' }>,
+  outcome: Extract<TodoModelCommandResult, { status: 'started' }>,
 ): Promise<ModelCommandSubmitResult> => {
   if (!runtimeTransport.durableOperation)
     return { ok: false, message: 'The configured Runtime Transport cannot observe this run.' };

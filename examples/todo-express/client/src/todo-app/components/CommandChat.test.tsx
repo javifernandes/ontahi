@@ -284,6 +284,15 @@ it('refreshes mutation state when an executed Operation also returns a response'
   await submit();
   expect(container.textContent).toContain('Completed 3 items.');
   expect(refresh).toHaveBeenCalledOnce();
+  expect(refresh).toHaveBeenCalledWith(
+    expect.objectContaining({
+      status: 'executed',
+      request: expect.objectContaining({
+        kind: 'invoke',
+        operationId: 'TodoList.completeAll',
+      }),
+    }),
+  );
 });
 
 it('does not retry an unknown transport outcome', async () => {
