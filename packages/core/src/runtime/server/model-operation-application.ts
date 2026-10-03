@@ -140,55 +140,61 @@ export const resolveModelOperationApplication = (
   contract: OperationApplicationContract,
   candidates: Readonly<Record<string, readonly ModelEntityCandidate[]>>,
 ) => {
-  let applications: { application: OperationApplication; labels: string[]; ids: string[] }[] = [
-    { application: proposal.application, labels: [], ids: [] },
-  ];
+  let application = proposal.application;
   for (const holeId of operationApplicationHoles(proposal.application)) {
     const matches = candidates[holeId] ?? [];
     if (!matches.length)
       return { status: 'unresolved' as const, reason: `No visible entity matches this request.` };
-    if (applications.length > 20 / matches.length)
+    if (matches.length > 20)
       return {
         status: 'unresolved' as const,
         reason: 'Too many matching entities. Be more specific.',
       };
-    applications = applications.flatMap(current =>
-      matches.flatMap(candidate => {
-        const result = substituteOperationApplication(
-          contract,
-          current.application,
-          holeId,
-          candidate.ref,
-        );
-        return result.success
-          ? [
-              {
-                application: result.application,
-                labels: [...current.labels, candidate.label],
-                ids: [...current.ids, JSON.stringify(candidate.ref)],
-              },
-            ]
-          : [];
-      }),
-    );
+    if (matches.length > 1)
+      return {
+        status: 'choice' as const,
+        prompt: `Which ${holeId} did you mean?`,
+        proposal: { ...proposal, application },
+        candidates,
+        holeId,
+        options: matches.map((candidate, index) => ({
+          id: `${holeId}:${index}`,
+          label: candidate.label,
+          candidate,
+        })),
+      };
+    const result = substituteOperationApplication(contract, application, holeId, matches[0]!.ref);
+    if (!result.success)
+      return {
+        status: 'unresolved' as const,
+        reason: 'The proposed operation could not be completed.',
+      };
+    application = result.application;
   }
-  const lowered = applications.flatMap(current => {
-    const result = lowerOperationApplication(contract, current.application);
-    return result.success ? [{ ...current, request: result.request }] : [];
-  });
-  if (!lowered.length)
+  const lowered = lowerOperationApplication(contract, application);
+  if (!lowered.success)
     return {
       status: 'unresolved' as const,
       reason: 'The proposed operation could not be completed.',
     };
-  if (lowered.length === 1) return { status: 'resolved' as const, request: lowered[0]!.request };
-  return {
-    status: 'choice' as const,
-    prompt: 'Which matching entity did you mean?',
-    options: lowered.map(item => ({
-      id: item.ids.join('|'),
-      label: item.labels.join(' · '),
-      request: item.request,
-    })),
-  };
+  return { status: 'resolved' as const, request: lowered.request };
+};
+
+export type ModelOperationApplicationChoice = Extract<
+  ReturnType<typeof resolveModelOperationApplication>,
+  { readonly status: 'choice' }
+>;
+
+export const continueModelOperationApplication = (
+  choice: ModelOperationApplicationChoice,
+  contract: OperationApplicationContract,
+  optionId: string,
+) => {
+  const selected = choice.options.find(option => option.id === optionId);
+  if (!selected)
+    return { status: 'unresolved' as const, reason: 'The selected entity is no longer available.' };
+  return resolveModelOperationApplication(choice.proposal, contract, {
+    ...choice.candidates,
+    [choice.holeId]: [selected.candidate],
+  });
 };

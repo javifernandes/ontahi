@@ -275,6 +275,81 @@ it('resolves and executes a model-proposed open Operation application', async ()
   expect(run.mock.calls[0]?.[0]).toEqual({ folder: inbox, title: 'Notes' });
 });
 
+it('continues an ambiguous Operation application without asking the model again', async () => {
+  const Folder = entity({ name: 'ChoiceFolder', fields: { id: field.id() } });
+  const operation = {
+    id: 'Document.moveChoice',
+    input: graphSchema.object({ folder: graphSchema.ref(Folder) }),
+  };
+  const generate = vi.fn(async () => ({
+    status: 'application' as const,
+    application: {
+      kind: 'operation-application' as const,
+      operationId: operation.id,
+      arguments: { folder: { kind: 'hole' as const, id: 'folder' } },
+    },
+    bindings: { folder: { kind: 'entity-match' as const, text: 'Inbox' } },
+  }));
+  const first = createEntityRef(Folder, { id: 'inbox-a' });
+  const second = createEntityRef(Folder, { id: 'inbox-b' });
+  const authorize = vi.fn();
+  const scope = vi.fn(async () => ({
+    bindings: { [operation.id]: { validate: () => undefined } },
+  }));
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
+    } as never,
+    provider: { generate },
+    authorize,
+    resolveEntityMatch: async () => ({
+      status: 'matched',
+      candidates: [
+        { ref: first, label: 'Inbox A' },
+        { ref: second, label: 'Inbox B' },
+      ],
+    }),
+    scope,
+  });
+  const request = { text: 'Move to Inbox' };
+  const prepared = await runtime.prepare(request, new AbortController().signal);
+  expect(prepared).toMatchObject({
+    status: 'application-choice',
+    choice: {
+      holeId: 'folder',
+      options: [{ label: 'Inbox A' }, { label: 'Inbox B' }],
+    },
+  });
+  if (prepared.status !== 'application-choice') throw new Error('Expected application choice.');
+
+  await expect(
+    runtime.continueApplication(
+      request,
+      prepared.choice,
+      prepared.choice.options[1]!.id,
+      new AbortController().signal,
+    ),
+  ).resolves.toEqual({
+    status: 'proposed',
+    request: { kind: 'invoke', operationId: operation.id, input: { folder: second } },
+  });
+  scope.mockResolvedValueOnce({ bindings: {} });
+  await expect(
+    runtime.continueApplication(
+      request,
+      prepared.choice,
+      prepared.choice.options[0]!.id,
+      new AbortController().signal,
+    ),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Operation is outside the configured scope.',
+  });
+  expect(generate).toHaveBeenCalledOnce();
+  expect(authorize).toHaveBeenCalledTimes(3);
+  expect(scope).toHaveBeenCalledTimes(3);
+});
+
 it('keeps model-proposed Operation applications outside the scoped catalog unresolved', async () => {
   const Folder = entity({ name: 'OutOfScopeFolder', fields: { id: field.id() } });
   const input = graphSchema.object({ folder: graphSchema.ref(Folder) });

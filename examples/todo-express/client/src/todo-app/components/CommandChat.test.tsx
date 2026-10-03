@@ -175,6 +175,81 @@ it('shows a model choice and continues with the selected option', async () => {
   expect(refresh).toHaveBeenCalledOnce();
 });
 
+it('keeps one exchange open across consecutive Hole choices', async () => {
+  const respond = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      value: {
+        status: 'pending',
+        message: 'Which destination?',
+        run: { taskId: 'ontahi.model-command', runId: 'run-dialogue' },
+        interaction: {
+          id: 'Document.move:destination',
+          kind: 'choice',
+          prompt: 'Which destination?',
+          options: [
+            { id: 'later-a', label: 'Later A' },
+            { id: 'later-b', label: 'Later B' },
+          ],
+          createdAt: '2026-10-03T00:00:00.000Z',
+        },
+      },
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      value: { status: 'executed', message: 'Item moved.' },
+    });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'Which source?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-dialogue' },
+      interaction: {
+        id: 'Document.move:source',
+        kind: 'choice',
+        prompt: 'Which source?',
+        options: [
+          { id: 'inbox-a', label: 'Inbox A' },
+          { id: 'inbox-b', label: 'Inbox B' },
+        ],
+        createdAt: '2026-10-03T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+
+  const inboxB = [...container.querySelectorAll('.command-chat-approval button')].find(
+    button => button.textContent === 'Inbox B',
+  ) as HTMLButtonElement;
+  await act(async () => inboxB.click());
+  expect(container.textContent).toContain('Which destination?');
+  expect(container.textContent).not.toContain('Which source?');
+  expect(refresh).not.toHaveBeenCalled();
+
+  const laterA = [...container.querySelectorAll('.command-chat-approval button')].find(
+    button => button.textContent === 'Later A',
+  ) as HTMLButtonElement;
+  await act(async () => laterA.click());
+  expect(container.textContent).toContain('Item moved.');
+  expect(respond).toHaveBeenNthCalledWith(
+    1,
+    { taskId: 'ontahi.model-command', runId: 'run-dialogue' },
+    { interactionId: 'Document.move:source', optionId: 'inbox-b' },
+  );
+  expect(respond).toHaveBeenNthCalledWith(
+    2,
+    { taskId: 'ontahi.model-command', runId: 'run-dialogue' },
+    { interactionId: 'Document.move:destination', optionId: 'later-a' },
+  );
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it('shows an executed read without refreshing mutation state', async () => {
   execute.mockResolvedValue({
     ok: true,

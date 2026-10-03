@@ -195,6 +195,145 @@ describe('Model Command Task', () => {
     });
   });
 
+  it('continues a partial Operation application through consecutive Hole choices', async () => {
+    const openApplication = {
+      kind: 'operation-application' as const,
+      operationId: 'Document.move',
+      arguments: {
+        source: { kind: 'hole' as const, id: 'source' },
+        destination: { kind: 'hole' as const, id: 'destination' },
+      },
+    };
+    const candidate = (entityName: string, id: string, label: string) => ({
+      id: JSON.stringify({ kind: 'entity-ref', entityName, ref: { id } }),
+      label,
+      candidate: {
+        ref: { kind: 'entity-ref', entityName, ref: { id } },
+        label,
+      },
+    });
+    const sourceChoice = {
+      status: 'choice' as const,
+      prompt: 'Which source did you mean?',
+      proposal: {
+        application: openApplication,
+        bindings: {
+          source: { kind: 'entity-match' as const, text: 'Inbox' },
+          destination: { kind: 'entity-match' as const, text: 'Later' },
+        },
+      },
+      candidates: {},
+      holeId: 'source',
+      options: [candidate('List', 'inbox-a', 'Inbox A'), candidate('List', 'inbox-b', 'Inbox B')],
+    };
+    const destinationChoice = {
+      ...sourceChoice,
+      prompt: 'Which destination did you mean?',
+      holeId: 'destination',
+      options: [candidate('List', 'later-a', 'Later A'), candidate('List', 'later-b', 'Later B')],
+    };
+    const request = {
+      kind: 'invoke' as const,
+      operationId: 'Document.move',
+      input: {
+        source: { kind: 'entity-ref', entityName: 'List', ref: { id: 'inbox-b' } },
+        destination: { kind: 'entity-ref', entityName: 'List', ref: { id: 'later-a' } },
+      },
+    };
+    const prepare = vi.fn(async () => ({
+      status: 'application-choice' as const,
+      choice: sourceChoice,
+    }));
+    const continueApplication = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'application-choice', choice: destinationChoice })
+      .mockResolvedValueOnce({ status: 'proposed', request });
+    const execute = vi.fn(async () => ({
+      status: 'executed' as const,
+      message: 'Document moved.',
+      request,
+    }));
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const task = createModelCommandTask({
+      runtime: {
+        prepare,
+        continueApplication,
+        execute,
+        submit: vi.fn(),
+      } as unknown as PreparedModelCommandRuntime,
+    });
+    taskRuntime.register?.(task);
+    const run = await Effect.runPromise(
+      startTask(taskRuntime, task, input, {
+        trigger: { cause: 'system', actor: { kind: 'system' } },
+      }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        interaction: {
+          id: 'Document.move:source',
+          kind: 'choice',
+          options: [{ label: 'Inbox A' }, { label: 'Inbox B' }],
+        },
+      });
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        taskRuntime,
+        run,
+        {
+          interactionId: 'Document.move:source',
+          optionId: sourceChoice.options[1]!.id,
+        },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        interaction: {
+          id: 'Document.move:destination',
+          kind: 'choice',
+          options: [{ label: 'Later A' }, { label: 'Later B' }],
+        },
+      });
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        taskRuntime,
+        run,
+        {
+          interactionId: 'Document.move:destination',
+          optionId: destinationChoice.options[0]!.id,
+        },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'executed', request },
+      });
+    });
+    expect(continueApplication).toHaveBeenNthCalledWith(
+      1,
+      input,
+      sourceChoice,
+      sourceChoice.options[1]!.id,
+      expect.any(AbortSignal),
+    );
+    expect(continueApplication).toHaveBeenNthCalledWith(
+      2,
+      input,
+      destinationChoice,
+      destinationChoice.options[0]!.id,
+      expect.any(AbortSignal),
+    );
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it('finishes a rejected proposal without executing it', async () => {
     const f = fixture();
     const run = await Effect.runPromise(

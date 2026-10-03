@@ -32,8 +32,10 @@ import {
   type ModelOperationExposure,
 } from './model-interpretation.js';
 import {
+  continueModelOperationApplication,
   modelOperationApplicationEntityMatches,
   resolveModelOperationApplication,
+  type ModelOperationApplicationChoice,
   type ModelOperationApplicationProposal,
 } from './model-operation-application.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
@@ -67,6 +69,7 @@ export type ModelCommandPreparation =
         request: ModelCommandCanonicalRequest;
       }>;
     }
+  | { status: 'application-choice'; choice: ModelOperationApplicationChoice }
   | { status: 'proposed'; request: ModelCommandCanonicalRequest };
 export type ModelCommandRuntime = {
   submit(
@@ -82,6 +85,12 @@ export type PreparedModelCommandRuntime = ModelCommandRuntime & {
     signal: AbortSignal,
     context?: { kind: 'proposal' | 'choice-option' },
   ): Promise<ModelCommandResult<ModelCommandCanonicalRequest, ModelGraphReadResult>>;
+  continueApplication(
+    request: ModelCommandRequest,
+    choice: ModelOperationApplicationChoice,
+    optionId: string,
+    signal: AbortSignal,
+  ): Promise<ModelCommandPreparation>;
 };
 
 export type CreateModelCommandRuntimeOptions = {
@@ -232,19 +241,18 @@ export const createModelCommandRuntime = ({
         );
         if (resolved.status === 'unresolved')
           return { status: 'unresolved', message: resolved.reason };
-        const requests =
-          resolved.status === 'resolved'
-            ? [resolved.request]
-            : resolved.options.map(option => option.request);
-        for (const candidate of requests) {
-          const reason = validateModelInvocation(candidate, catalog(initial), resolveOperation, {
-            kind: resolved.status === 'choice' ? 'choice-option' : 'proposal',
-          });
-          if (reason) return { status: 'unresolved', message: reason };
-        }
-        return resolved.status === 'resolved'
-          ? { status: 'proposed', request: resolved.request }
-          : resolved;
+        if (resolved.status === 'choice') return { status: 'application-choice', choice: resolved };
+        const reason = validateModelInvocation(
+          resolved.request,
+          catalog(initial),
+          resolveOperation,
+          {
+            kind: 'proposal',
+          },
+        );
+        return reason
+          ? { status: 'unresolved', message: reason }
+          : { status: 'proposed', request: resolved.request };
       }
       const readProposal = proposal as typeof proposal & ModelGraphReadApplicationProposal;
       const entityCandidates = [...(initial.entityCandidates ?? [])];
@@ -312,6 +320,42 @@ export const createModelCommandRuntime = ({
             .join('\n')}`,
       };
     return { status: 'unresolved', message: proposal.reason };
+  };
+
+  const continueApplication: PreparedModelCommandRuntime['continueApplication'] = async (
+    request,
+    choice,
+    optionId,
+    signal,
+  ) => {
+    validateRequest(request);
+    await authorize();
+    signal.throwIfAborted();
+    const current = await scope(request, signal);
+    if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
+    if (
+      !catalog(current).some(item => item.operationId === choice.proposal.application.operationId)
+    )
+      return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
+    const operation = resolveOperation(choice.proposal.application.operationId);
+    if (!operation || operation.input.kind !== 'schema.object')
+      return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
+    const resolved = continueModelOperationApplication(
+      choice,
+      {
+        id: choice.proposal.application.operationId,
+        input: operation.input as AnyGraphObjectDefinition,
+      },
+      optionId,
+    );
+    if (resolved.status === 'unresolved') return { status: 'unresolved', message: resolved.reason };
+    if (resolved.status === 'choice') return { status: 'application-choice', choice: resolved };
+    const reason = validateModelInvocation(resolved.request, catalog(current), resolveOperation, {
+      kind: 'choice-option',
+    });
+    return reason
+      ? { status: 'unresolved', message: reason }
+      : { status: 'proposed', request: resolved.request };
   };
 
   const execute: PreparedModelCommandRuntime['execute'] = async (
@@ -427,11 +471,16 @@ export const createModelCommandRuntime = ({
 
   return {
     prepare,
+    continueApplication,
     execute,
     submit: async (request, signal) => {
       const prepared = await prepare(request, signal);
       if (prepared.status === 'proposed') return execute(request, prepared.request, signal);
-      if (prepared.status === 'choice') return { status: 'unresolved', message: prepared.prompt };
+      if (prepared.status === 'choice' || prepared.status === 'application-choice')
+        return {
+          status: 'unresolved',
+          message: prepared.status === 'choice' ? prepared.prompt : prepared.choice.prompt,
+        };
       return prepared;
     },
   };
