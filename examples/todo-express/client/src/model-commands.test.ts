@@ -116,6 +116,7 @@ it('observes a started Operation before reporting the model command as executed'
     },
   });
   expect(observe).toHaveBeenCalledWith(run);
+  expect(request).toHaveBeenCalledOnce();
 });
 
 it('reports every non-completing started Operation outcome without resubmitting', async () => {

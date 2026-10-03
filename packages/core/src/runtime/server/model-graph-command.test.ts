@@ -112,6 +112,19 @@ it('dispatches a canonical graph update without domain operations', async () => 
   });
   expect(f.authorize).toHaveBeenCalledTimes(2);
 });
+it('includes graph command descriptions in default help', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({
+    application: f.application,
+    provider: { generate: async () => ({ status: 'help' }) },
+    scope: f.scope,
+    authorize: f.authorize,
+  });
+
+  await expect(
+    runtime.submit({ text: 'What can I do?' }, new AbortController().signal),
+  ).resolves.toEqual({ status: 'answered', message: 'You can:\n• Rename a document.' });
+});
 it('rejects exposure removal between inference and dispatch', async () => {
   const f = fixture();
   f.scope

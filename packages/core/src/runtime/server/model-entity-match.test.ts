@@ -59,6 +59,46 @@ it('searches display metadata through an authorized Graph Read and builds canoni
   });
 });
 
+it('searches across multiple authorized display fields', async () => {
+  const SearchableFolder = entity({
+    name: 'SearchableFolder',
+    fields: { id: field.id(), name: field.string(), description: field.string() },
+    display: { primary: 'name', search: ['name', 'description'] },
+  });
+  const searchablePolicy = {
+    ...policy,
+    entity: SearchableFolder,
+    fields: {
+      id: { select: true },
+      name: { select: true, filter: ['eq'] },
+      description: { select: true, filter: ['eq'] },
+    },
+  } as const satisfies GraphReadPolicy<typeof SearchableFolder, undefined>;
+  const read = vi.fn(async request => {
+    expect(request.selection.expression).toMatchObject({
+      kind: 'or',
+      operands: [
+        { fieldName: 'name', value: 'Incoming' },
+        { fieldName: 'description', value: 'Incoming' },
+      ],
+    });
+    return {
+      kind: 'graph-read-result' as const,
+      value: [{ id: 'inbox', name: 'Inbox', description: 'Incoming' }],
+    };
+  });
+
+  await expect(
+    resolveAuthorizedModelEntityMatch({
+      target: SearchableFolder,
+      text: 'Incoming',
+      policies: [searchablePolicy],
+      read,
+      authority: undefined,
+    }),
+  ).resolves.toMatchObject({ status: 'matched', candidates: [{ label: 'Inbox' }] });
+});
+
 it('requires an authorized searchable display field', async () => {
   const read = vi.fn();
   await expect(

@@ -464,6 +464,19 @@ it('does not execute unresolved results', async () => {
   });
   expect(f.run).not.toHaveBeenCalled();
 });
+it('stops before model interpretation when scope cannot be disclosed', async () => {
+  const f = fixture();
+  const runtime = createModelCommandRuntime({
+    ...f,
+    provider: { generate: f.generate },
+    scope: async () => ({ unresolved: 'Context is incomplete.' }),
+  });
+  await expect(runtime.submit({ text: 'rename' }, new AbortController().signal)).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Context is incomplete.',
+  });
+  expect(f.generate).not.toHaveBeenCalled();
+});
 it('does not dispatch after cancellation', async () => {
   const f = fixture();
   const controller = new AbortController();
