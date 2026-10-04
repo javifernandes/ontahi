@@ -88,8 +88,7 @@ import { createApplicationRuntimeProtocol } from '@ontahi/core/runtime/server';
 
 const protocol = createApplicationRuntimeProtocol({
   application,
-  graphRead: { policies: graphReadPolicies },
-  graphCommand: { policies: graphCommandPolicies },
+  policies: [...graphReadPolicies, ...graphCommandPolicies],
   modelCommand: { runtime: modelCommandRuntime },
 });
 ```
@@ -224,7 +223,30 @@ current observation contract is Graph Read v1; contextual v2 navigation remains 
 ## Mount the socket on the host server
 
 Creating a browser transport does not install a WebSocket endpoint. HTTP middleware alone cannot
-own the Node HTTP upgrade lifecycle. The Express host binds the same dispatcher to its server:
+own the Node HTTP upgrade lifecycle. For an application that owns its Node server,
+`createExpressRuntimeProtocolHost` supplies the ordinary secure defaults:
+
+```ts
+import { createExpressRuntimeProtocolHost } from '@ontahi/runtime-express/runtime-protocol';
+
+const host = createExpressRuntimeProtocolHost({
+  application: expressApp,
+  receiver: runtimeProtocol,
+  context: async request => ({ principal: await resolveWebSocketPrincipal(request) }),
+  publicOrigin: process.env.PUBLIC_ORIGIN,
+});
+
+host.server.listen(3001);
+// await host.close() during shutdown
+```
+
+The host owns the Node server and Runtime Protocol WebSocket lifecycle. It uses `/runtime`, owns the
+upgrade boundary, and rejects upgrades that are not from the effective HTTP(S) same origin. An
+explicit `publicOrigin` supports reverse-proxy deployments. A custom `authorizeUpgrade` can replace
+that policy when a non-browser transport has a different authenticated handshake.
+
+Hosts that already own a shared Node upgrade boundary can bind the receiver with the lower-level
+adapter:
 
 ```ts
 import { createServer } from 'node:http';
@@ -241,7 +263,7 @@ const socketServer = createExpressRuntimeProtocolWebSocketServer({
 });
 ```
 
-The named context and authorization functions above are host bindings, not implied defaults. The
+The named context and authorization functions in the low-level example are host bindings. The
 receiver is the same application protocol used for HTTP and supplies its observers. Choose
 `ownsUpgradeBoundary: true` only when this adapter owns the server's upgrade boundary; omit it
 when another socket service also handles upgrades. Retain `socketServer` and await its `close()`

@@ -41,7 +41,7 @@ export type OntahiExpressExplorerOptions = {
   buildSnapshot(
     application: OntahiApplication,
     context?: {
-      graphCommandPolicies: OntahiExpressGraphCommandOptions['policies'];
+      graphCommandPolicies: OntahiExpressGraphCommandOptions<any>['policies'];
     },
   ): unknown;
   path?: string;
@@ -93,7 +93,7 @@ export type OntahiExpressGraphCommandOptions<TAuthority = InvocationContext> = {
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
     | OrderedRelationshipCommandPolicy
-    | EntityMutationCommandPolicy<any>
+    | EntityMutationCommandPolicy<any, TAuthority>
   )[];
   dispatcher?: GraphCommandDispatcher<TAuthority>;
   context?: ExpressGraphCommandContextFactory<TAuthority>;

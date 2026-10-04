@@ -122,7 +122,7 @@ export type ApplicationGraphCommandDispatcherFactory = <TAuthority>(
     | RelationshipCommandPolicy
     | ManyToManyRelationshipCommandPolicy
     | OrderedRelationshipCommandPolicy
-    | EntityMutationCommandPolicy<any>
+    | EntityMutationCommandPolicy<any, TAuthority>
   )[],
 ) => GraphCommandDispatcher<TAuthority>;
 

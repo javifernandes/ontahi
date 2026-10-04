@@ -11,6 +11,8 @@ import {
 import { createFetchRuntimeTransport } from '@ontahi/react/graph';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type { TodoExpressServer } from './application.js';
+
 process.env.TODO_AUTH_MODE = 'disabled';
 process.env.TODO_TASK_RUNTIME = 'langgraph';
 
@@ -19,6 +21,7 @@ const { TodoApplication } = await import('./graph.js');
 
 describe('Todo LangGraph Runtime Protocol', () => {
   let server: Server | undefined;
+  let runtimeHost: TodoExpressServer | undefined;
   let origin: string;
 
   beforeAll(async () => {
@@ -31,19 +34,16 @@ describe('Todo LangGraph Runtime Protocol', () => {
     TodoApplication.storage.dataset.TodoItem = [
       { id: 'todo-1', list: 'list-inbox', title: 'Keep me', completed: false },
     ];
-    const runtimeServer = createTodoExpressServer();
+    runtimeHost = createTodoExpressServer();
     const startedServer = await new Promise<Server>(resolve => {
-      const started = runtimeServer.listen(0, '127.0.0.1', () => resolve(started));
+      const started = runtimeHost!.server.listen(0, '127.0.0.1', () => resolve(started));
     });
     server = startedServer;
     origin = `http://127.0.0.1:${(startedServer.address() as AddressInfo).port}`;
   });
 
   afterAll(async () => {
-    const startedServer = server;
-    if (!startedServer) return;
-    startedServer.closeAllConnections();
-    await new Promise<void>(resolve => startedServer.close(() => resolve()));
+    await runtimeHost?.close();
   });
 
   it('completes a rejected interaction through Runtime Protocol without snapshot recovery', async () => {
