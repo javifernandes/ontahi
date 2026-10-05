@@ -26,11 +26,10 @@ import {
   validateTaskOutput,
   validateTaskProgress,
   type InProcessTaskExecutorOptions,
-  type TaskApprovalInteractionRequest,
-  type TaskChoiceInteractionRequest,
   type TaskConfig,
   type TaskDefinition,
   type TaskExecutionCheckpoint,
+  type TaskExecutionInteractionRequest,
   type TaskExecutionState,
   type TaskExecutionTransition,
   type TaskExecutor,
@@ -46,7 +45,7 @@ import {
   type TaskStartOptions,
   type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
-import { cloneJson, type JsonValue } from '@ontahi/core/value/json';
+import { cloneJson } from '@ontahi/core/value/json';
 import { Effect, Stream } from 'effect';
 
 const LangGraphState = Annotation.Root({
@@ -168,14 +167,15 @@ const createLangGraphTaskRuntime = (
   const prepareInteraction = async (
     ref: TaskRunIdentity,
     state: TaskExecutionState,
-    request: TaskChoiceInteractionRequest<JsonValue> | TaskApprovalInteractionRequest,
+    request: TaskExecutionInteractionRequest,
     reuseClaimedResponseId: boolean,
   ) => {
     const persisted = await runTaskEffect(storage.loadSource(ref));
     const sameState = JSON.stringify(persisted.checkpoint?.state) === JSON.stringify(state);
     const persistedCheckpoint = checkpointOf(persisted);
     const existing = sameState ? persistedCheckpoint?.interaction : undefined;
-    const expectedKind = 'options' in request ? 'choice' : 'approval';
+    const expectedKind =
+      'options' in request ? 'choice' : 'input' in request ? 'input' : 'approval';
     const canReuse =
       existing?.kind === expectedKind && (request.id === undefined || request.id === existing.id);
     const interaction = canReuse

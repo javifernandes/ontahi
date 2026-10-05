@@ -254,6 +254,42 @@ describe('vercel workflow task executor', () => {
     });
   });
 
+  it('fails explicitly when a workflow task requests unsupported input', async () => {
+    loadSource.mockReturnValue(
+      Effect.succeed({
+        taskId: 'fixture.input',
+        runId: 'bookops-run-1',
+        status: 'queued',
+        input: {},
+        trigger: { cause: 'user_request' },
+        updatedAt: '2026-06-03T00:00:00.000Z',
+      }),
+    );
+    taskDefinitions.set('fixture.input', {
+      id: 'fixture.input',
+      run: (_input: unknown, context) =>
+        context.interact.input({
+          prompt: 'What title?',
+          input: { type: 'string' },
+        }),
+    });
+    const executor = await createExecutor();
+
+    await expect(
+      executor.runTask(
+        {
+          taskId: 'fixture.input',
+          runId: 'bookops-run-1',
+        },
+        vi.fn(),
+      ),
+    ).rejects.toMatchObject({
+      reason: 'task_interaction_unavailable',
+      taskId: 'fixture.input',
+      runId: 'bookops-run-1',
+    });
+  });
+
   it('rejects explicit task execution before calling the legacy run function', async () => {
     const run = vi.fn(() => Effect.succeed({ completed: true }));
     taskDefinitions.set('fixture.explicit-execution', {

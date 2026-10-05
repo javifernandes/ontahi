@@ -2,7 +2,7 @@ import type {
   TaskInteractionResponse,
   TaskPendingInteraction,
 } from '@ontahi/core/runtime/contracts';
-import { useContext, type CSSProperties } from 'react';
+import { useContext, type CSSProperties, type FormEvent } from 'react';
 
 import { graphCommandText } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
@@ -54,6 +54,49 @@ export const OperationInteraction = ({
         </span>
       </div>
     );
+
+  if (interaction.kind === 'input') {
+    const submit = (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const value = new FormData(event.currentTarget).get('value');
+      if (typeof value === 'string') respond({ interactionId: interaction.id, value });
+    };
+    return (
+      <form style={styles.semanticCard} onSubmit={submit}>
+        <span style={styles.semanticLabel}>Input required</span>
+        <label style={styles.semanticValue} htmlFor={`task-input-${interaction.id}`}>
+          {interaction.prompt}
+        </label>
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <input
+            id={`task-input-${interaction.id}`}
+            name='value'
+            type='text'
+            disabled={responding}
+            required
+            autoFocus
+            style={{
+              flex: '1 1 240px',
+              minHeight: 30,
+              padding: '0 10px',
+              border: '1px solid #30463a',
+              borderRadius: 8,
+              color: '#e6fff0',
+              background: '#101b16',
+              font: 'inherit',
+            }}
+          />
+          <button
+            type='submit'
+            disabled={responding}
+            style={{ ...buttonStyle('primary'), ...(responding ? styles.disabledButton : {}) }}
+          >
+            Continue
+          </button>
+        </span>
+      </form>
+    );
+  }
 
   return (
     <div style={styles.semanticCard}>

@@ -406,19 +406,20 @@ it('continues an omitted Entity choice through string input without asking the m
   }));
   const inbox = createEntityRef(Folder, { id: 'inbox' });
   const later = createEntityRef(Folder, { id: 'later' });
+  const scope = vi.fn(async () => ({
+    bindings: { [operation.id]: { validate: () => undefined } },
+    entityCandidates: [
+      { ref: inbox, label: 'Inbox' },
+      { ref: later, label: 'Later' },
+    ],
+  }));
   const runtime = createModelCommandRuntime({
     application: {
       resolveOperation: (id: string) => (id === operation.id ? (operation as never) : undefined),
     } as never,
     provider: { generate },
     authorize: () => undefined,
-    scope: async () => ({
-      bindings: { [operation.id]: { validate: () => undefined } },
-      entityCandidates: [
-        { ref: inbox, label: 'Inbox' },
-        { ref: later, label: 'Later' },
-      ],
-    }),
+    scope,
   });
   const request = { text: 'Add item' };
   const signal = new AbortController().signal;
@@ -442,6 +443,13 @@ it('continues an omitted Entity choice through string input without asking the m
       operationId: operation.id,
       input: { folder: inbox, title: 'Notes' },
     },
+  });
+  scope.mockResolvedValueOnce({ bindings: {}, entityCandidates: [] });
+  await expect(
+    runtime.submitApplicationInput(request, selected.input, 'Notes', signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Operation is outside the configured scope.',
   });
   expect(generate).toHaveBeenCalledOnce();
 });

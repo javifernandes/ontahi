@@ -390,6 +390,8 @@ export const createModelCommandRuntime = ({
     signal.throwIfAborted();
     const current = await scope(request, signal);
     if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
+    if (!catalog(current).some(item => item.operationId === input.proposal.application.operationId))
+      return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
     const operation = resolveOperation(input.proposal.application.operationId);
     if (!operation || operation.input.kind !== 'schema.object')
       return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
