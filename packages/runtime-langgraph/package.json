@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
-    "@types/node": "^20.0.0",
+    "@types/node": "^26.6.4",
     "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
