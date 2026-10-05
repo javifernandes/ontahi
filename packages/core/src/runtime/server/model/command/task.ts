@@ -21,7 +21,10 @@ import {
   type TaskFailure,
   type TaskStartOptions,
 } from '../../tasks.js';
-import type { ModelOperationApplicationChoice } from '../application/operation.js';
+import type {
+  ModelOperationApplicationChoice,
+  ModelOperationApplicationInput,
+} from '../application/operation.js';
 import { ModelInterpretationError } from '../interpretation.js';
 import type { ModelGraphReadResult } from '../read/graph.js';
 
@@ -50,6 +53,10 @@ type ModelCommandTaskState =
   | {
       readonly step: 'choose-application';
       readonly choice: ModelOperationApplicationChoice;
+    }
+  | {
+      readonly step: 'input-application';
+      readonly input: ModelOperationApplicationInput;
     }
   | {
       readonly step: 'review';
@@ -149,6 +156,11 @@ export const createModelCommandTask = ({
         kind: 'continue' as const,
         state: { step: 'choose-application' as const, choice: prepared.choice },
       };
+    if (prepared.status === 'application-input')
+      return {
+        kind: 'continue' as const,
+        state: { step: 'input-application' as const, input: prepared.input },
+      };
     if (prepared.status !== 'proposed') return { kind: 'complete' as const, result: prepared };
     return {
       kind: 'continue' as const,
@@ -245,6 +257,33 @@ export const createModelCommandTask = ({
               input,
               state.choice,
               response.optionId,
+              new AbortController().signal,
+            );
+            return routePreparation(prepared, input, 'choice-option');
+          });
+        },
+      }),
+      'input-application': defineTaskExecutionStep({
+        run: ({ input, state, response, context }) => {
+          if (state.step !== 'input-application')
+            return Effect.dieMessage('Invalid model command state.');
+          if (!response) {
+            return Effect.succeed({
+              kind: 'interaction' as const,
+              state,
+              interaction: {
+                id: `${state.input.proposal.application.operationId}:${state.input.holeId}`,
+                prompt: state.input.prompt,
+                input: state.input.input,
+              },
+            });
+          }
+          if (!('value' in response)) return Effect.dieMessage('Invalid input response.');
+          return modelEffect(context.trigger, async () => {
+            const prepared = await runtime.submitApplicationInput(
+              input,
+              state.input,
+              response.value,
               new AbortController().signal,
             );
             return routePreparation(prepared, input, 'choice-option');

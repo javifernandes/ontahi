@@ -452,6 +452,8 @@ JSON-safe state names the next step, and every named step returns `continue`, `i
 suspended Operation function. On recovery, the application host reconstructs current Operation
 runtime resources from the stored run metadata; credentials and live capabilities are never part
 of the checkpoint. The legacy function-style Task path still uses a process-local continuation.
+Interactions may request a finite `choice`, a string `input`, or an `approval`; their responses
+carry the same interaction identity through the Durable Operation Runtime Protocol.
 This boundary supports alternate workflow adapters while keeping checkpoint and Interaction
 semantics owned by Ontahí.
 
@@ -826,7 +828,10 @@ policies still apply at dispatch. Help is rendered from exposed descriptions thr
 `formatHelp`. A validated BCP 47 `language` guides user-facing reasons and host localization.
 Request `context` is host-defined interaction context, not authority.
 
-This iteration supports commands, invocations, help, and unresolved requests. Reads followed by
-natural-language answers, structured questions/continuations, automatic scope inference, and agent
-loops remain separate work. Provider adapters and domain disclosure policy remain host-owned.
+Model-proposed Operation applications may leave Entity Ref and string arguments as typed Holes.
+The runtime resolves named Refs through authorized reads, offers disclosed candidates when the Ref
+was omitted, and checkpoints string input as a durable interaction. Each response substitutes one
+Hole and continues the same application without invoking the model again. Other scalar input
+types, automatic scope inference, and agent loops remain separate work. Provider adapters and
+domain disclosure policy remain host-owned.
 Public chat request/result types live in the browser-safe `@ontahi/core/runtime/contracts` entrypoint.

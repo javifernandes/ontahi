@@ -250,6 +250,63 @@ describe('Todo canonical model requests', () => {
     expect(generate).toHaveBeenCalledTimes(2);
     expect(generate.mock.calls[1]![0].prompt).toContain('Do not return a graph-read application.');
   });
+  it('continues add item from list choice through title input without another model call', async () => {
+    const generate = vi.fn(async () => ({
+      status: 'application',
+      application: {
+        kind: 'operation-application',
+        operationId: 'TodoItem.addItem',
+        arguments: {
+          list: { kind: 'hole', id: 'list' },
+          title: { kind: 'hole', id: 'title' },
+        },
+      },
+      bindings: {
+        list: { kind: 'entity-choice', prompt: 'Which list?' },
+        title: { kind: 'free-input', prompt: 'What should the item say?' },
+      },
+    }));
+    bind(generate);
+    const request = { text: 'add item' };
+    const signal = new AbortController().signal;
+    const inContext = <T>(run: () => Promise<T>) => withInvocationContext({ principal }, run);
+
+    const prepared = await inContext(() => runtime.prepare(request, signal));
+    expect(prepared).toMatchObject({
+      status: 'application-choice',
+      choice: { holeId: 'list', prompt: 'Which list?' },
+    });
+    if (prepared.status !== 'application-choice') throw new Error('Expected list choice.');
+    const selected = await inContext(() =>
+      runtime.continueApplication(request, prepared.choice, prepared.choice.options[0]!.id, signal),
+    );
+    expect(selected).toMatchObject({
+      status: 'application-input',
+      input: { holeId: 'title', prompt: 'What should the item say?' },
+    });
+    if (selected.status !== 'application-input') throw new Error('Expected title input.');
+    const completed = await inContext(() =>
+      runtime.submitApplicationInput(request, selected.input, 'Buy milk', signal),
+    );
+    expect(completed).toMatchObject({
+      status: 'proposed',
+      request: {
+        kind: 'invoke',
+        operationId: 'TodoItem.addItem',
+        input: { list: list('list-1'), title: 'Buy milk' },
+      },
+    });
+    if (completed.status !== 'proposed') throw new Error('Expected completed proposal.');
+    await expect(
+      inContext(() =>
+        runtime.execute(request, completed.request, signal, { kind: 'choice-option' }),
+      ),
+    ).resolves.toMatchObject({ status: 'executed', message: 'Item added.' });
+    expect(generate).toHaveBeenCalledOnce();
+    expect(dataset().TodoItem).toContainEqual(
+      expect.objectContaining({ list: 'list-1', title: 'Buy milk', completed: false }),
+    );
+  });
   it('uses the graph read result for counts instead of answering from prompt context', async () => {
     bind(async () => readIncompleteItems('count'));
 

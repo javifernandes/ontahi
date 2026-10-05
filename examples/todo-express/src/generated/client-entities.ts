@@ -103,6 +103,17 @@ export const Tag = defineClientEntity(TagSchema, {
 
 export const TodoItem = defineClientEntity(TodoItemSchema, {
   domainOperations: {
+    addItem: defineClientDomainOperation({
+      authority: 'server',
+      exposure: 'bridge',
+      bridge: {
+        invalidate: [['TodoList'], ['TodoItem']],
+      },
+      input: graphSchema.object({
+        list: graphSchema.ref(TodoListSchema),
+        title: TodoItemSchema.fields.title,
+      }),
+    }),
     deleteFromNamedList: defineClientDomainOperation({
       authority: 'server',
       exposure: 'bridge',

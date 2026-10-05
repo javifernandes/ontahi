@@ -335,6 +335,92 @@ describe('Model Command Task', () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
+  it('checkpoints scalar Hole input and continues the same partial application', async () => {
+    const applicationInput = {
+      status: 'input' as const,
+      prompt: 'What should the item say?',
+      holeId: 'title',
+      input: { type: 'string' as const },
+      proposal: {
+        application: {
+          kind: 'operation-application' as const,
+          operationId: 'TodoItem.addItem',
+          arguments: {
+            list: { kind: 'value' as const, value: { id: 'inbox' } },
+            title: { kind: 'hole' as const, id: 'title' },
+          },
+        },
+        bindings: { title: { kind: 'free-input' as const, prompt: 'What should the item say?' } },
+      },
+      candidates: {},
+    };
+    const request = {
+      kind: 'invoke' as const,
+      operationId: 'TodoItem.addItem',
+      input: { list: { id: 'inbox' }, title: 'Buy milk' },
+    };
+    const prepare = vi.fn(async () => ({
+      status: 'application-input' as const,
+      input: applicationInput,
+    }));
+    const submitApplicationInput = vi.fn(async () => ({
+      status: 'proposed' as const,
+      request,
+    }));
+    const execute = vi.fn(async () => ({
+      status: 'executed' as const,
+      message: 'Item added.',
+      request,
+    }));
+    const taskRuntime = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const task = createModelCommandTask({
+      runtime: {
+        prepare,
+        submitApplicationInput,
+        execute,
+        submit: vi.fn(),
+      } as unknown as PreparedModelCommandRuntime,
+    });
+    taskRuntime.register?.(task);
+    const run = await Effect.runPromise(
+      startTask(taskRuntime, task, input, {
+        trigger: { cause: 'system', actor: { kind: 'system' } },
+      }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        interaction: {
+          id: 'TodoItem.addItem:title',
+          kind: 'input',
+          prompt: 'What should the item say?',
+          input: { type: 'string' },
+        },
+      });
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        taskRuntime,
+        run,
+        { interactionId: 'TodoItem.addItem:title', value: 'Buy milk' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(taskRuntime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { status: 'executed', message: 'Item added.' },
+      });
+    });
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(submitApplicationInput).toHaveBeenCalledWith(
+      input,
+      applicationInput,
+      'Buy milk',
+      expect.any(AbortSignal),
+    );
+  });
+
   it('finishes a rejected proposal without executing it', async () => {
     const f = fixture();
     const run = await Effect.runPromise(

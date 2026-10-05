@@ -373,6 +373,20 @@ export const TodoItem = entity({
       },
     });
     return {
+      addItem: operation({
+        description: 'Add an item to a list.',
+        input: graphSchema.object({
+          list: graphSchema.ref(TodoList),
+          title: self.fields.title,
+        }),
+        bridge: { invalidate: [['TodoList'], ['TodoItem']] },
+        run: ({ list, title }) => {
+          const command = mutateEntity(self).create({ list, title });
+          return getRequiredDataGraphRuntime<EntityMutationCommandExecutionRuntime<unknown>>()
+            .runEntityMutationCommand(command)
+            .pipe(Effect.orDie);
+        },
+      }),
       deleteFromNamedList: operation({
         description:
           'Delete every item from one named list after resolving ambiguity and approval.',

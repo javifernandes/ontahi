@@ -60,6 +60,7 @@ export const CommandChat = ({
   });
   const voice = useSpeechOutput(speech.language);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [interactionValues, setInteractionValues] = useState<Record<number, string>>({});
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [entries, expanded]);
@@ -234,7 +235,9 @@ export const CommandChat = ({
                     aria-label={
                       entry.interaction.kind === 'approval'
                         ? 'Approval required'
-                        : 'Choice required'
+                        : entry.interaction.kind === 'input'
+                          ? 'Input required'
+                          : 'Choice required'
                     }
                   >
                     {entry.interaction.kind === 'approval' ? (
@@ -267,6 +270,39 @@ export const CommandChat = ({
                           </button>
                         </div>
                       </>
+                    ) : entry.interaction.kind === 'input' ? (
+                      <form
+                        className='command-chat-input'
+                        onSubmit={event => {
+                          event.preventDefault();
+                          const value = interactionValues[entry.id]?.trim();
+                          if (!value) return;
+                          void respondToInteraction(entry, {
+                            interactionId: entry.interaction!.id,
+                            value,
+                          });
+                        }}
+                      >
+                        <input
+                          aria-label={entry.interaction.prompt}
+                          type='text'
+                          value={interactionValues[entry.id] ?? ''}
+                          disabled={entry.responding}
+                          onChange={event =>
+                            setInteractionValues(previous => ({
+                              ...previous,
+                              [entry.id]: event.target.value,
+                            }))
+                          }
+                          autoFocus
+                        />
+                        <button
+                          type='submit'
+                          disabled={entry.responding || !interactionValues[entry.id]?.trim()}
+                        >
+                          Continue
+                        </button>
+                      </form>
                     ) : (
                       <div>
                         {entry.interaction.options.map(option => (

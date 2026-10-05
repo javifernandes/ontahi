@@ -1480,6 +1480,22 @@ a {
   opacity: 0.5;
   cursor: default;
 }
+
+.command-chat-input {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.command-chat-input input {
+  min-width: 12rem;
+  flex: 1;
+  border: 1px solid #bdc7ba;
+  border-radius: 0.75rem;
+  background: #fffefa;
+  color: inherit;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
 .command-chat-composer {
   display: flex;
   align-items: center;

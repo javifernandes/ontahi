@@ -75,6 +75,14 @@ export const createTodoModelRuntime = ({
       return {
         data: current,
         bindings: {
+          'TodoItem.addItem': {
+            description: request.language?.toLowerCase().startsWith('es')
+              ? 'Agregar un ítem a una lista.'
+              : 'Add an item to a list.',
+            validate: () => undefined,
+            message: () =>
+              request.language?.toLowerCase().startsWith('es') ? 'Ítem agregado.' : 'Item added.',
+          },
           'TodoList.completeAll': {
             description: request.language?.toLowerCase().startsWith('es')
               ? 'Completar todas las tareas pendientes de una lista (por ejemplo: "completá todas las tareas de Inbox").'
@@ -111,6 +119,16 @@ export const createTodoModelRuntime = ({
             list: current.lists.find(list => list.id === item.list.locator.id)?.name,
           })),
         },
+        entityCandidates: [
+          ...current.lists.map(list => ({
+            ref: createEntityRef(TodoList, { id: list.id }),
+            label: list.name,
+          })),
+          ...current.items.map(item => ({
+            ref: createEntityRef(TodoItem, { id: item.id }),
+            label: item.title,
+          })),
+        ],
       };
     },
   });

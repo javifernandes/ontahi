@@ -1516,6 +1516,55 @@ describe('tasks', () => {
     });
   });
 
+  it('suspends and resumes a task through a string input interaction', async () => {
+    const adapter = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const task = defineTask({
+      id: 'demo.collect-title',
+      run: (_input: {}, context) =>
+        context.interact.input({
+          id: 'collect-title',
+          prompt: 'What should the item say?',
+          input: { type: 'string' },
+        }),
+    });
+    const run = await Effect.runPromise(
+      startTask(
+        adapter,
+        task,
+        {},
+        {
+          runId: 'collect-title-run',
+          trigger: createUserTaskTrigger({ userId: 'user-1' }),
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        interaction: {
+          id: 'collect-title',
+          kind: 'input',
+          prompt: 'What should the item say?',
+          input: { type: 'string' },
+        },
+      });
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        adapter,
+        run,
+        { interactionId: 'collect-title', value: 'Buy milk' },
+        { actor: { kind: 'user', id: 'user-1' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: 'Buy milk',
+      });
+    });
+  });
+
   it('records a terminal failure when resumed task execution defects', async () => {
     const adapter = createInProcessTaskRuntime({
       storage: createInMemoryTaskStorage(),

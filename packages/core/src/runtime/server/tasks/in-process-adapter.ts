@@ -9,6 +9,7 @@ import {
   materializeTaskExecutionInteraction,
   validateTaskApprovalInteractionRequest,
   validateTaskChoiceInteractionRequest,
+  validateTaskInputInteractionRequest,
   validateTaskInteractionResponse,
 } from './execution-interactions.js';
 import {
@@ -35,6 +36,7 @@ import type {
   TaskInteractionResponseContext,
   TaskPendingApprovalInteraction,
   TaskPendingChoiceInteraction,
+  TaskPendingInputInteraction,
   TaskPendingInteraction,
   TaskRunIdentity,
   TaskRunRef,
@@ -192,6 +194,35 @@ export const createInProcessTaskRuntime = ({
               ref,
               pending,
             );
+          }),
+        input: request =>
+          Effect.gen(function* () {
+            yield* validateTaskInputInteractionRequest(ref, request);
+            const key = keyOf(ref);
+            if (pendingInteractions.has(key)) {
+              return yield* Effect.fail(
+                invalidTaskInteractionFailure(ref, 'Task run already has a pending interaction.'),
+              );
+            }
+
+            const continuation = createContinuation();
+            const interaction = {
+              id: request.id ?? createInteractionId(),
+              kind: 'input',
+              prompt: request.prompt,
+              input: request.input,
+              createdAt: now(),
+            } satisfies TaskPendingInputInteraction;
+            const pending = {
+              interaction,
+              resolve: (response: TaskInteractionResponse) =>
+                'value' in response
+                  ? ({ success: true, value: response.value } as const)
+                  : ({ success: false } as const),
+              ...continuation,
+            } satisfies PendingInteraction;
+
+            return yield* waitForInteraction<string>(ref, pending);
           }),
         approval: request =>
           Effect.gen(function* () {
