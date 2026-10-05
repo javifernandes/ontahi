@@ -47,7 +47,7 @@
     "@ontahi/core": "workspace:*",
     "@ontahi/sql": "workspace:*",
     "effect": "^3.21.0",
-    "mysql2": "^3.14.0"
+    "mysql2": "^3.24.5"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

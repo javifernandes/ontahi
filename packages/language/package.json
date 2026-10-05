@@ -47,12 +47,12 @@
     "lint:fix": "pnpm exec eslint \"src/**/*.{ts,tsx}\" --ignore-pattern \"src/generated/**\" --fix --max-warnings 0"
   },
   "dependencies": {
-    "@lezer/common": "^1.2.3",
+    "@lezer/common": "^1.5.3",
     "@lezer/lr": "^1.4.2",
     "@ontahi/core": "workspace:*"
   },
   "devDependencies": {
-    "@lezer/generator": "^1.8.0",
+    "@lezer/generator": "^1.8.1",
     "@ontahi/supabase": "workspace:*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
