@@ -2,6 +2,10 @@
 
 Model the domain once. Let runtimes interpret it.
 
+[Read this guide on BookOps](https://bookops.net/ontahi-for-devs) ·
+[Visit ontahi.org](https://ontahi.org) ·
+[Explore the source](https://github.com/javifernandes/ontahi)
+
 This edition follows the `1.0.0-alpha.12` public surface. The
 [alpha.12 candidate and upgrade guide](../releases/1.0.0-alpha.12.md) records its release preparation;
 the chapters below distinguish implemented alpha contracts from further directions.

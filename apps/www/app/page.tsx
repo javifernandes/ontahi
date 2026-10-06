@@ -1,155 +1,121 @@
 import Image from 'next/image';
 
-const essayUrl =
-  'https://bookops.net/ontahi-library-01-living-systems/living-systems/why-systems-evolve';
+const siteUrl = 'https://ontahi.org';
 const repoUrl = 'https://github.com/javifernandes/ontahi';
+const docsUrl = 'https://bookops.net/ontahi-for-devs';
+const docsSourceUrl = `${repoUrl}/tree/main/docs/developers`;
+const npmUrl = 'https://www.npmjs.com/search?q=%40ontahi%2F';
 const licenseUrl = `${repoUrl}/blob/main/LICENSE`;
 
-const adoptionLayers = [
+const primitives = [
+  ['Entities & relations', 'Describe the things in your domain and how they connect.'],
+  ['Selections & reads', 'Ask for domain-shaped data without coupling callers to storage.'],
+  ['Commands & operations', 'Name intent and computation as capabilities of the model.'],
   [
-    'Domain',
-    'Entities, relations, operations, policies, and events give ordinary applications a precise executable ontology.',
-  ],
-  [
-    'Execution',
-    'When time matters, an invocation becomes a durable execution with identity, emissions, usage, and history.',
-  ],
-  [
-    'Autonomy',
-    'Policies, resources, and interchangeable implementations let entities act without introducing an Actor primitive.',
+    'Runtimes & interactions',
+    'Execute the same model through APIs, UIs, CLIs, or durable workers.',
   ],
 ] as const;
 
-const domainLayers = [
-  ['Entities', 'Things with identity, lifecycle, permissions, and meaning inside the domain.'],
-  ['Relations', 'Connections that make the system navigable as a graph, not a pile of tables.'],
-  ['Operations', 'Possible transformations, named as domain actions rather than raw endpoints.'],
-  ['Events', 'Facts that preserve what happened and make change observable.'],
-  ['Executions', 'Invocations that happen in time, with identity, status, result, and history.'],
-  ['Emissions', 'Values produced while an execution advances toward its final result.'],
-  ['Resources', 'Cost, capacity, quotas, and scale modeled explicitly when they matter.'],
-  ['Policies', 'Rules for admission, authority, limits, priority, and implementation choice.'],
+const journey = [
+  ['Declare', 'Define the domain once, in ordinary TypeScript.'],
+  ['Reflect', 'Ontahí turns that declaration into an inspectable application model.'],
+  ['Execute', 'A runtime interprets reads, commands, and operations through adapters.'],
+  ['Adapt', 'Add another interface or runtime without redefining the domain.'],
 ] as const;
 
-const autonomyCapacities = [
-  ['Identity & memory', 'An entity carries state, context, and history across many executions.'],
-  ['Operations', 'Its capabilities are operations, or useful views over related operations.'],
-  [
-    'Executions',
-    'Work can persist, stream values, retry, cancel, and remain observable over time.',
-  ],
-  [
-    'Resources & policies',
-    'Availability, budgets, limits, priorities, and implementations stay explicit.',
-  ],
-] as const;
-
-const usageModes = [
-  [
-    'Application',
-    'Model a traditional product domain, from a to-do list upward, with clearer contracts.',
-  ],
-  [
-    'Durable computation',
-    'Give long-running operations identity, emissions, resource usage, and history.',
-  ],
-  [
-    'Autonomous system',
-    'Let domain entities act over time when policies and capacities make that useful.',
-  ],
-] as const;
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareSourceCode',
+  name: 'Ontahí',
+  alternateName: 'Ontahi',
+  description:
+    'An open-source executable domain framework and runtime protocol for TypeScript applications.',
+  url: siteUrl,
+  codeRepository: repoUrl,
+  license: licenseUrl,
+  programmingLanguage: 'TypeScript',
+  runtimePlatform: 'Node.js',
+  sameAs: [repoUrl, docsUrl, 'https://www.npmjs.com/package/@ontahi/core'],
+};
 
 export default function HomePage() {
   return (
     <>
       <main>
         <section className='hero' aria-labelledby='hero-title'>
-          <header className='site-header' aria-label='Ontahi'>
-            <a className='brand-mark' href='/' aria-label='Ontahi home'>
+          <header className='site-header' aria-label='Ontahí'>
+            <a className='brand-mark' href='/' aria-label='Ontahí home'>
               <Image src='/brand/ontahi-symbol.svg' width={34} height={34} alt='' priority />
               <span>Ontahí</span>
             </a>
             <nav className='site-nav' aria-label='Primary'>
-              <a href={essayUrl}>Essay</a>
+              <a href={docsUrl}>Docs</a>
+              <a href='/vision/'>Vision</a>
               <a href={repoUrl}>GitHub</a>
+              <a href={npmUrl}>npm</a>
             </nav>
           </header>
 
           <div className='hero-grid'>
             <div className='hero-copy'>
-              <p className='eyebrow'>Coming soon</p>
+              <p className='eyebrow'>Open source · Public alpha</p>
               <h1 id='hero-title'>Ontahí</h1>
-              <p className='lede'>Executable domains, from everyday apps to autonomous systems.</p>
+              <p className='lede'>An executable domain framework and runtime protocol.</p>
               <p className='support'>
-                Ontahí models software through entities, relations, operations, policies, and
-                events. When work needs time, resources, or autonomy, the same model grows into
-                durable, observable executions. No special Actor primitive required.
+                Define entities, relationships, selections, commands, operations, and policies as
+                one application model. Ontahí carries that model across storage, APIs, interfaces,
+                and long-running work. Its current TypeScript implementation is published as the{' '}
+                <code>@ontahi/*</code> packages.
               </p>
+              <div className='hero-actions'>
+                <a className='button-link' href={docsUrl}>
+                  Start with the developer guide
+                </a>
+                <a className='button-link secondary' href={repoUrl}>
+                  Explore the source
+                </a>
+              </div>
             </div>
 
-            <aside className='experience-panel' aria-label='Ontahi adoption path'>
+            <aside className='experience-panel code-panel' aria-label='Ontahí entity example'>
               <div className='panel-topline'>
-                <span>adoption path</span>
-                <span>v0.2</span>
+                <span>todo-item.ts</span>
+                <span>TypeScript</span>
               </div>
-
-              <div className='adoption-path'>
-                {adoptionLayers.map(([title, text], index) => (
-                  <div className='adoption-layer' key={title}>
-                    <span>{String(index + 1).padStart(2, '0')}</span>
-                    <strong>{title}</strong>
-                    <span>{text}</span>
-                  </div>
-                ))}
-              </div>
-
-              <p className='formula'>Ontahí provides the grammar. The domain provides the names.</p>
+              <pre className='code-sample'>
+                <code>{`const TodoItem = entity({
+  name: 'TodoItem',
+  fields: {
+    title: text(),
+    completed: boolean(),
+  },
+  operations: {
+    complete: operation({
+      input: object({}),
+    }),
+  },
+});`}</code>
+              </pre>
+              <p className='formula'>The model is the contract. Runtimes decide how it executes.</p>
             </aside>
           </div>
         </section>
 
-        <section className='essay-section' aria-labelledby='essay-title'>
-          <div className='essay-inner'>
-            <div className='essay-illustration' aria-hidden='true'>
-              <Image
-                src='/living-systems/why-systems-evolve.png'
-                width={768}
-                height={1370}
-                alt=''
-                priority
-              />
-            </div>
-
-            <div className='essay-copy'>
-              <p className='eyebrow'>Living Systems</p>
-              <h2 id='essay-title'>
-                To build a system is to enter a long conversation with change.
-              </h2>
-              <p>
-                The first Ontahí essay starts before frameworks and actors. It asks why systems
-                evolve, how requirements reveal hidden dimensions, and what it means for a model to
-                change without losing itself.
-              </p>
-              <a className='text-link' href={essayUrl}>
-                Read Why Systems Evolve
-              </a>
-            </div>
-          </div>
-        </section>
-
-        <section className='runtime-section' aria-labelledby='runtime-title'>
+        <section className='runtime-section' aria-labelledby='model-title'>
           <div className='section-inner runtime-inner'>
             <div className='section-copy'>
-              <p className='eyebrow'>Core model</p>
-              <h2 id='runtime-title'>A small application can still deserve an ontology.</h2>
+              <p className='eyebrow'>The application model</p>
+              <h2 id='model-title'>Name the domain before choosing its surfaces.</h2>
               <p>
-                Ontahí is useful before autonomy enters the picture. A domain becomes easier to
-                build when its names, boundaries, transformations, and history are explicit.
+                Ontahí keeps meaning in the model and infrastructure behind runtime contracts. The
+                same domain can serve a web app today, a CLI tomorrow, and durable or AI-mediated
+                interactions when the application needs them.
               </p>
             </div>
 
-            <div className='layer-stack' aria-label='Ontahi runtime architecture'>
-              {domainLayers.map(([title, text], index) => (
+            <div className='layer-stack' aria-label='Ontahí model primitives'>
+              {primitives.map(([title, text], index) => (
                 <article className='layer-row' key={title}>
                   <span>{String(index + 1).padStart(2, '0')}</span>
                   <h3>{title}</h3>
@@ -160,35 +126,71 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className='principles-section' aria-labelledby='principles-title'>
-          <div className='section-inner principles-inner'>
+        <section className='journey-section' aria-labelledby='journey-title'>
+          <div className='section-inner journey-inner'>
             <div className='section-copy'>
-              <p className='eyebrow'>Emergent autonomy</p>
-              <h2 id='principles-title'>An actor is not a new kind of thing.</h2>
+              <p className='eyebrow'>One model in motion</p>
+              <h2 id='journey-title'>From declaration to execution.</h2>
               <p>
-                Autonomous behavior emerges when an entity has operations whose executions can be
-                scheduled, observed, limited, and resolved over time. Some domains need this. Many
-                only need a better way to name and execute their domain.
+                Ontahí is not a code generator or another transport abstraction. It is a shared
+                language between the domain and the runtimes that interpret it.
               </p>
             </div>
-
-            <ol className='principles-list'>
-              {autonomyCapacities.map(([title, text]) => (
+            <ol className='journey-list'>
+              {journey.map(([title, text], index) => (
                 <li key={title}>
-                  <strong>{title}</strong>
-                  <span>{text}</span>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <strong>{title}</strong>
+                    <p>{text}</p>
+                  </div>
                 </li>
               ))}
             </ol>
           </div>
+        </section>
 
-          <div className='ecosystem-strip' aria-label='Ways to use Ontahi'>
-            {usageModes.map(([title, text]) => (
-              <article key={title}>
-                <strong>{title}</strong>
-                <span>{text}</span>
-              </article>
-            ))}
+        <section className='docs-section' aria-labelledby='docs-title'>
+          <div className='section-inner docs-inner'>
+            <div className='docs-heading'>
+              <p className='eyebrow'>Learn and build</p>
+              <h2 id='docs-title'>Choose your way into Ontahí.</h2>
+            </div>
+            <div className='docs-grid'>
+              <a href={docsUrl}>
+                <span>01</span>
+                <strong>Developer guide</strong>
+                <p>A guided introduction with concepts, examples, and the current API.</p>
+              </a>
+              <a href={docsSourceUrl}>
+                <span>02</span>
+                <strong>Documentation source</strong>
+                <p>Read, search, or improve the canonical Markdown documentation on GitHub.</p>
+              </a>
+              <a href={npmUrl}>
+                <span>03</span>
+                <strong>Published packages</strong>
+                <p>
+                  Inspect the public <code>@ontahi/*</code> modules and their versions on npm.
+                </p>
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section className='vision-section' aria-labelledby='vision-title'>
+          <div className='section-inner vision-inner'>
+            <div>
+              <p className='eyebrow'>Where this can go</p>
+              <h2 id='vision-title'>Explore the wider Ontahí vision.</h2>
+              <p>
+                See how authorization, interactive operations, native LLM support, portable
+                runtimes, migrations, and a domain language fit around the core.
+              </p>
+            </div>
+            <a className='button-link' href='/vision/'>
+              Open the interactive vision map
+            </a>
           </div>
         </section>
       </main>
@@ -197,10 +199,16 @@ export default function HomePage() {
         <div className='footer-inner'>
           <p>© 2026 Javier Fernandes and Ontahí contributors.</p>
           <p>
-            Source code licensed under the <a href={licenseUrl}>Apache License 2.0</a>.
+            <a href={repoUrl}>GitHub</a> · <a href={docsUrl}>Documentation</a> ·{' '}
+            <a href={licenseUrl}>Apache License 2.0</a>
           </p>
         </div>
       </footer>
+
+      <script
+        type='application/ld+json'
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
     </>
   );
 }

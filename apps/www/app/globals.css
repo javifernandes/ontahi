@@ -15,6 +15,13 @@
   --font-ontahi-serif: Fraunces, Lora, Georgia, ui-serif, serif;
   --font-ontahi-sans: 'Alegreya Sans', inter, ui-sans-serif, system-ui, sans-serif;
   --font-ontahi-mono: 'JetBrains Mono', 'SFMono-Regular', consolas, monospace;
+  --ink: var(--ontahi-forest);
+  --paper: var(--ontahi-paper);
+  --muted: var(--ontahi-olive-dark);
+  --line: var(--ontahi-paper-deep);
+  --wash: var(--ontahi-warm-paper);
+  --accent: var(--ontahi-ceibo);
+  --font-mono: var(--font-ontahi-mono);
 }
 
 * {
@@ -663,5 +670,206 @@ h2 {
   .layer-row p,
   .principles-list span {
     grid-column: auto;
+  }
+}
+
+/* Public entry point */
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.8rem 1.1rem;
+  border: 1px solid var(--ink);
+  border-radius: 5px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  transform: translateY(-1px);
+}
+
+.button-link.secondary {
+  background: transparent;
+  color: var(--ink);
+}
+
+.code-panel {
+  align-self: center;
+}
+
+.code-sample {
+  overflow-x: auto;
+  margin: 0;
+  padding: 2rem 1.5rem;
+  font-family: var(--font-mono);
+  font-size: clamp(0.78rem, 1.5vw, 0.92rem);
+  line-height: 1.75;
+  tab-size: 2;
+}
+
+.support code,
+.docs-grid code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.journey-section {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.journey-inner {
+  align-items: start;
+}
+
+.journey-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid rgb(255 255 255 / 24%);
+}
+
+.journey-list li {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: 1rem;
+  padding: 1.4rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 24%);
+}
+
+.journey-list > li > span {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.journey-list strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+}
+
+.journey-list p {
+  margin: 0;
+  color: rgb(255 255 255 / 68%);
+  line-height: 1.55;
+}
+
+.docs-section {
+  background: var(--paper);
+}
+
+.docs-inner {
+  display: block;
+}
+
+.docs-heading {
+  max-width: 46rem;
+  margin-bottom: 3rem;
+}
+
+.docs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.docs-grid a {
+  min-height: 16rem;
+  padding: 1.5rem;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.docs-grid a:hover {
+  background: var(--wash);
+}
+
+.docs-grid span {
+  display: block;
+  margin-bottom: 3rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.docs-grid strong {
+  display: block;
+  font-size: 1.2rem;
+}
+
+.docs-grid p {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.vision-section {
+  background: var(--accent);
+}
+
+.vision-inner {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.vision-inner h2 {
+  max-width: 13ch;
+}
+
+.vision-inner p:not(.eyebrow) {
+  max-width: 46rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+  .docs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .docs-grid a {
+    min-height: auto;
+  }
+
+  .docs-grid span {
+    margin-bottom: 1.5rem;
+  }
+
+  .vision-inner {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 680px) {
+  .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .button-link {
+    width: 100%;
+  }
+
+  .code-sample {
+    padding-inline: 1rem;
   }
 }

@@ -1,4 +1,12 @@
-# Ontahi
+# Ontahí
+
+Ontahí is an open-source executable domain framework and runtime protocol. Define entities,
+relationships, selections, commands, and operations once, then interpret the same application
+model across storage, APIs, interfaces, and long-running work.
+
+[Website](https://ontahi.org) · [Developer guide](https://bookops.net/ontahi-for-devs) ·
+[Documentation source](./docs/developers/README.md) ·
+[npm packages](https://www.npmjs.com/search?q=%40ontahi%2F) · [Vision](https://ontahi.org/vision/)
 
 [![CI](https://github.com/javifernandes/ontahi/actions/workflows/ci.yml/badge.svg)](https://github.com/javifernandes/ontahi/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/javifernandes/ontahi/graph/badge.svg?token=Q6uxUP5uQS)](https://codecov.io/gh/javifernandes/ontahi)
@@ -6,15 +14,10 @@
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=javifernandes_ontahi&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=javifernandes_ontahi) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/javifernandes/ontahi?utm_source=oss&utm_medium=github&utm_campaign=javifernandes%2Fontahi&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-Ontahi is an executable ontology: a language for naming the world of a software system so that the
-world can be executed.
-
-Website: [https://ontahi.org](https://ontahi.org)
-
 ## Developer documentation
 
-- [`Ontahí for Developers`](./docs/developers/README.md) is the canonical long-form guide to the
-  application model, Relations lifecycle, runtimes, reflection, and browser projection.
+- [Ontahí for Developers](https://bookops.net/ontahi-for-devs) is the rendered long-form guide; its
+  [canonical Markdown source](./docs/developers/README.md) lives in this repository.
 - [`Application data access`](./docs/application-data-access.md) is the end-to-end path from server
   Entities and default-deny policy through generated client Views, React Queries, and Operations.
 - [`DEVELOPMENT.md`](./DEVELOPMENT.md) covers repository setup, Todo development, sibling hosts, and
