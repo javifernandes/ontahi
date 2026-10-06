@@ -497,6 +497,25 @@ describe('Runtime Protocol Durable Operation family', () => {
       },
     },
     {
+      name: 'invalid input interaction descriptor',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'running',
+          updatedAt: 'now',
+          interaction: {
+            id: 'enter-title',
+            kind: 'input',
+            prompt: 'What title?',
+            input: { type: 'number' },
+            createdAt: 'now',
+          },
+        },
+      },
+    },
+    {
       name: 'duplicate interaction option id',
       response: {
         version: 1,

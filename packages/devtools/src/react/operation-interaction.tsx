@@ -73,7 +73,6 @@ export const OperationInteraction = ({
             name='value'
             type='text'
             disabled={responding}
-            required
             autoFocus
             style={{
               flex: '1 1 240px',

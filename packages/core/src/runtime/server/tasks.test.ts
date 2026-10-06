@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { field, value } from '../../data-graph/index.js';
 
+import { validateTaskInputInteractionRequest } from './tasks/execution-interactions.js';
+
 import {
   architecture,
   createInMemoryTaskStorage,
@@ -1561,6 +1563,56 @@ describe('tasks', () => {
       await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
         status: 'completed',
         result: 'Buy milk',
+      });
+    });
+  });
+
+  it('rejects empty input prompts and invalid input interaction ids', async () => {
+    const ref = { taskId: 'demo.collect-title', runId: 'invalid-input' };
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          validateTaskInputInteractionRequest(ref, {
+            prompt: ' ',
+            input: { type: 'string' },
+          }),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction' });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          validateTaskInputInteractionRequest(ref, {
+            id: '',
+            prompt: 'What title?',
+            input: { type: 'string' },
+          }),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction' });
+  });
+
+  it('rejects a second concurrent input interaction in one suspended task function', async () => {
+    const adapter = createInProcessTaskRuntime({ storage: createInMemoryTaskStorage() });
+    const task = defineTask({
+      id: 'demo.concurrent-input',
+      run: (_input: {}, context) =>
+        Effect.all(
+          [
+            context.interact.input({ prompt: 'First?', input: { type: 'string' } }),
+            context.interact.input({ prompt: 'Second?', input: { type: 'string' } }),
+          ],
+          { concurrency: 'unbounded' },
+        ),
+    });
+    const run = await Effect.runPromise(
+      startTask(adapter, task, {}, { runId: 'concurrent-input' }),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(adapter, run))).resolves.toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_task_interaction' },
       });
     });
   });

@@ -421,6 +421,22 @@ describe('Model Command Task', () => {
     );
   });
 
+  it('rejects an input continuation routed with the wrong durable state', async () => {
+    const task = createModelCommandTask({ runtime: {} as PreparedModelCommandRuntime });
+    const step = task.execution?.steps['input-application'];
+    if (!step) throw new Error('Expected input-application step.');
+
+    await expect(
+      Effect.runPromise(
+        step.run({
+          input,
+          state: { step: 'prepare' },
+          context: {} as never,
+        } as never),
+      ),
+    ).rejects.toThrow('Invalid model command state.');
+  });
+
   it('finishes a rejected proposal without executing it', async () => {
     const f = fixture();
     const run = await Effect.runPromise(
