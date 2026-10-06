@@ -10,12 +10,14 @@ import {
 import type {
   TaskApprovalInteractionRequest,
   TaskChoiceInteractionRequest,
+  TaskInputInteractionRequest,
   TaskExecutionInteractionRequest,
   TaskExecutionState,
   TaskFailure,
   TaskInteractionResponse,
   TaskPendingApprovalInteraction,
   TaskPendingChoiceInteraction,
+  TaskPendingInputInteraction,
   TaskPendingInteraction,
   TaskRunIdentity,
 } from './types.js';
@@ -94,6 +96,17 @@ export const validateTaskApprovalInteractionRequest = (
   return Effect.void;
 };
 
+export const validateTaskInputInteractionRequest = (
+  ref: TaskRunIdentity,
+  request: TaskInputInteractionRequest,
+): Effect.Effect<void, TaskFailure> => {
+  if (request.prompt.trim().length === 0)
+    return Effect.fail(invalidTaskInteractionFailure(ref, 'Input prompt cannot be empty.'));
+  if (request.id !== undefined && (request.id.trim().length === 0 || request.id.length > 512))
+    return Effect.fail(invalidTaskInteractionFailure(ref, 'Input interaction ID is invalid.'));
+  return Effect.void;
+};
+
 export type MaterializeTaskInteractionOptions = {
   id?: string;
   now?: () => string;
@@ -118,18 +131,28 @@ export const materializeTaskExecutionInteraction = (
           createdAt,
         } satisfies TaskPendingChoiceInteraction),
       )
-    : validateTaskApprovalInteractionRequest(ref, request).pipe(
-        Effect.map(
-          () =>
-            ({
-              id,
-              kind: 'approval',
-              prompt: request.prompt,
-              proposal: cloneJson(request.proposal),
-              createdAt,
-            }) satisfies TaskPendingApprovalInteraction,
-        ),
-      );
+    : 'input' in request
+      ? validateTaskInputInteractionRequest(ref, request).pipe(
+          Effect.as({
+            id,
+            kind: 'input',
+            prompt: request.prompt,
+            input: request.input,
+            createdAt,
+          } satisfies TaskPendingInputInteraction),
+        )
+      : validateTaskApprovalInteractionRequest(ref, request).pipe(
+          Effect.map(
+            () =>
+              ({
+                id,
+                kind: 'approval',
+                prompt: request.prompt,
+                proposal: cloneJson(request.proposal),
+                createdAt,
+              }) satisfies TaskPendingApprovalInteraction,
+          ),
+        );
 };
 
 export const validateTaskInteractionResponse = (
@@ -144,7 +167,9 @@ export const validateTaskInteractionResponse = (
     interaction.kind === 'choice'
       ? 'optionId' in response &&
         interaction.options.some(option => option.id === response.optionId)
-      : 'decision' in response;
+      : interaction.kind === 'input'
+        ? 'value' in response && typeof response.value === 'string'
+        : 'decision' in response;
   return valid
     ? Effect.void
     : Effect.fail(invalidTaskInteractionResponseFailure(ref, response.interactionId));

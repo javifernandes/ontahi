@@ -175,6 +175,52 @@ it('shows a model choice and continues with the selected option', async () => {
   expect(refresh).toHaveBeenCalledOnce();
 });
 
+it('collects a durable string Hole and continues the same exchange', async () => {
+  const respond = vi.fn().mockResolvedValue({
+    ok: true,
+    value: { status: 'executed', message: 'Item added.' },
+  });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'What should the item say?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-input' },
+      interaction: {
+        id: 'TodoItem.addItem:title',
+        kind: 'input',
+        prompt: 'What should the item say?',
+        input: { type: 'string' },
+        createdAt: '2026-10-04T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+
+  const input = container.querySelector('[aria-label="What should the item say?"]')!;
+  expect(container.querySelector('[aria-label="Input required"]')).not.toBeNull();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+      input,
+      'Buy milk',
+    );
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    input.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(respond).toHaveBeenCalledWith(
+    { taskId: 'ontahi.model-command', runId: 'run-input' },
+    { interactionId: 'TodoItem.addItem:title', value: 'Buy milk' },
+  );
+  expect(container.textContent).toContain('Item added.');
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it('keeps one exchange open across consecutive Hole choices', async () => {
   const respond = vi
     .fn()

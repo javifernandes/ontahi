@@ -380,6 +380,92 @@ it('continues an ambiguous Operation application without asking the model again'
   expect(scope).toHaveBeenCalledTimes(6);
 });
 
+it('continues an omitted Entity choice through string input without asking the model again', async () => {
+  const Folder = entity({ name: 'InputFolder', fields: { id: field.id() } });
+  const operation = {
+    id: 'Document.addInput',
+    input: graphSchema.object({
+      folder: graphSchema.ref(Folder),
+      title: field.nonEmptyString({ trim: true }),
+    }),
+  };
+  const generate = vi.fn(async () => ({
+    status: 'application' as const,
+    application: {
+      kind: 'operation-application' as const,
+      operationId: operation.id,
+      arguments: {
+        folder: { kind: 'hole' as const, id: 'folder' },
+        title: { kind: 'hole' as const, id: 'title' },
+      },
+    },
+    bindings: {
+      folder: { kind: 'entity-choice' as const, prompt: 'Which folder?' },
+      title: { kind: 'free-input' as const, prompt: 'What title?' },
+    },
+  }));
+  const inbox = createEntityRef(Folder, { id: 'inbox' });
+  const later = createEntityRef(Folder, { id: 'later' });
+  let operationAvailable = true;
+  const resolveOperation = vi.fn((id: string) =>
+    operationAvailable && id === operation.id ? (operation as never) : undefined,
+  );
+  const scope = vi.fn(async () => ({
+    bindings: { [operation.id]: { validate: () => undefined } },
+    entityCandidates: [
+      { ref: inbox, label: 'Inbox' },
+      { ref: later, label: 'Later' },
+    ],
+  }));
+  const runtime = createModelCommandRuntime({
+    application: {
+      resolveOperation,
+    } as never,
+    provider: { generate },
+    authorize: () => undefined,
+    scope,
+  });
+  const request = { text: 'Add item' };
+  const signal = new AbortController().signal;
+  const prepared = await runtime.prepare(request, signal);
+  expect(prepared).toMatchObject({ status: 'application-choice', choice: { holeId: 'folder' } });
+  if (prepared.status !== 'application-choice') throw new Error('Expected folder choice.');
+  const selected = await runtime.continueApplication(
+    request,
+    prepared.choice,
+    prepared.choice.options[0]!.id,
+    signal,
+  );
+  expect(selected).toMatchObject({ status: 'application-input', input: { holeId: 'title' } });
+  if (selected.status !== 'application-input') throw new Error('Expected title input.');
+  await expect(
+    runtime.submitApplicationInput(request, selected.input, ' Notes ', signal),
+  ).resolves.toEqual({
+    status: 'proposed',
+    request: {
+      kind: 'invoke',
+      operationId: operation.id,
+      input: { folder: inbox, title: 'Notes' },
+    },
+  });
+  scope.mockResolvedValueOnce({ bindings: {}, entityCandidates: [] });
+  await expect(
+    runtime.submitApplicationInput(request, selected.input, 'Notes', signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Operation is outside the configured scope.',
+  });
+  operationAvailable = false;
+  resolveOperation.mockReturnValueOnce(operation as never);
+  await expect(
+    runtime.submitApplicationInput(request, selected.input, 'Notes', signal),
+  ).resolves.toEqual({
+    status: 'unresolved',
+    message: 'Operation is outside the configured scope.',
+  });
+  expect(generate).toHaveBeenCalledOnce();
+});
+
 it('keeps model-proposed Operation applications outside the scoped catalog unresolved', async () => {
   const Folder = entity({ name: 'OutOfScopeFolder', fields: { id: field.id() } });
   const input = graphSchema.object({ folder: graphSchema.ref(Folder) });

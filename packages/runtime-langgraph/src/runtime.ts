@@ -26,11 +26,10 @@ import {
   validateTaskOutput,
   validateTaskProgress,
   type InProcessTaskExecutorOptions,
-  type TaskApprovalInteractionRequest,
-  type TaskChoiceInteractionRequest,
   type TaskConfig,
   type TaskDefinition,
   type TaskExecutionCheckpoint,
+  type TaskExecutionInteractionRequest,
   type TaskExecutionState,
   type TaskExecutionTransition,
   type TaskExecutor,
@@ -46,7 +45,7 @@ import {
   type TaskStartOptions,
   type TaskStorage,
 } from '@ontahi/core/runtime/server/tasks';
-import { cloneJson, type JsonValue } from '@ontahi/core/value/json';
+import { cloneJson } from '@ontahi/core/value/json';
 import { Effect, Stream } from 'effect';
 
 const LangGraphState = Annotation.Root({
@@ -86,6 +85,19 @@ const createRunId = () =>
 
 const keyOf = (ref: TaskRunIdentity) => `${ref.taskId}:${ref.runId}`;
 const threadIdOf = (ref: TaskRunIdentity) => keyOf(ref);
+const interactionIdOf = (
+  ref: TaskRunIdentity,
+  state: TaskExecutionState,
+  request: TaskExecutionInteractionRequest,
+) => {
+  const source = JSON.stringify([ref.taskId, ref.runId, state, request]);
+  let hash = 2_166_136_261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return `langgraph-${(hash >>> 0).toString(36)}`;
+};
 const graphConfig = (ref: TaskRunIdentity) => ({
   configurable: { thread_id: threadIdOf(ref) },
   durability: 'sync' as const,
@@ -168,24 +180,18 @@ const createLangGraphTaskRuntime = (
   const prepareInteraction = async (
     ref: TaskRunIdentity,
     state: TaskExecutionState,
-    request: TaskChoiceInteractionRequest<JsonValue> | TaskApprovalInteractionRequest,
-    reuseClaimedResponseId: boolean,
+    request: TaskExecutionInteractionRequest,
   ) => {
     const persisted = await runTaskEffect(storage.loadSource(ref));
     const sameState = JSON.stringify(persisted.checkpoint?.state) === JSON.stringify(state);
     const persistedCheckpoint = checkpointOf(persisted);
     const existing = sameState ? persistedCheckpoint?.interaction : undefined;
-    const expectedKind = 'options' in request ? 'choice' : 'approval';
-    const canReuse =
-      existing?.kind === expectedKind && (request.id === undefined || request.id === existing.id);
+    const interactionId = request.id ?? interactionIdOf(ref, state, request);
+    const canReuse = existing?.id === interactionId;
     const interaction = canReuse
       ? existing
       : await runTaskEffect(
-          materializeTaskExecutionInteraction(ref, request, {
-            id:
-              request.id ??
-              (reuseClaimedResponseId ? persistedCheckpoint?.response?.interactionId : undefined),
-          }),
+          materializeTaskExecutionInteraction(ref, request, { id: interactionId }),
         );
 
     if (persistedCheckpoint?.response?.interactionId !== interaction.id) {
@@ -224,7 +230,7 @@ const createLangGraphTaskRuntime = (
     }
     const executionState = cloneJson(transition.state) as TaskExecutionState;
     if (transition.kind === 'interaction') {
-      await prepareInteraction(ref, executionState, transition.interaction, false);
+      await prepareInteraction(ref, executionState, transition.interaction);
       return { executionState, done: false };
     }
     await update(ref, {
@@ -266,12 +272,7 @@ const createLangGraphTaskRuntime = (
             { stepId: state.executionState.step },
           );
         }
-        const interaction = await prepareInteraction(
-          ref,
-          transition.state,
-          transition.interaction,
-          true,
-        );
+        const interaction = await prepareInteraction(ref, transition.state, transition.interaction);
         const response = interrupt<TaskPendingInteraction, TaskInteractionResponse>(interaction);
         await runTaskEffect(validateTaskInteractionResponse(ref, interaction, response));
         transition = await runTaskEffect(

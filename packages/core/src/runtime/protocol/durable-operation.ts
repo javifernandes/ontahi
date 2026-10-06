@@ -64,6 +64,7 @@ const inspectRequestKeys = new Set(['version', 'kind', 'run']);
 const respondRequestKeys = new Set(['version', 'kind', 'run', 'response']);
 const runKeys = new Set(['taskId', 'runId']);
 const choiceInteractionResponseKeys = new Set(['interactionId', 'optionId']);
+const inputInteractionResponseKeys = new Set(['interactionId', 'value']);
 const approvalInteractionResponseKeys = new Set(['interactionId', 'decision', 'reason']);
 const responseKeys = new Set(['version', 'kind', 'snapshot']);
 const snapshotKeys = new Set([
@@ -83,6 +84,8 @@ const snapshotKeys = new Set([
 const subjectKeys = new Set(['type', 'id']);
 const progressKeys = new Set(['phase', 'message', 'percent']);
 const choiceInteractionKeys = new Set(['id', 'kind', 'prompt', 'options', 'createdAt']);
+const inputInteractionKeys = new Set(['id', 'kind', 'prompt', 'input', 'createdAt']);
+const inputDescriptorKeys = new Set(['type']);
 const approvalInteractionKeys = new Set(['id', 'kind', 'prompt', 'proposal', 'createdAt']);
 const interactionOptionKeys = new Set(['id', 'label']);
 const approvalProposalKeys = new Set(['id', 'summary', 'requests']);
@@ -117,6 +120,7 @@ const isTaskInteractionResponse = (value: unknown): value is TaskInteractionResp
   isRecord(value) &&
   isIdentitySegment(value.interactionId) &&
   ((hasOnlyKeys(value, choiceInteractionResponseKeys) && isIdentitySegment(value.optionId)) ||
+    (hasOnlyKeys(value, inputInteractionResponseKeys) && typeof value.value === 'string') ||
     (hasOnlyKeys(value, approvalInteractionResponseKeys) &&
       (value.decision === 'approve' || value.decision === 'reject') &&
       isOptionalString(value.reason)));
@@ -188,7 +192,7 @@ export const parseDurableOperationProtocolRequest = (
     }
     if (!isTaskInteractionResponse(value.response)) {
       return invalidRequest(
-        'Durable Operation response must contain a valid choice or approval response.',
+        'Durable Operation response must contain a valid choice, input, or approval response.',
       );
     }
     return {
@@ -203,11 +207,16 @@ export const parseDurableOperationProtocolRequest = (
                 interactionId: value.response.interactionId,
                 optionId: value.response.optionId,
               }
-            : {
-                interactionId: value.response.interactionId,
-                decision: value.response.decision,
-                ...(value.response.reason === undefined ? {} : { reason: value.response.reason }),
-              },
+            : 'value' in value.response
+              ? {
+                  interactionId: value.response.interactionId,
+                  value: value.response.value,
+                }
+              : {
+                  interactionId: value.response.interactionId,
+                  decision: value.response.decision,
+                  ...(value.response.reason === undefined ? {} : { reason: value.response.reason }),
+                },
       },
     };
   }
@@ -309,6 +318,23 @@ export const parseTaskPendingInteraction = (value: unknown): TaskPendingInteract
         summary: value.proposal.summary,
         requests: (value.proposal.requests as JsonValue[]).map(request => cloneJson(request)),
       },
+      createdAt: value.createdAt,
+    };
+  }
+
+  if (value.kind === 'input') {
+    if (
+      !hasOnlyKeys(value, inputInteractionKeys) ||
+      !isRecord(value.input) ||
+      !hasOnlyKeys(value.input, inputDescriptorKeys) ||
+      value.input.type !== 'string'
+    )
+      return undefined;
+    return {
+      id: value.id,
+      kind: 'input',
+      prompt: value.prompt,
+      input: { type: 'string' },
       createdAt: value.createdAt,
     };
   }

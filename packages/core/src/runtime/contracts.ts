@@ -213,6 +213,14 @@ export type TaskPendingChoiceInteraction = {
   createdAt: string;
 };
 
+export type TaskPendingInputInteraction = {
+  id: string;
+  kind: 'input';
+  prompt: string;
+  input: { type: 'string' };
+  createdAt: string;
+};
+
 export type TaskApprovalProposal = {
   id: string;
   summary: string;
@@ -227,11 +235,19 @@ export type TaskPendingApprovalInteraction = {
   createdAt: string;
 };
 
-export type TaskPendingInteraction = TaskPendingChoiceInteraction | TaskPendingApprovalInteraction;
+export type TaskPendingInteraction =
+  | TaskPendingChoiceInteraction
+  | TaskPendingInputInteraction
+  | TaskPendingApprovalInteraction;
 
 export type TaskChoiceInteractionResponse = {
   interactionId: string;
   optionId: string;
+};
+
+export type TaskInputInteractionResponse = {
+  interactionId: string;
+  value: string;
 };
 
 export type TaskApprovalInteractionResponse = {
@@ -242,6 +258,7 @@ export type TaskApprovalInteractionResponse = {
 
 export type TaskInteractionResponse =
   | TaskChoiceInteractionResponse
+  | TaskInputInteractionResponse
   | TaskApprovalInteractionResponse;
 
 export type TaskExecutionCheckpoint = {

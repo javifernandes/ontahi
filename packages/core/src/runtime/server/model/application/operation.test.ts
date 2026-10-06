@@ -10,16 +10,21 @@ import { entity } from '../../entity.js';
 
 import {
   continueModelOperationApplication,
+  modelOperationApplicationEntityChoices,
   modelOperationApplicationEntityMatches,
   modelOperationApplicationSchema,
   parseModelOperationApplication,
   resolveModelOperationApplication,
+  submitModelOperationApplicationInput,
 } from './operation.js';
 
 const List = entity({ name: 'OperationList', fields: { id: field.id(), name: field.string() } });
 const contract = {
   id: 'OperationList.addItem',
-  input: graphSchema.object({ list: graphSchema.ref(List), title: field.string() }),
+  input: graphSchema.object({
+    list: graphSchema.ref(List),
+    title: field.nonEmptyString({ trim: true }),
+  }),
 };
 const application = {
   kind: 'operation-application' as const,
@@ -231,6 +236,54 @@ describe('Model Operation applications', () => {
           destination: createEntityRef(Destination, { id: 'later-a' }),
         },
       },
+    });
+  });
+
+  it('continues an omitted Entity choice into a scalar input without another interpretation', () => {
+    const open = {
+      application: {
+        kind: 'operation-application' as const,
+        operationId: contract.id,
+        arguments: {
+          list: { kind: 'hole' as const, id: 'list' },
+          title: { kind: 'hole' as const, id: 'title' },
+        },
+      },
+      bindings: {
+        list: { kind: 'entity-choice' as const, prompt: 'Which list?' },
+        title: { kind: 'free-input' as const, prompt: 'What should the item say?' },
+      },
+    };
+    expect(parseModelOperationApplication(open)).toEqual(open);
+    expect(modelOperationApplicationEntityMatches(open, contract)).toEqual([]);
+    expect(modelOperationApplicationEntityChoices(open, contract)).toEqual([
+      { holeId: 'list', target: List },
+    ]);
+
+    const inbox = { ref: createEntityRef(List, { id: 'inbox' }), label: 'Inbox' };
+    const later = { ref: createEntityRef(List, { id: 'later' }), label: 'Later' };
+    const choice = resolveModelOperationApplication(open, contract, { list: [inbox, later] });
+    expect(choice).toMatchObject({ status: 'choice', prompt: 'Which list?', holeId: 'list' });
+    if (choice.status !== 'choice') throw new Error('Expected list choice.');
+    const input = continueModelOperationApplication(choice, contract, choice.options[0]!.id);
+    expect(input).toMatchObject({
+      status: 'input',
+      prompt: 'What should the item say?',
+      holeId: 'title',
+      input: { type: 'string' },
+    });
+    if (input.status !== 'input') throw new Error('Expected title input.');
+    expect(submitModelOperationApplicationInput(input, contract, '  Buy milk  ')).toEqual({
+      status: 'resolved',
+      request: {
+        kind: 'invoke',
+        operationId: contract.id,
+        input: { list: inbox.ref, title: 'Buy milk' },
+      },
+    });
+    expect(submitModelOperationApplicationInput(input, contract, '')).toEqual({
+      status: 'unresolved',
+      reason: 'The supplied value is invalid.',
     });
   });
 });

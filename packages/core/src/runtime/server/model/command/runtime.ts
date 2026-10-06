@@ -14,9 +14,12 @@ import type { OntahiApplication } from '../../application.js';
 import { createOperationInvocationDispatcher } from '../../operation-invocation.js';
 import {
   continueModelOperationApplication,
+  modelOperationApplicationEntityChoices,
   modelOperationApplicationEntityMatches,
   resolveModelOperationApplication,
+  submitModelOperationApplicationInput,
   type ModelOperationApplicationChoice,
+  type ModelOperationApplicationInput,
   type ModelOperationApplicationProposal,
 } from '../application/operation.js';
 import {
@@ -70,6 +73,7 @@ export type ModelCommandPreparation =
       }>;
     }
   | { status: 'application-choice'; choice: ModelOperationApplicationChoice }
+  | { status: 'application-input'; input: ModelOperationApplicationInput }
   | { status: 'proposed'; request: ModelCommandCanonicalRequest };
 export type ModelCommandRuntime = {
   submit(
@@ -89,6 +93,12 @@ export type PreparedModelCommandRuntime = ModelCommandRuntime & {
     request: ModelCommandRequest,
     choice: ModelOperationApplicationChoice,
     optionId: string,
+    signal: AbortSignal,
+  ): Promise<ModelCommandPreparation>;
+  submitApplicationInput(
+    request: ModelCommandRequest,
+    input: ModelOperationApplicationInput,
+    value: string,
     signal: AbortSignal,
   ): Promise<ModelCommandPreparation>;
 };
@@ -219,20 +229,29 @@ export const createModelCommandRuntime = ({
           id: operationProposal.application.operationId,
           input: operationInput,
         });
-        if (!matches || !resolveEntityMatch)
+        const choices = modelOperationApplicationEntityChoices(operationProposal, {
+          id: operationProposal.application.operationId,
+          input: operationInput,
+        });
+        if (!matches || !choices || (matches.length > 0 && !resolveEntityMatch))
           return {
             status: 'unresolved',
             message: 'The proposed operation has an unsupported Hole.',
           };
         const candidates: Record<string, readonly ModelEntityCandidate[]> = {};
         for (const match of matches) {
-          const result = await resolveEntityMatch(
+          const result = await resolveEntityMatch!(
             { target: match.target, text: match.text },
             signal,
           );
           if (result.status === 'unresolved')
             return { status: 'unresolved', message: result.reason };
           candidates[match.holeId] = result.candidates;
+        }
+        for (const choice of choices) {
+          candidates[choice.holeId] = (initial.entityCandidates ?? []).filter(
+            candidate => candidate.ref.entityName === choice.target.name,
+          );
         }
         const resolved = resolveModelOperationApplication(
           operationProposal,
@@ -242,6 +261,7 @@ export const createModelCommandRuntime = ({
         if (resolved.status === 'unresolved')
           return { status: 'unresolved', message: resolved.reason };
         if (resolved.status === 'choice') return { status: 'application-choice', choice: resolved };
+        if (resolved.status === 'input') return { status: 'application-input', input: resolved };
         const reason = validateModelInvocation(
           resolved.request,
           catalog(initial),
@@ -350,6 +370,42 @@ export const createModelCommandRuntime = ({
     );
     if (resolved.status === 'unresolved') return { status: 'unresolved', message: resolved.reason };
     if (resolved.status === 'choice') return { status: 'application-choice', choice: resolved };
+    if (resolved.status === 'input') return { status: 'application-input', input: resolved };
+    const reason = validateModelInvocation(resolved.request, catalog(current), resolveOperation, {
+      kind: 'choice-option',
+    });
+    return reason
+      ? { status: 'unresolved', message: reason }
+      : { status: 'proposed', request: resolved.request };
+  };
+
+  const submitApplicationInput: PreparedModelCommandRuntime['submitApplicationInput'] = async (
+    request,
+    input,
+    value,
+    signal,
+  ) => {
+    validateRequest(request);
+    await authorize();
+    signal.throwIfAborted();
+    const current = await scope(request, signal);
+    if (current.unresolved) return { status: 'unresolved', message: current.unresolved };
+    if (!catalog(current).some(item => item.operationId === input.proposal.application.operationId))
+      return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
+    const operation = resolveOperation(input.proposal.application.operationId);
+    if (!operation || operation.input.kind !== 'schema.object')
+      return { status: 'unresolved', message: 'Operation is outside the configured scope.' };
+    const resolved = submitModelOperationApplicationInput(
+      input,
+      {
+        id: input.proposal.application.operationId,
+        input: operation.input as AnyGraphObjectDefinition,
+      },
+      value,
+    );
+    if (resolved.status === 'unresolved') return { status: 'unresolved', message: resolved.reason };
+    if (resolved.status === 'choice') return { status: 'application-choice', choice: resolved };
+    if (resolved.status === 'input') return { status: 'application-input', input: resolved };
     const reason = validateModelInvocation(resolved.request, catalog(current), resolveOperation, {
       kind: 'choice-option',
     });
@@ -472,14 +528,24 @@ export const createModelCommandRuntime = ({
   return {
     prepare,
     continueApplication,
+    submitApplicationInput,
     execute,
     submit: async (request, signal) => {
       const prepared = await prepare(request, signal);
       if (prepared.status === 'proposed') return execute(request, prepared.request, signal);
-      if (prepared.status === 'choice' || prepared.status === 'application-choice')
+      if (
+        prepared.status === 'choice' ||
+        prepared.status === 'application-choice' ||
+        prepared.status === 'application-input'
+      )
         return {
           status: 'unresolved',
-          message: prepared.status === 'choice' ? prepared.prompt : prepared.choice.prompt,
+          message:
+            prepared.status === 'choice'
+              ? prepared.prompt
+              : prepared.status === 'application-choice'
+                ? prepared.choice.prompt
+                : prepared.input.prompt,
         };
       return prepared;
     },

@@ -27,10 +27,12 @@ export type {
   TaskApprovalProposal,
   TaskChoiceInteractionOption,
   TaskChoiceInteractionResponse,
+  TaskInputInteractionResponse,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskExecutionCheckpoint,
   TaskPendingChoiceInteraction,
+  TaskPendingInputInteraction,
   TaskPendingApprovalInteraction,
   TaskPendingInteraction,
   TaskRunListItem,
@@ -56,6 +58,12 @@ export type TaskChoiceInteractionRequest<TValue> = {
   }>;
 };
 
+export type TaskInputInteractionRequest = {
+  id?: string;
+  prompt: string;
+  input: { type: 'string' };
+};
+
 export type TaskApprovalInteractionRequest = {
   id?: string;
   prompt: string;
@@ -66,6 +74,7 @@ export type TaskApprovalDecision = Omit<TaskApprovalInteractionResponse, 'intera
 
 export type TaskInteractionContext = {
   choice<TValue>(request: TaskChoiceInteractionRequest<TValue>): Effect.Effect<TValue, TaskFailure>;
+  input(request: TaskInputInteractionRequest): Effect.Effect<string, TaskFailure>;
   approval(
     request: TaskApprovalInteractionRequest,
   ): Effect.Effect<TaskApprovalDecision, TaskFailure>;
@@ -75,6 +84,7 @@ export type TaskExecutionState = { readonly step: string };
 
 export type TaskExecutionInteractionRequest =
   | TaskChoiceInteractionRequest<JsonValue>
+  | TaskInputInteractionRequest
   | TaskApprovalInteractionRequest;
 
 export type TaskExecutionTransition<TState extends TaskExecutionState, TResult> =

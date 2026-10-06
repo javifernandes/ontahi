@@ -36,6 +36,38 @@ export type ModelRequest = {
   signal: AbortSignal;
 };
 export type ModelProvider = { generate(request: ModelRequest): Promise<unknown> };
+
+const modelOperationHoleBindingSchema: GraphJsonSchema = {
+  anyOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'text'],
+      properties: {
+        kind: { const: 'entity-match' },
+        text: { type: 'string', minLength: 1 },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'prompt'],
+      properties: {
+        kind: { const: 'entity-choice' },
+        prompt: { type: 'string', minLength: 1 },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'prompt'],
+      properties: {
+        kind: { const: 'free-input' },
+        prompt: { type: 'string', minLength: 1 },
+      },
+    },
+  ],
+};
 export class ModelInterpretationError extends Error {
   constructor(
     readonly code: string,
@@ -300,15 +332,7 @@ export const interpretModelRequest = async ({
           application: modelOperationApplicationSchema(operation.operationId, operation.input),
           bindings: {
             type: 'object',
-            additionalProperties: {
-              type: 'object',
-              additionalProperties: false,
-              required: ['kind', 'text'],
-              properties: {
-                kind: { const: 'entity-match' },
-                text: { type: 'string', minLength: 1 },
-              },
-            },
+            additionalProperties: modelOperationHoleBindingSchema,
           },
         },
       })),
@@ -352,7 +376,7 @@ export const interpretModelRequest = async ({
     'Interpret the user request. Return JSON only.',
     'For ONE supported read or action return {status:"resolved",request:...}. request must be an existing Ontahi graph-read request, graph-command request (including version and command), or invoke request (kind, operationId, input), exactly as advertised.',
     'For a graph read whose entity reference is named but not supplied as a canonical Ref, return {status:"application",application:{kind:"graph-read-application",request:...},bindings:{holeId:{kind:"entity-match",text:"..."}}}. Put {kind:"hole",id:"holeId"} only in the unresolved reference predicate value. Keep all known predicates closed. Hole ids identify slots only; put the user wording in bindings.',
-    'For an advertised operation whose Entity Ref argument is named but unresolved, return the advertised operation-application form. Wrap known arguments as {kind:"value",value:...}, use {kind:"hole",id:"..."} only for unresolved Entity Refs, and provide one entity-match binding per Hole.',
+    'For an advertised operation with missing arguments, return the advertised operation-application form. Wrap known arguments as {kind:"value",value:...} and missing arguments as {kind:"hole",id:"..."}. For a named unresolved Entity Ref bind {kind:"entity-match",text:"..."}; for an omitted Entity Ref bind {kind:"entity-choice",prompt:"..."}; for an omitted string bind {kind:"free-input",prompt:"..."}. Provide exactly one binding per Hole.',
     'Use an advertised graph read for questions that ask for stored data or a count. Never answer those questions from the supplied context.',
     'Prefer an advertised operation when its description directly matches the requested action. Use a graph command only when no operation describes that action. Never reinterpret an explicit create or add request as an update or delete.',
     'For an editable property change that no advertised operation describes, use an advertised graph-command schema. Do not create an entity to rename it. Copy its current field value into the supplied conditional if field and put only the replacement value in values.',

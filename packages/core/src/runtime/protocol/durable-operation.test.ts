@@ -83,6 +83,22 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
+  it('authors and registers a typed input response request', () => {
+    const body = toDurableOperationInteractionResponseRequest(run, {
+      interactionId: 'TodoItem.addItem:title',
+      value: 'Buy milk',
+    });
+    const request = createRuntimeProtocolRequest({
+      id: 'exchange-input',
+      family: 'durable.operation',
+      body,
+    });
+    expect(createRuntimeProtocolRegistry(runtimeProtocolFamilies).parseRequest(request)).toEqual({
+      success: true,
+      request,
+    });
+  });
+
   it.each([
     { name: 'non-object body', body: null, code: 'invalid_request' },
     {
@@ -264,6 +280,25 @@ describe('Runtime Protocol Durable Operation family', () => {
       },
     });
 
+    expect(parseDurableOperationProtocolResponse(JSON.parse(JSON.stringify(response)))).toEqual({
+      success: true,
+      response,
+    });
+  });
+
+  it('transports a pending string input without its eventual value', () => {
+    const response = toDurableOperationSnapshotResponse({
+      ...run,
+      status: 'running',
+      updatedAt: '2026-10-04T00:00:00.000Z',
+      interaction: {
+        id: 'TodoItem.addItem:title',
+        kind: 'input',
+        prompt: 'What should the item say?',
+        input: { type: 'string' },
+        createdAt: '2026-10-04T00:00:00.000Z',
+      },
+    });
     expect(parseDurableOperationProtocolResponse(JSON.parse(JSON.stringify(response)))).toEqual({
       success: true,
       response,
@@ -456,6 +491,25 @@ describe('Runtime Protocol Durable Operation family', () => {
             kind: 'choice',
             prompt: 'Which list?',
             options: [{ id: 'inbox', label: 'Inbox', value: { id: 'inbox' } }],
+            createdAt: 'now',
+          },
+        },
+      },
+    },
+    {
+      name: 'invalid input interaction descriptor',
+      response: {
+        version: 1,
+        kind: 'snapshot',
+        snapshot: {
+          ...run,
+          status: 'running',
+          updatedAt: 'now',
+          interaction: {
+            id: 'enter-title',
+            kind: 'input',
+            prompt: 'What title?',
+            input: { type: 'number' },
             createdAt: 'now',
           },
         },

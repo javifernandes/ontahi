@@ -98,6 +98,155 @@ const createRuntime = (
 };
 
 describe('LangGraph Task Runtime', () => {
+  it('runs an explicit string input interaction', async () => {
+    const inputTask = defineTask({
+      id: 'demo.langgraph-input',
+      execution: defineTaskExecution<{}, { readonly step: 'input' }, { title: string }>({
+        initial: () => ({ step: 'input' }),
+        steps: {
+          input: defineTaskExecutionStep({
+            run: ({ state, response }) =>
+              Effect.succeed(
+                response && 'value' in response
+                  ? { kind: 'complete', result: { title: response.value } }
+                  : {
+                      kind: 'interaction',
+                      state,
+                      interaction: {
+                        id: 'enter-title',
+                        prompt: 'What title?',
+                        input: { type: 'string' },
+                      },
+                    },
+              ),
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy execution must not run.'),
+    });
+    const storage = createInMemoryTaskStorage();
+    const runtime = createLangGraphTaskExecutor({ checkpointer: new MemorySaver() }).createRuntime(
+      storage,
+    );
+    runtime.register?.(inputTask);
+    const run = await Effect.runPromise(
+      startTask(
+        runtime,
+        inputTask,
+        {},
+        {
+          runId: 'input-run',
+          trigger: { cause: 'system', actor: { kind: 'system' } },
+        },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'running',
+        interaction: { id: 'enter-title', kind: 'input' },
+      });
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        runtime,
+        run,
+        { interactionId: 'enter-title', value: 'Notes' },
+        { actor: { kind: 'system' } },
+      ),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { title: 'Notes' },
+      });
+    });
+  });
+
+  it('assigns distinct durable ids to consecutive unnamed input interactions', async () => {
+    type InputState = {
+      readonly step: 'input';
+      readonly phase: 'first' | 'second';
+      readonly first?: string;
+    };
+    const inputTask = defineTask({
+      id: 'demo.langgraph-consecutive-input',
+      execution: defineTaskExecution<{}, InputState, { first: string; second: string }>({
+        initial: () => ({ step: 'input', phase: 'first' }),
+        steps: {
+          input: defineTaskExecutionStep({
+            run: ({ state, response }) => {
+              if (state.phase === 'first' && response && 'value' in response)
+                return Effect.succeed({
+                  kind: 'interaction' as const,
+                  state: {
+                    step: 'input' as const,
+                    phase: 'second' as const,
+                    first: response.value,
+                  },
+                  interaction: { prompt: 'Value?', input: { type: 'string' as const } },
+                });
+              if (state.phase === 'second' && response && 'value' in response)
+                return Effect.succeed({
+                  kind: 'complete' as const,
+                  result: { first: state.first!, second: response.value },
+                });
+              return Effect.succeed({
+                kind: 'interaction' as const,
+                state,
+                interaction: { prompt: 'Value?', input: { type: 'string' as const } },
+              });
+            },
+          }),
+        },
+      }),
+      run: () => Effect.dieMessage('Legacy execution must not run.'),
+    });
+    const storage = createInMemoryTaskStorage();
+    const runtime = createLangGraphTaskExecutor({ checkpointer: new MemorySaver() }).createRuntime(
+      storage,
+    );
+    runtime.register?.(inputTask);
+    const context = { actor: { kind: 'system' as const } };
+    const run = await Effect.runPromise(
+      startTask(
+        runtime,
+        inputTask,
+        {},
+        {
+          runId: 'consecutive-input',
+          trigger: { cause: 'system', actor: context.actor },
+        },
+      ),
+    );
+    let firstId = '';
+    await vi.waitFor(async () => {
+      const snapshot = await Effect.runPromise(getTaskSnapshot(runtime, run));
+      expect(snapshot.interaction?.kind).toBe('input');
+      firstId = snapshot.interaction?.id ?? '';
+      expect(firstId).not.toBe('');
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(runtime, run, { interactionId: firstId, value: 'first' }, context),
+    );
+    let secondId = '';
+    await vi.waitFor(async () => {
+      const snapshot = await Effect.runPromise(getTaskSnapshot(runtime, run));
+      expect(snapshot.interaction?.kind).toBe('input');
+      secondId = snapshot.interaction?.id ?? '';
+      expect(secondId).not.toBe(firstId);
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(runtime, run, { interactionId: secondId, value: 'second' }, context),
+    );
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'completed',
+        result: { first: 'first', second: 'second' },
+      });
+    });
+  });
+
   it('runs the same explicit execution across choice, runtime recreation, and approval', async () => {
     const storage = createInMemoryTaskStorage();
     const saver = new MemorySaver();
