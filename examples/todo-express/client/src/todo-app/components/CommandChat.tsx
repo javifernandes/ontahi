@@ -52,7 +52,8 @@ const inputValue = (
     return raw.trim() && Number.isFinite(value) ? value : undefined;
   }
   if (!raw) return undefined;
-  return JSON.parse(raw) as TaskInputValue;
+  const options = interaction.input.type === 'boolean' ? [true, false] : interaction.input.values;
+  return options.find(option => encodeInputOption(option) === raw);
 };
 
 export const CommandChat = ({
@@ -78,7 +79,7 @@ export const CommandChat = ({
   });
   const voice = useSpeechOutput(speech.language);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [interactionValues, setInteractionValues] = useState<Record<number, string>>({});
+  const [interactionValues, setInteractionValues] = useState<Record<string, string>>({});
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [entries, expanded]);
@@ -293,7 +294,7 @@ export const CommandChat = ({
                         className='command-chat-input'
                         onSubmit={event => {
                           event.preventDefault();
-                          const raw = interactionValues[entry.id] ?? '';
+                          const raw = interactionValues[entry.interaction!.id] ?? '';
                           const value = inputValue(
                             entry.interaction as TaskPendingInputInteraction,
                             raw,
@@ -309,12 +310,12 @@ export const CommandChat = ({
                         entry.interaction.input.type === 'enum' ? (
                           <select
                             aria-label={entry.interaction.prompt}
-                            value={interactionValues[entry.id] ?? ''}
+                            value={interactionValues[entry.interaction.id] ?? ''}
                             disabled={entry.responding}
                             onChange={event =>
                               setInteractionValues(previous => ({
                                 ...previous,
-                                [entry.id]: event.target.value,
+                                [entry.interaction!.id]: event.target.value,
                               }))
                             }
                             autoFocus
@@ -348,17 +349,18 @@ export const CommandChat = ({
                               type={entry.interaction.input.type === 'number' ? 'number' : 'text'}
                               step={entry.interaction.input.type === 'number' ? 'any' : undefined}
                               value={
-                                interactionValues[entry.id] === nullInput
+                                interactionValues[entry.interaction.id] === nullInput
                                   ? ''
-                                  : (interactionValues[entry.id] ?? '')
+                                  : (interactionValues[entry.interaction.id] ?? '')
                               }
                               disabled={
-                                entry.responding || interactionValues[entry.id] === nullInput
+                                entry.responding ||
+                                interactionValues[entry.interaction.id] === nullInput
                               }
                               onChange={event =>
                                 setInteractionValues(previous => ({
                                   ...previous,
-                                  [entry.id]: event.target.value,
+                                  [entry.interaction!.id]: event.target.value,
                                 }))
                               }
                               autoFocus
@@ -367,12 +369,14 @@ export const CommandChat = ({
                               <label>
                                 <input
                                   type='checkbox'
-                                  checked={interactionValues[entry.id] === nullInput}
+                                  checked={interactionValues[entry.interaction.id] === nullInput}
                                   disabled={entry.responding}
                                   onChange={event =>
                                     setInteractionValues(previous => ({
                                       ...previous,
-                                      [entry.id]: event.target.checked ? nullInput : '',
+                                      [entry.interaction!.id]: event.target.checked
+                                        ? nullInput
+                                        : '',
                                     }))
                                   }
                                 />
@@ -385,8 +389,10 @@ export const CommandChat = ({
                           type='submit'
                           disabled={
                             entry.responding ||
-                            inputValue(entry.interaction, interactionValues[entry.id] ?? '') ===
-                              undefined
+                            inputValue(
+                              entry.interaction,
+                              interactionValues[entry.interaction.id] ?? '',
+                            ) === undefined
                           }
                         >
                           Continue

@@ -51,6 +51,13 @@ const InputInteractionForm = ({
     event.preventDefault();
     const raw = new FormData(event.currentTarget).get('value');
     if (!useNull && typeof raw !== 'string') return;
+    if (
+      !useNull &&
+      raw !== nullOption &&
+      interaction.input.type === 'number' &&
+      (!(raw as string).trim() || !Number.isFinite(Number(raw)))
+    )
+      return;
     const value: TaskInputValue =
       useNull || raw === nullOption
         ? null
@@ -154,7 +161,12 @@ export const OperationInteraction = ({
 
   if (interaction.kind === 'input') {
     return (
-      <InputInteractionForm interaction={interaction} responding={responding} respond={respond} />
+      <InputInteractionForm
+        key={interaction.id}
+        interaction={interaction}
+        responding={responding}
+        respond={respond}
+      />
     );
   }
 

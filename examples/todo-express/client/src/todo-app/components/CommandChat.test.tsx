@@ -264,6 +264,79 @@ it('collects a typed finite-choice Hole', async () => {
   );
 });
 
+it('clears input state when the same exchange advances to another typed Hole', async () => {
+  const respond = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      value: {
+        status: 'pending',
+        message: 'Completed?',
+        run: { taskId: 'ontahi.model-command', runId: 'run-input-dialogue' },
+        interaction: {
+          id: 'TodoItem.add:title-completed',
+          kind: 'input',
+          prompt: 'Completed?',
+          input: { type: 'boolean' },
+          createdAt: '2026-10-07T00:00:01.000Z',
+        },
+      },
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      value: { status: 'executed', message: 'Item added.' },
+    });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'What title?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-input-dialogue' },
+      interaction: {
+        id: 'TodoItem.add:title',
+        kind: 'input',
+        prompt: 'What title?',
+        input: { type: 'string' },
+        createdAt: '2026-10-07T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+
+  const title = container.querySelector('[aria-label="What title?"]') as HTMLInputElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(title, 'Notes');
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    title.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+
+  const completed = container.querySelector('[aria-label="Completed?"]') as HTMLSelectElement;
+  expect(completed.value).toBe('');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(
+      completed,
+      'false',
+    );
+    completed.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () =>
+    completed
+      .closest('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(respond).toHaveBeenNthCalledWith(
+    2,
+    { taskId: 'ontahi.model-command', runId: 'run-input-dialogue' },
+    { interactionId: 'TodoItem.add:title-completed', value: false },
+  );
+});
+
 it('keeps one exchange open across consecutive Hole choices', async () => {
   const respond = vi
     .fn()

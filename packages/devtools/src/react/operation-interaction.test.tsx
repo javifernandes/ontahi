@@ -63,6 +63,8 @@ it('submits numbers as numbers', () => {
       respond={respond}
     />,
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  expect(respond).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText('How many?'), { target: { value: '2.5' } });
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
   expect(respond).toHaveBeenCalledWith({ interactionId: 'enter-count', value: 2.5 });
@@ -110,7 +112,7 @@ it('offers finite choices for Boolean and enum inputs', () => {
 
 it('submits explicit null for a nullable input', () => {
   const respond = vi.fn();
-  render(
+  const { rerender } = render(
     <OperationInteraction
       interaction={{
         id: 'enter-note',
@@ -127,4 +129,25 @@ it('submits explicit null for a nullable input', () => {
   fireEvent.click(checkbox);
   fireEvent.submit(checkbox.closest('form')!);
   expect(respond).toHaveBeenCalledWith({ interactionId: 'enter-note', value: null });
+
+  rerender(
+    <OperationInteraction
+      interaction={{
+        id: 'enter-title-after-note',
+        kind: 'input',
+        prompt: 'Title?',
+        input: { type: 'string' },
+        createdAt: '2026-10-05T00:00:01.000Z',
+      }}
+      responding={false}
+      respond={respond}
+    />,
+  );
+  expect((screen.getByLabelText('Title?') as HTMLInputElement).disabled).toBe(false);
+  fireEvent.change(screen.getByLabelText('Title?'), { target: { value: 'Notes' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  expect(respond).toHaveBeenLastCalledWith({
+    interactionId: 'enter-title-after-note',
+    value: 'Notes',
+  });
 });
