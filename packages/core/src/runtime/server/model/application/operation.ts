@@ -3,7 +3,9 @@ import {
   type AnyEntityDefinition,
   type AnyReferenceFieldDefinition,
   type GraphJsonSchema,
+  type GraphSchemaDescriptor,
   type GraphSchemaDefinition,
+  toGraphSchemaDescriptor,
 } from '../../../../data-graph/index.js';
 import {
   lowerOperationApplication,
@@ -13,6 +15,7 @@ import {
   type OperationApplicationContract,
 } from '../../../../semantic-program/operation-application.js';
 import { hasOwn, isRecord } from '../../../../value/object.js';
+import type { TaskInputDescriptor, TaskInputValue } from '../../../contracts.js';
 import type { ModelEntityCandidate, ModelEntityMatch } from '../read/application.js';
 
 export type ModelOperationApplicationProposal = {
@@ -146,6 +149,72 @@ const referenceTargetForHole = (
   return target && targets.every(candidate => candidate === target) ? target : undefined;
 };
 
+const taskInputDescriptor = (
+  descriptor: GraphSchemaDescriptor,
+  nullable = false,
+): TaskInputDescriptor | undefined => {
+  if (descriptor.kind === 'nullable') return taskInputDescriptor(descriptor.item, true);
+  if (
+    descriptor.kind === 'optional' ||
+    descriptor.kind === 'default' ||
+    descriptor.kind === 'named' ||
+    descriptor.kind === 'refinement' ||
+    descriptor.kind === 'transform'
+  )
+    return taskInputDescriptor(descriptor.item, nullable);
+  if (descriptor.kind === 'literal')
+    return {
+      type: 'enum',
+      values: [descriptor.value],
+      ...(nullable || descriptor.value === null ? { nullable: true } : {}),
+    };
+  if (descriptor.kind === 'union') {
+    const values = descriptor.options.flatMap(option =>
+      option.kind === 'literal' ? [option.value] : [],
+    );
+    return values.length === descriptor.options.length
+      ? {
+          type: 'enum',
+          values,
+          ...(nullable || values.includes(null) ? { nullable: true } : {}),
+        }
+      : undefined;
+  }
+  if (descriptor.kind !== 'scalar') return undefined;
+  if (descriptor.type === 'enum' && !descriptor.enumValues?.length) return undefined;
+  const type =
+    descriptor.type === 'number'
+      ? 'number'
+      : descriptor.type === 'boolean'
+        ? 'boolean'
+        : descriptor.type === 'enum'
+          ? 'enum'
+          : ['id', 'string', 'date'].includes(descriptor.type)
+            ? 'string'
+            : undefined;
+  if (!type) return undefined;
+  return type === 'enum'
+    ? {
+        type,
+        values: descriptor.enumValues ?? [],
+        ...(nullable ? { nullable: true } : {}),
+      }
+    : { type, ...(nullable ? { nullable: true } : {}) };
+};
+
+const inputDescriptorForSchemas = (
+  schemas: readonly (GraphSchemaDefinition | undefined)[],
+): TaskInputDescriptor | undefined => {
+  const descriptors = schemas.map(schema =>
+    schema ? taskInputDescriptor(toGraphSchemaDescriptor(schema)) : undefined,
+  );
+  const first = descriptors[0];
+  return first &&
+    descriptors.every(candidate => JSON.stringify(candidate) === JSON.stringify(first))
+    ? first
+    : undefined;
+};
+
 export const modelOperationApplicationEntityMatches = (
   proposal: ModelOperationApplicationProposal,
   contract: OperationApplicationContract,
@@ -185,22 +254,24 @@ export const resolveModelOperationApplication = (
       ([, argument]) => argument.kind === 'hole' && argument.id === holeId,
     );
     const schemas = positions.map(([name]) => contract.input.fields[name]);
-    if (
-      binding?.kind === 'free-input' &&
-      schemas.length > 0 &&
-      schemas.every(schema => {
-        const definition = schema as GraphSchemaDefinition | undefined;
-        return definition?.kind === 'field' && definition.fieldType === 'string';
-      })
-    )
+    if (binding?.kind === 'free-input' && schemas.length > 0) {
+      const input = inputDescriptorForSchemas(
+        schemas as readonly (GraphSchemaDefinition | undefined)[],
+      );
+      if (!input)
+        return {
+          status: 'unresolved' as const,
+          reason: 'This input position cannot be completed interactively.',
+        };
       return {
         status: 'input' as const,
         prompt: binding.prompt,
         proposal: { ...proposal, application },
         candidates,
         holeId,
-        input: { type: 'string' as const },
+        input,
       };
+    }
     const matches = candidates[holeId] ?? [];
     if (!matches.length)
       return { status: 'unresolved' as const, reason: `No visible entity matches this request.` };
@@ -267,7 +338,7 @@ export const continueModelOperationApplication = (
 export const submitModelOperationApplicationInput = (
   input: ModelOperationApplicationInput,
   contract: OperationApplicationContract,
-  value: string,
+  value: TaskInputValue,
 ) => {
   const substitution = substituteOperationApplication(
     contract,

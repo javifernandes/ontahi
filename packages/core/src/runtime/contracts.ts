@@ -213,11 +213,31 @@ export type TaskPendingChoiceInteraction = {
   createdAt: string;
 };
 
+export type TaskInputValue = string | number | boolean | null;
+
+export type TaskInputDescriptor =
+  | { type: 'string'; nullable?: true }
+  | { type: 'number'; nullable?: true }
+  | { type: 'boolean'; nullable?: true }
+  | { type: 'enum'; values: readonly TaskInputValue[]; nullable?: true };
+
+export type TaskInputValueFor<TInput extends TaskInputDescriptor> =
+  | (TInput extends { type: 'string' }
+      ? string
+      : TInput extends { type: 'number' }
+        ? number
+        : TInput extends { type: 'boolean' }
+          ? boolean
+          : TInput extends { type: 'enum'; values: readonly (infer TValue)[] }
+            ? TValue
+            : never)
+  | (TInput extends { nullable: true } ? null : never);
+
 export type TaskPendingInputInteraction = {
   id: string;
   kind: 'input';
   prompt: string;
-  input: { type: 'string' };
+  input: TaskInputDescriptor;
   createdAt: string;
 };
 
@@ -247,7 +267,7 @@ export type TaskChoiceInteractionResponse = {
 
 export type TaskInputInteractionResponse = {
   interactionId: string;
-  value: string;
+  value: TaskInputValue;
 };
 
 export type TaskApprovalInteractionResponse = {

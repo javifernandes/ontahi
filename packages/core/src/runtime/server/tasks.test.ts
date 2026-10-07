@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { field, value } from '../../data-graph/index.js';
 
-import { validateTaskInputInteractionRequest } from './tasks/execution-interactions.js';
+import {
+  validateTaskInputInteractionRequest,
+  validateTaskInteractionResponse,
+} from './tasks/execution-interactions.js';
 
 import {
   architecture,
@@ -1590,6 +1593,71 @@ describe('tasks', () => {
         ),
       ),
     ).resolves.toMatchObject({ reason: 'invalid_task_interaction' });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          validateTaskInputInteractionRequest(ref, {
+            prompt: 'Which value?',
+            input: { type: 'enum', values: ['same', 'same'] },
+          }),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction' });
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          validateTaskInputInteractionRequest(ref, {
+            prompt: 'Which value?',
+            input: { type: 'enum', values: [null] },
+          }),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction' });
+  });
+
+  it.each([
+    [{ type: 'number' as const }, '2'],
+    [{ type: 'boolean' as const }, 'false'],
+    [{ type: 'enum' as const, values: ['low', 'high'] }, 'other'],
+    [{ type: 'string' as const }, null],
+  ])('rejects a response outside its %s input descriptor', async (input, value) => {
+    const ref = { taskId: 'demo.typed-input', runId: 'invalid-response' };
+    await expect(
+      Effect.runPromise(
+        Effect.flip(
+          validateTaskInteractionResponse(
+            ref,
+            {
+              id: 'typed-input',
+              kind: 'input',
+              prompt: 'Value?',
+              input,
+              createdAt: '2026-10-07T00:00:00.000Z',
+            },
+            { interactionId: 'typed-input', value },
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ reason: 'invalid_task_interaction_response' });
+  });
+
+  it('accepts explicit null only when the input descriptor is nullable', async () => {
+    const ref = { taskId: 'demo.typed-input', runId: 'nullable-response' };
+    await expect(
+      Effect.runPromise(
+        validateTaskInteractionResponse(
+          ref,
+          {
+            id: 'typed-input',
+            kind: 'input',
+            prompt: 'Value?',
+            input: { type: 'number', nullable: true },
+            createdAt: '2026-10-07T00:00:00.000Z',
+          },
+          { interactionId: 'typed-input', value: null },
+        ),
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects a second concurrent input interaction in one suspended task function', async () => {

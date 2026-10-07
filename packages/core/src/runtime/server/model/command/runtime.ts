@@ -8,7 +8,11 @@ import {
 } from '../../../../data-graph/index.js';
 import { isJsonValue } from '../../../../value/json.js';
 import { isRecord } from '../../../../value/object.js';
-import type { ModelCommandRequest, ModelCommandResult } from '../../../contracts.js';
+import type {
+  ModelCommandRequest,
+  ModelCommandResult,
+  TaskInputValue,
+} from '../../../contracts.js';
 import type { OperationInvokeRequest } from '../../../operation-invocation.js';
 import type { OntahiApplication } from '../../application.js';
 import { createOperationInvocationDispatcher } from '../../operation-invocation.js';
@@ -98,7 +102,7 @@ export type PreparedModelCommandRuntime = ModelCommandRuntime & {
   submitApplicationInput(
     request: ModelCommandRequest,
     input: ModelOperationApplicationInput,
-    value: string,
+    value: TaskInputValue,
     signal: AbortSignal,
   ): Promise<ModelCommandPreparation>;
 };

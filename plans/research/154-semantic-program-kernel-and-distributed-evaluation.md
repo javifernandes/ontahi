@@ -972,6 +972,24 @@ asked to reconstruct the invocation between answers. Every continuation restores
 principal, reauthorizes the request, and confirms that the Operation remains in fresh scope before
 eventual execution performs its existing receiver authorization.
 
+### Typed Application Input Checkpoint
+
+Implemented on 2026-10-07: a free-input Operation Hole now derives a neutral input descriptor from
+its occupied positions in the existing Operation schema. String, number, Boolean, enum/literal
+choice, and nullable scalar positions cross the durable Interaction protocol as their actual JSON
+values; the runtime rejects a response whose type or finite choice does not match that descriptor.
+One named Hole may occupy several compatible positions and is substituted into all of them through
+the existing schema-validation path. Incompatible positions remain unresolved rather than choosing
+an arbitrary presentation.
+
+Devtools and the Todo chat project the same descriptor into text, numeric, finite-choice, and
+explicit-null controls. This closes the direct scalar application-input path without copying schema
+metadata into the application or teaching each frontend domain rules. Existing normalization
+already distinguishes omitted required inputs from omitted optional/default inputs and explicit
+`null`; this checkpoint adds no second omission model. Nested/composite input editing, contextual
+producers, date-specific presentation, Entity search, and a general projectional editor remain out
+of scope.
+
 ## Second Vertical Proof
 
 After the first proof, reuse the kernel for a live Query with one externally computed value:
@@ -1055,17 +1073,17 @@ first result should clarify identity and state ownership rather than maximize ag
 
 - [ ] The kernel vocabulary explains existing Reads, Commands, Operations, Interactions, and Query
       observation without erasing their guarantees.
-- [ ] One Operation application is incrementally completed from its existing input schema.
-- [ ] Bound arguments and holes occupy one argument structure with no duplicated contract.
+- [x] One Operation application is incrementally completed from its existing input schema.
+- [x] Bound arguments and holes occupy one argument structure with no duplicated contract.
 - [ ] Omitted required, omitted optional, explicit hole, default, `null`, and contextual values have
       distinct semantics.
-- [ ] Named-hole substitution works across more than one term position.
-- [ ] An open application cannot reach an effect dispatcher.
-- [ ] A closed Operation application lowers to the unchanged canonical invocation protocol.
-- [ ] The same unresolved Ref projects to at least two interaction surfaces.
-- [ ] A resolver is replaceable without changing the authored program.
-- [ ] A model is optional and receives no special authority.
-- [ ] One Graph Read and one Graph Command reuse the substitution model.
+- [x] Named-hole substitution works across more than one term position.
+- [x] An open application cannot reach an effect dispatcher.
+- [x] A closed Operation application lowers to the unchanged canonical invocation protocol.
+- [x] The same unresolved Ref projects to at least two interaction surfaces.
+- [x] A resolver is replaceable without changing the authored program.
+- [x] A model is optional and receives no special authority.
+- [x] One Graph Read and one Graph Command reuse the substitution model.
 - [ ] One canonical Query can run once or produce a React-independent reactive value.
 - [ ] Event occurrence, reactive revision, row stream, and Operation progress remain distinguishable.
 - [ ] Approval is represented as a typed durable wait with participant authorization.

@@ -9,6 +9,8 @@ import type {
   TaskExecutionCheckpoint,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
+  TaskInputDescriptor,
+  TaskInputValueFor,
   TaskRunListItem,
   TaskRunIdentity,
   TaskRunRef,
@@ -28,6 +30,9 @@ export type {
   TaskChoiceInteractionOption,
   TaskChoiceInteractionResponse,
   TaskInputInteractionResponse,
+  TaskInputDescriptor,
+  TaskInputValue,
+  TaskInputValueFor,
   TaskInteractionResponse,
   TaskInteractionResponseContext,
   TaskExecutionCheckpoint,
@@ -58,11 +63,12 @@ export type TaskChoiceInteractionRequest<TValue> = {
   }>;
 };
 
-export type TaskInputInteractionRequest = {
-  id?: string;
-  prompt: string;
-  input: { type: 'string' };
-};
+export type TaskInputInteractionRequest<TInput extends TaskInputDescriptor = TaskInputDescriptor> =
+  {
+    id?: string;
+    prompt: string;
+    input: TInput;
+  };
 
 export type TaskApprovalInteractionRequest = {
   id?: string;
@@ -74,7 +80,9 @@ export type TaskApprovalDecision = Omit<TaskApprovalInteractionResponse, 'intera
 
 export type TaskInteractionContext = {
   choice<TValue>(request: TaskChoiceInteractionRequest<TValue>): Effect.Effect<TValue, TaskFailure>;
-  input(request: TaskInputInteractionRequest): Effect.Effect<string, TaskFailure>;
+  input<TInput extends TaskInputDescriptor>(
+    request: TaskInputInteractionRequest<TInput>,
+  ): Effect.Effect<TaskInputValueFor<TInput>, TaskFailure>;
   approval(
     request: TaskApprovalInteractionRequest,
   ): Effect.Effect<TaskApprovalDecision, TaskFailure>;

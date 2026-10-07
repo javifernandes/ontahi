@@ -221,6 +221,49 @@ it('collects a durable string Hole and continues the same exchange', async () =>
   expect(refresh).toHaveBeenCalledOnce();
 });
 
+it('collects a typed finite-choice Hole', async () => {
+  const respond = vi.fn().mockResolvedValue({
+    ok: true,
+    value: { status: 'executed', message: 'Item updated.' },
+  });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'Completed?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-boolean-input' },
+      interaction: {
+        id: 'TodoItem.update:completed',
+        kind: 'input',
+        prompt: 'Completed?',
+        input: { type: 'boolean' },
+        createdAt: '2026-10-07T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+
+  const select = container.querySelector('[aria-label="Completed?"]') as HTMLSelectElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(
+      select,
+      'false',
+    );
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () =>
+    select.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(respond).toHaveBeenCalledWith(
+    { taskId: 'ontahi.model-command', runId: 'run-boolean-input' },
+    { interactionId: 'TodoItem.update:completed', value: false },
+  );
+});
+
 it('keeps one exchange open across consecutive Hole choices', async () => {
   const respond = vi
     .fn()

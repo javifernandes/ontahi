@@ -1,5 +1,7 @@
 import type {
+  TaskInputValue,
   TaskInteractionResponse,
+  TaskPendingInputInteraction,
   TaskPendingInteraction,
   TaskRunIdentity,
 } from '@ontahi/core/runtime/contracts';
@@ -35,6 +37,22 @@ type Entry = {
   run?: TaskRunIdentity;
   interaction?: TaskPendingInteraction;
   responding?: boolean;
+};
+
+const nullInput = '__ontahi_null__';
+const encodeInputOption = (value: TaskInputValue) => JSON.stringify(value);
+const inputValue = (
+  interaction: Extract<TaskPendingInteraction, { kind: 'input' }>,
+  raw: string,
+): TaskInputValue | undefined => {
+  if (raw === nullInput) return interaction.input.nullable ? null : undefined;
+  if (interaction.input.type === 'string') return raw;
+  if (interaction.input.type === 'number') {
+    const value = Number(raw);
+    return raw.trim() && Number.isFinite(value) ? value : undefined;
+  }
+  if (!raw) return undefined;
+  return JSON.parse(raw) as TaskInputValue;
 };
 
 export const CommandChat = ({
@@ -275,30 +293,101 @@ export const CommandChat = ({
                         className='command-chat-input'
                         onSubmit={event => {
                           event.preventDefault();
-                          const value = interactionValues[entry.id]?.trim();
-                          if (!value) return;
+                          const raw = interactionValues[entry.id] ?? '';
+                          const value = inputValue(
+                            entry.interaction as TaskPendingInputInteraction,
+                            raw,
+                          );
+                          if (value === undefined) return;
                           void respondToInteraction(entry, {
                             interactionId: entry.interaction!.id,
                             value,
                           });
                         }}
                       >
-                        <input
-                          aria-label={entry.interaction.prompt}
-                          type='text'
-                          value={interactionValues[entry.id] ?? ''}
-                          disabled={entry.responding}
-                          onChange={event =>
-                            setInteractionValues(previous => ({
-                              ...previous,
-                              [entry.id]: event.target.value,
-                            }))
-                          }
-                          autoFocus
-                        />
+                        {entry.interaction.input.type === 'boolean' ||
+                        entry.interaction.input.type === 'enum' ? (
+                          <select
+                            aria-label={entry.interaction.prompt}
+                            value={interactionValues[entry.id] ?? ''}
+                            disabled={entry.responding}
+                            onChange={event =>
+                              setInteractionValues(previous => ({
+                                ...previous,
+                                [entry.id]: event.target.value,
+                              }))
+                            }
+                            autoFocus
+                          >
+                            <option value='' disabled>
+                              Select…
+                            </option>
+                            {entry.interaction.input.nullable &&
+                            !(
+                              entry.interaction.input.type === 'enum' &&
+                              entry.interaction.input.values.includes(null)
+                            ) ? (
+                              <option value={nullInput}>null</option>
+                            ) : null}
+                            {(entry.interaction.input.type === 'boolean'
+                              ? [true, false]
+                              : entry.interaction.input.values
+                            ).map(value => (
+                              <option
+                                key={encodeInputOption(value)}
+                                value={encodeInputOption(value)}
+                              >
+                                {String(value)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <>
+                            <input
+                              aria-label={entry.interaction.prompt}
+                              type={entry.interaction.input.type === 'number' ? 'number' : 'text'}
+                              step={entry.interaction.input.type === 'number' ? 'any' : undefined}
+                              value={
+                                interactionValues[entry.id] === nullInput
+                                  ? ''
+                                  : (interactionValues[entry.id] ?? '')
+                              }
+                              disabled={
+                                entry.responding || interactionValues[entry.id] === nullInput
+                              }
+                              onChange={event =>
+                                setInteractionValues(previous => ({
+                                  ...previous,
+                                  [entry.id]: event.target.value,
+                                }))
+                              }
+                              autoFocus
+                            />
+                            {entry.interaction.input.nullable ? (
+                              <label>
+                                <input
+                                  type='checkbox'
+                                  checked={interactionValues[entry.id] === nullInput}
+                                  disabled={entry.responding}
+                                  onChange={event =>
+                                    setInteractionValues(previous => ({
+                                      ...previous,
+                                      [entry.id]: event.target.checked ? nullInput : '',
+                                    }))
+                                  }
+                                />
+                                Use null
+                              </label>
+                            ) : null}
+                          </>
+                        )}
                         <button
                           type='submit'
-                          disabled={entry.responding || !interactionValues[entry.id]?.trim()}
+                          disabled={
+                            entry.responding ||
+                            inputValue(entry.interaction, interactionValues[entry.id] ?? '') ===
+                              undefined
+                          }
                         >
                           Continue
                         </button>
