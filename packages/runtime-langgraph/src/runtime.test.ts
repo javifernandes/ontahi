@@ -107,7 +107,7 @@ describe('LangGraph Task Runtime', () => {
           input: defineTaskExecutionStep({
             run: ({ state, response }) =>
               Effect.succeed(
-                response && 'value' in response
+                response && 'value' in response && typeof response.value === 'string'
                   ? { kind: 'complete', result: { title: response.value } }
                   : {
                       kind: 'interaction',
@@ -176,7 +176,12 @@ describe('LangGraph Task Runtime', () => {
         steps: {
           input: defineTaskExecutionStep({
             run: ({ state, response }) => {
-              if (state.phase === 'first' && response && 'value' in response)
+              if (
+                state.phase === 'first' &&
+                response &&
+                'value' in response &&
+                typeof response.value === 'string'
+              )
                 return Effect.succeed({
                   kind: 'interaction' as const,
                   state: {
@@ -186,7 +191,12 @@ describe('LangGraph Task Runtime', () => {
                   },
                   interaction: { prompt: 'Value?', input: { type: 'string' as const } },
                 });
-              if (state.phase === 'second' && response && 'value' in response)
+              if (
+                state.phase === 'second' &&
+                response &&
+                'value' in response &&
+                typeof response.value === 'string'
+              )
                 return Effect.succeed({
                   kind: 'complete' as const,
                   result: { first: state.first!, second: response.value },

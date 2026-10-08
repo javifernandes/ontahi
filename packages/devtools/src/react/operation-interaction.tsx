@@ -1,8 +1,9 @@
 import type {
+  TaskInputValue,
   TaskInteractionResponse,
   TaskPendingInteraction,
 } from '@ontahi/core/runtime/contracts';
-import { useContext, type CSSProperties, type FormEvent } from 'react';
+import { useContext, useState, type CSSProperties, type FormEvent } from 'react';
 
 import { graphCommandText } from './activity-model.js';
 import { AuthoringDialectContext } from './authoring-dialect.js';
@@ -23,6 +24,109 @@ const buttonStyle = (kind: 'primary' | 'secondary' | 'danger' = 'secondary'): CS
   font: 'inherit',
   fontWeight: 750,
 });
+
+const nullOption = '__ontahi_null__';
+const valueOption = (value: TaskInputValue) => JSON.stringify(value);
+const inputStyle: CSSProperties = {
+  minHeight: 30,
+  padding: '0 10px',
+  border: '1px solid #30463a',
+  borderRadius: 8,
+  color: '#e6fff0',
+  background: '#101b16',
+  font: 'inherit',
+};
+
+const InputInteractionForm = ({
+  interaction,
+  responding,
+  respond,
+}: {
+  interaction: Extract<TaskPendingInteraction, { kind: 'input' }>;
+  responding: boolean;
+  respond: (response: TaskInteractionResponse) => void;
+}) => {
+  const [useNull, setUseNull] = useState(false);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const raw = new FormData(event.currentTarget).get('value');
+    if (!useNull && typeof raw !== 'string') return;
+    if (
+      !useNull &&
+      raw !== nullOption &&
+      interaction.input.type === 'number' &&
+      (!(raw as string).trim() || !Number.isFinite(Number(raw)))
+    )
+      return;
+    const value: TaskInputValue =
+      useNull || raw === nullOption
+        ? null
+        : interaction.input.type === 'number'
+          ? Number(raw)
+          : interaction.input.type === 'boolean' || interaction.input.type === 'enum'
+            ? (JSON.parse(raw as string) as TaskInputValue)
+            : (raw as string);
+    respond({ interactionId: interaction.id, value });
+  };
+  const id = `task-input-${interaction.id}`;
+  const selectValues =
+    interaction.input.type === 'boolean'
+      ? [true, false]
+      : interaction.input.type === 'enum'
+        ? interaction.input.values
+        : undefined;
+  const control = selectValues ? (
+    <select id={id} name='value' disabled={responding} autoFocus style={inputStyle}>
+      {interaction.input.nullable && !selectValues.includes(null) ? (
+        <option value={nullOption}>null</option>
+      ) : null}
+      {selectValues.map(value => (
+        <option key={valueOption(value)} value={valueOption(value)}>
+          {String(value)}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <input
+      id={id}
+      name='value'
+      type={interaction.input.type === 'number' ? 'number' : 'text'}
+      step={interaction.input.type === 'number' ? 'any' : undefined}
+      disabled={responding || useNull}
+      autoFocus
+      style={{ ...inputStyle, flex: '1 1 240px' }}
+    />
+  );
+  return (
+    <form style={styles.semanticCard} onSubmit={submit}>
+      <span style={styles.semanticLabel}>Input required</span>
+      <label style={styles.semanticValue} htmlFor={id}>
+        {interaction.prompt}
+      </label>
+      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {control}
+        {interaction.input.nullable && !selectValues ? (
+          <label style={styles.consoleHint}>
+            <input
+              type='checkbox'
+              checked={useNull}
+              disabled={responding}
+              onChange={event => setUseNull(event.target.checked)}
+            />{' '}
+            Use null
+          </label>
+        ) : null}
+        <button
+          type='submit'
+          disabled={responding}
+          style={{ ...buttonStyle('primary'), ...(responding ? styles.disabledButton : {}) }}
+        >
+          Continue
+        </button>
+      </span>
+    </form>
+  );
+};
 
 export const OperationInteraction = ({
   interaction,
@@ -56,44 +160,13 @@ export const OperationInteraction = ({
     );
 
   if (interaction.kind === 'input') {
-    const submit = (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const value = new FormData(event.currentTarget).get('value');
-      if (typeof value === 'string') respond({ interactionId: interaction.id, value });
-    };
     return (
-      <form style={styles.semanticCard} onSubmit={submit}>
-        <span style={styles.semanticLabel}>Input required</span>
-        <label style={styles.semanticValue} htmlFor={`task-input-${interaction.id}`}>
-          {interaction.prompt}
-        </label>
-        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <input
-            id={`task-input-${interaction.id}`}
-            name='value'
-            type='text'
-            disabled={responding}
-            autoFocus
-            style={{
-              flex: '1 1 240px',
-              minHeight: 30,
-              padding: '0 10px',
-              border: '1px solid #30463a',
-              borderRadius: 8,
-              color: '#e6fff0',
-              background: '#101b16',
-              font: 'inherit',
-            }}
-          />
-          <button
-            type='submit'
-            disabled={responding}
-            style={{ ...buttonStyle('primary'), ...(responding ? styles.disabledButton : {}) }}
-          >
-            Continue
-          </button>
-        </span>
-      </form>
+      <InputInteractionForm
+        key={interaction.id}
+        interaction={interaction}
+        responding={responding}
+        respond={respond}
+      />
     );
   }
 

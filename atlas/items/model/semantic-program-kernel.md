@@ -123,3 +123,10 @@ Each accepted choice substitutes exactly one named Hole; another unresolved Hole
 Interaction, while a closed application lowers once to the canonical invocation. The model is not
 called again during this continuation, and fresh authorization plus Operation exposure are checked
 before every resumed substitution and before execution.
+
+Direct scalar Operation Holes now derive a frontend-neutral input descriptor from their original
+schema positions. Durable interactions transport string, number, Boolean, enum/literal, and
+nullable values without reducing them to text; runtime validation keeps the visible control and the
+eventual substitution consistent. Devtools and Todo chat are two projections of that same contract,
+and one compatible named Hole can fill several positions. This does not yet cover nested values,
+contextual producers, or a universal form representation.

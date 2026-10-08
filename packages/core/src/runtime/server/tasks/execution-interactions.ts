@@ -104,6 +104,19 @@ export const validateTaskInputInteractionRequest = (
     return Effect.fail(invalidTaskInteractionFailure(ref, 'Input prompt cannot be empty.'));
   if (request.id !== undefined && (request.id.trim().length === 0 || request.id.length > 512))
     return Effect.fail(invalidTaskInteractionFailure(ref, 'Input interaction ID is invalid.'));
+  if (
+    request.input.type === 'enum' &&
+    (request.input.values.length === 0 ||
+      (request.input.values.includes(null) && request.input.nullable !== true) ||
+      new Set(request.input.values.map(value => JSON.stringify(value))).size !==
+        request.input.values.length)
+  )
+    return Effect.fail(
+      invalidTaskInteractionFailure(
+        ref,
+        'Enum input values must be non-empty and unique; null requires a nullable descriptor.',
+      ),
+    );
   return Effect.void;
 };
 
@@ -163,12 +176,24 @@ export const validateTaskInteractionResponse = (
   if (interaction.id !== response.interactionId) {
     return Effect.fail(taskInteractionMismatchFailure(ref, response.interactionId));
   }
+  const validInput =
+    interaction.kind === 'input' && 'value' in response
+      ? response.value === null
+        ? interaction.input.nullable === true
+        : interaction.input.type === 'string'
+          ? typeof response.value === 'string'
+          : interaction.input.type === 'number'
+            ? typeof response.value === 'number' && Number.isFinite(response.value)
+            : interaction.input.type === 'boolean'
+              ? typeof response.value === 'boolean'
+              : interaction.input.values.includes(response.value)
+      : false;
   const valid =
     interaction.kind === 'choice'
       ? 'optionId' in response &&
         interaction.options.some(option => option.id === response.optionId)
       : interaction.kind === 'input'
-        ? 'value' in response && typeof response.value === 'string'
+        ? validInput
         : 'decision' in response;
   return valid
     ? Effect.void

@@ -99,6 +99,30 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
+  it.each([2.5, false, null])('authors a portable %j input response', value => {
+    const body = toDurableOperationInteractionResponseRequest(run, {
+      interactionId: 'typed-input',
+      value,
+    });
+    expect(createRuntimeProtocolRegistry(runtimeProtocolFamilies).parseRequest(body)).toMatchObject(
+      {
+        success: false,
+      },
+    );
+    expect(
+      createRuntimeProtocolRegistry(runtimeProtocolFamilies).parseRequest(
+        createRuntimeProtocolRequest({ id: 'typed-response', family: 'durable.operation', body }),
+      ),
+    ).toEqual({
+      success: true,
+      request: createRuntimeProtocolRequest({
+        id: 'typed-response',
+        family: 'durable.operation',
+        body,
+      }),
+    });
+  });
+
   it.each([
     { name: 'non-object body', body: null, code: 'invalid_request' },
     {
@@ -286,7 +310,12 @@ describe('Runtime Protocol Durable Operation family', () => {
     });
   });
 
-  it('transports a pending string input without its eventual value', () => {
+  it.each([
+    { type: 'string' as const },
+    { type: 'number' as const, nullable: true as const },
+    { type: 'boolean' as const },
+    { type: 'enum' as const, values: ['low', 'high', null], nullable: true as const },
+  ])('transports a pending $type input without its eventual value', input => {
     const response = toDurableOperationSnapshotResponse({
       ...run,
       status: 'running',
@@ -295,7 +324,7 @@ describe('Runtime Protocol Durable Operation family', () => {
         id: 'TodoItem.addItem:title',
         kind: 'input',
         prompt: 'What should the item say?',
-        input: { type: 'string' },
+        input,
         createdAt: '2026-10-04T00:00:00.000Z',
       },
     });
@@ -509,7 +538,7 @@ describe('Runtime Protocol Durable Operation family', () => {
             id: 'enter-title',
             kind: 'input',
             prompt: 'What title?',
-            input: { type: 'number' },
+            input: { type: 'object' },
             createdAt: 'now',
           },
         },

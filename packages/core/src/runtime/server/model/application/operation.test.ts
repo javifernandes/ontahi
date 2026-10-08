@@ -286,4 +286,110 @@ describe('Model Operation applications', () => {
       reason: 'The supplied value is invalid.',
     });
   });
+
+  it.each([
+    ['count', field.number(), { type: 'number' }, 3],
+    ['completed', field.boolean(), { type: 'boolean' }, false],
+    ['optionalCount', graphSchema.optional(field.number()), { type: 'number' }, 3],
+    ['batchSize', graphSchema.default(field.number(), 25), { type: 'number' }, 10],
+    ['priority', field.enum(['low', 'high']), { type: 'enum', values: ['low', 'high'] }, 'high'],
+    ['mode', graphSchema.literal('only'), { type: 'enum', values: ['only'] }, 'only'],
+    ['note', graphSchema.nullable(field.string()), { type: 'string', nullable: true }, null],
+    [
+      'direction',
+      graphSchema.union([graphSchema.literal('before'), graphSchema.literal('after')]),
+      { type: 'enum', values: ['before', 'after'] },
+      'after',
+    ],
+    [
+      'state',
+      graphSchema.union([graphSchema.literal('active'), graphSchema.literal(null)]),
+      { type: 'enum', values: ['active', null], nullable: true },
+      null,
+    ],
+  ] as const)('derives and submits a typed %s Hole', (name, schema, descriptor, value) => {
+    const typedContract = {
+      id: `OperationList.set-${name}`,
+      input: graphSchema.object({ [name]: schema }),
+    };
+    const typedProposal = {
+      application: {
+        kind: 'operation-application' as const,
+        operationId: typedContract.id,
+        arguments: { [name]: { kind: 'hole' as const, id: 'value' } },
+      },
+      bindings: { value: { kind: 'free-input' as const, prompt: `Choose ${name}` } },
+    };
+    const input = resolveModelOperationApplication(typedProposal, typedContract, {});
+    expect(input).toMatchObject({ status: 'input', holeId: 'value', input: descriptor });
+    if (input.status !== 'input') throw new Error('Expected typed input.');
+    expect(submitModelOperationApplicationInput(input, typedContract, value)).toEqual({
+      status: 'resolved',
+      request: {
+        kind: 'invoke',
+        operationId: typedContract.id,
+        input: { [name]: value },
+      },
+    });
+  });
+
+  it('substitutes one compatible named Hole in every position and rejects incompatible positions', () => {
+    const repeatedContract = {
+      id: 'OperationList.rename',
+      input: graphSchema.object({ first: field.string(), second: field.string() }),
+    };
+    const repeatedProposal = {
+      application: {
+        kind: 'operation-application' as const,
+        operationId: repeatedContract.id,
+        arguments: {
+          first: { kind: 'hole' as const, id: 'name' },
+          second: { kind: 'hole' as const, id: 'name' },
+        },
+      },
+      bindings: { name: { kind: 'free-input' as const, prompt: 'Which name?' } },
+    };
+    const input = resolveModelOperationApplication(repeatedProposal, repeatedContract, {});
+    expect(input).toMatchObject({ status: 'input', input: { type: 'string' } });
+    if (input.status !== 'input') throw new Error('Expected repeated input.');
+    expect(submitModelOperationApplicationInput(input, repeatedContract, 'Notes')).toMatchObject({
+      status: 'resolved',
+      request: { input: { first: 'Notes', second: 'Notes' } },
+    });
+
+    const incompatibleContract = {
+      id: 'OperationList.incompatible',
+      input: graphSchema.object({ first: field.string(), second: field.number() }),
+    };
+    expect(resolveModelOperationApplication(repeatedProposal, incompatibleContract, {})).toEqual({
+      status: 'unresolved',
+      reason: 'This input position cannot be completed interactively.',
+    });
+  });
+
+  it('keeps composite free input unresolved instead of inventing a generic value editor', () => {
+    const compositeContract = {
+      id: 'OperationList.configure',
+      input: graphSchema.object({ settings: graphSchema.object({ enabled: field.boolean() }) }),
+    };
+    expect(
+      resolveModelOperationApplication(
+        {
+          application: {
+            kind: 'operation-application',
+            operationId: compositeContract.id,
+            arguments: { settings: { kind: 'hole', id: 'settings' } },
+          },
+          bindings: {
+            settings: { kind: 'free-input', prompt: 'Which settings?' },
+          },
+        },
+        compositeContract,
+        {},
+      ),
+    ).toEqual({
+      status: 'unresolved',
+      reason: 'This input position cannot be completed interactively.',
+    });
+  });
 });

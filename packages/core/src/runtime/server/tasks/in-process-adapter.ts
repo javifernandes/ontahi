@@ -37,6 +37,8 @@ import type {
   TaskPendingApprovalInteraction,
   TaskPendingChoiceInteraction,
   TaskPendingInputInteraction,
+  TaskInputValue,
+  TaskInputValueFor,
   TaskPendingInteraction,
   TaskRunIdentity,
   TaskRunRef,
@@ -222,7 +224,9 @@ export const createInProcessTaskRuntime = ({
               ...continuation,
             } satisfies PendingInteraction;
 
-            return yield* waitForInteraction<string>(ref, pending);
+            return (yield* waitForInteraction<TaskInputValue>(ref, pending)) as TaskInputValueFor<
+              typeof request.input
+            >;
           }),
         approval: request =>
           Effect.gen(function* () {

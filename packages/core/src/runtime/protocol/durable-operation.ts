@@ -85,7 +85,7 @@ const subjectKeys = new Set(['type', 'id']);
 const progressKeys = new Set(['phase', 'message', 'percent']);
 const choiceInteractionKeys = new Set(['id', 'kind', 'prompt', 'options', 'createdAt']);
 const inputInteractionKeys = new Set(['id', 'kind', 'prompt', 'input', 'createdAt']);
-const inputDescriptorKeys = new Set(['type']);
+const inputDescriptorKeys = new Set(['type', 'values', 'nullable']);
 const approvalInteractionKeys = new Set(['id', 'kind', 'prompt', 'proposal', 'createdAt']);
 const interactionOptionKeys = new Set(['id', 'label']);
 const approvalProposalKeys = new Set(['id', 'summary', 'requests']);
@@ -107,6 +107,12 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>) 
 const isIdentitySegment = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && value.length <= 512;
 
+const isTaskInputValue = (value: unknown) =>
+  typeof value === 'string' ||
+  (typeof value === 'number' && Number.isFinite(value)) ||
+  typeof value === 'boolean' ||
+  value === null;
+
 const isTimestamp = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
@@ -120,7 +126,7 @@ const isTaskInteractionResponse = (value: unknown): value is TaskInteractionResp
   isRecord(value) &&
   isIdentitySegment(value.interactionId) &&
   ((hasOnlyKeys(value, choiceInteractionResponseKeys) && isIdentitySegment(value.optionId)) ||
-    (hasOnlyKeys(value, inputInteractionResponseKeys) && typeof value.value === 'string') ||
+    (hasOnlyKeys(value, inputInteractionResponseKeys) && isTaskInputValue(value.value)) ||
     (hasOnlyKeys(value, approvalInteractionResponseKeys) &&
       (value.decision === 'approve' || value.decision === 'reject') &&
       isOptionalString(value.reason)));
@@ -327,14 +333,33 @@ export const parseTaskPendingInteraction = (value: unknown): TaskPendingInteract
       !hasOnlyKeys(value, inputInteractionKeys) ||
       !isRecord(value.input) ||
       !hasOnlyKeys(value.input, inputDescriptorKeys) ||
-      value.input.type !== 'string'
+      !['string', 'number', 'boolean', 'enum'].includes(String(value.input.type)) ||
+      (value.input.nullable !== undefined && value.input.nullable !== true) ||
+      (value.input.type === 'enum' &&
+        (!Array.isArray(value.input.values) ||
+          value.input.values.length === 0 ||
+          !value.input.values.every(isTaskInputValue) ||
+          (value.input.values.includes(null) && value.input.nullable !== true) ||
+          new Set(value.input.values.map(item => JSON.stringify(item))).size !==
+            value.input.values.length)) ||
+      (value.input.type !== 'enum' && value.input.values !== undefined)
     )
       return undefined;
     return {
       id: value.id,
       kind: 'input',
       prompt: value.prompt,
-      input: { type: 'string' },
+      input:
+        value.input.type === 'enum'
+          ? {
+              type: 'enum',
+              values: value.input.values as (string | number | boolean | null)[],
+              ...(value.input.nullable === true ? { nullable: true } : {}),
+            }
+          : {
+              type: value.input.type as 'string' | 'number' | 'boolean',
+              ...(value.input.nullable === true ? { nullable: true } : {}),
+            },
       createdAt: value.createdAt,
     };
   }
