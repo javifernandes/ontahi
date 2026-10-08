@@ -284,6 +284,21 @@ it('clears input state when the same exchange advances to another typed Hole', a
     })
     .mockResolvedValueOnce({
       ok: true,
+      value: {
+        status: 'pending',
+        message: 'Optional note?',
+        run: { taskId: 'ontahi.model-command', runId: 'run-input-dialogue' },
+        interaction: {
+          id: 'TodoItem.add:note',
+          kind: 'input',
+          prompt: 'Optional note?',
+          input: { type: 'string', nullable: true },
+          createdAt: '2026-10-07T00:00:02.000Z',
+        },
+      },
+    })
+    .mockResolvedValueOnce({
+      ok: true,
       value: { status: 'executed', message: 'Item added.' },
     });
   execute.mockResolvedValue({
@@ -334,6 +349,69 @@ it('clears input state when the same exchange advances to another typed Hole', a
     2,
     { taskId: 'ontahi.model-command', runId: 'run-input-dialogue' },
     { interactionId: 'TodoItem.add:title-completed', value: false },
+  );
+
+  const note = container.querySelector('[aria-label="Optional note?"]') as HTMLInputElement;
+  expect(note.value).toBe('');
+  const useNull = [...note.closest('form')!.querySelectorAll('label')]
+    .find(label => label.textContent?.includes('Use null'))!
+    .querySelector('input')!;
+  await act(async () => useNull.click());
+  await act(async () =>
+    note.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(respond).toHaveBeenNthCalledWith(
+    3,
+    { taskId: 'ontahi.model-command', runId: 'run-input-dialogue' },
+    { interactionId: 'TodoItem.add:note', value: null },
+  );
+});
+
+it('submits numeric Hole values without coercing an empty input', async () => {
+  const respond = vi.fn().mockResolvedValue({
+    ok: true,
+    value: { status: 'executed', message: 'Estimate saved.' },
+  });
+  execute.mockResolvedValue({
+    ok: true,
+    value: {
+      status: 'pending',
+      message: 'Estimate?',
+      run: { taskId: 'ontahi.model-command', runId: 'run-number-input' },
+      interaction: {
+        id: 'TodoItem.estimate:hours',
+        kind: 'input',
+        prompt: 'Estimate?',
+        input: { type: 'number' },
+        createdAt: '2026-10-07T00:00:00.000Z',
+      },
+    },
+  });
+  await act(async () =>
+    root.render(<CommandChat onExecuted={refresh} submit={execute} respond={respond} />),
+  );
+  await write();
+  await submit();
+
+  const estimate = container.querySelector('[aria-label="Estimate?"]') as HTMLInputElement;
+  expect((estimate.closest('form')!.querySelector('button') as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+      estimate,
+      '2.5',
+    );
+    estimate.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    estimate
+      .closest('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(respond).toHaveBeenCalledWith(
+    { taskId: 'ontahi.model-command', runId: 'run-number-input' },
+    { interactionId: 'TodoItem.estimate:hours', value: 2.5 },
   );
 });
 

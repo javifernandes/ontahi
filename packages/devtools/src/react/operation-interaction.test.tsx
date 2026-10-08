@@ -110,6 +110,26 @@ it('offers finite choices for Boolean and enum inputs', () => {
   expect(respond).toHaveBeenLastCalledWith({ interactionId: 'enter-priority', value: 'high' });
 });
 
+it('offers and submits null from a nullable finite choice', () => {
+  const respond = vi.fn();
+  render(
+    <OperationInteraction
+      interaction={{
+        id: 'enter-state',
+        kind: 'input',
+        prompt: 'State?',
+        input: { type: 'enum', values: ['active', null], nullable: true },
+        createdAt: '2026-10-05T00:00:00.000Z',
+      }}
+      responding={false}
+      respond={respond}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('State?'), { target: { value: 'null' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  expect(respond).toHaveBeenCalledWith({ interactionId: 'enter-state', value: null });
+});
+
 it('submits explicit null for a nullable input', () => {
   const respond = vi.fn();
   const { rerender } = render(

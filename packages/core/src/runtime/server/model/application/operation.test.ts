@@ -290,7 +290,10 @@ describe('Model Operation applications', () => {
   it.each([
     ['count', field.number(), { type: 'number' }, 3],
     ['completed', field.boolean(), { type: 'boolean' }, false],
+    ['optionalCount', graphSchema.optional(field.number()), { type: 'number' }, 3],
+    ['batchSize', graphSchema.default(field.number(), 25), { type: 'number' }, 10],
     ['priority', field.enum(['low', 'high']), { type: 'enum', values: ['low', 'high'] }, 'high'],
+    ['mode', graphSchema.literal('only'), { type: 'enum', values: ['only'] }, 'only'],
     ['note', graphSchema.nullable(field.string()), { type: 'string', nullable: true }, null],
     [
       'direction',
@@ -359,6 +362,32 @@ describe('Model Operation applications', () => {
       input: graphSchema.object({ first: field.string(), second: field.number() }),
     };
     expect(resolveModelOperationApplication(repeatedProposal, incompatibleContract, {})).toEqual({
+      status: 'unresolved',
+      reason: 'This input position cannot be completed interactively.',
+    });
+  });
+
+  it('keeps composite free input unresolved instead of inventing a generic value editor', () => {
+    const compositeContract = {
+      id: 'OperationList.configure',
+      input: graphSchema.object({ settings: graphSchema.object({ enabled: field.boolean() }) }),
+    };
+    expect(
+      resolveModelOperationApplication(
+        {
+          application: {
+            kind: 'operation-application',
+            operationId: compositeContract.id,
+            arguments: { settings: { kind: 'hole', id: 'settings' } },
+          },
+          bindings: {
+            settings: { kind: 'free-input', prompt: 'Which settings?' },
+          },
+        },
+        compositeContract,
+        {},
+      ),
+    ).toEqual({
       status: 'unresolved',
       reason: 'This input position cannot be completed interactively.',
     });
