@@ -26,6 +26,7 @@ const toSnapshot = (source: TaskRunSource): TaskSnapshot => ({
   interaction: source.checkpoint?.interaction,
   error: source.error,
   result: source.result,
+  ...(source.executionMetadata ? { executionMetadata: source.executionMetadata } : {}),
 });
 
 const toListItem = (source: TaskRunSource): TaskRunListItem => {

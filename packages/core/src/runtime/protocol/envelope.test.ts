@@ -7,6 +7,7 @@ import {
   parseRuntimeProtocolResponse,
   runtimeProtocolError,
   isRuntimeProtocolFamilyName,
+  RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
 } from './envelope.js';
 
 describe('Runtime Protocol envelope', () => {
@@ -41,6 +42,54 @@ describe('Runtime Protocol envelope', () => {
       body: graphReadBody,
     });
     expect(JSON.parse(JSON.stringify(request))).toEqual(request);
+  });
+
+  it('round-trips an advertised committed-mutation capability and response metadata', () => {
+    const request = createRuntimeProtocolRequest({
+      id: 'mutation-request',
+      family: 'graph.command',
+      body: { version: 3, kind: 'graph-command' },
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+    const metadata = {
+      committedMutations: {
+        precision: 'widened' as const,
+        mutations: [
+          {
+            effect: { kind: 'graph-change' as const },
+            provenance: 'conservative' as const,
+          },
+        ],
+      },
+    };
+    const response = createRuntimeProtocolResponse(request, { kind: 'result' }, metadata);
+
+    expect(parseRuntimeProtocolRequestEnvelope(request)).toEqual({ success: true, request });
+    expect(parseRuntimeProtocolResponse(response, request)).toEqual({
+      success: true,
+      response,
+    });
+  });
+
+  it('preserves unknown response capabilities and rejects malformed execution metadata', () => {
+    const request = createRuntimeProtocolRequest({
+      id: 'mutation-request',
+      family: 'graph.command',
+      body: { version: 3, kind: 'graph-command' },
+    });
+
+    expect(
+      parseRuntimeProtocolRequestEnvelope({ ...request, accepts: ['future.v1'] }),
+    ).toMatchObject({ success: true, request: { accepts: ['future.v1'] } });
+    expect(
+      parseRuntimeProtocolRequestEnvelope({ ...request, accepts: ['Invalid Capability'] }),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_envelope' } } });
+    expect(
+      parseRuntimeProtocolResponse(
+        { ...createRuntimeProtocolResponse(request, { kind: 'result' }), metadata: {} },
+        request,
+      ),
+    ).toMatchObject({ success: false, error: { error: { code: 'invalid_response' } } });
   });
 
   it.each([

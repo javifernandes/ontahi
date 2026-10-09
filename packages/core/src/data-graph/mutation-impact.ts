@@ -1,8 +1,9 @@
-import { hasOwn } from '../value/object.js';
+import { isJsonValue } from '../value/json.js';
+import { hasOwn, isRecord } from '../value/object.js';
 
-import type { GraphCommandRequest } from './command-protocol.js';
+import { parseGraphCommandFamilyRequest, type GraphCommandRequest } from './command-protocol.js';
 import type { EntityMutationCommand } from './entity-mutation-command.js';
-import type { GraphReadRequest } from './read-protocol.js';
+import { parseGraphReadFamilyRequest, type GraphReadRequest } from './read-protocol.js';
 import { entityRefsEqual, isEntityRef, type AnyEntityRef } from './ref/index.js';
 import type { SelectionAst, SelectionExpression, SelectionPredicate } from './selection-ast.js';
 import type { EntityViewAst, ViewNode } from './view.js';
@@ -31,6 +32,61 @@ export type CommittedMutationSet = {
   readonly mutations: readonly CommittedMutation[];
   readonly precision: 'exact' | 'intensional' | 'widened';
 };
+
+export const isCommittedMutation = (value: unknown): value is CommittedMutation => {
+  if (
+    !isRecord(value) ||
+    !Object.keys(value).every(key => key === 'effect' || key === 'provenance') ||
+    (value.provenance !== 'captured' &&
+      value.provenance !== 'declared' &&
+      value.provenance !== 'conservative') ||
+    !isRecord(value.effect)
+  ) {
+    return false;
+  }
+
+  const effect = value.effect;
+  if (effect.kind === 'graph-change') {
+    return Object.keys(effect).every(key => key === 'kind');
+  }
+  if (effect.kind === 'graph-command') {
+    return (
+      Object.keys(effect).every(key => key === 'kind' || key === 'request') &&
+      parseGraphCommandFamilyRequest(effect.request).success
+    );
+  }
+  if (effect.kind === 'selection-change') {
+    return (
+      Object.keys(effect).every(key => key === 'kind' || key === 'selection') &&
+      isRecord(effect.selection) &&
+      Object.keys(effect.selection).every(
+        key => key === 'kind' || key === 'entityName' || key === 'expression',
+      ) &&
+      effect.selection.kind === 'selection' &&
+      typeof effect.selection.entityName === 'string' &&
+      effect.selection.entityName.length > 0 &&
+      isRecord(effect.selection.expression) &&
+      parseGraphReadFamilyRequest({
+        version: 1,
+        kind: 'graph-read',
+        mode: 'count',
+        selection: effect.selection,
+        orderBy: [],
+      }).success
+    );
+  }
+  return false;
+};
+
+export const isCommittedMutationSet = (value: unknown): value is CommittedMutationSet =>
+  isRecord(value) &&
+  Object.keys(value).every(key => key === 'mutations' || key === 'precision') &&
+  Array.isArray(value.mutations) &&
+  value.mutations.every(isCommittedMutation) &&
+  (value.precision === 'exact' ||
+    value.precision === 'intensional' ||
+    value.precision === 'widened') &&
+  isJsonValue(value);
 
 const isPrimitive = (value: unknown): value is string | number | boolean | null =>
   value === null ||

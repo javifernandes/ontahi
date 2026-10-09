@@ -330,6 +330,7 @@ export {
   type TaskDefinition,
   type TaskDefinitionDeclaration,
   type TaskExecutionDefinition,
+  type TaskExecutionMetadata,
   type TaskExecutionInteractionRequest,
   type TaskExecutionState,
   type TaskExecutionStepContext,

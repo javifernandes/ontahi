@@ -1,6 +1,7 @@
 import { Cause, Option, Runtime, type Stream } from 'effect';
 
 import type {
+  CommittedMutationSet,
   EntityMutationCommandPolicy,
   GraphReadPolicy,
   ManyToManyRelationshipCommandPolicy,
@@ -13,12 +14,15 @@ import {
   createTaskRunDurableOperationObserver,
   durableOperationProtocolError,
   toDurableOperationSnapshotResponse,
+  withRuntimeProtocolMetadata,
   type RuntimeProtocolDispatcher,
   type RuntimeProtocolDurableObserver,
   type RuntimeProtocolGraphObserver,
 } from '../protocol/index.js';
 
+import { serverContext } from './context.js';
 import type { InvocationContextInput } from './invocation-context.js';
+import { getCurrentInvocationContext } from './invocation-context.js';
 import { submitModelCommandProtocol } from './model/command/protocol.js';
 import type { ModelCommandRuntime } from './model/command/runtime.js';
 import type {
@@ -27,6 +31,7 @@ import type {
   GraphReadableOntahiApplication,
 } from './ontahi.js';
 import { createOperationInvocationDispatcher } from './operation-invocation.js';
+import { sealCurrentUnitOfWorkMutationJournal } from './unit-of-work.js';
 
 type RuntimeProtocolApplication = GraphReadableOntahiApplication &
   GraphObservableOntahiApplication &
@@ -55,6 +60,14 @@ export type ApplicationRuntimeProtocolOptions<TContext extends InvocationContext
   readonly application: RuntimeProtocolApplication;
   readonly policies: readonly ApplicationRuntimePolicy<TContext>[];
   readonly modelCommand?: { readonly runtime: ModelCommandRuntime };
+  /** Explicit authority-scoped projection. Mutation metadata is withheld when omitted. */
+  readonly projectCommittedMutations?: (
+    mutations: CommittedMutationSet,
+    details: {
+      readonly context: TContext;
+      readonly family: 'operation' | 'graph.command' | 'durable.operation';
+    },
+  ) => CommittedMutationSet | undefined | PromiseLike<CommittedMutationSet | undefined>;
   /** Returning null denies an Interaction response. Authenticated principals are mapped by default. */
   readonly taskInteractionActor?: (context: TContext) => TaskActor | null;
   readonly reportError?: (error: unknown) => void;
@@ -117,6 +130,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
   application,
   policies,
   modelCommand,
+  projectCommittedMutations,
   taskInteractionActor = actorFromContext,
   reportError,
 }: ApplicationRuntimeProtocolOptions<TContext>): ApplicationRuntimeProtocol<TContext> => {
@@ -131,20 +145,60 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
   const command = application.createGraphCommandDispatcher<TContext>(graphCommandPolicies);
   const withContext = <TValue>(context: TContext, run: () => TValue) =>
     application.app.runtime.withInvocationContext(context, run);
+  const withMutationJournal = <TValue>(
+    scope: string,
+    context: TContext,
+    run: () => TValue | PromiseLike<TValue>,
+  ) =>
+    withContext(context, () => {
+      const invocation = getCurrentInvocationContext();
+      if (!invocation) throw new Error('Runtime Protocol invocation context is unavailable.');
+
+      return serverContext.run(
+        {
+          scope,
+          telemetrySpanName: scope,
+          resources: invocation.resources,
+        },
+        async () => {
+          const body = await run();
+          const committedMutations = sealCurrentUnitOfWorkMutationJournal();
+          return withRuntimeProtocolMetadata(
+            body,
+            committedMutations.mutations.length === 0 ? undefined : { committedMutations },
+          );
+        },
+      );
+    });
+  const durableSnapshotResponse = (snapshot: TaskSnapshot) =>
+    withRuntimeProtocolMetadata(
+      toDurableOperationSnapshotResponse(snapshot),
+      (snapshot.status === 'completed' ||
+        snapshot.status === 'failed' ||
+        snapshot.status === 'cancelled') &&
+        snapshot.executionMetadata
+        ? snapshot.executionMetadata
+        : undefined,
+    );
 
   const dispatcher = createRuntimeProtocolDispatcher<TContext>({
     handlers: {
-      operation: (request, context) => withContext(context, () => operation(request)),
+      operation: (request, context) =>
+        request.kind === 'invoke'
+          ? withMutationJournal('runtime.protocol.operation', context, () => operation(request))
+          : withContext(context, () => operation(request)),
       'graph.read': (request, context) =>
         withContext(context, () => read(request, { authority: context })),
       'graph.command': (request, context) =>
-        withContext(context, () => command(request, { authority: context })),
+        request.kind === 'graph-command'
+          ? withMutationJournal('runtime.protocol.graph.command', context, () =>
+              command(request, { authority: context }),
+            )
+          : withContext(context, () => command(request, { authority: context })),
       'durable.operation': (request, context) =>
         withContext(context, async () => {
           if (request.kind === 'inspect')
-            return toDurableOperationSnapshotResponse(
-              await application.getTaskSnapshot(request.run),
-            );
+            return durableSnapshotResponse(await application.getTaskSnapshot(request.run));
 
           const actor = taskInteractionActor(context);
           if (!actor)
@@ -154,7 +208,7 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
             );
 
           try {
-            return toDurableOperationSnapshotResponse(
+            return durableSnapshotResponse(
               await application.respondToTaskInteraction(request.run, request.response, { actor }),
             );
           } catch (error) {
@@ -175,6 +229,22 @@ export const createApplicationRuntimeProtocol = <TContext extends InvocationCont
           }
         : {}),
     },
+    projectMetadata:
+      projectCommittedMutations === undefined
+        ? undefined
+        : async (metadata, request, context) => {
+            if (
+              request.family !== 'operation' &&
+              request.family !== 'graph.command' &&
+              request.family !== 'durable.operation'
+            )
+              return undefined;
+            const committedMutations = await projectCommittedMutations(
+              metadata.committedMutations,
+              { context, family: request.family },
+            );
+            return committedMutations === undefined ? undefined : { committedMutations };
+          },
     reportError: error => reportError?.(error),
   });
 

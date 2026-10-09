@@ -2,7 +2,9 @@ import { isJsonValue } from '../../value/json.js';
 
 import {
   createRuntimeProtocolResponse,
+  RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
   runtimeProtocolError,
+  type RuntimeProtocolExecutionMetadata,
   type RuntimeProtocolError,
   type RuntimeProtocolResponseEnvelope,
 } from './envelope.js';
@@ -24,6 +26,29 @@ export type RuntimeProtocolFamilyHandler<TRequest, TContext> = (
   context: TContext,
   options: RuntimeProtocolDispatchOptions,
 ) => unknown | PromiseLike<unknown>;
+
+const runtimeProtocolHandlerResult = Symbol('ontahi.runtimeProtocol.handlerResult');
+
+export type RuntimeProtocolHandlerResult = {
+  readonly [runtimeProtocolHandlerResult]: true;
+  readonly body: unknown;
+  readonly metadata?: RuntimeProtocolExecutionMetadata;
+};
+
+export const withRuntimeProtocolMetadata = (
+  body: unknown,
+  metadata?: RuntimeProtocolExecutionMetadata,
+): RuntimeProtocolHandlerResult => ({
+  [runtimeProtocolHandlerResult]: true,
+  body,
+  ...(metadata === undefined ? {} : { metadata }),
+});
+
+const isRuntimeProtocolHandlerResult = (value: unknown): value is RuntimeProtocolHandlerResult =>
+  typeof value === 'object' &&
+  value !== null &&
+  runtimeProtocolHandlerResult in value &&
+  value[runtimeProtocolHandlerResult] === true;
 
 export type RuntimeProtocolDispatchOptions = { readonly signal?: AbortSignal };
 
@@ -47,6 +72,14 @@ export type RuntimeProtocolDispatchContext<TDispatcher> =
 
 export type CreateRuntimeProtocolDispatcherOptions<TContext> = {
   readonly handlers: RuntimeProtocolFamilyHandlers<TContext>;
+  readonly projectMetadata?: (
+    metadata: RuntimeProtocolExecutionMetadata,
+    request: RegisteredRequest,
+    context: TContext,
+  ) =>
+    | RuntimeProtocolExecutionMetadata
+    | undefined
+    | PromiseLike<RuntimeProtocolExecutionMetadata | undefined>;
   readonly reportError?: (error: unknown, request: RegisteredRequest) => void;
 };
 
@@ -104,8 +137,20 @@ export const createRuntimeProtocolDispatcher = <TContext>(
     if (!handler) return familyUnavailable(request);
 
     let body: unknown;
+    let metadata: RuntimeProtocolExecutionMetadata | undefined;
     try {
-      body = await handler(request.body, context, dispatchOptions);
+      const handled = await handler(request.body, context, dispatchOptions);
+      if (isRuntimeProtocolHandlerResult(handled)) {
+        body = handled.body;
+        if (
+          handled.metadata &&
+          request.accepts?.includes(RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY)
+        ) {
+          metadata = await options.projectMetadata?.(handled.metadata, request, context);
+        }
+      } else {
+        body = handled;
+      }
     } catch (error) {
       options.reportError?.(error, request);
       return dispatchUnavailable(request);
@@ -119,6 +164,11 @@ export const createRuntimeProtocolDispatcher = <TContext>(
       return invalidHandlerResponse(request);
     }
 
-    return createRuntimeProtocolResponse(request, body);
+    try {
+      return createRuntimeProtocolResponse(request, body, metadata);
+    } catch (error) {
+      options.reportError?.(error, request);
+      return invalidHandlerResponse(request);
+    }
   };
 };

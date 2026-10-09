@@ -1,8 +1,10 @@
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
+import { field, value } from '../../data-graph/index.js';
 import {
   createRuntimeProtocolRequest,
+  RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
   toDurableOperationInteractionResponseRequest,
   toDurableOperationProtocolRequest,
   toOperationProtocolRequest,
@@ -16,6 +18,7 @@ import {
   createApplicationRuntimeProtocol,
   type ApplicationRuntimeProtocolOptions,
 } from './runtime-protocol.js';
+import { declareSelectionChange } from './unit-of-work.js';
 
 type Context = { principal: { kind: 'user'; subject: string } | null };
 type Application = ApplicationRuntimeProtocolOptions<Context>['application'];
@@ -52,8 +55,15 @@ const createApplication = () => {
           observedPrincipals.push(getCurrentInvocationContext()?.principal);
         },
     ),
-    createGraphCommandDispatcher: vi.fn(() => async () => {
+    createGraphCommandDispatcher: vi.fn(() => async (request: { kind: string }) => {
       observedPrincipals.push(getCurrentInvocationContext()?.principal);
+      if (request.kind === 'graph-command') {
+        declareSelectionChange({
+          kind: 'selection',
+          entityName: 'Todo',
+          expression: { kind: 'all' },
+        });
+      }
       return {
         version: 1,
         kind: 'graph-command-result',
@@ -177,6 +187,183 @@ describe('application Runtime Protocol', () => {
     expect(respondToTaskInteraction).toHaveBeenCalledWith(run, body.response, {
       actor: { kind: 'user', id: 'user-1' },
     });
+  });
+
+  it('captures direct Graph Commands and applies an explicit authority projection', async () => {
+    const { application } = createApplication();
+    const projectCommittedMutations = vi.fn((mutations, { context }) =>
+      context.principal ? mutations : undefined,
+    );
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectCommittedMutations,
+    });
+    const body = {
+      version: 3,
+      kind: 'graph-command',
+      command: {
+        kind: 'entity-mutation-command',
+        action: 'update',
+        entityName: 'Todo',
+        target: {
+          kind: 'selection',
+          entityName: 'Todo',
+          expression: { kind: 'all' },
+        },
+        values: { completed: true },
+      },
+    } as const;
+    const accepted = createRuntimeProtocolRequest({
+      id: 'graph-command-mutations',
+      family: 'graph.command',
+      body,
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+
+    await expect(
+      protocol.dispatcher(accepted, {
+        principal: { kind: 'user', subject: 'user-1' },
+      }),
+    ).resolves.toMatchObject({
+      kind: 'response',
+      body: { kind: 'graph-command-result' },
+      metadata: {
+        committedMutations: {
+          precision: 'intensional',
+          mutations: [
+            {
+              effect: {
+                kind: 'selection-change',
+                selection: { entityName: 'Todo' },
+              },
+              provenance: 'declared',
+            },
+          ],
+        },
+      },
+    });
+    await expect(protocol.dispatcher(accepted, { principal: null })).resolves.not.toHaveProperty(
+      'metadata',
+    );
+    expect(projectCommittedMutations).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns committed mutations beside an Operation result without changing its body', async () => {
+    const { application } = createApplication();
+    const operation = {
+      kind: 'domain-operation' as const,
+      id: 'Todo.completeAll',
+      entityName: 'Todo',
+      name: 'completeAll',
+      authority: 'server' as const,
+      exposure: 'bridge' as const,
+      input: value('CompleteAllInput', { listId: field.nonEmptyString() }),
+      layer: 'todos',
+      run: vi.fn(),
+    };
+    application.resolveOperation = () => operation as never;
+    application.invokeOperation = vi.fn(async () => {
+      declareSelectionChange({
+        kind: 'selection',
+        entityName: 'Todo',
+        expression: {
+          kind: 'predicate',
+          operator: 'eq',
+          fieldName: 'listId',
+          value: 'later',
+        },
+      });
+      return { ok: true as const, kind: 'success' as const, value: { completed: 3 } };
+    });
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectCommittedMutations: mutations => mutations,
+    });
+    const accepted = createRuntimeProtocolRequest({
+      id: 'operation-mutations',
+      family: 'operation',
+      body: toOperationProtocolRequest({
+        kind: 'invoke',
+        operationId: operation.id,
+        input: { listId: 'later' },
+      }),
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+
+    await expect(
+      protocol.dispatcher(accepted, {
+        principal: { kind: 'user', subject: 'user-1' },
+      }),
+    ).resolves.toMatchObject({
+      body: {
+        kind: 'invocation-result',
+        result: { ok: true, kind: 'success', value: { completed: 3 } },
+      },
+      metadata: {
+        committedMutations: {
+          mutations: [
+            {
+              effect: {
+                kind: 'selection-change',
+                selection: {
+                  entityName: 'Todo',
+                  expression: { fieldName: 'listId', value: 'later' },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it('projects persisted mutations from a terminal durable snapshot outside its body', async () => {
+    const { application } = createApplication();
+    const terminalSnapshot = {
+      ...run,
+      status: 'completed' as const,
+      updatedAt: '2026-10-03T00:00:00.000Z',
+      completedAt: '2026-10-03T00:00:00.000Z',
+      result: { completed: 3 },
+      executionMetadata: {
+        committedMutations: {
+          precision: 'widened' as const,
+          mutations: [
+            {
+              effect: { kind: 'graph-change' as const },
+              provenance: 'conservative' as const,
+            },
+          ],
+        },
+      },
+    };
+    application.getTaskSnapshot = vi.fn(async () => terminalSnapshot);
+    const protocol = createApplicationRuntimeProtocol({
+      application,
+      policies: [],
+      projectCommittedMutations: mutations => mutations,
+    });
+    const accepted = createRuntimeProtocolRequest({
+      id: 'durable-mutations',
+      family: 'durable.operation',
+      body: toDurableOperationProtocolRequest(run),
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+
+    const response = await protocol.dispatcher(accepted, {
+      principal: { kind: 'user', subject: 'user-1' },
+    });
+
+    expect(response).toMatchObject({
+      body: {
+        kind: 'snapshot',
+        snapshot: { status: 'completed', result: { completed: 3 } },
+      },
+      metadata: terminalSnapshot.executionMetadata,
+    });
+    expect(JSON.stringify(response)).not.toContain('executionMetadata');
   });
 
   it('supports an explicit system actor and maps task access failures', async () => {

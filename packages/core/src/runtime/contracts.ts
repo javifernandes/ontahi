@@ -1,3 +1,4 @@
+import type { CommittedMutationSet } from '../data-graph/mutation-impact.js';
 import type { JsonValue } from '../value/json.js';
 import { isRecord } from '../value/object.js';
 
@@ -292,6 +293,10 @@ export type TaskInteractionResponseContext = {
   actor: TaskActor;
 };
 
+export type TaskExecutionMetadata = {
+  committedMutations: CommittedMutationSet;
+};
+
 export type TaskSnapshot<TResult = unknown> = {
   taskId: string;
   runId: string;
@@ -312,6 +317,7 @@ export type TaskSnapshot<TResult = unknown> = {
     message: string;
   };
   result?: TResult;
+  executionMetadata?: TaskExecutionMetadata;
 };
 
 export type TaskRunSource = TaskSnapshot & {

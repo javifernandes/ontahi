@@ -19,8 +19,11 @@ import {
   createRuntimeProtocolDispatcher,
   createRuntimeProtocolRequest,
   parseRuntimeProtocolResponse,
+  RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY,
+  withRuntimeProtocolMetadata,
   type RuntimeProtocolDispatchContext,
   type RuntimeProtocolDispatcher,
+  type RuntimeProtocolExecutionMetadata,
 } from './index.js';
 
 const Book = entity('Book', {
@@ -287,6 +290,92 @@ describe('Runtime Protocol dispatcher', () => {
     await dispatch(runtimeRequest, { authority: null }, { signal });
 
     expect(handler).toHaveBeenCalledWith(operationBody, { authority: null }, { signal });
+  });
+
+  it('projects handler metadata only for receivers that advertise the capability', async () => {
+    const metadata = {
+      committedMutations: {
+        precision: 'widened' as const,
+        mutations: [
+          {
+            effect: { kind: 'graph-change' as const },
+            provenance: 'conservative' as const,
+          },
+        ],
+      },
+    };
+    const projectMetadata = vi.fn((candidate: RuntimeProtocolExecutionMetadata) => candidate);
+    const dispatch = createRuntimeProtocolDispatcher({
+      handlers: {
+        operation: async () => withRuntimeProtocolMetadata({ kind: 'result' }, metadata),
+      },
+      projectMetadata,
+    });
+    const context = { authority: null };
+
+    const legacy = await dispatch(request('legacy', 'operation', operationBody), context);
+    const acceptedRequest = createRuntimeProtocolRequest({
+      id: 'accepted',
+      family: 'operation',
+      body: operationBody,
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+    const accepted = await dispatch(acceptedRequest, context);
+
+    expect(legacy).not.toHaveProperty('metadata');
+    expect(projectMetadata).toHaveBeenCalledOnce();
+    expect(projectMetadata).toHaveBeenCalledWith(metadata, acceptedRequest, context);
+    expect(accepted).toMatchObject({ metadata });
+  });
+
+  it('withholds accepted metadata when no projector authorizes disclosure', async () => {
+    const dispatch = createRuntimeProtocolDispatcher({
+      handlers: {
+        operation: async () =>
+          withRuntimeProtocolMetadata(
+            { kind: 'result' },
+            { committedMutations: { precision: 'exact', mutations: [] } },
+          ),
+      },
+    });
+    const acceptedRequest = createRuntimeProtocolRequest({
+      id: 'withheld',
+      family: 'operation',
+      body: operationBody,
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+
+    await expect(dispatch(acceptedRequest, { authority: null })).resolves.not.toHaveProperty(
+      'metadata',
+    );
+  });
+
+  it('rejects and reports invalid projected metadata', async () => {
+    const reportError = vi.fn();
+    const dispatch = createRuntimeProtocolDispatcher({
+      handlers: {
+        operation: async () =>
+          withRuntimeProtocolMetadata(
+            { kind: 'result' },
+            { committedMutations: { precision: 'exact', mutations: [] } },
+          ),
+      },
+      projectMetadata: () =>
+        ({ committedMutations: { precision: 'invalid', mutations: [] } }) as never,
+      reportError,
+    });
+    const acceptedRequest = createRuntimeProtocolRequest({
+      id: 'invalid-metadata',
+      family: 'operation',
+      body: operationBody,
+      accepts: [RUNTIME_PROTOCOL_COMMITTED_MUTATIONS_CAPABILITY],
+    });
+
+    await expect(dispatch(acceptedRequest, { authority: null })).resolves.toMatchObject({
+      kind: 'protocol-error',
+      error: { code: 'invalid_response' },
+    });
+    expect(reportError).toHaveBeenCalledWith(expect.any(TypeError), acceptedRequest);
   });
 
   it('rejects unknown and malformed handler registrations eagerly', () => {

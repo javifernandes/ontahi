@@ -16,6 +16,7 @@ import {
   createSystemTaskTrigger,
   createTaskDefinitionFromDurableDomainOperation,
   createUserTaskTrigger,
+  declareSelectionChange,
   defineDomainOperation,
   defineDomainOperationsForEntity,
   defineTask,
@@ -43,6 +44,105 @@ const createDeferred = () => {
 };
 
 describe('tasks', () => {
+  it('isolates durable execution journals and accumulates mutations across interactions', async () => {
+    type State = { readonly step: 'choose' } | { readonly step: 'finish' };
+    const execution = defineTaskExecution<{}, State, { done: true }>({
+      initial: () => ({ step: 'choose' }),
+      steps: {
+        choose: defineTaskExecutionStep({
+          run: ({ response }) =>
+            Effect.sync(() => {
+              if (response) return { kind: 'continue', state: { step: 'finish' } } as const;
+              declareSelectionChange({
+                kind: 'selection',
+                entityName: 'Todo',
+                expression: {
+                  kind: 'predicate',
+                  operator: 'eq',
+                  fieldName: 'listId',
+                  value: 'later',
+                },
+              });
+              return {
+                kind: 'interaction',
+                state: { step: 'choose' },
+                interaction: {
+                  id: 'continue',
+                  prompt: 'Continue?',
+                  options: [{ id: 'yes', label: 'Yes', value: true }],
+                },
+              } as const;
+            }),
+        }),
+        finish: defineTaskExecutionStep({
+          run: () =>
+            Effect.sync(() => {
+              declareSelectionChange({
+                kind: 'selection',
+                entityName: 'AuditLog',
+                expression: { kind: 'all' },
+              });
+              return { kind: 'complete', result: { done: true } } as const;
+            }),
+        }),
+      },
+    });
+    const task = defineTask({
+      id: 'demo.mutation-journal',
+      execution,
+      run: () => Effect.dieMessage('Legacy run must not execute.'),
+    });
+    const storage = createInMemoryTaskStorage();
+    const runtime = createInProcessTaskRuntime({
+      storage,
+      createExecutionContext: source => ({
+        scope: source.taskId,
+        telemetrySpanName: source.taskId,
+        resources: new Map(),
+      }),
+    });
+    const trigger = createUserTaskTrigger({ userId: 'user-1' });
+    const run = await Effect.runPromise(startTask(runtime, task, {}, { trigger }));
+
+    await vi.waitFor(async () => {
+      await expect(Effect.runPromise(getTaskSnapshot(runtime, run))).resolves.toMatchObject({
+        status: 'running',
+        interaction: { id: 'continue' },
+        executionMetadata: {
+          committedMutations: {
+            mutations: [{ effect: { selection: { entityName: 'Todo' } } }],
+          },
+        },
+      });
+    });
+    await Effect.runPromise(
+      respondToTaskInteraction(
+        runtime,
+        run,
+        { interactionId: 'continue', optionId: 'yes' },
+        { actor: { kind: 'user', id: 'user-1' } },
+      ),
+    );
+
+    await vi.waitFor(async () => {
+      const completed = await Effect.runPromise(getTaskSnapshot(runtime, run));
+      expect(completed).toMatchObject({
+        status: 'completed',
+        result: { done: true },
+        executionMetadata: {
+          committedMutations: { precision: 'intensional' },
+        },
+      });
+      expect(
+        completed.executionMetadata?.committedMutations.mutations.map(mutation =>
+          mutation.effect.kind === 'selection-change'
+            ? mutation.effect.selection.entityName
+            : mutation.effect.kind,
+        ),
+      ).toEqual(['Todo', 'AuditLog']);
+    });
+  });
+
   it('drives explicit execution steps across interactions without a suspended task function', async () => {
     type ReviewState =
       | { readonly step: 'choose' }

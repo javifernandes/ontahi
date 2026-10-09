@@ -3,6 +3,11 @@ import { Cause, Effect, Option, Stream } from 'effect';
 import { cloneJson } from '../../../value/json.js';
 import type { OperationRuntimeContext } from '../context-types.js';
 import { getOperationRuntimeContext, operationRuntimeContextStorage } from '../context.js';
+import {
+  commitMutationSetToCurrentUnitOfWork,
+  getCurrentUnitOfWork,
+  sealCurrentUnitOfWorkMutationJournal,
+} from '../unit-of-work.js';
 
 import {
   isTaskExecutionState,
@@ -128,6 +133,31 @@ export const createInProcessTaskRuntime = ({
     storage.update(ref, {}).pipe(Effect.map(withPendingInteraction), Effect.tap(taskRuns.publish));
   const update = (ref: TaskRunIdentity, patch: Partial<TaskRunSource>) =>
     storage.update(ref, patch).pipe(Effect.tap(taskRuns.publish));
+  const restoreCommittedMutations = (source: TaskRunSource) => {
+    if (source.executionMetadata?.committedMutations) {
+      commitMutationSetToCurrentUnitOfWork(source.executionMetadata.committedMutations);
+    }
+  };
+  const captureExecutionMetadata = (): TaskRunSource['executionMetadata'] => {
+    if (!getCurrentUnitOfWork()) return undefined;
+    const committedMutations = sealCurrentUnitOfWorkMutationJournal();
+    return committedMutations.mutations.length === 0 ? undefined : { committedMutations };
+  };
+  const createTaskOperationContext = (
+    source: TaskRunSource,
+  ): OperationRuntimeContext | undefined => {
+    const configured = createExecutionContext?.(source);
+    if (configured) return configured;
+    const parent = getOperationRuntimeContext();
+    return parent
+      ? {
+          ...parent,
+          scope: source.taskId,
+          telemetrySpanName: source.taskId,
+          resources: new Map(parent.resources),
+        }
+      : undefined;
+  };
   const waitForInteraction = <TValue>(
     ref: TaskRunIdentity,
     pending: PendingInteraction,
@@ -301,6 +331,7 @@ export const createInProcessTaskRuntime = ({
     const definition = task.execution!;
     const context = createTaskContext(task, source);
     const background = Effect.gen(function* () {
+      yield* Effect.sync(() => restoreCommittedMutations(source));
       let checkpoint = source.checkpoint!;
 
       while (true) {
@@ -326,10 +357,12 @@ export const createInProcessTaskRuntime = ({
 
         if (transition.kind === 'complete') {
           const result = yield* validateTaskOutput(task, transition.result);
+          const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
           yield* update(ref, {
             status: 'completed',
             completedAt: now(),
             result,
+            ...(executionMetadata ? { executionMetadata } : {}),
             checkpoint: undefined,
           });
           return;
@@ -352,21 +385,30 @@ export const createInProcessTaskRuntime = ({
 
         const interaction = yield* materializeExecutionInteraction(ref, transition.interaction);
         checkpoint = { version: 1, state: cloneJson(transition.state), interaction };
-        yield* update(ref, { checkpoint });
+        const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
+        yield* update(ref, {
+          checkpoint,
+          ...(executionMetadata ? { executionMetadata } : {}),
+        });
         return;
       }
     }).pipe(
       Effect.catchAllCause(cause => {
         const error = taskFailureFromCause(cause);
-        return update(ref, {
-          status: 'failed',
-          completedAt: now(),
-          checkpoint: undefined,
-          error: {
-            code: error.reason,
-            message: error.message,
-          },
-        });
+        return Effect.sync(captureExecutionMetadata).pipe(
+          Effect.flatMap(executionMetadata =>
+            update(ref, {
+              status: 'failed',
+              completedAt: now(),
+              checkpoint: undefined,
+              ...(executionMetadata ? { executionMetadata } : {}),
+              error: {
+                code: error.reason,
+                message: error.message,
+              },
+            }),
+          ),
+        );
       }),
       Effect.ensuring(Effect.sync(() => activeExplicitExecutions.delete(executionKey))),
     );
@@ -383,12 +425,7 @@ export const createInProcessTaskRuntime = ({
       return false;
     }
 
-    return launchExplicitExecution(
-      source,
-      task,
-      source,
-      getOperationRuntimeContext() ?? createExecutionContext?.(source),
-    );
+    return launchExplicitExecution(source, task, source, createTaskOperationContext(source));
   };
 
   return {
@@ -410,6 +447,7 @@ export const createInProcessTaskRuntime = ({
         yield* taskRuns.publish(snapshot);
         const source = yield* storage.loadSource(ref);
         const context = createTaskContext(task, source);
+        const operationContext = createTaskOperationContext(source);
         const executionDefinition = task.execution;
         if (executionDefinition) {
           const background = Effect.gen(function* () {
@@ -423,8 +461,6 @@ export const createInProcessTaskRuntime = ({
                 ),
               );
             }
-            const operationContext =
-              getOperationRuntimeContext() ?? createExecutionContext?.(source);
             const checkpoint = { version: 1 as const, state: cloneJson(state) };
             yield* update(ref, { status: 'running', startedAt: now(), checkpoint });
             launchExplicitExecution(ref, task, { ...source, checkpoint }, operationContext);
@@ -444,32 +480,42 @@ export const createInProcessTaskRuntime = ({
           return toTaskRunRef(snapshot);
         }
         const background = Effect.gen(function* () {
+          yield* Effect.sync(() => restoreCommittedMutations(source));
           yield* update(ref, {
             status: 'running',
             startedAt: now(),
           });
           const result = yield* task.run(parsedInput, context);
           const parsedResult = yield* validateTaskOutput(task, result);
+          const executionMetadata = yield* Effect.sync(captureExecutionMetadata);
           yield* update(ref, {
             status: 'completed',
             completedAt: now(),
             result: parsedResult,
+            ...(executionMetadata ? { executionMetadata } : {}),
           });
         }).pipe(
           Effect.catchAllCause(cause => {
             const error = taskFailureFromCause(cause);
-            return update(ref, {
-              status: 'failed',
-              completedAt: now(),
-              error: {
-                code: error.reason,
-                message: error.message,
-              },
-            });
+            return Effect.sync(captureExecutionMetadata).pipe(
+              Effect.flatMap(executionMetadata =>
+                update(ref, {
+                  status: 'failed',
+                  completedAt: now(),
+                  ...(executionMetadata ? { executionMetadata } : {}),
+                  error: {
+                    code: error.reason,
+                    message: error.message,
+                  },
+                }),
+              ),
+            );
           }),
         );
 
-        void Effect.runPromise(background).catch(error => onBackgroundError?.(error));
+        const run = () => Effect.runPromise(background).catch(error => onBackgroundError?.(error));
+        if (operationContext) operationRuntimeContextStorage.run(operationContext, run);
+        else void run();
         return toTaskRunRef(snapshot);
       }),
     getSnapshot: ref =>
@@ -540,7 +586,7 @@ export const createInProcessTaskRuntime = ({
             ref,
             task,
             { ...source, checkpoint: nextCheckpoint },
-            getOperationRuntimeContext() ?? createExecutionContext?.(source),
+            createTaskOperationContext(source),
           );
           return snapshot;
         }

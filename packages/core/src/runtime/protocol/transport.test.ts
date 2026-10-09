@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createRuntimeProtocolResponse, runtimeProtocolError } from './envelope.js';
 import {
   createRuntimeProtocolExchange,
+  createRuntimeProtocolExecutionExchange,
   type RuntimeTransport,
   type RuntimeTransportRequestOptions,
 } from './transport.js';
@@ -81,5 +82,50 @@ describe('Runtime Protocol exchange', () => {
       mismatchedExchange({ family: 'operation', body: { version: 1, kind: 'invoke' } }),
     ).rejects.toThrow('Runtime Protocol response is invalid or mismatched.');
     expect(mismatchedRequest).toHaveBeenCalledOnce();
+  });
+
+  it('advertises and preserves committed mutation metadata for execution exchanges', async () => {
+    const metadata = {
+      committedMutations: {
+        precision: 'exact' as const,
+        mutations: [],
+      },
+    };
+    const request = vi.fn<RuntimeTransport['request']>(async envelope =>
+      createRuntimeProtocolResponse(envelope, { kind: 'family-result' }, metadata),
+    );
+    const exchange = createRuntimeProtocolExecutionExchange({
+      transport: { request },
+      requestId: () => 'execution-1',
+    });
+
+    await expect(
+      exchange({ family: 'operation', body: { version: 1, kind: 'invoke' } }),
+    ).resolves.toEqual({ body: { kind: 'family-result' }, metadata });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({
+      accepts: ['committed-mutations.v1'],
+    });
+  });
+
+  it('accepts execution responses without metadata and surfaces protocol errors', async () => {
+    const request = vi
+      .fn<RuntimeTransport['request']>()
+      .mockImplementationOnce(async envelope =>
+        createRuntimeProtocolResponse(envelope, { kind: 'family-result' }),
+      )
+      .mockImplementationOnce(async envelope =>
+        runtimeProtocolError('dispatch_unavailable', 'Try again.', {
+          id: envelope.id,
+          family: envelope.family,
+        }),
+      );
+    const exchange = createRuntimeProtocolExecutionExchange({ transport: { request } });
+
+    await expect(
+      exchange({ family: 'operation', body: { version: 1, kind: 'invoke' } }),
+    ).resolves.toEqual({ body: { kind: 'family-result' } });
+    await expect(
+      exchange({ family: 'operation', body: { version: 1, kind: 'invoke' } }),
+    ).rejects.toThrow('Try again.');
   });
 });

@@ -121,6 +121,7 @@ export const createRuntimeProtocolRegistry = <
           id: envelope.request.id,
           family: family.name,
           body: cloneJson(parsed.request),
+          ...(envelope.request.accepts === undefined ? {} : { accepts: envelope.request.accepts }),
         }) as RuntimeProtocolRegisteredRequest<TFamilies>,
       };
     },

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphCommandRequest } from './command-protocol.js';
-import { mayAffectGraphRead, type CommittedMutation } from './mutation-impact.js';
+import {
+  isCommittedMutationSet,
+  mayAffectGraphRead,
+  type CommittedMutation,
+} from './mutation-impact.js';
 import type { GraphReadRequest } from './read-protocol.js';
 import { createEntityRef } from './ref/index.js';
 import type { SelectionExpression } from './selection-ast.js';
@@ -385,5 +389,64 @@ describe('mayAffectGraphRead', () => {
         read('UnrelatedEntity'),
       ),
     ).toBe(true);
+  });
+});
+
+describe('committed mutation portability', () => {
+  it('recognizes every portable mutation effect', () => {
+    expect(
+      isCommittedMutationSet({
+        precision: 'intensional',
+        mutations: [
+          update(equal('listId', 'later')),
+          {
+            effect: {
+              kind: 'selection-change',
+              selection: {
+                kind: 'selection',
+                entityName: 'TodoItem',
+                expression: { kind: 'all' },
+              },
+            },
+            provenance: 'declared',
+          },
+          { effect: { kind: 'graph-change' }, provenance: 'conservative' },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    { precision: 'unknown', mutations: [] },
+    { precision: 'exact', mutations: [{ effect: { kind: 'future' }, provenance: 'captured' }] },
+    {
+      precision: 'exact',
+      mutations: [
+        {
+          effect: { kind: 'graph-change', extra: true },
+          provenance: 'conservative',
+        },
+      ],
+    },
+    {
+      precision: 'exact',
+      mutations: [
+        {
+          effect: { kind: 'selection-change', selection: { kind: 'selection' } },
+          provenance: 'declared',
+        },
+      ],
+    },
+    {
+      precision: 'exact',
+      mutations: [
+        {
+          effect: { kind: 'graph-command', request: { version: 3, kind: 'graph-command' } },
+          provenance: 'captured',
+        },
+      ],
+    },
+  ])('rejects malformed mutation metadata %#', candidate => {
+    expect(isCommittedMutationSet(candidate)).toBe(false);
   });
 });
