@@ -255,7 +255,10 @@ export function useOperation<TInput, TData>(
         if (currentOptions?.invalidateOnSuccess ?? true) {
           const committed = actionResult?.executionMetadata?.committedMutations;
           if (committed) {
-            await invalidateSemanticGraphReads(queryClient, committed);
+            await Promise.all([
+              invalidateSemanticGraphReads(queryClient, committed),
+              invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),
+            ]);
           } else {
             await Promise.all([
               invalidateReactQueryCachesContainingRefs(queryClient, affectedCacheRefs),

@@ -506,6 +506,9 @@ describe('operation hooks', () => {
     const queryClient = new QueryClient();
     const laterKey = ['Todo', 'later'] as const;
     const inboxKey = ['Todo', 'inbox'] as const;
+    const containingRefKey = ['custom', 'selected-todo'] as const;
+    const TodoEntity = entity('Todo', { id: field.id() });
+    const todoRef = createEntityRef(TodoEntity, { id: 'todo-1' });
     await Promise.all([
       queryClient.fetchQuery({
         queryKey: laterKey,
@@ -517,27 +520,33 @@ describe('operation hooks', () => {
         queryFn: () => [],
         meta: withCanonicalGraphReadMeta(undefined, todoItems('inbox')),
       }),
+      queryClient.fetchQuery({
+        queryKey: containingRefKey,
+        queryFn: () => ({ selected: todoRef }),
+      }),
     ]);
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const bridgeAction = vi.fn().mockResolvedValue({
       data: { ok: true, kind: 'success', value: { completed: 2 } },
       executionMetadata: { committedMutations: completeLater },
     });
-    const operation = defineClientDomainOperationsForEntity('Todo', {
+    const operation = defineClientDomainOperationsForEntity(TodoEntity, {
       completeAll: defineClientDomainOperation({
         authority: 'server',
         exposure: 'bridge',
         bridge: { invalidate: [['Todo']] },
+        input: graphSchema.object({ todo: graphSchema.ref(TodoEntity) }),
       }),
     }).completeAll;
     const { Wrapper } = createWrapper(bridgeAction, createGraphClientCache(), queryClient);
     const { result } = renderHook(() => useOperation(operation), { wrapper: Wrapper });
 
     await act(async () => {
-      await result.current.executeAsync({ list: 'later' });
+      await result.current.executeAsync({ todo: todoRef });
     });
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: laterKey, exact: true });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: containingRefKey, exact: true });
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: inboxKey, exact: true });
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['Todo'] });
   });
