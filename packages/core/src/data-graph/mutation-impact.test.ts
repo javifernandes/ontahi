@@ -20,7 +20,7 @@ const read = (
 });
 
 const mutation = (command: GraphCommandRequest['command']): CommittedMutation => ({
-  command: { version: 3, kind: 'graph-command', command },
+  effect: { kind: 'graph-command', request: { version: 3, kind: 'graph-command', command } },
   provenance: 'captured',
 });
 
@@ -44,6 +44,30 @@ const update = (
   });
 
 describe('mayAffectGraphRead', () => {
+  it('matches conservative Selection changes without pretending they are executable commands', () => {
+    const later = equal('listId', 'later');
+    const changed: CommittedMutation = {
+      effect: {
+        kind: 'selection-change',
+        selection: { kind: 'selection', entityName: 'TodoItem', expression: later },
+      },
+      provenance: 'declared',
+    };
+
+    expect(mayAffectGraphRead(changed, read('TodoItem', later))).toBe(true);
+    expect(mayAffectGraphRead(changed, read('TodoItem', equal('listId', 'inbox')))).toBe(false);
+    expect(mayAffectGraphRead(changed, read('TodoList'))).toBe(false);
+  });
+
+  it('matches a graph-wide conservative change against every Read', () => {
+    expect(
+      mayAffectGraphRead(
+        { effect: { kind: 'graph-change' }, provenance: 'conservative' },
+        read('TodoList'),
+      ),
+    ).toBe(true);
+  });
+
   it('matches the same Selection and broad Entity Reads', () => {
     const later = equal('listId', 'later');
 

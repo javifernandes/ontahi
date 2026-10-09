@@ -9,8 +9,21 @@ import type { EntityViewAst, ViewNode } from './view.js';
 
 export type CommittedMutationProvenance = 'captured' | 'declared' | 'conservative';
 
+export type CommittedMutationEffect =
+  | {
+      readonly kind: 'graph-command';
+      readonly request: GraphCommandRequest;
+    }
+  | {
+      readonly kind: 'selection-change';
+      readonly selection: SelectionAst;
+    }
+  | {
+      readonly kind: 'graph-change';
+    };
+
 export type CommittedMutation = {
-  readonly command: GraphCommandRequest;
+  readonly effect: CommittedMutationEffect;
   readonly provenance: CommittedMutationProvenance;
 };
 
@@ -207,7 +220,17 @@ export const mayAffectGraphRead = (
   mutation: CommittedMutation,
   read: GraphReadRequest,
 ): boolean => {
-  const command = mutation.command.command;
+  if (mutation.effect.kind === 'graph-change') return true;
+  if (mutation.effect.kind === 'selection-change') {
+    if (!readEntityNames(read).has(mutation.effect.selection.entityName)) return false;
+    if (read.selection.entityName !== mutation.effect.selection.entityName) return true;
+    return !expressionsAreProvablyDisjoint(
+      mutation.effect.selection.expression,
+      read.selection.expression,
+    );
+  }
+
+  const command = mutation.effect.request.command;
   if (command.kind !== 'entity-mutation-command') return true;
   if (!readEntityNames(read).has(command.entityName)) return false;
 

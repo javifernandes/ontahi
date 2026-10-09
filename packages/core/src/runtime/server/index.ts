@@ -133,6 +133,8 @@ export {
   toContextRecord,
 } from './context.js';
 export {
+  declareGraphMutation,
+  declareSelectionChange,
   getCurrentUnitOfWork,
   getRequiredUnitOfWork,
   withChildUnitOfWork,
@@ -167,6 +169,7 @@ export type {
   RateLimitResult,
   ServerRuntimeConfig,
   ServerRuntimeDiagnostics,
+  ServerRuntimeMutationJournalConfig,
   ServerRuntimeRateLimitAdapter,
   ServerRuntimeReportingAdapter,
   ServerRuntimeTelemetryAdapter,

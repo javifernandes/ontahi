@@ -57,10 +57,18 @@ export interface ServerRuntimeRateLimitAdapter {
   releaseSlot: (policy: RateLimitPolicy, key: string) => Promise<void>;
 }
 
+export type ServerRuntimeMutationJournalConfig = {
+  /** Maximum semantic mutation entries retained before conservative widening. */
+  maxEntries?: number;
+  /** Maximum UTF-8 encoded JSON bytes retained before conservative widening. */
+  maxBytes?: number;
+};
+
 export type ServerRuntimeConfig<TEvent = unknown> = {
   telemetry?: ServerRuntimeTelemetryAdapter;
   reporting?: ServerRuntimeReportingAdapter;
   diagnostics?: ServerRuntimeDiagnostics;
   rateLimit?: ServerRuntimeRateLimitAdapter;
+  mutationJournal?: ServerRuntimeMutationJournalConfig;
   loadArchitecture?: () => Promise<ArchitectureDefinition<TEvent>>;
 };

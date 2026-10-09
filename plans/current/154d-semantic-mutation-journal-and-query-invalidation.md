@@ -85,7 +85,10 @@ Names are provisional until the first slice proves the boundary:
 
 ```ts
 type CommittedMutation = {
-  command: GraphCommandRequest;
+  effect:
+    | { kind: 'graph-command'; request: GraphCommandRequest }
+    | { kind: 'selection-change'; selection: SelectionAst }
+    | { kind: 'graph-change' };
   provenance: 'captured' | 'declared' | 'conservative';
   evidence?: BoundedMutationEvidence;
 };
@@ -100,11 +103,10 @@ The command is authoritative semantic intent. Evidence may contain a small exact
 Refs already produced by execution, counts, or causal identifiers. Evidence is optional and
 bounded; it must never change which mutations are considered possible.
 
-A conservative escape hatch may require a small command-like `changed(Selection)` term when no
-honest create/update/delete/relationship operator can be declared. That term is not accepted by
-default. The first slice must determine whether an existing no-op/touch command can express it
-without lying about execution. If not, the new term belongs to mutation-effect reporting only, not
-to executable Graph Commands.
+A conservative escape hatch uses a first-class `changed(Selection)` mutation effect when no honest
+create/update/delete/relationship operator can be declared. Native work may report this
+non-executable effect directly; it must not manufacture a no-op/touch Graph Command that lies about
+what executed.
 
 ### Read dependency
 
@@ -367,6 +369,13 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
 7. Application escape hatches describe domain mutations, never cache implementation details.
 8. Operation business outputs remain independent from runtime mutation metadata.
 9. Existing bridges and explicit invalidation options are compatibility paths, not the target model.
+10. Native work may report a first-class, non-executable `selection-change`; it must not manufacture
+    a Graph Command whose operator or values did not actually run.
+11. Journals default to 64 entries and 64 KiB of encoded mutation entries. Equal effects deduplicate
+    while retaining the strongest provenance (`captured` over `declared` over `conservative`).
+12. Overflow widens deterministically to sorted affected Entity-root Selections, then to a global
+    graph change when those roots still exceed the budget. Widening is monotonic and never silently
+    drops a possible affected Entity.
 
 ## Open Questions
 
@@ -374,23 +383,19 @@ contract, while Event occurrence, mutation effects, and reactive revisions remai
    canonical command plus selected causal metadata?
 2. What is the common capture point shared by direct dispatch, Operations, Tasks, and Mutation
    Reactions without double recording?
-3. Does a conservative `changed(Selection)` term deserve a first-class non-executable mutation
-   effect type, or can existing commands express every honest escape hatch?
-4. How should create matching evaluate generated/defaulted Fields that were absent from authored
+3. How should create matching evaluate generated/defaulted Fields that were absent from authored
    values?
-5. Which Read dependencies must be extracted for nested relations, aggregates, derived Fields, and
+4. Which Read dependencies must be extracted for nested relations, aggregates, derived Fields, and
    contextual selections?
-6. What journal entry/byte budget and exact-evidence limit should be the safe default?
-7. When several narrow commands overflow, what is the narrowest safe Selection to which they can
-   widen without expensive normalization?
-8. Should post-commit publication failure fail the caller, become telemetry, or create retryable
+5. What exact-evidence limit should be the safe default once evidence is retained?
+6. Should post-commit publication failure fail the caller, become telemetry, or create retryable
    delivery work after the storage commit can no longer roll back?
-9. Which protocol family owns mutation metadata for direct Graph Commands versus Operations and
+7. Which protocol family owns mutation metadata for direct Graph Commands versus Operations and
    durable Task completion?
-10. Can server observation consume full commands safely, or does cross-authority delivery require
-    opaque scoped revision tokens?
-11. When may a client reconcile exact bounded evidence locally instead of refetching?
-12. What evidence is required before removing `bridge.invalidate` and explicit query-key options?
+8. Can server observation consume full commands safely, or does cross-authority delivery require
+   opaque scoped revision tokens?
+9. When may a client reconcile exact bounded evidence locally instead of refetching?
+10. What evidence is required before removing `bridge.invalidate` and explicit query-key options?
 
 ## Closure And Evolution
 

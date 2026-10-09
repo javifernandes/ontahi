@@ -36,13 +36,17 @@ const NOOP_RATE_LIMIT: ServerRuntimeRateLimitAdapter = {
 };
 
 const DEFAULT_RUNTIME_CONFIG: Required<
-  Pick<ServerRuntimeConfig<unknown>, 'telemetry' | 'reporting' | 'diagnostics' | 'rateLimit'>
+  Pick<
+    ServerRuntimeConfig<unknown>,
+    'telemetry' | 'reporting' | 'diagnostics' | 'rateLimit' | 'mutationJournal'
+  >
 > &
   Pick<ServerRuntimeConfig<unknown>, 'loadArchitecture'> = {
   telemetry: NOOP_TELEMETRY,
   reporting: NOOP_REPORTING,
   diagnostics: DEFAULT_DIAGNOSTICS,
   rateLimit: NOOP_RATE_LIMIT,
+  mutationJournal: { maxEntries: 64, maxBytes: 64 * 1024 },
   loadArchitecture: async () => ({}) as ArchitectureDefinition<unknown>,
 };
 
@@ -59,7 +63,10 @@ export const resetServerRuntimeForTests = (): void => {
 };
 
 export const getServerRuntimeConfig = <TEvent = unknown>(): Required<
-  Pick<ServerRuntimeConfig<TEvent>, 'telemetry' | 'reporting' | 'diagnostics' | 'rateLimit'>
+  Pick<
+    ServerRuntimeConfig<TEvent>,
+    'telemetry' | 'reporting' | 'diagnostics' | 'rateLimit' | 'mutationJournal'
+  >
 > &
   Pick<ServerRuntimeConfig<TEvent>, 'loadArchitecture'> => {
   const configured = runtimeConfig as ServerRuntimeConfig<TEvent> | undefined;
@@ -69,6 +76,10 @@ export const getServerRuntimeConfig = <TEvent = unknown>(): Required<
     reporting: configured?.reporting ?? DEFAULT_RUNTIME_CONFIG.reporting,
     diagnostics: configured?.diagnostics ?? DEFAULT_RUNTIME_CONFIG.diagnostics,
     rateLimit: configured?.rateLimit ?? DEFAULT_RUNTIME_CONFIG.rateLimit,
+    mutationJournal: {
+      ...DEFAULT_RUNTIME_CONFIG.mutationJournal,
+      ...configured?.mutationJournal,
+    },
     loadArchitecture: configured?.loadArchitecture ?? DEFAULT_RUNTIME_CONFIG.loadArchitecture,
   };
 };
