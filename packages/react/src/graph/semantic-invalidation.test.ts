@@ -6,6 +6,7 @@ import {
   getCanonicalGraphReadFromMeta,
   invalidateSemanticGraphReads,
   withCanonicalGraphReadMeta,
+  withUnknownGraphReadMeta,
 } from './semantic-invalidation.js';
 
 const items = (list?: string): GraphReadRequest => ({
@@ -107,6 +108,24 @@ describe('semantic Graph Read invalidation', () => {
     expect(await invalidateSemanticGraphReads(queryClient, completedLater)).toEqual({
       queryKeys: [],
     });
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+
+  it('preserves an unknown Graph Read when no mutations were committed', async () => {
+    const queryClient = new QueryClient();
+    const key = ['unknown-graph-read'] as const;
+    await queryClient.fetchQuery({
+      queryKey: key,
+      queryFn: () => [],
+      meta: withUnknownGraphReadMeta(undefined),
+    });
+
+    expect(
+      await invalidateSemanticGraphReads(queryClient, {
+        precision: 'intensional',
+        mutations: [],
+      }),
+    ).toEqual({ queryKeys: [] });
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
 });

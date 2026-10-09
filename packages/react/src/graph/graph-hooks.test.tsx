@@ -6,6 +6,7 @@ import {
   graphSchema,
   query,
   relationship,
+  relationshipSet,
   view,
   type CommittedMutationSet,
   type GraphCommandSpec,
@@ -23,6 +24,7 @@ import {
   useGraphCommand,
   useGraphOperation,
   useGraphQuery,
+  useManyToManyRelationshipCommand,
   useOrderedRelationshipCommand,
   withCanonicalGraphReadMeta,
 } from './index.js';
@@ -465,6 +467,45 @@ describe('graph query and command hooks', () => {
     );
   });
 
+  it('executes many-to-many Relationship Commands through the dedicated hook capability', async () => {
+    const Tag = entity('HookTag', { id: field.id() });
+    const TaggedItem = entity('HookTaggedItem', { id: field.id() }).manyToMany('tags', Tag);
+    const command = relationshipSet(
+      TaggedItem,
+      'tags',
+      createEntityRef(TaggedItem, { id: 'item-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    graphExecutor.runManyToManyRelationshipCommand = vi
+      .fn()
+      .mockResolvedValue({ status: 'applied', delta: { added: [], removed: [] } });
+
+    const { result } = renderHook(
+      () =>
+        useManyToManyRelationshipCommand(() => command, {
+          invalidateQueryKeys: [['graph', 'tags']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
+    await act(async () => {
+      await result.current.mutateAsync(undefined);
+    });
+
+    expect(graphExecutor.runManyToManyRelationshipCommand).toHaveBeenCalledWith(command, undefined);
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['graph', 'tags'] });
+
+    const unsupportedExecutor = createExecutorMock();
+    unsupportedExecutor.runManyToManyRelationshipCommand = undefined;
+    const unsupported = renderHook(() => useManyToManyRelationshipCommand(() => command), {
+      wrapper: createWrapper(unsupportedExecutor),
+    });
+    await expect(unsupported.result.current.mutateAsync(undefined)).rejects.toThrow(
+      'does not support many-to-many Relationship Commands',
+    );
+  });
+
   it('invalidates matching reads from ordered Relationship Command metadata', async () => {
     const List = entity('SemanticList', { id: field.id() });
     const Item = entity('SemanticItem', { id: field.id(), list: field.ref(List) });
@@ -508,6 +549,67 @@ describe('graph query and command hooks', () => {
     const { result } = renderHook(
       () =>
         useOrderedRelationshipCommand(() => command, {
+          invalidateQueryKeys: [['broad-fallback']],
+        }),
+      { wrapper: createWrapper(graphExecutor, queryClient) },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync(undefined);
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: matchingKey, exact: true });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['broad-fallback'] });
+  });
+
+  it('invalidates matching reads from many-to-many Relationship Command metadata', async () => {
+    const Tag = entity('SemanticTag', { id: field.id() });
+    const TaggedItem = entity('SemanticTaggedItem', { id: field.id() }).manyToMany('tags', Tag);
+    const command = relationshipSet(
+      TaggedItem,
+      'tags',
+      createEntityRef(TaggedItem, { id: 'item-1' }),
+    ).add(createEntityRef(Tag, { id: 'tag-1' }));
+    const graphExecutor = createExecutorMock();
+    const queryClient = new QueryClient();
+    const matchingKey = ['custom', 'tagged-items'] as const;
+    await queryClient.fetchQuery({
+      queryKey: matchingKey,
+      queryFn: () => 1,
+      meta: withCanonicalGraphReadMeta(undefined, {
+        version: 1,
+        kind: 'graph-read',
+        mode: 'run',
+        selection: {
+          kind: 'selection',
+          entityName: 'SemanticTaggedItem',
+          expression: { kind: 'all' },
+        },
+        orderBy: [],
+      }),
+    });
+    graphExecutor.runManyToManyRelationshipCommand = vi.fn();
+    graphExecutor.runManyToManyRelationshipCommandExecution = vi.fn().mockResolvedValue({
+      value: { status: 'applied', delta: { added: [], removed: [] } },
+      metadata: {
+        committedMutations: {
+          precision: 'intensional',
+          mutations: [
+            {
+              provenance: 'captured',
+              effect: {
+                kind: 'graph-command',
+                request: { version: 1, kind: 'graph-command', command },
+              },
+            },
+          ],
+        },
+      },
+    });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(
+      () =>
+        useManyToManyRelationshipCommand(() => command, {
           invalidateQueryKeys: [['broad-fallback']],
         }),
       { wrapper: createWrapper(graphExecutor, queryClient) },
